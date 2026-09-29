@@ -1,32 +1,425 @@
-diff --git a/Dockerfile b/Dockerfile
-index 99cc075ce..719f47b71 100644
---- a/Dockerfile
-+++ b/Dockerfile
-@@ -7,18 +7,20 @@ FROM ubuntu:24.04
+diff --git a/docs/specs/scheduler.md b/docs/specs/scheduler.md
+index 334c486f9..d5a414236 100644
+--- a/docs/specs/scheduler.md
++++ b/docs/specs/scheduler.md
+@@ -61,6 +61,10 @@ scheduler.  This document is the deduplicated synthesis of the historical papers
+ - **R3 — Clean teardown.**  A task is freed only after (a) it is no longer the
+   physical runner, (b) no deferred switch targets it, (c) peers waiting on its
+   IPC are resolved.
++- **R4 — Bounded lower-level liveness (issue #242).**  Strict RMS must not
++  deny every lower level forever when the top READY level never drains.
++  Worst-case interference is exactly one forced lower tick per
++  `kStarvationBreakerTicks` (= 20) backlogged ticks (§3.3).
  
- ARG DEBIAN_FRONTEND=noninteractive
+ ## 2. Invariants
  
--# Buildx target arch (auto-filled: amd64/arm64). grub-efi-amd64-bin exists
--# only on amd64 (absent from Ubuntu ports) — install it conditionally so
--# the arm64 leg builds. x86_64 QEMU tests need the UEFI El Torito entry
--# it provides (BIOS-only ISOs don't boot under OVMF); aarch64/riscv64
--# boot via -kernel ELF and never touch GRUB.
-+# Buildx target arch (auto-filled: amd64/arm64). The x86 GRUB modules
-+# exist only on amd64 (neither grub-pc-bin nor grub-efi-amd64-bin is in
-+# Ubuntu ports) — install them conditionally so the arm64 leg builds.
-+# x86_64 QEMU tests need the UEFI El Torito entry for OVMF (BIOS-only
-+# ISOs fail with BdsDxe Not Found); aarch64/riscv64 boot via -kernel
-+# ELF and never touch GRUB, so the arm64 image simply cannot build
-+# x86 ISOs (documented limitation).
- ARG TARGETARCH
+@@ -127,6 +131,33 @@ atomics + `next_task_id`), then scheduling proceeds; `next_task()` re-selects
+ immediately.  Dropped switch worst case = one tick of lag.  This removed the
+ "frozen switch window" that blocked the old lazy-rebuild.
  
- RUN apt-get update && apt-get install -y --no-install-recommends \
-     build-essential git make python3 wget ccache cpio meson ninja-build \
-     nasm \
--    xorriso mtools dosfstools grub-pc-bin grub-common \
--    $(if [ "$TARGETARCH" = "amd64" ]; then echo grub-efi-amd64-bin; fi) \
-+    xorriso mtools dosfstools grub-common \
-+    $(if [ "$TARGETARCH" = "amd64" ]; then echo grub-pc-bin grub-efi-amd64-bin; fi) \
-     gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
-     gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-     gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
++### 3.3 Starvation-breaker (issue #242) [IMPLEMENTED]
++Strict RMS starves every lower level forever when the top READY level never
++drains (convicted: two prio-11 never-blocking spinners alternate and the
++prio-10 harness gets zero CPU over 3001 ticks).  The fast path stays strict
++fixed-priority; a counter-only observer forces progress:
++
++- When the top READY level H is picked while lower non-idle READY levels wait
++  for `kStarvationBreakerTicks` (= 20) consecutive ticks, exactly one dispatch
++  of the highest READY level below H is forced (`next_task_below`, same
++  eligibility filter as `next_task`), then strict RMS resumes.  Level 0 (idle
++  band) is never a forced target.
++- Counter-only: no `task->priority` write (PI boosts and admission bases
++  untouched); O(1) bitmap ops (`highest_starvable_below` + `dequeue_level`);
++  identical debug/release control flow.
++- EDF keeps precedence: a tick with an EDF candidate takes the EDF path and
++  resets the count (a non-strict dispatch breaks the pattern).
++- Breaker state is policy-runtime: reset on `init()` and snapshot restore,
++  never preserved across tests.
++- Schedulability re-characterization: Liu–Leyland admission is unchanged for
++  the strict fast path; the breaker adds bounded interference of at most one
++  lower tick per 20 backlogged ticks (20 ms delay ceiling at 1 kHz).  Levels
++  below the highest starved level keep classic fixed-priority semantics
++  (a continuously backlogged level legitimately denies lower ones).
++- Deadline coupling is deliberately absent (fixed N preserves the bound);
++  deadline-urgent tasks preempt via EDF first, and the miss handler stays the
++  observer of any residual miss.
++
+ ## 4. Sporadic Server Interaction
+ 
+ ```
+diff --git a/src/kernel/task/priority_map.hpp b/src/kernel/task/priority_map.hpp
+index 5374071bf..e7773e03f 100644
+--- a/src/kernel/task/priority_map.hpp
++++ b/src/kernel/task/priority_map.hpp
+@@ -52,6 +52,33 @@ class PriorityMap {
+         return 0;
+     }
+ 
++    /// @brief Highest set level in [1, prio) — the starvation-breaker
++    ///        window (issue #242).  Level 0 is the idle band (forcing the
++    ///        idle task can never relieve a starved supervisor), so it is
++    ///        excluded by construction.  O(1): two masked word ops.
++    /// @return Level in [1, prio), or STARVABLE_NONE when no such level
++    ///         is set.
++    static constexpr uint64_t STARVABLE_NONE = ~0ULL;
++    uint64_t highest_starvable_below(uint64_t prio) const noexcept {
++        if (prio <= 1) {
++            return STARVABLE_NONE;
++        }
++        uint64_t lo_mask = (prio >= 64)
++                               ? 0xFFFFFFFFFFFFFFFEULL
++                               : (((1ULL << prio) - 1ULL) & ~1ULL);
++        uint64_t hi_mask =
++            (prio <= 64) ? 0ULL : ((1ULL << (prio - 64)) - 1ULL);
++        uint64_t masked_hi = bitmap_hi_ & hi_mask;
++        if (masked_hi) {
++            return 64 + hal::bits::find_highest_bit(masked_hi);
++        }
++        uint64_t masked_lo = bitmap_lo_ & lo_mask;
++        if (masked_lo) {
++            return hal::bits::find_highest_bit(masked_lo);
++        }
++        return STARVABLE_NONE;
++    }
++
+     /// @brief Returns true if the given priority level is set.
+     bool is_set(uint64_t prio) const noexcept {
+         if (prio >= 64) {
+diff --git a/src/kernel/task/ready_queue_manager.cpp b/src/kernel/task/ready_queue_manager.cpp
+index 0042ceebf..e6a0125ed 100644
+--- a/src/kernel/task/ready_queue_manager.cpp
++++ b/src/kernel/task/ready_queue_manager.cpp
+@@ -66,6 +66,31 @@ TaskControlBlock *ReadyQueueManager::dequeue_highest() noexcept {
+     return tcb;
+ }
+ 
++TaskControlBlock *ReadyQueueManager::dequeue_level(uint64_t prio) noexcept {
++    if (prio == 0 || prio > CONFIG_PRIORITY_CEILING) {
++        return nullptr;
++    }
++    // Level 0 is the idle band: the breaker never forces it (forcing idle
++    // relieves no starved supervisor); the strict path still serves level 0
++    // when it is the top level.
++    if (queues_[prio].empty()) {
++        bitmap_.clear(prio);
++        return nullptr;
++    }
++    auto *tcb = queues_[prio].pop_front();
++    if (queues_[prio].empty()) {
++        bitmap_.clear(prio);
++    }
++    if (tcb) {
++        tcb->rq_priority_ = 0;
++        // Same membership-flag discipline as dequeue_highest(): a dispatched
++        // task must not look queued, or a later enqueue() silently drops a
++        // READY task the scheduler can then never find.
++        tcb->in_ready_queue_ = false;
++    }
++    return tcb;
++}
++
+ TaskControlBlock *ReadyQueueManager::peek_highest() noexcept {
+     uint64_t prio = bitmap_.get_highest_priority();
+     if (prio == 0 && queues_[0].empty()) {
+diff --git a/src/kernel/task/ready_queue_manager.hpp b/src/kernel/task/ready_queue_manager.hpp
+index bde04717d..0a1a2b4a4 100644
+--- a/src/kernel/task/ready_queue_manager.hpp
++++ b/src/kernel/task/ready_queue_manager.hpp
+@@ -37,6 +37,12 @@ class ReadyQueueManager {
+     void enqueue(TaskControlBlock &tcb, uint64_t priority) noexcept;
+     /// @brief Dequeues and returns the highest-priority ready TCB.
+     TaskControlBlock *dequeue_highest() noexcept;
++    /// @brief Dequeues and returns the head TCB at one priority level
++    ///        (issue #242 starvation-breaker: forced dispatch below the top
++    ///        level).  Mirrors dequeue_highest() flag discipline; O(1).
++    /// @return Head TCB, or nullptr when the level holds nothing (stale bit
++    ///         cleared so a phantom level cannot spin the caller).
++    TaskControlBlock *dequeue_level(uint64_t prio) noexcept;
+     /// @brief Returns the highest-priority ready TCB without removing it.
+     TaskControlBlock *peek_highest() noexcept;
+     /// @brief Removes a specific TCB from its priority queue.
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index 5f65ecfcf..c197b8c0f 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -866,6 +866,16 @@ void Scheduler::reset_migration_counts() noexcept {
+         __atomic_store_n(&migration_count_[c], 0ULL, __ATOMIC_RELAXED);
+ }
+ 
++void Scheduler::reset_starvation_breaker() noexcept {
++    // Issue #242: unwatched (NONE) with zero count on every CPU.
++    // Zero-init would fake-watch level 0 (the idle band); like
++    // scheduler_next_task_id above, the explicit reset is the owner.
++    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
++        starve_level_[c] = PriorityMap::STARVABLE_NONE;
++        starve_ticks_[c] = 0;
++    }
++}
++
+ uint64_t Scheduler::stuck_rescue_count() noexcept {
+     return __atomic_load_n(&stuck_rescue_count_, __ATOMIC_RELAXED);
+ }
+@@ -1723,6 +1733,11 @@ bool Scheduler::s_scan_requested_ = false;
+ #endif
+ ReadyQueueManager Scheduler::ready_queues_[CONFIG_MAX_CPUS];
+ DeadlineList Scheduler::deadline_list_;
++// Issue #242: breaker observation starts unwatched (STARVABLE_NONE) with a
++// zero count on every CPU; reset_starvation_breaker() re-establishes this on
++// init and snapshot restore (policy-runtime, never preserved across tests).
++uint64_t Scheduler::starve_level_[CONFIG_MAX_CPUS];
++uint32_t Scheduler::starve_ticks_[CONFIG_MAX_CPUS];
+     constinit TaskControlBlock *Scheduler::idle_task_ = nullptr;
+ TaskControlBlock *Scheduler::idle_tasks_[CONFIG_MAX_CPUS] = {};
+ Scheduler::MailboxEntry
+@@ -1900,6 +1915,9 @@ void Scheduler::init(const SchedulerConfig &cfg) {
+     // Single owner here: init runs on the BSP before any AP exists.
+     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+         scheduler_next_task_id[c] = UINT64_MAX;
++    // Issue #242: breaker starts unwatched (zero-init would fake-watch the
++    // idle band on every CPU).
++    reset_starvation_breaker();
+ 
+ #if CONFIG_DEADLINE_MONITOR_TASK
+     ensure_monitor();
+@@ -2205,6 +2223,39 @@ TaskControlBlock *Scheduler::next_task() noexcept {
+     return own_idle();
+ }
+ 
++TaskControlBlock *Scheduler::next_task_below(uint64_t top) noexcept {
++    // Issue #242 starvation-breaker pick.  Mirrors next_task() eligibility
++    // exactly (READY/RUNNING, affine to this CPU, never the current task);
++    // ineligible heads are dequeued-dropped like next_task().  Each iteration
++    // unlinks at least one node or clears at least one stale bitmap bit
++    // (dequeue_level clears the bit when its queue is empty), both finite,
++    // so the loop always terminates; the caller additionally only invokes
++    // this once per tick.
++    while (rq_own().has_ready()) {
++        uint64_t lvl =
++            rq_own().bitmap().highest_starvable_below(top);
++        if (lvl == PriorityMap::STARVABLE_NONE) {
++            return nullptr;
++        }
++        TaskControlBlock *candidate = rq_own().dequeue_level(lvl);
++        if (!candidate) {
++            continue;
++        }
++        if (candidate == current_task() ||
++            (candidate->state != TaskState::READY &&
++             candidate->state != TaskState::RUNNING) ||
++            queue_target(*candidate) != sched_cpu()) {
++            continue;
++        }
++        return candidate;
++    }
++    // Unreachable in the firing path (bitmap stable under the held
++    // scheduler_lock_ between the counter block and this call), but the
++    // contract promises nullptr — the caller falls back to the strict pick,
++    // which returns idle on an empty queue anyway (identical outcome).
++    return nullptr;
++}
++
+ void Scheduler::set_current(TaskControlBlock &task) noexcept {
+     auto *old = current_task();
+     if (old == &task) {
+@@ -4270,7 +4321,47 @@ void Scheduler::rate_monotonic_schedule() noexcept {
+         restore_preempted_current(current, armed);
+     }
+ 
+-    auto *next = next_task();
++    // Issue #242: bounded starvation-breaker.  Strict RMS above starves
++    // every lower level forever when the top READY level never drains
++    // (convicted: two prio-11 never-blocking spinners alternate and the
++    // prio-10 harness gets zero CPU over 3001 ticks).  When the top level H
++    // is picked while lower non-idle READY levels wait for
++    // kStarvationBreakerTicks consecutive ticks, force exactly one dispatch
++    // below H, then reset to strict RMS.  Counter-only (task priorities are
++    // never mutated: PI/admission untouched); O(1) bitmap ops; identical
++    // debug/release flow; EDF keeps precedence (next_task checks EDF first,
++    // and the breaker only overrides a strict bitmap pick, never an EDF one
++    // — see below).  Worst-case interference is exactly one forced tick per
++    // N = 20 backlogged ticks (docs/specs/scheduler.md).
++    TaskControlBlock *breaker_next = nullptr;
++    {
++        uint64_t cpu = sched_cpu();
++        uint64_t top = rq_own().highest_ready_priority();
++        if (top == 0 ||
++            rq_own().bitmap().highest_starvable_below(top) ==
++                PriorityMap::STARVABLE_NONE) {
++            starve_level_[cpu] = top;
++            starve_ticks_[cpu] = 0;
++        } else if (top == starve_level_[cpu]) {
++            ++starve_ticks_[cpu];
++        } else {
++            starve_level_[cpu] = top;
++            starve_ticks_[cpu] = 1;
++        }
++        if (starve_ticks_[cpu] >= kStarvationBreakerTicks) {
++            // EDF keeps precedence: an EDF-pending tick is a non-strict
++            // dispatch that breaks the starvation pattern, so the breaker
++            // stands down (counter resets below) and next_task() serves the
++            // EDF candidate as today.  edf_preempt_candidate() is safe here:
++            // next_task() evaluates it in this same lock/IRQ context.
++            if (edf_preempt_candidate() == nullptr) {
++                breaker_next = next_task_below(top);
++            }
++            starve_level_[cpu] = PriorityMap::STARVABLE_NONE;
++            starve_ticks_[cpu] = 0;
++        }
++    }
++    auto *next = breaker_next ? breaker_next : next_task();
+ #if defined(CONFIG_DEBUG_IPC_SCHED)
+     if (all_tasks_.size() == 7) {
+         auto *r6 = Scheduler::find_task(6);
+@@ -4675,6 +4766,9 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
+     __atomic_store_n(&scheduler_switch_generation[0], (uint64_t)0,
+                      __ATOMIC_RELEASE);
+     __atomic_store_n(&isr_nesting_own(), (uint64_t)0, __ATOMIC_RELEASE);
++    // Issue #242: breaker observation is policy-runtime — a restored test
++    // must not inherit the previous test's watch window.
++    reset_starvation_breaker();
+ }
+ 
+ void Scheduler::clear_switch_globals() noexcept {
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index af19b63ce..9867e6a22 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -1051,6 +1051,33 @@ struct SwSlots {
+     static uint64_t stuck_rescue_count_;
+     /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
+     static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;
++    /// @brief Starvation-breaker trigger (issue #242): consecutive ticks the
++    ///        top READY level may be picked while lower non-idle READY levels
++    ///        wait before exactly one dispatch below the top is forced.  Fixed
++    ///        constant, deadline-agnostic, so worst-case interference stays
++    ///        exactly 1 forced tick per N = 20 backlogged ticks (20 ms delay
++    ///        ceiling at 1 kHz) in both builds.
++    static constexpr uint32_t kStarvationBreakerTicks = 20;
++    /// @brief Breaker observation per CPU: top level under watch
++    ///        (STARVABLE_NONE = no level watched), consecutive ticks seen.
++    ///        Tick-owned writes under scheduler_lock_; policy-runtime only —
++    ///        reset by reset_starvation_breaker() on init and snapshot
++    ///        restore, never preserved across tests.  Counter-only: task
++    ///        priorities are never mutated (PI/admission untouched).
++    static uint64_t starve_level_[CONFIG_MAX_CPUS];
++    static uint32_t starve_ticks_[CONFIG_MAX_CPUS];
++    /// @brief Forced pick below @p top for the breaker: highest non-idle
++    ///        READY level under top, eligibility-filtered exactly like
++    ///        next_task() (READY/RUNNING, affine here, never current).
++    ///        Ineligible heads are dequeued-dropped like next_task(); the
++    ///        drop loop is bounded (each iteration unlinks >= 1 node or
++    ///        clears >= 1 stale bit, both finite).
++    /// @return Dispatchable TCB (already dequeued, INV-2 clean), or nullptr
++    ///         when nothing below top is eligible (caller falls back to the
++    ///         strict pick).
++    static TaskControlBlock *next_task_below(uint64_t top) noexcept;
++    /// @brief Resets breaker observation on every CPU (init + restore).
++    static void reset_starvation_breaker() noexcept;
+     /// @brief Rescue warn cadence (issue #249): a warn per rescue feeds
+     ///        serial + redraw timing back into the race window it reports
+     ///        (observed self-sustaining flood). Log the 1st rescue and
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 2db6e65f1..015d0ab24 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -45,7 +45,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex+semaphore
+ 
+     // scheduler
+-    {"scheduler_core",       20,    0,       0      },  // reschedule/remove/reap/quantum/waitpid/FIFO + loadavg EMA math (issue #172) + 2 stranded-READY rescue tests (issue #249) + 1 evict-backstop test (issue #250)
++    {"scheduler_core",       21,    0,       0      },  // reschedule/remove/reap/quantum/waitpid/FIFO + loadavg EMA math (issue #172) + 2 stranded-READY rescue tests (issue #249) + 1 evict-backstop test (issue #250) + 1 starvation-breaker test (issue #242)
+     {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
+     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
+     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server scheduling policy
+diff --git a/src/kernel/test/test_scheduler.cpp b/src/kernel/test/test_scheduler.cpp
+index bae3f4f33..a30f83753 100644
+--- a/src/kernel/test/test_scheduler.cpp
++++ b/src/kernel/test/test_scheduler.cpp
+@@ -27,6 +27,7 @@
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/arch/irq_guard.hpp>
++#include <kernel/arch/timer.hpp>
+ #include "test_sched_helpers.hpp"
+ 
+ using namespace kernel;
+@@ -751,6 +752,73 @@ JARVIS_TEST(scheduler_evict_queued_current_drops_safely,
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: Issue #242 starvation-breaker — two never-blocking tasks above
++// the harness must not deny it forever. The breaker forces one lower
++// dispatch per kStarvationBreakerTicks backlogged ticks, so the harness
++// completes its loop (convicted pre-fix by GDB snapshots: harness exec
++// frozen at 10 over 3001 ticks while two prio-11 spinners split them 50/50).
++// Input: Two live forever-spinners one level above the harness (FIXED, never
++// park/block) + a harness loop of ten 5 ms NANOSLEEPs (each wakeup needs a
++// fresh dispatch).
++// Expect: Harness completes all sleeps within the tick budget (breaker
++// forced a dispatch after each expiry); spinners teardown cleanly. Pre-fix
++// this hangs on the first wakeup (class TIMEOUT); post-fix it completes in
++// well under budget.
++// Depends: RMS breaker (next_task_below), forever_entry, Timer::ticks.
++JARVIS_TEST(scheduler_breaker_lower_progress, "PRE: none | POST: none") {
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT(me != nullptr);
++    // Strictly above the harness under any suite priority (convicted shape
++    // was harness 10 / spinners 11).
++    uint64_t spin_prio = me->priority + 1;
++    auto *spin_a =
++        TaskControlBlock::create(kernel::test::forever_entry, spin_prio, 10);
++    JARVIS_ASSERT(spin_a != nullptr);
++    auto *spin_b =
++        TaskControlBlock::create(kernel::test::forever_entry, spin_prio, 10);
++    JARVIS_ASSERT(spin_b != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*spin_a, SchedPolicy::FIXED));
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*spin_b, SchedPolicy::FIXED));
++    {
++        arch::IrqGuard guard;
++        Scheduler::add_task(*spin_a);
++        Scheduler::add_task(*spin_b);
++    }
++    Scheduler::reschedule();
++    // Sleep-based window: each NANOSLEEP blocks the harness (spinners take
++    // the CPU), and every wakeup needs a fresh dispatch. Pre-fix the first
++    // wakeup is never dispatched (strict RMS keeps picking the two 11s) and
++    // the test hangs; post-fix the breaker forces a lower dispatch within
++    // kStarvationBreakerTicks of each expiry. Ten 5 ms sleeps complete in
++    // well under the budget iff the breaker works.
++    struct SleepReq {
++        int64_t tv_sec;
++        int64_t tv_nsec;
++    };
++    uint64_t tick_budget = 3000;
++    uint64_t start = arch::Timer::ticks();
++    uint64_t done = 0;
++    for (uint64_t iter = 0; iter < 10; ++iter) {
++        SleepReq req{};
++        req.tv_sec = 0;
++        req.tv_nsec = 5 * 1000000LL;
++        (void)Syscall::handle(static_cast<uint64_t>(SyscallNumber::NANOSLEEP),
++                              reinterpret_cast<uint64_t>(&req), 0, 0, 0,
++                              nullptr);
++        ++done;
++    }
++    uint64_t elapsed = arch::Timer::ticks() - start;
++    JARVIS_ASSERT_FMT(done == 10, "harness starved: %lu/10", done);
++    JARVIS_ASSERT_FMT(elapsed < tick_budget, "no breaker progress in %lu",
++                      elapsed);
++    // Cleanup BEFORE final assert (cookbook Rule 5): dispatched forever-tasks
++    // reclaim via the zombie path (no delete: drain frees MemPool blocks).
++    kernel::test::terminate_and_drain(*spin_a);
++    kernel::test::terminate_and_drain(*spin_b);
++    JARVIS_TEST_PASS();
++}
++
+ void register_scheduler_tests() {
+     Logger::info("Registering scheduler tests");
+     JARVIS_REGISTER_TEST(scheduler_task_count);
+@@ -773,4 +841,5 @@ void register_scheduler_tests() {
+     JARVIS_REGISTER_TEST(scheduler_stranded_ready_rescued);    // issue #249
+     JARVIS_REGISTER_TEST(scheduler_evict_current_then_rescued); // issue #249
+     JARVIS_REGISTER_TEST(scheduler_evict_queued_current_drops_safely); // #250
++    JARVIS_REGISTER_TEST(scheduler_breaker_lower_progress); // issue #242
+ }

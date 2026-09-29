@@ -52,6 +52,33 @@ class PriorityMap {
         return 0;
     }
 
+    /// @brief Highest set level in [1, prio) — the starvation-breaker
+    ///        window (issue #242).  Level 0 is the idle band (forcing the
+    ///        idle task can never relieve a starved supervisor), so it is
+    ///        excluded by construction.  O(1): two masked word ops.
+    /// @return Level in [1, prio), or STARVABLE_NONE when no such level
+    ///         is set.
+    static constexpr uint64_t STARVABLE_NONE = ~0ULL;
+    uint64_t highest_starvable_below(uint64_t prio) const noexcept {
+        if (prio <= 1) {
+            return STARVABLE_NONE;
+        }
+        uint64_t lo_mask = (prio >= 64)
+                               ? 0xFFFFFFFFFFFFFFFEULL
+                               : (((1ULL << prio) - 1ULL) & ~1ULL);
+        uint64_t hi_mask =
+            (prio <= 64) ? 0ULL : ((1ULL << (prio - 64)) - 1ULL);
+        uint64_t masked_hi = bitmap_hi_ & hi_mask;
+        if (masked_hi) {
+            return 64 + hal::bits::find_highest_bit(masked_hi);
+        }
+        uint64_t masked_lo = bitmap_lo_ & lo_mask;
+        if (masked_lo) {
+            return hal::bits::find_highest_bit(masked_lo);
+        }
+        return STARVABLE_NONE;
+    }
+
     /// @brief Returns true if the given priority level is set.
     bool is_set(uint64_t prio) const noexcept {
         if (prio >= 64) {

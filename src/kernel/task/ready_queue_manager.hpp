@@ -37,6 +37,12 @@ class ReadyQueueManager {
     void enqueue(TaskControlBlock &tcb, uint64_t priority) noexcept;
     /// @brief Dequeues and returns the highest-priority ready TCB.
     TaskControlBlock *dequeue_highest() noexcept;
+    /// @brief Dequeues and returns the head TCB at one priority level
+    ///        (issue #242 starvation-breaker: forced dispatch below the top
+    ///        level).  Mirrors dequeue_highest() flag discipline; O(1).
+    /// @return Head TCB, or nullptr when the level holds nothing (stale bit
+    ///         cleared so a phantom level cannot spin the caller).
+    TaskControlBlock *dequeue_level(uint64_t prio) noexcept;
     /// @brief Returns the highest-priority ready TCB without removing it.
     TaskControlBlock *peek_highest() noexcept;
     /// @brief Removes a specific TCB from its priority queue.

@@ -1051,6 +1051,33 @@ struct SwSlots {
     static uint64_t stuck_rescue_count_;
     /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
     static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;
+    /// @brief Starvation-breaker trigger (issue #242): consecutive ticks the
+    ///        top READY level may be picked while lower non-idle READY levels
+    ///        wait before exactly one dispatch below the top is forced.  Fixed
+    ///        constant, deadline-agnostic, so worst-case interference stays
+    ///        exactly 1 forced tick per N = 20 backlogged ticks (20 ms delay
+    ///        ceiling at 1 kHz) in both builds.
+    static constexpr uint32_t kStarvationBreakerTicks = 20;
+    /// @brief Breaker observation per CPU: top level under watch
+    ///        (STARVABLE_NONE = no level watched), consecutive ticks seen.
+    ///        Tick-owned writes under scheduler_lock_; policy-runtime only —
+    ///        reset by reset_starvation_breaker() on init and snapshot
+    ///        restore, never preserved across tests.  Counter-only: task
+    ///        priorities are never mutated (PI/admission untouched).
+    static uint64_t starve_level_[CONFIG_MAX_CPUS];
+    static uint32_t starve_ticks_[CONFIG_MAX_CPUS];
+    /// @brief Forced pick below @p top for the breaker: highest non-idle
+    ///        READY level under top, eligibility-filtered exactly like
+    ///        next_task() (READY/RUNNING, affine here, never current).
+    ///        Ineligible heads are dequeued-dropped like next_task(); the
+    ///        drop loop is bounded (each iteration unlinks >= 1 node or
+    ///        clears >= 1 stale bit, both finite).
+    /// @return Dispatchable TCB (already dequeued, INV-2 clean), or nullptr
+    ///         when nothing below top is eligible (caller falls back to the
+    ///         strict pick).
+    static TaskControlBlock *next_task_below(uint64_t top) noexcept;
+    /// @brief Resets breaker observation on every CPU (init + restore).
+    static void reset_starvation_breaker() noexcept;
     /// @brief Rescue warn cadence (issue #249): a warn per rescue feeds
     ///        serial + redraw timing back into the race window it reports
     ///        (observed self-sustaining flood). Log the 1st rescue and

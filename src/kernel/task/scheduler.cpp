@@ -866,6 +866,16 @@ void Scheduler::reset_migration_counts() noexcept {
         __atomic_store_n(&migration_count_[c], 0ULL, __ATOMIC_RELAXED);
 }
 
+void Scheduler::reset_starvation_breaker() noexcept {
+    // Issue #242: unwatched (NONE) with zero count on every CPU.
+    // Zero-init would fake-watch level 0 (the idle band); like
+    // scheduler_next_task_id above, the explicit reset is the owner.
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
+        starve_level_[c] = PriorityMap::STARVABLE_NONE;
+        starve_ticks_[c] = 0;
+    }
+}
+
 uint64_t Scheduler::stuck_rescue_count() noexcept {
     return __atomic_load_n(&stuck_rescue_count_, __ATOMIC_RELAXED);
 }
@@ -1723,6 +1733,11 @@ bool Scheduler::s_scan_requested_ = false;
 #endif
 ReadyQueueManager Scheduler::ready_queues_[CONFIG_MAX_CPUS];
 DeadlineList Scheduler::deadline_list_;
+// Issue #242: breaker observation starts unwatched (STARVABLE_NONE) with a
+// zero count on every CPU; reset_starvation_breaker() re-establishes this on
+// init and snapshot restore (policy-runtime, never preserved across tests).
+uint64_t Scheduler::starve_level_[CONFIG_MAX_CPUS];
+uint32_t Scheduler::starve_ticks_[CONFIG_MAX_CPUS];
     constinit TaskControlBlock *Scheduler::idle_task_ = nullptr;
 TaskControlBlock *Scheduler::idle_tasks_[CONFIG_MAX_CPUS] = {};
 Scheduler::MailboxEntry
@@ -1900,6 +1915,9 @@ void Scheduler::init(const SchedulerConfig &cfg) {
     // Single owner here: init runs on the BSP before any AP exists.
     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
         scheduler_next_task_id[c] = UINT64_MAX;
+    // Issue #242: breaker starts unwatched (zero-init would fake-watch the
+    // idle band on every CPU).
+    reset_starvation_breaker();
 
 #if CONFIG_DEADLINE_MONITOR_TASK
     ensure_monitor();
@@ -2203,6 +2221,39 @@ TaskControlBlock *Scheduler::next_task() noexcept {
     }
 
     return own_idle();
+}
+
+TaskControlBlock *Scheduler::next_task_below(uint64_t top) noexcept {
+    // Issue #242 starvation-breaker pick.  Mirrors next_task() eligibility
+    // exactly (READY/RUNNING, affine to this CPU, never the current task);
+    // ineligible heads are dequeued-dropped like next_task().  Each iteration
+    // unlinks at least one node or clears at least one stale bitmap bit
+    // (dequeue_level clears the bit when its queue is empty), both finite,
+    // so the loop always terminates; the caller additionally only invokes
+    // this once per tick.
+    while (rq_own().has_ready()) {
+        uint64_t lvl =
+            rq_own().bitmap().highest_starvable_below(top);
+        if (lvl == PriorityMap::STARVABLE_NONE) {
+            return nullptr;
+        }
+        TaskControlBlock *candidate = rq_own().dequeue_level(lvl);
+        if (!candidate) {
+            continue;
+        }
+        if (candidate == current_task() ||
+            (candidate->state != TaskState::READY &&
+             candidate->state != TaskState::RUNNING) ||
+            queue_target(*candidate) != sched_cpu()) {
+            continue;
+        }
+        return candidate;
+    }
+    // Unreachable in the firing path (bitmap stable under the held
+    // scheduler_lock_ between the counter block and this call), but the
+    // contract promises nullptr — the caller falls back to the strict pick,
+    // which returns idle on an empty queue anyway (identical outcome).
+    return nullptr;
 }
 
 void Scheduler::set_current(TaskControlBlock &task) noexcept {
@@ -4270,7 +4321,47 @@ void Scheduler::rate_monotonic_schedule() noexcept {
         restore_preempted_current(current, armed);
     }
 
-    auto *next = next_task();
+    // Issue #242: bounded starvation-breaker.  Strict RMS above starves
+    // every lower level forever when the top READY level never drains
+    // (convicted: two prio-11 never-blocking spinners alternate and the
+    // prio-10 harness gets zero CPU over 3001 ticks).  When the top level H
+    // is picked while lower non-idle READY levels wait for
+    // kStarvationBreakerTicks consecutive ticks, force exactly one dispatch
+    // below H, then reset to strict RMS.  Counter-only (task priorities are
+    // never mutated: PI/admission untouched); O(1) bitmap ops; identical
+    // debug/release flow; EDF keeps precedence (next_task checks EDF first,
+    // and the breaker only overrides a strict bitmap pick, never an EDF one
+    // — see below).  Worst-case interference is exactly one forced tick per
+    // N = 20 backlogged ticks (docs/specs/scheduler.md).
+    TaskControlBlock *breaker_next = nullptr;
+    {
+        uint64_t cpu = sched_cpu();
+        uint64_t top = rq_own().highest_ready_priority();
+        if (top == 0 ||
+            rq_own().bitmap().highest_starvable_below(top) ==
+                PriorityMap::STARVABLE_NONE) {
+            starve_level_[cpu] = top;
+            starve_ticks_[cpu] = 0;
+        } else if (top == starve_level_[cpu]) {
+            ++starve_ticks_[cpu];
+        } else {
+            starve_level_[cpu] = top;
+            starve_ticks_[cpu] = 1;
+        }
+        if (starve_ticks_[cpu] >= kStarvationBreakerTicks) {
+            // EDF keeps precedence: an EDF-pending tick is a non-strict
+            // dispatch that breaks the starvation pattern, so the breaker
+            // stands down (counter resets below) and next_task() serves the
+            // EDF candidate as today.  edf_preempt_candidate() is safe here:
+            // next_task() evaluates it in this same lock/IRQ context.
+            if (edf_preempt_candidate() == nullptr) {
+                breaker_next = next_task_below(top);
+            }
+            starve_level_[cpu] = PriorityMap::STARVABLE_NONE;
+            starve_ticks_[cpu] = 0;
+        }
+    }
+    auto *next = breaker_next ? breaker_next : next_task();
 #if defined(CONFIG_DEBUG_IPC_SCHED)
     if (all_tasks_.size() == 7) {
         auto *r6 = Scheduler::find_task(6);
@@ -4675,6 +4766,9 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
     __atomic_store_n(&scheduler_switch_generation[0], (uint64_t)0,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&isr_nesting_own(), (uint64_t)0, __ATOMIC_RELEASE);
+    // Issue #242: breaker observation is policy-runtime — a restored test
+    // must not inherit the previous test's watch window.
+    reset_starvation_breaker();
 }
 
 void Scheduler::clear_switch_globals() noexcept {

@@ -66,6 +66,31 @@ TaskControlBlock *ReadyQueueManager::dequeue_highest() noexcept {
     return tcb;
 }
 
+TaskControlBlock *ReadyQueueManager::dequeue_level(uint64_t prio) noexcept {
+    if (prio == 0 || prio > CONFIG_PRIORITY_CEILING) {
+        return nullptr;
+    }
+    // Level 0 is the idle band: the breaker never forces it (forcing idle
+    // relieves no starved supervisor); the strict path still serves level 0
+    // when it is the top level.
+    if (queues_[prio].empty()) {
+        bitmap_.clear(prio);
+        return nullptr;
+    }
+    auto *tcb = queues_[prio].pop_front();
+    if (queues_[prio].empty()) {
+        bitmap_.clear(prio);
+    }
+    if (tcb) {
+        tcb->rq_priority_ = 0;
+        // Same membership-flag discipline as dequeue_highest(): a dispatched
+        // task must not look queued, or a later enqueue() silently drops a
+        // READY task the scheduler can then never find.
+        tcb->in_ready_queue_ = false;
+    }
+    return tcb;
+}
+
 TaskControlBlock *ReadyQueueManager::peek_highest() noexcept {
     uint64_t prio = bitmap_.get_highest_priority();
     if (prio == 0 && queues_[0].empty()) {

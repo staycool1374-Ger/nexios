@@ -27,6 +27,7 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/irq_guard.hpp>
+#include <kernel/arch/timer.hpp>
 #include "test_sched_helpers.hpp"
 
 using namespace kernel;
@@ -751,6 +752,73 @@ JARVIS_TEST(scheduler_evict_queued_current_drops_safely,
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Issue #242 starvation-breaker — two never-blocking tasks above
+// the harness must not deny it forever. The breaker forces one lower
+// dispatch per kStarvationBreakerTicks backlogged ticks, so the harness
+// completes its loop (convicted pre-fix by GDB snapshots: harness exec
+// frozen at 10 over 3001 ticks while two prio-11 spinners split them 50/50).
+// Input: Two live forever-spinners one level above the harness (FIXED, never
+// park/block) + a harness loop of ten 5 ms NANOSLEEPs (each wakeup needs a
+// fresh dispatch).
+// Expect: Harness completes all sleeps within the tick budget (breaker
+// forced a dispatch after each expiry); spinners teardown cleanly. Pre-fix
+// this hangs on the first wakeup (class TIMEOUT); post-fix it completes in
+// well under budget.
+// Depends: RMS breaker (next_task_below), forever_entry, Timer::ticks.
+JARVIS_TEST(scheduler_breaker_lower_progress, "PRE: none | POST: none") {
+    auto *me = Scheduler::current_task();
+    JARVIS_ASSERT(me != nullptr);
+    // Strictly above the harness under any suite priority (convicted shape
+    // was harness 10 / spinners 11).
+    uint64_t spin_prio = me->priority + 1;
+    auto *spin_a =
+        TaskControlBlock::create(kernel::test::forever_entry, spin_prio, 10);
+    JARVIS_ASSERT(spin_a != nullptr);
+    auto *spin_b =
+        TaskControlBlock::create(kernel::test::forever_entry, spin_prio, 10);
+    JARVIS_ASSERT(spin_b != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*spin_a, SchedPolicy::FIXED));
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*spin_b, SchedPolicy::FIXED));
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*spin_a);
+        Scheduler::add_task(*spin_b);
+    }
+    Scheduler::reschedule();
+    // Sleep-based window: each NANOSLEEP blocks the harness (spinners take
+    // the CPU), and every wakeup needs a fresh dispatch. Pre-fix the first
+    // wakeup is never dispatched (strict RMS keeps picking the two 11s) and
+    // the test hangs; post-fix the breaker forces a lower dispatch within
+    // kStarvationBreakerTicks of each expiry. Ten 5 ms sleeps complete in
+    // well under the budget iff the breaker works.
+    struct SleepReq {
+        int64_t tv_sec;
+        int64_t tv_nsec;
+    };
+    uint64_t tick_budget = 3000;
+    uint64_t start = arch::Timer::ticks();
+    uint64_t done = 0;
+    for (uint64_t iter = 0; iter < 10; ++iter) {
+        SleepReq req{};
+        req.tv_sec = 0;
+        req.tv_nsec = 5 * 1000000LL;
+        (void)Syscall::handle(static_cast<uint64_t>(SyscallNumber::NANOSLEEP),
+                              reinterpret_cast<uint64_t>(&req), 0, 0, 0,
+                              nullptr);
+        ++done;
+    }
+    uint64_t elapsed = arch::Timer::ticks() - start;
+    JARVIS_ASSERT_FMT(done == 10, "harness starved: %lu/10", done);
+    JARVIS_ASSERT_FMT(elapsed < tick_budget, "no breaker progress in %lu",
+                      elapsed);
+    // Cleanup BEFORE final assert (cookbook Rule 5): dispatched forever-tasks
+    // reclaim via the zombie path (no delete: drain frees MemPool blocks).
+    kernel::test::terminate_and_drain(*spin_a);
+    kernel::test::terminate_and_drain(*spin_b);
+    JARVIS_TEST_PASS();
+}
+
 void register_scheduler_tests() {
     Logger::info("Registering scheduler tests");
     JARVIS_REGISTER_TEST(scheduler_task_count);
@@ -773,4 +841,5 @@ void register_scheduler_tests() {
     JARVIS_REGISTER_TEST(scheduler_stranded_ready_rescued);    // issue #249
     JARVIS_REGISTER_TEST(scheduler_evict_current_then_rescued); // issue #249
     JARVIS_REGISTER_TEST(scheduler_evict_queued_current_drops_safely); // #250
+    JARVIS_REGISTER_TEST(scheduler_breaker_lower_progress); // issue #242
 }
