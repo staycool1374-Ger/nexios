@@ -169,6 +169,14 @@ void TaskControlBlock::init_sporadic_server(
 ///        The task's own id serves as the cspace_id decoded from handles
 ///        (no global registry in iteration-1 CSpace; handles are validated
 ///        against the current task's root CNode only).
+///        Issue #265 contract note: the 8-bit truncation is a same-CNode
+///        self-consistency tag, NOT a global identity.  lookup() always
+///        resolves inside the caller's own CNode with slot+gen+rights fully
+///        mediating, so aliased tags across tasks grant no cross-task access
+///        and nothing can exhaust (CNodes free on task death).  The mask is
+///        load-bearing: storing the full id while the wire format stays
+///        8-bit would self-reject every task with id > 255.  A future global
+///        cspace registry must widen CAP_HANDLE_IDBITS first.
 void TaskControlBlock::ensure_cspace() noexcept {
     if (cspace_)
         return;

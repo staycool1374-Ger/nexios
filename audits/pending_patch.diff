@@ -2,27 +2,18 @@ diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
 index 86cb65702..c4b1b3f78 100644
 --- a/src/kernel/task/task.cpp
 +++ b/src/kernel/task/task.cpp
-@@ -76,12 +76,21 @@ size_t g_recent_tasks_idx = 0;
- 
- namespace kernel {
- namespace debug {
-+// Issue #264: per-slot single-writer contract. The slot index is claimed
-+// with an atomic fetch-add (no new lock: creation paths must not acquire
-+// spinlocks for diagnostics — lock-order risk), so concurrent writers land
-+// in distinct slots: no mixed entry-from-A/tcb-from-B records, no lost
-+// updates. The ring is write-only diagnostics (also GDB-readable
-+// post-mortem); any future READER must pair acquire semantics with these
-+// slot writes.
- void record_task_entry(uint64_t entry, uint64_t tcb) {
--    auto &r = g_recent_tasks[g_recent_tasks_idx % kRecentTasks];
-+    size_t my_idx = __atomic_fetch_add(&g_recent_tasks_idx, 1UL,
-+                                       __ATOMIC_RELAXED) %
-+                    kRecentTasks;
-+    auto &r = g_recent_tasks[my_idx];
-     r.entry = entry;
-     r.tcb = tcb;
-     r.ticks = 0;
--    g_recent_tasks_idx++;
- }
- /// @brief If `value` equals the low 32 bits or full value of a recently
- /// created task's `entry`, return that task's tcb address; else 0.
+@@ -160,6 +169,14 @@ void TaskControlBlock::init_sporadic_server(
+ ///        The task's own id serves as the cspace_id decoded from handles
+ ///        (no global registry in iteration-1 CSpace; handles are validated
+ ///        against the current task's root CNode only).
++///        Issue #265 contract note: the 8-bit truncation is a same-CNode
++///        self-consistency tag, NOT a global identity.  lookup() always
++///        resolves inside the caller's own CNode with slot+gen+rights fully
++///        mediating, so aliased tags across tasks grant no cross-task access
++///        and nothing can exhaust (CNodes free on task death).  The mask is
++///        load-bearing: storing the full id while the wire format stays
++///        8-bit would self-reject every task with id > 255.  A future global
++///        cspace registry must widen CAP_HANDLE_IDBITS first.
+ void TaskControlBlock::ensure_cspace() noexcept {
+     if (cspace_)
+         return;
