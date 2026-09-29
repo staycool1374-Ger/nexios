@@ -91,7 +91,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Actualize `README.md` "Recent Release Highlights": prepend a `### **vX.Y.Z — Name**` section (same 4-bullet shape as prior releases); `readme.html` carries no highlights section (version line only)
 - Move completed roadmap items from `prompts/ROADMAP.md` → `prompts/ROADMAP_done.md`; update `EXECUTIVE OVERRIDE` to next target
 - Strip `-dev` from `KERNEL_VERSION_STRING` and set `stage = ""` in `version.hpp`
-- Regenerate manifest: `tree -I "build|obj|.git|node_modules" > ../project_structure.txt`
+- Regenerate manifest: `tree -I "build|obj|.git|node_modules" > project_structure.txt` (workspace root — the tracked file)
 - Commit all changes: `git add -A && git commit -m "release: v$(major).$(minor).$(patch)"`
 - Push: `git push origin main`
 - Tag: `git tag v$(major).$(minor).$(patch) && git push origin v$(major).$(minor).$(patch)`
