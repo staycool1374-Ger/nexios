@@ -1,24 +1,16 @@
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -531,13 +531,13 @@
- #if defined(CONFIG_ARCH_X86_64)
-     kernel::gs::try_set_multiboot(magic, mb_info, ctx);
-     extern const uint64_t kernel_stack_top;
--    // Issue #251: take the ADDRESS explicitly. A value-load ("r"(symbol))
--    // relies on the toolchain resolving the symbol's GOT slot for a double
--    // dereference; Ubuntu-GCC+LTO misresolved it (slot past image end),
--    // loading RSP with wild RAM bytes and triple-faulting pre-serial.
--    // Address-of uses the single-load pattern every other extern access
--    // (e.g. try_set_multiboot one line above) resolves correctly with.
--    asm volatile("mov %0, %%rsp\n" : : "r"(&kernel_stack_top));
-+    // Issue #251: kernel_stack_top is a rodata DESCRIPTOR (stack.asm:
-+    // `kernel_stack_top: dq kernel_stack + 16384`); only the value-load
-+    // yields the linked stack top, while `&kernel_stack_top` is the
-+    // descriptor slot's own address (and diverges from set_tss_rsp0
-+    // below). The Ubuntu-GCC+LTO GOT misresolution must be fixed at the
-+    // toolchain/linker layer, not by changing load semantics here.
-+    asm volatile("mov %0, %%rsp\n" : : "r"(kernel_stack_top));
-     kernel::gs::boot_info().multiboot_magic = magic;
-     kernel::gs::boot_info().multiboot_info = mb_info;
- #elif defined(CONFIG_ARCH_AARCH64)
+diff --git a/audits/check7-263-retrieval.md b/audits/check7-263-retrieval.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/audits/check7-263-retrieval.md
+@@ -0,0 +1,10 @@
++# Check-7 retrieval remediation - issue #263 (kslot_snapshot_restore)
++
++The restore-layout fix in src/kernel/task/task.cpp is code-correct;
++this audit REJECTED it solely for missing check-7 retrieval artifacts.
++
++Corrective action (procedural, no source change):
++1. Run one graphify query/path over the kslot snapshot layout and one
++   obsidian_search_vault for the kslot spec plus audits/done reports.
++2. Paste each query plus a one-line disposition on issue #263 and re-submit
++   the unchanged pending_patch.diff for re-audit.

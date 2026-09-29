@@ -745,23 +745,29 @@ void kslot_snapshot_capture(uint8_t *dst) {
 void kslot_snapshot_restore(const uint8_t *src) {
     size_t off = 0;
     for (unsigned i = 0; i < 8; ++i) {
-        if (!s_kstack_pt_pages[i])
-            continue;
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        __builtin_memcpy(
-            reinterpret_cast<void *>(arch::HHDM_OFFSET + s_kstack_pt_pages[i]),
-            src + off, arch::PAGE_SIZE);
+        if (s_kstack_pt_pages[i]) {
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            __builtin_memcpy(
+                reinterpret_cast<void *>(arch::HHDM_OFFSET +
+                                         s_kstack_pt_pages[i]),
+                src + off, arch::PAGE_SIZE);
 #if defined(CONFIG_ARCH_X86_64)
-        // Flush the TLB for every window VA backed by this PT page.  invlpg
-        // on an unmapped VA is a documented no-op (no exception).
-        uint64_t base_va = CONFIG_KSTACK_WINDOW_BASE +
-                           static_cast<uint64_t>(i) * 512 * arch::PAGE_SIZE;
-        for (unsigned e = 0; e < 512; ++e)
-            asm volatile("invlpg (%0)"
-                         :
-                         : "r"(base_va + e * arch::PAGE_SIZE)
-                         : "memory");
+            // Flush the TLB for every window VA backed by this PT page.
+            // invlpg on an unmapped VA is a documented no-op (no exception).
+            uint64_t base_va = CONFIG_KSTACK_WINDOW_BASE +
+                               static_cast<uint64_t>(i) * 512 *
+                                   arch::PAGE_SIZE;
+            for (unsigned e = 0; e < 512; ++e)
+                asm volatile("invlpg (%0)"
+                             :
+                             : "r"(base_va + e * arch::PAGE_SIZE)
+                             : "memory");
 #endif // CONFIG_ARCH_X86_64
+        }
+        // Issue #263: advance unconditionally, mirroring capture (which
+        // writes zeros for null slots but still advances). Skipping the
+        // advance on null slots shifts every later page read plus the
+        // trailing bump/list/pool reads — silent wrong-state restore.
         off += arch::PAGE_SIZE;
     }
     __builtin_memcpy(&s_kslot_bump, src + off, sizeof(s_kslot_bump));
