@@ -72,8 +72,14 @@ class CNode : public KernelObject {
 
     /// @brief Installs @p obj into the first free slot with the given type
     ///        and rights.  Takes a strong reference (acquire()) on success.
+    /// @param gen_out when non-null, receives the generation assigned to the
+    ///        occupied slot, written inside the slot-table lock (issue #266:
+    ///        lets syscall returns encode the handle with no install->read
+    ///        TOCTOU against SMP cross-task grants; stale gens can only fail
+    ///        closed in lookup).
     /// @return slot index on success, -1 when full or the target is revoked.
-    int install(KernelObject *obj, CapType type, uint32_t rights) noexcept;
+    int install(KernelObject *obj, CapType type, uint32_t rights,
+                uint32_t *gen_out = nullptr) noexcept;
 
     /// @brief Removes the slot at @p idx (clears and releases the target).
     ///        Idempotent: an already-free slot is a no-op.  The target is
@@ -115,17 +121,25 @@ size_t occupied_count(const CNode *cspace) noexcept;
 
 /// @brief Copies the capability at @p src_handle of @p src into @p dst.
 ///        The destination slot inherits the source rights (COPY-capped).
-int copy(CNode *src, uint64_t src_handle, CNode *dst) noexcept;
+/// @param gen_out when non-null, receives the new destination slot's
+///        generation (issue #266; written inside the install lock).
+int copy(CNode *src, uint64_t src_handle, CNode *dst,
+         uint32_t *gen_out = nullptr) noexcept;
 
 /// @brief Grants the capability at @p src_handle of @p src into @p dst.
 ///        Requires CAP_RIGHT_GRANT on the source slot; clears the source
 ///        GRANT right after use (mint-once semantics).
-int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept;
+/// @param gen_out when non-null, receives the new destination slot's
+///        generation (issue #266; written inside the install lock).
+int grant(CNode *src, uint64_t src_handle, CNode *dst,
+          uint32_t *gen_out = nullptr) noexcept;
 
 /// @brief Copies the capability with a reduced rights mask and, for
 ///        endpoints, a new badge.
+/// @param gen_out when non-null, receives the new destination slot's
+///        generation (issue #266; written inside the install lock).
 int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
-         uint32_t badge) noexcept;
+         uint32_t badge, uint32_t *gen_out = nullptr) noexcept;
 
 /// @brief Retypes the Untyped at @p untyped_handle in @p cspace into a new
 ///        capability of @p target_type, installed into @p cspace.  Supports
@@ -136,7 +150,10 @@ int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
 ///        exact-size degenerate case (no child).  Non-destructive on
 ///        validation/capacity failure; fail-closed after the guard is claimed.
 /// @return the new target slot index, or -1 on any failure.
+/// @param gen_out when non-null, receives the new target slot's generation
+///        (issue #266; written inside the install lock).
 int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
-           size_t size, uint32_t rights) noexcept;
+           size_t size, uint32_t rights,
+           uint32_t *gen_out = nullptr) noexcept;
 
 } // namespace kernel::cap

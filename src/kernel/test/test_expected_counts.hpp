@@ -86,7 +86,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // cap — capability-based access control (CSpace)
     {"cap_core",             10,    0,       0      },  // CSpace engine: CNode/CSlot lifecycle, handle decode, revoke
     {"cap_lifecycle",         8,    0,       0      },  // grant/copy/revoke/mint + Endpoint/FrameCap objects
-    {"cap_syscall",           8,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch
+    {"cap_syscall",           9,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch + returned-handle roundtrip (issue #266)
     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
     {"cap_untyped",          18,    0,       0      },  // Untyped allocator + sub-range carve/child split (issue #1)
     {"cap_mmio",              14,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3) + revocation-closure (issue #8)

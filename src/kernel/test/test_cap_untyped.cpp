@@ -104,11 +104,11 @@ void cap_retype_happy_entry() {
         static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE),
         nullptr);
     g_rtype_ret = ret;
-    if (ret < static_cast<uint64_t>(CONFIG_CSLOT_COUNT)) {
+    if (ret != static_cast<uint64_t>(-1)) {
+        // Issue #266: the return is an opaque handle, usable directly with
+        // lookup — no manual re-encoding from a slot index.
         KernelObject *target = cap::lookup(
-            cs, cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(ret),
-                                   cs->slot_gen(static_cast<uint32_t>(ret))),
-            cap::CapType::Frame, cap::CAP_RIGHT_READ);
+            cs, ret, cap::CapType::Frame, cap::CAP_RIGHT_READ);
         if (target) {
             auto *fc = static_cast<cap::FrameCap *>(target);
             g_rtype_frame_ok =
@@ -131,8 +131,8 @@ void cap_retype_happy_entry() {
         g_rtype_child_ok = 0;
     }
     cs->remove(static_cast<uint32_t>(s));
-    if (ret < static_cast<uint64_t>(CONFIG_CSLOT_COUNT))
-        cs->remove(static_cast<uint32_t>(ret));
+    if (ret != static_cast<uint64_t>(-1))
+        cs->remove(cap::handle_slot(ret));
     if (child_idx >= 0)
         cs->remove(static_cast<uint32_t>(child_idx));
     ut->release();
@@ -208,8 +208,8 @@ void cap_retype_validation_entry() {
         static_cast<uint64_t>(sz),
         static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
     cs->remove(static_cast<uint32_t>(s));
-    if (g_rtype_val[6] < static_cast<uint64_t>(CONFIG_CSLOT_COUNT))
-        cs->remove(static_cast<uint32_t>(g_rtype_val[6]));
+    if (g_rtype_val[6] != static_cast<uint64_t>(-1))
+        cs->remove(cap::handle_slot(g_rtype_val[6]));
     ut->release();
     Scheduler::terminate(*cur, 0);
 }
@@ -883,8 +883,9 @@ JARVIS_TEST(retype_full_table_precheck_fails_closed,
 // Testidea: SYS_CAP_RETYPE dispatches a sub-range carve end-to-end in a real
 //           task; the frame + child slots land in the caller's CSpace.
 // Input: real task installs 4-page Untyped; Syscall::handle(CAP_RETYPE, ...)
-// Expect: return >= 0; frame slot (count 1, phys == base); child slot
-//         [base+1p, 3p); zero ResourceTracker delta after task teardown
+// Expect: return is an opaque handle (issue #266: slot field decodes in
+// range); frame slot (count 1, phys == base); child slot [base+1p, 3p);
+// zero ResourceTracker delta after task teardown
 // Depends: kernel::cap::UntypedMem, kernel::syscall::Syscall, kernel::task
 JARVIS_TEST(sys_cap_retype_dispatch_end_to_end, "PRE: none | POST: none") {
     auto &rt = kernel::test::ResourceTracker::instance();
@@ -899,7 +900,10 @@ JARVIS_TEST(sys_cap_retype_dispatch_end_to_end, "PRE: none | POST: none") {
     JARVIS_ASSERT(t != nullptr);
 
     JARVIS_ASSERT(g_rtype_ret != 99 && g_rtype_ret != 98);
-    JARVIS_ASSERT(g_rtype_ret < static_cast<uint64_t>(CONFIG_CSLOT_COUNT));
+    // Issue #266: opaque handle — the slot field must be in range (frame +
+    // child landing is proven by the _ok flags below).
+    JARVIS_ASSERT(cap::handle_slot(g_rtype_ret) <
+                  static_cast<uint32_t>(CONFIG_CSLOT_COUNT));
     JARVIS_ASSERT_EQ(1U, g_rtype_frame_ok);
     JARVIS_ASSERT_EQ(1U, g_rtype_child_ok);
 
@@ -936,8 +940,10 @@ JARVIS_TEST(sys_cap_retype_validation_matrix, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(syscall_fail, g_rtype_val[3]); // size 0
     JARVIS_ASSERT_EQ(syscall_fail, g_rtype_val[4]); // unaligned
     JARVIS_ASSERT_EQ(1U, g_rtype_val[5]);           // parent intact
-    JARVIS_ASSERT(g_rtype_val[6] <
-                  static_cast<uint64_t>(CONFIG_CSLOT_COUNT)); // exact works
+    // Issue #266: opaque handle — slot field in range proves the exact
+    // carve returned a well-formed handle.
+    JARVIS_ASSERT(cap::handle_slot(g_rtype_val[6]) <
+                  static_cast<uint32_t>(CONFIG_CSLOT_COUNT)); // exact works
 
     kernel::test::ResourceCounters after{};
     rt.capture(after);

@@ -130,6 +130,7 @@ class FrameCap : public KernelObject {          // cap/frame.hpp/.cpp
 ### 2.3 Capability address translation
 
 - Handle = 64-bit opaque value: `(gen << (CBITS+IDBITS)) | (cspace_id << CBITS) | slot_index`, with `CBITS = ceil(log2(CONFIG_CSLOT_COUNT))`, `IDBITS = 8`.
+- Producing syscalls (`sys_cap_grant/copy/mint/retype`, `sys_frame_create`) return opaque handles per the definition above (issue #266) — directly passable to any `cap::lookup` consumer or `revoke`, never raw slot indices. The generation is captured inside the install lock, so the handle cannot go stale between install and return.
 - `cap::lookup(TaskControlBlock *cur, uint64_t handle, CapType want, uint32_t need_rights) -> KernelObject *` — validates against the **current task's own root CNode only** (no global registry in iteration 1; no ambient lookup). Checks: slot in range, `occupied`, `gen == slot.gen`, `type == want`, `(rights & need_rights) == need_rights`. Returns the target **already pinned** (the caller holds a `ScopedRef`); on any failure returns nullptr and the syscall returns -1.
 - Slot recycling bumps `slot.gen`, so a stale handle for a reused slot fails decode deterministically.
 - Lookup runs entirely in task context; the CNode `lock_` is held only for the slot-table read (short critical section).

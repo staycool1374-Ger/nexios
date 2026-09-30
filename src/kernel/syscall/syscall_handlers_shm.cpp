@@ -68,14 +68,17 @@ uint64_t Syscall::sys_frame_create(uint64_t count, uint64_t, uint64_t,
         return static_cast<uint64_t>(-1);
     }
 
+    uint32_t gen = 0;
     int idx = cs->install(fc, cap::CapType::Frame,
-                          cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                          cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
     if (idx < 0) {
         fc->release(); // never installed — drop the creator reference
         return static_cast<uint64_t>(-1);
     }
     fc->release(); // slot holds a reference; drop the creator's
-    return static_cast<uint64_t>(idx);
+    // Issue #266: opaque encoded handle for the caller's own root CNode,
+    // directly usable with lookup/revoke — never a raw slot index.
+    return cap::encode_user_handle(cs->cspace_id, idx, gen);
 }
 
 uint64_t Syscall::sys_frame_map(uint64_t cap_handle, uint64_t, uint64_t,

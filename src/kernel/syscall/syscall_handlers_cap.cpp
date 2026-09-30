@@ -52,11 +52,12 @@ uint64_t Syscall::sys_cap_grant(uint64_t src_handle, uint64_t dst_handle,
     if (!dst_obj)
         return static_cast<uint64_t>(-1);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
-    int idx = cap::grant(src, src_handle, dst);
+    uint32_t gen = 0;
+    int idx = cap::grant(src, src_handle, dst, &gen);
     dst_obj->release();
-    if (idx < 0)
-        return static_cast<uint64_t>(-1);
-    return static_cast<uint64_t>(idx);
+    // Issue #266: user handles are opaque encoded values (spec §:132),
+    // directly usable with lookup/revoke — never raw slot indices.
+    return cap::encode_user_handle(dst->cspace_id, idx, gen);
 }
 
 uint64_t Syscall::sys_cap_copy(uint64_t src_handle, uint64_t dst_handle,
@@ -69,11 +70,12 @@ uint64_t Syscall::sys_cap_copy(uint64_t src_handle, uint64_t dst_handle,
     if (!dst_obj)
         return static_cast<uint64_t>(-1);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
-    int idx = cap::copy(src, src_handle, dst);
+    uint32_t gen = 0;
+    int idx = cap::copy(src, src_handle, dst, &gen);
     dst_obj->release();
-    if (idx < 0)
-        return static_cast<uint64_t>(-1);
-    return static_cast<uint64_t>(idx);
+    // Issue #266: user handles are opaque encoded values (spec §:132),
+    // directly usable with lookup/revoke — never raw slot indices.
+    return cap::encode_user_handle(dst->cspace_id, idx, gen);
 }
 
 uint64_t Syscall::sys_cap_revoke(uint64_t src_handle, uint64_t, uint64_t,
@@ -97,13 +99,13 @@ uint64_t Syscall::sys_cap_mint(uint64_t src_handle, uint64_t dst_handle,
     if (!dst_obj)
         return static_cast<uint64_t>(-1);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
+    uint32_t gen = 0;
     int idx =
         cap::mint(src, src_handle, dst, static_cast<uint32_t>(rights_mask),
-                  static_cast<uint32_t>(badge));
+                  static_cast<uint32_t>(badge), &gen);
     dst_obj->release();
-    if (idx < 0)
-        return static_cast<uint64_t>(-1);
-    return static_cast<uint64_t>(idx);
+    // Issue #266: opaque encoded handle, never a raw slot index.
+    return cap::encode_user_handle(dst->cspace_id, idx, gen);
 }
 
 uint64_t Syscall::sys_cap_retype(uint64_t untyped_handle, uint64_t target_type,
@@ -114,13 +116,14 @@ uint64_t Syscall::sys_cap_retype(uint64_t untyped_handle, uint64_t target_type,
     // Installs the retyped target (and, on a sub-range carve, the child
     // Untyped) into the caller's own root CNode.  cap::retype validates the
     // type/size (garbage target_type or oversize/unaligned -> -1, parent kept).
+    // The install lands in the caller's own root CNode, so the handle is
+    // encoded with the caller's own cspace id (issue #266).
+    uint32_t gen = 0;
     int idx = cap::retype(src, untyped_handle,
                           static_cast<cap::CapType>(target_type),
                           static_cast<size_t>(size),
-                          static_cast<uint32_t>(rights));
-    if (idx < 0)
-        return static_cast<uint64_t>(-1);
-    return static_cast<uint64_t>(idx);
+                          static_cast<uint32_t>(rights), &gen);
+    return cap::encode_user_handle(src->cspace_id, idx, gen);
 }
 
 } // namespace kernel

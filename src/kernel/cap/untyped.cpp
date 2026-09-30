@@ -129,7 +129,7 @@ void UntypedMem::dispose() noexcept {
 }
 
 int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
-           size_t size, uint32_t rights) noexcept {
+           size_t size, uint32_t rights, uint32_t *gen_out) noexcept {
     if (!cspace)
         return -1;
     // Pin the Untyped (WRITE = mutation right).  The pin keeps the object
@@ -191,7 +191,7 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
         }
     }
 
-    int idx_target = cspace->install(fc, CapType::Frame, rights);
+    int idx_target = cspace->install(fc, CapType::Frame, rights, gen_out);
     if (idx_target < 0) {
         if (child)
             child->release(); // disposes [ut->phys + size, ut->phys + ut->size)

@@ -109,7 +109,8 @@ void teardown_dest_cspace(TaskControlBlock *t, cap::CNode *dst, int slot) {
 //           destination CNode (addressed by a CapCNode handle).
 // Input: task sets up its CSpace + a dest CNode cap + a task target cap;
 //        dispatches SYS_CAP_GRANT
-// Expect: syscall returns the new slot index; dest CNode holds the target
+// Expect: syscall returns the new opaque handle (issue #266: directly
+// usable, never a raw slot index); dest CNode holds the target
 // Depends: kernel::Syscall, kernel::cap
 JARVIS_TEST(sys_cap_grant_dispatch, "PRE: none | POST: none") {
     static uint64_t g_ret = 0;
@@ -162,7 +163,8 @@ JARVIS_TEST(sys_cap_grant_dispatch, "PRE: none | POST: none") {
 // Testidea: SYS_CAP_COPY duplicates the capability into the destination.
 // Input: task sets up CSpace + dest CNode cap + target cap; dispatches
 //        SYS_CAP_COPY
-// Expect: syscall returns the new slot index; dest CNode holds the target
+// Expect: syscall returns the new opaque handle (issue #266: directly
+// usable, never a raw slot index); dest CNode holds the target
 // Depends: kernel::Syscall, kernel::cap
 JARVIS_TEST(sys_cap_copy_dispatch, "PRE: none | POST: none") {
     static uint64_t g_ret = 0;
@@ -260,10 +262,51 @@ JARVIS_TEST(sys_cap_revoke_dispatch, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: Issue #266 — syscall-produced handles are opaque encoded values
+// usable with no manual encoding: frame_create's return feeds revoke
+// directly. Pre-fix the producers returned raw slot indices, which lookup/
+// revoke reject (cspace/gen mismatch) — the round trip failed.
+// Input: SYS_FRAME_CREATE(1) -> take the returned handle as-is ->
+// SYS_CAP_REVOKE(handle).
+// Expect: create returns non-minus-1; revoke of the returned handle is 0
+// (slot actually gone afterwards).
+// Depends: kernel::Syscall, kernel::cap encode/lookup/revoke contract.
+JARVIS_TEST(sys_cap_returned_handle_roundtrip, "PRE: none | POST: none") {
+    static uint64_t g_created = 0;
+    static uint64_t g_revoked = 0;
+    static uint64_t g_occ = 0;
+
+    g_created = 0;
+    g_revoked = 0;
+    g_occ = 0;
+
+    auto *t = run_cap_task([]() {
+        g_created = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::FRAME_CREATE), 1, 0, 0, 0,
+            nullptr);
+        if (g_created == static_cast<uint64_t>(-1))
+            return;
+        g_revoked = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::CAP_REVOKE), g_created, 0,
+            0, 0, nullptr);
+        auto *cur = Scheduler::current_task();
+        g_occ = (cur != nullptr && cur->get_cspace() != nullptr)
+                    ? cap::occupied_count(cur->get_cspace())
+                    : 999;
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(g_created != static_cast<uint64_t>(-1));
+    JARVIS_ASSERT_EQ(0ULL, g_revoked);
+    JARVIS_ASSERT_EQ(0ULL, g_occ);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: SYS_CAP_MINT copies the capability with a reduced rights mask.
 // Input: task installs READ|WRITE cap; dispatches SYS_CAP_MINT with WRITE
 //        only into the dest CNode
-// Expect: syscall returns the slot index; dest slot carries only WRITE
+// Expect: syscall returns the opaque handle (issue #266); dest slot carries
+// only WRITE
 // Depends: kernel::Syscall, kernel::cap
 JARVIS_TEST(sys_cap_mint_dispatch, "PRE: none | POST: none") {
     static uint64_t g_ret = 0;
@@ -479,4 +522,5 @@ void register_cap_syscall_tests() {
     JARVIS_REGISTER_TEST(sys_cap_wrong_type_returns_minus1);
     JARVIS_REGISTER_TEST(sys_cap_rights_denied_returns_minus1);
     JARVIS_REGISTER_TEST(sys_cap_revoke_cleanup_zero_delta);
+    JARVIS_REGISTER_TEST(sys_cap_returned_handle_roundtrip); // issue #266
 }

@@ -101,6 +101,19 @@ constexpr uint32_t handle_gen(uint64_t handle) noexcept {
     return static_cast<uint32_t>(handle >> (CAP_HANDLE_IDBITS + CAP_SLOT_BITS));
 }
 
+/// @brief Builds the user-facing handle for a freshly installed slot
+///        (issue #266): an opaque 64-bit value directly usable with lookup/
+///        revoke, never a raw slot index.  Centralizes the -1 failure
+///        encoding so all syscall producers share one rule.  An inline
+///        function (not a macro): the failure path stays visible and typed,
+///        with no double evaluation of arguments.
+inline uint64_t encode_user_handle(uint32_t cspace_id, int idx,
+                                   uint32_t gen) noexcept {
+    if (idx < 0)
+        return static_cast<uint64_t>(-1);
+    return encode_handle(cspace_id, static_cast<uint32_t>(idx), gen);
+}
+
 /// @brief True if the slot index fits this CNode's table.
 constexpr bool slot_index_valid(uint32_t idx) noexcept {
     return idx < static_cast<uint32_t>(CONFIG_CSLOT_COUNT);

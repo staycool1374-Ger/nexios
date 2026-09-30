@@ -91,7 +91,8 @@ void CNode::revoke() noexcept {
     }
 }
 
-int CNode::install(KernelObject *obj, CapType type, uint32_t rights) noexcept {
+int CNode::install(KernelObject *obj, CapType type, uint32_t rights,
+                    uint32_t *gen_out) noexcept {
     if (!obj || type == CapType::Null)
         return -1;
     if (!obj->acquire())
@@ -103,6 +104,8 @@ int CNode::install(KernelObject *obj, CapType type, uint32_t rights) noexcept {
             slots[i].type = type;
             slots[i].rights = rights;
             slots[i].occupied = true;
+            if (gen_out != nullptr)
+                *gen_out = slots[i].gen;
             kernel::test::ResourceTracker::instance().track_cap_slot_add();
             return static_cast<int>(i);
         }
@@ -237,8 +240,10 @@ size_t occupied_count(const CNode *cspace) noexcept {
 /// @brief Core of copy/grant: pins the source slot target, then installs it
 ///        into @p dst with @p rights.  The install takes its own acquire();
 ///        the pin taken here is released on both success and failure.
+///        Forwards an optional generation out-slot to the dst install
+///        (issue #266: lets syscall returns encode with no TOCTOU).
 int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
-                   uint32_t rights) noexcept {
+                   uint32_t rights, uint32_t *gen_out = nullptr) noexcept {
     if (!src || !dst || src == dst)
         return -1;
     // lookup() returns the target with acquire() already taken.
@@ -267,18 +272,21 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
     // Reduce the granted rights by the requested mask AND the source rights
     // (a copy can never widen rights).
     const uint32_t effective = rights & src_rights;
-    int installed = dst->install(target, type, effective);
+    int installed = dst->install(target, type, effective, gen_out);
     target->release();
     return installed;
 }
 
-int copy(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
+int copy(CNode *src, uint64_t src_handle, CNode *dst,
+         uint32_t *gen_out) noexcept {
     return do_copy_pinned(src, src_handle, dst,
                           CAP_RIGHT_READ | CAP_RIGHT_WRITE | CAP_RIGHT_COPY |
-                              CAP_RIGHT_GRANT);
+                              CAP_RIGHT_GRANT,
+                          gen_out);
 }
 
-int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
+int grant(CNode *src, uint64_t src_handle, CNode *dst,
+          uint32_t *gen_out) noexcept {
     // Requires CAP_RIGHT_GRANT on the source slot.
     KernelObject *target =
         lookup(src, src_handle, CapType::Null, CAP_RIGHT_GRANT);
@@ -304,7 +312,7 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
         target->release();
         return -1;
     }
-    int installed = dst->install(target, type, rights);
+    int installed = dst->install(target, type, rights, gen_out);
     if (installed >= 0)
         src->clear_grant(handle_slot(src_handle));
     target->release();
@@ -312,9 +320,9 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
 }
 
 int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
-         uint32_t badge) noexcept {
+         uint32_t badge, uint32_t *gen_out) noexcept {
     (void)badge; // badge re-branding lands with endpoint integration (Phase 4)
-    return do_copy_pinned(src, src_handle, dst, rights_mask);
+    return do_copy_pinned(src, src_handle, dst, rights_mask, gen_out);
 }
 
 } // namespace kernel::cap
