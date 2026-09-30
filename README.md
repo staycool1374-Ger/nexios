@@ -178,14 +178,11 @@ Done roadmap archived in `prompts/README_done.md`.
 ### **v0.5.1 — Bring-up Multi-Arch Boot**
 * **Three Architectures Boot to Production:** aarch64 and riscv64 join x86_64 with real production boot paths — page-table/HHDM bring-up, PCI discovery, per-arch syscall ABI conformance tests, an EL0 fork smoke test, and riscv64 U-mode user tasks.
 * **Kernel Debugger Foundations:** the debugd groundwork lands — kernel debug syscalls (read/write regs/mem, attach), stop-event routing with breakpoint shadows, per-arch stepping, and an RSP parser core with mock-transport tests.
-* **Races Found and Fixed:** scheduler wedge investigations closed out the stranded-READY rescue and the wake-while-current deferral root cause; release validation itself caught and fixed an Ubuntu PIE-GOT boot fault and an APIC EOI-skip wedge, plus the per-tag Docker release image.
-* **Release Gates Green:** Full test suites pass — 1610 debug tests across 20 classes, 85 release tests — with each fix reviewed under the SIL 3 process before merge.
 
 ### **v0.5.0 — picolibc + ABI**
 * **Frozen System-Call Interface:** The kernel/userspace contract is pinned at v1.0 — trap numbers, register conventions and a versioned syscall table (86 calls) in a single public header, so applications built today keep working tomorrow.
 * **Real C Library for Applications:** picolibc is integrated as the userspace C library — POSIX stubs with proper error reporting, thread-local storage switched on every context switch, and a 5/5 verification program proving it end to end.
 * **POSIX Time Services:** Applications get wall-clock and timer APIs (`clock_gettime`, `nanosleep`, `timer_create`, `timerfd`) backed by the high-resolution clock and event-timer wheel, covered by 10 dedicated conformance tests.
-* **Release Gates Green:** Full test suites pass — 1564 debug tests across 20 classes, 85 release tests, 136 self-tests — with each user-facing feature reviewed under the SIL 3 process before merge.
 
 ---
 
