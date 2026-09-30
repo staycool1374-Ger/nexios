@@ -368,6 +368,26 @@ JARVIS_TEST(dmesg_base_error_strings, "PRE: none | POST: none") {
             == 0,
         "expected Daemon event");
     JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Task exited", log::base_error_string(0xDC01ULL))
+            == 0,
+        "expected Task exited");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Task faulted", log::base_error_string(0xDC02ULL))
+            == 0,
+        "expected Task faulted");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Task end event",
+                         log::base_error_string(0xDCFFULL))
+            == 0,
+        "expected Task end event");
+    // Issue #77 live session: a new event family must also be INFO-classed,
+    // or its lines render as ERR=<stale enum> (0xDC01 showed "Out of
+    // memory" before the predicate knew the range).
+    JARVIS_ASSERT(log::base_code_is_info(0xDC01ULL));
+    JARVIS_ASSERT(log::base_code_is_info(0xDC02ULL));
+    JARVIS_ASSERT(!log::base_code_is_info(
+        static_cast<uint64_t>(kernel::Error::OOM)));
+    JARVIS_ASSERT_FMT(
         __builtin_strcmp("Unknown base error",
                          log::base_error_string(9999ULL))
             == 0,

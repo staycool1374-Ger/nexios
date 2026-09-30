@@ -2042,32 +2042,51 @@ void Shell::cmd_export(int argc, const char** argv) {
 }
 
 void Shell::cmd_runelf(int argc, const char** argv) {
-    if (argc < 2) {
-        Terminal::write("Usage: runelf <path.elf> [args...]\n");
+    // Issue #77 (user-directed contract): runelf takes no parameters — it
+    // runs the previously background-loaded ELF (`load` stages via the
+    // ElfLoader; runelf activates the retained completion).  With no
+    // completed image it reports "no elf loaded" instead of failing.
+    if (argc != 1) {
+        Terminal::write("Usage: runelf\n");
         return;
     }
+    (void)argv;
 
-    const char* path = argv[1];
-
-    initrd::InitrdFile f = initrd::find(path);
-    if (!f.data) {
-        shell_error_path("runelf", path, "file not found in initrd");
-        return;
-    }
-
-    auto* hdr = reinterpret_cast<const kernel::elf::ELF64Header*>(f.data);
-    if (!kernel::elf::validate_header(hdr)) {
-        shell_error_path("runelf", path, "invalid ELF");
-        return;
-    }
-
-    auto* task = kernel::elf::load(hdr, f.data, f.size);
+    kernel::TaskControlBlock* task =
+        kernel::elf::ElfLoader::take_completed();
     if (!task) {
-        shell_error_path("runelf", path, "failed to load");
+        shell_error("runelf", "no elf loaded");
         return;
     }
 
-    kernel::Scheduler::add_task(*task);
+    // Settled activation parameters BEFORE add_task (not queued: no
+    // re-bucket needed, but priority goes through the scheduler helper
+    // per §11.4 — never direct writes).  Strictly periodic user task per
+    // the issue contract (prio 2 user band, period/deadline 100); FIXED
+    // keeps it in bitmap RMS dispatch (AUTO + finite deadline would enter
+    // EDF dispatch — deadline-timing exposure a run-once demo must not
+    // take; EDF user tasks are a follow-up).
+    kernel::Scheduler::set_priority(*task, 2);
+    task->period_ticks = 100;
+    task->deadline_ticks = arch::Timer::ticks() + 100;
+    if (!kernel::Scheduler::set_sched_policy(*task,
+                                             kernel::SchedPolicy::FIXED)) {
+        kernel::elf::ElfLoader::destroy_completed_tcb(task);
+        shell_error("runelf", "policy rejected");
+        return;
+    }
+    // Admission BEFORE activation (S1): fail closed with the denial code;
+    // a denied image is destroyed via the loader teardown (never
+    // cleanup()+delete on a never-added TCB, never leaked).
+    kernel::errors::SchedulerError admit =
+        kernel::Scheduler::add_task_err(*task);
+    if (admit != kernel::errors::SCHED_ERR_OK) {
+        kernel::elf::ElfLoader::destroy_completed_tcb(task);
+        kernel::Logger::warn("runelf: admission denied: %s",
+                             kernel::errors::error_string(admit));
+        shell_error("runelf", "admission denied");
+        return;
+    }
 
     Terminal::set_fg(COLOR_GREEN);
     Terminal::write("Started task #");
@@ -2076,8 +2095,6 @@ void Shell::cmd_runelf(int argc, const char** argv) {
     uint64_t id = task->id;
     while (id > 0) { buf[pos++] = static_cast<char>('0' + (id % 10)); id /= 10; }
     while (pos > 0) Terminal::putchar(buf[--pos]);
-    Terminal::write(": ");
-    Terminal::write(path);
     Terminal::putchar('\n');
     Terminal::set_fg(COLOR_DEFAULT);
 }

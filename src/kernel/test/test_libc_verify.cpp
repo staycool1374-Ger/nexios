@@ -35,6 +35,8 @@
 #include <kernel/task/task.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/timer.hpp>
+#include <kernel/sync/semaphore.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/test/test_isolate.hpp>
 #include "test_sched_helpers.hpp"
@@ -176,8 +178,10 @@ constexpr const char *kStdoutPath = "/tmp/libc_stdout.txt";
 
 // Stage image + stdin, load, repoint fd 0, dispatch to EXIT with a
 // bounded join, capture serial markers, tear down. Returns observable
-// state; asserts happen after teardown (allocation-free).
-VerifyOutcome run_verify_program() {
+// state; asserts happen after teardown (allocation-free). When admitted
+// is true the dispatch goes through the wired #77 activation instead:
+// settled parameters + FIXED policy + add_task_err admission.
+VerifyOutcome run_verify_impl(bool admitted) {
     VerifyOutcome out{};
     elf::ElfLoader::reset();
     if (write_image_file() == 0)
@@ -269,17 +273,46 @@ VerifyOutcome run_verify_program() {
     // lower-priority waitee forever after the first dispatch demotes the
     // harness to READY (every driven test uses >= 11 for this reason).
     // Set before add_task (not yet queued: no re-bucket needed).
-    t->priority = 11;
-    t->base_priority = 11;
+    if (admitted) {
+        // Issue #77 wired activation: settled parameters BEFORE add_task
+        // (priority via the scheduler helper per §11.4); strictly periodic
+        // user task (prio 2 user band, period/deadline 100); FIXED keeps
+        // bitmap RMS dispatch (AUTO + finite deadline would enter EDF
+        // dispatch). Admission BEFORE activation: fail closed — on denial
+        // destroy via the loader teardown and report joined=false (no
+        // harness asserts mid-flight; teardown discipline mirrors above).
+        Scheduler::set_priority(*t, 2);
+        t->period_ticks = 100;
+        t->deadline_ticks = arch::Timer::ticks() + 100;
+        bool pok = Scheduler::set_sched_policy(*t, SchedPolicy::FIXED);
+        auto acode = Scheduler::add_task_err(*t);
+        if (!pok || acode != errors::SCHED_ERR_OK) {
+            elf::ElfLoader::destroy_completed_tcb(t);
+            cleanup_image_file();
+            cleanup_stdin_file();
+            return out;
+        }
+    } else {
+        t->priority = 11;
+        t->base_priority = 11;
 
-    {
-        arch::IrqGuard ig{};
-        Scheduler::add_task(*t);
+        {
+            arch::IrqGuard ig{};
+            Scheduler::add_task(*t);
+        }
     }
     Scheduler::reschedule();
-    for (uint64_t i = 0;
-         i < kJoinSpins && t->state != TaskState::TERMINATED; ++i)
-        arch::pause();
+    if (admitted) {
+        // Production-shape join: a spinning harness is never preempted for
+        // lower peers (BUGS.md#021 harness protection — the legacy tests
+        // dodge it with prio >= 11). need_resched + hlt yields every tick
+        // until the admitted task exits, exactly like a blocking supervisor.
+        test::wait_for_termination_safe(t);
+    } else {
+        for (uint64_t i = 0;
+             i < kJoinSpins && t->state != TaskState::TERMINATED; ++i)
+            arch::pause();
+    }
     bool exited = (t->state == TaskState::TERMINATED);
     bool clean = exited && (t->exit_code == 0);
     out.program_break = t->program_break;
@@ -313,6 +346,21 @@ VerifyOutcome run_verify_program() {
     out.clean_exit = clean;
     (void)exited;
     return out;
+}
+
+// Legacy dispatch (prio 11, void add_task): the five original tests.
+VerifyOutcome run_verify_program() { return run_verify_impl(false); }
+
+// Issue #77 wired activation: identical staging, admission-enforced
+// dispatch (settled params + FIXED + add_task_err).
+VerifyOutcome run_verify_wired() { return run_verify_impl(true); }
+
+// Filler entry for the denial pin: blocks on the gate (never posted until
+// teardown) so admitted fillers stay alive-but-idle in the LUB sum.
+void wired_deny_filler_entry() {
+    auto *self = Scheduler::current_task();
+    auto *gate = reinterpret_cast<sync::Semaphore *>(self->user_data);
+    gate->wait();
 }
 
 } // namespace
@@ -388,6 +436,60 @@ JARVIS_TEST(libc_verify_exit_clean_zero_delta, "PRE: vfsd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Issue #77 wired activation — the verify image runs to clean
+// EXIT(0) through take_completed + settled params + FIXED + add_task_err
+// (not the legacy prio-11 void-add_task dispatch).
+// Input: Same staging; admitted dispatch at prio 2, period/deadline 100.
+// Expect: Joined clean; capture contains LIBC_VERIFY: hello (proves the
+// admitted task actually executed user code to EXIT, not merely admitted).
+// Depends: ElfLoader take_completed, Scheduler::add_task_err (#77)
+JARVIS_TEST(libc_verify_wired_activation, "PRE: vfsd | POST: none") {
+    VerifyOutcome o = run_verify_wired();
+    JARVIS_ASSERT(o.joined);
+    JARVIS_ASSERT(o.clean_exit);
+    JARVIS_ASSERT(serial_contains(o.capture, "LIBC_VERIFY: hello"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Issue #77 denial branch — a wired activation refused by
+// admission fails closed (no dispatch, no leak, joined=false).
+// Input: Fill the task table with exempt gated fillers (period 0 skips
+// the LUB gate, so the fill is ambient-independent) until add_task_err
+// refuses; then the wired activation. Either refusal mode (TABLE_FULL
+// or LUB over bound) exercises the same destroy-on-deny branch.
+// Expect: joined==false; image destroyed via the loader teardown; zero
+// ResourceTracker delta via isolation.
+// Depends: Scheduler::add_task_err fail-closed paths (#20)
+JARVIS_TEST(libc_verify_wired_denied, "PRE: vfsd | POST: none") {
+    sync::Semaphore gate;
+    gate.init(0, 1);
+    TaskControlBlock *fillers[CONFIG_MAX_TASKS];
+    uint64_t nfill = 0;
+    for (uint64_t i = 0; i < static_cast<uint64_t>(CONFIG_MAX_TASKS); ++i) {
+        auto *f =
+            TaskControlBlock::create(wired_deny_filler_entry, 11, 0);
+        if (f == nullptr)
+            break;
+        f->user_data = &gate;
+        if (Scheduler::add_task_err(*f) != errors::SCHED_ERR_OK) {
+            // Never admitted: fail-closed teardown (absent from tables).
+            JARVIS_ASSERT(Scheduler::find_task(f->id) == nullptr);
+            TaskControlBlock::destroy(f);
+            break;
+        }
+        fillers[nfill++] = f;
+    }
+    VerifyOutcome o = run_verify_wired();
+    JARVIS_ASSERT(!o.joined);
+    gate.post();
+    for (uint64_t i = 0; i < nfill; ++i)
+        kernel::test::terminate_and_drain(*fillers[i]);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
 #endif // CONFIG_ARCH_X86_64
 
 void register_libc_verify_tests() {
@@ -398,5 +500,7 @@ void register_libc_verify_tests() {
     JARVIS_REGISTER_TEST(libc_verify_malloc_reuse);
     JARVIS_REGISTER_TEST(libc_verify_scanf_read);
     JARVIS_REGISTER_TEST(libc_verify_exit_clean_zero_delta);
+    JARVIS_REGISTER_TEST(libc_verify_wired_activation); // issue #77
+    JARVIS_REGISTER_TEST(libc_verify_wired_denied);      // issue #77
 #endif
 }

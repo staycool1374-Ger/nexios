@@ -158,6 +158,12 @@ void init_task_main() {
             }
         }
     }
+    // ── Background ELF loader task (created before the rc runner so a
+    //    background-loader rc can dispatch: the servicing task must exist
+    //    before the first request.  Still before the test runner, so it is
+    //    part of the snapshot baseline and survives snapshot_restore).
+    //    Issue #77 step 1 (hard requirement). ──
+    kernel::elf::ElfLoader::ensure_task();
     // Read /etc/rc and execute each command
     {
         auto rc = initrd::find("./etc/rc");
@@ -189,9 +195,22 @@ void init_task_main() {
                 while (*src && *src != ' ' && *src != '\t' && n < 127)
                     elf_path[n++] = *src++;
                 elf_path[n] = '\0';
+                // Issue #77 step 6 (DECIDED): argv is deferred — lines
+                // carrying arguments are rejected loudly (skip-and-continue
+                // per the per-line failure policy), never silently trimmed.
+                while (*src == ' ' || *src == '\t')
+                    ++src;
+                if (*src != '\0') {
+                    kernel::Logger::warn(
+                        "init: rc line has arguments (deferred), skipping: %s",
+                        elf_path);
+                    continue;
+                }
                 char elf_path1[160], elf_path2[160];
                 int m = 0;
-                for (int i = 0; elf_path[i]; ++i)
+                // Audit S3 (#77): explicit bound (safe by the n<127
+                // upstream invariant today, self-evident with the guard).
+                for (int i = 0; elf_path[i] && m < 150; ++i)
                     elf_path1[m++] = elf_path[i];
                 elf_path1[m++] = '.';
                 elf_path1[m++] = 'e';
@@ -199,7 +218,7 @@ void init_task_main() {
                 elf_path1[m++] = 'f';
                 elf_path1[m] = '\0';
                 m = 0;
-                for (int i = 0; elf_path[i]; ++i)
+                for (int i = 0; elf_path[i] && m < 150; ++i)
                     elf_path2[m++] = elf_path[i];
                 elf_path2[m++] = '.';
                 elf_path2[m++] = 'c';
@@ -213,20 +232,100 @@ void init_task_main() {
                     f = initrd::find(elf_path1);
                 if (!f.data)
                     f = initrd::find(elf_path2);
-                if (f.data) {
+                if (!f.data) {
+                    kernel::Logger::warn("init: rc file not found: %s",
+                                         elf_path);
+                    continue;
+                }
+                // Converged background load (issue #77 step 1): the shell
+                // `runelf` and rc share the ElfLoader + take_completed
+                // path; direct elf::load keeps no activation role.
+                {
                     auto *hdr =
                         reinterpret_cast<const kernel::elf::ELF64Header *>(
                             f.data);
-                    if (kernel::elf::validate_header(hdr)) {
-                        auto *task = kernel::elf::load(hdr, f.data, f.size);
-                        if (task) {
-                            task->priority = 2;
-                            task->base_priority = 2;
-                            task->period_ticks = 0;
-                            kernel::Scheduler::add_task(*task);
-                            kernel::Logger::info("init: started %s", elf_path);
-                        }
+                    if (!kernel::elf::validate_header(hdr)) {
+                        kernel::Logger::warn("init: rc invalid ELF: %s",
+                                             elf_path);
+                        continue;
                     }
+                    // Issue #77 step 4 / S3: dynamic/interp images rejected
+                    // with a clear boot-log error — never silently loaded
+                    // to die at rip 0. Shared validate_header stays
+                    // ET_EXEC+ET_DYN-capable for the #95 shared-lib loader.
+                    if (hdr->type != kernel::elf::ET_EXEC) {
+                        kernel::Logger::warn(
+                            "init: rc only ET_EXEC supported: %s", elf_path);
+                        continue;
+                    }
+                    // Map the initrd-relative path into the VFS domain
+                    // (initrd is mounted at /) for the loader, which
+                    // re-resolves there.
+                    char vfs_path[160];
+                    int v = 0;
+                    if (elf_path[0] != '/') {
+                        vfs_path[v++] = '/';
+                    }
+                    for (int i = 0; elf_path[i] != '\0'; ++i) {
+                        if (v >= 127)
+                            break;
+                        vfs_path[v++] = elf_path[i];
+                    }
+                    vfs_path[v] = '\0';
+                    if (elf_path[v - (elf_path[0] != '/' ? 1 : 0)] != '\0') {
+                        kernel::Logger::warn("init: rc path too long: %s",
+                                             elf_path);
+                        continue;
+                    }
+                    auto lres = kernel::elf::ElfLoader::request_load(vfs_path);
+                    if (lres != kernel::elf::LoadResult::OK) {
+                        kernel::Logger::warn(
+                            "init: rc load not accepted for %s", elf_path);
+                        continue;
+                    }
+                    kernel::elf::ElfLoader::wait_loader_idle();
+                    if (kernel::elf::ElfLoader::state() !=
+                        kernel::elf::LoadState::DONE) {
+                        kernel::Logger::warn("init: rc load failed: %s",
+                                             elf_path);
+                        continue;
+                    }
+                    kernel::TaskControlBlock *task =
+                        kernel::elf::ElfLoader::take_completed();
+                    if (!task) {
+                        kernel::Logger::warn("init: rc load failed: %s",
+                                             elf_path);
+                        continue;
+                    }
+                    // Settled parameters BEFORE add_task (never add then
+                    // mutate); priority via the scheduler helper (§11.4).
+                    // Strictly periodic user task (prio 2 user band,
+                    // period/deadline 100); FIXED keeps bitmap RMS dispatch
+                    // (AUTO + finite deadline would enter EDF dispatch).
+                    kernel::Scheduler::set_priority(*task, 2);
+                    task->period_ticks = 100;
+                    task->deadline_ticks = arch::Timer::ticks() + 100;
+                    if (!kernel::Scheduler::set_sched_policy(
+                            *task, kernel::SchedPolicy::FIXED)) {
+                        kernel::elf::ElfLoader::destroy_completed_tcb(task);
+                        kernel::Logger::warn(
+                            "init: rc policy rejected: %s", elf_path);
+                        continue;
+                    }
+                    // Admission BEFORE activation (S1): fail closed with a
+                    // boot-log code; a denied image is destroyed via the
+                    // loader teardown (never cleanup()+delete on a
+                    // never-added TCB, never leaked).
+                    kernel::errors::SchedulerError admit =
+                        kernel::Scheduler::add_task_err(*task);
+                    if (admit != kernel::errors::SCHED_ERR_OK) {
+                        kernel::elf::ElfLoader::destroy_completed_tcb(task);
+                        kernel::Logger::warn(
+                            "init: rc admission denied for %s: %s", elf_path,
+                            kernel::errors::error_string(admit));
+                        continue;
+                    }
+                    kernel::Logger::info("init: started %s", elf_path);
                 }
             }
         }
@@ -298,10 +397,6 @@ void init_task_main() {
         // would deadlock — we'd never be resumed after yielding.
         arch::hlt();
     }
-
-    // ── Background ELF loader task (created before the test runner so it is
-    //    part of the snapshot baseline and survives snapshot_restore). ──
-    kernel::elf::ElfLoader::ensure_task();
 
     // ── Run tests from init-task context (IF=1) ──────────────────
 #if defined(CONFIG_DEBUG)
@@ -1447,6 +1542,102 @@ extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
 ///        action is to terminate).
 /// @return true if signal was delivered (handler will run), false if task was
 /// terminated.
+/// @brief dmesg codes for task-end reports (user request): clean exit vs
+///        fault/signal death.  0xDBxx belongs to the ELF loader; 0xDCxx is
+///        free (verified: no other 0xDC codes tree-wide).
+#define TASK_END_DMESG_CLEAN 0xDC01
+#define TASK_END_DMESG_FAULT 0xDC02
+
+/// @brief Stable message slots for task-end reports (dmesg stores the
+///        pointer, so the text must outlive the call).  Four slots tolerate
+///        a fault-death nesting inside another report; overwrites only
+///        recycle the oldest line.
+namespace {
+char s_taskend_msg[4][160];
+uint32_t s_taskend_idx = 0;
+} // namespace
+
+/// @brief One-line cause phrase for a CPU fault vector (x86 numbers; other
+///        arches pass vector 0 and get the generic wording).
+const char *task_fault_cause(uint64_t vector) {
+    switch (vector) {
+    case 0:
+        return "divide error";
+    case 6:
+        return "invalid opcode";
+    case 13:
+        return "general protection";
+    case 14:
+        return "access violation";
+    default:
+        return "fault";
+    }
+}
+
+void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
+                          uint64_t code_or_sig, uint64_t vector) {
+    // User tasks outside test mode only: kernel-task churn (daemons,
+    // reapers, test fixtures by the hundreds) would flood the console.
+    if (!task.is_user_ || kernel::Scheduler::is_test_active())
+        return;
+    char *slot = s_taskend_msg[__atomic_fetch_add(&s_taskend_idx, 1U,
+                                                  __ATOMIC_RELAXED) %
+                               4];
+    int n = 0;
+    auto append_str = [&slot, &n](const char *s) {
+        while (*s && n < 159)
+            slot[n++] = *s++;
+    };
+    auto append_dec = [&slot, &n](uint64_t v) {
+        char tmp[24];
+        int ti = 0;
+        if (v == 0)
+            tmp[ti++] = '0';
+        while (v > 0 && ti < 23) {
+            tmp[ti++] = static_cast<char>('0' + (v % 10));
+            v /= 10;
+        }
+        while (ti > 0 && n < 159)
+            slot[n++] = tmp[--ti];
+    };
+    append_str("Task #");
+    append_dec(task.id);
+    append_str(" '");
+    for (size_t i = 0; i < CONFIG_TASK_NAME_LEN && task.name[i] != '\0';
+         ++i) {
+        if (n < 159)
+            slot[n++] = task.name[i];
+    }
+    append_str("' ");
+    if (clean) {
+        append_str("exited (code ");
+        append_dec(code_or_sig);
+        append_str(")");
+        slot[n] = '\0';
+        kernel::log::dmesg_push_base(TASK_END_DMESG_CLEAN, slot, 0);
+        kernel::Logger::info("%s", slot);
+    } else {
+        append_str("faulted: ");
+        append_str(task_fault_cause(vector));
+        append_str(" (");
+        if (vector != 0) {
+            append_str(kernel::exception_to_signal(vector).name);
+        } else {
+            append_str("signal ");
+            append_dec(code_or_sig);
+        }
+        append_str(")");
+        slot[n] = '\0';
+        kernel::log::dmesg_push_base(TASK_END_DMESG_FAULT, slot, 0);
+        kernel::Logger::error("%s", slot);
+    }
+    // Framebuffer console (user request): Logger serves serial/dmesg only.
+    // write_fb renders pixels without touching serial (no duplicate lines)
+    // or the shell capture buffer.
+    service::Terminal::write_fb(slot);
+    service::Terminal::write_fb("\n");
+}
+
 static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
                                    uint64_t vector, uint64_t error_code,
                                    uint64_t rip, uint64_t *regs) {
@@ -1543,6 +1734,9 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
         kernel::Logger::error("  CR2=%x", cr2_val);
     }
     dump_regs(regs);
+    // User task-end report (user request): one line with the cause on
+    // dmesg + serial + framebuffer; the detail lines above stay.
+    report_user_task_end(*task, false, sig, vector);
     // INV-5: terminate dequeues so the task is never left inrq=1 outside the
     // physical queue. Issue #197: an AP-live target is left alive instead
     // (the owning CPU's own exit path terminates it).
@@ -1557,6 +1751,7 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
     (void)rip;
     kernel::Logger::error("Task %x: signal %x (aarch64 stub, terminating)",
                           task->id, sig);
+    report_user_task_end(*task, false, sig, 0);
     task->state = kernel::TaskState::TERMINATED;
     task->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
     return false;
@@ -1566,6 +1761,7 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
     (void)rip;
     kernel::Logger::error("Task %x: signal %x (riscv64 stub, terminating)",
                           task->id, sig);
+    report_user_task_end(*task, false, sig, 0);
     task->state = kernel::TaskState::TERMINATED;
     task->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
     return false;

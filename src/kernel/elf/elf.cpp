@@ -653,6 +653,12 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
         tcb->bss_size_ = bss;
     }
 
+    // Issue #77 handoff contract: a completed user image carries no TLS yet.
+    // The dispatcher publishes tls_base_ to FS_BASE on user entry, so a
+    // stale nonzero base would corrupt the new task's thread-local state
+    // silently — fail stop here, not at first dispatch.  (When user TLS
+    // lands, this relaxes to the TLS-template contract.)
+    ENSURE(tcb->tls_base_ == 0);
     return tcb;
 }
 

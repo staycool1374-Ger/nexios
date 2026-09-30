@@ -51,6 +51,15 @@ public:
     /// @param str String to display.
     static void puts(const char* str);
 
+    /// @brief Renders a string on the framebuffer only (no serial output,
+    ///        no capture-buffer feed).  For background producers (e.g. the
+    ///        ELF loader event log) whose serial channel is already served
+    ///        elsewhere (Logger/dmesg): without this, console users would
+    ///        never see their progress.  Mirrors putchar's framebuffer
+    ///        half exactly (cursor, newline, fb_enabled_ gate).
+    /// @param str String to display (NUL-terminated).
+    static void write_fb(const char* str);
+
     /// @brief Sets the foreground (text) color.
     /// @param color 24-bit RGB color.
     static void set_fg(uint32_t color);

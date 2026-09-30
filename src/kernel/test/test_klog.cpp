@@ -22,7 +22,12 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/log/ring_buffer.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/memory/checked_ptr.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <kernel/arch/irq_guard.hpp>
+#include <kernel/kernel.hpp>
 #include <string.hpp>
 
 using namespace kernel;
@@ -203,6 +208,34 @@ JARVIS_TEST(klog_read_partial, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: User request — task-end reports (clean code / fault reason to
+// dmesg + serial + framebuffer) must stay silent in test mode, or hundreds
+// of fixtures would flood the console. Both paths through the gate.
+// Input: Real (added, never dispatched) user task; call the reporter for
+// clean exit and fault death; dmesg size before/after.
+// Expect: dmesg size unchanged (early return inside the gate); teardown
+// via the never-dispatched pattern (remove+cleanup+delete).
+// Depends: report_user_task_end gate (is_user_ + !is_test_active)
+JARVIS_TEST(task_end_report_silent_in_tests, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create([]() {}, 11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->is_user_ = true;
+    size_t d0 = 0;
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*t);
+        d0 = log::DmesgService::instance().size();
+        ::report_user_task_end(*t, true, 0, 0);
+        ::report_user_task_end(*t, false, 11, 14);
+        JARVIS_ASSERT_EQ(d0, log::DmesgService::instance().size());
+        Scheduler::remove_task(*t);
+    }
+    t->cleanup();
+    delete t;
+    JARVIS_TEST_PASS();
+}
+
 void register_klog_tests() {
     Logger::info("Registering KLOG tests");
 
@@ -214,4 +247,5 @@ void register_klog_tests() {
     JARVIS_REGISTER_TEST(klog_empty_read);
     JARVIS_REGISTER_TEST(klog_clear);
     JARVIS_REGISTER_TEST(klog_read_partial);
+    JARVIS_REGISTER_TEST(task_end_report_silent_in_tests); // user request
 }

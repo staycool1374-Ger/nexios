@@ -314,11 +314,14 @@ inline bool dmesg_push_base(uint64_t err, const char *msg,
 }
 
 /// @brief True when a base-subsystem code is an informational event rather
-///        than a fault: daemon lifecycle (0xDA00-0xDAFF) and background ELF
-///        loader (0xDB00-0xDBFF) ranges.  Used by the dmesg renderers to
-///        print INFO= instead of ERR=.
+///        than a fault: daemon lifecycle (0xDA00-0xDAFF), background ELF
+///        loader (0xDB00-0xDBFF), and user task-end reports (0xDC00-0xDCFF)
+///        ranges.  Used by the dmesg renderers to print INFO= instead of
+///        ERR=.  A new event family MUST extend both this predicate and
+///        base_error_string below, or its lines render as ERR=<stale enum>.
 inline bool base_code_is_info(uint64_t code) {
-    return (code & ~0xFFULL) == 0xDA00 || (code & ~0xFFULL) == 0xDB00;
+    return (code & ~0xFFULL) == 0xDA00 || (code & ~0xFFULL) == 0xDB00 ||
+           (code & ~0xFFULL) == 0xDC00;
 }
 
 /// @brief Return a human-readable string for a base-subsystem error code.
@@ -326,6 +329,7 @@ inline bool base_code_is_info(uint64_t code) {
 ///        a custom range for event codes:
 ///          0xDA00 – 0xDAFF  daemon lifecycle events
 ///          0xDB00 – 0xDBFF  background ELF loader events
+///          0xDC00 – 0xDCFF  user task-end reports (clean exit / fault)
 inline const char *base_error_string(uint64_t code) {
     // Custom event ranges
     if ((code & ~0xFFULL) == 0xDA00) {
@@ -371,6 +375,17 @@ inline const char *base_error_string(uint64_t code) {
             break;
         }
         return "ELF loader event";
+    }
+    if ((code & ~0xFFULL) == 0xDC00) {
+        switch (code) {
+        case 0xDC01:
+            return "Task exited";
+        case 0xDC02:
+            return "Task faulted";
+        default:
+            break;
+        }
+        return "Task end event";
     }
     // Standard kernel::Error range (0–9)
     switch (static_cast<kernel::Error>(code)) {

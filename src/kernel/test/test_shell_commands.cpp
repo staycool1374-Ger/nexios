@@ -36,6 +36,7 @@
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/elf/elf_loader.hpp>
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
@@ -217,6 +218,27 @@ JARVIS_TEST(shell_run_unknown_program_and_usage,
     JARVIS_ASSERT(named);
     JARVIS_ASSERT(usage_ok);
     JARVIS_ASSERT(lists_ok);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Issue #77 bare-runelf contract — runelf takes no parameters
+// (it runs the previously background-loaded ELF); with arguments it
+// prints usage, and with no completed image it reports "no elf loaded".
+// Input: Shell::execute("runelf a b"); reset loader, Shell::execute("runelf").
+// Expect: usage line for the former ("Usage: runelf"); "no elf loaded"
+// for the latter; neither touches the loader (argv rejected before take;
+// empty take mutates nothing).
+// Depends: service::Shell, Terminal capture, ElfLoader::reset
+JARVIS_TEST(shell_runelf_bare_contract, "PRE: vfsd, iocd | POST: none") {
+    char usage[k_capture_size];
+    run_shell("runelf a b", usage, sizeof(usage));
+    JARVIS_ASSERT(has(usage, "Usage: runelf"));
+
+    kernel::elf::ElfLoader::reset();
+    char empty[k_capture_size];
+    run_shell("runelf", empty, sizeof(empty));
+    JARVIS_ASSERT(has(empty, "no elf loaded"));
     JARVIS_TEST_PASS();
 }
 
@@ -1122,4 +1144,5 @@ void register_shell_commands_tests() {
     JARVIS_REGISTER_TEST(shell_top_zombie_rows_and_omission);
     JARVIS_REGISTER_TEST(shell_top_sys_user_split);
     JARVIS_REGISTER_TEST(shell_top_usage_contract);
+    JARVIS_REGISTER_TEST(shell_runelf_bare_contract); // issue #77
 }

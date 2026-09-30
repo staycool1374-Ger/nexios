@@ -21,6 +21,7 @@
 /// get_ticks, exit, etc.
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/kernel.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/random.hpp>
@@ -93,6 +94,10 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     if (t) {
         t->state = TaskState::TERMINATED;
         t->exit_code = arg0;
+        // User task-end report (user request): clean exit with return
+        // code on dmesg + serial + framebuffer.  Gated inside on user
+        // tasks outside test mode.
+        report_user_task_end(*t, true, arg0, 0);
 
         // If the exiting task is the current running task (the normal case for
         // sys_exit), we must switch the CPU off it BEFORE returning to user

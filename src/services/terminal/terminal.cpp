@@ -114,6 +114,41 @@ void Terminal::puts(const char* str) {
     putchar('\n');
 }
 
+void Terminal::write_fb(const char* str) {
+    if (!instance_ || !instance_->fb_enabled_)
+        return;
+    auto draw_plain = [&](char c) {
+        if (c >= 32 && c <= 126) {
+            Framebuffer::draw_char(
+                instance_->cursor_x_ * FONT_WIDTH,
+                instance_->cursor_y_ * FONT_HEIGHT,
+                c, instance_->fg_, instance_->bg_);
+            instance_->advance_cursor();
+        }
+    };
+    while (str && *str) {
+        char c = *str++;
+        switch (c) {
+        case '\n':
+            instance_->newline();
+            break;
+        case '\r':
+            instance_->cursor_x_ = 0;
+            break;
+        case '\t':
+            for (int i = 0; i < 4; ++i)
+                draw_plain(' ');
+            break;
+        case '\b':
+            instance_->backspace();
+            break;
+        default:
+            draw_plain(c);
+            break;
+        }
+    }
+}
+
 bool Terminal::readline(char* buf, size_t max_len) {
 #if defined(CONFIG_ARCH_AARCH64)
     (void)buf; (void)max_len;

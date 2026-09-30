@@ -53,3 +53,22 @@ extern uint8_t kernel_stack[];
 /// @param size   Buffer size.
 /// @param wall_ns  Nanoseconds since 1970-01-01 00:00:00 UTC.
 void format_datetime(char *buf, size_t size, uint64_t wall_ns);
+
+namespace kernel {
+class TaskControlBlock;
+} // namespace kernel
+
+/// @brief Reports a user task's end (clean exit code or fault reason) to
+///        dmesg + serial log + framebuffer console (user request: an app
+///        ending unexpectedly — or even cleanly, which may itself be
+///        unintended — must say why).  Gated inside on user tasks outside
+///        test mode (kernel-task churn and test fixtures stay quiet), so
+///        call sites stay unconditional.
+/// @param task         The ending task (name/id read here).
+/// @param clean        True for sys_exit (code_or_sig = exit status),
+///                     false for signal/fault death (code_or_sig = signal).
+/// @param code_or_sig  Exit status or signal number.
+/// @param vector       CPU fault vector for cause text (x86 fault path);
+///                     0 when not applicable (generic "fault" wording).
+void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
+                          uint64_t code_or_sig, uint64_t vector);

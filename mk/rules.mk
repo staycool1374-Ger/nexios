@@ -259,7 +259,7 @@ $(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c | $(PICOLIBC_SYSROOT)/lib/lib
 initrd/tests/test-config.txt:
 	@mkdir -p initrd/tests
 	@printf 'none\n' > $@
-$(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt
+$(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c userspace/nullderef.c
 	@printf '  %-7s %s\n' 'CPIO' 'initrd.cpio'
 	@mkdir -p initrd_root/etc initrd_root/tmp initrd_root/tests
 	@printf 'tmpfs /tmp\n' > initrd_root/etc/fstab
@@ -267,6 +267,7 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt
 	@printf '# Init script\n' >> initrd_root/etc/rc
 	@if [ ! -z "$(USERSPACE_ELF)" ]; then cp $(USERSPACE_ELF) initrd_root/; fi
 	@if [ -f userspace/picolibc/libc_verify.c.elf ]; then cp userspace/picolibc/libc_verify.c.elf initrd_root/; fi
+	@cp userspace/hey.c userspace/nullderef.c initrd_root/
 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
 	cd initrd_root && find . -print0 | cpio -o -H newc -0 --quiet > ../$@
 	@rm -rf initrd_root

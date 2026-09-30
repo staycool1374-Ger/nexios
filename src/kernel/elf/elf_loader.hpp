@@ -101,7 +101,9 @@ class ElfLoader {
     static const char *current_path();
 
     /// @brief Completed TCB from the last successful load (future runelf /
-    ///        tests).  Ownership transfers to the caller.
+    ///        tests).  Ownership transfers to the caller, which sets the
+    ///        settled priority/base_priority/period/deadline BEFORE add_task
+    ///        (never add_task then mutate) and admits via add_task_err.
     static TaskControlBlock *take_completed();
 
     /// @brief Release (cleanup + delete) the completed TCB.  Used by tests /

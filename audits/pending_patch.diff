@@ -1,476 +1,1175 @@
-diff --git a/docs/specs/cspace.md b/docs/specs/cspace.md
-index 17e05f4b5..25fbf0dec 100644
---- a/docs/specs/cspace.md
-+++ b/docs/specs/cspace.md
-@@ -130,6 +130,7 @@ class FrameCap : public KernelObject {          // cap/frame.hpp/.cpp
- ### 2.3 Capability address translation
- 
- - Handle = 64-bit opaque value: `(gen << (CBITS+IDBITS)) | (cspace_id << CBITS) | slot_index`, with `CBITS = ceil(log2(CONFIG_CSLOT_COUNT))`, `IDBITS = 8`.
-+- Producing syscalls (`sys_cap_grant/copy/mint/retype`, `sys_frame_create`) return opaque handles per the definition above (issue #266) — directly passable to any `cap::lookup` consumer or `revoke`, never raw slot indices. The generation is captured inside the install lock, so the handle cannot go stale between install and return.
- - `cap::lookup(TaskControlBlock *cur, uint64_t handle, CapType want, uint32_t need_rights) -> KernelObject *` — validates against the **current task's own root CNode only** (no global registry in iteration 1; no ambient lookup). Checks: slot in range, `occupied`, `gen == slot.gen`, `type == want`, `(rights & need_rights) == need_rights`. Returns the target **already pinned** (the caller holds a `ScopedRef`); on any failure returns nullptr and the syscall returns -1.
- - Slot recycling bumps `slot.gen`, so a stale handle for a reused slot fails decode deterministically.
- - Lookup runs entirely in task context; the CNode `lock_` is held only for the slot-table read (short critical section).
-diff --git a/src/kernel/cap/cap.cpp b/src/kernel/cap/cap.cpp
-index 43c94d354..640e09b3c 100644
---- a/src/kernel/cap/cap.cpp
-+++ b/src/kernel/cap/cap.cpp
-@@ -91,7 +91,8 @@ void CNode::revoke() noexcept {
+diff --git a/mk/rules.mk b/mk/rules.mk
+index bb87b7a85..2ef22dc39 100644
+--- a/mk/rules.mk
++++ b/mk/rules.mk
+@@ -259,7 +259,7 @@ $(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c | $(PICOLIBC_SYSROOT)/lib/lib
+ initrd/tests/test-config.txt:
+ 	@mkdir -p initrd/tests
+ 	@printf 'none\n' > $@
+-$(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt
++$(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c userspace/nullderef.c
+ 	@printf '  %-7s %s\n' 'CPIO' 'initrd.cpio'
+ 	@mkdir -p initrd_root/etc initrd_root/tmp initrd_root/tests
+ 	@printf 'tmpfs /tmp\n' > initrd_root/etc/fstab
+@@ -267,6 +267,7 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt
+ 	@printf '# Init script\n' >> initrd_root/etc/rc
+ 	@if [ ! -z "$(USERSPACE_ELF)" ]; then cp $(USERSPACE_ELF) initrd_root/; fi
+ 	@if [ -f userspace/picolibc/libc_verify.c.elf ]; then cp userspace/picolibc/libc_verify.c.elf initrd_root/; fi
++	@cp userspace/hey.c userspace/nullderef.c initrd_root/
+ 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
+ 	cd initrd_root && find . -print0 | cpio -o -H newc -0 --quiet > ../$@
+ 	@rm -rf initrd_root
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 2645a8343..ed54c8728 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -653,6 +653,12 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
+         tcb->bss_size_ = bss;
      }
+ 
++    // Issue #77 handoff contract: a completed user image carries no TLS yet.
++    // The dispatcher publishes tls_base_ to FS_BASE on user entry, so a
++    // stale nonzero base would corrupt the new task's thread-local state
++    // silently — fail stop here, not at first dispatch.  (When user TLS
++    // lands, this relaxes to the TLS-template contract.)
++    ENSURE(tcb->tls_base_ == 0);
+     return tcb;
  }
  
--int CNode::install(KernelObject *obj, CapType type, uint32_t rights) noexcept {
-+int CNode::install(KernelObject *obj, CapType type, uint32_t rights,
-+                    uint32_t *gen_out) noexcept {
-     if (!obj || type == CapType::Null)
-         return -1;
-     if (!obj->acquire())
-@@ -103,6 +104,8 @@ int CNode::install(KernelObject *obj, CapType type, uint32_t rights) noexcept {
-             slots[i].type = type;
-             slots[i].rights = rights;
-             slots[i].occupied = true;
-+            if (gen_out != nullptr)
-+                *gen_out = slots[i].gen;
-             kernel::test::ResourceTracker::instance().track_cap_slot_add();
-             return static_cast<int>(i);
+diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
+index 9acf381ab..b015bf98f 100644
+--- a/src/kernel/elf/elf_loader.cpp
++++ b/src/kernel/elf/elf_loader.cpp
+@@ -33,6 +33,7 @@
+ #include <kernel/syscall/syscall_helpers.hpp>
+ #include <kernel/ipc/buffer_pool.hpp>
+ #include <kernel/arch/timer.hpp>
++#include <services/terminal/terminal.hpp>
+ #include <kernel/core/global_state.hpp>
+ #include <kernel/test/resource_tracker.hpp>
+ #include <logger.hpp>
+@@ -111,15 +112,45 @@ void ElfLoader::ensure_task() {
+ LoadResult ElfLoader::request_load(const char *path) {
+     if (!path)
+         return LoadResult::FILE_NOT_FOUND;
+-    // Resolve the file OUTSIDE the spinlock (vfs::resolve may block on I/O).
+-    vfs::Vnode *vn = vfs::resolve(path);
+-    if (!vn)
++    // Validate existence + size OUTSIDE the spinlock (fs I/O may block)
++    // with an open/stat/close probe: the fd lifecycle owns every vnode
++    // reference symmetrically on every filesystem.  A bare vfs::resolve
++    // cannot be released safely here — filesystems disagree on whether
++    // lookup results are owned (initrd: fresh refcount-1 nodes) or
++    // borrowed (tmpfs canonical nodes, mount roots), so neither a bare
++    // dec (corrupts borrowed counts) nor no dec (leaks fresh nodes) is
++    // correct for all paths (audit S3 on the first fix attempt).
++    int probe = syscall_path_open(path, vfs::O_RDONLY);
++    if (probe < 0)
+         return LoadResult::FILE_NOT_FOUND;
+-    uint64_t fsize = vn->size;
++    uint64_t fsize = 0;
++    {
++        auto *cur = Scheduler::current_task();
++        auto *fd =
++            (cur != nullptr) ? cur->fd_table.get(probe) : nullptr;
++        if (fd == nullptr || fd->vnode == nullptr) {
++            if (cur != nullptr)
++                cur->fd_table.free(probe);
++            return LoadResult::FILE_NOT_FOUND;
++        }
++        fsize = fd->vnode->size;
++        cur->fd_table.free(probe);
++    }
+ 
+     SpinLockGuard<sync::SpinLock> guard(lock_);
+     if (state_ != LoadState::IDLE)
+         return LoadResult::ALREADY_LOADING;
++    // Issue #77 step 3 (RETAIN-FOR-RETRY): a previous load may have
++    // completed without ever being taken. The new path already validated
++    // above (resolve succeeded), so free the retained image now — never
++    // free-before-validate (a bad new path must not destroy a good
++    // retained image), and never overwrite (that would leak it when
++    // run_load publishes the new completion). At most one retained image
++    // exists by construction.
++    if (completed_tcb_) {
++        destroy_completed_tcb(completed_tcb_);
++        completed_tcb_ = nullptr;
++    }
+     file_size_ = fsize;
+ 
+     copy_bounded(path_, path, kMaxPath);
+@@ -243,8 +274,12 @@ void ElfLoader::reset() {
+     }
+     SpinLockGuard<sync::SpinLock> guard(lock_);
+     if (completed_tcb_) {
+-        completed_tcb_->cleanup();
+-        delete completed_tcb_;
++        // Issue #77 step 3: a completed TCB was built by
++        // finalize_loaded_task and never add_task'd — teardown MUST be
++        // destroy_completed_tcb (direct frees, no scheduler/task-accounting
++        // interaction). cleanup()+delete here would unregister an absent
++        // task and run parent/daemon logic on a never-scheduled TCB.
++        destroy_completed_tcb(completed_tcb_);
+         completed_tcb_ = nullptr;
+     }
+     cancel_requested_ = false;
+@@ -391,6 +426,14 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t ticks,
+     slot[n] = '\0';
+     log::dmesg_push_base(code, slot, 0);
+     kernel::Logger::info("%s", slot);
++    // Live-session finding (#77 report): loader progress must ALSO reach
++    // the framebuffer console — Logger serves serial/dmesg only, so
++    // framebuffer users never saw completions.  write_fb renders pixels
++    // without touching serial (no duplicate lines) or the shell capture
++    // buffer (async loader text must not pollute redirections); the
++    // shell's async-redraw guard already absorbs the interleaving.
++    service::Terminal::write_fb(slot);
++    service::Terminal::write_fb("\n");
+ }
+ 
+ void ElfLoader::cleanup_and_idle() {
+@@ -466,6 +509,18 @@ void ElfLoader::run_load() {
+         cleanup_and_idle();
+         return;
+     }
++    // Issue #77: the background loader serves runelf activation, which
++    // dispatches the image as a plain ET_EXEC user task — dynamic/interp
++    // images are rejected here with a clear error, never loaded to die at
++    // rip 0.  Shared validate_header stays ET_EXEC+ET_DYN-capable: the #95
++    // shared-lib loader resolves dependencies through its own backend,
++    // never through this validation.
++    if (hdr_.type != ET_EXEC) {
++        post_event(0xDB04, " failed: only ET_EXEC supported", 0,
++                   PostKind::OTHER);
++        cleanup_and_idle();
++        return;
++    }
+     uint64_t phnum_sz = static_cast<uint64_t>(hdr_.phnum) * hdr_.phentsize;
+     if (phnum_sz > sizeof(phdr_image_) - sizeof(ELF64Header)) {
+         post_event(0xDB04, " failed: invalid elf-file", 0, PostKind::OTHER);
+diff --git a/src/kernel/elf/elf_loader.hpp b/src/kernel/elf/elf_loader.hpp
+index 0986b6882..0471c15c2 100644
+--- a/src/kernel/elf/elf_loader.hpp
++++ b/src/kernel/elf/elf_loader.hpp
+@@ -101,7 +101,9 @@ class ElfLoader {
+     static const char *current_path();
+ 
+     /// @brief Completed TCB from the last successful load (future runelf /
+-    ///        tests).  Ownership transfers to the caller.
++    ///        tests).  Ownership transfers to the caller, which sets the
++    ///        settled priority/base_priority/period/deadline BEFORE add_task
++    ///        (never add_task then mutate) and admits via add_task_err.
+     static TaskControlBlock *take_completed();
+ 
+     /// @brief Release (cleanup + delete) the completed TCB.  Used by tests /
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 23371cdfe..4c8d1983a 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -158,6 +158,12 @@ void init_task_main() {
+             }
          }
-@@ -237,8 +240,10 @@ size_t occupied_count(const CNode *cspace) noexcept {
- /// @brief Core of copy/grant: pins the source slot target, then installs it
- ///        into @p dst with @p rights.  The install takes its own acquire();
- ///        the pin taken here is released on both success and failure.
-+///        Forwards an optional generation out-slot to the dst install
-+///        (issue #266: lets syscall returns encode with no TOCTOU).
- int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
--                   uint32_t rights) noexcept {
-+                   uint32_t rights, uint32_t *gen_out = nullptr) noexcept {
-     if (!src || !dst || src == dst)
-         return -1;
-     // lookup() returns the target with acquire() already taken.
-@@ -267,18 +272,21 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
-     // Reduce the granted rights by the requested mask AND the source rights
-     // (a copy can never widen rights).
-     const uint32_t effective = rights & src_rights;
--    int installed = dst->install(target, type, effective);
-+    int installed = dst->install(target, type, effective, gen_out);
-     target->release();
-     return installed;
- }
- 
--int copy(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
-+int copy(CNode *src, uint64_t src_handle, CNode *dst,
-+         uint32_t *gen_out) noexcept {
-     return do_copy_pinned(src, src_handle, dst,
-                           CAP_RIGHT_READ | CAP_RIGHT_WRITE | CAP_RIGHT_COPY |
--                              CAP_RIGHT_GRANT);
-+                              CAP_RIGHT_GRANT,
-+                          gen_out);
- }
- 
--int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
-+int grant(CNode *src, uint64_t src_handle, CNode *dst,
-+          uint32_t *gen_out) noexcept {
-     // Requires CAP_RIGHT_GRANT on the source slot.
-     KernelObject *target =
-         lookup(src, src_handle, CapType::Null, CAP_RIGHT_GRANT);
-@@ -304,7 +312,7 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
-         target->release();
-         return -1;
      }
--    int installed = dst->install(target, type, rights);
-+    int installed = dst->install(target, type, rights, gen_out);
-     if (installed >= 0)
-         src->clear_grant(handle_slot(src_handle));
-     target->release();
-@@ -312,9 +320,9 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
- }
++    // ── Background ELF loader task (created before the rc runner so a
++    //    background-loader rc can dispatch: the servicing task must exist
++    //    before the first request.  Still before the test runner, so it is
++    //    part of the snapshot baseline and survives snapshot_restore).
++    //    Issue #77 step 1 (hard requirement). ──
++    kernel::elf::ElfLoader::ensure_task();
+     // Read /etc/rc and execute each command
+     {
+         auto rc = initrd::find("./etc/rc");
+@@ -189,9 +195,22 @@ void init_task_main() {
+                 while (*src && *src != ' ' && *src != '\t' && n < 127)
+                     elf_path[n++] = *src++;
+                 elf_path[n] = '\0';
++                // Issue #77 step 6 (DECIDED): argv is deferred — lines
++                // carrying arguments are rejected loudly (skip-and-continue
++                // per the per-line failure policy), never silently trimmed.
++                while (*src == ' ' || *src == '\t')
++                    ++src;
++                if (*src != '\0') {
++                    kernel::Logger::warn(
++                        "init: rc line has arguments (deferred), skipping: %s",
++                        elf_path);
++                    continue;
++                }
+                 char elf_path1[160], elf_path2[160];
+                 int m = 0;
+-                for (int i = 0; elf_path[i]; ++i)
++                // Audit S3 (#77): explicit bound (safe by the n<127
++                // upstream invariant today, self-evident with the guard).
++                for (int i = 0; elf_path[i] && m < 150; ++i)
+                     elf_path1[m++] = elf_path[i];
+                 elf_path1[m++] = '.';
+                 elf_path1[m++] = 'e';
+@@ -199,7 +218,7 @@ void init_task_main() {
+                 elf_path1[m++] = 'f';
+                 elf_path1[m] = '\0';
+                 m = 0;
+-                for (int i = 0; elf_path[i]; ++i)
++                for (int i = 0; elf_path[i] && m < 150; ++i)
+                     elf_path2[m++] = elf_path[i];
+                 elf_path2[m++] = '.';
+                 elf_path2[m++] = 'c';
+@@ -213,20 +232,100 @@ void init_task_main() {
+                     f = initrd::find(elf_path1);
+                 if (!f.data)
+                     f = initrd::find(elf_path2);
+-                if (f.data) {
++                if (!f.data) {
++                    kernel::Logger::warn("init: rc file not found: %s",
++                                         elf_path);
++                    continue;
++                }
++                // Converged background load (issue #77 step 1): the shell
++                // `runelf` and rc share the ElfLoader + take_completed
++                // path; direct elf::load keeps no activation role.
++                {
+                     auto *hdr =
+                         reinterpret_cast<const kernel::elf::ELF64Header *>(
+                             f.data);
+-                    if (kernel::elf::validate_header(hdr)) {
+-                        auto *task = kernel::elf::load(hdr, f.data, f.size);
+-                        if (task) {
+-                            task->priority = 2;
+-                            task->base_priority = 2;
+-                            task->period_ticks = 0;
+-                            kernel::Scheduler::add_task(*task);
+-                            kernel::Logger::info("init: started %s", elf_path);
+-                        }
++                    if (!kernel::elf::validate_header(hdr)) {
++                        kernel::Logger::warn("init: rc invalid ELF: %s",
++                                             elf_path);
++                        continue;
++                    }
++                    // Issue #77 step 4 / S3: dynamic/interp images rejected
++                    // with a clear boot-log error — never silently loaded
++                    // to die at rip 0. Shared validate_header stays
++                    // ET_EXEC+ET_DYN-capable for the #95 shared-lib loader.
++                    if (hdr->type != kernel::elf::ET_EXEC) {
++                        kernel::Logger::warn(
++                            "init: rc only ET_EXEC supported: %s", elf_path);
++                        continue;
++                    }
++                    // Map the initrd-relative path into the VFS domain
++                    // (initrd is mounted at /) for the loader, which
++                    // re-resolves there.
++                    char vfs_path[160];
++                    int v = 0;
++                    if (elf_path[0] != '/') {
++                        vfs_path[v++] = '/';
++                    }
++                    for (int i = 0; elf_path[i] != '\0'; ++i) {
++                        if (v >= 127)
++                            break;
++                        vfs_path[v++] = elf_path[i];
++                    }
++                    vfs_path[v] = '\0';
++                    if (elf_path[v - (elf_path[0] != '/' ? 1 : 0)] != '\0') {
++                        kernel::Logger::warn("init: rc path too long: %s",
++                                             elf_path);
++                        continue;
+                     }
++                    auto lres = kernel::elf::ElfLoader::request_load(vfs_path);
++                    if (lres != kernel::elf::LoadResult::OK) {
++                        kernel::Logger::warn(
++                            "init: rc load not accepted for %s", elf_path);
++                        continue;
++                    }
++                    kernel::elf::ElfLoader::wait_loader_idle();
++                    if (kernel::elf::ElfLoader::state() !=
++                        kernel::elf::LoadState::DONE) {
++                        kernel::Logger::warn("init: rc load failed: %s",
++                                             elf_path);
++                        continue;
++                    }
++                    kernel::TaskControlBlock *task =
++                        kernel::elf::ElfLoader::take_completed();
++                    if (!task) {
++                        kernel::Logger::warn("init: rc load failed: %s",
++                                             elf_path);
++                        continue;
++                    }
++                    // Settled parameters BEFORE add_task (never add then
++                    // mutate); priority via the scheduler helper (§11.4).
++                    // Strictly periodic user task (prio 2 user band,
++                    // period/deadline 100); FIXED keeps bitmap RMS dispatch
++                    // (AUTO + finite deadline would enter EDF dispatch).
++                    kernel::Scheduler::set_priority(*task, 2);
++                    task->period_ticks = 100;
++                    task->deadline_ticks = arch::Timer::ticks() + 100;
++                    if (!kernel::Scheduler::set_sched_policy(
++                            *task, kernel::SchedPolicy::FIXED)) {
++                        kernel::elf::ElfLoader::destroy_completed_tcb(task);
++                        kernel::Logger::warn(
++                            "init: rc policy rejected: %s", elf_path);
++                        continue;
++                    }
++                    // Admission BEFORE activation (S1): fail closed with a
++                    // boot-log code; a denied image is destroyed via the
++                    // loader teardown (never cleanup()+delete on a
++                    // never-added TCB, never leaked).
++                    kernel::errors::SchedulerError admit =
++                        kernel::Scheduler::add_task_err(*task);
++                    if (admit != kernel::errors::SCHED_ERR_OK) {
++                        kernel::elf::ElfLoader::destroy_completed_tcb(task);
++                        kernel::Logger::warn(
++                            "init: rc admission denied for %s: %s", elf_path,
++                            kernel::errors::error_string(admit));
++                        continue;
++                    }
++                    kernel::Logger::info("init: started %s", elf_path);
+                 }
+             }
+         }
+@@ -299,10 +398,6 @@ void init_task_main() {
+         arch::hlt();
+     }
  
- int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
--         uint32_t badge) noexcept {
-+         uint32_t badge, uint32_t *gen_out) noexcept {
-     (void)badge; // badge re-branding lands with endpoint integration (Phase 4)
--    return do_copy_pinned(src, src_handle, dst, rights_mask);
-+    return do_copy_pinned(src, src_handle, dst, rights_mask, gen_out);
- }
- 
- } // namespace kernel::cap
-diff --git a/src/kernel/cap/cap.hpp b/src/kernel/cap/cap.hpp
-index 1f033b121..338306492 100644
---- a/src/kernel/cap/cap.hpp
-+++ b/src/kernel/cap/cap.hpp
-@@ -72,8 +72,14 @@ class CNode : public KernelObject {
- 
-     /// @brief Installs @p obj into the first free slot with the given type
-     ///        and rights.  Takes a strong reference (acquire()) on success.
-+    /// @param gen_out when non-null, receives the generation assigned to the
-+    ///        occupied slot, written inside the slot-table lock (issue #266:
-+    ///        lets syscall returns encode the handle with no install->read
-+    ///        TOCTOU against SMP cross-task grants; stale gens can only fail
-+    ///        closed in lookup).
-     /// @return slot index on success, -1 when full or the target is revoked.
--    int install(KernelObject *obj, CapType type, uint32_t rights) noexcept;
-+    int install(KernelObject *obj, CapType type, uint32_t rights,
-+                uint32_t *gen_out = nullptr) noexcept;
- 
-     /// @brief Removes the slot at @p idx (clears and releases the target).
-     ///        Idempotent: an already-free slot is a no-op.  The target is
-@@ -115,17 +121,25 @@ size_t occupied_count(const CNode *cspace) noexcept;
- 
- /// @brief Copies the capability at @p src_handle of @p src into @p dst.
- ///        The destination slot inherits the source rights (COPY-capped).
--int copy(CNode *src, uint64_t src_handle, CNode *dst) noexcept;
-+/// @param gen_out when non-null, receives the new destination slot's
-+///        generation (issue #266; written inside the install lock).
-+int copy(CNode *src, uint64_t src_handle, CNode *dst,
-+         uint32_t *gen_out = nullptr) noexcept;
- 
- /// @brief Grants the capability at @p src_handle of @p src into @p dst.
- ///        Requires CAP_RIGHT_GRANT on the source slot; clears the source
- ///        GRANT right after use (mint-once semantics).
--int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept;
-+/// @param gen_out when non-null, receives the new destination slot's
-+///        generation (issue #266; written inside the install lock).
-+int grant(CNode *src, uint64_t src_handle, CNode *dst,
-+          uint32_t *gen_out = nullptr) noexcept;
- 
- /// @brief Copies the capability with a reduced rights mask and, for
- ///        endpoints, a new badge.
-+/// @param gen_out when non-null, receives the new destination slot's
-+///        generation (issue #266; written inside the install lock).
- int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
--         uint32_t badge) noexcept;
-+         uint32_t badge, uint32_t *gen_out = nullptr) noexcept;
- 
- /// @brief Retypes the Untyped at @p untyped_handle in @p cspace into a new
- ///        capability of @p target_type, installed into @p cspace.  Supports
-@@ -136,7 +150,10 @@ int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
- ///        exact-size degenerate case (no child).  Non-destructive on
- ///        validation/capacity failure; fail-closed after the guard is claimed.
- /// @return the new target slot index, or -1 on any failure.
-+/// @param gen_out when non-null, receives the new target slot's generation
-+///        (issue #266; written inside the install lock).
- int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
--           size_t size, uint32_t rights) noexcept;
-+           size_t size, uint32_t rights,
-+           uint32_t *gen_out = nullptr) noexcept;
- 
- } // namespace kernel::cap
-diff --git a/src/kernel/cap/cap_types.hpp b/src/kernel/cap/cap_types.hpp
-index c749ac078..60cc0fef9 100644
---- a/src/kernel/cap/cap_types.hpp
-+++ b/src/kernel/cap/cap_types.hpp
-@@ -101,6 +101,19 @@ constexpr uint32_t handle_gen(uint64_t handle) noexcept {
-     return static_cast<uint32_t>(handle >> (CAP_HANDLE_IDBITS + CAP_SLOT_BITS));
- }
- 
-+/// @brief Builds the user-facing handle for a freshly installed slot
-+///        (issue #266): an opaque 64-bit value directly usable with lookup/
-+///        revoke, never a raw slot index.  Centralizes the -1 failure
-+///        encoding so all syscall producers share one rule.  An inline
-+///        function (not a macro): the failure path stays visible and typed,
-+///        with no double evaluation of arguments.
-+inline uint64_t encode_user_handle(uint32_t cspace_id, int idx,
-+                                   uint32_t gen) noexcept {
-+    if (idx < 0)
-+        return static_cast<uint64_t>(-1);
-+    return encode_handle(cspace_id, static_cast<uint32_t>(idx), gen);
+-    // ── Background ELF loader task (created before the test runner so it is
+-    //    part of the snapshot baseline and survives snapshot_restore). ──
+-    kernel::elf::ElfLoader::ensure_task();
+-
+     // ── Run tests from init-task context (IF=1) ──────────────────
+ #if defined(CONFIG_DEBUG)
+     kernel::Logger::info(
+@@ -1447,6 +1542,102 @@ extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
+ ///        action is to terminate).
+ /// @return true if signal was delivered (handler will run), false if task was
+ /// terminated.
++/// @brief dmesg codes for task-end reports (user request): clean exit vs
++///        fault/signal death.  0xDBxx belongs to the ELF loader; 0xDCxx is
++///        free (verified: no other 0xDC codes tree-wide).
++#define TASK_END_DMESG_CLEAN 0xDC01
++#define TASK_END_DMESG_FAULT 0xDC02
++
++/// @brief Stable message slots for task-end reports (dmesg stores the
++///        pointer, so the text must outlive the call).  Four slots tolerate
++///        a fault-death nesting inside another report; overwrites only
++///        recycle the oldest line.
++namespace {
++char s_taskend_msg[4][160];
++uint32_t s_taskend_idx = 0;
++} // namespace
++
++/// @brief One-line cause phrase for a CPU fault vector (x86 numbers; other
++///        arches pass vector 0 and get the generic wording).
++const char *task_fault_cause(uint64_t vector) {
++    switch (vector) {
++    case 0:
++        return "divide error";
++    case 6:
++        return "invalid opcode";
++    case 13:
++        return "general protection";
++    case 14:
++        return "access violation";
++    default:
++        return "fault";
++    }
 +}
 +
- /// @brief True if the slot index fits this CNode's table.
- constexpr bool slot_index_valid(uint32_t idx) noexcept {
-     return idx < static_cast<uint32_t>(CONFIG_CSLOT_COUNT);
-diff --git a/src/kernel/cap/untyped.cpp b/src/kernel/cap/untyped.cpp
-index f26d07c7c..8b08201e1 100644
---- a/src/kernel/cap/untyped.cpp
-+++ b/src/kernel/cap/untyped.cpp
-@@ -129,7 +129,7 @@ void UntypedMem::dispose() noexcept {
++void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
++                          uint64_t code_or_sig, uint64_t vector) {
++    // User tasks outside test mode only: kernel-task churn (daemons,
++    // reapers, test fixtures by the hundreds) would flood the console.
++    if (!task.is_user_ || kernel::Scheduler::is_test_active())
++        return;
++    char *slot = s_taskend_msg[__atomic_fetch_add(&s_taskend_idx, 1U,
++                                                  __ATOMIC_RELAXED) %
++                               4];
++    int n = 0;
++    auto append_str = [&slot, &n](const char *s) {
++        while (*s && n < 159)
++            slot[n++] = *s++;
++    };
++    auto append_dec = [&slot, &n](uint64_t v) {
++        char tmp[24];
++        int ti = 0;
++        if (v == 0)
++            tmp[ti++] = '0';
++        while (v > 0 && ti < 23) {
++            tmp[ti++] = static_cast<char>('0' + (v % 10));
++            v /= 10;
++        }
++        while (ti > 0 && n < 159)
++            slot[n++] = tmp[--ti];
++    };
++    append_str("Task #");
++    append_dec(task.id);
++    append_str(" '");
++    for (size_t i = 0; i < CONFIG_TASK_NAME_LEN && task.name[i] != '\0';
++         ++i) {
++        if (n < 159)
++            slot[n++] = task.name[i];
++    }
++    append_str("' ");
++    if (clean) {
++        append_str("exited (code ");
++        append_dec(code_or_sig);
++        append_str(")");
++        slot[n] = '\0';
++        kernel::log::dmesg_push_base(TASK_END_DMESG_CLEAN, slot, 0);
++        kernel::Logger::info("%s", slot);
++    } else {
++        append_str("faulted: ");
++        append_str(task_fault_cause(vector));
++        append_str(" (");
++        if (vector != 0) {
++            append_str(kernel::exception_to_signal(vector).name);
++        } else {
++            append_str("signal ");
++            append_dec(code_or_sig);
++        }
++        append_str(")");
++        slot[n] = '\0';
++        kernel::log::dmesg_push_base(TASK_END_DMESG_FAULT, slot, 0);
++        kernel::Logger::error("%s", slot);
++    }
++    // Framebuffer console (user request): Logger serves serial/dmesg only.
++    // write_fb renders pixels without touching serial (no duplicate lines)
++    // or the shell capture buffer.
++    service::Terminal::write_fb(slot);
++    service::Terminal::write_fb("\n");
++}
++
+ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
+                                    uint64_t vector, uint64_t error_code,
+                                    uint64_t rip, uint64_t *regs) {
+@@ -1543,6 +1734,9 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
+         kernel::Logger::error("  CR2=%x", cr2_val);
+     }
+     dump_regs(regs);
++    // User task-end report (user request): one line with the cause on
++    // dmesg + serial + framebuffer; the detail lines above stay.
++    report_user_task_end(*task, false, sig, vector);
+     // INV-5: terminate dequeues so the task is never left inrq=1 outside the
+     // physical queue. Issue #197: an AP-live target is left alive instead
+     // (the owning CPU's own exit path terminates it).
+@@ -1557,6 +1751,7 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
+     (void)rip;
+     kernel::Logger::error("Task %x: signal %x (aarch64 stub, terminating)",
+                           task->id, sig);
++    report_user_task_end(*task, false, sig, 0);
+     task->state = kernel::TaskState::TERMINATED;
+     task->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
+     return false;
+@@ -1566,6 +1761,7 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
+     (void)rip;
+     kernel::Logger::error("Task %x: signal %x (riscv64 stub, terminating)",
+                           task->id, sig);
++    report_user_task_end(*task, false, sig, 0);
+     task->state = kernel::TaskState::TERMINATED;
+     task->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
+     return false;
+diff --git a/src/kernel/kernel.hpp b/src/kernel/kernel.hpp
+index 0e78bba3a..c7f6bace2 100644
+--- a/src/kernel/kernel.hpp
++++ b/src/kernel/kernel.hpp
+@@ -53,3 +53,22 @@ extern uint8_t kernel_stack[];
+ /// @param size   Buffer size.
+ /// @param wall_ns  Nanoseconds since 1970-01-01 00:00:00 UTC.
+ void format_datetime(char *buf, size_t size, uint64_t wall_ns);
++
++namespace kernel {
++class TaskControlBlock;
++} // namespace kernel
++
++/// @brief Reports a user task's end (clean exit code or fault reason) to
++///        dmesg + serial log + framebuffer console (user request: an app
++///        ending unexpectedly — or even cleanly, which may itself be
++///        unintended — must say why).  Gated inside on user tasks outside
++///        test mode (kernel-task churn and test fixtures stay quiet), so
++///        call sites stay unconditional.
++/// @param task         The ending task (name/id read here).
++/// @param clean        True for sys_exit (code_or_sig = exit status),
++///                     false for signal/fault death (code_or_sig = signal).
++/// @param code_or_sig  Exit status or signal number.
++/// @param vector       CPU fault vector for cause text (x86 fault path);
++///                     0 when not applicable (generic "fault" wording).
++void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
++                          uint64_t code_or_sig, uint64_t vector);
+diff --git a/src/kernel/log/dmesg.hpp b/src/kernel/log/dmesg.hpp
+index 15428610e..559c87b94 100644
+--- a/src/kernel/log/dmesg.hpp
++++ b/src/kernel/log/dmesg.hpp
+@@ -314,11 +314,14 @@ inline bool dmesg_push_base(uint64_t err, const char *msg,
  }
  
- int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
--           size_t size, uint32_t rights) noexcept {
-+           size_t size, uint32_t rights, uint32_t *gen_out) noexcept {
-     if (!cspace)
-         return -1;
-     // Pin the Untyped (WRITE = mutation right).  The pin keeps the object
-@@ -191,7 +191,7 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
+ /// @brief True when a base-subsystem code is an informational event rather
+-///        than a fault: daemon lifecycle (0xDA00-0xDAFF) and background ELF
+-///        loader (0xDB00-0xDBFF) ranges.  Used by the dmesg renderers to
+-///        print INFO= instead of ERR=.
++///        than a fault: daemon lifecycle (0xDA00-0xDAFF), background ELF
++///        loader (0xDB00-0xDBFF), and user task-end reports (0xDC00-0xDCFF)
++///        ranges.  Used by the dmesg renderers to print INFO= instead of
++///        ERR=.  A new event family MUST extend both this predicate and
++///        base_error_string below, or its lines render as ERR=<stale enum>.
+ inline bool base_code_is_info(uint64_t code) {
+-    return (code & ~0xFFULL) == 0xDA00 || (code & ~0xFFULL) == 0xDB00;
++    return (code & ~0xFFULL) == 0xDA00 || (code & ~0xFFULL) == 0xDB00 ||
++           (code & ~0xFFULL) == 0xDC00;
+ }
+ 
+ /// @brief Return a human-readable string for a base-subsystem error code.
+@@ -326,6 +329,7 @@ inline bool base_code_is_info(uint64_t code) {
+ ///        a custom range for event codes:
+ ///          0xDA00 – 0xDAFF  daemon lifecycle events
+ ///          0xDB00 – 0xDBFF  background ELF loader events
++///          0xDC00 – 0xDCFF  user task-end reports (clean exit / fault)
+ inline const char *base_error_string(uint64_t code) {
+     // Custom event ranges
+     if ((code & ~0xFFULL) == 0xDA00) {
+@@ -372,6 +376,17 @@ inline const char *base_error_string(uint64_t code) {
          }
+         return "ELF loader event";
      }
++    if ((code & ~0xFFULL) == 0xDC00) {
++        switch (code) {
++        case 0xDC01:
++            return "Task exited";
++        case 0xDC02:
++            return "Task faulted";
++        default:
++            break;
++        }
++        return "Task end event";
++    }
+     // Standard kernel::Error range (0–9)
+     switch (static_cast<kernel::Error>(code)) {
+     case kernel::Error::OK:
+diff --git a/src/kernel/syscall/syscall_handlers_misc.cpp b/src/kernel/syscall/syscall_handlers_misc.cpp
+index 28b417e2d..9988fa095 100644
+--- a/src/kernel/syscall/syscall_handlers_misc.cpp
++++ b/src/kernel/syscall/syscall_handlers_misc.cpp
+@@ -21,6 +21,7 @@
+ /// get_ticks, exit, etc.
  
--    int idx_target = cspace->install(fc, CapType::Frame, rights);
-+    int idx_target = cspace->install(fc, CapType::Frame, rights, gen_out);
-     if (idx_target < 0) {
-         if (child)
-             child->release(); // disposes [ut->phys + size, ut->phys + ut->size)
-diff --git a/src/kernel/syscall/syscall_handlers_cap.cpp b/src/kernel/syscall/syscall_handlers_cap.cpp
-index 9d9a5956c..2a8183224 100644
---- a/src/kernel/syscall/syscall_handlers_cap.cpp
-+++ b/src/kernel/syscall/syscall_handlers_cap.cpp
-@@ -52,11 +52,12 @@ uint64_t Syscall::sys_cap_grant(uint64_t src_handle, uint64_t dst_handle,
-     if (!dst_obj)
-         return static_cast<uint64_t>(-1);
-     auto *dst = static_cast<cap::CNode *>(dst_obj);
--    int idx = cap::grant(src, src_handle, dst);
-+    uint32_t gen = 0;
-+    int idx = cap::grant(src, src_handle, dst, &gen);
-     dst_obj->release();
--    if (idx < 0)
--        return static_cast<uint64_t>(-1);
--    return static_cast<uint64_t>(idx);
-+    // Issue #266: user handles are opaque encoded values (spec §:132),
-+    // directly usable with lookup/revoke — never raw slot indices.
-+    return cap::encode_user_handle(dst->cspace_id, idx, gen);
- }
+ #include <kernel/syscall/syscall.hpp>
++#include <kernel/kernel.hpp>
+ #include <kernel/syscall/syscall_helpers.hpp>
+ #include <kernel/log/dmesg.hpp>
+ #include <kernel/random.hpp>
+@@ -93,6 +94,10 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
+     if (t) {
+         t->state = TaskState::TERMINATED;
+         t->exit_code = arg0;
++        // User task-end report (user request): clean exit with return
++        // code on dmesg + serial + framebuffer.  Gated inside on user
++        // tasks outside test mode.
++        report_user_task_end(*t, true, arg0, 0);
  
- uint64_t Syscall::sys_cap_copy(uint64_t src_handle, uint64_t dst_handle,
-@@ -69,11 +70,12 @@ uint64_t Syscall::sys_cap_copy(uint64_t src_handle, uint64_t dst_handle,
-     if (!dst_obj)
-         return static_cast<uint64_t>(-1);
-     auto *dst = static_cast<cap::CNode *>(dst_obj);
--    int idx = cap::copy(src, src_handle, dst);
-+    uint32_t gen = 0;
-+    int idx = cap::copy(src, src_handle, dst, &gen);
-     dst_obj->release();
--    if (idx < 0)
--        return static_cast<uint64_t>(-1);
--    return static_cast<uint64_t>(idx);
-+    // Issue #266: user handles are opaque encoded values (spec §:132),
-+    // directly usable with lookup/revoke — never raw slot indices.
-+    return cap::encode_user_handle(dst->cspace_id, idx, gen);
- }
+         // If the exiting task is the current running task (the normal case for
+         // sys_exit), we must switch the CPU off it BEFORE returning to user
+diff --git a/src/kernel/test/test_dmesg.cpp b/src/kernel/test/test_dmesg.cpp
+index f3254600f..9ce8506e0 100644
+--- a/src/kernel/test/test_dmesg.cpp
++++ b/src/kernel/test/test_dmesg.cpp
+@@ -367,6 +367,26 @@ JARVIS_TEST(dmesg_base_error_strings, "PRE: none | POST: none") {
+                          log::base_error_string(0xDAFFULL))
+             == 0,
+         "expected Daemon event");
++    JARVIS_ASSERT_FMT(
++        __builtin_strcmp("Task exited", log::base_error_string(0xDC01ULL))
++            == 0,
++        "expected Task exited");
++    JARVIS_ASSERT_FMT(
++        __builtin_strcmp("Task faulted", log::base_error_string(0xDC02ULL))
++            == 0,
++        "expected Task faulted");
++    JARVIS_ASSERT_FMT(
++        __builtin_strcmp("Task end event",
++                         log::base_error_string(0xDCFFULL))
++            == 0,
++        "expected Task end event");
++    // Issue #77 live session: a new event family must also be INFO-classed,
++    // or its lines render as ERR=<stale enum> (0xDC01 showed "Out of
++    // memory" before the predicate knew the range).
++    JARVIS_ASSERT(log::base_code_is_info(0xDC01ULL));
++    JARVIS_ASSERT(log::base_code_is_info(0xDC02ULL));
++    JARVIS_ASSERT(!log::base_code_is_info(
++        static_cast<uint64_t>(kernel::Error::OOM)));
+     JARVIS_ASSERT_FMT(
+         __builtin_strcmp("Unknown base error",
+                          log::base_error_string(9999ULL))
+diff --git a/src/kernel/test/test_elf_loader.cpp b/src/kernel/test/test_elf_loader.cpp
+index 4474f9080..4c4f0321d 100644
+--- a/src/kernel/test/test_elf_loader.cpp
++++ b/src/kernel/test/test_elf_loader.cpp
+@@ -29,6 +29,7 @@
+ #include <kernel/task/task.hpp>
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/test/test_isolate.hpp>
++#include <kernel/test/resource_tracker.hpp>
+ #include <string.hpp>
  
- uint64_t Syscall::sys_cap_revoke(uint64_t src_handle, uint64_t, uint64_t,
-@@ -97,13 +99,13 @@ uint64_t Syscall::sys_cap_mint(uint64_t src_handle, uint64_t dst_handle,
-     if (!dst_obj)
-         return static_cast<uint64_t>(-1);
-     auto *dst = static_cast<cap::CNode *>(dst_obj);
-+    uint32_t gen = 0;
-     int idx =
-         cap::mint(src, src_handle, dst, static_cast<uint32_t>(rights_mask),
--                  static_cast<uint32_t>(badge));
-+                  static_cast<uint32_t>(badge), &gen);
-     dst_obj->release();
--    if (idx < 0)
--        return static_cast<uint64_t>(-1);
--    return static_cast<uint64_t>(idx);
-+    // Issue #266: opaque encoded handle, never a raw slot index.
-+    return cap::encode_user_handle(dst->cspace_id, idx, gen);
- }
- 
- uint64_t Syscall::sys_cap_retype(uint64_t untyped_handle, uint64_t target_type,
-@@ -114,13 +116,14 @@ uint64_t Syscall::sys_cap_retype(uint64_t untyped_handle, uint64_t target_type,
-     // Installs the retyped target (and, on a sub-range carve, the child
-     // Untyped) into the caller's own root CNode.  cap::retype validates the
-     // type/size (garbage target_type or oversize/unaligned -> -1, parent kept).
-+    // The install lands in the caller's own root CNode, so the handle is
-+    // encoded with the caller's own cspace id (issue #266).
-+    uint32_t gen = 0;
-     int idx = cap::retype(src, untyped_handle,
-                           static_cast<cap::CapType>(target_type),
-                           static_cast<size_t>(size),
--                          static_cast<uint32_t>(rights));
--    if (idx < 0)
--        return static_cast<uint64_t>(-1);
--    return static_cast<uint64_t>(idx);
-+                          static_cast<uint32_t>(rights), &gen);
-+    return cap::encode_user_handle(src->cspace_id, idx, gen);
- }
- 
- } // namespace kernel
-diff --git a/src/kernel/syscall/syscall_handlers_shm.cpp b/src/kernel/syscall/syscall_handlers_shm.cpp
-index 36f56f149..e2e98b7df 100644
---- a/src/kernel/syscall/syscall_handlers_shm.cpp
-+++ b/src/kernel/syscall/syscall_handlers_shm.cpp
-@@ -68,14 +68,17 @@ uint64_t Syscall::sys_frame_create(uint64_t count, uint64_t, uint64_t,
-         return static_cast<uint64_t>(-1);
-     }
- 
-+    uint32_t gen = 0;
-     int idx = cs->install(fc, cap::CapType::Frame,
--                          cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+                          cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
-     if (idx < 0) {
-         fc->release(); // never installed — drop the creator reference
-         return static_cast<uint64_t>(-1);
-     }
-     fc->release(); // slot holds a reference; drop the creator's
--    return static_cast<uint64_t>(idx);
-+    // Issue #266: opaque encoded handle for the caller's own root CNode,
-+    // directly usable with lookup/revoke — never a raw slot index.
-+    return cap::encode_user_handle(cs->cspace_id, idx, gen);
- }
- 
- uint64_t Syscall::sys_frame_map(uint64_t cap_handle, uint64_t, uint64_t,
-diff --git a/src/kernel/test/test_cap_syscall.cpp b/src/kernel/test/test_cap_syscall.cpp
-index 0b46abf98..44c1a263a 100644
---- a/src/kernel/test/test_cap_syscall.cpp
-+++ b/src/kernel/test/test_cap_syscall.cpp
-@@ -109,7 +109,8 @@ void teardown_dest_cspace(TaskControlBlock *t, cap::CNode *dst, int slot) {
- //           destination CNode (addressed by a CapCNode handle).
- // Input: task sets up its CSpace + a dest CNode cap + a task target cap;
- //        dispatches SYS_CAP_GRANT
--// Expect: syscall returns the new slot index; dest CNode holds the target
-+// Expect: syscall returns the new opaque handle (issue #266: directly
-+// usable, never a raw slot index); dest CNode holds the target
- // Depends: kernel::Syscall, kernel::cap
- JARVIS_TEST(sys_cap_grant_dispatch, "PRE: none | POST: none") {
-     static uint64_t g_ret = 0;
-@@ -162,7 +163,8 @@ JARVIS_TEST(sys_cap_grant_dispatch, "PRE: none | POST: none") {
- // Testidea: SYS_CAP_COPY duplicates the capability into the destination.
- // Input: task sets up CSpace + dest CNode cap + target cap; dispatches
- //        SYS_CAP_COPY
--// Expect: syscall returns the new slot index; dest CNode holds the target
-+// Expect: syscall returns the new opaque handle (issue #266: directly
-+// usable, never a raw slot index); dest CNode holds the target
- // Depends: kernel::Syscall, kernel::cap
- JARVIS_TEST(sys_cap_copy_dispatch, "PRE: none | POST: none") {
-     static uint64_t g_ret = 0;
-@@ -259,11 +261,52 @@ JARVIS_TEST(sys_cap_revoke_dispatch, "PRE: none | POST: none") {
+ using namespace kernel;
+@@ -150,6 +151,34 @@ JARVIS_TEST(loader_load_invalid_elf, "PRE: vfsd, iocd | POST: none") {
      JARVIS_TEST_PASS();
  }
  
 +// Runmode: kernel
-+// Testidea: Issue #266 — syscall-produced handles are opaque encoded values
-+// usable with no manual encoding: frame_create's return feeds revoke
-+// directly. Pre-fix the producers returned raw slot indices, which lookup/
-+// revoke reject (cspace/gen mismatch) — the round trip failed.
-+// Input: SYS_FRAME_CREATE(1) -> take the returned handle as-is ->
-+// SYS_CAP_REVOKE(handle).
-+// Expect: create returns non-minus-1; revoke of the returned handle is 0
-+// (slot actually gone afterwards).
-+// Depends: kernel::Syscall, kernel::cap encode/lookup/revoke contract.
-+JARVIS_TEST(sys_cap_returned_handle_roundtrip, "PRE: none | POST: none") {
-+    static uint64_t g_created = 0;
-+    static uint64_t g_revoked = 0;
-+    static uint64_t g_occ = 0;
-+
-+    g_created = 0;
-+    g_revoked = 0;
-+    g_occ = 0;
-+
-+    auto *t = run_cap_task([]() {
-+        g_created = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::FRAME_CREATE), 1, 0, 0, 0,
-+            nullptr);
-+        if (g_created == static_cast<uint64_t>(-1))
-+            return;
-+        g_revoked = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::CAP_REVOKE), g_created, 0,
-+            0, 0, nullptr);
-+        auto *cur = Scheduler::current_task();
-+        g_occ = (cur != nullptr && cur->get_cspace() != nullptr)
-+                    ? cap::occupied_count(cur->get_cspace())
-+                    : 999;
-+    });
++// Testidea: Live-session finding (#77 report) — request_load on an initrd
++// path leaked the resolve-result vnode (InitrdFileNode+Vnode, never
++// released), so repeated `load`s exhausted MemPool until every resolve
++// failed with FILE_NOT_FOUND. The tmpfs-staged tests never caught it:
++// tmpfs lookups don't allocate initrd nodes.
++// Input: request_load("/hey.c.elf") (initrd-resident ET_EXEC demo) ->
++// wait -> take -> destroy, with vnode counters captured around the cycle.
++// Expect: take succeeds (proves initrd-path loads work); vnode count
++// identical before/after (pre-fix: +2 per request).
++// Depends: ElfLoader request/wait/take/destroy, initrd mount at /
++JARVIS_TEST(loader_initrd_request_no_vnode_leak, "PRE: vfsd, iocd | POST: none") {
++    auto &rt = kernel::test::ResourceTracker::instance();
++    kernel::test::ResourceCounters before{};
++    rt.capture(before);
++    elf::ElfLoader::reset();
++    auto result = elf::ElfLoader::request_load("/hey.c.elf");
++    JARVIS_ASSERT(result == elf::LoadResult::OK);
++    elf::ElfLoader::wait_loader_idle();
++    auto *t = elf::ElfLoader::take_completed();
 +    JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT(g_created != static_cast<uint64_t>(-1));
-+    JARVIS_ASSERT_EQ(0ULL, g_revoked);
-+    JARVIS_ASSERT_EQ(0ULL, g_occ);
++    elf::ElfLoader::destroy_completed_tcb(t);
++    kernel::test::ResourceCounters after{};
++    rt.capture(after);
++    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
 +    JARVIS_TEST_PASS();
 +}
 +
  // Runmode: kernel
- // Testidea: SYS_CAP_MINT copies the capability with a reduced rights mask.
- // Input: task installs READ|WRITE cap; dispatches SYS_CAP_MINT with WRITE
- //        only into the dest CNode
--// Expect: syscall returns the slot index; dest slot carries only WRITE
-+// Expect: syscall returns the opaque handle (issue #266); dest slot carries
-+// only WRITE
- // Depends: kernel::Syscall, kernel::cap
- JARVIS_TEST(sys_cap_mint_dispatch, "PRE: none | POST: none") {
-     static uint64_t g_ret = 0;
-@@ -479,4 +522,5 @@ void register_cap_syscall_tests() {
-     JARVIS_REGISTER_TEST(sys_cap_wrong_type_returns_minus1);
-     JARVIS_REGISTER_TEST(sys_cap_rights_denied_returns_minus1);
-     JARVIS_REGISTER_TEST(sys_cap_revoke_cleanup_zero_delta);
-+    JARVIS_REGISTER_TEST(sys_cap_returned_handle_roundtrip); // issue #266
+ // Testidea: cancel mid-load reclaims all partial state (zero delta) and the
+ // loader returns to IDLE.  An 8-page load is started; cancel is requested
+@@ -325,4 +354,5 @@ void register_elf_loader_tests() {
+     JARVIS_REGISTER_TEST(loader_multiple_cycles);
+     JARVIS_REGISTER_TEST(loader_preemption_yield);
+     JARVIS_REGISTER_TEST(loader_lost_wakeup_race);
++    JARVIS_REGISTER_TEST(loader_initrd_request_no_vnode_leak); // #77 leak
  }
-diff --git a/src/kernel/test/test_cap_untyped.cpp b/src/kernel/test/test_cap_untyped.cpp
-index 3f25aa2f1..84da2d350 100644
---- a/src/kernel/test/test_cap_untyped.cpp
-+++ b/src/kernel/test/test_cap_untyped.cpp
-@@ -104,11 +104,11 @@ void cap_retype_happy_entry() {
-         static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE),
-         nullptr);
-     g_rtype_ret = ret;
--    if (ret < static_cast<uint64_t>(CONFIG_CSLOT_COUNT)) {
-+    if (ret != static_cast<uint64_t>(-1)) {
-+        // Issue #266: the return is an opaque handle, usable directly with
-+        // lookup — no manual re-encoding from a slot index.
-         KernelObject *target = cap::lookup(
--            cs, cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(ret),
--                                   cs->slot_gen(static_cast<uint32_t>(ret))),
--            cap::CapType::Frame, cap::CAP_RIGHT_READ);
-+            cs, ret, cap::CapType::Frame, cap::CAP_RIGHT_READ);
-         if (target) {
-             auto *fc = static_cast<cap::FrameCap *>(target);
-             g_rtype_frame_ok =
-@@ -131,8 +131,8 @@ void cap_retype_happy_entry() {
-         g_rtype_child_ok = 0;
-     }
-     cs->remove(static_cast<uint32_t>(s));
--    if (ret < static_cast<uint64_t>(CONFIG_CSLOT_COUNT))
--        cs->remove(static_cast<uint32_t>(ret));
-+    if (ret != static_cast<uint64_t>(-1))
-+        cs->remove(cap::handle_slot(ret));
-     if (child_idx >= 0)
-         cs->remove(static_cast<uint32_t>(child_idx));
-     ut->release();
-@@ -208,8 +208,8 @@ void cap_retype_validation_entry() {
-         static_cast<uint64_t>(sz),
-         static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
-     cs->remove(static_cast<uint32_t>(s));
--    if (g_rtype_val[6] < static_cast<uint64_t>(CONFIG_CSLOT_COUNT))
--        cs->remove(static_cast<uint32_t>(g_rtype_val[6]));
-+    if (g_rtype_val[6] != static_cast<uint64_t>(-1))
-+        cs->remove(cap::handle_slot(g_rtype_val[6]));
-     ut->release();
-     Scheduler::terminate(*cur, 0);
- }
-@@ -883,8 +883,9 @@ JARVIS_TEST(retype_full_table_precheck_fails_closed,
- // Testidea: SYS_CAP_RETYPE dispatches a sub-range carve end-to-end in a real
- //           task; the frame + child slots land in the caller's CSpace.
- // Input: real task installs 4-page Untyped; Syscall::handle(CAP_RETYPE, ...)
--// Expect: return >= 0; frame slot (count 1, phys == base); child slot
--//         [base+1p, 3p); zero ResourceTracker delta after task teardown
-+// Expect: return is an opaque handle (issue #266: slot field decodes in
-+// range); frame slot (count 1, phys == base); child slot [base+1p, 3p);
-+// zero ResourceTracker delta after task teardown
- // Depends: kernel::cap::UntypedMem, kernel::syscall::Syscall, kernel::task
- JARVIS_TEST(sys_cap_retype_dispatch_end_to_end, "PRE: none | POST: none") {
-     auto &rt = kernel::test::ResourceTracker::instance();
-@@ -899,7 +900,10 @@ JARVIS_TEST(sys_cap_retype_dispatch_end_to_end, "PRE: none | POST: none") {
-     JARVIS_ASSERT(t != nullptr);
- 
-     JARVIS_ASSERT(g_rtype_ret != 99 && g_rtype_ret != 98);
--    JARVIS_ASSERT(g_rtype_ret < static_cast<uint64_t>(CONFIG_CSLOT_COUNT));
-+    // Issue #266: opaque handle — the slot field must be in range (frame +
-+    // child landing is proven by the _ok flags below).
-+    JARVIS_ASSERT(cap::handle_slot(g_rtype_ret) <
-+                  static_cast<uint32_t>(CONFIG_CSLOT_COUNT));
-     JARVIS_ASSERT_EQ(1U, g_rtype_frame_ok);
-     JARVIS_ASSERT_EQ(1U, g_rtype_child_ok);
- 
-@@ -936,8 +940,10 @@ JARVIS_TEST(sys_cap_retype_validation_matrix, "PRE: none | POST: none") {
-     JARVIS_ASSERT_EQ(syscall_fail, g_rtype_val[3]); // size 0
-     JARVIS_ASSERT_EQ(syscall_fail, g_rtype_val[4]); // unaligned
-     JARVIS_ASSERT_EQ(1U, g_rtype_val[5]);           // parent intact
--    JARVIS_ASSERT(g_rtype_val[6] <
--                  static_cast<uint64_t>(CONFIG_CSLOT_COUNT)); // exact works
-+    // Issue #266: opaque handle — slot field in range proves the exact
-+    // carve returned a well-formed handle.
-+    JARVIS_ASSERT(cap::handle_slot(g_rtype_val[6]) <
-+                  static_cast<uint32_t>(CONFIG_CSLOT_COUNT)); // exact works
- 
-     kernel::test::ResourceCounters after{};
-     rt.capture(after);
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 015d0ab24..9a1fa19f4 100644
+index 9a1fa19f4..259dadfed 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -86,7 +86,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     // cap — capability-based access control (CSpace)
-     {"cap_core",             10,    0,       0      },  // CSpace engine: CNode/CSlot lifecycle, handle decode, revoke
-     {"cap_lifecycle",         8,    0,       0      },  // grant/copy/revoke/mint + Endpoint/FrameCap objects
--    {"cap_syscall",           8,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch
-+    {"cap_syscall",           9,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch + returned-handle roundtrip (issue #266)
-     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
-     {"cap_untyped",          18,    0,       0      },  // Untyped allocator + sub-range carve/child split (issue #1)
-     {"cap_mmio",              14,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3) + revocation-closure (issue #8)
+@@ -74,7 +74,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // process
+     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
+     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
+-    {"elf_loader",            8,    0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield)
++    {"elf_loader",            9,    0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77)
+     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)
+     {"process_signals",       8,    0,       0      },  // signal delivery/handling
+     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
+@@ -228,7 +228,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"memory_checked_ptr_api", 9,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views
+     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
+     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
+-    {"shell_commands",       30,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source
++    {"shell_commands",       31,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77)
+     {"services_framework",    7,    0,       0      },  // services framework (issue #125): terminal colors, length-bounded write, cursor/splash, fb gate, scroll, program registry bounds
+     {"ui_framebuffer",        5,    0,       0      },  // framebuffer init/putpixel/clear/scroll
+ 
+@@ -241,7 +241,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+ 
+     // logging / debug
+     {"logging_dmesg",        15,    0,       0      },  // DmesgBuffer + error strings + suppression
+-    {"logging_klog",          8,    0,       0      },  // kernel log read/wrap/concurrent
++    {"logging_klog",          9,    0,       0      },  // kernel log read/wrap/concurrent + task-end silence gate (user request)
+     {"debug_core",            2,    0,       0      },  // write formats + switch logs (qemu_debug_exit tests disabled)
+     {"debug_gcov",            4,    0,       0      },  // GCOV coverage metadata
+ 
+@@ -276,8 +276,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"core",                441,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 2 block-arm tests (issue #212)
+     {"ipc",                 81,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208)
+     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
+-    {"proc_elf",            83,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 5 (issues #173, #75)
+-    {"libc_verify",          5,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only)
++    {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
++    {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
+     {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
+     {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
+     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
+diff --git a/src/kernel/test/test_klog.cpp b/src/kernel/test/test_klog.cpp
+index a97a16b2a..b150da1ca 100644
+--- a/src/kernel/test/test_klog.cpp
++++ b/src/kernel/test/test_klog.cpp
+@@ -22,7 +22,12 @@
+ #include <test.hpp>
+ #include <logger.hpp>
+ #include <kernel/log/ring_buffer.hpp>
++#include <kernel/log/dmesg.hpp>
+ #include <kernel/memory/checked_ptr.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/arch/irq_guard.hpp>
++#include <kernel/kernel.hpp>
+ #include <string.hpp>
+ 
+ using namespace kernel;
+@@ -203,6 +208,34 @@ JARVIS_TEST(klog_read_partial, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: User request — task-end reports (clean code / fault reason to
++// dmesg + serial + framebuffer) must stay silent in test mode, or hundreds
++// of fixtures would flood the console. Both paths through the gate.
++// Input: Real (added, never dispatched) user task; call the reporter for
++// clean exit and fault death; dmesg size before/after.
++// Expect: dmesg size unchanged (early return inside the gate); teardown
++// via the never-dispatched pattern (remove+cleanup+delete).
++// Depends: report_user_task_end gate (is_user_ + !is_test_active)
++JARVIS_TEST(task_end_report_silent_in_tests, "PRE: none | POST: none") {
++    auto *t = TaskControlBlock::create([]() {}, 11, 10);
++    JARVIS_ASSERT(t != nullptr);
++    t->is_user_ = true;
++    size_t d0 = 0;
++    {
++        arch::IrqGuard guard;
++        Scheduler::add_task(*t);
++        d0 = log::DmesgService::instance().size();
++        ::report_user_task_end(*t, true, 0, 0);
++        ::report_user_task_end(*t, false, 11, 14);
++        JARVIS_ASSERT_EQ(d0, log::DmesgService::instance().size());
++        Scheduler::remove_task(*t);
++    }
++    t->cleanup();
++    delete t;
++    JARVIS_TEST_PASS();
++}
++
+ void register_klog_tests() {
+     Logger::info("Registering KLOG tests");
+ 
+@@ -214,4 +247,5 @@ void register_klog_tests() {
+     JARVIS_REGISTER_TEST(klog_empty_read);
+     JARVIS_REGISTER_TEST(klog_clear);
+     JARVIS_REGISTER_TEST(klog_read_partial);
++    JARVIS_REGISTER_TEST(task_end_report_silent_in_tests); // user request
+ }
+\ No newline at end of file
+diff --git a/src/kernel/test/test_libc_verify.cpp b/src/kernel/test/test_libc_verify.cpp
+index 0100e3341..249730bba 100644
+--- a/src/kernel/test/test_libc_verify.cpp
++++ b/src/kernel/test/test_libc_verify.cpp
+@@ -35,6 +35,8 @@
+ #include <kernel/task/task.hpp>
+ #include <kernel/vfs/vfs.hpp>
+ #include <kernel/arch/io.hpp>
++#include <kernel/arch/timer.hpp>
++#include <kernel/sync/semaphore.hpp>
+ #include <kernel/arch/hal/irq_guard.hpp>
+ #include <kernel/test/test_isolate.hpp>
+ #include "test_sched_helpers.hpp"
+@@ -176,8 +178,10 @@ constexpr const char *kStdoutPath = "/tmp/libc_stdout.txt";
+ 
+ // Stage image + stdin, load, repoint fd 0, dispatch to EXIT with a
+ // bounded join, capture serial markers, tear down. Returns observable
+-// state; asserts happen after teardown (allocation-free).
+-VerifyOutcome run_verify_program() {
++// state; asserts happen after teardown (allocation-free). When admitted
++// is true the dispatch goes through the wired #77 activation instead:
++// settled parameters + FIXED policy + add_task_err admission.
++VerifyOutcome run_verify_impl(bool admitted) {
+     VerifyOutcome out{};
+     elf::ElfLoader::reset();
+     if (write_image_file() == 0)
+@@ -269,17 +273,46 @@ VerifyOutcome run_verify_program() {
+     // lower-priority waitee forever after the first dispatch demotes the
+     // harness to READY (every driven test uses >= 11 for this reason).
+     // Set before add_task (not yet queued: no re-bucket needed).
+-    t->priority = 11;
+-    t->base_priority = 11;
++    if (admitted) {
++        // Issue #77 wired activation: settled parameters BEFORE add_task
++        // (priority via the scheduler helper per §11.4); strictly periodic
++        // user task (prio 2 user band, period/deadline 100); FIXED keeps
++        // bitmap RMS dispatch (AUTO + finite deadline would enter EDF
++        // dispatch). Admission BEFORE activation: fail closed — on denial
++        // destroy via the loader teardown and report joined=false (no
++        // harness asserts mid-flight; teardown discipline mirrors above).
++        Scheduler::set_priority(*t, 2);
++        t->period_ticks = 100;
++        t->deadline_ticks = arch::Timer::ticks() + 100;
++        bool pok = Scheduler::set_sched_policy(*t, SchedPolicy::FIXED);
++        auto acode = Scheduler::add_task_err(*t);
++        if (!pok || acode != errors::SCHED_ERR_OK) {
++            elf::ElfLoader::destroy_completed_tcb(t);
++            cleanup_image_file();
++            cleanup_stdin_file();
++            return out;
++        }
++    } else {
++        t->priority = 11;
++        t->base_priority = 11;
+ 
+-    {
+-        arch::IrqGuard ig{};
+-        Scheduler::add_task(*t);
++        {
++            arch::IrqGuard ig{};
++            Scheduler::add_task(*t);
++        }
+     }
+     Scheduler::reschedule();
+-    for (uint64_t i = 0;
+-         i < kJoinSpins && t->state != TaskState::TERMINATED; ++i)
+-        arch::pause();
++    if (admitted) {
++        // Production-shape join: a spinning harness is never preempted for
++        // lower peers (BUGS.md#021 harness protection — the legacy tests
++        // dodge it with prio >= 11). need_resched + hlt yields every tick
++        // until the admitted task exits, exactly like a blocking supervisor.
++        test::wait_for_termination_safe(t);
++    } else {
++        for (uint64_t i = 0;
++             i < kJoinSpins && t->state != TaskState::TERMINATED; ++i)
++            arch::pause();
++    }
+     bool exited = (t->state == TaskState::TERMINATED);
+     bool clean = exited && (t->exit_code == 0);
+     out.program_break = t->program_break;
+@@ -315,6 +348,21 @@ VerifyOutcome run_verify_program() {
+     return out;
+ }
+ 
++// Legacy dispatch (prio 11, void add_task): the five original tests.
++VerifyOutcome run_verify_program() { return run_verify_impl(false); }
++
++// Issue #77 wired activation: identical staging, admission-enforced
++// dispatch (settled params + FIXED + add_task_err).
++VerifyOutcome run_verify_wired() { return run_verify_impl(true); }
++
++// Filler entry for the denial pin: blocks on the gate (never posted until
++// teardown) so admitted fillers stay alive-but-idle in the LUB sum.
++void wired_deny_filler_entry() {
++    auto *self = Scheduler::current_task();
++    auto *gate = reinterpret_cast<sync::Semaphore *>(self->user_data);
++    gate->wait();
++}
++
+ } // namespace
+ 
+ // Runmode: kernel
+@@ -388,6 +436,60 @@ JARVIS_TEST(libc_verify_exit_clean_zero_delta, "PRE: vfsd | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: Issue #77 wired activation — the verify image runs to clean
++// EXIT(0) through take_completed + settled params + FIXED + add_task_err
++// (not the legacy prio-11 void-add_task dispatch).
++// Input: Same staging; admitted dispatch at prio 2, period/deadline 100.
++// Expect: Joined clean; capture contains LIBC_VERIFY: hello (proves the
++// admitted task actually executed user code to EXIT, not merely admitted).
++// Depends: ElfLoader take_completed, Scheduler::add_task_err (#77)
++JARVIS_TEST(libc_verify_wired_activation, "PRE: vfsd | POST: none") {
++    VerifyOutcome o = run_verify_wired();
++    JARVIS_ASSERT(o.joined);
++    JARVIS_ASSERT(o.clean_exit);
++    JARVIS_ASSERT(serial_contains(o.capture, "LIBC_VERIFY: hello"));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Issue #77 denial branch — a wired activation refused by
++// admission fails closed (no dispatch, no leak, joined=false).
++// Input: Fill the task table with exempt gated fillers (period 0 skips
++// the LUB gate, so the fill is ambient-independent) until add_task_err
++// refuses; then the wired activation. Either refusal mode (TABLE_FULL
++// or LUB over bound) exercises the same destroy-on-deny branch.
++// Expect: joined==false; image destroyed via the loader teardown; zero
++// ResourceTracker delta via isolation.
++// Depends: Scheduler::add_task_err fail-closed paths (#20)
++JARVIS_TEST(libc_verify_wired_denied, "PRE: vfsd | POST: none") {
++    sync::Semaphore gate;
++    gate.init(0, 1);
++    TaskControlBlock *fillers[CONFIG_MAX_TASKS];
++    uint64_t nfill = 0;
++    for (uint64_t i = 0; i < static_cast<uint64_t>(CONFIG_MAX_TASKS); ++i) {
++        auto *f =
++            TaskControlBlock::create(wired_deny_filler_entry, 11, 0);
++        if (f == nullptr)
++            break;
++        f->user_data = &gate;
++        if (Scheduler::add_task_err(*f) != errors::SCHED_ERR_OK) {
++            // Never admitted: fail-closed teardown (absent from tables).
++            JARVIS_ASSERT(Scheduler::find_task(f->id) == nullptr);
++            TaskControlBlock::destroy(f);
++            break;
++        }
++        fillers[nfill++] = f;
++    }
++    VerifyOutcome o = run_verify_wired();
++    JARVIS_ASSERT(!o.joined);
++    gate.post();
++    for (uint64_t i = 0; i < nfill; ++i)
++        kernel::test::terminate_and_drain(*fillers[i]);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
+ #endif // CONFIG_ARCH_X86_64
+ 
+ void register_libc_verify_tests() {
+@@ -398,5 +500,7 @@ void register_libc_verify_tests() {
+     JARVIS_REGISTER_TEST(libc_verify_malloc_reuse);
+     JARVIS_REGISTER_TEST(libc_verify_scanf_read);
+     JARVIS_REGISTER_TEST(libc_verify_exit_clean_zero_delta);
++    JARVIS_REGISTER_TEST(libc_verify_wired_activation); // issue #77
++    JARVIS_REGISTER_TEST(libc_verify_wired_denied);      // issue #77
+ #endif
+ }
+diff --git a/src/kernel/test/test_shell_commands.cpp b/src/kernel/test/test_shell_commands.cpp
+index 01ddc7106..e0348b5a8 100644
+--- a/src/kernel/test/test_shell_commands.cpp
++++ b/src/kernel/test/test_shell_commands.cpp
+@@ -36,6 +36,7 @@
+ #include <kernel/vfs/vfs.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/elf/elf_loader.hpp>
+ #include <kernel/sync/semaphore.hpp>
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/arch/io.hpp>
+@@ -220,6 +221,27 @@ JARVIS_TEST(shell_run_unknown_program_and_usage,
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: Issue #77 bare-runelf contract — runelf takes no parameters
++// (it runs the previously background-loaded ELF); with arguments it
++// prints usage, and with no completed image it reports "no elf loaded".
++// Input: Shell::execute("runelf a b"); reset loader, Shell::execute("runelf").
++// Expect: usage line for the former ("Usage: runelf"); "no elf loaded"
++// for the latter; neither touches the loader (argv rejected before take;
++// empty take mutates nothing).
++// Depends: service::Shell, Terminal capture, ElfLoader::reset
++JARVIS_TEST(shell_runelf_bare_contract, "PRE: vfsd, iocd | POST: none") {
++    char usage[k_capture_size];
++    run_shell("runelf a b", usage, sizeof(usage));
++    JARVIS_ASSERT(has(usage, "Usage: runelf"));
++
++    kernel::elf::ElfLoader::reset();
++    char empty[k_capture_size];
++    run_shell("runelf", empty, sizeof(empty));
++    JARVIS_ASSERT(has(empty, "no elf loaded"));
++    JARVIS_TEST_PASS();
++}
++
+ // Runmode: kernel
+ // Testidea: The job-control built-ins are documented stubs / no-ops: `fg`
+ // and `bg` state that job control is not implemented, `disown` echoes the
+@@ -1122,4 +1144,5 @@ void register_shell_commands_tests() {
+     JARVIS_REGISTER_TEST(shell_top_zombie_rows_and_omission);
+     JARVIS_REGISTER_TEST(shell_top_sys_user_split);
+     JARVIS_REGISTER_TEST(shell_top_usage_contract);
++    JARVIS_REGISTER_TEST(shell_runelf_bare_contract); // issue #77
+ }
+diff --git a/src/kernel/vfs/vfs.cpp b/src/kernel/vfs/vfs.cpp
+index e430d6a55..90980f77f 100644
+--- a/src/kernel/vfs/vfs.cpp
++++ b/src/kernel/vfs/vfs.cpp
+@@ -175,7 +175,15 @@ Vnode *resolve(const char *path) {
+             const char *mp = mount_table[i].mount_point;
+             size_t mplen = strlen(mp);
+             if (strncmp(path, mp, mplen) == 0) {
+-                if (path[mplen] == '/' || path[mplen] == '\0') {
++                // Live-session finding (#77 report): the root mount "/"
++                // (mplen 1) must match every absolute path — requiring
++                // path[1] to be '/' or NUL meant no direct child of /
++                // ("/hey.c.elf", "/etc/rc") ever resolved, while submount
++                // paths ("/tmp/x", "/dev/tty") worked. The separator
++                // guard still applies to longer mount points ("/devXYZ"
++                // must not match "/dev").
++                if (mplen == 1 || path[mplen] == '/' ||
++                    path[mplen] == '\0') {
+                     if (mplen > best_len) {
+                         best = &mount_table[i];
+                         best_len = mplen;
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index d43a53dac..5baffe8d6 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -2042,33 +2042,52 @@ void Shell::cmd_export(int argc, const char** argv) {
+ }
+ 
+ void Shell::cmd_runelf(int argc, const char** argv) {
+-    if (argc < 2) {
+-        Terminal::write("Usage: runelf <path.elf> [args...]\n");
++    // Issue #77 (user-directed contract): runelf takes no parameters — it
++    // runs the previously background-loaded ELF (`load` stages via the
++    // ElfLoader; runelf activates the retained completion).  With no
++    // completed image it reports "no elf loaded" instead of failing.
++    if (argc != 1) {
++        Terminal::write("Usage: runelf\n");
+         return;
+     }
++    (void)argv;
+ 
+-    const char* path = argv[1];
+-
+-    initrd::InitrdFile f = initrd::find(path);
+-    if (!f.data) {
+-        shell_error_path("runelf", path, "file not found in initrd");
++    kernel::TaskControlBlock* task =
++        kernel::elf::ElfLoader::take_completed();
++    if (!task) {
++        shell_error("runelf", "no elf loaded");
+         return;
+     }
+ 
+-    auto* hdr = reinterpret_cast<const kernel::elf::ELF64Header*>(f.data);
+-    if (!kernel::elf::validate_header(hdr)) {
+-        shell_error_path("runelf", path, "invalid ELF");
++    // Settled activation parameters BEFORE add_task (not queued: no
++    // re-bucket needed, but priority goes through the scheduler helper
++    // per §11.4 — never direct writes).  Strictly periodic user task per
++    // the issue contract (prio 2 user band, period/deadline 100); FIXED
++    // keeps it in bitmap RMS dispatch (AUTO + finite deadline would enter
++    // EDF dispatch — deadline-timing exposure a run-once demo must not
++    // take; EDF user tasks are a follow-up).
++    kernel::Scheduler::set_priority(*task, 2);
++    task->period_ticks = 100;
++    task->deadline_ticks = arch::Timer::ticks() + 100;
++    if (!kernel::Scheduler::set_sched_policy(*task,
++                                             kernel::SchedPolicy::FIXED)) {
++        kernel::elf::ElfLoader::destroy_completed_tcb(task);
++        shell_error("runelf", "policy rejected");
+         return;
+     }
+-
+-    auto* task = kernel::elf::load(hdr, f.data, f.size);
+-    if (!task) {
+-        shell_error_path("runelf", path, "failed to load");
++    // Admission BEFORE activation (S1): fail closed with the denial code;
++    // a denied image is destroyed via the loader teardown (never
++    // cleanup()+delete on a never-added TCB, never leaked).
++    kernel::errors::SchedulerError admit =
++        kernel::Scheduler::add_task_err(*task);
++    if (admit != kernel::errors::SCHED_ERR_OK) {
++        kernel::elf::ElfLoader::destroy_completed_tcb(task);
++        kernel::Logger::warn("runelf: admission denied: %s",
++                             kernel::errors::error_string(admit));
++        shell_error("runelf", "admission denied");
+         return;
+     }
+ 
+-    kernel::Scheduler::add_task(*task);
+-
+     Terminal::set_fg(COLOR_GREEN);
+     Terminal::write("Started task #");
+     char buf[16];
+@@ -2076,8 +2095,6 @@ void Shell::cmd_runelf(int argc, const char** argv) {
+     uint64_t id = task->id;
+     while (id > 0) { buf[pos++] = static_cast<char>('0' + (id % 10)); id /= 10; }
+     while (pos > 0) Terminal::putchar(buf[--pos]);
+-    Terminal::write(": ");
+-    Terminal::write(path);
+     Terminal::putchar('\n');
+     Terminal::set_fg(COLOR_DEFAULT);
+ }
+diff --git a/src/services/terminal/terminal.cpp b/src/services/terminal/terminal.cpp
+index 065cc1a33..29246025f 100644
+--- a/src/services/terminal/terminal.cpp
++++ b/src/services/terminal/terminal.cpp
+@@ -114,6 +114,41 @@ void Terminal::puts(const char* str) {
+     putchar('\n');
+ }
+ 
++void Terminal::write_fb(const char* str) {
++    if (!instance_ || !instance_->fb_enabled_)
++        return;
++    auto draw_plain = [&](char c) {
++        if (c >= 32 && c <= 126) {
++            Framebuffer::draw_char(
++                instance_->cursor_x_ * FONT_WIDTH,
++                instance_->cursor_y_ * FONT_HEIGHT,
++                c, instance_->fg_, instance_->bg_);
++            instance_->advance_cursor();
++        }
++    };
++    while (str && *str) {
++        char c = *str++;
++        switch (c) {
++        case '\n':
++            instance_->newline();
++            break;
++        case '\r':
++            instance_->cursor_x_ = 0;
++            break;
++        case '\t':
++            for (int i = 0; i < 4; ++i)
++                draw_plain(' ');
++            break;
++        case '\b':
++            instance_->backspace();
++            break;
++        default:
++            draw_plain(c);
++            break;
++        }
++    }
++}
++
+ bool Terminal::readline(char* buf, size_t max_len) {
+ #if defined(CONFIG_ARCH_AARCH64)
+     (void)buf; (void)max_len;
+diff --git a/src/services/terminal/terminal.hpp b/src/services/terminal/terminal.hpp
+index ffdb49006..09ec456e0 100644
+--- a/src/services/terminal/terminal.hpp
++++ b/src/services/terminal/terminal.hpp
+@@ -51,6 +51,15 @@ public:
+     /// @param str String to display.
+     static void puts(const char* str);
+ 
++    /// @brief Renders a string on the framebuffer only (no serial output,
++    ///        no capture-buffer feed).  For background producers (e.g. the
++    ///        ELF loader event log) whose serial channel is already served
++    ///        elsewhere (Logger/dmesg): without this, console users would
++    ///        never see their progress.  Mirrors putchar's framebuffer
++    ///        half exactly (cursor, newline, fb_enabled_ gate).
++    /// @param str String to display (NUL-terminated).
++    static void write_fb(const char* str);
++
+     /// @brief Sets the foreground (text) color.
+     /// @param color 24-bit RGB color.
+     static void set_fg(uint32_t color);
+diff --git a/userspace/hey.c b/userspace/hey.c
+new file mode 100644
+index 000000000..569255210
+--- /dev/null
++++ b/userspace/hey.c
+@@ -0,0 +1,12 @@
++/* NexIOS demonstration program: clean user-task execution.
++ *
++ * Loaded via `load /hey.c.elf` + bare `runelf`: the background ElfLoader
++ * maps it as an ET_EXEC user image, runelf admits + dispatches it, and it
++ * prints through the WRITE path and exits 0.
++ */
++#include <stdio.h>
++
++int main(void) {
++    printf("Hey! This is NexIOS, running your application!\n");
++    return 0;
++}
+diff --git a/userspace/nullderef.c b/userspace/nullderef.c
+new file mode 100644
+index 000000000..526c85fab
+--- /dev/null
++++ b/userspace/nullderef.c
+@@ -0,0 +1,15 @@
++/* NexIOS demonstration program: handled user-mode MMU fault.
++ *
++ * Loaded via `load /nullderef.c.elf` + bare `runelf`: prints a greeting,
++ * then dereferences address zero.  The unmapped access raises a user-mode
++ * #PF (page not-present) which the kernel handles as SIGSEGV: the task is
++ * TERMINATED, never a kernel panic (same path as fault-probe.c).
++ */
++#include <stdio.h>
++
++int main(void) {
++    printf("Hey. This is NexIOS, the appication access memory which doesnt belongs to it!\n");
++    volatile unsigned char *p = (volatile unsigned char *)0UL;
++    *p = 0xAB;
++    return 0;
++}

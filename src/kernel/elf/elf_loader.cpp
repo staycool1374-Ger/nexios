@@ -33,6 +33,7 @@
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/arch/timer.hpp>
+#include <services/terminal/terminal.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <logger.hpp>
@@ -111,15 +112,45 @@ void ElfLoader::ensure_task() {
 LoadResult ElfLoader::request_load(const char *path) {
     if (!path)
         return LoadResult::FILE_NOT_FOUND;
-    // Resolve the file OUTSIDE the spinlock (vfs::resolve may block on I/O).
-    vfs::Vnode *vn = vfs::resolve(path);
-    if (!vn)
+    // Validate existence + size OUTSIDE the spinlock (fs I/O may block)
+    // with an open/stat/close probe: the fd lifecycle owns every vnode
+    // reference symmetrically on every filesystem.  A bare vfs::resolve
+    // cannot be released safely here — filesystems disagree on whether
+    // lookup results are owned (initrd: fresh refcount-1 nodes) or
+    // borrowed (tmpfs canonical nodes, mount roots), so neither a bare
+    // dec (corrupts borrowed counts) nor no dec (leaks fresh nodes) is
+    // correct for all paths (audit S3 on the first fix attempt).
+    int probe = syscall_path_open(path, vfs::O_RDONLY);
+    if (probe < 0)
         return LoadResult::FILE_NOT_FOUND;
-    uint64_t fsize = vn->size;
+    uint64_t fsize = 0;
+    {
+        auto *cur = Scheduler::current_task();
+        auto *fd =
+            (cur != nullptr) ? cur->fd_table.get(probe) : nullptr;
+        if (fd == nullptr || fd->vnode == nullptr) {
+            if (cur != nullptr)
+                cur->fd_table.free(probe);
+            return LoadResult::FILE_NOT_FOUND;
+        }
+        fsize = fd->vnode->size;
+        cur->fd_table.free(probe);
+    }
 
     SpinLockGuard<sync::SpinLock> guard(lock_);
     if (state_ != LoadState::IDLE)
         return LoadResult::ALREADY_LOADING;
+    // Issue #77 step 3 (RETAIN-FOR-RETRY): a previous load may have
+    // completed without ever being taken. The new path already validated
+    // above (resolve succeeded), so free the retained image now — never
+    // free-before-validate (a bad new path must not destroy a good
+    // retained image), and never overwrite (that would leak it when
+    // run_load publishes the new completion). At most one retained image
+    // exists by construction.
+    if (completed_tcb_) {
+        destroy_completed_tcb(completed_tcb_);
+        completed_tcb_ = nullptr;
+    }
     file_size_ = fsize;
 
     copy_bounded(path_, path, kMaxPath);
@@ -243,8 +274,12 @@ void ElfLoader::reset() {
     }
     SpinLockGuard<sync::SpinLock> guard(lock_);
     if (completed_tcb_) {
-        completed_tcb_->cleanup();
-        delete completed_tcb_;
+        // Issue #77 step 3: a completed TCB was built by
+        // finalize_loaded_task and never add_task'd — teardown MUST be
+        // destroy_completed_tcb (direct frees, no scheduler/task-accounting
+        // interaction). cleanup()+delete here would unregister an absent
+        // task and run parent/daemon logic on a never-scheduled TCB.
+        destroy_completed_tcb(completed_tcb_);
         completed_tcb_ = nullptr;
     }
     cancel_requested_ = false;
@@ -391,6 +426,14 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t ticks,
     slot[n] = '\0';
     log::dmesg_push_base(code, slot, 0);
     kernel::Logger::info("%s", slot);
+    // Live-session finding (#77 report): loader progress must ALSO reach
+    // the framebuffer console — Logger serves serial/dmesg only, so
+    // framebuffer users never saw completions.  write_fb renders pixels
+    // without touching serial (no duplicate lines) or the shell capture
+    // buffer (async loader text must not pollute redirections); the
+    // shell's async-redraw guard already absorbs the interleaving.
+    service::Terminal::write_fb(slot);
+    service::Terminal::write_fb("\n");
 }
 
 void ElfLoader::cleanup_and_idle() {
@@ -463,6 +506,18 @@ void ElfLoader::run_load() {
     }
     if (!validate_header(&hdr_)) {
         post_event(0xDB04, " failed: invalid elf-file", 0, PostKind::OTHER);
+        cleanup_and_idle();
+        return;
+    }
+    // Issue #77: the background loader serves runelf activation, which
+    // dispatches the image as a plain ET_EXEC user task — dynamic/interp
+    // images are rejected here with a clear error, never loaded to die at
+    // rip 0.  Shared validate_header stays ET_EXEC+ET_DYN-capable: the #95
+    // shared-lib loader resolves dependencies through its own backend,
+    // never through this validation.
+    if (hdr_.type != ET_EXEC) {
+        post_event(0xDB04, " failed: only ET_EXEC supported", 0,
+                   PostKind::OTHER);
         cleanup_and_idle();
         return;
     }

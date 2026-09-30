@@ -175,7 +175,15 @@ Vnode *resolve(const char *path) {
             const char *mp = mount_table[i].mount_point;
             size_t mplen = strlen(mp);
             if (strncmp(path, mp, mplen) == 0) {
-                if (path[mplen] == '/' || path[mplen] == '\0') {
+                // Live-session finding (#77 report): the root mount "/"
+                // (mplen 1) must match every absolute path — requiring
+                // path[1] to be '/' or NUL meant no direct child of /
+                // ("/hey.c.elf", "/etc/rc") ever resolved, while submount
+                // paths ("/tmp/x", "/dev/tty") worked. The separator
+                // guard still applies to longer mount points ("/devXYZ"
+                // must not match "/dev").
+                if (mplen == 1 || path[mplen] == '/' ||
+                    path[mplen] == '\0') {
                     if (mplen > best_len) {
                         best = &mount_table[i];
                         best_len = mplen;

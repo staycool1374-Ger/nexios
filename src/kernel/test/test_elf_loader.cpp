@@ -29,6 +29,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/test/test_isolate.hpp>
+#include <kernel/test/resource_tracker.hpp>
 #include <string.hpp>
 
 using namespace kernel;
@@ -147,6 +148,34 @@ JARVIS_TEST(loader_load_invalid_elf, "PRE: vfsd, iocd | POST: none") {
 
     JARVIS_ASSERT(elf::ElfLoader::take_completed() == nullptr);
     cleanup_file("/tmp/loadbad.elf");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Live-session finding (#77 report) — request_load on an initrd
+// path leaked the resolve-result vnode (InitrdFileNode+Vnode, never
+// released), so repeated `load`s exhausted MemPool until every resolve
+// failed with FILE_NOT_FOUND. The tmpfs-staged tests never caught it:
+// tmpfs lookups don't allocate initrd nodes.
+// Input: request_load("/hey.c.elf") (initrd-resident ET_EXEC demo) ->
+// wait -> take -> destroy, with vnode counters captured around the cycle.
+// Expect: take succeeds (proves initrd-path loads work); vnode count
+// identical before/after (pre-fix: +2 per request).
+// Depends: ElfLoader request/wait/take/destroy, initrd mount at /
+JARVIS_TEST(loader_initrd_request_no_vnode_leak, "PRE: vfsd, iocd | POST: none") {
+    auto &rt = kernel::test::ResourceTracker::instance();
+    kernel::test::ResourceCounters before{};
+    rt.capture(before);
+    elf::ElfLoader::reset();
+    auto result = elf::ElfLoader::request_load("/hey.c.elf");
+    JARVIS_ASSERT(result == elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t != nullptr);
+    elf::ElfLoader::destroy_completed_tcb(t);
+    kernel::test::ResourceCounters after{};
+    rt.capture(after);
+    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
     JARVIS_TEST_PASS();
 }
 
@@ -325,4 +354,5 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(loader_multiple_cycles);
     JARVIS_REGISTER_TEST(loader_preemption_yield);
     JARVIS_REGISTER_TEST(loader_lost_wakeup_race);
+    JARVIS_REGISTER_TEST(loader_initrd_request_no_vnode_leak); // #77 leak
 }
