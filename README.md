@@ -169,7 +169,7 @@ Fix the code on your host, re-run `rsync`, and restart the task from the shell.
 - **Full backlog:** ~80 aspirational roadmap items as [GitHub Issues](https://github.com/staycool1374-Ger/nexios/issues) (labeled `feature`, grouped by phase).
 - **Implementation history (what's already done):** [`prompts/ROADMAP_done.md`](prompts/ROADMAP_done.md) — the complete audit trail of every shipped milestone from v0.3.7 through v0.4.10 (CSpace capability security, User-Space Infrastructure caps/IOMMU/MSI-X, SMP bring-up, Cache coloring, TLB Shootdown, High-Resolution Time, Deadline Scheduling, IRQ Blocking, and more), each entry with root-cause analyses, commit ranges, and validated test-gate results.
 
-Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
+Done roadmap archived in `prompts/README_done.md`.
 
 ---
 
@@ -186,56 +186,6 @@ Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
 * **Real C Library for Applications:** picolibc is integrated as the userspace C library — POSIX stubs with proper error reporting, thread-local storage switched on every context switch, and a 5/5 verification program proving it end to end.
 * **POSIX Time Services:** Applications get wall-clock and timer APIs (`clock_gettime`, `nanosleep`, `timer_create`, `timerfd`) backed by the high-resolution clock and event-timer wheel, covered by 10 dedicated conformance tests.
 * **Release Gates Green:** Full test suites pass — 1564 debug tests across 20 classes, 85 release tests, 136 self-tests — with each user-facing feature reviewed under the SIL 3 process before merge.
-
-### **v0.4.10 — Test-Coverage Closure (Areas < 80%)**
-* **Every Weak Spot Covered:** All 16 sub-80% coverage areas closed with real tests — vfs, services/shell, lib, memory, debug, profiling, driver, top-level kernel, sync, iommu, syscall, daemon, core, cap, net, boot — plus dead-code removal (`compiler_rt` clz/ctz) shrinking the denominator.
-* **Tests That Find Bugs:** Closure testing exposed and fixed real defects — dropped syscall results for kernel-task callers, silent `lseek` success on bogus `whence`, IP length-underflow OOB read, missing ICMP byte-swaps, a coverage-boot panic at the checked-ptr fault boundary.
-* **Harness & Arch Hardening:** `hal` page-table mapping hygiene, record-but-continue verdict parsing for benign panic text, and aarch64/riscv64 link-green (TLB-purge fallbacks, EL0 fault handler, gated `compiler_rt`).
-
-### **v0.4.9 — Interrupt-Driven I/O & Live System Monitoring**
-* **No More Disk Polling:** Storage drivers (AHCI/virtio-blk) now sleep while the hardware works and wake on hardware interrupts — bounded waits replace core-blocking spins, with fail-closed polling fallbacks.
-* **Verified Blocking Discipline:** Every driver wait path audited — bounded loops or scheduler-mediated waits, never unbounded spins — with the guarantees pinned in the binding-invariants spec.
-* **See Inside the Machine:** New `cpuinfo` and `top` shell commands show per-CPU load, task placement and affinity, real period usage vs WCET, zombie processes, and system-vs-user load split — built for SMP correctness checks.
-* **Idle Shell & SMP by Default:** Interactive input sleeps in notification waits (near-0% idle CPU), the release shell boots 2-CPU SMP out of the box, and load displays follow the wall clock.
-
-### **v0.4.8 — Deadline-Aware Scheduling & Enforced Admission Control**
-* **Deadline-Driven Dispatch:** Tasks with the earliest deadlines run first (Earliest-Deadline-First), with priorities auto-assigned from deadlines — time-critical work provably meets its timing guarantees.
-* **Guaranteed Admission:** The kernel now refuses new real-time tasks that would overload any CPU core (idle-time and background workloads exempt), so admitted tasks can never miss deadlines due to overcommit — including across task migration and multi-core placement.
-* **Flexible Aperiodic Service + Self-Verification:** Deferrable and background server modes handle bursty, non-periodic work beside classic sporadic servers, and every boot re-verifies the scheduling guarantees with a built-in admission self-test.
-
-### **v0.4.7 — High-Resolution Time & Bounded Waits**
-* **Precise System Clock:** A calibrated, high-resolution monotonic timebase provides sub-millisecond accuracy for deadlines and latency measurements.
-* **Efficient Timer Management:** A constant-time event queue powers system timeouts, driver deadlines, and watchdog timers without scanning overhead.
-* **No More Indefinite Blocking:** Inter-process message receives now support bounded timeouts, guaranteeing every blocking call returns — with a message or a timeout — instead of waiting forever.
-
-### **v0.4.6 — System Responsiveness & Memory Efficiency**
-* **Event-Driven Idle Cleanup:** Terminated process reaping is handled via an event-driven wait loop rather than CPU spinning, preserving system resources and improving responsiveness.
-* **Faster Process Context Switches:** Hardware-assisted memory management (PCID/INVPCID) prevents unnecessary CPU cache flushes during application context switches.
-* **Multi-Core Overhead Reduction:** Cross-core memory invalidation requests (TLB shootdowns) are batched to avoid interrupting active real-time workloads.
-
-### **v0.4.5 — Multi-Core Real-Time Scheduling**
-* **Distributed Runqueues:** Per-CPU task queues eliminate global scheduler lock contention on multi-core systems.
-* **Real-Time Load Balancing & Core Pinning:** Time-critical tasks can be deterministically distributed or strictly bound to specific CPU cores (`SYS_SET_AFFINITY`).
-* **Cache-Coloring Memory Allocator:** A tailored physical memory allocator minimizes L1/L2 CPU cache collisions.
-
-### **v0.4.4 — SMP Bring-Up & Shared Libraries**
-* **Multi-Core Bootup:** Complete multi-core initialization using Inter-Processor Interrupts (IPIs).
-* **Dynamic Linking (ELF Shared Objects):** Applications can share common library code (`DT_NEEDED`), significantly reducing memory footprints.
-* **Robust Boot Handshake:** Automatic relocation of overwritten bootloader staging data prevents page faults during initial bootup.
-
-### **v0.4.3 — Hardware Driver Stability & Coverage**
-* **Extended Hardware Diagnostics:** Expanded test coverage for storage controllers (AHCI/SATA), real-time clocks (RTC), and ACPI tables on bare metal.
-* **Cross-Platform Hardening:** Elimination of silent build and runtime defects across both x86_64 and ARM64 architectures.
-
-### **v0.4.2 — User-Space Drivers & Hardware Isolation**
-* **IOMMU DMA Protection:** Hardware drivers running in user-space are isolated via VT-d to prevent faulty DMA accesses from compromising system integrity.
-* **Fine-Grained Hardware Delegation:** Direct assignment of hardware interrupts (MSI-X/IRQ) and MMIO regions to user-space drivers without kernel privilege escalation.
-* **Dynamic Capability Management:** Granular hardware rights can be delegated to child processes and deterministically revoked at any time.
-
-### **v0.4.1 — Capability Security Model (CSpace)**
-* **Zero Ambient Authority:** Tasks operate under strict capability-based access control, accessing only kernel objects and IPC endpoints explicitly granted to them.
-* **Deterministic Resource Teardown:** Automatic, leak-free cleanup of kernel objects enforced through a multi-holder shared reference counting model.
-* **Sub-Range Memory Carving:** Applications can safely subdivide and retype untyped memory ranges independently.
 
 ---
 
