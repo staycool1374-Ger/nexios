@@ -1,4 +1,4 @@
-<!-- SEO Metadata: NexIOS is an independent custom operating system project. It is not affiliated with Cisco NX-OS, Cisco IOS, NixOS, or Nexos. Dedicated C++20 x86_64 Hard Real-Time Kernel. -->
+<!-- SEO Metadata: NexIOS is an independent custom operating system project. It is not affiliated with Cisco NX-OS, Cisco IOS, NixOS, or Nexos. Dedicated C++20 x86_64 AARCH64 RISCV64 Hard Real-Time Kernel. -->
 <p align="center">
   <img src="nexios-rtos-logo.png" alt="NexIOS RTOS Logo" width="600"/>
 </p>
@@ -27,16 +27,17 @@
 
 ## Overview NexIOS
 
-A freestanding C++20 real-time operating system for x86_64 with zero dynamic heap allocation in critical paths and deterministic O(1) scheduling.
+A freestanding C++20 multi-architecture real-time operating system with zero dynamic heap allocation (Slab-Allocator) in critical paths and deterministic O(1) scheduling.
 
-Currently a monolithic kernel (47 syscalls via `int 0x82`), actively transitioning toward a capability-based microkernel.
+Currently a hybrid kernel actively transitioning toward a capability-based microkernel.
 
-* **Target:** x86_64 (ARM64 & RISC-V in preparation)
+* **Target:** x86_64, ARM64 & RISC-V
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
 * **Status:** v0.5.1 — Bring-up Multi-Arch Boot (1610 debug tests, 85 release tests: aarch64/riscv64 production boot, per-arch syscall ABI conformance, EL0 fork smoke, debugd phases 1–2)
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
+
 ---
 
 ## Diagram of actual implementation
@@ -45,11 +46,11 @@ NexIOS RTOS is an independent, ground-up implementation of a real-time operating
 
 ---
 
-## What's the plan
+## Who Needs This?
 
-The core vision of NexIOS is straightforward: **your application is just an ELF file on the system — NexIOS keeps it running on time, every time.**
+NexIOS combines MMU process isolation and capability-based security (CSpace) with a straightforward workflow:  **your application is just an ELF file on the system — NexIOS keeps it running on time, every time.**
 
-Write your control logic in C, C++, or Rust and execute it directly via the POSIX-compliant NexIOS shell. Applications can be dynamically loaded from storage or secondary media without needing a system reboot. If an application fails, simply reload and restart it. Handy for a rapid application development (RAD) system without re-flashing for instance: 
+Write your control logic in C, C++, or Rust and execute it directly via the POSIX-compliant NexIOS shell. Applications can be dynamically loaded from storage or secondary media without needing a system reboot. If an application fails, simply reload and restart it. Handy for a rapid application development (RAD) system without re-flashing like: 
 
 * **Robotics & Motion Control:** High-frequency servo and actuator control loops requiring strict sub-millisecond execution windows.
 * **Industrial & Home Automation:** Multi-tasking controllers (e.g., climate regulation, energy management, sensor pipelines) where individual services can be updated on the fly without stopping core safety routines.
@@ -127,7 +128,7 @@ Pin a different snapshot explicitly (default is the image's own tag):
 ```bash
 docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.1
 ```
-#### 3. Run in QEMU Emulator
+#### Running in QEMU Emulator
 
 * **Interactive Debug Mode (Default x86_64):** Launches the kernel in QEMU with serial debug output active.
   ```bash
