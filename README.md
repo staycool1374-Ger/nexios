@@ -56,7 +56,9 @@ Write your control logic in C, C++, or Rust and execute it directly via the POSI
 * **Industrial & Home Automation:** Multi-tasking controllers (e.g., climate regulation, energy management, sensor pipelines) where individual services can be updated on the fly without stopping core safety routines.
 * **Rapid Edge Prototyping:** Dropping and testing updated user binaries on real-time target hardware without re-flashing the underlying kernel.
 
-If you have been looking for exactly this kind of system and want to help test or build it: **this project is GPLv3 open source, and contributors are welcome.** See [Call for Contributions](#call-for-contributions).
+If you have been looking for exactly this kind of system and want to help test or build it: 
+**this project is GPLv3 open source, and contributors are welcome.**
+Please read through open roadmap issues before submitting major architectural changes.
 
 ---
 
@@ -100,7 +102,6 @@ Have questions about the architecture, CSpace capabilities, or real-time schedul
 
 * **Q&A Thread:** Check out or participate in our central [Q&A Discussion #189](https://github.com/staycool1374-Ger/nexios/discussions/189).
 * **Issue Tracker:** Report bugs or discuss upcoming features on [GitHub Issues](https://github.com/staycool1374-Ger/nexios/issues).
-* **Contributing:** Pull requests are welcome! Please read through open roadmap issues before submitting major architectural changes.
 
 ---
   
