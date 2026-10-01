@@ -23,6 +23,8 @@
 #include <logger.hpp>
 #include <services/terminal/framebuffer.hpp>
 #include <services/terminal/terminal.hpp>
+#include <services/terminal/font.hpp>
+#include <kernel/task/scheduler.hpp>
 
 using namespace kernel;
 
@@ -98,6 +100,33 @@ JARVIS_TEST(fb_scroll_up, "PRE: iocd | POST: none") {
 // Input: None
 // Expect: All Framebuffer tests registered via JARVIS_REGISTER_TEST
 // Depends: kernel test framework
+// Runmode: kernel
+// Testidea: issue #269 — the reap `terminated` line reaches the
+// framebuffer (serial/fb parity). Clear, render via the real helper,
+// then scan the first text row for lit pixels.
+// Expect: at least one non-background pixel when fb is available;
+// no-crash pass otherwise.
+// Depends: Scheduler::fb_terminated_line, Framebuffer::get_pixel.
+JARVIS_TEST(fb_terminated_line_renders, "PRE: iocd | POST: none") {
+    if (!service::Framebuffer::available()) {
+        JARVIS_TEST_PASS();
+    }
+    service::Terminal::clear();
+    kernel::Scheduler::fb_terminated_line("probe-task", 42);
+    bool lit = false;
+    uint32_t w = service::Framebuffer::width();
+    for (uint32_t x = 0; x < w && !lit; ++x) {
+        for (uint32_t y = 0; y < FONT_HEIGHT; ++y) {
+            if (service::Framebuffer::get_pixel(x, y) != 0x000000) {
+                lit = true;
+                break;
+            }
+        }
+    }
+    JARVIS_ASSERT(lit);
+    JARVIS_TEST_PASS();
+}
+
 void register_framebuffer_tests() {
     Logger::info("Registering framebuffer tests");
     JARVIS_REGISTER_TEST(fb_init_from_multiboot);
@@ -105,4 +134,5 @@ void register_framebuffer_tests() {
     JARVIS_REGISTER_TEST(fb_putpixel_out_of_bounds);
     JARVIS_REGISTER_TEST(fb_clear_screen);
     JARVIS_REGISTER_TEST(fb_scroll_up);
+    JARVIS_REGISTER_TEST(fb_terminated_line_renders); // #269 parity pin
 }

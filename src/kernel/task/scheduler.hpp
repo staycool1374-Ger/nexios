@@ -519,6 +519,10 @@ class Scheduler {
     ///        woken by on_tick().  Only compiled when
     ///        CONFIG_DEADLINE_MONITOR_TASK > 0.
     static void monitor_task_entry() noexcept;
+    /// @brief Framebuffer mirror of the reap `terminated` line (issue #269).
+    ///        Public for the framebuffer render test; production callers
+    ///        are the two reap_orphans log sites.
+    static void fb_terminated_line(const char *name, uint64_t id) noexcept;
 
     /// @brief Checks if a context switch is needed (reschedule flag).
     /// @return True if a switch is pending.

@@ -23,6 +23,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/elf/elf.hpp>
 #include <crc32.hpp>
+#include <services/terminal/terminal.hpp>
 #include <kernel/memory/tlb_shootdown.hpp>
 #include <kernel/time/timer_wheel.hpp>
 #include <kernel/time/posix_time.hpp>
@@ -1645,6 +1646,41 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
                              static_cast<unsigned>(task.id),
                              static_cast<unsigned>(err));
     }
+}
+
+// Bounded stack buffer, no locks, no heap; write_fb early-outs on null
+// instance / disabled fb, so this is safe wherever the Logger line
+// itself is safe (incl. the reap loop under scheduler_lock_).
+void Scheduler::fb_terminated_line(const char *name, uint64_t id) noexcept {
+    char line[160] = {};
+    uint64_t n = 0;
+    const char *p0 = "Scheduler: task '";
+    while (*p0 && n < sizeof(line) - 1)
+        line[n++] = *p0++;
+    if (name) {
+        for (uint64_t i = 0; name[i] != '\0' && i < CONFIG_TASK_NAME_LEN &&
+                             n < sizeof(line) - 1;
+             ++i)
+            line[n++] = name[i];
+    }
+    const char *p1 = "' (ID=";
+    while (*p1 && n < sizeof(line) - 1)
+        line[n++] = *p1++;
+    char rev[20];
+    uint64_t rp = 0;
+    uint64_t v = id;
+    do {
+        rev[rp++] = static_cast<char>('0' + (v % 10));
+        v /= 10;
+    } while (v && rp < sizeof(rev));
+    while (rp > 0 && n < sizeof(line) - 1)
+        line[n++] = rev[--rp];
+    const char *p2 = ") terminated";
+    while (*p2 && n < sizeof(line) - 1)
+        line[n++] = *p2++;
+    line[n] = '\0';
+    service::Terminal::write_fb(line);
+    service::Terminal::write_fb("\n");
 }
 
 // Issue #46: per-slice page budget (bounded IRQ-mask window + WCET-flat).
@@ -3575,9 +3611,11 @@ void Scheduler::reap_orphans() noexcept {
                 TaskControlBlock::NO_PERIOD);
             if (created) {
                 created->state = TaskState::READY;
-                if (!suppress_terminated_log_)
+                if (!suppress_terminated_log_) {
                     Logger::info("Scheduler: task '%s' (ID=%u) terminated",
                                  t->name, t->id);
+                    fb_terminated_line(t->name, t->id); // issue #269
+                }
                 t->cleanup();
                 MemPool::free(t);
                 new_idle = created;
@@ -3589,9 +3627,11 @@ void Scheduler::reap_orphans() noexcept {
                        "id_table full in reap (idle restore)");
             }
         } else {
-            if (!suppress_terminated_log_)
+            if (!suppress_terminated_log_) {
                 Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
                              t->id);
+                fb_terminated_line(t->name, t->id); // issue #269
+            }
             t->cleanup();
             MemPool::free(t);
         }

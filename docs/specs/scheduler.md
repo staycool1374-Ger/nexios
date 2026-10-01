@@ -289,3 +289,17 @@ beyond one placement store:
   framebuffer), deliberately not `report_user_task_end` (parents are
   already woken by `terminate_err`; the report is a fixed security-event
   format). `VERIFIED` logs one info line per task lifetime.
+
+## 11. Console Parity (issue #269)
+
+- Owner contract: the framebuffer and serial consoles show the same
+  user-actionable output. `Logger` serves serial + dmesg + klog only —
+  never fb. Parity is per-site, not central (a Logger→fb fan-out would
+  drag boot spam, ISR-context output, and scheduler internals onto the
+  small fb text area, and fb rendering assumes task context).
+- Mirrored sites (dmesg + Logger + `write_fb` triple, each bounded,
+  lock-free, null-instance-safe): `report_user_task_end` (task end),
+  loader `post_event` (load lifecycle), `auth_verify_poll` (auth kill),
+  reap `terminated` lines (this file's `fb_terminated_line`).
+- Serial-only by default: DEBUG/WARN internals, per-tick traces,
+  suppressed runs. A line earns an fb mirror by being user-actionable.

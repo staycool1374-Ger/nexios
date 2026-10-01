@@ -230,7 +230,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
     {"shell_commands",       31,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77)
     {"services_framework",    7,    0,       0      },  // services framework (issue #125): terminal colors, length-bounded write, cursor/splash, fb gate, scroll, program registry bounds
-    {"ui_framebuffer",        5,    0,       0      },  // framebuffer init/putpixel/clear/scroll
+    {"ui_framebuffer",        6,    0,       0      },  // framebuffer init/putpixel/clear/scroll + terminated-line render pin (#269)
 
     // random
     {"random_core",           7,    0,       0      },  // RNG smoke/non-repeating
@@ -285,7 +285,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
     {"deadline",            125,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76)
-    {"ui",                  68,   0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173)
+    {"ui",                  69,   0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin
     {"logging_debug",       29,   0,       0      },  // dmesg + klog + debug + gcov (issue #173)
     {"random",              17,   0,       0      },  // random_* (issue #173)
     {"bench",               22,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173)

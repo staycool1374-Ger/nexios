@@ -80,6 +80,9 @@ public:
     /// @brief Returns whether the framebuffer was successfully initialised.
     /// @return True if available.
     static bool available() { return initialized_; }
+    /// @brief Reads one pixel back (issue #269 test oracle).
+    /// @return 0x000000 when unavailable or out of bounds.
+    static uint32_t get_pixel(uint32_t x, uint32_t y);
 
 private:
     // NOLINTBEGIN(bugprone-dynamic-static-initializers)

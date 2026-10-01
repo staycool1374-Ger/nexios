@@ -128,4 +128,24 @@ void Framebuffer::put_pixel(uint32_t x, uint32_t y, uint32_t color)
     if (bpp_bytes > 3) fb[offset + 3] = 0xFF;
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
+uint32_t Framebuffer::get_pixel(uint32_t x, uint32_t y)
+// NOLINTEND(bugprone-easily-swappable-parameters)
+{
+    if (!initialized_ || x >= info_.width || y >= info_.height)
+        return 0x000000;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *fb = reinterpret_cast<const uint8_t *>(
+        static_cast<uint64_t>(info_.addr));
+    uint32_t bpp_bytes = info_.bpp / 8;
+    if (bpp_bytes < 3)
+        return 0x000000;
+    size_t offset = static_cast<size_t>(y) * info_.pitch +
+                    static_cast<size_t>(x) * bpp_bytes;
+    uint32_t b = fb[offset + 0];
+    uint32_t g = fb[offset + 1];
+    uint32_t r = fb[offset + 2];
+    return (r << 16) | (g << 8) | b;
+}
+
 } // namespace service
