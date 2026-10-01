@@ -1726,6 +1726,11 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
     }
 
     // Default is to terminate
+    // ISSUE-270-USER-FAULT-VERBOSE: console dump of fault internals
+    // (registers/CR2/stack trace). Undefined by default: the console
+    // shows only the one-line summary below; detail stays reachable via
+    // the remote debug stub (StopEvent + read_regs/read_mem).
+#ifdef CONFIG_USER_FAULT_VERBOSE
     kernel::Logger::error("Task %x: unhandled signal %x "
                           "vector=%x rip=%x err=%x",
                           task->id, sig, vector, rip, error_code);
@@ -1734,8 +1739,12 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
         kernel::Logger::error("  CR2=%x", cr2_val);
     }
     dump_regs(regs);
+#else
+    (void)rip;
+    (void)error_code;
+#endif
     // User task-end report (user request): one line with the cause on
-    // dmesg + serial + framebuffer; the detail lines above stay.
+    // dmesg + serial + framebuffer; always shown (issue #270).
     report_user_task_end(*task, false, sig, vector);
     // INV-5: terminate dequeues so the task is never left inrq=1 outside the
     // physical queue. Issue #197: an AP-live target is left alive instead
@@ -1905,6 +1914,9 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         if (from_user && t) {
             auto mapping = kernel::exception_to_signal(vector);
             uint64_t sig = static_cast<uint64_t>(mapping.signal);
+#ifdef CONFIG_USER_FAULT_VERBOSE
+            // ISSUE-270-USER-FAULT-VERBOSE: console dump of fault
+            // internals (see deliver path above for the policy).
             kernel::Logger::warn("Task %x: exception vector=%x (%s) "
                                  "→ signal %x",
                                  t->id, vector, mapping.name, sig);
@@ -1912,6 +1924,7 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
             if (vector == 14) {
                 kernel::Logger::error("  CR2=%x", read_cr2());
             }
+#endif
 
             // Issue #107: user-mode #PF delegation to a designated pager.  The
             // classifier (paper §3.2 F1-F10) is checked BEFORE signal

@@ -31,7 +31,9 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/integrity.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/log/ring_buffer.hpp>
 #include <kernel/test/test_isolate.hpp>
+#include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <string.hpp>
 
@@ -531,6 +533,78 @@ JARVIS_TEST(loader_phoff_shifted_baseline, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: issue #270 — a faulting user task dies with SIGSEGV and the
+// console stays quiet: no register/CR2/stack-trace dump by default
+// (CONFIG_USER_FAULT_VERBOSE undefined); the one-line summary path is
+// unchanged (silent in tests via the is_test_active gate, live-verified).
+// A real dispatch into an unmapped entry faults deterministically.
+// Expect: TERMINATED, exit -11; klog delta free of dump markers (or,
+// with the macro defined, dump markers PRESENT — same test pins both).
+JARVIS_TEST(loader_fault_dump_gated, "PRE: vfsd, iocd | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t sz = build_minimal_elf(&hdr, img);
+    hdr.entry = 0x500000; // unmapped: first dispatch faults deterministically
+    __builtin_memcpy(img, &hdr, sizeof(elf::ELF64Header));
+    uint64_t written = write_file("/tmp/loadfault.elf", img, sz);
+    JARVIS_ASSERT(written == sz);
+
+    auto result = elf::ElfLoader::request_load("/tmp/loadfault.elf");
+    JARVIS_ASSERT(result == elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+
+    auto *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::set_priority(*t, 2);
+    t->period_ticks = 100;
+    t->deadline_ticks = arch::Timer::ticks() + 100;
+    bool pok = Scheduler::set_sched_policy(*t, SchedPolicy::FIXED);
+    auto acode = Scheduler::add_task_err(*t);
+    JARVIS_ASSERT(pok && acode == errors::SCHED_ERR_OK);
+
+    kernel::log::KlogService::instance().clear();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
+    JARVIS_ASSERT(t->exit_code ==
+                  static_cast<uint64_t>(-static_cast<int64_t>(11)));
+
+    // Scan the klog delta for fault-dump markers.
+    char kbuf[512];
+    bool saw_dump = false;
+    for (;;) {
+        size_t n =
+            kernel::log::KlogService::instance().read(kbuf, sizeof(kbuf));
+        if (n == 0)
+            break;
+        for (size_t i = 0; i < n; ++i) {
+            if ((kbuf[i] == 'R' && i + 4 < n && kbuf[i + 1] == 'A' &&
+                 kbuf[i + 2] == 'X' && kbuf[i + 3] == ':') ||
+                (kbuf[i] == 'C' && i + 3 < n && kbuf[i + 1] == 'R' &&
+                 kbuf[i + 2] == '2') ||
+                (kbuf[i] == 'S' && i + 11 < n &&
+                 __builtin_memcmp(kbuf + i, "Stack trace:", 12) == 0) ||
+                (kbuf[i] == 'u' && i + 16 < n &&
+                 __builtin_memcmp(kbuf + i, "unhandled signal", 16) == 0)) {
+                saw_dump = true;
+                break;
+            }
+        }
+        if (saw_dump)
+            break;
+    }
+#ifdef CONFIG_USER_FAULT_VERBOSE
+    JARVIS_ASSERT(saw_dump); // verbose build: dump must be present
+#else
+    JARVIS_ASSERT(!saw_dump); // default: console stays quiet
+#endif
+
+    Scheduler::drain_zombie_list();
+    cleanup_file("/tmp/loadfault.elf");
+    JARVIS_TEST_PASS();
+}
+
 void register_elf_loader_tests() {
     Logger::info("Registering background ELF loader tests");
     JARVIS_REGISTER_TEST(loader_load_success);
@@ -546,4 +620,5 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(loader_tamper_killed);   // #46 mismatch kill
     JARVIS_REGISTER_TEST(loader_clean_verified);  // #46 clean verify
     JARVIS_REGISTER_TEST(loader_phoff_shifted_baseline); // #46 S2 pin
+    JARVIS_REGISTER_TEST(loader_fault_dump_gated); // #270 quiet default
 }

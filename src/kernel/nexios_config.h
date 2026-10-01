@@ -1058,4 +1058,16 @@ extern "C" void panic(const char *msg);
     } while (0)
 #endif
 
+// ---------------------------------------------------------------------------
+// User-Fault Verbosity (issue #270)
+// ---------------------------------------------------------------------------
+/// ISSUE-270-USER-FAULT-VERBOSE: when defined, a faulting user task dumps
+/// registers/CR2/stack-trace on the console (kernel.cpp deliver path +
+/// EL0 pre-signal warn). Undefined (default): console shows only the
+/// one-line fault summary (report_user_task_end, dmesg 0xDC02); full
+/// detail stays reachable via the remote debug stub (StopEvent +
+/// read_regs/read_mem). Re-enable by defining; remove permanently by
+/// deleting the marked blocks in kernel.cpp.
+// #define CONFIG_USER_FAULT_VERBOSE 1
+
 #endif // JARVIS_CONFIG_H

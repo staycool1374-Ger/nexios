@@ -145,6 +145,15 @@ Raw pid-to-handle lookup does not exist.
 
 ## 4. Stop-event routing (normative)
 
+Console-quiet invariant (issue #270): a faulting user task never dumps
+registers/CR/fault addresses on the console — only the one-line
+`report_user_task_end` summary (dmesg 0xDC02 + serial + framebuffer).
+Full detail stays reachable here: fault stops carry the vector/cause in
+the StopEvent (num/addr fields), and `read_regs`/`read_mem` expose the
+live trap frame on demand. The console dump block in kernel.cpp is
+gated by `CONFIG_USER_FAULT_VERBOSE` (default off; marker
+`ISSUE-270-USER-FAULT-VERBOSE`).
+
 Today a user fault terminates the task. With a debugger attached:
 
 - Attach model: `debugd` issues `sys_task_debug_attach(target_cap)` (the fifth
