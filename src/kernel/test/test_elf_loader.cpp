@@ -22,11 +22,14 @@
 
 #include <test.hpp>
 #include <logger.hpp>
+#include <crc32.hpp>
 #include <kernel/elf/elf.hpp>
 #include <kernel/elf/elf_loader.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/memory/vmm.hpp>
+#include <kernel/memory/integrity.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/test/resource_tracker.hpp>
@@ -344,6 +347,190 @@ JARVIS_TEST(loader_lost_wakeup_race, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: issue #46 — the loader captures a read-only CRC baseline into
+// the completed TCB (UNVERIFIED, nonzero range count, non-trivial CRC).
+// Input: minimal ELF (one R-X PT_LOAD page) -> wait -> take.
+// Expect: ro_seg_count_ == 1, ro_crc32_ != finalize(INITIAL),
+// ro_verify_state_ == UNVERIFIED.  Destroy (never scheduled).
+// Depends: ElfLoader request/wait/take/destroy, snapshot_ro_baseline.
+JARVIS_TEST(loader_ro_crc_baseline, "PRE: vfsd, iocd | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t sz = build_minimal_elf(&hdr, img);
+    uint64_t written = write_file("/tmp/loadbase.elf", img, sz);
+    JARVIS_ASSERT(written == sz);
+
+    auto result = elf::ElfLoader::request_load("/tmp/loadbase.elf");
+    JARVIS_ASSERT(result == elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+
+    auto *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(t->ro_seg_count_ == 1);
+    JARVIS_ASSERT(t->ro_crc32_ != CRC32::finalize(CRC32::INITIAL));
+    JARVIS_ASSERT(t->ro_verify_state_ ==
+                  TaskControlBlock::RoVerifyState::UNVERIFIED);
+    JARVIS_ASSERT(t->ro_verify_off_ == 0);
+
+    elf::ElfLoader::destroy_completed_tcb(t);
+    cleanup_file("/tmp/loadbase.elf");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: issue #46 — flipping one read-only byte post-load makes the
+// idle re-verify slice terminate the task with the dmesg-matched exit
+// code.  The image is admitted production-shape (prio 2/FIXED) but never
+// dispatched: the prio-10 harness outranks it while the test drives the
+// slice directly (no reschedule — fully deterministic, no UAF window).
+// Input: load -> take -> add_task_err -> corrupt 0x400000 via HHDM ->
+// bounded auth_verify_poll drive.
+// Expect: task leaves the scheduler tables, state TERMINATED,
+// exit_code == kElfAuthKillExitCode.  Drain reclaims everything.
+// Depends: add_task_err, auth_verify_step kill path, drain_zombie_list.
+JARVIS_TEST(loader_tamper_killed, "PRE: vfsd, iocd | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t sz = build_minimal_elf(&hdr, img);
+    uint64_t written = write_file("/tmp/loadtamp.elf", img, sz);
+    JARVIS_ASSERT(written == sz);
+
+    auto result = elf::ElfLoader::request_load("/tmp/loadtamp.elf");
+    JARVIS_ASSERT(result == elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+
+    auto *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::set_priority(*t, 2);
+    t->period_ticks = 100;
+    t->deadline_ticks = arch::Timer::ticks() + 100;
+    bool pok = Scheduler::set_sched_policy(*t, SchedPolicy::FIXED);
+    auto acode = Scheduler::add_task_err(*t);
+    JARVIS_ASSERT(pok && acode == errors::SCHED_ERR_OK);
+    uint64_t tid = t->id;
+
+    // Corrupt one read-only byte through the kernel HHDM alias (bypasses
+    // the user PML4 R-X mapping, exactly what a rowhammer-style flip or a
+    // stray DMA write looks like to the verifier).  Offset 0x200 lands in
+    // the NOP sled, past the ELF header/phdrs and any header canary slot.
+    uint64_t phys = VMM::virt_to_phys_in_pml4(0x400200, t->page_table_);
+    JARVIS_ASSERT(phys != 0);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    uint8_t *alias = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
+    JARVIS_ASSERT(alias[0] == 0x90); // pristine NOP sled byte
+    alias[0] ^= 0xFF;
+
+    for (int i = 0; i < 10 && Scheduler::find_task(tid) != nullptr; ++i)
+        integrity::auth_verify_poll();
+    JARVIS_ASSERT(Scheduler::find_task(tid) == nullptr);
+    JARVIS_ASSERT(TaskControlBlock::is_valid(t));
+    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
+    JARVIS_ASSERT(t->exit_code == elf::kElfAuthKillExitCode);
+    JARVIS_ASSERT(t->ro_verify_state_ == TaskControlBlock::RoVerifyState::FAILED);
+
+    Scheduler::drain_zombie_list();
+    cleanup_file("/tmp/loadtamp.elf");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: issue #46 — an untampered image verifies clean: one slice
+// covers the single RO page, state reaches VERIFIED, the task stays
+// alive.  Same deterministic shape as loader_tamper_killed (admitted,
+// never dispatched, no reschedule).
+// Expect: VERIFIED + non-terminal state; teardown via terminate + drain
+// (mirrors the test_libc_verify admitted-task teardown).
+JARVIS_TEST(loader_clean_verified, "PRE: vfsd, iocd | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t sz = build_minimal_elf(&hdr, img);
+    uint64_t written = write_file("/tmp/loadclean.elf", img, sz);
+    JARVIS_ASSERT(written == sz);
+
+    auto result = elf::ElfLoader::request_load("/tmp/loadclean.elf");
+    JARVIS_ASSERT(result == elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+
+    auto *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::set_priority(*t, 2);
+    t->period_ticks = 100;
+    t->deadline_ticks = arch::Timer::ticks() + 100;
+    bool pok = Scheduler::set_sched_policy(*t, SchedPolicy::FIXED);
+    auto acode = Scheduler::add_task_err(*t);
+    JARVIS_ASSERT(pok && acode == errors::SCHED_ERR_OK);
+
+    for (int i = 0;
+         i < 10 &&
+         t->ro_verify_state_ != TaskControlBlock::RoVerifyState::VERIFIED;
+         ++i)
+        integrity::auth_verify_poll();
+    JARVIS_ASSERT(t->ro_verify_state_ ==
+                  TaskControlBlock::RoVerifyState::VERIFIED);
+    JARVIS_ASSERT(t->state != TaskState::TERMINATED);
+
+    if (TaskControlBlock::is_valid(t) && t->state != TaskState::TERMINATED)
+        Scheduler::terminate(*t, 0);
+    Scheduler::drain_zombie_list();
+    cleanup_file("/tmp/loadclean.elf");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: issue #46 S2 pin — an image whose phdrs sit at a non-default
+// file offset (phoff=128, legal per the ELF spec) must baseline the SAME
+// ranges as the packed layout: the helpers index the loader's packed
+// buffer (phdrs always at +64), never the file offset.  Pre-fix the scan
+// walked the wrong buffer bytes (vacuous baseline for dynamic images).
+// Input: minimal ELF with 64 pad bytes between header and phdrs.
+// Expect: load completes, ro_seg_count_ == 1, UNVERIFIED.
+JARVIS_TEST(loader_phoff_shifted_baseline, "PRE: vfsd, iocd | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t base_sz = build_minimal_elf(&hdr, img);
+    (void)base_sz;
+    // Relocate the phdr table to file offset 128 (64 pad bytes).
+    hdr.phoff = 128;
+    __builtin_memcpy(img, &hdr, sizeof(elf::ELF64Header));
+    __builtin_memset(img + sizeof(elf::ELF64Header), 0,
+                     128 - sizeof(elf::ELF64Header));
+    auto *phdr = reinterpret_cast<elf::ELF64ProgramHeader *>(img + 128);
+    phdr->type = elf::PT_LOAD;
+    phdr->flags = elf::PF_R | elf::PF_X;
+    phdr->offset = 128 + sizeof(elf::ELF64ProgramHeader);
+    phdr->vaddr = 0x400000;
+    phdr->paddr = 0x400000;
+    phdr->filesz = 0x1000;
+    phdr->memsz = 0x1000;
+    phdr->align = 0x1000;
+    for (size_t i = 0; i < 0x1000; ++i)
+        img[phdr->offset + i] = 0x90;
+    uint64_t sz = phdr->offset + 0x1000;
+    uint64_t written = write_file("/tmp/loadphoff.elf", img, sz);
+    JARVIS_ASSERT(written == sz);
+
+    auto result = elf::ElfLoader::request_load("/tmp/loadphoff.elf");
+    JARVIS_ASSERT(result == elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+
+    auto *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(t->ro_seg_count_ == 1);
+    // Range starts past the carved TEXT before-canary slot.
+    JARVIS_ASSERT(t->ro_ranges_[0].vaddr == 0x400008);
+    JARVIS_ASSERT(t->ro_verify_state_ ==
+                  TaskControlBlock::RoVerifyState::UNVERIFIED);
+
+    elf::ElfLoader::destroy_completed_tcb(t);
+    cleanup_file("/tmp/loadphoff.elf");
+    JARVIS_TEST_PASS();
+}
+
 void register_elf_loader_tests() {
     Logger::info("Registering background ELF loader tests");
     JARVIS_REGISTER_TEST(loader_load_success);
@@ -355,4 +542,8 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(loader_preemption_yield);
     JARVIS_REGISTER_TEST(loader_lost_wakeup_race);
     JARVIS_REGISTER_TEST(loader_initrd_request_no_vnode_leak); // #77 leak
+    JARVIS_REGISTER_TEST(loader_ro_crc_baseline); // #46 baseline
+    JARVIS_REGISTER_TEST(loader_tamper_killed);   // #46 mismatch kill
+    JARVIS_REGISTER_TEST(loader_clean_verified);  // #46 clean verify
+    JARVIS_REGISTER_TEST(loader_phoff_shifted_baseline); // #46 S2 pin
 }

@@ -486,6 +486,26 @@ class Scheduler {
     ///        terminate() above delegates and warns on refusal.
     static errors::SchedulerError terminate_err(TaskControlBlock &task,
                                                 uint64_t exit_code) noexcept;
+    /// @brief Result of one idle authenticity re-verify slice (issue #46).
+    enum class AuthStepResult : uint8_t {
+        NONE = 0,    ///< No verifiable user image found.
+        PROGRESS = 1, ///< Slice advanced (or a lost race re-queues).
+        VERIFIED = 2, ///< A task's recomputed CRC matched its baseline.
+        KILLED = 3,   ///< Mismatch: task terminated (@p out_task_id set).
+    };
+    /// @brief One bounded idle re-verify slice (issue #46): selects the
+    ///        first UNVERIFIED/VERIFYING user image with a loader baseline,
+    ///        CRCs up to two pages of its read-only ranges, commits
+    ///        progress, and terminates (exit code kElfAuthKillExitCode)
+    ///        on mismatch.  Whole-step IrqGuard (UP: no preemption between
+    ///        select and kill); scheduler_lock_ around select/commit; the
+    ///        kill runs after lock release (terminate_err retakes it).
+    ///        No lock is held across reschedule (none occurs here).
+    /// @param[out] out_task_id Task id when KILLED, else 0.
+    /// @param[out] out_name Task name snapshot when KILLED (bounded copy).
+    /// @param name_len Capacity of @p out_name.
+    static AuthStepResult auth_verify_step(uint64_t &out_task_id, char *out_name,
+                                           uint64_t name_len) noexcept;
     /// @brief Wake a parent blocked in waitpid for a child that just
     ///        terminated via a non-sys_exit path (issue #217: EL0-fault
     ///        kill; also terminate, deadline miss).  Mirrors the wake

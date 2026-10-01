@@ -95,6 +95,51 @@ bool validate_header(const ELF64Header *hdr);
 /// @return true if the segment is safe to load.
 bool validate_segment(const ELF64ProgramHeader *phdr,
                       uint64_t file_size = 0);
+
+/// @brief Bound for the post-relocation baseline scan (issue #46): larger
+///        read-only images fail the load closed instead of stalling MAPPING.
+static constexpr uint64_t kMaxRoScanBytes = 4 * 1024 * 1024;
+/// @brief Exit code for authenticity-kill termination (issue #46): matches
+///        the dmesg event that records the cause, so waitpid status and the
+///        log line trace to each other.
+static constexpr uint64_t kElfAuthKillExitCode = 0xDB0C;
+
+/// @brief Collect the covered read-only ranges (issue #46): every PT_LOAD
+///        segment without PF_W, as [vaddr, filesz), validated segments only.
+/// @param phdr_buf_off Buffer offset of the phdr table — NOT the file
+///        phoff: the loader packs phdrs at sizeof(ELF64Header) regardless
+///        of where they sit in the file.
+/// @return Range count, or -1 when more than @p max_ranges exist (fail
+///         closed — the TCB snapshot cannot hold them).
+uint64_t collect_ro_ranges(const uint8_t *phdr_image, uint64_t phdr_buf_off,
+                           uint16_t phnum, uint64_t phentsize,
+                           uint64_t file_size, TaskControlBlock::RoRange *out,
+                           uint64_t max_ranges) noexcept;
+/// @brief Locate the TEXT before-canary slot (issue #46): mirrors
+///        install_segment_canaries' text_base rule (first PF_X PT_LOAD,
+///        page_align_down(vaddr)) so the authenticity coverage can exclude
+///        the 8 bytes the canary subsystem owns and checks itself.
+/// @return true + slot address when a PF_X segment exists.
+bool text_canary_slot(const uint8_t *phdr_image, uint64_t phdr_buf_off,
+                      uint16_t phnum, uint64_t phentsize, uint64_t file_size,
+                      uint64_t *slot_out) noexcept;
+/// @brief Fold one mapped range into @p acc via the target page table.
+/// @return false when any page is unmapped (fail closed).
+bool crc_user_range(uint64_t pml4, uint64_t vaddr, uint64_t len,
+                    uint32_t &acc) noexcept;
+/// @brief Capture the post-relocation CRC baseline into @p tcb (issue #46).
+///        For static images the scan must equal the incremental chunk-loop
+///        CRC (copy-path cross-check); dynamic images adopt the scan.
+///        The TEXT before-canary slot (@p canary_slot, 0 = none) is carved
+///        out of the scan — the canary subsystem owns and checks it.
+/// @return false to fail the load closed (overflow / oversize / unmapped /
+///         static cross-check delta).
+bool snapshot_ro_baseline(uint64_t pml4, const uint8_t *phdr_image,
+                          uint64_t phdr_buf_off, uint16_t phnum,
+                          uint64_t phentsize, uint64_t file_size,
+                          bool has_dynamic, uint32_t load_crc,
+                          uint64_t canary_slot,
+                          TaskControlBlock *tcb) noexcept;
 /// @brief Load an ELF binary into a new task.
 /// @param hdr Pointer to the ELF header.
 /// @param data Raw ELF file data.

@@ -22,6 +22,10 @@
 #include <assert.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/elf/elf.hpp>
+#include <kernel/log/dmesg.hpp>
+#include <services/terminal/terminal.hpp>
 #include <constants.hpp>
 
 namespace kernel {
@@ -159,7 +163,41 @@ void idle_task_main() {
         Scheduler::cleanup_step();
         check_section_markers();
         crc_process_chunk();
+        auth_verify_poll();
         arch::hlt();
+    }
+}
+
+/// @brief Drain one authenticity slice per idle pass (issue #46) and report
+///        kills.  Deliberately NOT report_user_task_end: the kill path
+///        already wakes waitpid parents via terminate_err, and the report
+///        here is a fixed-format security event (dmesg 0xDB0C + serial +
+///        framebuffer), not a generic task-end line.
+void auth_verify_poll() {
+    uint64_t killed_id = 0;
+    char name[CONFIG_TASK_NAME_LEN] = {};
+    Scheduler::AuthStepResult r =
+        Scheduler::auth_verify_step(killed_id, name, sizeof(name));
+    if (r == Scheduler::AuthStepResult::VERIFIED) {
+        Logger::info("Idle: user image CRC verified OK");
+    } else if (r == Scheduler::AuthStepResult::KILLED) {
+        char msg[128] = {};
+        uint64_t n = 0;
+        const char *p0 = "authenticity mismatch: task ";
+        while (*p0 && n < sizeof(msg) - 1)
+            msg[n++] = *p0++;
+        const char *p1 = name;
+        while (*p1 && n < sizeof(msg) - 1)
+            msg[n++] = *p1++;
+        const char *p2 = " terminated";
+        while (*p2 && n < sizeof(msg) - 1)
+            msg[n++] = *p2++;
+        msg[n] = '\0';
+        log::dmesg_push_base(elf::kElfAuthKillExitCode, msg,
+                             static_cast<uintptr_t>(killed_id));
+        Logger::error("%s", msg);
+        service::Terminal::write_fb(msg);
+        service::Terminal::write_fb("\n");
     }
 }
 

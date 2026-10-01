@@ -371,6 +371,10 @@ inline const char *base_error_string(uint64_t code) {
             return "ELF load rejected: already loading";
         case 0xDB09:
             return "ELF load rejected: not loading";
+        case 0xDB0C:
+            return "ELF authenticity mismatch: task terminated";
+        case 0xDB0D:
+            return "ELF load failed: authenticity baseline";
         default:
             break;
         }

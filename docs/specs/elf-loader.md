@@ -63,7 +63,7 @@ COPYING_SEGMENTS --all segments--> MAPPING
 COPYING_SEGMENTS --fail/OOM/read-error--> FAILED
 COPYING_SEGMENTS --cancel observed--> CANCELED
 MAPPING --ok--> DONE
-MAPPING --fail/OOM--> FAILED
+MAPPING --fail/OOM/baseline--> FAILED
 MAPPING --cancel observed (before TCB build)--> CANCELED
 FAILED --cleanup done--> IDLE
 CANCELED --cleanup done--> IDLE
@@ -124,14 +124,16 @@ IDLE --request_cancel (shell)--> "not loading" (no state change)
 | READ_ERROR | "read error" | 0xDB07 | FAILED→IDLE | cleanup_and_idle |
 | INVALID_ELF | "invalid elf-file" | 0xDB04 | FAILED→IDLE | cleanup_and_idle |
 | OOM | "not enough memory" | 0xDB05 | FAILED→IDLE | cleanup_and_idle |
+| AUTH_BASELINE_FAIL | "failed: authenticity baseline" | 0xDB0D | FAILED→IDLE | destroy TCB + cleanup_and_idle |
+| AUTH_KILL (idle side) | "authenticity mismatch: task <name> terminated" | 0xDB0C | — (task → TERMINATED/zombie) | terminate_err + deferred free |
 | (success) | "loading <name> <size> started" | 0xDB01 | VALIDATING | — |
 | (success) | "loading <name> <size> completed in <t>" | 0xDB02 | DONE→IDLE | close fd, retain TCB |
 | (cancel) | "loading <name> canceled" | 0xDB03 | CANCELED→IDLE | cleanup_and_idle |
 
 ## 7. Shell Command Contract
 
-- `load <path.elf>`:
-  - `argc < 2` → `Usage: load <path.elf>`
+- `loadelf <path.elf>`:
+  - `argc < 2` → `Usage: loadelf <path.elf>`
   - success → `loading <path.elf> <size> started` to terminal + dmesg 0xDB01,
     return immediately (no waiting).
   - `ALREADY_LOADING` → "load: <path> already loading" + dmesg 0xDB08.
@@ -191,3 +193,35 @@ New class `elf_loader` (test_elf_loader.cpp):
 
 Validation: `elf` class (refactor guard), `elf_loader` class, `selftest`,
 debug `all` (trace ON), release `all` (trace OFF); test-history rows.
+
+## 12. Read-Only Authenticity Baseline (issue #46)
+
+- **Coverage rule:** every PT_LOAD segment WITHOUT PF_W, byte range
+  `[vaddr, vaddr+filesz)` — code + rodata as mapped, post-relocation.
+  Writable segments mutate by design (GOT/data/stack), the BSS tail carries
+  no file signal, headers are never mapped.
+- **Canary exclusion:** the 8-byte TEXT before-canary slot
+  (`page_align_down` of the first PF_X vaddr — see `text_canary_slot`,
+  mirroring `install_segment_canaries`) is covered by NEITHER side: the
+  canary subsystem owns and checks those bytes itself.
+- **Loader side (incremental):** the chunk loop folds each read-only chunk
+  into `load_crc_` as it lands (skew/padding excluded, canary slot
+  skipped). After relocation, MAPPING re-scans the mapped ranges
+  (`snapshot_ro_baseline`, capped at `kMaxRoScanBytes` = 4 MiB): static
+  images must reproduce the chunk CRC (copy-path cross-check — a delta
+  fails the load via 0xDB0D, never published); dynamic images adopt the
+  scan (relocations legitimately rewrote bytes).
+- **TCB retention:** baseline + carved ranges + `UNVERIFIED` progress live
+  in the completed TCB (`ro_crc32_`, `ro_ranges_`, `ro_seg_count_`,
+  `ro_verify_state/off/acc`); single-writer handoff loader→idle across
+  publication. Kernel tasks and direct `elf::load` images carry zeros
+  (never verified, never killed).
+- **Detection (not prevention):** activation is NOT gated on verification —
+  the idle slice (`Scheduler::auth_verify_step`, ≤2 pages per pass)
+  re-verifies running-or-not images and terminates on mismatch
+  (exit code = dmesg code 0xDB0C, so waitpid status traces to the log
+  line). Fail-closed throughout: unmapped mid-range, range overflow,
+  oversize image, and cross-check deltas all deny/kill, never admit.
+- **Out of scope:** Ed25519/signature chains (no keyring in tree — separate
+  issue); kernel-image verification (covered by the existing `.text` CRC
+  in `integrity.cpp`).

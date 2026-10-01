@@ -268,8 +268,10 @@ struct TaskControlBlock {
           user_stack_size_(0), user_data(nullptr), is_user_(false),
           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
           canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
-          program_break_start(0), kstack_low_water_(0), text_size_(0),
-          data_size_(0), bss_size_(0), fd_table({}), cwd_vnode(nullptr),
+           program_break_start(0), kstack_low_water_(0), text_size_(0),
+           data_size_(0), bss_size_(0), ro_crc32_(0),
+           ro_verify_state_(RoVerifyState::UNVERIFIED), ro_verify_off_(0),
+           ro_verify_acc_(0), ro_seg_count_(0), fd_table({}), cwd_vnode(nullptr),
           needed_lib_count(0),
           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
           dl_prev_(nullptr), pri_next_(nullptr), pri_prev_(nullptr),
@@ -441,6 +443,35 @@ struct TaskControlBlock {
     uint64_t text_size_;
     uint64_t data_size_;
     uint64_t bss_size_;
+
+    /// @brief Read-only image authenticity state (issue #46): the loader
+    ///        captures a CRC32 baseline over the mapped read-only PT_LOAD
+    ///        ranges ([vaddr, vaddr+filesz), post-relocation) and the idle
+    ///        task re-verifies it incrementally, killing the task on
+    ///        mismatch.  Single-writer invariant: the loader owns the
+    ///        baseline + ranges + progress until completed_tcb_
+    ///        publication; the idle slice owns the progress triple after
+    ///        (the lock_ → take_completed → add_task mutex chain orders
+    ///        the handoff).  Zero for kernel tasks and direct elf::load
+    ///        images (never verified, never killed).
+    enum class RoVerifyState : uint8_t {
+        UNVERIFIED = 0, ///< Baseline stored, idle re-verify pending.
+        VERIFYING = 1,  ///< Idle slice partway through the ranges.
+        VERIFIED = 2,   ///< Recomputed CRC matches the baseline.
+        FAILED = 3,     ///< Mismatch latched; kill issued or pending.
+    };
+    /// @brief One covered read-only range (vaddr + filesz, never BSS tail).
+    struct RoRange {
+        uint64_t vaddr;
+        uint64_t len;
+    };
+    static constexpr size_t kMaxRoRanges = 8;
+    uint32_t ro_crc32_;
+    RoVerifyState ro_verify_state_;
+    uint64_t ro_verify_off_;
+    uint32_t ro_verify_acc_;
+    uint64_t ro_seg_count_;
+    RoRange ro_ranges_[kMaxRoRanges];
 
     /// @brief Maximum pages this task may allocate from PMM.  0 = unlimited.
     uint64_t memory_budget_pages_;

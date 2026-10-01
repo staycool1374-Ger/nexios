@@ -175,6 +175,10 @@ class ElfLoader {
     // Exec mapped range from Stage A (for lib overlap checks).
     static uint64_t exec_base_;
     static uint64_t exec_size_;
+    // Issue #46: incremental CRC32 over the read-only (non-PF_W) file
+    // bytes as they land per chunk; the post-relocation mapped scan in
+    // MAPPING cross-checks (static) or adopts (dynamic) it.
+    static uint32_t load_crc_;
 };
 
 /// @brief The loader task's entry (extern for scheduler).

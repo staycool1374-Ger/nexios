@@ -21,6 +21,7 @@
 
 #include <kernel/elf/elf_loader.hpp>
 #include <kernel/elf/elf_shared.hpp>
+#include <crc32.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/pmm.hpp>
@@ -87,6 +88,7 @@ uint32_t ElfLoader::msg_idx_ = 0;
 DepResolveContext ElfLoader::dep_ctx_ = {};
 uint64_t ElfLoader::exec_base_ = 0;
 uint64_t ElfLoader::exec_size_ = 0;
+uint32_t ElfLoader::load_crc_ = CRC32::INITIAL;
 
 /// @brief The loader task's entry: block on the wake semaphore, run one load
 ///        per accepted request, loop.  Idle = blocked (zero CPU).
@@ -477,6 +479,12 @@ void ElfLoader::run_load() {
     pml4_ = 0;
     seg_idx_ = 0;
     page_in_seg_ = 0;
+    // Issue #46: the CRC table must be live before the first update — the
+    // idle task (the other init caller) may never have run (notably in
+    // tests), and an uninitialized table makes update() ignore its input,
+    // which would reduce the whole scheme to theater.  Idempotent.
+    CRC32::init();
+    load_crc_ = CRC32::INITIAL; // issue #46: incremental RO baseline reset
 
     // Note the load start in dmesg (0xDB01 "ELF load started").  Posted from
     // the loader task so the entry is attributed to it.
@@ -552,6 +560,16 @@ void ElfLoader::run_load() {
         return;
     }
 
+    // Issue #46: locate the TEXT before-canary slot (0 = none) so both
+    // the incremental CRC and the baseline scan exclude the 8 bytes the
+    // canary subsystem owns and checks itself.
+    uint64_t canary_slot = 0;
+    // NOTE: phdr_image_ is a PACKED buffer ([header@0][phdrs@64]) — pass the
+    // buffer offset, not the file offset hdr_.phoff (they differ whenever an
+    // image places its phdrs elsewhere; validate_header permits that).
+    (void)text_canary_slot(phdr_image_, sizeof(ELF64Header), hdr_.phnum,
+                           hdr_.phentsize, file_size_, &canary_slot);
+
     pml4_ = VMM::clone_kernel_pml4();
     if (!pml4_) {
         post_event(0xDB05, " failed: not enough memory", 0, PostKind::OTHER);
@@ -626,6 +644,31 @@ void ElfLoader::run_load() {
                     post_event(0xDB07, " failed: read error", 0, PostKind::OTHER);
                     cleanup_and_idle();
                     return;
+                }
+                // Issue #46: fold read-only file bytes into the incremental
+                // baseline as they land (chunk_buf_ holds exactly the
+                // copy_len bytes just read; skew/padding excluded).  Chunk
+                // byte i maps to VA (phdr->vaddr + src_off + i) in every
+                // skew case; bytes inside the TEXT before-canary slot are
+                // skipped (canary-owned, covered by the canary check).
+                if (!(phdr->flags & PF_W)) {
+                    uint64_t va0 = phdr->vaddr + src_off;
+                    if (canary_slot != 0 && va0 < canary_slot + 8 &&
+                        va0 + copy_len > canary_slot) {
+                        if (va0 < canary_slot) {
+                            load_crc_ = CRC32::update(
+                                load_crc_, chunk_buf_, canary_slot - va0);
+                        }
+                        uint64_t after = canary_slot + 8;
+                        if (va0 + copy_len > after) {
+                            uint64_t skip = after - va0;
+                            load_crc_ = CRC32::update(
+                                load_crc_, chunk_buf_ + skip, copy_len - skip);
+                        }
+                    } else {
+                        load_crc_ =
+                            CRC32::update(load_crc_, chunk_buf_, copy_len);
+                    }
                 }
             }
             uint64_t phys = PMM::alloc_user_page();
@@ -810,6 +853,33 @@ void ElfLoader::run_load() {
         post_event(0xDB05, " failed: not enough memory", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
+    }
+    // Issue #46: capture the post-relocation RO baseline into the TCB
+    // before publication.  Static images cross-check the incremental
+    // chunk CRC (copy-path corruption fails the load); dynamic images
+    // adopt the scan (relocations legitimately rewrote bytes).
+    {
+        bool has_dynamic = false;
+        for (uint16_t i = 0; i < hdr_.phnum; ++i) {
+            auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+                phdr_image_ + sizeof(ELF64Header) +
+                static_cast<uint64_t>(i) * hdr_.phentsize);
+            if (phdr->type == PT_DYNAMIC) {
+                has_dynamic = true;
+                break;
+            }
+        }
+        // NOTE: packed buffer (see above) — sizeof(ELF64Header), not phoff.
+        if (!snapshot_ro_baseline(pml4_, phdr_image_, sizeof(ELF64Header),
+                                  hdr_.phnum,
+                                  hdr_.phentsize, file_size_, has_dynamic,
+                                  load_crc_, canary_slot, tcb)) {
+            destroy_completed_tcb(tcb);            pml4_ = 0; // Owned + freed by destroy; cleanup must not re-free.
+            post_event(0xDB0D, " failed: authenticity baseline", 0,
+                       PostKind::OTHER);
+            cleanup_and_idle();
+            return;
+        }
     }
     tcb->priority = 2;
     tcb->base_priority = 2;

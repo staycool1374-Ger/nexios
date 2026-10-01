@@ -74,7 +74,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // process
     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
-    {"elf_loader",            9,    0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77)
+    {"elf_loader",            13,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet)
     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)
     {"process_signals",       8,    0,       0      },  // signal delivery/handling
     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk

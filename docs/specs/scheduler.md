@@ -219,6 +219,13 @@ fully unlinks the node; poison is applied ONLY by `MemPool::free()`.
 
 See `zombie-list-spec.md` for the zombie/reaper lifecycle detail.
 
+- **Auth-kill edge (issue #46):** a `FAILED`-latched authenticity verdict
+  terminates via the canonical `terminate_err` path (dequeue → TERMINATED
+  → `wake_waiting_parent` → zombie → deferred free), exit code
+  `kElfAuthKillExitCode` (0xDB0C). No new lifecycle state; `FAILED`
+  latching blocks any later `VERIFIED` transition even if the kill is
+  refused/deferred.
+
 ## 7. Snapshot/Restore Ready-Queue Handling
 
 1. `snapshot_create()` captures `ReadyQueuePOD` (heads/tails/counts/bitmap).
@@ -230,7 +237,6 @@ See `zombie-list-spec.md` for the zombie/reaper lifecycle detail.
 priorities, orphaned flags, dangling pointers).
 
 ## 8. Open Gaps / Follow-ups
-
 - **`isr_nesting_depth` → per-CPU asm** (GS/TPIDR-relative) — deferred to SMP
   (Phase 5, ROADMAP §0.4.1).
 - **`hhdm_modified_` (VAR-17)** — single-core safe today; re-audit under SMP.
@@ -260,3 +266,26 @@ beyond one placement store:
   under IrqGuard + zombie leaf (drain_zombie_list precedent, read-only —
   no surgery, no free); shell prints lock-free from the snapshot with
   magic + TERMINATED/REAPED filtering.
+
+## 10. Idle Authenticity Re-Verify Slice (issue #46)
+
+- **Entry:** `Scheduler::auth_verify_step()` (called once per idle pass
+  via `integrity::auth_verify_poll`, after the kernel `.text` CRC chunk).
+  One candidate per call: first `UNVERIFIED`/`VERIFYING` user image with a
+  loader baseline (`ro_seg_count_ > 0`), registry order; terminal states
+  skipped (dead tasks have nothing left to protect).
+- **Budget:** ≤2 pages CRC'd per pass through the target page table
+  (`VMM::virt_to_phys_in_pml4` + HHDM; unmapped mid-range = fail closed).
+  Whole-step `IrqGuard` (bounded: registry walk + 2 page CRCs, no alloc,
+  no reschedule); `scheduler_lock_` around select/commit only (the kill
+  runs after release — `terminate_err` retakes it).
+- **Commit:** progress (`off`/`acc`) or verdict under re-validation
+  (magic + `page_table_` + state + offset unchanged ⇒ same live object;
+  TCB frees funnel through this same idle task, so the unlocked work
+  phase cannot race a free on UP). Completion finalizes `acc` against
+  `ro_crc32_` → `VERIFIED`, else latch `FAILED` + kill. A lost race
+  returns `PROGRESS` (re-select later) — never a false verdict.
+- **Kill reporting** lives in `auth_verify_poll` (dmesg 0xDB0C + serial +
+  framebuffer), deliberately not `report_user_task_end` (parents are
+  already woken by `terminate_err`; the report is a fixed security-event
+  format). `VERIFIED` logs one info line per task lifetime.
