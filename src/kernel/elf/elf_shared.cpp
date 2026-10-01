@@ -501,11 +501,13 @@ static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
     path[sizeof(path) - 1] = '\0';
     vfs::Vnode *vn = vfs::resolve(path);
     if (!vn || !vn->ops || !vn->ops->read || vn->size != slot->file_size) {
+        vfs::release(vn); // issue #268 (null-safe)
         return ElfError::NOT_FOUND; // Missing or changed under us.
     }
     uint64_t npages = 0;
     uint64_t buf = read_image_pages(vn, vn->size, &npages, ctx);
     if (buf == 0) {
+        vfs::release(vn); // issue #268
         return ElfError::NOMEM;
     }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -517,6 +519,7 @@ static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
     uint64_t npg = slot->num_phys_pages;
     if (npg > MAX_LIB_PHYS_PAGES) {
         free_image_pages(buf, npages);
+        vfs::release(vn); // issue #268: owned on every exit
         return ElfError::INVALID_ELF; // Corrupt slot: fail closed.
     }
     for (uint64_t i = 0; i < npg; ++i) {
@@ -574,6 +577,7 @@ static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
     }
     if (err != ElfError::OK) {
         free_image_pages(buf, npages);
+        vfs::release(vn); // issue #268
         return err;
     }
     // Relocate the fresh RW copies for this task (same values: fixed
@@ -587,6 +591,7 @@ static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
         ctx->image_count >= MAX_DEP_DEPTH + 1) {
         free_image_pages(buf, npages);
         SharedLibCache::instance().release(name);
+        vfs::release(vn); // issue #268
         return ElfError::NOMEM;
     }
     SharedLibCache::instance().acquire(name);
@@ -609,10 +614,12 @@ static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
         --ctx->acquired_count;
         free_image_pages(buf, npages);
         SharedLibCache::instance().release(name);
+        vfs::release(vn); // issue #268
         return ElfError::INVALID_ELF;
     }
     ctx->mapped_bytes += slot->load_size;
     *out_base = slot->load_base;
+    vfs::release(vn); // issue #268: image retained in ctx, vnode done
     return ElfError::OK;
 }
 
@@ -853,14 +860,17 @@ static ElfError load_fresh(const char *name, LoadedLibrary *slot,
     path[sizeof(path) - 1] = '\0';
     vfs::Vnode *vn = vfs::resolve(path);
     if (!vn || !vn->ops || !vn->ops->read) {
+        vfs::release(vn); // issue #268 (null-safe)
         return ElfError::NOT_FOUND;
     }
     uint64_t size = vn->size;
     if (size == 0 || size > MAX_SO_FILE_SIZE) {
+        vfs::release(vn); // issue #268
         return ElfError::NOMEM;
     }
     uint64_t npages = 0;
     uint64_t buf = read_image_pages(vn, size, &npages, ctx);
+    vfs::release(vn); // issue #268: image buffered, vnode unneeded below
     if (buf == 0) {
         return ElfError::NOMEM;
     }

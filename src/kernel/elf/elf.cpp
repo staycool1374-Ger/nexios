@@ -461,10 +461,15 @@ static void open_std_fds(TaskControlBlock &tcb) {
             tcb.fd_table.fds[fd].vnode = tty;
             tcb.fd_table.fds[fd].offset = 0;
             tcb.fd_table.fds[fd].flags = 0;
+            // Issue #268: each fd holds its own reference (FdTable::free
+            // drops one per slot); the resolve() reference is released
+            // after the loop below.
+            vfs::vnode_ref_inc(tty);
             if (tty->ops && tty->ops->open)
                 tty->ops->open(*tty, 0);
         }
     }
+    vfs::release(tty);
 }
 
 static void install_segment_canaries(TaskControlBlock *tcb,
@@ -808,9 +813,10 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
 
     {
         vfs::Vnode *tty = vfs::resolve("/dev/tty");
-        if (tty && tcb->fd_table.get(0) && tcb->fd_table.get(0)->vnode == tty) {
-            // keep std fds
-        } else {
+        bool keep = (tty && tcb->fd_table.get(0) &&
+                     tcb->fd_table.get(0)->vnode == tty);
+        vfs::release(tty); // issue #268: probe only, not retained
+        if (!keep) {
             for (int std_fd = 0; std_fd < 3; ++std_fd) {
                 if (tcb->fd_table.get(std_fd)) {
                     tcb->fd_table.free(std_fd);
@@ -824,10 +830,14 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
                         tcb->fd_table.fds[fd].vnode = tty2;
                         tcb->fd_table.fds[fd].offset = 0;
                         tcb->fd_table.fds[fd].flags = 0;
+                        // Issue #268: one reference per fd (see
+                        // open_std_fds); drop the resolve() reference after.
+                        vfs::vnode_ref_inc(tty2);
                         if (tty2->ops && tty2->ops->open)
                             tty2->ops->open(*tty2, 0);
                     }
                 }
+                vfs::release(tty2);
             }
         }
     }

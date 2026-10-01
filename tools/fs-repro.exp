@@ -1,0 +1,51 @@
+#!/usr/bin/expect -f
+# Repro for the live-session report: `ls` lists ./-prefixed initrd names
+# but `cat <bare>` / `load <bare>` fail with not-found.
+# Boots run-debug-mode, sends ls + cat hey.c + load hey.c.elf, logs all.
+# Usage: fs-repro.exp [-log file]
+set logfile "/tmp/fs-repro.log"
+set args $argv
+if {[lindex $argv 0] eq "-log"} {
+    set logfile [lindex $argv 1]
+    set args [lrange $argv 2 end]
+}
+log_file -a $logfile
+set timeout 150
+eval spawn make $args
+expect {
+    -re {\$ $} { puts "REPRO: prompt reached" }
+    timeout { puts "REPRO: TIMEOUT waiting for prompt"; exit 1 }
+    eof { puts "REPRO: EOF before prompt"; exit 1 }
+}
+send "ls\r"
+expect {
+    -re {\$ $} { puts "REPRO: ls done" }
+    timeout { puts "REPRO: TIMEOUT after ls"; exit 1 }
+    eof { puts "REPRO: EOF after ls"; exit 1 }
+}
+send "cat /hey.c\r"
+expect {
+    -re {\$ $} { puts "REPRO: cat-first done" }
+    timeout { puts "REPRO: TIMEOUT after cat-first"; exit 1 }
+    eof { puts "REPRO: EOF after cat-first"; exit 1 }
+}
+send "ls /\r"
+expect {
+    -re {\$ $} { puts "REPRO: ls-root done" }
+    timeout { puts "REPRO: TIMEOUT after ls-root"; exit 1 }
+    eof { puts "REPRO: EOF after ls-root"; exit 1 }
+}
+send "ls /tmp\r"
+expect {
+    -re {\$ $} { puts "REPRO: ls-tmp done" }
+    timeout { puts "REPRO: TIMEOUT after ls-tmp"; exit 1 }
+    eof { puts "REPRO: EOF after ls-tmp"; exit 1 }
+}
+send "cat /hey.c\r"
+expect {
+    -re {\$ $} { puts "REPRO: cat-after done" }
+    timeout { puts "REPRO: TIMEOUT after cat-after"; exit 1 }
+    eof { puts "REPRO: EOF after cat-after"; exit 1 }
+}
+puts "REPRO: DONE"
+exit 0

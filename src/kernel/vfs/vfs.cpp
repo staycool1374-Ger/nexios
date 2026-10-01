@@ -165,6 +165,11 @@ Vnode *resolve(const char *path) {
     bool is_absolute = (path[0] == '/');
     const char *search = path;
     Vnode *current = nullptr;
+    // Issue #268: ownership of `current`.  The initial node (mount root /
+    // cwd / global root) is BORROWED; every adopted `lookup()` result is
+    // OWNED and must be released before reassignment or on failure.  The
+    // final return is always OWNED (borrowed finals are inc'd on exit).
+    bool owned = false;
 
     if (is_absolute) {
         Mount *best = nullptr;
@@ -223,6 +228,12 @@ Vnode *resolve(const char *path) {
 
         if (comp[0] == '.' && comp[1] == '.' && comp[2] == '\0') {
             if (current->parent) {
+                // Parent links are borrowed: drop an owned `current`
+                // first, then adopt borrowed (owned = false).
+                if (owned) {
+                    release(current);
+                    owned = false;
+                }
                 current = current->parent;
                 continue;
             }
@@ -244,16 +255,29 @@ Vnode *resolve(const char *path) {
                     char parent_path[MAX_PATH];
                     __builtin_memcpy(parent_path, mp, len);
                     parent_path[len] = '\0';
+                    if (owned) {
+                        release(current);
+                        owned = false;
+                    }
                     current = resolve(parent_path);
+                    owned = true;
                 } else if (last_slash == mp) {
+                    if (owned) {
+                        release(current);
+                        owned = false;
+                    }
                     current = resolve("/");
+                    owned = true;
                 }
+                if (!current)
+                    return nullptr; // inner resolve failed: nothing owned
                 break;
             }
             continue;
         }
 
         Vnode *child = nullptr;
+        bool child_from_mount = false;
         for (size_t i = 0; i < mount_count; ++i) {
             if (!mount_table[i].used)
                 continue;
@@ -265,6 +289,7 @@ Vnode *resolve(const char *path) {
             }
             if (strcmp(name_start, comp) == 0) {
                 child = mount_table[i].root_vnode;
+                child_from_mount = true;
                 break;
             }
         }
@@ -272,11 +297,26 @@ Vnode *resolve(const char *path) {
             child =
                 current->ops ? current->ops->lookup(*current, comp) : nullptr;
         }
-        if (!child)
+        if (!child) {
+            if (owned)
+                release(current);
             return nullptr;
+        }
+        if (owned)
+            release(current);
+        // Mount roots are borrowed (owned = false); lookup results are
+        // callee-owned (owned = true) — borrowed ones (tmpfs cache,
+        // devfs statics) are refcount-0, so release() no-ops on them.
+        owned = !child_from_mount;
         current = child;
     }
 
+    if (current && !owned) {
+        // Uniform OWNED return: the initial node (mount root / cwd /
+        // global root) is borrowed during traversal — take the caller's
+        // reference here so every resolve() result releases exactly once.
+        vnode_ref_inc(current);
+    }
     return current;
 }
 
@@ -385,7 +425,13 @@ Vnode *resolve_parent(const char *path, const char *&out_name) {
     if (!*out_name)
         return nullptr;
     auto *task = Scheduler::current_task();
-    return (task && task->cwd_vnode) ? task->cwd_vnode : root_vnode_global;
+    Vnode *cwd =
+        (task && task->cwd_vnode) ? task->cwd_vnode : root_vnode_global;
+    // Uniform OWNED return (issue #268): take the caller's reference on
+    // the borrowed cwd/global root; slash-case resolve() is already owned.
+    if (cwd)
+        vnode_ref_inc(cwd);
+    return cwd;
 }
 
 /// @brief Create a subdirectory at the given path.
@@ -396,11 +442,17 @@ int mkdir(const char *path, uint16_t mode) {
 #endif
     const char *name = nullptr;
     Vnode *parent = resolve_parent(path, name);
-    if (!parent || !(parent->mode & S_IFDIR))
+    if (!parent || !(parent->mode & S_IFDIR)) {
+        release(parent);
         return VFS_INVALID;
-    if (!parent->ops || !parent->ops->mkdir)
+    }
+    if (!parent->ops || !parent->ops->mkdir) {
+        release(parent);
         return VFS_INVALID;
-    return parent->ops->mkdir(*parent, name, mode);
+    }
+    int rc = parent->ops->mkdir(*parent, name, mode);
+    release(parent);
+    return rc;
 }
 
 /// @brief Remove a file or empty directory at the given path.
@@ -411,11 +463,17 @@ int unlink(const char *path) {
 #endif
     const char *name = nullptr;
     Vnode *parent = resolve_parent(path, name);
-    if (!parent || !(parent->mode & S_IFDIR))
+    if (!parent || !(parent->mode & S_IFDIR)) {
+        release(parent);
         return VFS_INVALID;
-    if (!parent->ops || !parent->ops->unlink)
+    }
+    if (!parent->ops || !parent->ops->unlink) {
+        release(parent);
         return VFS_INVALID;
-    return parent->ops->unlink(*parent, name);
+    }
+    int rc = parent->ops->unlink(*parent, name);
+    release(parent);
+    return rc;
 }
 
 /// @brief Create a regular file at the given path.
@@ -423,11 +481,17 @@ int unlink(const char *path) {
 int create(const char *path, uint16_t mode) {
     const char *name = nullptr;
     Vnode *parent = resolve_parent(path, name);
-    if (!parent || !(parent->mode & S_IFDIR))
+    if (!parent || !(parent->mode & S_IFDIR)) {
+        release(parent);
         return VFS_INVALID;
-    if (!parent->ops || !parent->ops->create)
+    }
+    if (!parent->ops || !parent->ops->create) {
+        release(parent);
         return VFS_INVALID;
-    return parent->ops->create(*parent, name, mode);
+    }
+    int rc = parent->ops->create(*parent, name, mode);
+    release(parent);
+    return rc;
 }
 
 /// @brief Mount a filesystem with error handling.
@@ -510,11 +574,16 @@ VfsError mkdir_err(const char *path, uint16_t mode) {
     Vnode *parent = resolve_parent(path, name);
     if (!parent)
         return VFS_ERR_NOT_FOUND;
-    if (!(parent->mode & S_IFDIR))
+    if (!(parent->mode & S_IFDIR)) {
+        release(parent); // issue #268
         return VFS_ERR_NOT_DIR;
-    if (!parent->ops || !parent->ops->mkdir)
+    }
+    if (!parent->ops || !parent->ops->mkdir) {
+        release(parent); // issue #268
         return VFS_ERR_NOT_SUPPORTED;
+    }
     int result = parent->ops->mkdir(*parent, name, mode);
+    release(parent); // issue #268
     if (result == 0)
         return VFS_ERR_OK;
     // Positive codes are specific VfsError values (e.g. VFS_ERR_EXISTS);
@@ -531,11 +600,16 @@ VfsError create_err(const char *path, uint16_t mode) {
     Vnode *parent = resolve_parent(path, name);
     if (!parent)
         return VFS_ERR_NOT_FOUND;
-    if (!(parent->mode & S_IFDIR))
+    if (!(parent->mode & S_IFDIR)) {
+        release(parent); // issue #268
         return VFS_ERR_NOT_DIR;
-    if (!parent->ops || !parent->ops->create)
+    }
+    if (!parent->ops || !parent->ops->create) {
+        release(parent); // issue #268
         return VFS_ERR_NOT_SUPPORTED;
+    }
     int result = parent->ops->create(*parent, name, mode);
+    release(parent); // issue #268
     return result == 0 ? VFS_ERR_OK : VFS_ERR_IO_ERROR;
 }
 
@@ -546,11 +620,16 @@ VfsError unlink_err(const char *path) {
     Vnode *parent = resolve_parent(path, name);
     if (!parent)
         return VFS_ERR_NOT_FOUND;
-    if (!(parent->mode & S_IFDIR))
+    if (!(parent->mode & S_IFDIR)) {
+        release(parent); // issue #268
         return VFS_ERR_NOT_DIR;
-    if (!parent->ops || !parent->ops->unlink)
+    }
+    if (!parent->ops || !parent->ops->unlink) {
+        release(parent); // issue #268
         return VFS_ERR_NOT_SUPPORTED;
+    }
     int result = parent->ops->unlink(*parent, name);
+    release(parent); // issue #268
     return result == 0 ? VFS_ERR_OK : VFS_ERR_IO_ERROR;
 }
 

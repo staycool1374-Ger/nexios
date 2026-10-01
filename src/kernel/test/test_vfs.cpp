@@ -25,6 +25,8 @@
 #include <kernel/vfs/pipe.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/test/resource_tracker.hpp>
+#include <kernel/syscall/syscall_helpers.hpp>
 
 using namespace kernel;
 using namespace kernel::vfs;
@@ -412,6 +414,119 @@ JARVIS_TEST(vfs_pipe_read_write, "PRE: vfsd, iocd | POST: none") {
 // Input: None
 // Expect: Each JARVIS_REGISTER_TEST call adds the test to the suite.
 // Depends: kernel::test
+
+// Runmode: kernel
+// Testidea: issue #268 — repeated initrd resolve+release leaves the vnode
+// counters flat (pre-fix: +1 vnode per resolve, draining the 32-block
+// pool3 until every lookup fails).
+// Input: 40x resolve("/hey.c.elf") + release (initrd-resident demo ELF).
+// Expect: ResourceTracker vnodes identical before/after.
+// Depends: vfs::resolve OWNED convention + vfs::release.
+JARVIS_TEST(vfs_initrd_lookup_release_flat, "PRE: vfsd, iocd | POST: none") {
+    auto &rt = kernel::test::ResourceTracker::instance();
+    kernel::test::ResourceCounters before{};
+    rt.capture(before);
+    for (int i = 0; i < 40; ++i) {
+        auto *vn = vfs::resolve("/hey.c.elf");
+        JARVIS_ASSERT(vn != nullptr);
+        vfs::release(vn);
+    }
+    kernel::test::ResourceCounters after{};
+    rt.capture(after);
+    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: issue #268 regression guard — tmpfs cached vnodes are
+// borrowed (refcount 0), so resolve+release cycles must neither leak nor
+// double-free the cache entries (release is a no-op on them).
+// Input: mkdir + create nested tmpfs file, 20x resolve+release, then
+// resolve once more (cache entry must be alive and correct).
+// Expect: vnodes flat; final resolve non-null with S_IFREG.
+JARVIS_TEST(vfs_tmpfs_nested_resolve_balanced,
+            "PRE: vfsd, iocd | POST: none") {
+    JARVIS_ASSERT(vfs::mkdir("/tmp/d268", 0755) == 0);
+    JARVIS_ASSERT(vfs::create("/tmp/d268/f", vfs::S_IFREG) == 0);
+    auto &rt = kernel::test::ResourceTracker::instance();
+    kernel::test::ResourceCounters before{};
+    rt.capture(before);
+    for (int i = 0; i < 20; ++i) {
+        auto *vn = vfs::resolve("/tmp/d268/f");
+        JARVIS_ASSERT(vn != nullptr);
+        vfs::release(vn);
+    }
+    kernel::test::ResourceCounters after{};
+    rt.capture(after);
+    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
+    auto *check = vfs::resolve("/tmp/d268/f");
+    JARVIS_ASSERT(check != nullptr);
+    JARVIS_ASSERT(check->mode & vfs::S_IFREG);
+    vfs::release(check);
+    JARVIS_ASSERT(vfs::unlink("/tmp/d268/f") == 0);
+    JARVIS_ASSERT(vfs::unlink("/tmp/d268") == 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: issue #268 — mirror the shell `ls` coloring loop
+// (readdir + per-entry lookup) with releases: 3 full passes over the
+// initrd root must not move the vnode counters (pre-fix: +entries/pass).
+JARVIS_TEST(vfs_ls_lookup_loop_no_leak, "PRE: vfsd, iocd | POST: none") {
+    auto &rt = kernel::test::ResourceTracker::instance();
+    kernel::test::ResourceCounters before{};
+    rt.capture(before);
+    auto *root = vfs::resolve("/");
+    JARVIS_ASSERT(root != nullptr);
+    for (int pass = 0; pass < 3; ++pass) {
+        uint64_t pos = 0;
+        vfs::Dirent dent{};
+        while (root->ops->readdir(*root, pos, dent) == 0) {
+            if (dent.d_name[0] == '\0')
+                continue;
+            auto *child = root->ops->lookup(*root, dent.d_name);
+            vfs::release(child);
+        }
+    }
+    vfs::release(root);
+    kernel::test::ResourceCounters after{};
+    rt.capture(after);
+    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: issue #268 — fd open/close cycles balance vnode + fd counters
+// on initrd (owned lookup vnodes) and tmpfs (borrowed cache vnodes).
+JARVIS_TEST(vfs_fd_open_close_balanced, "PRE: vfsd, iocd | POST: none") {
+    auto *cur = kernel::Scheduler::current_task();
+    JARVIS_ASSERT(cur != nullptr);
+    JARVIS_ASSERT(vfs::create("/tmp/fd268", vfs::S_IFREG) == 0);
+    auto &rt = kernel::test::ResourceTracker::instance();
+    kernel::test::ResourceCounters before{};
+    rt.capture(before);
+    for (int i = 0; i < 10; ++i) {
+        auto *vn = vfs::resolve("/hey.c.elf");
+        JARVIS_ASSERT(vn != nullptr);
+        int fd = kernel::syscall_task_open(vn, vfs::O_RDONLY);
+        JARVIS_ASSERT(fd >= 0);
+        cur->fd_table.free(fd);
+    }
+    for (int i = 0; i < 10; ++i) {
+        auto *vn = vfs::resolve("/tmp/fd268");
+        JARVIS_ASSERT(vn != nullptr);
+        int fd = kernel::syscall_task_open(vn, vfs::O_RDONLY);
+        JARVIS_ASSERT(fd >= 0);
+        cur->fd_table.free(fd);
+    }
+    kernel::test::ResourceCounters after{};
+    rt.capture(after);
+    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
+    JARVIS_ASSERT_EQ(before.open_fds, after.open_fds);
+    JARVIS_ASSERT(vfs::unlink("/tmp/fd268") == 0);
+    JARVIS_TEST_PASS();
+}
+
 void register_vfs_tests() {
     Logger::info("Registering VFS tests");
 
@@ -438,4 +553,8 @@ void register_vfs_tests() {
     JARVIS_REGISTER_TEST(vfs_open_read_null);
     JARVIS_REGISTER_TEST(vfs_write_fstat);
     JARVIS_REGISTER_TEST(vfs_pipe_read_write);
+    JARVIS_REGISTER_TEST(vfs_initrd_lookup_release_flat); // #268
+    JARVIS_REGISTER_TEST(vfs_tmpfs_nested_resolve_balanced); // #268
+    JARVIS_REGISTER_TEST(vfs_ls_lookup_loop_no_leak); // #268
+    JARVIS_REGISTER_TEST(vfs_fd_open_close_balanced); // #268
 }

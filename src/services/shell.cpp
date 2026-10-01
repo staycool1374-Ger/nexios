@@ -210,7 +210,7 @@ void Shell::init() {
     register_command("cd",      "Change working directory",          cmd_cd);
     register_command("export",  "Set environment variable",          cmd_export);
     register_command("runelf",  "Run userspace ELF from initrd",     cmd_runelf);
-    register_command("load",    "Background-load an ELF file (returns immediately)", cmd_load);
+    register_command("loadelf", "Background-load an ELF file (returns immediately)", cmd_loadelf);
     register_command("cancel-load", "Cancel the background ELF load", cmd_cancel_load);
     register_command("exit",    "Shut down the system",              cmd_exit);
     register_command("shutdown","Shut down the system",              cmd_exit);
@@ -1974,16 +1974,28 @@ void Shell::cmd_cd(int argc, const char** argv) {
     }
     if (!(vn->mode & kernel::vfs::S_IFDIR)) {
         shell_error_path("cd", target, "not a directory");
+        kernel::vfs::release(vn); // issue #268: owned resolve result
         return;
     }
     auto* task = kernel::Scheduler::current_task();
-    if (!task) return;
+    if (!task) {
+        kernel::vfs::release(vn);
+        return;
+    }
     task->cwd_lock_.lock();
-    if (task->cwd_vnode)
-        kernel::vfs::vnode_ref_dec(task->cwd_vnode);
-    task->cwd_vnode = vn;
-    kernel::vfs::vnode_ref_inc(vn);
-    task->cwd_lock_.unlock();
+    // Issue #268: the resolve() result is caller-owned.  Transfer it to
+    // the task (no inc) when switching directories; when already there,
+    // drop just the fresh reference.  Unconditional inc + dec (the old
+    // shape) either leaks one ref per cd or frees under an aliased self.
+    auto *old = task->cwd_vnode;
+    if (vn == old) {
+        task->cwd_lock_.unlock();
+        kernel::vfs::release(vn);
+    } else {
+        task->cwd_vnode = vn;
+        task->cwd_lock_.unlock();
+        kernel::vfs::release(old);
+    }
     char canonical[256];
     build_canonical_path(task->cwd, target, canonical, sizeof(canonical));
     size_t i = 0;
@@ -2100,9 +2112,9 @@ void Shell::cmd_runelf(int argc, const char** argv) {
 }
 
 /// @brief Built-in: start a background ELF load (returns immediately).
-void Shell::cmd_load(int argc, const char** argv) {
+void Shell::cmd_loadelf(int argc, const char** argv) {
     if (argc < 2) {
-        Terminal::write("Usage: load <path.elf>\n");
+        Terminal::write("Usage: loadelf <path.elf>\n");
         return;
     }
     const char* path = argv[1];
@@ -2114,10 +2126,10 @@ void Shell::cmd_load(int argc, const char** argv) {
         // second "started" here — it would interleave with the async line.
         return;
     case kernel::elf::LoadResult::ALREADY_LOADING:
-        shell_error_path("load", path, "already loading");
+        shell_error_path("loadelf", path, "already loading");
         return;
     case kernel::elf::LoadResult::FILE_NOT_FOUND:
-        shell_error_path("load", path, "file not found");
+        shell_error_path("loadelf", path, "file not found");
         return;
     default:
         return;
@@ -2472,12 +2484,19 @@ void Shell::cmd_source(int argc, const char** argv) {
     auto* vn = kernel::vfs::resolve(argv[1]);
     if (!vn || !(vn->mode & kernel::vfs::S_IFREG)) {
         shell_error_path("source", argv[1], "cannot read");
+        kernel::vfs::release(vn);
         return;
     }
-    if (!vn->ops->read) return;
+    if (!vn->ops->read) {
+        kernel::vfs::release(vn);
+        return;
+    }
     uint8_t buf[4096];
     int64_t nread = vn->ops->read(*vn, buf, sizeof(buf) - 1, 0);
-    if (nread <= 0) return;
+    if (nread <= 0) {
+        kernel::vfs::release(vn); // issue #268
+        return;
+    }
     buf[nread] = '\0';
     // Execute each line
     char* line = reinterpret_cast<char*>(buf);
@@ -2491,6 +2510,7 @@ void Shell::cmd_source(int argc, const char** argv) {
         ++line;
     }
     if (*start) parse_and_exec(start);
+    kernel::vfs::release(vn); // issue #268: success path owns one release
 }
 
 void Shell::cmd_set(int argc, const char** argv) {
@@ -2774,6 +2794,7 @@ void Shell::cmd_test(int argc, const char** argv) {
             case 's': result = vn && vn->size > 0; break;
             default: result = false; break;
             }
+            kernel::vfs::release(vn); // issue #268
         } else {
             result = false;
         }
@@ -2970,8 +2991,10 @@ void Shell::cmd_pushd(int argc, const char** argv) {
     auto* vn = kernel::vfs::resolve(argv[1]);
     if (!vn || !(vn->mode & kernel::vfs::S_IFDIR)) {
         shell_error_path("pushd", argv[1], "not a directory");
+        kernel::vfs::release(vn);
         return;
     }
+    kernel::vfs::release(vn); // probe only; cmd_cd resolves again
     size_t pos = 0;
     for (const char* p = argv[1]; *p && pos < BUF_SIZE - 1; ++p) dir_stack_[dir_stack_count_][pos++] = *p;
     dir_stack_[dir_stack_count_][pos] = '\0';
@@ -3000,6 +3023,7 @@ void Shell::cmd_ls(int argc, const char** argv) {
     if (!(vn->mode & kernel::vfs::S_IFDIR)) {
         Terminal::write(path);
         Terminal::putchar('\n');
+        kernel::vfs::release(vn);
         return;
     }
 
@@ -3016,14 +3040,15 @@ void Shell::cmd_ls(int argc, const char** argv) {
             } else {
                 Terminal::set_fg(COLOR_DEFAULT);
             }
+            kernel::vfs::release(child); // issue #268: color probe is owned
         } else {
             Terminal::set_fg(COLOR_DEFAULT);
         }
         Terminal::write(dent.d_name);
         Terminal::set_fg(COLOR_DEFAULT);
-        Terminal::putchar(' ');
+        Terminal::putchar('\n');
     }
-    Terminal::putchar('\n');
+    kernel::vfs::release(vn);
 }
 
 static void print_ip(net::Ipv4Addr ip) {
@@ -3263,9 +3288,13 @@ void Shell::cmd_less(int argc, const char** argv) {
     auto* vn = kernel::vfs::resolve(argv[1]);
     if (!vn || !(vn->mode & kernel::vfs::S_IFREG)) {
         shell_error_path("less", argv[1], "No such file");
+        kernel::vfs::release(vn);
         return;
     }
-    if (!vn->ops->read) return;
+    if (!vn->ops->read) {
+        kernel::vfs::release(vn);
+        return;
+    }
 
     static constexpr int LINES_PER_PAGE = 24;
     static constexpr int BUF_SIZE = 512;
@@ -3293,6 +3322,7 @@ void Shell::cmd_less(int argc, const char** argv) {
                             got = arch::Keyboard::getchar(c);
                         if (got && (c == 'q' || c == 'Q')) {
                             Terminal::putchar('\n');
+                            kernel::vfs::release(vn); // issue #268
                             return;
                         }
                         if (got) break;
@@ -3312,11 +3342,13 @@ void Shell::cmd_less(int argc, const char** argv) {
             got = arch::Keyboard::getchar(c);
         if (got && (c == 'q' || c == 'Q')) {
             Terminal::putchar('\n');
+            kernel::vfs::release(vn); // issue #268
             return;
         }
         if (got) break;
         arch::pause();
     }
+    kernel::vfs::release(vn); // issue #268
 }
 
 void Shell::cmd_cat(int argc, const char** argv) {
@@ -3328,10 +3360,12 @@ void Shell::cmd_cat(int argc, const char** argv) {
     auto* vn = kernel::vfs::resolve(argv[1]);
     if (!vn || !(vn->mode & kernel::vfs::S_IFREG)) {
         shell_error_path("cat", argv[1], "No such file");
+        kernel::vfs::release(vn);
         return;
     }
     if (!vn->ops->read) {
         shell_error_path("cat", argv[1], "not readable");
+        kernel::vfs::release(vn);
         return;
     }
 
@@ -3347,6 +3381,7 @@ void Shell::cmd_cat(int argc, const char** argv) {
         for (int64_t i = 0; i < nread; ++i)
             Terminal::putchar(static_cast<char>(buf[i]));
     }
+    kernel::vfs::release(vn); // issue #268
 }
 
 void Shell::cmd_touch(int argc, const char** argv) {

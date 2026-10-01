@@ -121,6 +121,25 @@ static inline bool vnode_ref_dec(Vnode *vn) noexcept {
     return __atomic_fetch_sub(&vn->refcount, 1ULL, __ATOMIC_ACQ_REL) == 1;
 }
 
+/// @brief Release a vnode reference (issue #268: uniform OWNED convention).
+///        `resolve()` / `resolve_parent()` / `lookup()` results are OWNED —
+///        the caller releases exactly once via this helper when done.
+///        Zero-count vnodes (tmpfs cache entries, static roots, devfs
+///        statics) are borrowed: release is a no-op for them, so sharing
+///        one helper across filesystems can never free cache/static
+///        storage.  Never call `ops->close` directly (except `FdTable`).
+static inline void release(Vnode *vn) noexcept {
+    if (!vn)
+        return;
+    // UP: no VFS refcount traffic in IRQ context, so the acquire-load
+    // below is stable for the check-then-dec that follows (SMP will need
+    // a locked or RCU reclamation pass — see vfs.md ownership notes).
+    if (__atomic_load_n(&vn->refcount, __ATOMIC_ACQUIRE) == 0)
+        return;
+    if (vnode_ref_dec(vn) && vn->ops && vn->ops->close)
+        vn->ops->close(*vn);
+}
+
 struct FileDescription {
     Vnode *vnode;    ///< The vnode this descriptor refers to.
     uint64_t offset; ///< Current read/write offset.
@@ -169,15 +188,17 @@ struct Mount {
 };
 
 /// @brief Resolve an absolute path to a vnode.
-/// @return The vnode, or nullptr if not found.
+/// @return The vnode (OWNED — release via `vfs::release()`), or nullptr
+///         if not found.  Traversal intermediates are freed inside.
 Vnode *resolve(const char *path);
 /// @brief Resolve an absolute path to a vnode with error code.
-/// @param[out] out_vnode The resolved vnode on success.
+/// @param[out] out_vnode The resolved vnode (OWNED) on success.
 /// @return VfsError code.
 VfsError resolve_err(const char *path, Vnode *&out_vnode);
 /// @brief Resolve the parent directory and leaf name of a path.
 /// @param[out] out_name Leaf component of the path (points into `path`).
-/// @return The parent vnode, or nullptr if not found.
+/// @return The parent vnode (OWNED — release via `vfs::release()`), or
+///         nullptr if not found.
 Vnode *resolve_parent(const char *path, const char *&out_name);
 /// @brief Mount a filesystem at a given mount point.
 /// @return 0 on success, or VFS_INVALID on failure.

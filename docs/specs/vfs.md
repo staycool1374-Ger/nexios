@@ -64,6 +64,27 @@ must null-check before dispatch.  There is **no** `getattr`/`rename`/`truncate`.
 **Two-part free model:** the vnode struct (MemPool or static) and `private_data`
 are freed by the fs-specific `close` — `close` is the owner-only free path.
 
+### 1.4 Lookup ownership (issue #268)
+- `lookup()` / `resolve()` / `resolve_parent()` results are **OWNED** — the
+  caller releases exactly once via `vfs::release()` when done (fd attach,
+  cwd adoption, and `resolve()` traversal intermediates excepted — see below).
+- `release()` is zero-safe: refcount-0 vnodes (tmpfs cache entries, static
+  roots, devfs statics) are borrowed and never freed by it; never call
+  `ops->close` directly (except `FdTable::free`, which owns the fd ref).
+- `resolve()` frees owned intermediates internally; mount roots / cwd /
+  the global root are borrowed during traversal. Every `resolve()` return
+  is owned (borrowed finals are inc'd on exit), including `"/"` and `"."`.
+  `resolve_parent()` bare-name case inc's cwd for the same guarantee.
+- Transfers (no extra ref): fd attach consumes the resolve ref
+  (`syscall_task_open` takes it; one `vnode_ref_inc` per ADDITIONAL fd
+  sharing the vnode, e.g. stdio triple); cwd adoption consumes it
+  (alias-safe: same-dir `cd` drops only the fresh ref).
+- Correction to §1.3: tmpfs file `close` is a no-op — cached vnodes free
+  only at `unlink` (open-but-unlinked lifetime is a known follow-up, not
+  covered here). tmpfs `lookup` returns the borrowed cache entry.
+- UP assumption: no VFS refcount traffic in IRQ context (documented at
+  `vfs::release`); SMP will need a locked/RCU reclamation pass.
+
 ## 2. Mount Model
 
 ```cpp

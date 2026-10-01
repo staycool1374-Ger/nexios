@@ -234,21 +234,31 @@ uint64_t Syscall::sys_exec(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     // VULN-H4/W1 + VULN-U2: validate both arrays with hard bounds and
     // accumulate the combined string length for the stack-reservation check.
     uint64_t str_total = 0;
-    if (!validate_argv_envp(argv, true, &str_total))
+    if (!validate_argv_envp(argv, true, &str_total)) {
+        vfs::release(vn); // issue #268: vn already owned here
         return static_cast<uint64_t>(-1);
-    if (!validate_argv_envp(envp, true, &str_total))
+    }
+    if (!validate_argv_envp(envp, true, &str_total)) {
+        vfs::release(vn); // issue #268
         return static_cast<uint64_t>(-1);
-    if (vn->size == 0 || vn->size > 512_KiB)
+    }
+    if (vn->size == 0 || vn->size > 512_KiB) {
+        vfs::release(vn); // issue #268
         return static_cast<uint64_t>(-1);
+    }
     size_t file_pages = (static_cast<size_t>(vn->size) + 4095) / 4096;
     uint64_t file_phys = PMM::alloc_contiguous(file_pages);
-    if (!file_phys)
+    if (!file_phys) {
+        vfs::release(vn); // issue #268
         return static_cast<uint64_t>(-1);
+    }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     uint8_t *file_buf =
         reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + file_phys);
-    int64_t r = vn->ops->read(*vn, file_buf, vn->size, 0);
-    if (r <= 0 || static_cast<uint64_t>(r) != vn->size) {
+    uint64_t want_size = vn->size; // capture before release below
+    int64_t r = vn->ops->read(*vn, file_buf, want_size, 0);
+    vfs::release(vn); // issue #268: image is buffered, vnode unneeded below
+    if (r <= 0 || static_cast<uint64_t>(r) != want_size) {
         for (size_t i = 0; i < file_pages; ++i)
             PMM::free_page(file_phys + i * 4096);
         return static_cast<uint64_t>(-1);

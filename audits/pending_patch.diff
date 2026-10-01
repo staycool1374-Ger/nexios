@@ -1,1175 +1,1213 @@
-diff --git a/mk/rules.mk b/mk/rules.mk
-index bb87b7a85..2ef22dc39 100644
---- a/mk/rules.mk
-+++ b/mk/rules.mk
-@@ -259,7 +259,7 @@ $(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c | $(PICOLIBC_SYSROOT)/lib/lib
- initrd/tests/test-config.txt:
- 	@mkdir -p initrd/tests
- 	@printf 'none\n' > $@
--$(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt
-+$(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c userspace/nullderef.c
- 	@printf '  %-7s %s\n' 'CPIO' 'initrd.cpio'
- 	@mkdir -p initrd_root/etc initrd_root/tmp initrd_root/tests
- 	@printf 'tmpfs /tmp\n' > initrd_root/etc/fstab
-@@ -267,6 +267,7 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt
- 	@printf '# Init script\n' >> initrd_root/etc/rc
- 	@if [ ! -z "$(USERSPACE_ELF)" ]; then cp $(USERSPACE_ELF) initrd_root/; fi
- 	@if [ -f userspace/picolibc/libc_verify.c.elf ]; then cp userspace/picolibc/libc_verify.c.elf initrd_root/; fi
-+	@cp userspace/hey.c userspace/nullderef.c initrd_root/
- 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
- 	cd initrd_root && find . -print0 | cpio -o -H newc -0 --quiet > ../$@
- 	@rm -rf initrd_root
+diff --git a/docs/specs/vfs.md b/docs/specs/vfs.md
+index 5efa81f3f..dcb651d6b 100644
+--- a/docs/specs/vfs.md
++++ b/docs/specs/vfs.md
+@@ -64,6 +64,27 @@ must null-check before dispatch.  There is **no** `getattr`/`rename`/`truncate`.
+ **Two-part free model:** the vnode struct (MemPool or static) and `private_data`
+ are freed by the fs-specific `close` — `close` is the owner-only free path.
+ 
++### 1.4 Lookup ownership (issue #268)
++- `lookup()` / `resolve()` / `resolve_parent()` results are **OWNED** — the
++  caller releases exactly once via `vfs::release()` when done (fd attach,
++  cwd adoption, and `resolve()` traversal intermediates excepted — see below).
++- `release()` is zero-safe: refcount-0 vnodes (tmpfs cache entries, static
++  roots, devfs statics) are borrowed and never freed by it; never call
++  `ops->close` directly (except `FdTable::free`, which owns the fd ref).
++- `resolve()` frees owned intermediates internally; mount roots / cwd /
++  the global root are borrowed during traversal. Every `resolve()` return
++  is owned (borrowed finals are inc'd on exit), including `"/"` and `"."`.
++  `resolve_parent()` bare-name case inc's cwd for the same guarantee.
++- Transfers (no extra ref): fd attach consumes the resolve ref
++  (`syscall_task_open` takes it; one `vnode_ref_inc` per ADDITIONAL fd
++  sharing the vnode, e.g. stdio triple); cwd adoption consumes it
++  (alias-safe: same-dir `cd` drops only the fresh ref).
++- Correction to §1.3: tmpfs file `close` is a no-op — cached vnodes free
++  only at `unlink` (open-but-unlinked lifetime is a known follow-up, not
++  covered here). tmpfs `lookup` returns the borrowed cache entry.
++- UP assumption: no VFS refcount traffic in IRQ context (documented at
++  `vfs::release`); SMP will need a locked/RCU reclamation pass.
++
+ ## 2. Mount Model
+ 
+ ```cpp
+diff --git a/project_structure.txt b/project_structure.txt
+index f2bb27739..42e6d4bcc 100644
+--- a/project_structure.txt
++++ b/project_structure.txt
+@@ -322,8 +322,6 @@
+ │   ├── CMakeLists.txt
+ │   └── main.cpp
+ ├── compile_flags.txt
+-├── debug
+-│   └── nexios-rtos.iso
+ ├── diagram.png
+ ├── docker
+ │   └── entrypoint.sh
+@@ -13441,6 +13439,8 @@
+ │   └── testcases-v0.9.x.md
+ ├── readme.html
+ ├── README.md
++├── release
++│   └── nexios-rtos.iso
+ ├── scripts
+ │   ├── gate.py
+ │   ├── healthcheck.sh
+@@ -13633,6 +13633,7 @@
+ │   │   │   ├── virtio_net.hpp
+ │   │   │   └── virtio_pci.cpp
+ │   │   ├── elf
++│   │   │   ├── elf_auth.cpp
+ │   │   │   ├── elf_loader.cpp
+ │   │   │   ├── elf_loader.hpp
+ │   │   │   ├── elf_shared.cpp
+@@ -14335,4 +14336,4 @@
+     ├── yield-probe.c.d
+     └── yield-probe.c.elf
+ 
+-143 directories, 14193 files
++143 directories, 14194 files
 diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 2645a8343..ed54c8728 100644
+index ed54c8728..46cb4951d 100644
 --- a/src/kernel/elf/elf.cpp
 +++ b/src/kernel/elf/elf.cpp
-@@ -653,6 +653,12 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
-         tcb->bss_size_ = bss;
-     }
- 
-+    // Issue #77 handoff contract: a completed user image carries no TLS yet.
-+    // The dispatcher publishes tls_base_ to FS_BASE on user entry, so a
-+    // stale nonzero base would corrupt the new task's thread-local state
-+    // silently — fail stop here, not at first dispatch.  (When user TLS
-+    // lands, this relaxes to the TLS-template contract.)
-+    ENSURE(tcb->tls_base_ == 0);
-     return tcb;
- }
- 
-diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
-index 9acf381ab..b015bf98f 100644
---- a/src/kernel/elf/elf_loader.cpp
-+++ b/src/kernel/elf/elf_loader.cpp
-@@ -33,6 +33,7 @@
- #include <kernel/syscall/syscall_helpers.hpp>
- #include <kernel/ipc/buffer_pool.hpp>
- #include <kernel/arch/timer.hpp>
-+#include <services/terminal/terminal.hpp>
- #include <kernel/core/global_state.hpp>
- #include <kernel/test/resource_tracker.hpp>
- #include <logger.hpp>
-@@ -111,15 +112,45 @@ void ElfLoader::ensure_task() {
- LoadResult ElfLoader::request_load(const char *path) {
-     if (!path)
-         return LoadResult::FILE_NOT_FOUND;
--    // Resolve the file OUTSIDE the spinlock (vfs::resolve may block on I/O).
--    vfs::Vnode *vn = vfs::resolve(path);
--    if (!vn)
-+    // Validate existence + size OUTSIDE the spinlock (fs I/O may block)
-+    // with an open/stat/close probe: the fd lifecycle owns every vnode
-+    // reference symmetrically on every filesystem.  A bare vfs::resolve
-+    // cannot be released safely here — filesystems disagree on whether
-+    // lookup results are owned (initrd: fresh refcount-1 nodes) or
-+    // borrowed (tmpfs canonical nodes, mount roots), so neither a bare
-+    // dec (corrupts borrowed counts) nor no dec (leaks fresh nodes) is
-+    // correct for all paths (audit S3 on the first fix attempt).
-+    int probe = syscall_path_open(path, vfs::O_RDONLY);
-+    if (probe < 0)
-         return LoadResult::FILE_NOT_FOUND;
--    uint64_t fsize = vn->size;
-+    uint64_t fsize = 0;
-+    {
-+        auto *cur = Scheduler::current_task();
-+        auto *fd =
-+            (cur != nullptr) ? cur->fd_table.get(probe) : nullptr;
-+        if (fd == nullptr || fd->vnode == nullptr) {
-+            if (cur != nullptr)
-+                cur->fd_table.free(probe);
-+            return LoadResult::FILE_NOT_FOUND;
-+        }
-+        fsize = fd->vnode->size;
-+        cur->fd_table.free(probe);
-+    }
- 
-     SpinLockGuard<sync::SpinLock> guard(lock_);
-     if (state_ != LoadState::IDLE)
-         return LoadResult::ALREADY_LOADING;
-+    // Issue #77 step 3 (RETAIN-FOR-RETRY): a previous load may have
-+    // completed without ever being taken. The new path already validated
-+    // above (resolve succeeded), so free the retained image now — never
-+    // free-before-validate (a bad new path must not destroy a good
-+    // retained image), and never overwrite (that would leak it when
-+    // run_load publishes the new completion). At most one retained image
-+    // exists by construction.
-+    if (completed_tcb_) {
-+        destroy_completed_tcb(completed_tcb_);
-+        completed_tcb_ = nullptr;
-+    }
-     file_size_ = fsize;
- 
-     copy_bounded(path_, path, kMaxPath);
-@@ -243,8 +274,12 @@ void ElfLoader::reset() {
-     }
-     SpinLockGuard<sync::SpinLock> guard(lock_);
-     if (completed_tcb_) {
--        completed_tcb_->cleanup();
--        delete completed_tcb_;
-+        // Issue #77 step 3: a completed TCB was built by
-+        // finalize_loaded_task and never add_task'd — teardown MUST be
-+        // destroy_completed_tcb (direct frees, no scheduler/task-accounting
-+        // interaction). cleanup()+delete here would unregister an absent
-+        // task and run parent/daemon logic on a never-scheduled TCB.
-+        destroy_completed_tcb(completed_tcb_);
-         completed_tcb_ = nullptr;
-     }
-     cancel_requested_ = false;
-@@ -391,6 +426,14 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t ticks,
-     slot[n] = '\0';
-     log::dmesg_push_base(code, slot, 0);
-     kernel::Logger::info("%s", slot);
-+    // Live-session finding (#77 report): loader progress must ALSO reach
-+    // the framebuffer console — Logger serves serial/dmesg only, so
-+    // framebuffer users never saw completions.  write_fb renders pixels
-+    // without touching serial (no duplicate lines) or the shell capture
-+    // buffer (async loader text must not pollute redirections); the
-+    // shell's async-redraw guard already absorbs the interleaving.
-+    service::Terminal::write_fb(slot);
-+    service::Terminal::write_fb("\n");
- }
- 
- void ElfLoader::cleanup_and_idle() {
-@@ -466,6 +509,18 @@ void ElfLoader::run_load() {
-         cleanup_and_idle();
-         return;
-     }
-+    // Issue #77: the background loader serves runelf activation, which
-+    // dispatches the image as a plain ET_EXEC user task — dynamic/interp
-+    // images are rejected here with a clear error, never loaded to die at
-+    // rip 0.  Shared validate_header stays ET_EXEC+ET_DYN-capable: the #95
-+    // shared-lib loader resolves dependencies through its own backend,
-+    // never through this validation.
-+    if (hdr_.type != ET_EXEC) {
-+        post_event(0xDB04, " failed: only ET_EXEC supported", 0,
-+                   PostKind::OTHER);
-+        cleanup_and_idle();
-+        return;
-+    }
-     uint64_t phnum_sz = static_cast<uint64_t>(hdr_.phnum) * hdr_.phentsize;
-     if (phnum_sz > sizeof(phdr_image_) - sizeof(ELF64Header)) {
-         post_event(0xDB04, " failed: invalid elf-file", 0, PostKind::OTHER);
-diff --git a/src/kernel/elf/elf_loader.hpp b/src/kernel/elf/elf_loader.hpp
-index 0986b6882..0471c15c2 100644
---- a/src/kernel/elf/elf_loader.hpp
-+++ b/src/kernel/elf/elf_loader.hpp
-@@ -101,7 +101,9 @@ class ElfLoader {
-     static const char *current_path();
- 
-     /// @brief Completed TCB from the last successful load (future runelf /
--    ///        tests).  Ownership transfers to the caller.
-+    ///        tests).  Ownership transfers to the caller, which sets the
-+    ///        settled priority/base_priority/period/deadline BEFORE add_task
-+    ///        (never add_task then mutate) and admits via add_task_err.
-     static TaskControlBlock *take_completed();
- 
-     /// @brief Release (cleanup + delete) the completed TCB.  Used by tests /
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 23371cdfe..4c8d1983a 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -158,6 +158,12 @@ void init_task_main() {
-             }
+@@ -461,10 +461,15 @@ static void open_std_fds(TaskControlBlock &tcb) {
+             tcb.fd_table.fds[fd].vnode = tty;
+             tcb.fd_table.fds[fd].offset = 0;
+             tcb.fd_table.fds[fd].flags = 0;
++            // Issue #268: each fd holds its own reference (FdTable::free
++            // drops one per slot); the resolve() reference is released
++            // after the loop below.
++            vfs::vnode_ref_inc(tty);
+             if (tty->ops && tty->ops->open)
+                 tty->ops->open(*tty, 0);
          }
      }
-+    // ── Background ELF loader task (created before the rc runner so a
-+    //    background-loader rc can dispatch: the servicing task must exist
-+    //    before the first request.  Still before the test runner, so it is
-+    //    part of the snapshot baseline and survives snapshot_restore).
-+    //    Issue #77 step 1 (hard requirement). ──
-+    kernel::elf::ElfLoader::ensure_task();
-     // Read /etc/rc and execute each command
++    vfs::release(tty);
+ }
+ 
+ static void install_segment_canaries(TaskControlBlock *tcb,
+@@ -808,9 +813,10 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+ 
      {
-         auto rc = initrd::find("./etc/rc");
-@@ -189,9 +195,22 @@ void init_task_main() {
-                 while (*src && *src != ' ' && *src != '\t' && n < 127)
-                     elf_path[n++] = *src++;
-                 elf_path[n] = '\0';
-+                // Issue #77 step 6 (DECIDED): argv is deferred — lines
-+                // carrying arguments are rejected loudly (skip-and-continue
-+                // per the per-line failure policy), never silently trimmed.
-+                while (*src == ' ' || *src == '\t')
-+                    ++src;
-+                if (*src != '\0') {
-+                    kernel::Logger::warn(
-+                        "init: rc line has arguments (deferred), skipping: %s",
-+                        elf_path);
-+                    continue;
-+                }
-                 char elf_path1[160], elf_path2[160];
-                 int m = 0;
--                for (int i = 0; elf_path[i]; ++i)
-+                // Audit S3 (#77): explicit bound (safe by the n<127
-+                // upstream invariant today, self-evident with the guard).
-+                for (int i = 0; elf_path[i] && m < 150; ++i)
-                     elf_path1[m++] = elf_path[i];
-                 elf_path1[m++] = '.';
-                 elf_path1[m++] = 'e';
-@@ -199,7 +218,7 @@ void init_task_main() {
-                 elf_path1[m++] = 'f';
-                 elf_path1[m] = '\0';
-                 m = 0;
--                for (int i = 0; elf_path[i]; ++i)
-+                for (int i = 0; elf_path[i] && m < 150; ++i)
-                     elf_path2[m++] = elf_path[i];
-                 elf_path2[m++] = '.';
-                 elf_path2[m++] = 'c';
-@@ -213,20 +232,100 @@ void init_task_main() {
-                     f = initrd::find(elf_path1);
-                 if (!f.data)
-                     f = initrd::find(elf_path2);
--                if (f.data) {
-+                if (!f.data) {
-+                    kernel::Logger::warn("init: rc file not found: %s",
-+                                         elf_path);
-+                    continue;
-+                }
-+                // Converged background load (issue #77 step 1): the shell
-+                // `runelf` and rc share the ElfLoader + take_completed
-+                // path; direct elf::load keeps no activation role.
-+                {
-                     auto *hdr =
-                         reinterpret_cast<const kernel::elf::ELF64Header *>(
-                             f.data);
--                    if (kernel::elf::validate_header(hdr)) {
--                        auto *task = kernel::elf::load(hdr, f.data, f.size);
--                        if (task) {
--                            task->priority = 2;
--                            task->base_priority = 2;
--                            task->period_ticks = 0;
--                            kernel::Scheduler::add_task(*task);
--                            kernel::Logger::info("init: started %s", elf_path);
--                        }
-+                    if (!kernel::elf::validate_header(hdr)) {
-+                        kernel::Logger::warn("init: rc invalid ELF: %s",
-+                                             elf_path);
-+                        continue;
-+                    }
-+                    // Issue #77 step 4 / S3: dynamic/interp images rejected
-+                    // with a clear boot-log error — never silently loaded
-+                    // to die at rip 0. Shared validate_header stays
-+                    // ET_EXEC+ET_DYN-capable for the #95 shared-lib loader.
-+                    if (hdr->type != kernel::elf::ET_EXEC) {
-+                        kernel::Logger::warn(
-+                            "init: rc only ET_EXEC supported: %s", elf_path);
-+                        continue;
-+                    }
-+                    // Map the initrd-relative path into the VFS domain
-+                    // (initrd is mounted at /) for the loader, which
-+                    // re-resolves there.
-+                    char vfs_path[160];
-+                    int v = 0;
-+                    if (elf_path[0] != '/') {
-+                        vfs_path[v++] = '/';
-+                    }
-+                    for (int i = 0; elf_path[i] != '\0'; ++i) {
-+                        if (v >= 127)
-+                            break;
-+                        vfs_path[v++] = elf_path[i];
-+                    }
-+                    vfs_path[v] = '\0';
-+                    if (elf_path[v - (elf_path[0] != '/' ? 1 : 0)] != '\0') {
-+                        kernel::Logger::warn("init: rc path too long: %s",
-+                                             elf_path);
-+                        continue;
+         vfs::Vnode *tty = vfs::resolve("/dev/tty");
+-        if (tty && tcb->fd_table.get(0) && tcb->fd_table.get(0)->vnode == tty) {
+-            // keep std fds
+-        } else {
++        bool keep = (tty && tcb->fd_table.get(0) &&
++                     tcb->fd_table.get(0)->vnode == tty);
++        vfs::release(tty); // issue #268: probe only, not retained
++        if (!keep) {
+             for (int std_fd = 0; std_fd < 3; ++std_fd) {
+                 if (tcb->fd_table.get(std_fd)) {
+                     tcb->fd_table.free(std_fd);
+@@ -824,10 +830,14 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+                         tcb->fd_table.fds[fd].vnode = tty2;
+                         tcb->fd_table.fds[fd].offset = 0;
+                         tcb->fd_table.fds[fd].flags = 0;
++                        // Issue #268: one reference per fd (see
++                        // open_std_fds); drop the resolve() reference after.
++                        vfs::vnode_ref_inc(tty2);
+                         if (tty2->ops && tty2->ops->open)
+                             tty2->ops->open(*tty2, 0);
                      }
-+                    auto lres = kernel::elf::ElfLoader::request_load(vfs_path);
-+                    if (lres != kernel::elf::LoadResult::OK) {
-+                        kernel::Logger::warn(
-+                            "init: rc load not accepted for %s", elf_path);
-+                        continue;
-+                    }
-+                    kernel::elf::ElfLoader::wait_loader_idle();
-+                    if (kernel::elf::ElfLoader::state() !=
-+                        kernel::elf::LoadState::DONE) {
-+                        kernel::Logger::warn("init: rc load failed: %s",
-+                                             elf_path);
-+                        continue;
-+                    }
-+                    kernel::TaskControlBlock *task =
-+                        kernel::elf::ElfLoader::take_completed();
-+                    if (!task) {
-+                        kernel::Logger::warn("init: rc load failed: %s",
-+                                             elf_path);
-+                        continue;
-+                    }
-+                    // Settled parameters BEFORE add_task (never add then
-+                    // mutate); priority via the scheduler helper (§11.4).
-+                    // Strictly periodic user task (prio 2 user band,
-+                    // period/deadline 100); FIXED keeps bitmap RMS dispatch
-+                    // (AUTO + finite deadline would enter EDF dispatch).
-+                    kernel::Scheduler::set_priority(*task, 2);
-+                    task->period_ticks = 100;
-+                    task->deadline_ticks = arch::Timer::ticks() + 100;
-+                    if (!kernel::Scheduler::set_sched_policy(
-+                            *task, kernel::SchedPolicy::FIXED)) {
-+                        kernel::elf::ElfLoader::destroy_completed_tcb(task);
-+                        kernel::Logger::warn(
-+                            "init: rc policy rejected: %s", elf_path);
-+                        continue;
-+                    }
-+                    // Admission BEFORE activation (S1): fail closed with a
-+                    // boot-log code; a denied image is destroyed via the
-+                    // loader teardown (never cleanup()+delete on a
-+                    // never-added TCB, never leaked).
-+                    kernel::errors::SchedulerError admit =
-+                        kernel::Scheduler::add_task_err(*task);
-+                    if (admit != kernel::errors::SCHED_ERR_OK) {
-+                        kernel::elf::ElfLoader::destroy_completed_tcb(task);
-+                        kernel::Logger::warn(
-+                            "init: rc admission denied for %s: %s", elf_path,
-+                            kernel::errors::error_string(admit));
-+                        continue;
-+                    }
-+                    kernel::Logger::info("init: started %s", elf_path);
                  }
++                vfs::release(tty2);
              }
          }
-@@ -299,10 +398,6 @@ void init_task_main() {
-         arch::hlt();
      }
- 
--    // ── Background ELF loader task (created before the test runner so it is
--    //    part of the snapshot baseline and survives snapshot_restore). ──
--    kernel::elf::ElfLoader::ensure_task();
--
-     // ── Run tests from init-task context (IF=1) ──────────────────
- #if defined(CONFIG_DEBUG)
-     kernel::Logger::info(
-@@ -1447,6 +1542,102 @@ extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
- ///        action is to terminate).
- /// @return true if signal was delivered (handler will run), false if task was
- /// terminated.
-+/// @brief dmesg codes for task-end reports (user request): clean exit vs
-+///        fault/signal death.  0xDBxx belongs to the ELF loader; 0xDCxx is
-+///        free (verified: no other 0xDC codes tree-wide).
-+#define TASK_END_DMESG_CLEAN 0xDC01
-+#define TASK_END_DMESG_FAULT 0xDC02
-+
-+/// @brief Stable message slots for task-end reports (dmesg stores the
-+///        pointer, so the text must outlive the call).  Four slots tolerate
-+///        a fault-death nesting inside another report; overwrites only
-+///        recycle the oldest line.
-+namespace {
-+char s_taskend_msg[4][160];
-+uint32_t s_taskend_idx = 0;
-+} // namespace
-+
-+/// @brief One-line cause phrase for a CPU fault vector (x86 numbers; other
-+///        arches pass vector 0 and get the generic wording).
-+const char *task_fault_cause(uint64_t vector) {
-+    switch (vector) {
-+    case 0:
-+        return "divide error";
-+    case 6:
-+        return "invalid opcode";
-+    case 13:
-+        return "general protection";
-+    case 14:
-+        return "access violation";
-+    default:
-+        return "fault";
-+    }
-+}
-+
-+void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
-+                          uint64_t code_or_sig, uint64_t vector) {
-+    // User tasks outside test mode only: kernel-task churn (daemons,
-+    // reapers, test fixtures by the hundreds) would flood the console.
-+    if (!task.is_user_ || kernel::Scheduler::is_test_active())
-+        return;
-+    char *slot = s_taskend_msg[__atomic_fetch_add(&s_taskend_idx, 1U,
-+                                                  __ATOMIC_RELAXED) %
-+                               4];
-+    int n = 0;
-+    auto append_str = [&slot, &n](const char *s) {
-+        while (*s && n < 159)
-+            slot[n++] = *s++;
-+    };
-+    auto append_dec = [&slot, &n](uint64_t v) {
-+        char tmp[24];
-+        int ti = 0;
-+        if (v == 0)
-+            tmp[ti++] = '0';
-+        while (v > 0 && ti < 23) {
-+            tmp[ti++] = static_cast<char>('0' + (v % 10));
-+            v /= 10;
-+        }
-+        while (ti > 0 && n < 159)
-+            slot[n++] = tmp[--ti];
-+    };
-+    append_str("Task #");
-+    append_dec(task.id);
-+    append_str(" '");
-+    for (size_t i = 0; i < CONFIG_TASK_NAME_LEN && task.name[i] != '\0';
-+         ++i) {
-+        if (n < 159)
-+            slot[n++] = task.name[i];
-+    }
-+    append_str("' ");
-+    if (clean) {
-+        append_str("exited (code ");
-+        append_dec(code_or_sig);
-+        append_str(")");
-+        slot[n] = '\0';
-+        kernel::log::dmesg_push_base(TASK_END_DMESG_CLEAN, slot, 0);
-+        kernel::Logger::info("%s", slot);
-+    } else {
-+        append_str("faulted: ");
-+        append_str(task_fault_cause(vector));
-+        append_str(" (");
-+        if (vector != 0) {
-+            append_str(kernel::exception_to_signal(vector).name);
-+        } else {
-+            append_str("signal ");
-+            append_dec(code_or_sig);
-+        }
-+        append_str(")");
-+        slot[n] = '\0';
-+        kernel::log::dmesg_push_base(TASK_END_DMESG_FAULT, slot, 0);
-+        kernel::Logger::error("%s", slot);
-+    }
-+    // Framebuffer console (user request): Logger serves serial/dmesg only.
-+    // write_fb renders pixels without touching serial (no duplicate lines)
-+    // or the shell capture buffer.
-+    service::Terminal::write_fb(slot);
-+    service::Terminal::write_fb("\n");
-+}
-+
- static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
-                                    uint64_t vector, uint64_t error_code,
-                                    uint64_t rip, uint64_t *regs) {
-@@ -1543,6 +1734,9 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
-         kernel::Logger::error("  CR2=%x", cr2_val);
+diff --git a/src/kernel/elf/elf_shared.cpp b/src/kernel/elf/elf_shared.cpp
+index 4ca1a6d14..c9c8afa47 100644
+--- a/src/kernel/elf/elf_shared.cpp
++++ b/src/kernel/elf/elf_shared.cpp
+@@ -501,11 +501,13 @@ static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
+     path[sizeof(path) - 1] = '\0';
+     vfs::Vnode *vn = vfs::resolve(path);
+     if (!vn || !vn->ops || !vn->ops->read || vn->size != slot->file_size) {
++        vfs::release(vn); // issue #268 (null-safe)
+         return ElfError::NOT_FOUND; // Missing or changed under us.
      }
-     dump_regs(regs);
-+    // User task-end report (user request): one line with the cause on
-+    // dmesg + serial + framebuffer; the detail lines above stay.
-+    report_user_task_end(*task, false, sig, vector);
-     // INV-5: terminate dequeues so the task is never left inrq=1 outside the
-     // physical queue. Issue #197: an AP-live target is left alive instead
-     // (the owning CPU's own exit path terminates it).
-@@ -1557,6 +1751,7 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
-     (void)rip;
-     kernel::Logger::error("Task %x: signal %x (aarch64 stub, terminating)",
-                           task->id, sig);
-+    report_user_task_end(*task, false, sig, 0);
-     task->state = kernel::TaskState::TERMINATED;
-     task->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
-     return false;
-@@ -1566,6 +1761,7 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
-     (void)rip;
-     kernel::Logger::error("Task %x: signal %x (riscv64 stub, terminating)",
-                           task->id, sig);
-+    report_user_task_end(*task, false, sig, 0);
-     task->state = kernel::TaskState::TERMINATED;
-     task->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
-     return false;
-diff --git a/src/kernel/kernel.hpp b/src/kernel/kernel.hpp
-index 0e78bba3a..c7f6bace2 100644
---- a/src/kernel/kernel.hpp
-+++ b/src/kernel/kernel.hpp
-@@ -53,3 +53,22 @@ extern uint8_t kernel_stack[];
- /// @param size   Buffer size.
- /// @param wall_ns  Nanoseconds since 1970-01-01 00:00:00 UTC.
- void format_datetime(char *buf, size_t size, uint64_t wall_ns);
-+
-+namespace kernel {
-+class TaskControlBlock;
-+} // namespace kernel
-+
-+/// @brief Reports a user task's end (clean exit code or fault reason) to
-+///        dmesg + serial log + framebuffer console (user request: an app
-+///        ending unexpectedly — or even cleanly, which may itself be
-+///        unintended — must say why).  Gated inside on user tasks outside
-+///        test mode (kernel-task churn and test fixtures stay quiet), so
-+///        call sites stay unconditional.
-+/// @param task         The ending task (name/id read here).
-+/// @param clean        True for sys_exit (code_or_sig = exit status),
-+///                     false for signal/fault death (code_or_sig = signal).
-+/// @param code_or_sig  Exit status or signal number.
-+/// @param vector       CPU fault vector for cause text (x86 fault path);
-+///                     0 when not applicable (generic "fault" wording).
-+void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
-+                          uint64_t code_or_sig, uint64_t vector);
-diff --git a/src/kernel/log/dmesg.hpp b/src/kernel/log/dmesg.hpp
-index 15428610e..559c87b94 100644
---- a/src/kernel/log/dmesg.hpp
-+++ b/src/kernel/log/dmesg.hpp
-@@ -314,11 +314,14 @@ inline bool dmesg_push_base(uint64_t err, const char *msg,
+     uint64_t npages = 0;
+     uint64_t buf = read_image_pages(vn, vn->size, &npages, ctx);
+     if (buf == 0) {
++        vfs::release(vn); // issue #268
+         return ElfError::NOMEM;
+     }
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+@@ -517,6 +519,7 @@ static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
+     uint64_t npg = slot->num_phys_pages;
+     if (npg > MAX_LIB_PHYS_PAGES) {
+         free_image_pages(buf, npages);
++        vfs::release(vn); // issue #268: owned on every exit
+         return ElfError::INVALID_ELF; // Corrupt slot: fail closed.
+     }
+     for (uint64_t i = 0; i < npg; ++i) {
+@@ -574,6 +577,7 @@ static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
+     }
+     if (err != ElfError::OK) {
+         free_image_pages(buf, npages);
++        vfs::release(vn); // issue #268
+         return err;
+     }
+     // Relocate the fresh RW copies for this task (same values: fixed
+@@ -587,6 +591,7 @@ static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
+         ctx->image_count >= MAX_DEP_DEPTH + 1) {
+         free_image_pages(buf, npages);
+         SharedLibCache::instance().release(name);
++        vfs::release(vn); // issue #268
+         return ElfError::NOMEM;
+     }
+     SharedLibCache::instance().acquire(name);
+@@ -609,10 +614,12 @@ static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
+         --ctx->acquired_count;
+         free_image_pages(buf, npages);
+         SharedLibCache::instance().release(name);
++        vfs::release(vn); // issue #268
+         return ElfError::INVALID_ELF;
+     }
+     ctx->mapped_bytes += slot->load_size;
+     *out_base = slot->load_base;
++    vfs::release(vn); // issue #268: image retained in ctx, vnode done
+     return ElfError::OK;
  }
  
- /// @brief True when a base-subsystem code is an informational event rather
--///        than a fault: daemon lifecycle (0xDA00-0xDAFF) and background ELF
--///        loader (0xDB00-0xDBFF) ranges.  Used by the dmesg renderers to
--///        print INFO= instead of ERR=.
-+///        than a fault: daemon lifecycle (0xDA00-0xDAFF), background ELF
-+///        loader (0xDB00-0xDBFF), and user task-end reports (0xDC00-0xDCFF)
-+///        ranges.  Used by the dmesg renderers to print INFO= instead of
-+///        ERR=.  A new event family MUST extend both this predicate and
-+///        base_error_string below, or its lines render as ERR=<stale enum>.
- inline bool base_code_is_info(uint64_t code) {
--    return (code & ~0xFFULL) == 0xDA00 || (code & ~0xFFULL) == 0xDB00;
-+    return (code & ~0xFFULL) == 0xDA00 || (code & ~0xFFULL) == 0xDB00 ||
-+           (code & ~0xFFULL) == 0xDC00;
+@@ -853,14 +860,17 @@ static ElfError load_fresh(const char *name, LoadedLibrary *slot,
+     path[sizeof(path) - 1] = '\0';
+     vfs::Vnode *vn = vfs::resolve(path);
+     if (!vn || !vn->ops || !vn->ops->read) {
++        vfs::release(vn); // issue #268 (null-safe)
+         return ElfError::NOT_FOUND;
+     }
+     uint64_t size = vn->size;
+     if (size == 0 || size > MAX_SO_FILE_SIZE) {
++        vfs::release(vn); // issue #268
+         return ElfError::NOMEM;
+     }
+     uint64_t npages = 0;
+     uint64_t buf = read_image_pages(vn, size, &npages, ctx);
++    vfs::release(vn); // issue #268: image buffered, vnode unneeded below
+     if (buf == 0) {
+         return ElfError::NOMEM;
+     }
+diff --git a/src/kernel/syscall/syscall_handlers_fs.cpp b/src/kernel/syscall/syscall_handlers_fs.cpp
+index 238f338c9..07771ce69 100644
+--- a/src/kernel/syscall/syscall_handlers_fs.cpp
++++ b/src/kernel/syscall/syscall_handlers_fs.cpp
+@@ -159,11 +159,18 @@ static bool resolve_then_authorize(uint64_t op_type, uint64_t pid,
+     if (!vn)
+         return false;
+     uint64_t ino = vn->ino;
+-    if (!vfsd_authorize(op_type, pid, path, ino))
++    if (!vfsd_authorize(op_type, pid, path, ino)) {
++        vfs::release(vn); // issue #268
+         return false;
++    }
+     vfs::Vnode *vn2 = vfs::resolve(path);
+-    if (!vn2 || vn2 != vn || vn2->ino != ino)
++    // Compare BEFORE releasing (vn may be freed by the release below).
++    bool ok = (vn2 && vn2 == vn && vn2->ino == ino);
++    vfs::release(vn);
++    if (!ok) {
++        vfs::release(vn2);
+         return false;
++    }
+     out_vn = vn2;
+     return true;
  }
- 
- /// @brief Return a human-readable string for a base-subsystem error code.
-@@ -326,6 +329,7 @@ inline bool base_code_is_info(uint64_t code) {
- ///        a custom range for event codes:
- ///          0xDA00 – 0xDAFF  daemon lifecycle events
- ///          0xDB00 – 0xDBFF  background ELF loader events
-+///          0xDC00 – 0xDCFF  user task-end reports (clean exit / fault)
- inline const char *base_error_string(uint64_t code) {
-     // Custom event ranges
-     if ((code & ~0xFFULL) == 0xDA00) {
-@@ -372,6 +376,17 @@ inline const char *base_error_string(uint64_t code) {
+@@ -175,16 +182,25 @@ static bool resolve_parent_then_authorize(uint64_t op_type, uint64_t pid,
+                                           vfs::Vnode *&out_parent) {
+     const char *name = nullptr;
+     vfs::Vnode *parent = vfs::resolve_parent(path, name);
+-    if (!parent || !name || !*name)
++    if (!parent || !name || !*name) {
++        vfs::release(parent); // issue #268 (null-safe)
+         return false;
++    }
+     uint64_t ino = parent->ino;
+-    if (!vfsd_authorize(op_type, pid, path, ino))
++    if (!vfsd_authorize(op_type, pid, path, ino)) {
++        vfs::release(parent);
+         return false;
++    }
+     const char *name2 = nullptr;
+     vfs::Vnode *parent2 = vfs::resolve_parent(path, name2);
+-    if (!parent2 || parent2 != parent || parent2->ino != ino || !name2 ||
+-        *name2 == '\0')
++    // Compare BEFORE releasing (parent may be freed by the release below).
++    bool ok = (parent2 && parent2 == parent && parent2->ino == ino && name2 &&
++               *name2 != '\0');
++    vfs::release(parent);
++    if (!ok) {
++        vfs::release(parent2);
+         return false;
++    }
+     out_name = name2;
+     out_parent = parent2;
+     return true;
+@@ -204,8 +220,14 @@ uint64_t Syscall::sys_open(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
+         path = path_buf;
+     }
+     vfs::Vnode *vn = nullptr;
+-    if (resolve_then_authorize(vfsd::VFS_OPEN, pid, path, vn))
+-        return static_cast<uint64_t>(syscall_task_open(vn, arg1));
++    if (resolve_then_authorize(vfsd::VFS_OPEN, pid, path, vn)) {
++        // Ownership transfers to the fd slot on success; release when
++        // the table is full (issue #268).
++        int fd = syscall_task_open(vn, arg1);
++        if (fd < 0)
++            vfs::release(vn);
++        return static_cast<uint64_t>(fd);
++    }
+     if (arg1 & vfs::O_CREAT) {
+         // Target does not exist yet — authorize + create in the parent dir.
+         const char *name = nullptr;
+@@ -215,10 +237,15 @@ uint64_t Syscall::sys_open(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
+             if (parent->ops && parent->ops->create &&
+                 parent->ops->create(*parent, name, vfs::S_IFREG) == 0) {
+                 vfs::Vnode *created = vfs::resolve(path);
+-                if (created)
+-                    return static_cast<uint64_t>(syscall_task_open(created,
+-                                                                  arg1));
++                if (created) {
++                    int fd = syscall_task_open(created, arg1);
++                    if (fd < 0)
++                        vfs::release(created);
++                    vfs::release(parent);
++                    return static_cast<uint64_t>(fd);
++                }
+             }
++            vfs::release(parent); // issue #268
          }
-         return "ELF loader event";
      }
-+    if ((code & ~0xFFULL) == 0xDC00) {
-+        switch (code) {
-+        case 0xDC01:
-+            return "Task exited";
-+        case 0xDC02:
-+            return "Task faulted";
-+        default:
-+            break;
-+        }
-+        return "Task end event";
+     return static_cast<uint64_t>(-1);
+@@ -477,24 +504,33 @@ uint64_t Syscall::sys_stat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
+     }
+     vfs::Vnode *vn = nullptr;
+     if (!resolve_then_authorize(vfsd::VFS_STAT, pid, path, vn) || !vn ||
+-        !vn->ops->fstat)
++        !vn->ops->fstat) {
++        vfs::release(vn); // issue #268 (null-safe)
+         return static_cast<uint64_t>(-1);
 +    }
-     // Standard kernel::Error range (0–9)
-     switch (static_cast<kernel::Error>(code)) {
-     case kernel::Error::OK:
-diff --git a/src/kernel/syscall/syscall_handlers_misc.cpp b/src/kernel/syscall/syscall_handlers_misc.cpp
-index 28b417e2d..9988fa095 100644
---- a/src/kernel/syscall/syscall_handlers_misc.cpp
-+++ b/src/kernel/syscall/syscall_handlers_misc.cpp
-@@ -21,6 +21,7 @@
- /// get_ticks, exit, etc.
- 
- #include <kernel/syscall/syscall.hpp>
-+#include <kernel/kernel.hpp>
- #include <kernel/syscall/syscall_helpers.hpp>
- #include <kernel/log/dmesg.hpp>
- #include <kernel/random.hpp>
-@@ -93,6 +94,10 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
-     if (t) {
-         t->state = TaskState::TERMINATED;
-         t->exit_code = arg0;
-+        // User task-end report (user request): clean exit with return
-+        // code on dmesg + serial + framebuffer.  Gated inside on user
-+        // tasks outside test mode.
-+        report_user_task_end(*t, true, arg0, 0);
- 
-         // If the exiting task is the current running task (the normal case for
-         // sys_exit), we must switch the CPU off it BEFORE returning to user
-diff --git a/src/kernel/test/test_dmesg.cpp b/src/kernel/test/test_dmesg.cpp
-index f3254600f..9ce8506e0 100644
---- a/src/kernel/test/test_dmesg.cpp
-+++ b/src/kernel/test/test_dmesg.cpp
-@@ -367,6 +367,26 @@ JARVIS_TEST(dmesg_base_error_strings, "PRE: none | POST: none") {
-                          log::base_error_string(0xDAFFULL))
-             == 0,
-         "expected Daemon event");
-+    JARVIS_ASSERT_FMT(
-+        __builtin_strcmp("Task exited", log::base_error_string(0xDC01ULL))
-+            == 0,
-+        "expected Task exited");
-+    JARVIS_ASSERT_FMT(
-+        __builtin_strcmp("Task faulted", log::base_error_string(0xDC02ULL))
-+            == 0,
-+        "expected Task faulted");
-+    JARVIS_ASSERT_FMT(
-+        __builtin_strcmp("Task end event",
-+                         log::base_error_string(0xDCFFULL))
-+            == 0,
-+        "expected Task end event");
-+    // Issue #77 live session: a new event family must also be INFO-classed,
-+    // or its lines render as ERR=<stale enum> (0xDC01 showed "Out of
-+    // memory" before the predicate knew the range).
-+    JARVIS_ASSERT(log::base_code_is_info(0xDC01ULL));
-+    JARVIS_ASSERT(log::base_code_is_info(0xDC02ULL));
-+    JARVIS_ASSERT(!log::base_code_is_info(
-+        static_cast<uint64_t>(kernel::Error::OOM)));
-     JARVIS_ASSERT_FMT(
-         __builtin_strcmp("Unknown base error",
-                          log::base_error_string(9999ULL))
-diff --git a/src/kernel/test/test_elf_loader.cpp b/src/kernel/test/test_elf_loader.cpp
-index 4474f9080..4c4f0321d 100644
---- a/src/kernel/test/test_elf_loader.cpp
-+++ b/src/kernel/test/test_elf_loader.cpp
-@@ -29,6 +29,7 @@
- #include <kernel/task/task.hpp>
- #include <kernel/arch/timer.hpp>
- #include <kernel/test/test_isolate.hpp>
-+#include <kernel/test/resource_tracker.hpp>
- #include <string.hpp>
- 
- using namespace kernel;
-@@ -150,6 +151,34 @@ JARVIS_TEST(loader_load_invalid_elf, "PRE: vfsd, iocd | POST: none") {
-     JARVIS_TEST_PASS();
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto st = checked(reinterpret_cast<vfs::VfsStat *>(arg1));
+-    if (syscall_is_user_task() && !st.valid())
++    if (syscall_is_user_task() && !st.valid()) {
++        vfs::release(vn); // issue #268
+         return static_cast<uint64_t>(-1);
++    }
+     // MP-4 (SMAP): local VfsStat + safe_copy_to_user (see sys_fstat).
+     vfs::VfsStat kst{};
+     int rstat = vn->ops->fstat(*vn, kst);
+-    if (rstat != 0)
++    if (rstat != 0) {
++        vfs::release(vn); // issue #268
+         return static_cast<uint64_t>(rstat);
++    }
+     // Issue #175: kernel-task callers need the result too (see sys_fstat).
+     if (syscall_is_user_task()) {
+-        if (!safe_copy_to_user(st.unsafe_ptr(), &kst, 1))
++        if (!safe_copy_to_user(st.unsafe_ptr(), &kst, 1)) {
++            vfs::release(vn); // issue #268
+             return static_cast<uint64_t>(-1);
++        }
+     } else {
+         *st.unsafe_ptr() = kst;
+     }
++    vfs::release(vn); // issue #268
+     return 0;
  }
  
-+// Runmode: kernel
-+// Testidea: Live-session finding (#77 report) — request_load on an initrd
-+// path leaked the resolve-result vnode (InitrdFileNode+Vnode, never
-+// released), so repeated `load`s exhausted MemPool until every resolve
-+// failed with FILE_NOT_FOUND. The tmpfs-staged tests never caught it:
-+// tmpfs lookups don't allocate initrd nodes.
-+// Input: request_load("/hey.c.elf") (initrd-resident ET_EXEC demo) ->
-+// wait -> take -> destroy, with vnode counters captured around the cycle.
-+// Expect: take succeeds (proves initrd-path loads work); vnode count
-+// identical before/after (pre-fix: +2 per request).
-+// Depends: ElfLoader request/wait/take/destroy, initrd mount at /
-+JARVIS_TEST(loader_initrd_request_no_vnode_leak, "PRE: vfsd, iocd | POST: none") {
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+    elf::ElfLoader::reset();
-+    auto result = elf::ElfLoader::request_load("/hey.c.elf");
-+    JARVIS_ASSERT(result == elf::LoadResult::OK);
-+    elf::ElfLoader::wait_loader_idle();
-+    auto *t = elf::ElfLoader::take_completed();
-+    JARVIS_ASSERT(t != nullptr);
-+    elf::ElfLoader::destroy_completed_tcb(t);
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
-+    JARVIS_TEST_PASS();
-+}
-+
- // Runmode: kernel
- // Testidea: cancel mid-load reclaims all partial state (zero delta) and the
- // loader returns to IDLE.  An 8-page load is started; cancel is requested
-@@ -325,4 +354,5 @@ void register_elf_loader_tests() {
-     JARVIS_REGISTER_TEST(loader_multiple_cycles);
-     JARVIS_REGISTER_TEST(loader_preemption_yield);
-     JARVIS_REGISTER_TEST(loader_lost_wakeup_race);
-+    JARVIS_REGISTER_TEST(loader_initrd_request_no_vnode_leak); // #77 leak
+@@ -537,16 +573,26 @@ uint64_t Syscall::sys_chdir(uint64_t arg0, uint64_t, uint64_t, uint64_t,
+     if (!resolve_then_authorize(vfsd::VFS_CHDIR, pid, path, vn) || !vn)
+         return static_cast<uint64_t>(-1);
+     auto *cur = syscall_task();
+-    if (!cur)
++    if (!cur) {
++        vfs::release(vn); // issue #268
+         return static_cast<uint64_t>(-1);
+-    if (!(vn->mode & vfs::S_IFDIR))
++    }
++    if (!(vn->mode & vfs::S_IFDIR)) {
++        vfs::release(vn); // issue #268
+         return static_cast<uint64_t>(-1);
++    }
+     cur->cwd_lock_.lock();
+-    if (cur->cwd_vnode)
+-        vfs::vnode_ref_dec(cur->cwd_vnode);
+-    cur->cwd_vnode = vn;
+-    vfs::vnode_ref_inc(vn);
+-    cur->cwd_lock_.unlock();
++    // Issue #268: transfer the resolve() reference to the task (no inc);
++    // when already there, drop just the fresh reference (alias-safe).
++    auto *old = cur->cwd_vnode;
++    if (vn == old) {
++        cur->cwd_lock_.unlock();
++        vfs::release(vn);
++    } else {
++        cur->cwd_vnode = vn;
++        cur->cwd_lock_.unlock();
++        vfs::release(old);
++    }
+     size_t i = 0;
+     while (resolved_path[i] && i < 255) {
+         cur->cwd[i] = resolved_path[i];
+@@ -620,9 +666,12 @@ uint64_t Syscall::sys_mkdir(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
+     if (!resolve_parent_then_authorize(vfsd::VFS_MKDIR, pid, path, name,
+                                        parent))
+         return static_cast<uint64_t>(-1);
+-    if (!parent->ops || !parent->ops->mkdir)
++    if (!parent->ops || !parent->ops->mkdir) {
++        vfs::release(parent); // issue #268: owned parent, all exits
+         return static_cast<uint64_t>(-1);
++    }
+     int r = parent->ops->mkdir(*parent, name, static_cast<uint16_t>(arg1));
++    vfs::release(parent); // issue #268
+     return static_cast<uint64_t>(r == 0 ? 0 : -1);
  }
+ 
+@@ -644,9 +693,12 @@ uint64_t Syscall::sys_unlink(uint64_t arg0, uint64_t, uint64_t, uint64_t,
+     if (!resolve_parent_then_authorize(vfsd::VFS_UNLINK, pid, path, name,
+                                        parent))
+         return static_cast<uint64_t>(-1);
+-    if (!parent->ops || !parent->ops->unlink)
++    if (!parent->ops || !parent->ops->unlink) {
++        vfs::release(parent); // issue #268: owned parent, all exits
+         return static_cast<uint64_t>(-1);
++    }
+     int r = parent->ops->unlink(*parent, name);
++    vfs::release(parent); // issue #268
+     return static_cast<uint64_t>(r == 0 ? 0 : -1);
+ }
+ 
+@@ -669,9 +721,12 @@ uint64_t Syscall::sys_rmdir(uint64_t arg0, uint64_t, uint64_t, uint64_t,
+     if (!resolve_parent_then_authorize(vfsd::VFS_RMDIR, pid, path, name,
+                                        parent))
+         return static_cast<uint64_t>(-1);
+-    if (!parent->ops || !parent->ops->unlink)
++    if (!parent->ops || !parent->ops->unlink) {
++        vfs::release(parent); // issue #268: owned parent, all exits
+         return static_cast<uint64_t>(-1);
++    }
+     int r = parent->ops->unlink(*parent, name);
++    vfs::release(parent); // issue #268
+     return static_cast<uint64_t>(r == 0 ? 0 : -1);
+ }
+ 
+diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
+index 1e8b512cb..a1bb2b46a 100644
+--- a/src/kernel/syscall/syscall_handlers_process.cpp
++++ b/src/kernel/syscall/syscall_handlers_process.cpp
+@@ -234,21 +234,31 @@ uint64_t Syscall::sys_exec(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+     // VULN-H4/W1 + VULN-U2: validate both arrays with hard bounds and
+     // accumulate the combined string length for the stack-reservation check.
+     uint64_t str_total = 0;
+-    if (!validate_argv_envp(argv, true, &str_total))
++    if (!validate_argv_envp(argv, true, &str_total)) {
++        vfs::release(vn); // issue #268: vn already owned here
+         return static_cast<uint64_t>(-1);
+-    if (!validate_argv_envp(envp, true, &str_total))
++    }
++    if (!validate_argv_envp(envp, true, &str_total)) {
++        vfs::release(vn); // issue #268
+         return static_cast<uint64_t>(-1);
+-    if (vn->size == 0 || vn->size > 512_KiB)
++    }
++    if (vn->size == 0 || vn->size > 512_KiB) {
++        vfs::release(vn); // issue #268
+         return static_cast<uint64_t>(-1);
++    }
+     size_t file_pages = (static_cast<size_t>(vn->size) + 4095) / 4096;
+     uint64_t file_phys = PMM::alloc_contiguous(file_pages);
+-    if (!file_phys)
++    if (!file_phys) {
++        vfs::release(vn); // issue #268
+         return static_cast<uint64_t>(-1);
++    }
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     uint8_t *file_buf =
+         reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + file_phys);
+-    int64_t r = vn->ops->read(*vn, file_buf, vn->size, 0);
+-    if (r <= 0 || static_cast<uint64_t>(r) != vn->size) {
++    uint64_t want_size = vn->size; // capture before release below
++    int64_t r = vn->ops->read(*vn, file_buf, want_size, 0);
++    vfs::release(vn); // issue #268: image is buffered, vnode unneeded below
++    if (r <= 0 || static_cast<uint64_t>(r) != want_size) {
+         for (size_t i = 0; i < file_pages; ++i)
+             PMM::free_page(file_phys + i * 4096);
+         return static_cast<uint64_t>(-1);
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 9a1fa19f4..259dadfed 100644
+index 259dadfed..52f9567fb 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
 @@ -74,7 +74,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      // process
      {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
      {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
--    {"elf_loader",            8,    0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield)
-+    {"elf_loader",            9,    0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77)
+-    {"elf_loader",            9,    0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77)
++    {"elf_loader",            13,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet)
      {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)
      {"process_signals",       8,    0,       0      },  // signal delivery/handling
      {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
-@@ -228,7 +228,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"memory_checked_ptr_api", 9,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views
-     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
-     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
--    {"shell_commands",       30,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source
-+    {"shell_commands",       31,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77)
-     {"services_framework",    7,    0,       0      },  // services framework (issue #125): terminal colors, length-bounded write, cursor/splash, fb gate, scroll, program registry bounds
-     {"ui_framebuffer",        5,    0,       0      },  // framebuffer init/putpixel/clear/scroll
- 
-@@ -241,7 +241,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
- 
-     // logging / debug
-     {"logging_dmesg",        15,    0,       0      },  // DmesgBuffer + error strings + suppression
--    {"logging_klog",          8,    0,       0      },  // kernel log read/wrap/concurrent
-+    {"logging_klog",          9,    0,       0      },  // kernel log read/wrap/concurrent + task-end silence gate (user request)
-     {"debug_core",            2,    0,       0      },  // write formats + switch logs (qemu_debug_exit tests disabled)
-     {"debug_gcov",            4,    0,       0      },  // GCOV coverage metadata
- 
-@@ -276,8 +276,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"core",                441,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 2 block-arm tests (issue #212)
-     {"ipc",                 81,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208)
+@@ -278,7 +278,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
--    {"proc_elf",            83,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 5 (issues #173, #75)
--    {"libc_verify",          5,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only)
-+    {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
-+    {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
-     {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
+     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
+     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
+-    {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
++    {"storage",             147,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268)
      {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
      {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
-diff --git a/src/kernel/test/test_klog.cpp b/src/kernel/test/test_klog.cpp
-index a97a16b2a..b150da1ca 100644
---- a/src/kernel/test/test_klog.cpp
-+++ b/src/kernel/test/test_klog.cpp
-@@ -22,7 +22,12 @@
- #include <test.hpp>
- #include <logger.hpp>
- #include <kernel/log/ring_buffer.hpp>
-+#include <kernel/log/dmesg.hpp>
- #include <kernel/memory/checked_ptr.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/arch/irq_guard.hpp>
-+#include <kernel/kernel.hpp>
- #include <string.hpp>
+     {"hal",                 121,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199)
+diff --git a/src/kernel/test/test_vfs.cpp b/src/kernel/test/test_vfs.cpp
+index 568bb36f6..ee0cb722b 100644
+--- a/src/kernel/test/test_vfs.cpp
++++ b/src/kernel/test/test_vfs.cpp
+@@ -25,6 +25,8 @@
+ #include <kernel/vfs/pipe.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
++#include <kernel/test/resource_tracker.hpp>
++#include <kernel/syscall/syscall_helpers.hpp>
  
  using namespace kernel;
-@@ -203,6 +208,34 @@ JARVIS_TEST(klog_read_partial, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
+ using namespace kernel::vfs;
+@@ -412,6 +414,119 @@ JARVIS_TEST(vfs_pipe_read_write, "PRE: vfsd, iocd | POST: none") {
+ // Input: None
+ // Expect: Each JARVIS_REGISTER_TEST call adds the test to the suite.
+ // Depends: kernel::test
++
 +// Runmode: kernel
-+// Testidea: User request — task-end reports (clean code / fault reason to
-+// dmesg + serial + framebuffer) must stay silent in test mode, or hundreds
-+// of fixtures would flood the console. Both paths through the gate.
-+// Input: Real (added, never dispatched) user task; call the reporter for
-+// clean exit and fault death; dmesg size before/after.
-+// Expect: dmesg size unchanged (early return inside the gate); teardown
-+// via the never-dispatched pattern (remove+cleanup+delete).
-+// Depends: report_user_task_end gate (is_user_ + !is_test_active)
-+JARVIS_TEST(task_end_report_silent_in_tests, "PRE: none | POST: none") {
-+    auto *t = TaskControlBlock::create([]() {}, 11, 10);
-+    JARVIS_ASSERT(t != nullptr);
-+    t->is_user_ = true;
-+    size_t d0 = 0;
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*t);
-+        d0 = log::DmesgService::instance().size();
-+        ::report_user_task_end(*t, true, 0, 0);
-+        ::report_user_task_end(*t, false, 11, 14);
-+        JARVIS_ASSERT_EQ(d0, log::DmesgService::instance().size());
-+        Scheduler::remove_task(*t);
++// Testidea: issue #268 — repeated initrd resolve+release leaves the vnode
++// counters flat (pre-fix: +1 vnode per resolve, draining the 32-block
++// pool3 until every lookup fails).
++// Input: 40x resolve("/hey.c.elf") + release (initrd-resident demo ELF).
++// Expect: ResourceTracker vnodes identical before/after.
++// Depends: vfs::resolve OWNED convention + vfs::release.
++JARVIS_TEST(vfs_initrd_lookup_release_flat, "PRE: vfsd, iocd | POST: none") {
++    auto &rt = kernel::test::ResourceTracker::instance();
++    kernel::test::ResourceCounters before{};
++    rt.capture(before);
++    for (int i = 0; i < 40; ++i) {
++        auto *vn = vfs::resolve("/hey.c.elf");
++        JARVIS_ASSERT(vn != nullptr);
++        vfs::release(vn);
 +    }
-+    t->cleanup();
-+    delete t;
++    kernel::test::ResourceCounters after{};
++    rt.capture(after);
++    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
 +    JARVIS_TEST_PASS();
 +}
 +
- void register_klog_tests() {
-     Logger::info("Registering KLOG tests");
- 
-@@ -214,4 +247,5 @@ void register_klog_tests() {
-     JARVIS_REGISTER_TEST(klog_empty_read);
-     JARVIS_REGISTER_TEST(klog_clear);
-     JARVIS_REGISTER_TEST(klog_read_partial);
-+    JARVIS_REGISTER_TEST(task_end_report_silent_in_tests); // user request
- }
-\ No newline at end of file
-diff --git a/src/kernel/test/test_libc_verify.cpp b/src/kernel/test/test_libc_verify.cpp
-index 0100e3341..249730bba 100644
---- a/src/kernel/test/test_libc_verify.cpp
-+++ b/src/kernel/test/test_libc_verify.cpp
-@@ -35,6 +35,8 @@
- #include <kernel/task/task.hpp>
- #include <kernel/vfs/vfs.hpp>
- #include <kernel/arch/io.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/sync/semaphore.hpp>
- #include <kernel/arch/hal/irq_guard.hpp>
- #include <kernel/test/test_isolate.hpp>
- #include "test_sched_helpers.hpp"
-@@ -176,8 +178,10 @@ constexpr const char *kStdoutPath = "/tmp/libc_stdout.txt";
- 
- // Stage image + stdin, load, repoint fd 0, dispatch to EXIT with a
- // bounded join, capture serial markers, tear down. Returns observable
--// state; asserts happen after teardown (allocation-free).
--VerifyOutcome run_verify_program() {
-+// state; asserts happen after teardown (allocation-free). When admitted
-+// is true the dispatch goes through the wired #77 activation instead:
-+// settled parameters + FIXED policy + add_task_err admission.
-+VerifyOutcome run_verify_impl(bool admitted) {
-     VerifyOutcome out{};
-     elf::ElfLoader::reset();
-     if (write_image_file() == 0)
-@@ -269,17 +273,46 @@ VerifyOutcome run_verify_program() {
-     // lower-priority waitee forever after the first dispatch demotes the
-     // harness to READY (every driven test uses >= 11 for this reason).
-     // Set before add_task (not yet queued: no re-bucket needed).
--    t->priority = 11;
--    t->base_priority = 11;
-+    if (admitted) {
-+        // Issue #77 wired activation: settled parameters BEFORE add_task
-+        // (priority via the scheduler helper per §11.4); strictly periodic
-+        // user task (prio 2 user band, period/deadline 100); FIXED keeps
-+        // bitmap RMS dispatch (AUTO + finite deadline would enter EDF
-+        // dispatch). Admission BEFORE activation: fail closed — on denial
-+        // destroy via the loader teardown and report joined=false (no
-+        // harness asserts mid-flight; teardown discipline mirrors above).
-+        Scheduler::set_priority(*t, 2);
-+        t->period_ticks = 100;
-+        t->deadline_ticks = arch::Timer::ticks() + 100;
-+        bool pok = Scheduler::set_sched_policy(*t, SchedPolicy::FIXED);
-+        auto acode = Scheduler::add_task_err(*t);
-+        if (!pok || acode != errors::SCHED_ERR_OK) {
-+            elf::ElfLoader::destroy_completed_tcb(t);
-+            cleanup_image_file();
-+            cleanup_stdin_file();
-+            return out;
-+        }
-+    } else {
-+        t->priority = 11;
-+        t->base_priority = 11;
- 
--    {
--        arch::IrqGuard ig{};
--        Scheduler::add_task(*t);
-+        {
-+            arch::IrqGuard ig{};
-+            Scheduler::add_task(*t);
-+        }
-     }
-     Scheduler::reschedule();
--    for (uint64_t i = 0;
--         i < kJoinSpins && t->state != TaskState::TERMINATED; ++i)
--        arch::pause();
-+    if (admitted) {
-+        // Production-shape join: a spinning harness is never preempted for
-+        // lower peers (BUGS.md#021 harness protection — the legacy tests
-+        // dodge it with prio >= 11). need_resched + hlt yields every tick
-+        // until the admitted task exits, exactly like a blocking supervisor.
-+        test::wait_for_termination_safe(t);
-+    } else {
-+        for (uint64_t i = 0;
-+             i < kJoinSpins && t->state != TaskState::TERMINATED; ++i)
-+            arch::pause();
++// Runmode: kernel
++// Testidea: issue #268 regression guard — tmpfs cached vnodes are
++// borrowed (refcount 0), so resolve+release cycles must neither leak nor
++// double-free the cache entries (release is a no-op on them).
++// Input: mkdir + create nested tmpfs file, 20x resolve+release, then
++// resolve once more (cache entry must be alive and correct).
++// Expect: vnodes flat; final resolve non-null with S_IFREG.
++JARVIS_TEST(vfs_tmpfs_nested_resolve_balanced,
++            "PRE: vfsd, iocd | POST: none") {
++    JARVIS_ASSERT(vfs::mkdir("/tmp/d268", 0755) == 0);
++    JARVIS_ASSERT(vfs::create("/tmp/d268/f", vfs::S_IFREG) == 0);
++    auto &rt = kernel::test::ResourceTracker::instance();
++    kernel::test::ResourceCounters before{};
++    rt.capture(before);
++    for (int i = 0; i < 20; ++i) {
++        auto *vn = vfs::resolve("/tmp/d268/f");
++        JARVIS_ASSERT(vn != nullptr);
++        vfs::release(vn);
 +    }
-     bool exited = (t->state == TaskState::TERMINATED);
-     bool clean = exited && (t->exit_code == 0);
-     out.program_break = t->program_break;
-@@ -315,6 +348,21 @@ VerifyOutcome run_verify_program() {
-     return out;
- }
- 
-+// Legacy dispatch (prio 11, void add_task): the five original tests.
-+VerifyOutcome run_verify_program() { return run_verify_impl(false); }
-+
-+// Issue #77 wired activation: identical staging, admission-enforced
-+// dispatch (settled params + FIXED + add_task_err).
-+VerifyOutcome run_verify_wired() { return run_verify_impl(true); }
-+
-+// Filler entry for the denial pin: blocks on the gate (never posted until
-+// teardown) so admitted fillers stay alive-but-idle in the LUB sum.
-+void wired_deny_filler_entry() {
-+    auto *self = Scheduler::current_task();
-+    auto *gate = reinterpret_cast<sync::Semaphore *>(self->user_data);
-+    gate->wait();
-+}
-+
- } // namespace
- 
- // Runmode: kernel
-@@ -388,6 +436,60 @@ JARVIS_TEST(libc_verify_exit_clean_zero_delta, "PRE: vfsd | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Runmode: kernel
-+// Testidea: Issue #77 wired activation — the verify image runs to clean
-+// EXIT(0) through take_completed + settled params + FIXED + add_task_err
-+// (not the legacy prio-11 void-add_task dispatch).
-+// Input: Same staging; admitted dispatch at prio 2, period/deadline 100.
-+// Expect: Joined clean; capture contains LIBC_VERIFY: hello (proves the
-+// admitted task actually executed user code to EXIT, not merely admitted).
-+// Depends: ElfLoader take_completed, Scheduler::add_task_err (#77)
-+JARVIS_TEST(libc_verify_wired_activation, "PRE: vfsd | POST: none") {
-+    VerifyOutcome o = run_verify_wired();
-+    JARVIS_ASSERT(o.joined);
-+    JARVIS_ASSERT(o.clean_exit);
-+    JARVIS_ASSERT(serial_contains(o.capture, "LIBC_VERIFY: hello"));
++    kernel::test::ResourceCounters after{};
++    rt.capture(after);
++    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
++    auto *check = vfs::resolve("/tmp/d268/f");
++    JARVIS_ASSERT(check != nullptr);
++    JARVIS_ASSERT(check->mode & vfs::S_IFREG);
++    vfs::release(check);
++    JARVIS_ASSERT(vfs::unlink("/tmp/d268/f") == 0);
++    JARVIS_ASSERT(vfs::unlink("/tmp/d268") == 0);
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: Issue #77 denial branch — a wired activation refused by
-+// admission fails closed (no dispatch, no leak, joined=false).
-+// Input: Fill the task table with exempt gated fillers (period 0 skips
-+// the LUB gate, so the fill is ambient-independent) until add_task_err
-+// refuses; then the wired activation. Either refusal mode (TABLE_FULL
-+// or LUB over bound) exercises the same destroy-on-deny branch.
-+// Expect: joined==false; image destroyed via the loader teardown; zero
-+// ResourceTracker delta via isolation.
-+// Depends: Scheduler::add_task_err fail-closed paths (#20)
-+JARVIS_TEST(libc_verify_wired_denied, "PRE: vfsd | POST: none") {
-+    sync::Semaphore gate;
-+    gate.init(0, 1);
-+    TaskControlBlock *fillers[CONFIG_MAX_TASKS];
-+    uint64_t nfill = 0;
-+    for (uint64_t i = 0; i < static_cast<uint64_t>(CONFIG_MAX_TASKS); ++i) {
-+        auto *f =
-+            TaskControlBlock::create(wired_deny_filler_entry, 11, 0);
-+        if (f == nullptr)
-+            break;
-+        f->user_data = &gate;
-+        if (Scheduler::add_task_err(*f) != errors::SCHED_ERR_OK) {
-+            // Never admitted: fail-closed teardown (absent from tables).
-+            JARVIS_ASSERT(Scheduler::find_task(f->id) == nullptr);
-+            TaskControlBlock::destroy(f);
-+            break;
++// Testidea: issue #268 — mirror the shell `ls` coloring loop
++// (readdir + per-entry lookup) with releases: 3 full passes over the
++// initrd root must not move the vnode counters (pre-fix: +entries/pass).
++JARVIS_TEST(vfs_ls_lookup_loop_no_leak, "PRE: vfsd, iocd | POST: none") {
++    auto &rt = kernel::test::ResourceTracker::instance();
++    kernel::test::ResourceCounters before{};
++    rt.capture(before);
++    auto *root = vfs::resolve("/");
++    JARVIS_ASSERT(root != nullptr);
++    for (int pass = 0; pass < 3; ++pass) {
++        uint64_t pos = 0;
++        vfs::Dirent dent{};
++        while (root->ops->readdir(*root, pos, dent) == 0) {
++            if (dent.d_name[0] == '\0')
++                continue;
++            auto *child = root->ops->lookup(*root, dent.d_name);
++            vfs::release(child);
 +        }
-+        fillers[nfill++] = f;
 +    }
-+    VerifyOutcome o = run_verify_wired();
-+    JARVIS_ASSERT(!o.joined);
-+    gate.post();
-+    for (uint64_t i = 0; i < nfill; ++i)
-+        kernel::test::terminate_and_drain(*fillers[i]);
-+    Scheduler::drain_zombie_list();
++    vfs::release(root);
++    kernel::test::ResourceCounters after{};
++    rt.capture(after);
++    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
 +    JARVIS_TEST_PASS();
 +}
 +
- #endif // CONFIG_ARCH_X86_64
- 
- void register_libc_verify_tests() {
-@@ -398,5 +500,7 @@ void register_libc_verify_tests() {
-     JARVIS_REGISTER_TEST(libc_verify_malloc_reuse);
-     JARVIS_REGISTER_TEST(libc_verify_scanf_read);
-     JARVIS_REGISTER_TEST(libc_verify_exit_clean_zero_delta);
-+    JARVIS_REGISTER_TEST(libc_verify_wired_activation); // issue #77
-+    JARVIS_REGISTER_TEST(libc_verify_wired_denied);      // issue #77
- #endif
- }
-diff --git a/src/kernel/test/test_shell_commands.cpp b/src/kernel/test/test_shell_commands.cpp
-index 01ddc7106..e0348b5a8 100644
---- a/src/kernel/test/test_shell_commands.cpp
-+++ b/src/kernel/test/test_shell_commands.cpp
-@@ -36,6 +36,7 @@
- #include <kernel/vfs/vfs.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/task/scheduler.hpp>
-+#include <kernel/elf/elf_loader.hpp>
- #include <kernel/sync/semaphore.hpp>
- #include <kernel/arch/timer.hpp>
- #include <kernel/arch/io.hpp>
-@@ -220,6 +221,27 @@ JARVIS_TEST(shell_run_unknown_program_and_usage,
-     JARVIS_TEST_PASS();
- }
- 
 +// Runmode: kernel
-+// Testidea: Issue #77 bare-runelf contract — runelf takes no parameters
-+// (it runs the previously background-loaded ELF); with arguments it
-+// prints usage, and with no completed image it reports "no elf loaded".
-+// Input: Shell::execute("runelf a b"); reset loader, Shell::execute("runelf").
-+// Expect: usage line for the former ("Usage: runelf"); "no elf loaded"
-+// for the latter; neither touches the loader (argv rejected before take;
-+// empty take mutates nothing).
-+// Depends: service::Shell, Terminal capture, ElfLoader::reset
-+JARVIS_TEST(shell_runelf_bare_contract, "PRE: vfsd, iocd | POST: none") {
-+    char usage[k_capture_size];
-+    run_shell("runelf a b", usage, sizeof(usage));
-+    JARVIS_ASSERT(has(usage, "Usage: runelf"));
-+
-+    kernel::elf::ElfLoader::reset();
-+    char empty[k_capture_size];
-+    run_shell("runelf", empty, sizeof(empty));
-+    JARVIS_ASSERT(has(empty, "no elf loaded"));
++// Testidea: issue #268 — fd open/close cycles balance vnode + fd counters
++// on initrd (owned lookup vnodes) and tmpfs (borrowed cache vnodes).
++JARVIS_TEST(vfs_fd_open_close_balanced, "PRE: vfsd, iocd | POST: none") {
++    auto *cur = kernel::Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    JARVIS_ASSERT(vfs::create("/tmp/fd268", vfs::S_IFREG) == 0);
++    auto &rt = kernel::test::ResourceTracker::instance();
++    kernel::test::ResourceCounters before{};
++    rt.capture(before);
++    for (int i = 0; i < 10; ++i) {
++        auto *vn = vfs::resolve("/hey.c.elf");
++        JARVIS_ASSERT(vn != nullptr);
++        int fd = kernel::syscall_task_open(vn, vfs::O_RDONLY);
++        JARVIS_ASSERT(fd >= 0);
++        cur->fd_table.free(fd);
++    }
++    for (int i = 0; i < 10; ++i) {
++        auto *vn = vfs::resolve("/tmp/fd268");
++        JARVIS_ASSERT(vn != nullptr);
++        int fd = kernel::syscall_task_open(vn, vfs::O_RDONLY);
++        JARVIS_ASSERT(fd >= 0);
++        cur->fd_table.free(fd);
++    }
++    kernel::test::ResourceCounters after{};
++    rt.capture(after);
++    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
++    JARVIS_ASSERT_EQ(before.open_fds, after.open_fds);
++    JARVIS_ASSERT(vfs::unlink("/tmp/fd268") == 0);
 +    JARVIS_TEST_PASS();
 +}
 +
- // Runmode: kernel
- // Testidea: The job-control built-ins are documented stubs / no-ops: `fg`
- // and `bg` state that job control is not implemented, `disown` echoes the
-@@ -1122,4 +1144,5 @@ void register_shell_commands_tests() {
-     JARVIS_REGISTER_TEST(shell_top_zombie_rows_and_omission);
-     JARVIS_REGISTER_TEST(shell_top_sys_user_split);
-     JARVIS_REGISTER_TEST(shell_top_usage_contract);
-+    JARVIS_REGISTER_TEST(shell_runelf_bare_contract); // issue #77
+ void register_vfs_tests() {
+     Logger::info("Registering VFS tests");
+ 
+@@ -438,4 +553,8 @@ void register_vfs_tests() {
+     JARVIS_REGISTER_TEST(vfs_open_read_null);
+     JARVIS_REGISTER_TEST(vfs_write_fstat);
+     JARVIS_REGISTER_TEST(vfs_pipe_read_write);
++    JARVIS_REGISTER_TEST(vfs_initrd_lookup_release_flat); // #268
++    JARVIS_REGISTER_TEST(vfs_tmpfs_nested_resolve_balanced); // #268
++    JARVIS_REGISTER_TEST(vfs_ls_lookup_loop_no_leak); // #268
++    JARVIS_REGISTER_TEST(vfs_fd_open_close_balanced); // #268
  }
 diff --git a/src/kernel/vfs/vfs.cpp b/src/kernel/vfs/vfs.cpp
-index e430d6a55..90980f77f 100644
+index 90980f77f..898cc153e 100644
 --- a/src/kernel/vfs/vfs.cpp
 +++ b/src/kernel/vfs/vfs.cpp
-@@ -175,7 +175,15 @@ Vnode *resolve(const char *path) {
-             const char *mp = mount_table[i].mount_point;
-             size_t mplen = strlen(mp);
-             if (strncmp(path, mp, mplen) == 0) {
--                if (path[mplen] == '/' || path[mplen] == '\0') {
-+                // Live-session finding (#77 report): the root mount "/"
-+                // (mplen 1) must match every absolute path — requiring
-+                // path[1] to be '/' or NUL meant no direct child of /
-+                // ("/hey.c.elf", "/etc/rc") ever resolved, while submount
-+                // paths ("/tmp/x", "/dev/tty") worked. The separator
-+                // guard still applies to longer mount points ("/devXYZ"
-+                // must not match "/dev").
-+                if (mplen == 1 || path[mplen] == '/' ||
-+                    path[mplen] == '\0') {
-                     if (mplen > best_len) {
-                         best = &mount_table[i];
-                         best_len = mplen;
+@@ -165,6 +165,11 @@ Vnode *resolve(const char *path) {
+     bool is_absolute = (path[0] == '/');
+     const char *search = path;
+     Vnode *current = nullptr;
++    // Issue #268: ownership of `current`.  The initial node (mount root /
++    // cwd / global root) is BORROWED; every adopted `lookup()` result is
++    // OWNED and must be released before reassignment or on failure.  The
++    // final return is always OWNED (borrowed finals are inc'd on exit).
++    bool owned = false;
+ 
+     if (is_absolute) {
+         Mount *best = nullptr;
+@@ -223,6 +228,12 @@ Vnode *resolve(const char *path) {
+ 
+         if (comp[0] == '.' && comp[1] == '.' && comp[2] == '\0') {
+             if (current->parent) {
++                // Parent links are borrowed: drop an owned `current`
++                // first, then adopt borrowed (owned = false).
++                if (owned) {
++                    release(current);
++                    owned = false;
++                }
+                 current = current->parent;
+                 continue;
+             }
+@@ -244,16 +255,29 @@ Vnode *resolve(const char *path) {
+                     char parent_path[MAX_PATH];
+                     __builtin_memcpy(parent_path, mp, len);
+                     parent_path[len] = '\0';
++                    if (owned) {
++                        release(current);
++                        owned = false;
++                    }
+                     current = resolve(parent_path);
++                    owned = true;
+                 } else if (last_slash == mp) {
++                    if (owned) {
++                        release(current);
++                        owned = false;
++                    }
+                     current = resolve("/");
++                    owned = true;
+                 }
++                if (!current)
++                    return nullptr; // inner resolve failed: nothing owned
+                 break;
+             }
+             continue;
+         }
+ 
+         Vnode *child = nullptr;
++        bool child_from_mount = false;
+         for (size_t i = 0; i < mount_count; ++i) {
+             if (!mount_table[i].used)
+                 continue;
+@@ -265,6 +289,7 @@ Vnode *resolve(const char *path) {
+             }
+             if (strcmp(name_start, comp) == 0) {
+                 child = mount_table[i].root_vnode;
++                child_from_mount = true;
+                 break;
+             }
+         }
+@@ -272,11 +297,26 @@ Vnode *resolve(const char *path) {
+             child =
+                 current->ops ? current->ops->lookup(*current, comp) : nullptr;
+         }
+-        if (!child)
++        if (!child) {
++            if (owned)
++                release(current);
+             return nullptr;
++        }
++        if (owned)
++            release(current);
++        // Mount roots are borrowed (owned = false); lookup results are
++        // callee-owned (owned = true) — borrowed ones (tmpfs cache,
++        // devfs statics) are refcount-0, so release() no-ops on them.
++        owned = !child_from_mount;
+         current = child;
+     }
+ 
++    if (current && !owned) {
++        // Uniform OWNED return: the initial node (mount root / cwd /
++        // global root) is borrowed during traversal — take the caller's
++        // reference here so every resolve() result releases exactly once.
++        vnode_ref_inc(current);
++    }
+     return current;
+ }
+ 
+@@ -385,7 +425,13 @@ Vnode *resolve_parent(const char *path, const char *&out_name) {
+     if (!*out_name)
+         return nullptr;
+     auto *task = Scheduler::current_task();
+-    return (task && task->cwd_vnode) ? task->cwd_vnode : root_vnode_global;
++    Vnode *cwd =
++        (task && task->cwd_vnode) ? task->cwd_vnode : root_vnode_global;
++    // Uniform OWNED return (issue #268): take the caller's reference on
++    // the borrowed cwd/global root; slash-case resolve() is already owned.
++    if (cwd)
++        vnode_ref_inc(cwd);
++    return cwd;
+ }
+ 
+ /// @brief Create a subdirectory at the given path.
+@@ -396,11 +442,17 @@ int mkdir(const char *path, uint16_t mode) {
+ #endif
+     const char *name = nullptr;
+     Vnode *parent = resolve_parent(path, name);
+-    if (!parent || !(parent->mode & S_IFDIR))
++    if (!parent || !(parent->mode & S_IFDIR)) {
++        release(parent);
+         return VFS_INVALID;
+-    if (!parent->ops || !parent->ops->mkdir)
++    }
++    if (!parent->ops || !parent->ops->mkdir) {
++        release(parent);
+         return VFS_INVALID;
+-    return parent->ops->mkdir(*parent, name, mode);
++    }
++    int rc = parent->ops->mkdir(*parent, name, mode);
++    release(parent);
++    return rc;
+ }
+ 
+ /// @brief Remove a file or empty directory at the given path.
+@@ -411,11 +463,17 @@ int unlink(const char *path) {
+ #endif
+     const char *name = nullptr;
+     Vnode *parent = resolve_parent(path, name);
+-    if (!parent || !(parent->mode & S_IFDIR))
++    if (!parent || !(parent->mode & S_IFDIR)) {
++        release(parent);
+         return VFS_INVALID;
+-    if (!parent->ops || !parent->ops->unlink)
++    }
++    if (!parent->ops || !parent->ops->unlink) {
++        release(parent);
+         return VFS_INVALID;
+-    return parent->ops->unlink(*parent, name);
++    }
++    int rc = parent->ops->unlink(*parent, name);
++    release(parent);
++    return rc;
+ }
+ 
+ /// @brief Create a regular file at the given path.
+@@ -423,11 +481,17 @@ int unlink(const char *path) {
+ int create(const char *path, uint16_t mode) {
+     const char *name = nullptr;
+     Vnode *parent = resolve_parent(path, name);
+-    if (!parent || !(parent->mode & S_IFDIR))
++    if (!parent || !(parent->mode & S_IFDIR)) {
++        release(parent);
+         return VFS_INVALID;
+-    if (!parent->ops || !parent->ops->create)
++    }
++    if (!parent->ops || !parent->ops->create) {
++        release(parent);
+         return VFS_INVALID;
+-    return parent->ops->create(*parent, name, mode);
++    }
++    int rc = parent->ops->create(*parent, name, mode);
++    release(parent);
++    return rc;
+ }
+ 
+ /// @brief Mount a filesystem with error handling.
+@@ -510,11 +574,16 @@ VfsError mkdir_err(const char *path, uint16_t mode) {
+     Vnode *parent = resolve_parent(path, name);
+     if (!parent)
+         return VFS_ERR_NOT_FOUND;
+-    if (!(parent->mode & S_IFDIR))
++    if (!(parent->mode & S_IFDIR)) {
++        release(parent); // issue #268
+         return VFS_ERR_NOT_DIR;
+-    if (!parent->ops || !parent->ops->mkdir)
++    }
++    if (!parent->ops || !parent->ops->mkdir) {
++        release(parent); // issue #268
+         return VFS_ERR_NOT_SUPPORTED;
++    }
+     int result = parent->ops->mkdir(*parent, name, mode);
++    release(parent); // issue #268
+     if (result == 0)
+         return VFS_ERR_OK;
+     // Positive codes are specific VfsError values (e.g. VFS_ERR_EXISTS);
+@@ -531,11 +600,16 @@ VfsError create_err(const char *path, uint16_t mode) {
+     Vnode *parent = resolve_parent(path, name);
+     if (!parent)
+         return VFS_ERR_NOT_FOUND;
+-    if (!(parent->mode & S_IFDIR))
++    if (!(parent->mode & S_IFDIR)) {
++        release(parent); // issue #268
+         return VFS_ERR_NOT_DIR;
+-    if (!parent->ops || !parent->ops->create)
++    }
++    if (!parent->ops || !parent->ops->create) {
++        release(parent); // issue #268
+         return VFS_ERR_NOT_SUPPORTED;
++    }
+     int result = parent->ops->create(*parent, name, mode);
++    release(parent); // issue #268
+     return result == 0 ? VFS_ERR_OK : VFS_ERR_IO_ERROR;
+ }
+ 
+@@ -546,11 +620,16 @@ VfsError unlink_err(const char *path) {
+     Vnode *parent = resolve_parent(path, name);
+     if (!parent)
+         return VFS_ERR_NOT_FOUND;
+-    if (!(parent->mode & S_IFDIR))
++    if (!(parent->mode & S_IFDIR)) {
++        release(parent); // issue #268
+         return VFS_ERR_NOT_DIR;
+-    if (!parent->ops || !parent->ops->unlink)
++    }
++    if (!parent->ops || !parent->ops->unlink) {
++        release(parent); // issue #268
+         return VFS_ERR_NOT_SUPPORTED;
++    }
+     int result = parent->ops->unlink(*parent, name);
++    release(parent); // issue #268
+     return result == 0 ? VFS_ERR_OK : VFS_ERR_IO_ERROR;
+ }
+ 
+diff --git a/src/kernel/vfs/vfs.hpp b/src/kernel/vfs/vfs.hpp
+index 10f1814a3..ea2cb8eac 100644
+--- a/src/kernel/vfs/vfs.hpp
++++ b/src/kernel/vfs/vfs.hpp
+@@ -121,6 +121,25 @@ static inline bool vnode_ref_dec(Vnode *vn) noexcept {
+     return __atomic_fetch_sub(&vn->refcount, 1ULL, __ATOMIC_ACQ_REL) == 1;
+ }
+ 
++/// @brief Release a vnode reference (issue #268: uniform OWNED convention).
++///        `resolve()` / `resolve_parent()` / `lookup()` results are OWNED —
++///        the caller releases exactly once via this helper when done.
++///        Zero-count vnodes (tmpfs cache entries, static roots, devfs
++///        statics) are borrowed: release is a no-op for them, so sharing
++///        one helper across filesystems can never free cache/static
++///        storage.  Never call `ops->close` directly (except `FdTable`).
++static inline void release(Vnode *vn) noexcept {
++    if (!vn)
++        return;
++    // UP: no VFS refcount traffic in IRQ context, so the acquire-load
++    // below is stable for the check-then-dec that follows (SMP will need
++    // a locked or RCU reclamation pass — see vfs.md ownership notes).
++    if (__atomic_load_n(&vn->refcount, __ATOMIC_ACQUIRE) == 0)
++        return;
++    if (vnode_ref_dec(vn) && vn->ops && vn->ops->close)
++        vn->ops->close(*vn);
++}
++
+ struct FileDescription {
+     Vnode *vnode;    ///< The vnode this descriptor refers to.
+     uint64_t offset; ///< Current read/write offset.
+@@ -169,15 +188,17 @@ struct Mount {
+ };
+ 
+ /// @brief Resolve an absolute path to a vnode.
+-/// @return The vnode, or nullptr if not found.
++/// @return The vnode (OWNED — release via `vfs::release()`), or nullptr
++///         if not found.  Traversal intermediates are freed inside.
+ Vnode *resolve(const char *path);
+ /// @brief Resolve an absolute path to a vnode with error code.
+-/// @param[out] out_vnode The resolved vnode on success.
++/// @param[out] out_vnode The resolved vnode (OWNED) on success.
+ /// @return VfsError code.
+ VfsError resolve_err(const char *path, Vnode *&out_vnode);
+ /// @brief Resolve the parent directory and leaf name of a path.
+ /// @param[out] out_name Leaf component of the path (points into `path`).
+-/// @return The parent vnode, or nullptr if not found.
++/// @return The parent vnode (OWNED — release via `vfs::release()`), or
++///         nullptr if not found.
+ Vnode *resolve_parent(const char *path, const char *&out_name);
+ /// @brief Mount a filesystem at a given mount point.
+ /// @return 0 on success, or VFS_INVALID on failure.
 diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index d43a53dac..5baffe8d6 100644
+index 5baffe8d6..a37c58666 100644
 --- a/src/services/shell.cpp
 +++ b/src/services/shell.cpp
-@@ -2042,33 +2042,52 @@ void Shell::cmd_export(int argc, const char** argv) {
- }
- 
- void Shell::cmd_runelf(int argc, const char** argv) {
--    if (argc < 2) {
--        Terminal::write("Usage: runelf <path.elf> [args...]\n");
-+    // Issue #77 (user-directed contract): runelf takes no parameters — it
-+    // runs the previously background-loaded ELF (`load` stages via the
-+    // ElfLoader; runelf activates the retained completion).  With no
-+    // completed image it reports "no elf loaded" instead of failing.
-+    if (argc != 1) {
-+        Terminal::write("Usage: runelf\n");
+@@ -210,7 +210,7 @@ void Shell::init() {
+     register_command("cd",      "Change working directory",          cmd_cd);
+     register_command("export",  "Set environment variable",          cmd_export);
+     register_command("runelf",  "Run userspace ELF from initrd",     cmd_runelf);
+-    register_command("load",    "Background-load an ELF file (returns immediately)", cmd_load);
++    register_command("loadelf", "Background-load an ELF file (returns immediately)", cmd_loadelf);
+     register_command("cancel-load", "Cancel the background ELF load", cmd_cancel_load);
+     register_command("exit",    "Shut down the system",              cmd_exit);
+     register_command("shutdown","Shut down the system",              cmd_exit);
+@@ -1974,16 +1974,28 @@ void Shell::cmd_cd(int argc, const char** argv) {
+     }
+     if (!(vn->mode & kernel::vfs::S_IFDIR)) {
+         shell_error_path("cd", target, "not a directory");
++        kernel::vfs::release(vn); // issue #268: owned resolve result
          return;
      }
-+    (void)argv;
- 
--    const char* path = argv[1];
--
--    initrd::InitrdFile f = initrd::find(path);
--    if (!f.data) {
--        shell_error_path("runelf", path, "file not found in initrd");
-+    kernel::TaskControlBlock* task =
-+        kernel::elf::ElfLoader::take_completed();
+     auto* task = kernel::Scheduler::current_task();
+-    if (!task) return;
 +    if (!task) {
-+        shell_error("runelf", "no elf loaded");
-         return;
-     }
- 
--    auto* hdr = reinterpret_cast<const kernel::elf::ELF64Header*>(f.data);
--    if (!kernel::elf::validate_header(hdr)) {
--        shell_error_path("runelf", path, "invalid ELF");
-+    // Settled activation parameters BEFORE add_task (not queued: no
-+    // re-bucket needed, but priority goes through the scheduler helper
-+    // per §11.4 — never direct writes).  Strictly periodic user task per
-+    // the issue contract (prio 2 user band, period/deadline 100); FIXED
-+    // keeps it in bitmap RMS dispatch (AUTO + finite deadline would enter
-+    // EDF dispatch — deadline-timing exposure a run-once demo must not
-+    // take; EDF user tasks are a follow-up).
-+    kernel::Scheduler::set_priority(*task, 2);
-+    task->period_ticks = 100;
-+    task->deadline_ticks = arch::Timer::ticks() + 100;
-+    if (!kernel::Scheduler::set_sched_policy(*task,
-+                                             kernel::SchedPolicy::FIXED)) {
-+        kernel::elf::ElfLoader::destroy_completed_tcb(task);
-+        shell_error("runelf", "policy rejected");
-         return;
-     }
--
--    auto* task = kernel::elf::load(hdr, f.data, f.size);
--    if (!task) {
--        shell_error_path("runelf", path, "failed to load");
-+    // Admission BEFORE activation (S1): fail closed with the denial code;
-+    // a denied image is destroyed via the loader teardown (never
-+    // cleanup()+delete on a never-added TCB, never leaked).
-+    kernel::errors::SchedulerError admit =
-+        kernel::Scheduler::add_task_err(*task);
-+    if (admit != kernel::errors::SCHED_ERR_OK) {
-+        kernel::elf::ElfLoader::destroy_completed_tcb(task);
-+        kernel::Logger::warn("runelf: admission denied: %s",
-+                             kernel::errors::error_string(admit));
-+        shell_error("runelf", "admission denied");
-         return;
-     }
- 
--    kernel::Scheduler::add_task(*task);
--
-     Terminal::set_fg(COLOR_GREEN);
-     Terminal::write("Started task #");
-     char buf[16];
-@@ -2076,8 +2095,6 @@ void Shell::cmd_runelf(int argc, const char** argv) {
-     uint64_t id = task->id;
-     while (id > 0) { buf[pos++] = static_cast<char>('0' + (id % 10)); id /= 10; }
-     while (pos > 0) Terminal::putchar(buf[--pos]);
--    Terminal::write(": ");
--    Terminal::write(path);
-     Terminal::putchar('\n');
-     Terminal::set_fg(COLOR_DEFAULT);
- }
-diff --git a/src/services/terminal/terminal.cpp b/src/services/terminal/terminal.cpp
-index 065cc1a33..29246025f 100644
---- a/src/services/terminal/terminal.cpp
-+++ b/src/services/terminal/terminal.cpp
-@@ -114,6 +114,41 @@ void Terminal::puts(const char* str) {
-     putchar('\n');
- }
- 
-+void Terminal::write_fb(const char* str) {
-+    if (!instance_ || !instance_->fb_enabled_)
++        kernel::vfs::release(vn);
 +        return;
-+    auto draw_plain = [&](char c) {
-+        if (c >= 32 && c <= 126) {
-+            Framebuffer::draw_char(
-+                instance_->cursor_x_ * FONT_WIDTH,
-+                instance_->cursor_y_ * FONT_HEIGHT,
-+                c, instance_->fg_, instance_->bg_);
-+            instance_->advance_cursor();
-+        }
-+    };
-+    while (str && *str) {
-+        char c = *str++;
-+        switch (c) {
-+        case '\n':
-+            instance_->newline();
-+            break;
-+        case '\r':
-+            instance_->cursor_x_ = 0;
-+            break;
-+        case '\t':
-+            for (int i = 0; i < 4; ++i)
-+                draw_plain(' ');
-+            break;
-+        case '\b':
-+            instance_->backspace();
-+            break;
-+        default:
-+            draw_plain(c);
-+            break;
-+        }
 +    }
-+}
-+
- bool Terminal::readline(char* buf, size_t max_len) {
- #if defined(CONFIG_ARCH_AARCH64)
-     (void)buf; (void)max_len;
-diff --git a/src/services/terminal/terminal.hpp b/src/services/terminal/terminal.hpp
-index ffdb49006..09ec456e0 100644
---- a/src/services/terminal/terminal.hpp
-+++ b/src/services/terminal/terminal.hpp
-@@ -51,6 +51,15 @@ public:
-     /// @param str String to display.
-     static void puts(const char* str);
+     task->cwd_lock_.lock();
+-    if (task->cwd_vnode)
+-        kernel::vfs::vnode_ref_dec(task->cwd_vnode);
+-    task->cwd_vnode = vn;
+-    kernel::vfs::vnode_ref_inc(vn);
+-    task->cwd_lock_.unlock();
++    // Issue #268: the resolve() result is caller-owned.  Transfer it to
++    // the task (no inc) when switching directories; when already there,
++    // drop just the fresh reference.  Unconditional inc + dec (the old
++    // shape) either leaks one ref per cd or frees under an aliased self.
++    auto *old = task->cwd_vnode;
++    if (vn == old) {
++        task->cwd_lock_.unlock();
++        kernel::vfs::release(vn);
++    } else {
++        task->cwd_vnode = vn;
++        task->cwd_lock_.unlock();
++        kernel::vfs::release(old);
++    }
+     char canonical[256];
+     build_canonical_path(task->cwd, target, canonical, sizeof(canonical));
+     size_t i = 0;
+@@ -2100,9 +2112,9 @@ void Shell::cmd_runelf(int argc, const char** argv) {
+ }
  
-+    /// @brief Renders a string on the framebuffer only (no serial output,
-+    ///        no capture-buffer feed).  For background producers (e.g. the
-+    ///        ELF loader event log) whose serial channel is already served
-+    ///        elsewhere (Logger/dmesg): without this, console users would
-+    ///        never see their progress.  Mirrors putchar's framebuffer
-+    ///        half exactly (cursor, newline, fb_enabled_ gate).
-+    /// @param str String to display (NUL-terminated).
-+    static void write_fb(const char* str);
+ /// @brief Built-in: start a background ELF load (returns immediately).
+-void Shell::cmd_load(int argc, const char** argv) {
++void Shell::cmd_loadelf(int argc, const char** argv) {
+     if (argc < 2) {
+-        Terminal::write("Usage: load <path.elf>\n");
++        Terminal::write("Usage: loadelf <path.elf>\n");
+         return;
+     }
+     const char* path = argv[1];
+@@ -2114,10 +2126,10 @@ void Shell::cmd_load(int argc, const char** argv) {
+         // second "started" here — it would interleave with the async line.
+         return;
+     case kernel::elf::LoadResult::ALREADY_LOADING:
+-        shell_error_path("load", path, "already loading");
++        shell_error_path("loadelf", path, "already loading");
+         return;
+     case kernel::elf::LoadResult::FILE_NOT_FOUND:
+-        shell_error_path("load", path, "file not found");
++        shell_error_path("loadelf", path, "file not found");
+         return;
+     default:
+         return;
+@@ -2472,12 +2484,19 @@ void Shell::cmd_source(int argc, const char** argv) {
+     auto* vn = kernel::vfs::resolve(argv[1]);
+     if (!vn || !(vn->mode & kernel::vfs::S_IFREG)) {
+         shell_error_path("source", argv[1], "cannot read");
++        kernel::vfs::release(vn);
++        return;
++    }
++    if (!vn->ops->read) {
++        kernel::vfs::release(vn);
+         return;
+     }
+-    if (!vn->ops->read) return;
+     uint8_t buf[4096];
+     int64_t nread = vn->ops->read(*vn, buf, sizeof(buf) - 1, 0);
+-    if (nread <= 0) return;
++    if (nread <= 0) {
++        kernel::vfs::release(vn); // issue #268
++        return;
++    }
+     buf[nread] = '\0';
+     // Execute each line
+     char* line = reinterpret_cast<char*>(buf);
+@@ -2491,6 +2510,7 @@ void Shell::cmd_source(int argc, const char** argv) {
+         ++line;
+     }
+     if (*start) parse_and_exec(start);
++    kernel::vfs::release(vn); // issue #268: success path owns one release
+ }
+ 
+ void Shell::cmd_set(int argc, const char** argv) {
+@@ -2774,6 +2794,7 @@ void Shell::cmd_test(int argc, const char** argv) {
+             case 's': result = vn && vn->size > 0; break;
+             default: result = false; break;
+             }
++            kernel::vfs::release(vn); // issue #268
+         } else {
+             result = false;
+         }
+@@ -2970,8 +2991,10 @@ void Shell::cmd_pushd(int argc, const char** argv) {
+     auto* vn = kernel::vfs::resolve(argv[1]);
+     if (!vn || !(vn->mode & kernel::vfs::S_IFDIR)) {
+         shell_error_path("pushd", argv[1], "not a directory");
++        kernel::vfs::release(vn);
+         return;
+     }
++    kernel::vfs::release(vn); // probe only; cmd_cd resolves again
+     size_t pos = 0;
+     for (const char* p = argv[1]; *p && pos < BUF_SIZE - 1; ++p) dir_stack_[dir_stack_count_][pos++] = *p;
+     dir_stack_[dir_stack_count_][pos] = '\0';
+@@ -3000,6 +3023,7 @@ void Shell::cmd_ls(int argc, const char** argv) {
+     if (!(vn->mode & kernel::vfs::S_IFDIR)) {
+         Terminal::write(path);
+         Terminal::putchar('\n');
++        kernel::vfs::release(vn);
+         return;
+     }
+ 
+@@ -3016,14 +3040,15 @@ void Shell::cmd_ls(int argc, const char** argv) {
+             } else {
+                 Terminal::set_fg(COLOR_DEFAULT);
+             }
++            kernel::vfs::release(child); // issue #268: color probe is owned
+         } else {
+             Terminal::set_fg(COLOR_DEFAULT);
+         }
+         Terminal::write(dent.d_name);
+         Terminal::set_fg(COLOR_DEFAULT);
+-        Terminal::putchar(' ');
++        Terminal::putchar('\n');
+     }
+-    Terminal::putchar('\n');
++    kernel::vfs::release(vn);
+ }
+ 
+ static void print_ip(net::Ipv4Addr ip) {
+@@ -3263,9 +3288,13 @@ void Shell::cmd_less(int argc, const char** argv) {
+     auto* vn = kernel::vfs::resolve(argv[1]);
+     if (!vn || !(vn->mode & kernel::vfs::S_IFREG)) {
+         shell_error_path("less", argv[1], "No such file");
++        kernel::vfs::release(vn);
++        return;
++    }
++    if (!vn->ops->read) {
++        kernel::vfs::release(vn);
+         return;
+     }
+-    if (!vn->ops->read) return;
+ 
+     static constexpr int LINES_PER_PAGE = 24;
+     static constexpr int BUF_SIZE = 512;
+@@ -3293,6 +3322,7 @@ void Shell::cmd_less(int argc, const char** argv) {
+                             got = arch::Keyboard::getchar(c);
+                         if (got && (c == 'q' || c == 'Q')) {
+                             Terminal::putchar('\n');
++                            kernel::vfs::release(vn); // issue #268
+                             return;
+                         }
+                         if (got) break;
+@@ -3312,11 +3342,13 @@ void Shell::cmd_less(int argc, const char** argv) {
+             got = arch::Keyboard::getchar(c);
+         if (got && (c == 'q' || c == 'Q')) {
+             Terminal::putchar('\n');
++            kernel::vfs::release(vn); // issue #268
+             return;
+         }
+         if (got) break;
+         arch::pause();
+     }
++    kernel::vfs::release(vn); // issue #268
+ }
+ 
+ void Shell::cmd_cat(int argc, const char** argv) {
+@@ -3328,10 +3360,12 @@ void Shell::cmd_cat(int argc, const char** argv) {
+     auto* vn = kernel::vfs::resolve(argv[1]);
+     if (!vn || !(vn->mode & kernel::vfs::S_IFREG)) {
+         shell_error_path("cat", argv[1], "No such file");
++        kernel::vfs::release(vn);
+         return;
+     }
+     if (!vn->ops->read) {
+         shell_error_path("cat", argv[1], "not readable");
++        kernel::vfs::release(vn);
+         return;
+     }
+ 
+@@ -3347,6 +3381,7 @@ void Shell::cmd_cat(int argc, const char** argv) {
+         for (int64_t i = 0; i < nread; ++i)
+             Terminal::putchar(static_cast<char>(buf[i]));
+     }
++    kernel::vfs::release(vn); // issue #268
+ }
+ 
+ void Shell::cmd_touch(int argc, const char** argv) {
+diff --git a/src/services/shell.hpp b/src/services/shell.hpp
+index 40821d83b..2b2952ea5 100644
+--- a/src/services/shell.hpp
++++ b/src/services/shell.hpp
+@@ -141,7 +141,7 @@ private:
+     /// @brief Built-in: run a userspace ELF from initrd as a new task.
+     static void cmd_runelf(int argc, const char** argv);
+     /// @brief Built-in: start a background ELF load (returns immediately).
+-    static void cmd_load(int argc, const char** argv);
++    static void cmd_loadelf(int argc, const char** argv);
+     /// @brief Built-in: cancel the in-flight background ELF load.
+     static void cmd_cancel_load(int argc, const char** argv);
+     /// @brief Built-in: shut down the system.
+diff --git a/test-history.txt b/test-history.txt
+index af3eb74df..415e84c01 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -2329,3 +2329,107 @@ SUMMARY: total=18 ok=18 fail=0
+ 2026-09-30 14:08:47 selftest PASSED: 139 FAILED: 0 TIME: 30068ms
+ 2026-09-30 14:09:31 proc_elf PASSED: 86 FAILED: 0 TIME: 20841ms
+ 2026-09-30 14:19:52 selftest PASSED: 139 FAILED: 0 TIME: 7054ms STATUS: INITRD-SOURCES
++2026-09-30 15:11:20 elf_loader PASSED: 12 FAILED: 0 TIME: 468ms
++2026-09-30 15:19:02 proc_elf PASSED: 89 FAILED: 0 TIME: 4796ms
++2026-09-30 15:19:02 elf_shared PASSED: 9 FAILED: 0 TIME: 392ms
++2026-09-30 15:19:02 scheduler_idle PASSED: 11 FAILED: 0 TIME: 5153ms
++2026-09-30 15:19:02 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 4199ms
++2026-09-30 15:19:02 scheduler_core PASSED: 21 FAILED: 0 TIME: 1254ms
++2026-09-30 15:19:02 selftest PASSED: 139 FAILED: 0 TIME: 29448ms
++2026-09-30 17:19:34 core PASSED: 494 FAILED: 0 TIME: 58550ms
++2026-09-30 17:19:49 ipc PASSED: 81 FAILED: 0 TIME: 13196ms
++2026-09-30 17:20:05 capability PASSED: 148 FAILED: 0 TIME: 445ms
++2026-09-30 17:20:21 proc_elf PASSED: 89 FAILED: 0 TIME: 4572ms
++2026-09-30 17:20:36 storage PASSED: 143 FAILED: 0 TIME: 10116ms
++2026-09-30 17:20:51 servers PASSED: 62 FAILED: 0 TIME: 1565ms
++2026-09-30 17:21:06 drivers PASSED: 107 FAILED: 0 TIME: 15164ms
++2026-09-30 17:21:22 hal PASSED: 122 FAILED: 0 TIME: 0ms
++2026-09-30 17:21:37 smp PASSED: 81 FAILED: 0 TIME: 2959ms
++2026-09-30 17:21:51 smp_multicpu PASSED: 18 FAILED: 0 TIME: 528ms
++2026-09-30 17:22:19 deadline PASSED: 125 FAILED: 0 TIME: 157960ms
++2026-09-30 17:22:35 ui PASSED: 69 FAILED: 0 TIME: 5780ms
++2026-09-30 17:22:48 logging_debug PASSED: 30 FAILED: 0 TIME: 626ms
++2026-09-30 17:23:02 random PASSED: 17 FAILED: 0 TIME: 404ms
++2026-09-30 17:23:16 bench PASSED: 22 FAILED: 0 TIME: 3991ms
++2026-09-30 17:23:30 task_tcb_log PASSED: 1 FAILED: 0 TIME: 46ms
++2026-09-30 17:23:44 task_fpu PASSED: 0 FAILED: 0 TIME: 13823ms STATUS: NO_TESTS_REGISTERED
++2026-09-30 17:23:59 ahci_live PASSED: 5 FAILED: 0 TIME: 5906ms
++2026-09-30 17:24:12 iommu_live PASSED: 6 FAILED: 0 TIME: 152ms
++2026-09-30 17:26:23 testrunner PASSED: 0 FAILED: 0 TIME: 130871ms STATUS: EXPECTED_PANIC_PASS
 +
-     /// @brief Sets the foreground (text) color.
-     /// @param color 24-bit RGB color.
-     static void set_fg(uint32_t color);
-diff --git a/userspace/hey.c b/userspace/hey.c
-new file mode 100644
-index 000000000..569255210
---- /dev/null
-+++ b/userspace/hey.c
-@@ -0,0 +1,12 @@
-+/* NexIOS demonstration program: clean user-task execution.
-+ *
-+ * Loaded via `load /hey.c.elf` + bare `runelf`: the background ElfLoader
-+ * maps it as an ET_EXEC user image, runelf admits + dispatches it, and it
-+ * prints through the WRITE path and exits 0.
-+ */
-+#include <stdio.h>
++SUMMARY: total=20 ok=20 fail=0
++2026-09-30 17:27:28 core PASSED: 19 FAILED: 0 TIME: 27ms
++2026-09-30 17:27:43 ipc PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 17:27:59 capability PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 17:28:14 proc_elf PASSED: 1 FAILED: 0 TIME: 3ms
++2026-09-30 17:28:29 storage PASSED: 38 FAILED: 0 TIME: 29ms
++2026-09-30 17:28:45 servers PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 17:29:00 drivers PASSED: 8 FAILED: 0 TIME: 48ms
++2026-09-30 17:29:15 hal PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 17:29:31 smp PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 17:29:46 smp_multicpu PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 17:30:01 deadline PASSED: 0 FAILED: 0 TIME: 1ms
++2026-09-30 17:30:18 ui PASSED: 19 FAILED: 0 TIME: 4351ms
++2026-09-30 17:30:33 logging_debug PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 17:30:49 random PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 17:31:04 bench PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 17:31:19 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 17:33:32 task_fpu PASSED: 0 FAILED: 0 TIME: 132657ms STATUS: NO_TESTS_REGISTERED
++2026-09-30 17:33:47 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
 +
-+int main(void) {
-+    printf("Hey! This is NexIOS, running your application!\n");
-+    return 0;
-+}
-diff --git a/userspace/nullderef.c b/userspace/nullderef.c
-new file mode 100644
-index 000000000..526c85fab
---- /dev/null
-+++ b/userspace/nullderef.c
-@@ -0,0 +1,15 @@
-+/* NexIOS demonstration program: handled user-mode MMU fault.
-+ *
-+ * Loaded via `load /nullderef.c.elf` + bare `runelf`: prints a greeting,
-+ * then dereferences address zero.  The unmapped access raises a user-mode
-+ * #PF (page not-present) which the kernel handles as SIGSEGV: the task is
-+ * TERMINATED, never a kernel panic (same path as fault-probe.c).
-+ */
-+#include <stdio.h>
++SUMMARY: total=18 ok=18 fail=0
++2026-09-30 15:43:38 elf_loader PASSED: 13 FAILED: 0 TIME: 487ms
++2026-09-30 15:57:58 shell_commands PASSED: 31 FAILED: 0 TIME: 1033ms
++2026-09-30 17:55:59 shell_commands PASSED: 31 FAILED: 0 TIME: 950ms
++2026-09-30 18:18:29 shell_commands PASSED: 31 FAILED: 0 TIME: 964ms
++2026-09-30 18:18:29 elf_loader PASSED: 13 FAILED: 0 TIME: 502ms
++2026-09-30 18:18:29 proc_elf PASSED: 90 FAILED: 0 TIME: 5524ms
++2026-09-30 18:18:29 elf_shared PASSED: 9 FAILED: 0 TIME: 356ms
++2026-09-30 18:18:29 storage PASSED: 147 FAILED: 0 TIME: 13678ms
++2026-09-30 18:18:49 libc_verify PASSED: 7 FAILED: 0 TIME: 9233ms
++2026-09-30 18:19:10 selftest PASSED: 139 FAILED: 0 TIME: 16991ms
++2026-09-30 20:19:34 core PASSED: 494 FAILED: 0 TIME: 28857ms
++2026-09-30 20:19:49 ipc PASSED: 81 FAILED: 0 TIME: 13297ms
++2026-09-30 20:20:04 capability PASSED: 148 FAILED: 0 TIME: 3897ms
++2026-09-30 20:20:20 proc_elf PASSED: 90 FAILED: 0 TIME: 19110ms
++2026-09-30 20:20:35 storage PASSED: 147 FAILED: 0 TIME: 3287ms
++2026-09-30 20:20:50 servers PASSED: 62 FAILED: 0 TIME: 6611ms
++2026-09-30 20:21:05 drivers PASSED: 107 FAILED: 0 TIME: 2867ms
++2026-09-30 20:21:21 hal PASSED: 122 FAILED: 0 TIME: 0ms
++2026-09-30 20:21:35 smp PASSED: 81 FAILED: 0 TIME: 2975ms
++2026-09-30 20:21:49 smp_multicpu PASSED: 18 FAILED: 0 TIME: 525ms
++2026-09-30 20:22:17 deadline PASSED: 125 FAILED: 0 TIME: 38061ms
++2026-09-30 20:22:33 ui PASSED: 69 FAILED: 0 TIME: 5557ms
++2026-09-30 20:22:47 logging_debug PASSED: 30 FAILED: 0 TIME: 399ms
++2026-09-30 20:23:01 random PASSED: 17 FAILED: 0 TIME: 439ms
++2026-09-30 20:23:14 bench PASSED: 22 FAILED: 0 TIME: 692ms
++2026-09-30 20:23:28 task_tcb_log PASSED: 1 FAILED: 0 TIME: 192ms
++2026-09-30 20:23:43 task_fpu PASSED: 0 FAILED: 0 TIME: 14569ms STATUS: NO_TESTS_REGISTERED
++2026-09-30 20:23:57 ahci_live PASSED: 5 FAILED: 0 TIME: 9694ms
++2026-09-30 20:24:10 iommu_live PASSED: 6 FAILED: 0 TIME: 157ms
++2026-09-30 20:26:21 testrunner PASSED: 0 FAILED: 0 TIME: 130913ms STATUS: EXPECTED_PANIC_PASS
 +
-+int main(void) {
-+    printf("Hey. This is NexIOS, the appication access memory which doesnt belongs to it!\n");
-+    volatile unsigned char *p = (volatile unsigned char *)0UL;
-+    *p = 0xAB;
-+    return 0;
-+}
++SUMMARY: total=20 ok=20 fail=0
++2026-09-30 20:27:21 core PASSED: 19 FAILED: 0 TIME: 7ms
++2026-09-30 20:27:36 ipc PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 20:27:51 capability PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 20:28:06 proc_elf PASSED: 1 FAILED: 0 TIME: 3ms
++2026-09-30 20:28:22 storage PASSED: 38 FAILED: 0 TIME: 28ms
++2026-09-30 20:28:37 servers PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 20:28:52 drivers PASSED: 8 FAILED: 0 TIME: 49ms
++2026-09-30 20:29:07 hal PASSED: 0 FAILED: 0 TIME: 1ms
++2026-09-30 20:29:22 smp PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 20:29:37 smp_multicpu PASSED: 0 FAILED: 0 TIME: 1ms
++2026-09-30 20:29:52 deadline PASSED: 0 FAILED: 0 TIME: 1ms
++2026-09-30 20:30:09 ui PASSED: 19 FAILED: 0 TIME: 4420ms
++2026-09-30 20:30:24 logging_debug PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 20:30:39 random PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-30 20:30:54 bench PASSED: 0 FAILED: 0 TIME: 1ms
++2026-09-30 20:31:10 task_tcb_log PASSED: 0 FAILED: 0 TIME: 1ms
++2026-09-30 20:33:23 task_fpu PASSED: 0 FAILED: 0 TIME: 133026ms STATUS: NO_TESTS_REGISTERED
++2026-09-30 20:33:42 testrunner PASSED: 0 FAILED: 0 TIME: 17ms
++
++SUMMARY: total=18 ok=18 fail=0
++2026-10-01 06:29:50 storage PASSED: 147 FAILED: 0 TIME: 3395ms
++2026-10-01 06:29:50 shell_commands PASSED: 31 FAILED: 0 TIME: 953ms
++2026-10-01 06:29:50 elf_loader PASSED: 13 FAILED: 0 TIME: 1949ms

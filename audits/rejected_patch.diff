@@ -1,11 +1,10 @@
-diff --git a/src/kernel/cap/cap_types.hpp b/src/kernel/cap/cap_types.hpp
---- a/src/kernel/cap/cap_types.hpp
-+++ b/src/kernel/cap/cap_types.hpp
-@@ -110,6 +110,6 @@
- inline uint64_t encode_user_handle(uint32_t cspace_id, int idx,
-                                    uint32_t gen) noexcept {
-     if (idx < 0)
-         return static_cast<uint64_t>(-1);
--    return encode_handle(cspace_id, static_cast<uint32_t>(idx), gen);
-+    return encode_handle(cspace_id, static_cast<uint32_t>(idx), gen);
- }
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -1975,5 +1975,6 @@ void Shell::cmd_cd(int argc, const char** argv) {
+     }
+     if (!(vn->mode & kernel::vfs::S_IFDIR)) {
+         shell_error_path("cd", target, "not a directory");
++        kernel::vfs::release(vn); // issue #268: owned resolve result
+         return;
+     }

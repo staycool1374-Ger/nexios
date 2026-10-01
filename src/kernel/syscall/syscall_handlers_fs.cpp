@@ -159,11 +159,18 @@ static bool resolve_then_authorize(uint64_t op_type, uint64_t pid,
     if (!vn)
         return false;
     uint64_t ino = vn->ino;
-    if (!vfsd_authorize(op_type, pid, path, ino))
+    if (!vfsd_authorize(op_type, pid, path, ino)) {
+        vfs::release(vn); // issue #268
         return false;
+    }
     vfs::Vnode *vn2 = vfs::resolve(path);
-    if (!vn2 || vn2 != vn || vn2->ino != ino)
+    // Compare BEFORE releasing (vn may be freed by the release below).
+    bool ok = (vn2 && vn2 == vn && vn2->ino == ino);
+    vfs::release(vn);
+    if (!ok) {
+        vfs::release(vn2);
         return false;
+    }
     out_vn = vn2;
     return true;
 }
@@ -175,16 +182,25 @@ static bool resolve_parent_then_authorize(uint64_t op_type, uint64_t pid,
                                           vfs::Vnode *&out_parent) {
     const char *name = nullptr;
     vfs::Vnode *parent = vfs::resolve_parent(path, name);
-    if (!parent || !name || !*name)
+    if (!parent || !name || !*name) {
+        vfs::release(parent); // issue #268 (null-safe)
         return false;
+    }
     uint64_t ino = parent->ino;
-    if (!vfsd_authorize(op_type, pid, path, ino))
+    if (!vfsd_authorize(op_type, pid, path, ino)) {
+        vfs::release(parent);
         return false;
+    }
     const char *name2 = nullptr;
     vfs::Vnode *parent2 = vfs::resolve_parent(path, name2);
-    if (!parent2 || parent2 != parent || parent2->ino != ino || !name2 ||
-        *name2 == '\0')
+    // Compare BEFORE releasing (parent may be freed by the release below).
+    bool ok = (parent2 && parent2 == parent && parent2->ino == ino && name2 &&
+               *name2 != '\0');
+    vfs::release(parent);
+    if (!ok) {
+        vfs::release(parent2);
         return false;
+    }
     out_name = name2;
     out_parent = parent2;
     return true;
@@ -204,8 +220,14 @@ uint64_t Syscall::sys_open(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
         path = path_buf;
     }
     vfs::Vnode *vn = nullptr;
-    if (resolve_then_authorize(vfsd::VFS_OPEN, pid, path, vn))
-        return static_cast<uint64_t>(syscall_task_open(vn, arg1));
+    if (resolve_then_authorize(vfsd::VFS_OPEN, pid, path, vn)) {
+        // Ownership transfers to the fd slot on success; release when
+        // the table is full (issue #268).
+        int fd = syscall_task_open(vn, arg1);
+        if (fd < 0)
+            vfs::release(vn);
+        return static_cast<uint64_t>(fd);
+    }
     if (arg1 & vfs::O_CREAT) {
         // Target does not exist yet — authorize + create in the parent dir.
         const char *name = nullptr;
@@ -215,10 +237,15 @@ uint64_t Syscall::sys_open(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
             if (parent->ops && parent->ops->create &&
                 parent->ops->create(*parent, name, vfs::S_IFREG) == 0) {
                 vfs::Vnode *created = vfs::resolve(path);
-                if (created)
-                    return static_cast<uint64_t>(syscall_task_open(created,
-                                                                  arg1));
+                if (created) {
+                    int fd = syscall_task_open(created, arg1);
+                    if (fd < 0)
+                        vfs::release(created);
+                    vfs::release(parent);
+                    return static_cast<uint64_t>(fd);
+                }
             }
+            vfs::release(parent); // issue #268
         }
     }
     return static_cast<uint64_t>(-1);
@@ -477,24 +504,33 @@ uint64_t Syscall::sys_stat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     }
     vfs::Vnode *vn = nullptr;
     if (!resolve_then_authorize(vfsd::VFS_STAT, pid, path, vn) || !vn ||
-        !vn->ops->fstat)
+        !vn->ops->fstat) {
+        vfs::release(vn); // issue #268 (null-safe)
         return static_cast<uint64_t>(-1);
+    }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto st = checked(reinterpret_cast<vfs::VfsStat *>(arg1));
-    if (syscall_is_user_task() && !st.valid())
+    if (syscall_is_user_task() && !st.valid()) {
+        vfs::release(vn); // issue #268
         return static_cast<uint64_t>(-1);
+    }
     // MP-4 (SMAP): local VfsStat + safe_copy_to_user (see sys_fstat).
     vfs::VfsStat kst{};
     int rstat = vn->ops->fstat(*vn, kst);
-    if (rstat != 0)
+    if (rstat != 0) {
+        vfs::release(vn); // issue #268
         return static_cast<uint64_t>(rstat);
+    }
     // Issue #175: kernel-task callers need the result too (see sys_fstat).
     if (syscall_is_user_task()) {
-        if (!safe_copy_to_user(st.unsafe_ptr(), &kst, 1))
+        if (!safe_copy_to_user(st.unsafe_ptr(), &kst, 1)) {
+            vfs::release(vn); // issue #268
             return static_cast<uint64_t>(-1);
+        }
     } else {
         *st.unsafe_ptr() = kst;
     }
+    vfs::release(vn); // issue #268
     return 0;
 }
 
@@ -537,16 +573,26 @@ uint64_t Syscall::sys_chdir(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     if (!resolve_then_authorize(vfsd::VFS_CHDIR, pid, path, vn) || !vn)
         return static_cast<uint64_t>(-1);
     auto *cur = syscall_task();
-    if (!cur)
+    if (!cur) {
+        vfs::release(vn); // issue #268
         return static_cast<uint64_t>(-1);
-    if (!(vn->mode & vfs::S_IFDIR))
+    }
+    if (!(vn->mode & vfs::S_IFDIR)) {
+        vfs::release(vn); // issue #268
         return static_cast<uint64_t>(-1);
+    }
     cur->cwd_lock_.lock();
-    if (cur->cwd_vnode)
-        vfs::vnode_ref_dec(cur->cwd_vnode);
-    cur->cwd_vnode = vn;
-    vfs::vnode_ref_inc(vn);
-    cur->cwd_lock_.unlock();
+    // Issue #268: transfer the resolve() reference to the task (no inc);
+    // when already there, drop just the fresh reference (alias-safe).
+    auto *old = cur->cwd_vnode;
+    if (vn == old) {
+        cur->cwd_lock_.unlock();
+        vfs::release(vn);
+    } else {
+        cur->cwd_vnode = vn;
+        cur->cwd_lock_.unlock();
+        vfs::release(old);
+    }
     size_t i = 0;
     while (resolved_path[i] && i < 255) {
         cur->cwd[i] = resolved_path[i];
@@ -620,9 +666,12 @@ uint64_t Syscall::sys_mkdir(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     if (!resolve_parent_then_authorize(vfsd::VFS_MKDIR, pid, path, name,
                                        parent))
         return static_cast<uint64_t>(-1);
-    if (!parent->ops || !parent->ops->mkdir)
+    if (!parent->ops || !parent->ops->mkdir) {
+        vfs::release(parent); // issue #268: owned parent, all exits
         return static_cast<uint64_t>(-1);
+    }
     int r = parent->ops->mkdir(*parent, name, static_cast<uint16_t>(arg1));
+    vfs::release(parent); // issue #268
     return static_cast<uint64_t>(r == 0 ? 0 : -1);
 }
 
@@ -644,9 +693,12 @@ uint64_t Syscall::sys_unlink(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     if (!resolve_parent_then_authorize(vfsd::VFS_UNLINK, pid, path, name,
                                        parent))
         return static_cast<uint64_t>(-1);
-    if (!parent->ops || !parent->ops->unlink)
+    if (!parent->ops || !parent->ops->unlink) {
+        vfs::release(parent); // issue #268: owned parent, all exits
         return static_cast<uint64_t>(-1);
+    }
     int r = parent->ops->unlink(*parent, name);
+    vfs::release(parent); // issue #268
     return static_cast<uint64_t>(r == 0 ? 0 : -1);
 }
 
@@ -669,9 +721,12 @@ uint64_t Syscall::sys_rmdir(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     if (!resolve_parent_then_authorize(vfsd::VFS_RMDIR, pid, path, name,
                                        parent))
         return static_cast<uint64_t>(-1);
-    if (!parent->ops || !parent->ops->unlink)
+    if (!parent->ops || !parent->ops->unlink) {
+        vfs::release(parent); // issue #268: owned parent, all exits
         return static_cast<uint64_t>(-1);
+    }
     int r = parent->ops->unlink(*parent, name);
+    vfs::release(parent); // issue #268
     return static_cast<uint64_t>(r == 0 ? 0 : -1);
 }
 
