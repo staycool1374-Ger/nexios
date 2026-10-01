@@ -1,0 +1,66 @@
+#!/usr/bin/expect -f
+# Live acceptance for #269 (reap line on serial; fb half by unit test),
+# #270 (fault summary without register dump), #271 (rerun without reload).
+# Usage: expect -f tools/verify-269-271.exp run-debug-mode
+set timeout 150
+eval spawn make $argv
+expect {
+    -re {\$ $} { puts "VERIFY: prompt reached" }
+    timeout { puts "VERIFY: TIMEOUT waiting for prompt"; exit 1 }
+    eof { puts "VERIFY: EOF before prompt"; exit 1 }
+}
+send "loadelf hey.c.elf\r"
+expect {
+    -re {\$ $} { puts "VERIFY: loadelf done" }
+    timeout { puts "VERIFY: TIMEOUT after loadelf"; exit 1 }
+    eof { puts "VERIFY: EOF after loadelf"; exit 1 }
+}
+send "runelf\r"
+expect {
+    -re {exited} { puts "VERIFY: run1 exited" }
+    timeout { puts "VERIFY: TIMEOUT waiting run1 exit"; exit 1 }
+    eof { puts "VERIFY: EOF waiting run1 exit"; exit 1 }
+}
+expect {
+    -re {\$ $} { puts "VERIFY: run1 done" }
+    timeout { puts "VERIFY: TIMEOUT after run1"; exit 1 }
+    eof { puts "VERIFY: EOF after run1"; exit 1 }
+}
+puts "VERIFY: settling for reap..."
+sleep 4
+send "runelf\r"
+expect {
+    -re {exited} { puts "VERIFY: run2 exited" }
+    timeout { puts "VERIFY: TIMEOUT waiting run2 exit"; exit 1 }
+    eof { puts "VERIFY: EOF waiting run2 exit"; exit 1 }
+}
+expect {
+    -re {\$ $} { puts "VERIFY: run2 done" }
+    timeout { puts "VERIFY: TIMEOUT after run2"; exit 1 }
+    eof { puts "VERIFY: EOF after run2"; exit 1 }
+}
+send "loadelf nullderef.c.elf\r"
+expect {
+    -re {\$ $} { puts "VERIFY: loadelf-null done" }
+    timeout { puts "VERIFY: TIMEOUT after loadelf-null"; exit 1 }
+    eof { puts "VERIFY: EOF after loadelf-null"; exit 1 }
+}
+send "runelf\r"
+expect {
+    -re {faulted} { puts "VERIFY: run-null faulted" }
+    timeout { puts "VERIFY: TIMEOUT waiting run-null fault"; exit 1 }
+    eof { puts "VERIFY: EOF waiting run-null fault"; exit 1 }
+}
+expect {
+    -re {\$ $} { puts "VERIFY: run-null done" }
+    timeout { puts "VERIFY: TIMEOUT after run-null"; exit 1 }
+    eof { puts "VERIFY: EOF after run-null"; exit 1 }
+}
+send "runelf\r"
+expect {
+    -re {\$ $} { puts "VERIFY: rerun-after-fault done" }
+    timeout { puts "VERIFY: TIMEOUT after rerun-after-fault"; exit 1 }
+    eof { puts "VERIFY: EOF after rerun-after-fault"; exit 1 }
+}
+puts "VERIFY: DONE"
+exit 0

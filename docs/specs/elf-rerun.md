@@ -1,0 +1,279 @@
+/* NexIOS RTOS — Rerunnable user images (issue #271, design only) */
+
+/// @file elf-rerun.md
+/// @brief DESIGN SPEC (no implementation): restart a cleanly-exited user
+///        program without `loadelf`, deterministically, at any image size.
+///
+/// Status: SPEC APPROVAL cycle (auditor). Implementation deferred.
+///
+/// Owner constraints (binding):
+/// 1. Rerun needs zero filesystem I/O (a reload during `runelf`, including
+///    its failure modes — vanished/changed file — is not acceptable).
+/// 2. Rerun needs zero bulk copies (copying megabytes per rerun breaks the
+///    first period/deadline of a time-sensitive program).
+/// 3. Rerun is deterministic in bytes AND scheduling (same image, same
+///    settled params: prio 2 / FIXED / period+deadline 100).
+/// 4. Only cleanly-exited (code 0) runs rerun; faulted/unknown never do.
+
+## 1. Rejected designs (recorded, do not revisit without new evidence)
+
+- **R1 — re-read the file at rerun** (implemented once, then reverted):
+  violates (1): the file may vanish/change between runs (refuse path) and
+  every rerun pays filesystem latency. Correct but not deterministic.
+- **R2 — pin the whole file, memcpy into fresh pages per rerun**
+  (implemented once, then reverted): violates (2): a several-megabyte app
+  pays a several-megabyte copy inside the `runelf` command, blowing the
+  first period budget. Correct but not time-deterministic.
+- Both reverts are intentional: the retained-slot metadata + outcome
+  tracking SHAPE is reused (see §3); no R1/R2 code survives in tree
+  (both reverted) — `take_completed` retention, `note_launched` /
+  `note_task_end`, the pin, and the golden set are all NEW state.
+  Only the byte source changes vs R2.
+
+## 2. Chosen design: shared read-only pages + small writable rebuild
+
+Observation: in a real user image the megabytes are code + rodata
+(read-only, never legitimately written); writable file bytes (data
+initializers) are small; BSS/stack/heap are zeros or fresh state.
+
+- At load, the read-only ranges (issue #46 `ro_ranges_`: PT_LOAD without
+  PF_W, canary slot carved) become the GOLDEN set: the exact physical
+  pages built by the load, refcounted as ONE set (single lifetime —
+  no per-page counts).
+- VMM has NO read-only user-map primitive today: every user PTE sets
+  PAGE_WRITE (`vmm.cpp` `map_page_in_pml4`), and the load maps ALL
+  segments (code, rodata AND data) via the legacy 3-arg overload, i.e.
+  RWX (`elf.cpp` `load_segments_and_stack` + `vmm.cpp:581-585`; W^X is
+  enforced only at validation, `elf.cpp:146-148`, never at the PTE).
+  Implementation MUST FIRST add a read-only user-map primitive (clear
+  RW; NX per PF_X following the #95 `page_executable` rule) AND apply
+  it at LOAD to the RO ranges (after canary install — `canary_write_at`
+  writes via HHDM phys and is PTE-perm-independent): the FIRST run's
+  golden pages must already be PTE-read-only, otherwise the live task
+  holds a writable alias to the retained bytes and "BY CONSTRUCTION"
+  byte-identity (§6) is false.
+- Every run maps the SAME golden pages read-only THROUGH THAT
+  PRIMITIVE with IDENTICAL perms (first run included): zero copies,
+  zero filesystem I/O, bit-identical bytes AND perms, bounded
+  page-table work only.
+- Every run builds writable segments, stack, and heap FRESH: zeros where
+  due, plus the small writable file bytes from a bounded pin (see §4).
+- Dynamic images (PT_DYNAMIC) are EXCLUDED entirely: nothing is pinned,
+  nothing is shared, nothing is duplicated — no retention, rerun refuses
+  with reload-required. This answers the doubling concern directly:
+  relocatable content is never retained in any form.
+
+## 3. State: retention slot + outcome tracking (survives from R1/R2)
+
+- `take_completed()` snapshots `{path, size, dynamic flag}` and adopts
+  the pin/golden refs (freeing any older retention first — subject to
+  the live-map guard in §4: an older set still mapped by a live task
+  is NOT freed until its last mapper dies). Overwrite semantics: the
+  newest taken load wins.
+- `reset()` / `release_completed()` abandon retention (unref golden,
+  free pin — same live-map guard: pages are freed ONLY at zero live
+  mappers + zero retention refs, never unconditionally). A validated
+  new `request_load` destroys an untaken completion (+ its load pin)
+  but never touches post-take retention.
+- `note_launched(id)` after successful `add_task` arms tracking;
+  `note_task_end(id, clean, code)` records it (`sys_exit` clean,
+  fault paths faulted, matched by task id). Anything else
+  (auth-kill, external kill, never launched) stays UNKNOWN.
+- Rerun requires: loader IDLE + retention valid + outcome CLEAN +
+  code 0 + static. Anything else refuses with an explicit message
+  (`no elf loaded` / `dynamic image needs reload` /
+  `last run not clean, reload required` / `rebuild failed`).
+
+## 4. Golden set + writable pin: bounds and lifecycle
+
+- Golden eligibility: static image, total RO bytes within the existing
+  4 MiB scan cap (`kMaxRoScanBytes`). Bigger → no retention (fail
+  closed, documented message path via `has_retained() == false`).
+- Writable pin eligibility: total writable file bytes within
+  `kMaxRerunWritableBytes` (1 MiB; new constant). Bigger → no retention.
+  The pin is filled during COPYING (dual-copy of RW chunks only —
+  negligible next to the load itself), transferred at take, freed on
+  take-overwrite/reset/release. BSS/stack/heap are never pinned.
+- Refcount rule (one set-count over TWO owner classes): load
+  completion holds 0 (owns pages outright); take + first launch
+  transfers pages to task AND takes ONE retention ref on the golden
+  set; EVERY live task mapping the set holds one task ref (first
+  launch AND every rerun launch — at most one live mapper at a time
+  by the §3 CLEAN gate, plus any fork children sharing the tables);
+  task death teardown unmaps (never frees) golden pages and drops
+  THAT task's ref; retention drops its ref on supersede/reset/
+  release. Pages are freed if and only if retention refs == 0 AND
+  task refs == 0 — a retention drop while a mapper is live (new take
+  overwriting retention during a live run, `reset()` during a live
+  run) MUST NOT free (live task would execute freed pages: UAF).
+  Never negative, never double-free; leak = retained by design until
+  superseded AND unmapped.
+- Lock discipline (new — was unstated): all set-count transitions run
+  under the loader spinlock, IRQ-masked, never held across
+  `reschedule()` (same ordering as `release_task_libs`: the death
+  path takes no scheduler lock before it); no bare counters (SMP:
+  lock-atomic transitions only). The idle auth slice never touches
+  the count (read-only `ro_` triple, existing handoff).
+- Peak transient: one load pin + one retained set during load-while-
+  retained (bounded, documented in §8-style accounting at implementation).
+
+## 5. Rerun build (all fresh except golden RO)
+
+Fresh PML4 + fresh TCB, then: map golden pages read-only at their
+recorded ranges; allocate + zero writable/BSS/stack/heap pages; copy
+writable file bytes from the pin; reset entry RSP frame, brk, fds
+(`open_std_fds` triple + per-fd refs), TLS base 0; set TCB canary
+records: skip the page-write ONLY for the TEXT-before slot (magic
+persists in golden pages, idempotent value); RE-INSTALL all canaries
+living in fresh pages — DATA-after (RW padding rebuilt per run),
+stack/heap (`canary_install_user_segments`), kernel stack
+(`canary_install_kernel_stack`) — then set the records (a
+marked-but-unwritten slot false-trips the checker:
+`canary_verify_user_segments` compares live page bytes to
+`CANARY_MAGIC ^ (seg+1)`, `task.cpp:869`); retention stores the
+ORIGINAL #46 baseline (crc + carved ranges) from first-run
+`snapshot_ro_baseline`, and the rerun build RE-SCANS the mapped
+golden pages and COMPARES to the retained original — mismatch
+(decay across runs) fails the build closed (no TCB published, rerun
+refused), match publishes the (equal) baseline to the rerun TCB
+which starts UNVERIFIED → idle re-verifies. NEVER adopt a fresh scan
+as the new baseline (adopt-then-verify cannot see decay: it stamps
+corrupted bytes VERIFIED — the dynamic-image adopt path in
+`snapshot_ro_baseline` exists precisely because relocation rewrites
+bytes, which never happens to static golden pages); settled params
+identical (shared launch path with first run).
+
+## 6. Determinism argument (auditor: verify each claim at implementation)
+
+- Bytes: RO = same physical pages every run (PTE-read-only in ALL
+  runs per the §2 primitive — without it the first run's writable
+  alias breaks this claim); writable = same pinned bytes; zeros
+  elsewhere. Skew padding, BSS tails, and canary slot are identical
+  across runs BY CONSTRUCTION (same pages / same pin) once the §2
+  primitive holds.
+- Scheduling: identical settled params through the shared launch path
+  (prio 2 / FIXED / period+deadline 100); admission gate unchanged
+  (a loaded system may still deny — observed live, pre-existing LUB
+  semantics, out of scope; zombies count until reaped).
+- Timing: rerun cost = page-table setup + small bounded copies. NO
+  filesystem I/O, NO bulk copies, NO unbounded loops. First-period
+  safe by construction (nothing in the rerun path scales with image
+  size except page-table mapping, which is O(pages) like any spawn).
+- Freshness: no stale state — entry frame, stack contents, brk, fds,
+  signals, verify state all rebuilt per run. Two consecutive runs of
+  a deterministic program produce byte-identical observable output.
+
+## 7. Interplay (auditor: check each at implementation)
+
+- **#46 authenticity:** baseline COMPARED per build against the
+  retained original (never re-adopted — see §5); shared pages covered
+  like mapped pages (`crc_user_range` walks any mapping); tamper →
+  FAILED → outcome path refuses rerun (auth-kill terminates with the
+  nonzero `kElfAuthKillExitCode` via `terminate_err` and has no note
+  hook → UNKNOWN → refused; implementation must ensure no hook ever
+  records an auth-kill as CLEAN/code-0).
+- **Canaries:** magic written once at load into golden pages (idempotent
+  value); per-TCB records set per build; checker reads the shared slot.
+- **Teardown surgery (highest-risk area):** `TCB::cleanup`,
+  `destroy_completed_tcb`, and every `free_user_pages` caller must
+  skip golden pages (unmap + ref-drop instead of free). Inventory at
+  implementation: all `free_user_pages` call sites, `release_task_libs`
+  ordering (shared RO unmapped before blind frees — same rule as #95
+  libs), fd-table teardown (unaffected — no vnode refs in golden set),
+  note the pre-existing destroy-vs-cleanup asymmetry: `cleanup()`
+  `vnode_ref_dec`s per fd, `destroy_completed_tcb` does not
+  (`elf_loader.cpp:252-264` vs `task.cpp:1949-1963`) — rerun TCBs die
+  via `cleanup()`, so the `cleanup()` pairing applies; disposition it
+  in implementation), `TCB::cleanup`'s direct `user_stack_` PMM free
+  loop (stack-only alloc, disjoint from golden segment pages — assert
+  disjointness, do not skip blindly), `BufferPool::unmap_all` / MMIO /
+  pager drains (unaffected — golden pages carry no such mappings;
+  assert it).
+- **Loader paths:** background async loads and the MAPPING tail must
+  behave identically with golden-marking present-but-inert when no
+  retention follows (take without launch → destroy frees all, no refs
+  taken). Snapshot/test-isolation: retained statics follow the existing
+  `reset()` discipline.
+- **Dynamic exclusion:** no pin, no golden ref, no retention — verified
+  by a refused-rerun test with a PT_DYNAMIC image (message path).
+
+## 8. Caveats (known, accepted, tracked here — not silently fixed)
+
+- C1 — debugger persistence: breakpoints (`int3`) written into shared
+  RO persist across runs and are visible to any co-mapped run. debugd
+  must re-arm/clear on rerun (follow-up issue at implementation).
+- C2 — teardown miss = double-free or leak of golden pages: the
+  implementation audit must enumerate EVERY user-page free path (see
+  §7 inventory); a single missed skip corrupts memory. Highest review
+  priority.
+- C3 — first-run vs rerun padding divergence: none BY CONSTRUCTION
+  (same pages), but any future change to load-time padding/canary
+  layout must update §5 mapping rules in lockstep (or reruns diverge
+  from first runs — assert byte-identity in tests, see §9).
+- C4 — zombie-inflated admission: rerun can be denied while the dead
+  task awaits reap (observed live). Pre-existing LUB semantics; human
+  latency absorbs it; not fixed in this cycle.
+- C5 — writable cap refusal: data-heavy images (>1 MiB writable file
+  bytes) cannot retain. Documented limitation, explicit message.
+- C6 — golden pages and PMM pressure: a retained multi-MB set pins
+  physical memory until superseded/reset. Acceptable (one set max);
+  `tasks`/meminfo should surface it (follow-up display item).
+- C7 — SMP/TLB: the new §2 RO primitive changes PTE perms on live
+  tables (load path) — TLB purge discipline per arch at implementation
+  (x86 `tlb_purge_context`-class invalidation); set-count transitions
+  are lock-atomic only (see §4), no bare counters.
+- C8 — fork/clone interplay: a fork child shares page tables
+  (`page_table_shared_`) including golden mappings; the teardown skip
+  must compose with the shared-table skip, and fork children count as
+  live mappers under the §4 rule. Rerun while a fork child lives maps
+  the same phys into a third PML4 — readers coexist, frees wait for
+  zero (same rule, no new mechanism, but pin it in tests).
+- C9 — PMM fragmentation: C6 covers pin pressure (bytes pinned), not
+  fragmentation (golden sets are multi-page contiguous allocs that pin
+  frames across the map; repeated retain/supersede cycles can fragment
+  the contiguous pool — same class as segment allocs, no new
+  mechanism, monitor only).
+- C10 — debugger writes vs PTE-RO: C1 covers breakpoint persistence;
+  additionally debugd's write path must target golden pages via HHDM
+  phys (or explicit temporary unprotect) once §2 PTE-RO lands —
+  virt writes will fault by design.
+
+## 9. Test strategy (implementation must provide)
+
+- Retention lifecycle (take snapshots, reset/release abandon, no
+  retention without pin).
+- Byte-identity: run, corrupt AND DELETE the image file, rerun from
+  retention, assert identical output (proves no filesystem dependence).
+- Fault-blocked (real fault → FAULTED → refused), unknown-blocked,
+  dynamic-refused (message), oversize-writable-refused, busy-refused.
+- Golden balance: ResourceTracker PMM flat across
+  take→launch→death→rerun→reset cycles (no leak, no double-free).
+- Auth re-verify on rerun: rescan EQUALS retained original → VERIFIED
+  via idle slice; corrupt-one-golden-byte (via HHDM phys, simulating
+  decay) → build refused before publish (proves compare-not-adopt).
+- Canary pin on rerun: DATA-after + stack/heap/kernel-stack slots hold
+  live magic after rerun build (checker passes); TEXT-before slot
+  untouched since load (proves selective skip, §5).
+- RO-perm pin: golden PTEs have RW clear (and NX per PF_X) in BOTH
+  first-run and rerun tables (proves §2 primitive + no divergence).
+- Supersede-while-live: take-overwrite (and `reset()`) during a live
+  run does NOT free golden phys (balance + live task still
+  byte-correct); pages freed only after death + drop (proves §4
+  live-map guard, no UAF, no leak).
+- Launch fidelity: existing take/launch tests unchanged (extraction
+  shared first/rerun path).
+
+## 10. Requirements checklist (for issue #271)
+
+- [ ] R1: rerun after clean code-0 exit without `loadelf`.
+- [ ] R2: zero filesystem I/O in the rerun path (prove by
+  deleted-file rerun test).
+- [ ] R3: zero bulk copies in the rerun path (prove by design +
+  concrete bounds: writable copies ≤ `kMaxRerunWritableBytes`, PTE
+  work ≤ capped RO pages + fresh RW/stack/heap pages, no file I/O,
+  no loop over image bytes; assert first-period budget in test).
+- [ ] R4: identical settled scheduling params every run.
+- [ ] R5: faulted/unknown/dynamic/oversize/busy all refuse explicitly.
+- [ ] R6: no retention growth without bound (one set max + caps).
+- [ ] R7: existing gates stay green (build + full debug/release).
+- [ ] R8: SIL 3 audit APPROVED on the implementation.
