@@ -23,6 +23,7 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/log/dmesg.hpp>
+#include <kernel/log/dmesg_catalog.hpp>
 
 using namespace kernel;
 
@@ -224,7 +225,7 @@ JARVIS_TEST(dmesg_overflow, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: subsystem_name() returns the correct string for each subsystem.
-// Input: all 7 ErrorSubsystem values + invalid
+// Input: all 19 ErrorSubsystem values
 // Expect: correct short names
 // Depends: kernel::log::subsystem_name
 JARVIS_TEST(dmesg_subsystem_names, "PRE: none | POST: none") {
@@ -259,6 +260,62 @@ JARVIS_TEST(dmesg_subsystem_names, "PRE: none | POST: none") {
                          log::subsystem_name(log::ErrorSubsystem::SYSCALL))
             == 0,
         "expected SYSCALL");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("NET", log::subsystem_name(log::ErrorSubsystem::NET))
+            == 0,
+        "expected NET");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("ELF", log::subsystem_name(log::ErrorSubsystem::ELF))
+            == 0,
+        "expected ELF");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("USERSPACE",
+                         log::subsystem_name(log::ErrorSubsystem::USER))
+            == 0,
+        "expected USERSPACE");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("DAEMON",
+                         log::subsystem_name(log::ErrorSubsystem::DAEMON))
+            == 0,
+        "expected DAEMON");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("PMM", log::subsystem_name(log::ErrorSubsystem::PMM))
+            == 0,
+        "expected PMM");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("VMM", log::subsystem_name(log::ErrorSubsystem::VMM))
+            == 0,
+        "expected VMM");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("TASK",
+                         log::subsystem_name(log::ErrorSubsystem::TASK))
+            == 0,
+        "expected TASK");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("BUFPOOL",
+                         log::subsystem_name(log::ErrorSubsystem::BUFPOOL))
+            == 0,
+        "expected BUFPOOL");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("DRIVER",
+                         log::subsystem_name(log::ErrorSubsystem::DRIVER))
+            == 0,
+        "expected DRIVER");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("INIT",
+                         log::subsystem_name(log::ErrorSubsystem::INIT))
+            == 0,
+        "expected INIT");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("TIMING",
+                         log::subsystem_name(log::ErrorSubsystem::TIMING))
+            == 0,
+        "expected TIMING");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("TEST",
+                         log::subsystem_name(log::ErrorSubsystem::TEST))
+            == 0,
+        "expected TEST");
     JARVIS_TEST_PASS();
 }
 
@@ -478,6 +535,329 @@ JARVIS_TEST(dmesg_timestamp_and_task_id, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: severity_name() covers all five severities + invalid input.
+// Input: all LogSeverity values + out-of-range cast
+// Expect: DEBUG/INFO/WARN/ERROR/FATAL strings, UNK for invalid
+// Depends: kernel::log::severity_name
+JARVIS_TEST(dmesg_severity_names, "PRE: none | POST: none") {
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("DEBUG",
+                         log::severity_name(log::LogSeverity::DEBUG)) == 0,
+        "expected DEBUG");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("INFO", log::severity_name(log::LogSeverity::INFO))
+            == 0,
+        "expected INFO");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("WARN", log::severity_name(log::LogSeverity::WARN))
+            == 0,
+        "expected WARN");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("ERROR",
+                         log::severity_name(log::LogSeverity::ERROR)) == 0,
+        "expected ERROR");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("FATAL",
+                         log::severity_name(log::LogSeverity::FATAL)) == 0,
+        "expected FATAL");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp(
+            "UNK", log::severity_name(static_cast<log::LogSeverity>(0xFF)))
+            == 0,
+        "expected UNK");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Canonical bases are 1000 apart and legacy codes still decode.
+// Input: subsystem_base() for all subsystems, is_canonical_nbr probes,
+//        legacy 0xDA01/0xDB02/0xDC01 strings + INFO predicate
+// Expect: distinct 1000-spaced bases; legacy compat intact
+// Depends: kernel::log::{subsystem_base, is_canonical_nbr,
+//         base_error_string, base_code_is_info}
+JARVIS_TEST(dmesg_canonical_bases, "PRE: none | POST: none") {
+    JARVIS_ASSERT_EQ(log::kDmesgBase_SYNC, log::subsystem_base(
+                                               log::ErrorSubsystem::SYNC));
+    JARVIS_ASSERT_EQ(log::kDmesgBase_NET, log::subsystem_base(
+                                              log::ErrorSubsystem::NET));
+    JARVIS_ASSERT_EQ(log::kDmesgBase_ELF, log::subsystem_base(
+                                              log::ErrorSubsystem::ELF));
+    JARVIS_ASSERT_EQ(log::kDmesgBase_USER, log::subsystem_base(
+                                               log::ErrorSubsystem::USER));
+    JARVIS_ASSERT_EQ(log::kDmesgBase_DAEMON,
+                     log::subsystem_base(log::ErrorSubsystem::DAEMON));
+    JARVIS_ASSERT_EQ(log::kDmesgStride, 1000ULL);
+    JARVIS_ASSERT(log::is_canonical_nbr(log::ErrorSubsystem::DAEMON,
+                                        log::kDmesgBase_DAEMON + 1));
+    JARVIS_ASSERT(!log::is_canonical_nbr(log::ErrorSubsystem::DAEMON,
+                                         log::kDmesgBase_DAEMON + 1000));
+    JARVIS_ASSERT(!log::is_canonical_nbr(log::ErrorSubsystem::BASE, 0xDA01));
+    // Legacy field-log compat: old codes decode and classify as before.
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Daemon exited",
+                         log::base_error_string(0xDA01ULL)) == 0,
+        "legacy daemon code must decode");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("ELF load completed",
+                         log::base_error_string(0xDB02ULL)) == 0,
+        "legacy elf code must decode");
+    JARVIS_ASSERT(log::base_code_is_info(log::kDmesgBase_ELF + 1));
+    JARVIS_ASSERT(!log::base_code_is_info(log::kDmesgBase_ELF + 4));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: catalog_lookup resolves records; unknown pairs fall back.
+// Input: known DAEMON/ELF/USER/NET numbers, unknown subsystem + number
+// Expect: severity + text per record; nullptr / ERROR / UNKNOWN fallback
+// Depends: kernel::log::catalog::{catalog_lookup, lookup_severity,
+//         catalog_text}
+JARVIS_TEST(dmesg_catalog_lookup, "PRE: none | POST: none") {
+    const log::catalog::DmesgRecord *rec = log::catalog::catalog_lookup(
+        log::ErrorSubsystem::DAEMON, log::kDmesgBase_DAEMON + 1);
+    JARVIS_ASSERT(rec != nullptr);
+    JARVIS_ASSERT_EQ(log::LogSeverity::ERROR, rec->severity);
+    JARVIS_ASSERT_FMT(__builtin_strcmp("Daemon exited", rec->text) == 0,
+                      "daemon text, got %s", rec->text);
+
+    rec = log::catalog::catalog_lookup(log::ErrorSubsystem::ELF,
+                                       log::kDmesgBase_ELF + 14);
+    JARVIS_ASSERT(rec != nullptr);
+    JARVIS_ASSERT_EQ(log::LogSeverity::FATAL, rec->severity);
+
+    rec = log::catalog::catalog_lookup(log::ErrorSubsystem::USER,
+                                       log::kDmesgBase_USER + 1);
+    JARVIS_ASSERT(rec != nullptr);
+    JARVIS_ASSERT_EQ(log::LogSeverity::INFO, rec->severity);
+
+    rec = log::catalog::catalog_lookup(log::ErrorSubsystem::NET,
+                                       log::kDmesgBase_NET + 2);
+    JARVIS_ASSERT(rec != nullptr);
+    JARVIS_ASSERT_EQ(log::LogSeverity::WARN, rec->severity);
+
+    JARVIS_ASSERT(log::catalog::catalog_lookup(log::ErrorSubsystem::ELF,
+                                               log::kDmesgBase_ELF + 999)
+                  == nullptr);
+    JARVIS_ASSERT(log::catalog::catalog_lookup(log::ErrorSubsystem::SYNC,
+                                               1001ULL) == nullptr);
+    JARVIS_ASSERT_EQ(log::LogSeverity::ERROR,
+                     log::catalog::lookup_severity(log::ErrorSubsystem::ELF,
+                                                   log::kDmesgBase_ELF
+                                                       + 999));
+    JARVIS_ASSERT_EQ(log::LogSeverity::INFO,
+                     log::catalog::lookup_severity(log::ErrorSubsystem::SYNC,
+                                                   0ULL));
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("UNKNOWN",
+                         log::catalog::catalog_text(log::ErrorSubsystem::ELF,
+                                                    log::kDmesgBase_ELF + 999))
+            == 0,
+        "unknown pair must be UNKNOWN");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Daemon restarted",
+                         log::error_string(log::ErrorSubsystem::DAEMON,
+                                           log::kDmesgBase_DAEMON + 2))
+            == 0,
+        "error_string must serve catalog subsystems");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Explicit-severity pushes survive the ring round trip.
+// Input: push ELF/FATAL + DAEMON/INFO, pop both
+// Expect: severity, subsystem, code, message preserved in order
+// Depends: DmesgService::push (severity overload), ::pop
+JARVIS_TEST(dmesg_push_severity_roundtrip, "PRE: none | POST: none") {
+    auto &db = log::DmesgService::instance();
+    db.clear();
+    db.push(log::ErrorSubsystem::ELF, log::kDmesgBase_ELF + 14,
+            log::LogSeverity::FATAL, "auth kill probe");
+    db.push(log::ErrorSubsystem::DAEMON, log::kDmesgBase_DAEMON + 3,
+            log::LogSeverity::INFO, "ensured probe");
+    log::LogEntry entry{};
+    JARVIS_ASSERT(db.pop(entry));
+    JARVIS_ASSERT_EQ(log::LogSeverity::FATAL, entry.severity);
+    JARVIS_ASSERT_EQ(log::ErrorSubsystem::ELF, entry.subsystem);
+    JARVIS_ASSERT_EQ(log::kDmesgBase_ELF + 14, entry.error_code);
+    JARVIS_ASSERT(db.pop(entry));
+    JARVIS_ASSERT_EQ(log::LogSeverity::INFO, entry.severity);
+    JARVIS_ASSERT_EQ(log::ErrorSubsystem::DAEMON, entry.subsystem);
+    JARVIS_ASSERT(db.empty());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: format_dmesg_entry emits the canonical line shape, bounded.
+// Input: synthetic FATAL/DAEMON entry (tick time) + truncation probe
+// Expect: "[DMESG <ts>ms]: FATAL DAEMON <nr> <text>: <msg> [task=..]",
+//         wall_ms override, NUL-terminated truncation within cap
+// Depends: kernel::log::format_dmesg_entry
+JARVIS_TEST(dmesg_render_format, "PRE: none | POST: none") {
+    log::LogEntry entry{};
+    entry.timestamp = 4242;
+    entry.task_id = 7;
+    entry.subsystem = log::ErrorSubsystem::DAEMON;
+    entry.severity = log::LogSeverity::FATAL;
+    entry.error_code = log::kDmesgBase_DAEMON + 1;
+    entry.context = 0xAB;
+    const char *msg = "render probe";
+    size_t mi = 0;
+    while (msg[mi] && mi < log::LogEntry::kMessageCap - 1) {
+        entry.message[mi] = msg[mi];
+        ++mi;
+    }
+    entry.message[mi] = '\0';
+
+    char line[log::DMESG_RENDER_CAP] = {};
+    size_t len = log::format_dmesg_entry(line, sizeof(line), entry);
+    JARVIS_ASSERT(len > 0);
+    JARVIS_ASSERT(len < sizeof(line));
+    JARVIS_ASSERT(line[len] == '\0');
+    // Spot-check shape markers in order: prefix, severity, codebase,
+    // canonical number, message, task trailer. wall_ms == 0 here, so the
+    // tick fallback renders.
+    const char *needles[] = {"[DMESG 4242ms tick]:", "FATAL", "DAEMON",
+                             "10001", "Daemon exited", "render probe",
+                             "[task=7 "};
+    size_t scan_from = 0;
+    for (size_t ni = 0; ni < sizeof(needles) / sizeof(needles[0]); ++ni) {
+        const char *nd = needles[ni];
+        size_t nlen = 0;
+        while (nd[nlen] != '\0' && nlen < 64) {
+            ++nlen;
+        }
+        bool found = false;
+        for (size_t pi = scan_from; line[pi] != '\0'; ++pi) {
+            size_t ki = 0;
+            while (ki < nlen && line[pi + ki] == nd[ki]) {
+                ++ki;
+            }
+            if (ki == nlen) {
+                scan_from = pi + nlen;
+                found = true;
+                break;
+            }
+        }
+        JARVIS_ASSERT_FMT(found, "render missing %s: %s", nd, line);
+    }
+
+    // Wall-clock override wins over the tick count: 999001 ms after the
+    // epoch renders as a datetime, not as a tick count.
+    entry.wall_ms = 999001;
+    char wall_line[log::DMESG_RENDER_CAP] = {};
+    log::format_dmesg_entry(wall_line, sizeof(wall_line), entry);
+    bool wall_found = false;
+    const char *wall_nd = "[DMESG 1970-01-01 00:16:39:001]:";
+    size_t wall_len = 0;
+    while (wall_nd[wall_len] != '\0' && wall_len < 64) {
+        ++wall_len;
+    }
+    for (size_t pi = 0; wall_line[pi] != '\0'; ++pi) {
+        size_t ki = 0;
+        while (ki < wall_len && wall_line[pi + ki] == wall_nd[ki]) {
+            ++ki;
+        }
+        if (ki == wall_len) {
+            wall_found = true;
+            break;
+        }
+    }
+    JARVIS_ASSERT_FMT(wall_found, "wall time missing: %s", wall_line);
+
+    // Truncation: tiny buffer stays NUL-terminated within cap.
+    char tiny[16] = {};
+    size_t tiny_len = log::format_dmesg_entry(tiny, sizeof(tiny), entry);
+    JARVIS_ASSERT(tiny_len < sizeof(tiny));
+    JARVIS_ASSERT(tiny[sizeof(tiny) - 1] == '\0');
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Full #234 taxonomy resolves: every wired table serves text
+// for code 0 and its max code, canonical numbers strip to the same text,
+// the panic code decodes, and unknown pairs stay UNKNOWN/ERROR.
+// Input: code 0 / max / canonical / huge codes across all 19 subsystems
+// Expect: real texts for defined codes, UNKNOWN only for undefined
+// Depends: error_string, strip_canonical, lookup_severity, base codes
+JARVIS_TEST(dmesg_full_taxonomy, "PRE: none | POST: none") {
+    // Newly wired tables: raw and canonical resolve identically.
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Out of memory — no free physical pages",
+                         log::error_string(log::ErrorSubsystem::PMM, 1))
+            == 0,
+        "PMM OOM text");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Out of memory — no free physical pages",
+                         log::error_string(log::ErrorSubsystem::PMM,
+                                           log::kDmesgBase_PMM + 1))
+            == 0,
+        "PMM canonical strip");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Virtual address not mapped",
+                         log::error_string(log::ErrorSubsystem::VMM,
+                                           log::kDmesgBase_VMM + 4))
+            == 0,
+        "VMM canonical strip");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Task control block corrupt (bad magic)",
+                         log::error_string(log::ErrorSubsystem::TASK, 9))
+            == 0,
+        "TASK corruption text");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Buffer is not mapped in this task",
+                         log::error_string(log::ErrorSubsystem::BUFPOOL, 7))
+            == 0,
+        "BUFPOOL text");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Invalid or uninitialized BAR",
+                         log::error_string(log::ErrorSubsystem::DRIVER, 3))
+            == 0,
+        "DRIVER/PCI text");
+    // Event records resolve through the catalog with record severity.
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Timing: deadline missed",
+                         log::error_string(log::ErrorSubsystem::TIMING,
+                                           log::kDmesgBase_TIMING + 1))
+            == 0,
+        "TIMING text");
+    JARVIS_ASSERT_EQ(log::LogSeverity::WARN,
+                     log::catalog::lookup_severity(
+                         log::ErrorSubsystem::TIMING,
+                         log::kDmesgBase_TIMING + 3));
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Kernel panic",
+                         log::error_string(log::ErrorSubsystem::BASE,
+                                           log::kDmesgPanicCode))
+            == 0,
+        "panic text");
+    // Taxonomy spot checks: OK is INFO, routine codes WARN, faults ERROR.
+    JARVIS_ASSERT_EQ(log::LogSeverity::INFO,
+                     log::catalog::lookup_severity(log::ErrorSubsystem::SYNC,
+                                                   0ULL));
+    JARVIS_ASSERT_EQ(log::LogSeverity::WARN,
+                     log::catalog::lookup_severity(log::ErrorSubsystem::VFS,
+                                                   3ULL));
+    JARVIS_ASSERT_EQ(log::LogSeverity::ERROR,
+                     log::catalog::lookup_severity(log::ErrorSubsystem::PMM,
+                                                   1ULL));
+    JARVIS_ASSERT_EQ(log::LogSeverity::ERROR,
+                     log::catalog::lookup_severity(log::ErrorSubsystem::TASK,
+                                                   9ULL));
+    // Unknown pairs fail closed.
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("UNKNOWN",
+                         log::error_string(log::ErrorSubsystem::TEST,
+                                           log::kDmesgBase_TEST + 999))
+            == 0,
+        "unknown stays UNKNOWN");
+    JARVIS_ASSERT_EQ(log::LogSeverity::ERROR,
+                     log::catalog::lookup_severity(
+                         log::ErrorSubsystem::TEST,
+                         log::kDmesgBase_TEST + 999));
+    JARVIS_TEST_PASS();
+}
+
 void register_dmesg_tests() {
     Logger::info("Registering DMESG tests");
 
@@ -496,4 +876,10 @@ void register_dmesg_tests() {
     JARVIS_REGISTER_TEST(dmesg_error_string_dispatch);
     JARVIS_REGISTER_TEST(dmesg_suppression_toggle);
     JARVIS_REGISTER_TEST(dmesg_timestamp_and_task_id);
+    JARVIS_REGISTER_TEST(dmesg_severity_names);
+    JARVIS_REGISTER_TEST(dmesg_canonical_bases);
+    JARVIS_REGISTER_TEST(dmesg_catalog_lookup);
+    JARVIS_REGISTER_TEST(dmesg_push_severity_roundtrip);
+    JARVIS_REGISTER_TEST(dmesg_render_format);
+    JARVIS_REGISTER_TEST(dmesg_full_taxonomy);
 }

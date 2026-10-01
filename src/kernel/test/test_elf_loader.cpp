@@ -579,14 +579,31 @@ JARVIS_TEST(loader_fault_dump_gated, "PRE: vfsd, iocd | POST: none") {
         if (n == 0)
             break;
         for (size_t i = 0; i < n; ++i) {
+            // Manual char compares only: __builtin_memcmp emits a memcmp
+            // libcall on riscv64 (no freestanding provider) while x86_64
+            // folds it — the call breaks the riscv64 link (issue #234
+            // cross-arch gate; pre-existing at HEAD).
+            bool is_stack_trace =
+                (kbuf[i] == 'S' && i + 11 < n && kbuf[i + 1] == 't' &&
+                 kbuf[i + 2] == 'a' && kbuf[i + 3] == 'c' &&
+                 kbuf[i + 4] == 'k' && kbuf[i + 5] == ' ' &&
+                 kbuf[i + 6] == 't' && kbuf[i + 7] == 'r' &&
+                 kbuf[i + 8] == 'a' && kbuf[i + 9] == 'c' &&
+                 kbuf[i + 10] == 'e' && kbuf[i + 11] == ':');
+            bool is_unhandled_sig =
+                (kbuf[i] == 'u' && i + 15 < n && kbuf[i + 1] == 'n' &&
+                 kbuf[i + 2] == 'h' && kbuf[i + 3] == 'a' &&
+                 kbuf[i + 4] == 'n' && kbuf[i + 5] == 'd' &&
+                 kbuf[i + 6] == 'l' && kbuf[i + 7] == 'e' &&
+                 kbuf[i + 8] == 'd' && kbuf[i + 9] == ' ' &&
+                 kbuf[i + 10] == 's' && kbuf[i + 11] == 'i' &&
+                 kbuf[i + 12] == 'g' && kbuf[i + 13] == 'n' &&
+                 kbuf[i + 14] == 'a' && kbuf[i + 15] == 'l');
             if ((kbuf[i] == 'R' && i + 4 < n && kbuf[i + 1] == 'A' &&
                  kbuf[i + 2] == 'X' && kbuf[i + 3] == ':') ||
                 (kbuf[i] == 'C' && i + 3 < n && kbuf[i + 1] == 'R' &&
                  kbuf[i + 2] == '2') ||
-                (kbuf[i] == 'S' && i + 11 < n &&
-                 __builtin_memcmp(kbuf + i, "Stack trace:", 12) == 0) ||
-                (kbuf[i] == 'u' && i + 16 < n &&
-                 __builtin_memcmp(kbuf + i, "unhandled signal", 16) == 0)) {
+                is_stack_trace || is_unhandled_sig) {
                 saw_dump = true;
                 break;
             }

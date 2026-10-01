@@ -240,7 +240,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"random_vfs_write",      2,    0,       0      },  // /dev/random VFS write
 
     // logging / debug
-    {"logging_dmesg",        15,    0,       0      },  // DmesgBuffer + error strings + suppression
+    {"logging_dmesg",        21,    0,       0      },  // DmesgBuffer + error strings + suppression + severity/catalog/render (issue #234) + full taxonomy
     {"logging_klog",          9,    0,       0      },  // kernel log read/wrap/concurrent + task-end silence gate (user request)
     {"debug_core",            2,    0,       0      },  // write formats + switch logs (qemu_debug_exit tests disabled)
     {"debug_gcov",            4,    0,       0      },  // GCOV coverage metadata
@@ -286,7 +286,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
     {"deadline",            125,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76)
     {"ui",                  69,   0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin
-    {"logging_debug",       29,   0,       0      },  // dmesg + klog + debug + gcov (issue #173)
+    {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
     {"random",              17,   0,       0      },  // random_* (issue #173)
     {"bench",               22,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173)
     {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls, rescued (issue #61, wired up #173)

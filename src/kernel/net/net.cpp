@@ -20,6 +20,7 @@
 /// @brief Network stack core implementation.
 
 #include <kernel/net/net.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
@@ -239,6 +240,12 @@ bool net_send_udp(Nic &nic, Ipv4Addr dst_ip, uint16_t dst_port,
         Logger::warn("net: ARP resolution failed for %d.%d.%d.%d",
                      dst_ip.addr[0], dst_ip.addr[1], dst_ip.addr[2],
                      dst_ip.addr[3]);
+        // Issue #234: neighbour-resolution failure enters the ring.
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::NET,
+                                    kernel::log::kDmesgBase_NET + 4,
+                                    kernel::log::LogSeverity::WARN,
+                                    "ARP resolution failed",
+                                    dst_ip.as_u32());
         return false;
     }
 
@@ -248,6 +255,10 @@ bool net_send_udp(Nic &nic, Ipv4Addr dst_ip, uint16_t dst_port,
 
     if (frame_len > MAX_PACKET_SIZE) {
         Logger::error("net: packet too large (%zu)", frame_len);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::NET,
+                                    kernel::log::kDmesgBase_NET + 5,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "UDP packet too large", frame_len);
         return false;
     }
 
@@ -334,6 +345,10 @@ bool net_send_icmp_echo(Nic &nic, Ipv4Addr dst_ip, uint16_t id, uint16_t seq,
 
     if (frame_len > MAX_PACKET_SIZE) {
         Logger::error("net: ping packet too large (%zu)", frame_len);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::NET,
+                                    kernel::log::kDmesgBase_NET + 5,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "ping packet too large", frame_len);
         return false;
     }
 

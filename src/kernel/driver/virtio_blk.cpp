@@ -20,6 +20,7 @@
 /// @brief Virtio block driver implementation.
 
 #include <kernel/driver/virtio_blk.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/arch/pci.hpp>
@@ -67,12 +68,22 @@ VirtioBlkDriver::~VirtioBlkDriver() {
 bool VirtioBlkDriver::init() {
     if (!arch::virtio_init_transport(transport_)) {
         Logger::error("virtio-blk: transport init failed");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 2,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-blk transport", 0);
         return false;
     }
 
     // Negotiate features: require VERSION_1, offer nothing extra
     uint64_t features = VIRTIO_F_VERSION_1;
     if (!arch::virtio_negotiate_features(transport_, features)) {
+        // Issue #234: silent negotiation failure enters the ring.
+        Logger::error("virtio-blk: feature negotiation failed");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 7,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-blk features", 0);
         return false;
     }
 
@@ -91,6 +102,10 @@ bool VirtioBlkDriver::init() {
 
     if (!desc_phys_ || !avail_phys_ || !used_phys_ || !dma_buf_phys_) {
         Logger::error("virtio-blk: OOM for queue memory");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 6,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-blk queue OOM", 0);
         return false;
     }
 
@@ -112,6 +127,10 @@ bool VirtioBlkDriver::init() {
     if (!arch::virtio_setup_queue(transport_, 0, queue_size_, desc_phys_,
                                   avail_phys_, used_phys_)) {
         Logger::error("virtio-blk: queue setup failed");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 3,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-blk queue setup", 0);
         return false;
     }
 
@@ -167,6 +186,10 @@ bool VirtioBlkDriver::wait_request_poll(uint16_t used_snapshot) {
     }
     if (timeout <= 0) {
         Logger::error("virtio-blk: request timeout");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 4,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-blk timeout", 0);
         return false;
     }
     return true;
@@ -178,6 +201,10 @@ bool VirtioBlkDriver::finish_request(bool is_read, uint8_t *data) {
         dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
     if (*status_ptr != VIRTIO_BLK_S_OK) {
         Logger::error("virtio-blk: request failed (status=%d)", *status_ptr);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 5,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-blk request", *status_ptr);
         return false;
     }
 
@@ -275,12 +302,20 @@ bool VirtioBlkDriver::wait_request(uint16_t used_snapshot,
     if (!done) {
         // Timeout: retire exactly like the poll path (log + false).
         Logger::error("virtio-blk: request timeout");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 4,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-blk wait timeout", 0);
         return false;
     }
     if (status != VIRTIO_BLK_S_OK) {
         // Teardown error wake (or a device-reported failure snapshotted
         // by the ISR): same failure semantics as finish_request.
         Logger::error("virtio-blk: request failed (status=%d)", status);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 5,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-blk wait failed", status);
         return false;
     }
     return true;

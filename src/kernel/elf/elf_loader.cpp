@@ -426,7 +426,63 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t ticks,
         append_str("s");
     }
     slot[n] = '\0';
-    log::dmesg_push_base(code, slot, 0);
+    // Issue #234: translate the legacy BASE 0xDBxx event code to the
+    // canonical ELF record (base + offset) with catalog severity, then
+    // push under the ELF subsystem. Unknown codes fail closed to ERROR.
+    uint64_t canon = log::kDmesgBase_ELF + 4;
+    log::LogSeverity sev = log::LogSeverity::ERROR;
+    switch (code) {
+    case 0xDB01:
+        canon = log::kDmesgBase_ELF + 1;
+        sev = log::LogSeverity::INFO;
+        break;
+    case 0xDB02:
+        canon = log::kDmesgBase_ELF + 2;
+        sev = log::LogSeverity::INFO;
+        break;
+    case 0xDB03:
+        canon = log::kDmesgBase_ELF + 3;
+        sev = log::LogSeverity::INFO;
+        break;
+    case 0xDB04:
+        canon = log::kDmesgBase_ELF + 4;
+        break;
+    case 0xDB05:
+        canon = log::kDmesgBase_ELF + 5;
+        break;
+    case 0xDB06:
+        canon = log::kDmesgBase_ELF + 6;
+        break;
+    case 0xDB07:
+        canon = log::kDmesgBase_ELF + 7;
+        break;
+    case 0xDB08:
+        // 0xDB08 is produced only by the missing-shared-lib site: the
+        // canonical record is ELF+10 (ERROR), not ELF+8 (rejected/WARN).
+        canon = log::kDmesgBase_ELF + 10;
+        break;
+    case 0xDB09:
+        // 0xDB09 is produced only by the layout-conflict site: the
+        // canonical record is ELF+11 (ERROR), not ELF+9 (rejected/WARN).
+        canon = log::kDmesgBase_ELF + 11;
+        break;
+    case 0xDB0A:
+        canon = log::kDmesgBase_ELF + 12;
+        break;
+    case 0xDB0B:
+        canon = log::kDmesgBase_ELF + 13;
+        break;
+    case 0xDB0C:
+        canon = log::kDmesgBase_ELF + 14;
+        sev = log::LogSeverity::FATAL;
+        break;
+    case 0xDB0D:
+        canon = log::kDmesgBase_ELF + 15;
+        break;
+    default:
+        break;
+    }
+    log::dmesg_push_sev(log::ErrorSubsystem::ELF, canon, sev, slot, 0);
     kernel::Logger::info("%s", slot);
     // Live-session finding (#77 report): loader progress must ALSO reach
     // the framebuffer console — Logger serves serial/dmesg only, so

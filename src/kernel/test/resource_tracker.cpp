@@ -20,6 +20,7 @@
 /// @brief Resource tracker implementation.
 
 #include <kernel/test/resource_tracker.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <logger.hpp>
 #include <string.hpp>
@@ -188,6 +189,10 @@ bool ResourceTracker::check(const ResourceCounters &baseline,
     };
 
     Logger::warn("[RESOURCE] %s leaked resources:", test_name);
+    // Issue #234: selftest leaks enter the dmesg ring (TEST subsystem).
+    kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::TEST,
+                                kernel::log::kDmesgBase_TEST + 1,
+                                kernel::log::LogSeverity::ERROR, test_name, 0);
 
     // Lossless lifecycle summary for leak analysis: how many tasks were created
     // vs cleanup()'d vs delete()'d since boot.  A gap (create > cleanup, or

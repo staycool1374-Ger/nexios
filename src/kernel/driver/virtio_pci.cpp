@@ -20,6 +20,7 @@
 /// @brief Virtio PCI transport implementation (modern 1.0 interface).
 
 #include <kernel/arch/virtio.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/arch/pci.hpp>
 #include <logger.hpp>
 #include <lib/atomic.hpp>
@@ -124,6 +125,12 @@ bool virtio_find_device(uint16_t device_id, VirtioTransport &transport) {
                 Logger::error(
                     "virtio: failed to map cfg type %d at bar %d + 0x%x",
                     cap.cfg_type, cap.bar, cap.offset);
+                // Issue #234: MMIO mapping failure enters the ring.
+                kernel::log::dmesg_push_sev(
+                    kernel::log::ErrorSubsystem::DRIVER,
+                    kernel::log::kDmesgBase_DRIVER + 2,
+                    kernel::log::LogSeverity::ERROR, "virtio cfg map",
+                    cap.cfg_type);
             }
         }
 
@@ -190,6 +197,10 @@ bool virtio_negotiate_features(VirtioTransport &t, uint64_t driver_features) {
     status = virtio_read_status(t);
     if (!(status & VIRTIO_STATUS_FEATURES_OK)) {
         Logger::error("virtio: device rejected feature negotiation");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 7,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio features rejected", 0);
         return false;
     }
 
@@ -207,6 +218,10 @@ bool virtio_setup_queue(VirtioTransport &t, uint16_t queue_idx,
     uint16_t size = virtio_read_common16(t, VIRTIO_COMMON_QUEUE_SIZE);
     if (size == 0) {
         Logger::error("virtio: queue %d not available", queue_idx);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 3,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio queue unavailable", queue_idx);
         return false;
     }
     if (queue_size > size)

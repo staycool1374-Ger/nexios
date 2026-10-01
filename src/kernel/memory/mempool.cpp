@@ -17,6 +17,7 @@
  */
 
 #include <kernel/memory/mempool.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <kernel/sync/irq_spinlock_guard.hpp>
@@ -141,6 +142,12 @@ void MemPool::free(void *block) {
             if (pool.is_block_pinned(block_idx)) {
                 Logger::warn("MemPool::free: pinned block %zu in pool %zu",
                              block_idx, i);
+                // Issue #234: pinned-free refusal enters the ring.
+                kernel::log::dmesg_push_sev(
+                    kernel::log::ErrorSubsystem::MEMPOOL,
+                    kernel::log::kDmesgBase_MPOOL + 3,
+                    kernel::log::LogSeverity::WARN, "pinned block kept",
+                    block_idx);
                 return;
             }
             ENSURE(!pool.is_block_freed(block_idx) && "double-free detected");

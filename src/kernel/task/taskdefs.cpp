@@ -20,6 +20,7 @@
 /// @brief Task definition table and reboot-from-table implementation.
 
 #include <kernel/task/taskdefs.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/sporadic_server.hpp>
 #include <kernel/elf/elf.hpp>
@@ -339,6 +340,11 @@ void reboot_from_table() {
             if (!kernel::elf::validate_header(hdr)) {
                 Logger::warn("reboot: invalid ELF '%s' for task '%s'",
                              def.elf_path, def.name);
+                // Issue #234: broken task definition enters the ring.
+                kernel::log::dmesg_push_sev(
+                    kernel::log::ErrorSubsystem::INIT,
+                    kernel::log::kDmesgBase_INIT + 13,
+                    kernel::log::LogSeverity::ERROR, def.name, 0);
                 break;
             }
             task = kernel::elf::load(hdr, f.data, f.size);
@@ -364,6 +370,11 @@ void reboot_from_table() {
         if (!task) {
             Logger::warn("reboot: failed to create task '%s', skipping",
                          def.name);
+            // Issue #234: failed task creation enters the ring.
+            kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::INIT,
+                                        kernel::log::kDmesgBase_INIT + 14,
+                                        kernel::log::LogSeverity::ERROR,
+                                        def.name, 0);
             continue;
         }
 

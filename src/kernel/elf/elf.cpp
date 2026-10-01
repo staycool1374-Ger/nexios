@@ -21,6 +21,7 @@
 /// stack setup.
 
 #include <kernel/elf/elf.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -297,18 +298,31 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
         Logger::warn("ELF load rejected: segment end 0x%lx past heap base "
                      "0x%lx",
                      max_seg_end, mem::HEAP_VADDR);
+        // Issue #234: loader validation rejects enter the ring.
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::ELF,
+                                    kernel::log::kDmesgBase_ELF + 16,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "segment past heap", max_seg_end);
         return false;
     }
     if (mem::HEAP_VADDR < max_seg_end + arch::PAGE_SIZE) {
         Logger::warn("ELF load rejected: no red-zone page between segment end "
                      "0x%lx and heap 0x%lx",
                      max_seg_end, mem::HEAP_VADDR);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::ELF,
+                                    kernel::log::kDmesgBase_ELF + 17,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "no red-zone page", max_seg_end);
         return false;
     }
     if (mem::HEAP_VADDR + INITIAL_HEAP_SIZE > mem::STACK_VADDR) {
         Logger::warn("ELF load rejected: heap+initial size overruns user "
                      "stack base 0x%lx",
                      mem::STACK_VADDR);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::ELF,
+                                    kernel::log::kDmesgBase_ELF + 18,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "heap overruns stack", mem::STACK_VADDR);
         return false;
     }
 

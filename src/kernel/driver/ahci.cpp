@@ -22,6 +22,7 @@
 #if defined(CONFIG_ARCH_X86_64)
 
 #include <kernel/driver/ahci.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/driver/dma.hpp>
 #include <kernel/arch/pci.hpp>
@@ -160,6 +161,11 @@ bool AhciDriver::port_wait_ready(uint8_t port, uint64_t timeout_us) {
     }
     Logger::error("ahci: port %u timeout waiting for ready (TFD=0x%x)", port,
                   port_read(port, PORT_TFD));
+    // Issue #234: device timeouts enter the ring (DRIVER).
+    kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                kernel::log::kDmesgBase_DRIVER + 4,
+                                kernel::log::LogSeverity::ERROR,
+                                "ahci port ready timeout", port);
     return false;
 }
 
@@ -203,6 +209,10 @@ bool AhciDriver::port_init(uint8_t port) {
     cl_phys_[port] = PMM::alloc_contiguous(1);
     if (!cl_phys_[port]) {
         Logger::error("ahci: port %u failed to alloc command list", port);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 6,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "ahci command list OOM", port);
         return false;
     }
     VMM::map_page(HHDM_OFFSET + cl_phys_[port], cl_phys_[port], false);
@@ -215,6 +225,10 @@ bool AhciDriver::port_init(uint8_t port) {
     rfis_phys_[port] = PMM::alloc_contiguous(1);
     if (!rfis_phys_[port]) {
         Logger::error("ahci: port %u failed to alloc RFIS", port);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 6,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "ahci RFIS OOM", port);
         PMM::free_page(cl_phys_[port]);
         cl_phys_[port] = 0;
         return false;
@@ -441,11 +455,19 @@ bool AhciDriver::wait_cmd_poll(uint8_t port, uint8_t slot,
         uint32_t tfd = port_read(port, PORT_TFD);
         if (tfd & TFD_ERR) {
             Logger::error("ahci: cmd slot %u error (TFD=0x%x)", slot, tfd);
+            kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                        kernel::log::kDmesgBase_DRIVER + 5,
+                                        kernel::log::LogSeverity::ERROR,
+                                        "ahci slot error", slot);
             port_write(port, PORT_CI, 1U << slot); // clear CI
             return false;
         }
         if (arch::Timer::ticks() >= deadline) {
             Logger::error("ahci: cmd slot %u timeout", slot);
+            kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                        kernel::log::kDmesgBase_DRIVER + 4,
+                                        kernel::log::LogSeverity::ERROR,
+                                        "ahci slot timeout", slot);
             port_write(port, PORT_CI, 1U << slot); // clear CI
             return false;
         }
@@ -727,6 +749,10 @@ bool AhciDriver::read_sector(uint64_t lba, uint8_t *buffer) {
     uint8_t slot = alloc_slot(active_port_);
     if (slot >= AHCI_MAX_CMDS) {
         Logger::error("ahci: no free slot for read");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 5,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "ahci no slot for read", 0);
         cmd_lock_[active_port_].unlock();
         return false;
     }
@@ -766,6 +792,10 @@ bool AhciDriver::write_sector(uint64_t lba, const uint8_t *buffer) {
     uint8_t slot = alloc_slot(active_port_);
     if (slot >= AHCI_MAX_CMDS) {
         Logger::error("ahci: no free slot for write");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 5,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "ahci no slot for write", 0);
         cmd_lock_[active_port_].unlock();
         return false;
     }
@@ -814,6 +844,10 @@ bool AhciDriver::init() {
     if (dev->bars[5].address == 0 ||
         dev->bars[5].type == arch::PciBarType::IO) {
         Logger::error("ahci: ABAR (BAR5) not valid");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 1,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "ahci ABAR invalid", 0);
         return false;
     }
 
@@ -926,6 +960,10 @@ bool AhciDriver::init() {
 
     if (active_port_ >= AHCI_MAX_PORTS) {
         Logger::error("ahci: no active port found");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 1,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "ahci no active port", 0);
         return false;
     }
 

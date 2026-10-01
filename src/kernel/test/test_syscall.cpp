@@ -854,12 +854,14 @@ JARVIS_TEST(syscall_user_open_rejected, "PRE: vfsd, iocd | POST: none") {
 //           covers the entry-format lambda). Self-seeding: no dependence on
 //           ambient log state (dmesg can be legitimately empty).
 // Input: Dispatched task pushes "KLOGPROBE" via dmesg_push_base, then calls
-//        KLOG(stack buf, 512, flags 0).
-// Expect: Bytes written (> 0) and the marker substring present in the
-//         buffer.
+//        KLOG(stack buf, 2048, flags 0).
+// Expect: Bytes written (> 0, fits the buffer) and the marker substring
+//         present in the buffer. 2048 (not 512): since issue #234 the boot
+//         records INIT milestones and count-drift notes, so the walk
+//         legitimately exceeds 512 bytes.
 // Depends: Syscall::sys_klog, DmesgService
 JARVIS_TEST(syscall_klog_read, "PRE: none | POST: none") {
-    static char g_buf[512];
+    static char g_buf[2048];
     static uint64_t g_ret = 0;
     static uint64_t g_found = 0;
 

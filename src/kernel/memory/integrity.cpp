@@ -171,7 +171,7 @@ void idle_task_main() {
 /// @brief Drain one authenticity slice per idle pass (issue #46) and report
 ///        kills.  Deliberately NOT report_user_task_end: the kill path
 ///        already wakes waitpid parents via terminate_err, and the report
-///        here is a fixed-format security event (dmesg 0xDB0C + serial +
+///        here is a fixed-format security event (ELF FATAL + serial +
 ///        framebuffer), not a generic task-end line.
 void auth_verify_poll() {
     uint64_t killed_id = 0;
@@ -193,8 +193,11 @@ void auth_verify_poll() {
         while (*p2 && n < sizeof(msg) - 1)
             msg[n++] = *p2++;
         msg[n] = '\0';
-        log::dmesg_push_base(elf::kElfAuthKillExitCode, msg,
-                             static_cast<uintptr_t>(killed_id));
+        // Issue #234: canonical ELF authenticity record (FATAL). The exit
+        // code constant stays 0xDB0C (process exit-code ABI, not dmesg).
+        log::dmesg_push_sev(log::ErrorSubsystem::ELF,
+                            log::kDmesgBase_ELF + 14, log::LogSeverity::FATAL,
+                            msg, static_cast<uintptr_t>(killed_id));
         Logger::error("%s", msg);
         service::Terminal::write_fb(msg);
         service::Terminal::write_fb("\n");

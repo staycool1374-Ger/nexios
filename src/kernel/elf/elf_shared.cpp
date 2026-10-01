@@ -21,6 +21,7 @@
 ///        DT_NEEDED resolution, GOT/PLT fixups, relocation handling.
 
 #include <kernel/elf/elf_shared.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/elf/elf.hpp>
 #include <kernel/elf/elf_loader.hpp>
 #include <kernel/task/task.hpp>
@@ -1240,6 +1241,11 @@ static bool apply_view(const DynView *view, const uint8_t *image,
     (void)size;
     if (!view || !view->dyn || !ctx || !soname || !hdr) {
         kernel::Logger::warn("elf_shared: apply_view null argument");
+        // Issue #234: shared-loader rejects enter the ring.
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::ELF,
+                                    kernel::log::kDmesgBase_ELF + 19,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "apply_view null", 0);
         return false;
     }
     // This image must be registered in the closure for symbol lookup.
@@ -1255,6 +1261,10 @@ static bool apply_view(const DynView *view, const uint8_t *image,
     if (!found) {
         kernel::Logger::warn("elf_shared: image not in closure base=%lx",
                              load_base);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::ELF,
+                                    kernel::log::kDmesgBase_ELF + 20,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "image not in closure", load_base);
         return false;
     }
     // Non-empty init arrays need untrusted code execution: reject.

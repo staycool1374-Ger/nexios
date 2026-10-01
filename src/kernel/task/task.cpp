@@ -21,6 +21,7 @@
 /// cleanup.
 
 #include <kernel/task/task.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/time/posix_time.hpp>
 #include <kernel/elf/elf_shared.hpp>
@@ -1010,6 +1011,10 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
 #if CONFIG_MEMORY_BUDGET
     if (!Scheduler::reserve_memory_pages(stack_pages)) {
         Logger::warn("TCB::create: budget OOM for %zu-page stack", stack_pages);
+        // Issue #234: creation-time OOM enters the ring.
+        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
+                            log::kDmesgBase_TASK + 1, log::LogSeverity::ERROR,
+                            "TCB stack budget OOM", stack_pages);
         TaskControlBlock::destroy(tcb);
         return nullptr;
     }
@@ -1017,6 +1022,10 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     uint64_t stack_phys = PMM::alloc_contiguous(stack_pages);
     if (!stack_phys) {
         Logger::warn("TCB::create: PMM OOM for %zu-page stack", stack_pages);
+        // Issue #234: creation-time OOM enters the ring.
+        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
+                            log::kDmesgBase_TASK + 1, log::LogSeverity::ERROR,
+                            "TCB stack PMM OOM", stack_pages);
 #if CONFIG_MEMORY_BUDGET
         Scheduler::release_memory_pages(stack_pages);
 #endif

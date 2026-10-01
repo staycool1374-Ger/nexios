@@ -2096,6 +2096,11 @@ void Shell::cmd_runelf(int argc, const char** argv) {
         kernel::elf::ElfLoader::destroy_completed_tcb(task);
         kernel::Logger::warn("runelf: admission denied: %s",
                              kernel::errors::error_string(admit));
+        // Issue #234: user-visible admission refusal enters the ring.
+        kernel::log::dmesg_push_sev(
+            kernel::log::ErrorSubsystem::TIMING,
+            kernel::log::kDmesgBase_TIMING + 3, kernel::log::LogSeverity::WARN,
+            "runelf admission denied", static_cast<uintptr_t>(admit));
         shell_error("runelf", "admission denied");
         return;
     }
@@ -2109,6 +2114,11 @@ void Shell::cmd_runelf(int argc, const char** argv) {
     while (pos > 0) Terminal::putchar(buf[--pos]);
     Terminal::putchar('\n');
     Terminal::set_fg(COLOR_DEFAULT);
+    // Issue #234: user program start enters the ring (USERSPACE/INFO).
+    kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::USER,
+                                kernel::log::kDmesgBase_USER + 4,
+                                kernel::log::LogSeverity::INFO, task->name,
+                                task->id);
 }
 
 /// @brief Built-in: start a background ELF load (returns immediately).
@@ -3474,43 +3484,12 @@ void Shell::cmd_dmesg(int argc, const char** argv) {
             return;
         }
 
-        // Technical format (default)
-        *p++ = '['; *p++ = 'T'; *p++ = 'S'; *p++ = '=';
-        uint64_t ts = e.timestamp;
-        char tsbuf[24]; int tlen = 0;
-        if (ts == 0) tsbuf[tlen++] = '0';
-        else { while (ts > 0 && tlen < 23) { tsbuf[tlen++] = static_cast<char>('0' + (ts % 10)); ts /= 10; } }
-        for (int i = 0; i < tlen/2; ++i) { char c = tsbuf[i]; tsbuf[i] = tsbuf[tlen-1-i]; tsbuf[tlen-1-i] = c; }
-        for (int i = 0; i < tlen && p < end; ++i) *p++ = tsbuf[i];
-        *p++ = ']'; *p++ = ' ';
-
-        const char* task_s = "TASK=";
-        while (*task_s && p < end) *p++ = *task_s++;
-        uint64_t tid = e.task_id;
-        char tidbuf[24]; int tidlen = 0;
-        if (tid == 0) tidbuf[tidlen++] = '0';
-        else { while (tid > 0 && tidlen < 23) { tidbuf[tidlen++] = static_cast<char>('0' + (tid % 10)); tid /= 10; } }
-        for (int i = 0; i < tidlen/2; ++i) { char c = tidbuf[i]; tidbuf[i] = tidbuf[tidlen-1-i]; tidbuf[tidlen-1-i] = c; }
-        for (int i = 0; i < tidlen && p < end; ++i) *p++ = tidbuf[i];
-        *p++ = ' ';
-
-        const char* err_s =
-            kernel::log::base_code_is_info(e.error_code) ? "INFO=" : "ERR=";
-        while (*err_s && p < end) *p++ = *err_s++;
-        const char* sub = kernel::log::subsystem_name(e.subsystem);
-        while (*sub && p < end) *p++ = *sub++;
-        *p++ = ':';
-        const char* err_name = kernel::log::error_string(e.subsystem, e.error_code);
-        while (*err_name && p < end) *p++ = *err_name++;
-         *p++ = ' ';
-
-        const char *msg = e.message; // owned char array, never null
-        while (*msg && p < end) *p++ = *msg++;
-        *p++ = '\n';
-        *p = '\0';
-
+        // Technical format (default): canonical issue-#234 line via the
+        // single renderer (dmesg_task and sys_klog render identically).
+        size_t rendered =
+            kernel::log::format_dmesg_entry(buf, sizeof(buf), e);
         Terminal::write(buf);
-        total += p - buf;
+        total += rendered;
     });
     if (total == 0) {
         Terminal::write("Kernel log buffer is empty.\n");

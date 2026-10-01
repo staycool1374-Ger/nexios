@@ -21,6 +21,7 @@
 /// access).
 
 #include <kernel/arch/pci.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/address.hpp>
 #include <logger.hpp>
@@ -83,6 +84,15 @@ void probe_bdf(arch::PciBdf bdf) {
         return;
     if (g_device_count >= arch::PCI_MAX_DEVICES_FOUND) {
         Logger::warn("PCI: device buffer full, stopping scan");
+        // Issue #234: truncated PCI scan enters the ring (DRIVER).
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 10,
+                                    kernel::log::LogSeverity::WARN,
+                                    "PCI scan truncated",
+                                    (static_cast<uintptr_t>(bdf.bus) << 16) |
+                                        (static_cast<uintptr_t>(bdf.device)
+                                         << 8) |
+                                        bdf.function);
         return;
     }
     g_devices[g_device_count] = arch::pci_read_device_info(bdf);

@@ -28,8 +28,13 @@
 #include <kernel/sync/sync_errors.hpp>
 #include <kernel/vfs/vfs_errors.hpp>
 #include <kernel/memory/mempool_errors.hpp>
+#include <kernel/memory/pmm_errors.hpp>
+#include <kernel/memory/vmm_errors.hpp>
 #include <kernel/task/scheduler_errors.hpp>
+#include <kernel/task/task_errors.hpp>
 #include <kernel/ipc/ipc_errors.hpp>
+#include <kernel/ipc/buffer_pool_errors.hpp>
+#include <kernel/arch/pci_errors.hpp>
 #include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/timer.hpp>
@@ -57,31 +62,186 @@ void test_dmesg_timestamp_and_task_id();
 
 namespace kernel::log {
 
+/// @brief Severity of a dmesg entry (issue #234). Stored per entry so the
+/// renderer never re-derives it from the code (misclassification would mask
+/// faults as INFO — SIL 3 S1 guard: severity travels with the record).
+enum class LogSeverity : uint8_t {
+    DEBUG = 0, ///< Verbose/trace, debug targets only.
+    INFO = 1,  ///< Action succeeded, confirmational.
+    WARN = 2,  ///< Unusual, system stable, maybe user action needed.
+    ERROR = 3, ///< Operation failed, system handled it via an action.
+    FATAL = 4, ///< Unrecoverable, safe state + halt, restart required.
+};
+
 /// @brief Subsystem identifier used in dmesg entries (maps to per-subsystem
 /// error_string).
 enum class ErrorSubsystem : uint8_t {
     BASE = 0,    ///< Generic kernel errors.
     SYNC = 1,    ///< Synchronisation primitives.
-    VFS = 2,     ///< Virtual file system.
+    VFS = 2,     ///< Virtual file system (incl. vfsd daemon).
     MEMPOOL = 3, ///< Memory pool allocator.
     SCHED = 4,   ///< Scheduler.
     IPC = 5,     ///< Inter-process communication.
     SYSCALL = 6, ///< System call interface.
+    NET = 7,     ///< Network stack / NIC drivers (issue #234).
+    ELF = 8,     ///< ELF loader (issue #234).
+    USER = 9,    ///< User task lifecycle reports (issue #234).
+    DAEMON = 10, ///< Daemon lifecycle events (issue #234).
+    PMM = 11,    ///< Physical memory manager (issue #234 full taxonomy).
+    VMM = 12,    ///< Virtual memory manager (issue #234 full taxonomy).
+    TASK = 13,   ///< Task creation/lifecycle errors (issue #234).
+    BUFPOOL = 14, ///< Zero-copy buffer pool (issue #234 full taxonomy).
+    DRIVER = 15, ///< Device drivers + PCI (issue #234 full taxonomy).
+    INIT = 16,   ///< Boot/init/init-rc events (issue #234 full taxonomy).
+    TIMING = 17, ///< Deadlines/budgets/admission/WCET (issue #234).
+    TEST = 18,   ///< Selftest infrastructure: leaks, count drift (#234).
 };
+
+/// @brief Canonical error-nr stride: each subsystem owns [base, base+1000).
+/// New subsystems number from these decimal bases; legacy BASE event
+/// families (0xDAxx daemon, 0xDBxx ELF, 0xDCxx task-end) keep decoding
+/// through base_error_string — see docs/specs/dmesg.md §5 for old→new map.
+constexpr uint64_t kDmesgStride = 1000;
+constexpr uint64_t kDmesgBase_BASE = 0;
+constexpr uint64_t kDmesgBase_SYNC = 1000;
+constexpr uint64_t kDmesgBase_VFS = 2000;
+constexpr uint64_t kDmesgBase_MPOOL = 3000;
+constexpr uint64_t kDmesgBase_SCHED = 4000;
+constexpr uint64_t kDmesgBase_IPC = 5000;
+constexpr uint64_t kDmesgBase_SYSCALL = 6000;
+constexpr uint64_t kDmesgBase_NET = 7000;
+constexpr uint64_t kDmesgBase_ELF = 8000;
+constexpr uint64_t kDmesgBase_USER = 9000;
+constexpr uint64_t kDmesgBase_DAEMON = 10000;
+constexpr uint64_t kDmesgBase_PMM = 11000;
+constexpr uint64_t kDmesgBase_VMM = 12000;
+constexpr uint64_t kDmesgBase_TASK = 13000;
+constexpr uint64_t kDmesgBase_BUFPOOL = 14000;
+constexpr uint64_t kDmesgBase_DRIVER = 15000;
+constexpr uint64_t kDmesgBase_INIT = 16000;
+constexpr uint64_t kDmesgBase_TIMING = 17000;
+constexpr uint64_t kDmesgBase_TEST = 18000;
+
+/// @brief Panic record: pushed by panic() as BASE/FATAL (issue #234).
+/// Outside every canonical window — decodes through base_error_string.
+constexpr uint64_t kDmesgPanicCode = 0xFA57;
+
+/// @brief Canonical base for a subsystem (kDmesgBase_* above).
+inline uint64_t subsystem_base(ErrorSubsystem subsys) noexcept {
+    switch (subsys) {
+    case ErrorSubsystem::BASE:
+        return kDmesgBase_BASE;
+    case ErrorSubsystem::SYNC:
+        return kDmesgBase_SYNC;
+    case ErrorSubsystem::VFS:
+        return kDmesgBase_VFS;
+    case ErrorSubsystem::MEMPOOL:
+        return kDmesgBase_MPOOL;
+    case ErrorSubsystem::SCHED:
+        return kDmesgBase_SCHED;
+    case ErrorSubsystem::IPC:
+        return kDmesgBase_IPC;
+    case ErrorSubsystem::SYSCALL:
+        return kDmesgBase_SYSCALL;
+    case ErrorSubsystem::NET:
+        return kDmesgBase_NET;
+    case ErrorSubsystem::ELF:
+        return kDmesgBase_ELF;
+    case ErrorSubsystem::USER:
+        return kDmesgBase_USER;
+    case ErrorSubsystem::DAEMON:
+        return kDmesgBase_DAEMON;
+    case ErrorSubsystem::PMM:
+        return kDmesgBase_PMM;
+    case ErrorSubsystem::VMM:
+        return kDmesgBase_VMM;
+    case ErrorSubsystem::TASK:
+        return kDmesgBase_TASK;
+    case ErrorSubsystem::BUFPOOL:
+        return kDmesgBase_BUFPOOL;
+    case ErrorSubsystem::DRIVER:
+        return kDmesgBase_DRIVER;
+    case ErrorSubsystem::INIT:
+        return kDmesgBase_INIT;
+    case ErrorSubsystem::TIMING:
+        return kDmesgBase_TIMING;
+    case ErrorSubsystem::TEST:
+        return kDmesgBase_TEST;
+    default:
+        return kDmesgBase_BASE;
+    }
+}
+
+/// @brief True when error_nr lies in the subsystem's canonical window
+/// [base, base + stride). Legacy BASE event codes (0xDAxx and friends)
+/// are NOT canonical — they decode through the compat shims.
+inline bool is_canonical_nbr(ErrorSubsystem subsys,
+                             uint64_t error_nr) noexcept {
+    const uint64_t base = subsystem_base(subsys);
+    return error_nr >= base && error_nr < base + kDmesgStride &&
+           subsys != ErrorSubsystem::BASE;
+}
+
+namespace catalog {
+// Forward declarations — defined in dmesg_catalog.hpp (included at the
+// end of this header). Lets error_string/default_severity_for resolve
+// new-subsystem records without a circular include.
+struct DmesgRecord;
+const DmesgRecord *catalog_lookup(ErrorSubsystem subsys,
+                                  uint64_t error_nr) noexcept;
+const char *catalog_text(ErrorSubsystem subsys, uint64_t error_nr) noexcept;
+LogSeverity lookup_severity(ErrorSubsystem subsys, uint64_t code) noexcept;
+} // namespace catalog
 
 /// @brief A single dmesg log entry.
 struct LogEntry {
     static constexpr size_t kMessageCap = 96;
-    uint64_t timestamp;       ///< Tick count at log time.
-    uint64_t task_id;         ///< ID of the task that logged the entry.
-    ErrorSubsystem subsystem; ///< Subsystem that generated the error.
-    uint64_t error_code;      ///< Subsystem-specific error code.
-    uintptr_t context;   ///< Optional context pointer (e.g. address involved).
+    uint64_t timestamp = 0;   ///< Tick count at log time (1 tick = 1 ms).
+    uint64_t wall_ms = 0;     ///< Wall-clock ms since boot epoch, 0 = n/a
+                              ///< (renderer falls back to tick count).
+    uint64_t task_id = 0;     ///< ID of the task that logged the entry.
+    ErrorSubsystem subsystem = ErrorSubsystem::BASE; ///< Origin subsystem.
+    LogSeverity severity = LogSeverity::INFO; ///< Entry severity (#234).
+    uint64_t error_code = 0;  ///< Subsystem-specific error code.
+    uintptr_t context = 0;    ///< Optional context (e.g. address involved).
     char message[kMessageCap]; ///< Human-readable description (owned copy).
 };
 
 /// Capacity of the kernel dmesg ring buffer (from Kconfig).
 constexpr size_t DMESG_CAPACITY = CONFIG_DMESG_CAPACITY;
+
+/// @brief Stack buffer capacity for one rendered dmesg line (issue #234).
+constexpr size_t DMESG_RENDER_CAP = 256;
+
+/// @brief Wall-clock milliseconds since the Unix epoch for log entries.
+/// Defined in dmesg.cpp (reads the boot epoch + tick count); returns 0
+/// while no wall time is available (early boot) — the renderer then falls
+/// back to the boot-tick count per the issue-#234 time rule.
+uint64_t current_wall_ms() noexcept;
+
+/// @brief Short name for a LogSeverity.
+inline const char *severity_name(LogSeverity sev) {
+    switch (sev) {
+    case LogSeverity::DEBUG:
+        return "DEBUG";
+    case LogSeverity::INFO:
+        return "INFO";
+    case LogSeverity::WARN:
+        return "WARN";
+    case LogSeverity::ERROR:
+        return "ERROR";
+    case LogSeverity::FATAL:
+        return "FATAL";
+    default:
+        return "UNK";
+    }
+}
+
+/// @brief Default severity for legacy severity-less pushes: INFO for
+/// confirmational codes (BASE info ranges, code 0), ERROR fail-closed
+/// otherwise. New producers should pass an explicit severity (or the
+/// catalog severity) instead of relying on this fallback.
+inline LogSeverity default_severity_for(ErrorSubsystem subsys, uint64_t code);
 
 /// @brief Sole owner of the kernel dmesg ring.
 ///
@@ -101,7 +261,16 @@ class DmesgService {
     /// @return true unless an entry was overwritten.
     bool push(ErrorSubsystem subsys, uint64_t err_code, const char *msg,
               uintptr_t ctx = 0) noexcept {
-        return buffer_.push(subsys, err_code, msg, ctx);
+        return buffer_.push(subsys, err_code, default_severity_for(subsys,
+                                                                  err_code),
+                            msg, ctx);
+    }
+
+    /// @brief Push a structured entry with explicit severity (issue #234).
+    /// @return true unless an entry was overwritten.
+    bool push(ErrorSubsystem subsys, uint64_t err_code, LogSeverity sev,
+              const char *msg, uintptr_t ctx = 0) noexcept {
+        return buffer_.push(subsys, err_code, sev, msg, ctx);
     }
 
     /// @brief Pop the oldest entry (dmesg_task consumer side).
@@ -184,8 +353,8 @@ class DmesgService {
       public:
         /// @brief Push an entry (overwrites oldest if full).
         /// @return true unless an entry was overwritten.
-        bool push(ErrorSubsystem subsys, uint64_t err_code, const char *msg,
-                  uintptr_t ctx = 0) {
+        bool push(ErrorSubsystem subsys, uint64_t err_code, LogSeverity sev,
+                  const char *msg, uintptr_t ctx = 0) {
             if (s_suppressed_)
                 return true;
             const uint64_t ts = arch::Timer::ticks();
@@ -206,8 +375,10 @@ class DmesgService {
 
             buffer[h] = LogEntry{};
             buffer[h].timestamp = ts;
+            buffer[h].wall_ms = current_wall_ms();
             buffer[h].task_id = tid;
             buffer[h].subsystem = subsys;
+            buffer[h].severity = sev;
             buffer[h].error_code = err_code;
             buffer[h].context = ctx;
             // Owned copy (SIL3): the entry stores a bounded char array, so
@@ -316,12 +487,36 @@ inline bool dmesg_push_base(uint64_t err, const char *msg,
 /// @brief True when a base-subsystem code is an informational event rather
 ///        than a fault: daemon lifecycle (0xDA00-0xDAFF), background ELF
 ///        loader (0xDB00-0xDBFF), and user task-end reports (0xDC00-0xDCFF)
-///        ranges.  Used by the dmesg renderers to print INFO= instead of
-///        ERR=.  A new event family MUST extend both this predicate and
-///        base_error_string below, or its lines render as ERR=<stale enum>.
+///        ranges, plus the canonical INFO records of issue #234 (daemon
+///        restarted/ensured/terminated/restarting/up, ELF started/completed/
+///        canceled, user task exited). Used by legacy renderers and the
+///        severity fallback to print INFO instead of ERROR. A new INFO
+///        family MUST extend both this predicate and base_error_string
+///        below, or its lines render as ERR=<stale enum>.
 inline bool base_code_is_info(uint64_t code) {
-    return (code & ~0xFFULL) == 0xDA00 || (code & ~0xFFULL) == 0xDB00 ||
-           (code & ~0xFFULL) == 0xDC00;
+    if ((code & ~0xFFULL) == 0xDA00 || (code & ~0xFFULL) == 0xDB00 ||
+        (code & ~0xFFULL) == 0xDC00) {
+        return true;
+    }
+    switch (code) {
+    case kDmesgBase_DAEMON + 2:
+    case kDmesgBase_DAEMON + 3:
+    case kDmesgBase_DAEMON + 4:
+    case kDmesgBase_DAEMON + 5:
+    case kDmesgBase_DAEMON + 6:
+    case kDmesgBase_ELF + 1:
+    case kDmesgBase_ELF + 2:
+    case kDmesgBase_ELF + 3:
+    case kDmesgBase_USER + 1:
+        return true;
+    default:
+        return false;
+    }
+}
+
+/// @brief Default severity for legacy severity-less pushes (issue #234).
+inline LogSeverity default_severity_for(ErrorSubsystem subsys, uint64_t code) {
+    return catalog::lookup_severity(subsys, code);
 }
 
 /// @brief Return a human-readable string for a base-subsystem error code.
@@ -331,6 +526,10 @@ inline bool base_code_is_info(uint64_t code) {
 ///          0xDB00 – 0xDBFF  background ELF loader events
 ///          0xDC00 – 0xDCFF  user task-end reports (clean exit / fault)
 inline const char *base_error_string(uint64_t code) {
+    // Panic record (pushed by panic() as BASE/FATAL, issue #234).
+    if (code == kDmesgPanicCode) {
+        return "Kernel panic";
+    }
     // Custom event ranges
     if ((code & ~0xFFULL) == 0xDA00) {
         switch (code) {
@@ -434,37 +633,126 @@ inline const char *subsystem_name(ErrorSubsystem s) {
         return "IPC";
     case ErrorSubsystem::SYSCALL:
         return "SYSCALL";
+    case ErrorSubsystem::NET:
+        return "NET";
+    case ErrorSubsystem::ELF:
+        return "ELF";
+    case ErrorSubsystem::USER:
+        return "USERSPACE";
+    case ErrorSubsystem::DAEMON:
+        return "DAEMON";
+    case ErrorSubsystem::PMM:
+        return "PMM";
+    case ErrorSubsystem::VMM:
+        return "VMM";
+    case ErrorSubsystem::TASK:
+        return "TASK";
+    case ErrorSubsystem::BUFPOOL:
+        return "BUFPOOL";
+    case ErrorSubsystem::DRIVER:
+        return "DRIVER";
+    case ErrorSubsystem::INIT:
+        return "INIT";
+    case ErrorSubsystem::TIMING:
+        return "TIMING";
+    case ErrorSubsystem::TEST:
+        return "TEST";
     default:
         return "UNK";
     }
 }
 
+/// @brief Strip a canonical number to its raw table code. Raw (legacy)
+/// codes pass through unchanged, so every pre-#234 push decodes exactly
+/// as before; canonical pushes (base + raw) resolve to the same text.
+inline uint64_t strip_canonical(ErrorSubsystem subsys, uint64_t code) {
+    if (subsys == ErrorSubsystem::BASE) {
+        return code;
+    }
+    const uint64_t base = subsystem_base(subsys);
+    if (code >= base && code < base + kDmesgStride) {
+        return code - base;
+    }
+    return code;
+}
+
 /// @brief Dispatch an error code to the correct subsystem's error_string.
+/// Catalog event records take precedence over the raw tables, so event
+/// numbers (e.g. TIMING deadline-missed) render their cause text while
+/// plain table codes render the table text — both fail closed.
 inline const char *error_string(ErrorSubsystem subsys, uint64_t code) {
+    if (catalog::catalog_lookup(subsys, code) != nullptr) {
+        return catalog::catalog_text(subsys, code);
+    }
+    const uint64_t raw = strip_canonical(subsys, code);
     switch (subsys) {
     case ErrorSubsystem::BASE:
-        return base_error_string(code);
+        return base_error_string(raw);
     case ErrorSubsystem::SYNC:
         return kernel::errors::error_string(
-            static_cast<kernel::errors::SyncError>(code));
+            static_cast<kernel::errors::SyncError>(raw));
     case ErrorSubsystem::VFS:
         return kernel::errors::error_string(
-            static_cast<kernel::errors::VfsError>(code));
+            static_cast<kernel::errors::VfsError>(raw));
     case ErrorSubsystem::MEMPOOL:
         return kernel::errors::error_string(
-            static_cast<kernel::errors::MemPoolError>(code));
+            static_cast<kernel::errors::MemPoolError>(raw));
     case ErrorSubsystem::SCHED:
         return kernel::errors::error_string(
-            static_cast<kernel::errors::SchedulerError>(code));
+            static_cast<kernel::errors::SchedulerError>(raw));
     case ErrorSubsystem::IPC:
         return kernel::errors::error_string(
-            static_cast<kernel::errors::IpcError>(code));
+            static_cast<kernel::errors::IpcError>(raw));
     case ErrorSubsystem::SYSCALL:
         return kernel::errors::error_string(
-            static_cast<kernel::errors::SyscallError>(code));
+            static_cast<kernel::errors::SyscallError>(raw));
+    case ErrorSubsystem::PMM:
+        return kernel::errors::error_string(
+            static_cast<kernel::errors::PmmError>(raw));
+    case ErrorSubsystem::VMM:
+        return kernel::errors::error_string(
+            static_cast<kernel::errors::VmmError>(raw));
+    case ErrorSubsystem::TASK:
+        return kernel::errors::error_string(
+            static_cast<kernel::errors::TaskError>(raw));
+    case ErrorSubsystem::BUFPOOL:
+        return kernel::errors::error_string(
+            static_cast<kernel::errors::BufPoolError>(raw));
+    case ErrorSubsystem::DRIVER:
+        return kernel::errors::error_string(
+            static_cast<kernel::errors::PciError>(raw));
+    case ErrorSubsystem::NET:
+    case ErrorSubsystem::ELF:
+    case ErrorSubsystem::USER:
+    case ErrorSubsystem::DAEMON:
+    case ErrorSubsystem::INIT:
+    case ErrorSubsystem::TIMING:
+    case ErrorSubsystem::TEST:
+        return catalog::catalog_text(subsys, code);
     default:
         return "UNKNOWN";
     }
 }
 
+/// @brief Render one entry in the canonical issue-#234 line format:
+/// `[DMESG <time>ms]: <TYPE> <CODEBASE> <error-nr> <err-text>: <msg>`
+/// `  [task=<id> ctx=0x<hex>]`
+/// <time> is wall_ms when set, else the boot-tick timestamp. The output
+/// is always NUL-terminated and truncated to fit; bounded loops only.
+/// @return Bytes written excluding the NUL (0 when out_cap == 0).
+size_t format_dmesg_entry(char *out_buf, size_t out_cap,
+                          const LogEntry &entry) noexcept;
+
+/// @brief Shorthand: push an entry with explicit severity (issue #234).
+inline bool dmesg_push_sev(ErrorSubsystem subsys, uint64_t err,
+                           LogSeverity sev, const char *msg,
+                           uintptr_t ctx = 0) noexcept {
+    return DmesgService::instance().push(subsys, err, sev, msg, ctx);
+}
+
 } // namespace kernel::log
+
+// Central record catalog (struct + per-subsystem arrays, issue req. 3).
+// Included last so the catalog sees the complete dmesg types while the
+// forward declarations above satisfy error_string/default_severity_for.
+#include <kernel/log/dmesg_catalog.hpp>

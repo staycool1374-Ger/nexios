@@ -20,6 +20,7 @@
 /// @brief DMA driver implementation.
 
 #include <kernel/driver/dma.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/io.hpp>
@@ -39,6 +40,10 @@ DmaBuffer alloc_buffer(size_t size) {
     uint64_t phys = PMM::alloc_contiguous(page_count);
     if (!phys) {
         Logger::error("dma: alloc_buffer(%zu) failed", size);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 8,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "dma alloc failed", size);
         return buf;
     }
     buf.phys_addr = phys;
@@ -99,6 +104,10 @@ bool sg_from_virt(SgList &sg, uint64_t virt_addr, size_t length) {
         uint64_t phys = VMM::virt_to_phys(page_start);
         if (!phys) {
             Logger::error("dma: sg_from_virt: unmapped virt %x", page_start);
+            kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                        kernel::log::kDmesgBase_DRIVER + 8,
+                                        kernel::log::LogSeverity::ERROR,
+                                        "dma unmapped virt", page_start);
             return false;
         }
         size_t offset_in_page = static_cast<size_t>(current - page_start);

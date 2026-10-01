@@ -30,6 +30,7 @@
 #include <string.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/test/test_expected_counts.hpp>
+#include <kernel/log/dmesg.hpp>
 
 using namespace kernel;
 
@@ -1225,7 +1226,13 @@ bool kernel::test::register_class(const char *name) {
             size_t added = after - before;
             Logger::info("[TCOUNT] class=%s added=%u total=%u", name,
                          (unsigned)added, (unsigned)after);
-            validate_class_count(name, after);
+            if (!validate_class_count(name, after)) {
+                // Issue #234: count drift enters the ring (TEST subsystem).
+                kernel::log::dmesg_push_sev(
+                    kernel::log::ErrorSubsystem::TEST,
+                    kernel::log::kDmesgBase_TEST + 2,
+                    kernel::log::LogSeverity::WARN, name, after);
+            }
             return true;
         }
     }

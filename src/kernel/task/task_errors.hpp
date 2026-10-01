@@ -37,7 +37,8 @@ namespace kernel::errors {
     X(PML4_CLONE, 5, "PML4 clone failed")                                      \
     X(NOT_FOUND, 6, "Task not found")                                          \
     X(INVALID_ARG, 7, "Invalid argument")                                      \
-    X(INVALID_STATE, 8, "Invalid task state")
+    X(INVALID_STATE, 8, "Invalid task state")                                  \
+    X(CORRUPTED, 9, "Task control block corrupt (bad magic)")
 
 // NOLINTNEXTLINE(performance-enum-size)
 enum TaskError : uint64_t {

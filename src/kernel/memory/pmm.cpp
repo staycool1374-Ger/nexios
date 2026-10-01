@@ -17,6 +17,7 @@
  */
 
 #include <kernel/memory/pmm.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -153,6 +154,11 @@ void PMM::init(uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end,
         kernel::Logger::error(
             "[PMM] allocatable window [%lu, %lu) has no free pages",
             window_base_page_, window_end_page_);
+        // Issue #234: PMM exhaustion enters the ring.
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::PMM,
+                                    kernel::log::kDmesgBase_PMM + 1,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "PMM window exhausted", window_base_page_);
     }
 
     // Register the default OOM handler based on CONFIG_OOM_POLICY.

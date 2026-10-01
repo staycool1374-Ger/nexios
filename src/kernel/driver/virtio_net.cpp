@@ -20,6 +20,7 @@
 /// @brief Virtio-net NIC driver implementation.
 
 #include <kernel/driver/virtio_net.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -89,6 +90,10 @@ static bool alloc_queue_pages(uint64_t &desc_phys, uint64_t &avail_phys,
 
     if (!desc_phys || !avail_phys || !used_phys) {
         Logger::error("virtio-net: OOM for queue pages");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 6,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-net queue OOM", 0);
         return false;
     }
 
@@ -147,6 +152,10 @@ bool virtio_net_probe(Nic &nic) {
 
     if (!arch::virtio_init_transport(transport)) {
         Logger::error("virtio-net: transport init failed");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 2,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-net transport", 0);
         return false;
     }
 
@@ -202,6 +211,11 @@ bool virtio_net_probe(Nic &nic) {
         uint64_t phys = PMM::alloc_page();
         if (!phys) {
             Logger::error("virtio-net: OOM for RX buffer %d", i);
+            kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                        kernel::log::kDmesgBase_DRIVER + 6,
+                                        kernel::log::LogSeverity::ERROR,
+                                        "virtio-net RX OOM",
+                                        static_cast<uintptr_t>(i));
             dev->~VirtioNetDevice();
             kernel::MemPool::free(dev);
             return false;
@@ -233,6 +247,11 @@ bool virtio_net_probe(Nic &nic) {
     MacAddr mac{};
     if (transport.device_cfg.virt_addr == 0) {
         Logger::error("virtio-net: device cfg not mapped, using fallback MAC");
+        // Issue #234: degraded device config enters the ring as WARN.
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 9,
+                                    kernel::log::LogSeverity::WARN,
+                                    "virtio-net fallback MAC", 0);
         mac = {{0x52, 0x54, 0x00, 0x12, 0x34, 0x56}};
     } else {
         // NOLINTNEXTLINE(performance-no-int-to-ptr)

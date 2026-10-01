@@ -153,6 +153,14 @@ void init_task_main() {
                     if (fs && kernel::vfs::mount(*fs, mp) == 0) {
                         kernel::Logger::info("init: mounted %s at %s", fs_name,
                                              mp);
+                    } else {
+                        // Issue #234: mount failures enter the ring.
+                        kernel::Logger::warn("init: mount failed %s at %s",
+                                             fs_name, mp);
+                        kernel::log::dmesg_push_sev(
+                            kernel::log::ErrorSubsystem::INIT,
+                            kernel::log::kDmesgBase_INIT + 15,
+                            kernel::log::LogSeverity::ERROR, mp, 0);
                     }
                 }
             }
@@ -204,6 +212,11 @@ void init_task_main() {
                     kernel::Logger::warn(
                         "init: rc line has arguments (deferred), skipping: %s",
                         elf_path);
+                    // Issue #234: init-rc events enter the ring (INIT).
+                    kernel::log::dmesg_push_sev(
+                        kernel::log::ErrorSubsystem::INIT,
+                        kernel::log::kDmesgBase_INIT + 1,
+                        kernel::log::LogSeverity::WARN, elf_path, 0);
                     continue;
                 }
                 char elf_path1[160], elf_path2[160];
@@ -235,6 +248,10 @@ void init_task_main() {
                 if (!f.data) {
                     kernel::Logger::warn("init: rc file not found: %s",
                                          elf_path);
+                    kernel::log::dmesg_push_sev(
+                        kernel::log::ErrorSubsystem::INIT,
+                        kernel::log::kDmesgBase_INIT + 2,
+                        kernel::log::LogSeverity::WARN, elf_path, 0);
                     continue;
                 }
                 // Converged background load (issue #77 step 1): the shell
@@ -247,6 +264,10 @@ void init_task_main() {
                     if (!kernel::elf::validate_header(hdr)) {
                         kernel::Logger::warn("init: rc invalid ELF: %s",
                                              elf_path);
+                        kernel::log::dmesg_push_sev(
+                            kernel::log::ErrorSubsystem::INIT,
+                            kernel::log::kDmesgBase_INIT + 3,
+                            kernel::log::LogSeverity::ERROR, elf_path, 0);
                         continue;
                     }
                     // Issue #77 step 4 / S3: dynamic/interp images rejected
@@ -256,6 +277,10 @@ void init_task_main() {
                     if (hdr->type != kernel::elf::ET_EXEC) {
                         kernel::Logger::warn(
                             "init: rc only ET_EXEC supported: %s", elf_path);
+                        kernel::log::dmesg_push_sev(
+                            kernel::log::ErrorSubsystem::INIT,
+                            kernel::log::kDmesgBase_INIT + 4,
+                            kernel::log::LogSeverity::ERROR, elf_path, 0);
                         continue;
                     }
                     // Map the initrd-relative path into the VFS domain
@@ -275,12 +300,20 @@ void init_task_main() {
                     if (elf_path[v - (elf_path[0] != '/' ? 1 : 0)] != '\0') {
                         kernel::Logger::warn("init: rc path too long: %s",
                                              elf_path);
+                        kernel::log::dmesg_push_sev(
+                            kernel::log::ErrorSubsystem::INIT,
+                            kernel::log::kDmesgBase_INIT + 5,
+                            kernel::log::LogSeverity::WARN, elf_path, 0);
                         continue;
                     }
                     auto lres = kernel::elf::ElfLoader::request_load(vfs_path);
                     if (lres != kernel::elf::LoadResult::OK) {
                         kernel::Logger::warn(
                             "init: rc load not accepted for %s", elf_path);
+                        kernel::log::dmesg_push_sev(
+                            kernel::log::ErrorSubsystem::INIT,
+                            kernel::log::kDmesgBase_INIT + 6,
+                            kernel::log::LogSeverity::ERROR, elf_path, 0);
                         continue;
                     }
                     kernel::elf::ElfLoader::wait_loader_idle();
@@ -288,6 +321,10 @@ void init_task_main() {
                         kernel::elf::LoadState::DONE) {
                         kernel::Logger::warn("init: rc load failed: %s",
                                              elf_path);
+                        kernel::log::dmesg_push_sev(
+                            kernel::log::ErrorSubsystem::INIT,
+                            kernel::log::kDmesgBase_INIT + 7,
+                            kernel::log::LogSeverity::ERROR, elf_path, 0);
                         continue;
                     }
                     kernel::TaskControlBlock *task =
@@ -295,6 +332,10 @@ void init_task_main() {
                     if (!task) {
                         kernel::Logger::warn("init: rc load failed: %s",
                                              elf_path);
+                        kernel::log::dmesg_push_sev(
+                            kernel::log::ErrorSubsystem::INIT,
+                            kernel::log::kDmesgBase_INIT + 7,
+                            kernel::log::LogSeverity::ERROR, elf_path, 0);
                         continue;
                     }
                     // Settled parameters BEFORE add_task (never add then
@@ -310,6 +351,10 @@ void init_task_main() {
                         kernel::elf::ElfLoader::destroy_completed_tcb(task);
                         kernel::Logger::warn(
                             "init: rc policy rejected: %s", elf_path);
+                        kernel::log::dmesg_push_sev(
+                            kernel::log::ErrorSubsystem::INIT,
+                            kernel::log::kDmesgBase_INIT + 8,
+                            kernel::log::LogSeverity::ERROR, elf_path, 0);
                         continue;
                     }
                     // Admission BEFORE activation (S1): fail closed with a
@@ -323,9 +368,19 @@ void init_task_main() {
                         kernel::Logger::warn(
                             "init: rc admission denied for %s: %s", elf_path,
                             kernel::errors::error_string(admit));
+                        kernel::log::dmesg_push_sev(
+                            kernel::log::ErrorSubsystem::INIT,
+                            kernel::log::kDmesgBase_INIT + 9,
+                            kernel::log::LogSeverity::ERROR, elf_path,
+                            static_cast<uintptr_t>(admit));
                         continue;
                     }
                     kernel::Logger::info("init: started %s", elf_path);
+                    // Issue #234: user program start enters the ring.
+                    kernel::log::dmesg_push_sev(
+                        kernel::log::ErrorSubsystem::USER,
+                        kernel::log::kDmesgBase_USER + 4,
+                        kernel::log::LogSeverity::INFO, task->name, task->id);
                 }
             }
         }
@@ -363,6 +418,11 @@ void init_task_main() {
         if (arch::Timer::ticks() >= deadline) {
             kernel::Logger::warn("init: timeout waiting for daemon(s), "
                                  "starting in degraded mode");
+            // Issue #234: degraded boot enters the ring.
+            kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::INIT,
+                                        kernel::log::kDmesgBase_INIT + 10,
+                                        kernel::log::LogSeverity::ERROR,
+                                        "daemon wait timeout", 0);
             degraded = true;
             break;
         }
@@ -385,6 +445,12 @@ void init_task_main() {
                         kernel::Logger::warn("init: daemon '%s' "
                                              "failed to init",
                                              watch[wi].name);
+                        // Issue #234: failed daemon init enters the ring.
+                        kernel::log::dmesg_push_sev(
+                            kernel::log::ErrorSubsystem::INIT,
+                            kernel::log::kDmesgBase_INIT + 11,
+                            kernel::log::LogSeverity::ERROR, watch[wi].name,
+                            0);
                         break;
                     }
                 }
@@ -396,6 +462,13 @@ void init_task_main() {
         // IPC::send only wakes BLOCKED tasks (ipc.cpp:183), so WAITING
         // would deadlock — we'd never be resumed after yielding.
         arch::hlt();
+    }
+    if (!degraded) {
+        // Issue #234: clean daemon rendezvous is a boot milestone.
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::INIT,
+                                    kernel::log::kDmesgBase_INIT + 16,
+                                    kernel::log::LogSeverity::INFO,
+                                    "daemons ready", 0);
     }
 
     // ── Run tests from init-task context (IF=1) ──────────────────
@@ -439,8 +512,18 @@ void init_task_main() {
             kernel::Scheduler::set_shell_task(shell);
             // Issue #244: the scheduler already logs the spawn above —
             // no duplicate line.
+            // Issue #234: shell availability is a boot milestone.
+            kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::INIT,
+                                        kernel::log::kDmesgBase_INIT + 17,
+                                        kernel::log::LogSeverity::INFO,
+                                        "shell started", shell->id);
         } else {
             kernel::Logger::warn("init: failed to create shell task");
+            // Issue #234: no shell = degraded system, enters the ring.
+            kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::INIT,
+                                        kernel::log::kDmesgBase_INIT + 12,
+                                        kernel::log::LogSeverity::ERROR,
+                                        "shell task", 0);
         }
     }
 
@@ -518,6 +601,12 @@ void init_task_main() {
                 kernel::Logger::warn("init: daemon (PID %u) init "
                                      "failed (restart)",
                                      msg.sender_id);
+                // Issue #234: restart-time daemon failure enters the ring.
+                kernel::log::dmesg_push_sev(
+                    kernel::log::ErrorSubsystem::INIT,
+                    kernel::log::kDmesgBase_INIT + 11,
+                    kernel::log::LogSeverity::ERROR, "daemon restart",
+                    msg.sender_id);
             }
         }
 
@@ -1264,6 +1353,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
 extern "C" void panic(const char *msg) {
     cli();
+    // Issue #234: the panic message enters the ring first (post-mortem
+    // readable via GDB) — push is lock-free, no allocation, IRQ-safe.
+    kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::BASE,
+                                kernel::log::kDmesgPanicCode,
+                                kernel::log::LogSeverity::FATAL, msg, 0);
     kernel::Logger::fatal("KERNEL PANIC: %s", msg);
     if (service::Terminal::instance()) {
         service::Terminal::set_fg(0xFF0000);
@@ -1542,11 +1636,11 @@ extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
 ///        action is to terminate).
 /// @return true if signal was delivered (handler will run), false if task was
 /// terminated.
-/// @brief dmesg codes for task-end reports (user request): clean exit vs
-///        fault/signal death.  0xDBxx belongs to the ELF loader; 0xDCxx is
-///        free (verified: no other 0xDC codes tree-wide).
-#define TASK_END_DMESG_CLEAN 0xDC01
-#define TASK_END_DMESG_FAULT 0xDC02
+/// @brief dmesg records for task-end reports (issue #234): clean exit vs
+///        fault/signal death, canonical USER subsystem (kDmesgBase_USER).
+///        Legacy 0xDC01/0xDC02 codes keep decoding via base_error_string.
+constexpr uint64_t kTaskEndDmesgClean = kernel::log::kDmesgBase_USER + 1;
+constexpr uint64_t kTaskEndDmesgFault = kernel::log::kDmesgBase_USER + 2;
 
 /// @brief Stable message slots for task-end reports (dmesg stores the
 ///        pointer, so the text must outlive the call).  Four slots tolerate
@@ -1614,7 +1708,9 @@ void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
         append_dec(code_or_sig);
         append_str(")");
         slot[n] = '\0';
-        kernel::log::dmesg_push_base(TASK_END_DMESG_CLEAN, slot, 0);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::USER,
+                                    kTaskEndDmesgClean,
+                                    kernel::log::LogSeverity::INFO, slot, 0);
         kernel::Logger::info("%s", slot);
     } else {
         append_str("faulted: ");
@@ -1628,7 +1724,9 @@ void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
         }
         append_str(")");
         slot[n] = '\0';
-        kernel::log::dmesg_push_base(TASK_END_DMESG_FAULT, slot, 0);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::USER,
+                                    kTaskEndDmesgFault,
+                                    kernel::log::LogSeverity::ERROR, slot, 0);
         kernel::Logger::error("%s", slot);
     }
     // Framebuffer console (user request): Logger serves serial/dmesg only.

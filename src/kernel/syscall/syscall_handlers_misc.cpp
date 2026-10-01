@@ -497,89 +497,12 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         [&](const kernel::log::LogEntry &e) {
         if (written >= user_size)
             return;
-        char entry_buf[256];
-        char *p = entry_buf;
-        char *end = entry_buf + sizeof(entry_buf) - 1;
-
-        const char *prefix = "[DMESG] TS=";
-        while (*prefix && p < end)
-            *p++ = *prefix++;
-
-        uint64_t ts = e.timestamp;
-        char tsbuf[24];
-        int tlen = 0;
-        if (ts == 0)
-            tsbuf[tlen++] = '0';
-        else {
-            while (ts > 0 && tlen < 23) {
-                tsbuf[tlen++] = static_cast<char>('0' + (ts % 10));
-                ts /= 10;
-            }
-        }
-        for (int i = 0; i < tlen / 2; ++i) {
-            char c = tsbuf[i];
-            tsbuf[i] = tsbuf[tlen - 1 - i];
-            tsbuf[tlen - 1 - i] = c;
-        }
-        for (int i = 0; i < tlen && p < end; ++i)
-            *p++ = tsbuf[i];
-
-        const char *task_str = " TASK=";
-        while (*task_str && p < end)
-            *p++ = *task_str++;
-        uint64_t tid = e.task_id;
-        char tidbuf[24];
-        int tidlen = 0;
-        if (tid == 0)
-            tidbuf[tidlen++] = '0';
-        else {
-            while (tid > 0 && tidlen < 23) {
-                tidbuf[tidlen++] = static_cast<char>('0' + (tid % 10));
-                tid /= 10;
-            }
-        }
-        for (int i = 0; i < tidlen / 2; ++i) {
-            char c = tidbuf[i];
-            tidbuf[i] = tidbuf[tidlen - 1 - i];
-            tidbuf[tidlen - 1 - i] = c;
-        }
-        for (int i = 0; i < tidlen && p < end; ++i)
-            *p++ = tidbuf[i];
-
-        const char *err_str = " ERR=";
-        while (*err_str && p < end)
-            *p++ = *err_str++;
-        const char *sub = kernel::log::subsystem_name(e.subsystem);
-        while (*sub && p < end)
-            *p++ = *sub++;
-        *p++ = ':';
-        const char *err_name =
-            kernel::log::error_string(e.subsystem, e.error_code);
-        while (*err_name && p < end)
-            *p++ = *err_name++;
-
-        const char *ctx_str = " CTX=";
-        while (*ctx_str && p < end)
-            *p++ = *ctx_str++;
-        uintptr_t ctx = e.context;
-        *p++ = '0';
-        *p++ = 'x';
-        for (int i = (sizeof(uintptr_t) * 2) - 1; i >= 0 && p < end; --i) {
-            uint8_t nib = (ctx >> (i * 4)) & 0xF;
-            *p++ = static_cast<char>(nib < 10 ? '0' + nib : 'a' + (nib - 10));
-        }
-
-        const char *msg_str = ": ";
-        while (*msg_str && p < end)
-            *p++ = *msg_str++;
-        const char *msg = e.message; // owned char array, never null
-        while (*msg && p < end)
-            *p++ = *msg++;
-
-        *p++ = '\n';
-        *p = '\0';
-
-        size_t entry_len = p - entry_buf;
+        // Canonical issue-#234 line format via the single renderer
+        // (replaces the bespoke TS/TASK/ERR formatter). The SMAP guard
+        // below still covers only the user-memory copy.
+        char entry_buf[kernel::log::DMESG_RENDER_CAP];
+        size_t entry_len =
+            kernel::log::format_dmesg_entry(entry_buf, sizeof(entry_buf), e);
         size_t copy_len = (written + entry_len <= user_size)
                               ? entry_len
                               : (user_size - written);

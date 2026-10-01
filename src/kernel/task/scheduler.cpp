@@ -21,6 +21,7 @@
 ///        rate-monotonic dispatch, context switching, and test isolation.
 
 #include <kernel/task/scheduler.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/elf/elf.hpp>
 #include <crc32.hpp>
 #include <services/terminal/terminal.hpp>
@@ -767,6 +768,11 @@ Scheduler::set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept {
                              "CPU%u (err=%u, util=%u > bound=%u)",
                              task.id, new_target,
                              static_cast<uint64_t>(adm), util, bound);
+                // Issue #234: partition admission denial enters the ring.
+                log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                                    log::kDmesgBase_TIMING + 3,
+                                    log::LogSeverity::WARN, task.name,
+                                    static_cast<uintptr_t>(adm));
                 quiesce_exit();
                 return adm;
             }
@@ -1560,6 +1566,10 @@ Scheduler::terminate_err(TaskControlBlock &task,
     if (is_current_on_any_cpu(&task) && &task != current_task()) {
         kernel::Logger::warn("sched: terminate id=%u refused (remote-current)",
                              static_cast<unsigned>(task.id));
+        // Issue #234: fail-closed refusal enters the ring as WARN.
+        log::dmesg_push_sev(log::ErrorSubsystem::SCHED,
+                            log::kDmesgBase_SCHED + 14, log::LogSeverity::WARN,
+                            task.name, task.id);
         return errors::SCHED_ERR_REMOTE_CURRENT;
     }
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
@@ -1645,6 +1655,11 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
         kernel::Logger::warn("sched: terminate id=%u refused (err=%u)",
                              static_cast<unsigned>(task.id),
                              static_cast<unsigned>(err));
+        // Issue #234: refusal code enters the ring (canonical SCHED nr).
+        log::dmesg_push_sev(
+            log::ErrorSubsystem::SCHED,
+            log::kDmesgBase_SCHED + static_cast<uint64_t>(err),
+            log::LogSeverity::WARN, task.name, task.id);
     }
 }
 
@@ -2226,6 +2241,17 @@ void Scheduler::add_task(TaskControlBlock &task) {
                          "Liu-Leyland bound (%d > %d) — overrun possible",
                          task.id, task.priority, task.period_ticks, total_util,
                          bound);
+            // Issue #234: the bound check fires per admission (thousands of
+            // times per test run) — the ring records the first exceed only;
+            // every occurrence stays on the serial console above.
+            static bool liu_exceed_recorded = false;
+            if (!liu_exceed_recorded) {
+                liu_exceed_recorded = true;
+                log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                                    log::kDmesgBase_TIMING + 4,
+                                    log::LogSeverity::WARN, task.name,
+                                    total_util);
+            }
         }
     }
 }
@@ -2236,6 +2262,11 @@ void Scheduler::remove_task(TaskControlBlock &task) {
         Logger::error("remove_task: TCB %p magic=0x%lx (expected 0x%lx)",
                       &task, (uint64_t)task.magic,
                       (uint64_t)TaskControlBlock::TCB_MAGIC);
+        // Issue #234: TCB corruption is an integrity violation — FATAL.
+        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
+                            log::kDmesgBase_TASK + 9, log::LogSeverity::FATAL,
+                            "TCB magic mismatch",
+                            reinterpret_cast<uintptr_t>(&task));
         kernel::diag::dump_tcb_write_log("[REMOVE_TASK] corrupted TCB");
         // Despite the corruption, try to remove from all_tasks_ to prevent
         // cascading corruption.  If all_bucket_ is also corrupted (poisoned
@@ -3622,6 +3653,11 @@ void Scheduler::reap_orphans() noexcept {
             } else {
                 if (!suppress_terminated_log_)
                     Logger::warn("Scheduler: idle recreate OOM — keeping old idle");
+                // Issue #234: failed idle restore enters the ring.
+                log::dmesg_push_sev(log::ErrorSubsystem::TASK,
+                                    log::kDmesgBase_TASK + 1,
+                                    log::LogSeverity::ERROR,
+                                    "idle recreate OOM", 0);
                 all_tasks_.append(*t);
                 ENSURE(id_table_insert(t->id, t) &&
                        "id_table full in reap (idle restore)");
@@ -5181,6 +5217,10 @@ void Scheduler::defer_kill(TaskControlBlock *task) noexcept {
     } else {
         Logger::warn("[DMD] deferred-kill list full, task %lu not added",
                      task->id);
+        // Issue #234: dropped kill enters the ring (table-full family).
+        log::dmesg_push_sev(log::ErrorSubsystem::SCHED,
+                            log::kDmesgBase_SCHED + 1, log::LogSeverity::ERROR,
+                            "deferred-kill list full", task->id);
     }
 }
 
@@ -5328,6 +5368,13 @@ deadline_miss_handler(TaskControlBlock &task,
                                  task.ss_state_on_deadline_miss) ==
                                  task::SporadicServer::State::EXHAUSTED);
 
+    // Issue #234: every deadline/budget event enters the dmesg ring (the
+    // Logger lines above stay for the serial console). Severity ERROR: a
+    // missed deadline is a fault whatever the configured response.
+    log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                        log::kDmesgBase_TIMING + (budget_exhausted ? 2 : 1),
+                        log::LogSeverity::ERROR, task.name, missed_by_ticks);
+
 #if CONFIG_DEADLINE_ACTION == 1
     if (budget_exhausted)
         Logger::error("[DMD] Task %lu (%s) budget exhausted (state=EXHAUSTED, "
@@ -5410,6 +5457,10 @@ wcet_overrun_handler(TaskControlBlock *task,
     Logger::info(
         "[WCET] Task %lu (%s) exceeded WCET by %lu ticks (action=LOG_ONLY)",
         task->id, task->name, overrun_by_ticks);
+    // Issue #234: WCET overrun enters the ring as WARN (observed only).
+    log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                        log::kDmesgBase_TIMING + 5, log::LogSeverity::WARN,
+                        task->name, overrun_by_ticks);
 }
 #endif
 
@@ -5444,6 +5495,10 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
         Logger::warn("Scheduler: admission denied task %u (err=%u, "
                      "util=%u > bound=%u)",
                      task.id, static_cast<uint64_t>(adm), util, bound);
+        // Issue #234: by-design refusal, system healthy — WARN, not ERROR.
+        log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                            log::kDmesgBase_TIMING + 3, log::LogSeverity::WARN,
+                            task.name, static_cast<uintptr_t>(adm));
         return adm;
     }
     all_tasks_.append(task);
