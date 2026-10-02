@@ -41,6 +41,11 @@
 - **Adapted:** pinned spare/skip in scan + 4 drain paths + destroy + reap can_reap; prio-9 helpers; watchdog.md §7 daemon section; Makefile deadline timeout.
 - **Style re-surface:** §11 (no new locks — is_block_pinned is lock-free reads, safe in ISR paths); §5 fail-closed preserved on every expiry path; §6 bounded loops untouched.
 
+### #278 — signal-vs-sleep lost wakeup (owner review)
+- **Learned:** (1) sys_kill set pending_signals but never woke wheel-blocked sleepers — park-until-wheel-expiry by design gap, not just test race. (2) IrqGuard is non-nestable: probe+park must drop the guard before reschedule()/set_task_ready() (both take it internally) — close the residual window with a same-dispatch re-check instead. (3) set_task_ready is IrqGuard-only (no scheduler_lock_), hence tick-ISR-safe; the alarm path gets the same wake as sys_kill for free.
+- **Adapted:** atomic probe-and-park + post-reschedule re-check in sys_nanosleep; sleeper-only wakes in sys_kill and alarm delivery.
+- **Style re-surface:** §11 (guard discipline, deferral-safe wakes); §5 (EINTR path byte-identical, rem math untouched).
+
 ### #45 — raw-counter boot time source (T0=0 fail-open found live)
 - **Learned:** (1) `Timer::ns()` reads 0 until `Timer::init()` sets the freq var on ALL archs (x86 `tsc_freq_hz_`, aarch64 `counter_freq_hz_`, riscv `timer_freq_hz_`) — any entry-stamp taken through ns()/ns_monotonic() is 0, and a "skip when zero" gate fail-opens forever. Found by live boot, not by tests (no test boots through real calibration). (2) The fix is raw counters with no init dependency (rdtsc/cntpct/rdtime + live-or-constant freq) converted at use with the #16 overflow-split form; zero-freq fails closed. (3) `Logger::debug` is runtime-filtered below the default level — boot milestones must use info/debug_write or they vanish from serial (missing stage table misread as missing marks). (4) Planner stubs happen: a planner returning schema-claims without the document is a non-plan — verify the artifact exists before Phase 2, and say so on the thread.
 - **Adapted:** `Timer::raw_counter/raw_counter_freq_hz` ×3 archs; raw entry stamp + raw stage marks in kernel.cpp (ns stamp untouched); watchdog.md §6 handoff note.

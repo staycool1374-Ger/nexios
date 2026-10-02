@@ -299,6 +299,13 @@ uint64_t Syscall::sys_kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
         }
     } else {
         t->pending_signals |= (1ULL << sig);
+        // Issue #278 (owner review): a wheel-blocked nanosleep parks
+        // with no other wake source — deliver the wake here or the
+        // signal sleeps until wheel expiry. Sleepers only (other wait
+        // channels re-check on their own wakeups); set_task_ready is
+        // deferral-safe for wake-while-current.
+        if (t->state == TaskState::BLOCKED && t->sleep_armed)
+            Scheduler::set_task_ready(*t);
     }
     return 0;
 }

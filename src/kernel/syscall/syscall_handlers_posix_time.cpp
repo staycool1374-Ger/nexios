@@ -26,6 +26,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/time/posix_time.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/irq_guard.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -219,14 +220,40 @@ uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
         return kNeg(time::kPosixErrAgain);
     }
     // §11.1/11.2 block (sys_receive shape): no locks held across the
-    // reschedule; BLOCKED always leaves the ready queue.
-    cur->state = TaskState::BLOCKED;
-    Scheduler::dequeue_ready(*cur);
-    Scheduler::reschedule();
-    if (cur->is_user_) {
-        arch::sti();
-        arch::hlt();
-        arch::cli();
+    // reschedule; BLOCKED always leaves the ready queue. The
+    // pending-signal probe and the park are one IrqGuard critical
+    // section (issue #278, owner review): with IF=0 no async interrupt
+    // can land between observing a clear mask and parking, so a signal
+    // set before this point takes the EINTR path without parking. A
+    // signal set after the park is woken by the delivery paths
+    // (sys_kill / alarm tick re-READY sleepers).
+    bool skip_park = false;
+    {
+        arch::IrqGuard guard{};
+        if (__atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) !=
+            0) {
+            skip_park = true;
+        } else {
+            cur->state = TaskState::BLOCKED;
+            Scheduler::dequeue_ready(*cur);
+        }
+    }
+    if (!skip_park) {
+        Scheduler::reschedule();
+        // Re-check on the same dispatch (the switch above is deferred —
+        // still on CPU): a signal that landed after the guard dropped
+        // but before parking would otherwise sleep unobserved (delivery
+        // saw RUNNING and skipped its wake). set_task_ready is idempotent
+        // and deferral-safe; the spin below re-checks in all cases.
+        if (__atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) !=
+                0 &&
+            cur->state == TaskState::BLOCKED)
+            Scheduler::set_task_ready(*cur);
+        if (cur->is_user_) {
+            arch::sti();
+            arch::hlt();
+            arch::cli();
+        }
     }
     // Resume: expiry beats signals; signals beat re-block. The wheel
     // guarantees the expiry fires, so this spin is bounded (§11.3).

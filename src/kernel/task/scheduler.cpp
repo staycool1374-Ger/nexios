@@ -3333,6 +3333,12 @@ void Scheduler::on_tick() noexcept {
                     task->alarm_armed = false;
                     task->pending_signals |=
                         (1ULL << static_cast<uint64_t>(Signal::SIGALRM));
+                    // Issue #278: same lost-wakeup hole as sys_kill — a
+                    // wheel-blocked sleeper would sit until wheel expiry.
+                    // Sleepers only; set_task_ready is deferral-safe.
+                    if (task->state == TaskState::BLOCKED &&
+                        task->sleep_armed)
+                        Scheduler::set_task_ready(*task);
                 }
             }
         }
