@@ -1,1734 +1,296 @@
-diff --git a/docs/specs/dmesg.md b/docs/specs/dmesg.md
-index 3001bb7ae..eb66ec7bd 100644
---- a/docs/specs/dmesg.md
-+++ b/docs/specs/dmesg.md
-@@ -53,7 +53,7 @@ Raw table codes and canonical numbers (`base + raw`) decode identically
- | BUFPOOL | 14000 | `BufPoolError` 0–7 (3 skipped upstream); all non-zero ERROR |
- | DRIVER | 15000 | `PciError` 0–4 (table) + events 1–10 (see §4) |
- | INIT | 16000 | events 1–17 (see §4) |
--| TIMING | 17000 | events 1–5 (see §4) |
-+| TIMING | 17000 | events 1–6 (see §4) |
- | TEST | 18000 | events: 1 leak ERROR, 2 count-drift WARN |
- 
- ## 3. Complete error-code list with severity
-@@ -148,12 +148,14 @@ INIT 16001 rc-args WARN, 16002 rc-missing WARN, 16003 rc-invalid ERROR,
- 16014 taskdef-create-fail ERROR, 16015 fstab-mount-fail ERROR,
- 16016 daemons-ready INFO, 16017 shell-started INFO.
- TIMING 17001 deadline-missed ERROR, 17002 budget-exhausted ERROR,
--17003 admission-denied WARN, 17004 liu-leyland-exceed WARN, 17005 wcet-overrun WARN.
-+17003 admission-denied WARN, 17004 liu-leyland-exceed WARN, 17005 wcet-overrun WARN,
-+17006 watchdog-expired ERROR.
- TEST 18001 leak-detected ERROR, 18002 count-drift WARN.
- 
- ## 5. Emission inventory (who pushes what)
- 
- Scheduler: deadline/budget (TIMING 1/2 ERROR), WCET (TIMING 5 WARN),
-+watchdog expiry (TIMING 6 ERROR, issue #41),
- admission incl. affinity partition (TIMING 3 WARN), Liu-Leyland
- (TIMING 4 WARN, first exceed only — the check fires per admission and
- would flood the ring; every occurrence stays on serial), TCB corruption
-diff --git a/docs/specs/watchdog.md b/docs/specs/watchdog.md
-new file mode 100644
-index 000000000..77e4b01eb
---- /dev/null
-+++ b/docs/specs/watchdog.md
-@@ -0,0 +1,81 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file watchdog.md
-+/// @brief Per-task software watchdog, kernel foundation (issue #41).
-+///
-+/// Owner scope for this increment: kernel foundation ONLY — the
-+/// userspace watchdog daemon (first externalized microservice) is a
-+/// follow-up issue. What lands here: two syscalls, TCB-embedded state,
-+/// an on_tick expiry scan, a /proc node, and a ring record.
-+
-+/// ## 1. Syscalls
-+///
-+/// | Number | Name | Args | Returns |
-+/// |---|---|---|---|
-+/// | 91 | WATCHDOG_CREATE | arg0 = period_ticks (> 0), arg1 = 0 reserved | 0, -SCHED_NO_CURRENT, -SCHED_INVALID_ARGS |
-+/// | 92 | WATCHDOG_KICK | arg0 = arg1 = 0 reserved | 0, -SCHED_NO_CURRENT, -SCHED_INVALID_ARGS, -SCHED_INVALID_STATE (disarmed) |
-+///
-+/// Both are self-only (the caller's own TCB; no pid argument, no new
-+/// CapType in this increment) and stay out of k_syscall_fast[] (issue
-+/// #92 discipline: mutating path, full canary). Expiry saturates instead
-+/// of wrapping (a wrapped expiry would fire immediately — fail-open).
-+
-+/// ## 2. TCB semantics
-+///
-+/// Fields on TaskControlBlock (task.hpp): wdog_armed, wdog_period_ticks,
-+/// wdog_last_kick_tick, wdog_expiry_tick, wdog_gen. All five are
-+/// snapshot-captured (TaskFields) so an arm never outlives the test that
-+/// made it, and explicitly initialized at all four memset sites
-+/// (create/create_user/clone/elf) plus disarm-on-teardown with a
-+/// generation bump (ABA guard on TCB slot reuse: gen 0 = never armed).
-+/// Expiry is one-shot: the scan disarms before dispatching, re-CREATE
-+/// re-arms with a fresh generation.
-+
-+/// ## 3. CONFIG_WATCHDOG_ACTION table
-+///
-+/// Mirrors CONFIG_DEADLINE_ACTION 0..4 (deadline.md §3): 0 LOG_ONLY,
-+/// 1 PANIC, 2 DEMOTE (priority >>= 1), 3 KILL via defer_kill (default,
-+/// fail-closed), 4 NOTIFY_MONITOR (SIGUSR1, same monitor-PID resolution
-+/// as the deadline path). Range enforced by static_assert plus the
-+/// admission self-test. Every expiry enters the ring (TIMING+6 ERROR,
-+/// "Timing: watchdog expired") whatever the action.
-+
-+/// ## 4. /proc format
-+///
-+/// `/proc/<pid>/watchdog` (and `/proc/self/watchdog`) reads:
-+/// `armed=<0|1> period=<ticks> last_kick=<tick> expires=<tick>\n`.
-+/// Write returns VFS_INVALID — SYS_WATCHDOG_KICK is the single kick
-+/// funnel. The node is embedded in PidDirVnode (no extra vnode counter,
-+/// stat precedent).
-+
-+/// ## 5. Timer-wheel rejection rationale
-+///
-+/// The wheel was evaluated and rejected: shared 64-slots/CPU can exhaust,
-+/// tick-context callbacks cannot reschedule (KILL needs deferral anyway),
-+/// and re-arm churn duplicates TCB state. The on_tick inline scan is a
-+/// single bounded pass with disarmed-skip early-out under the already-held
-+/// scheduler_lock_ — same window as the pager watchdog_scan.
-+
-+/// ## 6. #45 handoff hook
-+///
-+/// The #45 boot gate (CONFIG_BOOT_BUDGET_MS path) keeps its boot-only
-+/// disposition until CREATE lands, then swaps the arm to
-+/// SYS_WATCHDOG_CREATE with the budget as the period. This increment
-+/// only reserves that call-site signature; the swap itself is a
-+/// follow-up edit on the #45 thread.
-diff --git a/mk/cpp-rules.gen.mk b/mk/cpp-rules.gen.mk
-deleted file mode 100644
-index d3aa0eddf..000000000
---- a/mk/cpp-rules.gen.mk
-+++ /dev/null
-@@ -1,920 +0,0 @@
--build/initrd/initrd.o: src/initrd/initrd.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/programs/demo/demo.o: src/programs/demo/demo.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/lib/compiler_rt.o: src/lib/compiler_rt.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/lib/cxxabi.o: src/lib/cxxabi.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/lib/version.o: src/lib/version.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/lib/crc32.o: src/lib/crc32.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/lib/test.o: src/lib/test.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/lib/fdt/fdt_ro.o: src/lib/fdt/fdt_ro.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/lib/fdt/fdt_strerror.o: src/lib/fdt/fdt_strerror.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/lib/new.o: src/lib/new.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/lib/logger.o: src/lib/logger.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/lib/chacha.o: src/lib/chacha.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/services/program.o: src/services/program.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/services/terminal/framebuffer.o: src/services/terminal/framebuffer.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/services/terminal/terminal.o: src/services/terminal/terminal.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/services/shell.o: src/services/shell.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/gcov/gcov_handler.o: src/kernel/gcov/gcov_handler.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/bootparams.o: src/kernel/bootparams.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/irq_latency_histogram.o: src/kernel/irq_latency_histogram.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/vfs/vfsd.o: src/kernel/vfs/vfsd.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/vfs/pipe.o: src/kernel/vfs/pipe.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/vfs/devfs.o: src/kernel/vfs/devfs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/vfs/initrd_fs.o: src/kernel/vfs/initrd_fs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/vfs/fat32.o: src/kernel/vfs/fat32.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/vfs/procfs.o: src/kernel/vfs/procfs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/vfs/tmpfs.o: src/kernel/vfs/tmpfs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/vfs/vfs.o: src/kernel/vfs/vfs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/vfs/fat32_fs.o: src/kernel/vfs/fat32_fs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/net/arp.o: src/kernel/net/arp.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/net/net.o: src/kernel/net/net.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/core/global_state.o: src/kernel/core/global_state.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/kernel.o: src/kernel/kernel.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/memory/mempool.o: src/kernel/memory/mempool.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/memory/vmm.o: src/kernel/memory/vmm.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/memory/integrity.o: src/kernel/memory/integrity.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/memory/pmm.o: src/kernel/memory/pmm.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/memory/markers.o: src/kernel/memory/markers.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_deadline_recovery.o: src/kernel/test/test_deadline_recovery.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_idt.o: src/kernel/test/test_idt.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_klog.o: src/kernel/test/test_klog.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_irq_guard.o: src/kernel/test/test_irq_guard.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_wcet_overrun.o: src/kernel/test/test_wcet_overrun.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_dma.o: src/kernel/test/test_dma.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_wcet_scheduler.o: src/kernel/test/test_wcet_scheduler.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_mempool.o: src/kernel/test/test_mempool.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_pip.o: src/kernel/test/test_pip.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_idle_task.o: src/kernel/test/test_idle_task.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_testrunner.o: src/kernel/test/test_testrunner.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/bench_syscall_latency.o: src/kernel/test/bench_syscall_latency.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_irqguard_audit.o: src/kernel/test/test_irqguard_audit.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_ipc_robustness.o: src/kernel/test/test_ipc_robustness.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_hal.o: src/kernel/test/test_hal.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_syscall.o: src/kernel/test/test_syscall.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_buildsystem.o: src/kernel/test/test_buildsystem.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_textutils.o: src/kernel/test/test_textutils.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_shell_interaction.o: src/kernel/test/test_shell_interaction.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_pml4_clone.o: src/kernel/test/test_pml4_clone.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_ipc_blocking.o: src/kernel/test/test_ipc_blocking.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_budget.o: src/kernel/test/test_budget.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_locking_stress.o: src/kernel/test/test_locking_stress.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_fat32.o: src/kernel/test/test_fat32.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/bench_irq_latency.o: src/kernel/test/bench_irq_latency.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_no_dynamic_alloc_after_init.o: src/kernel/test/test_no_dynamic_alloc_after_init.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_zombie_cleanup.o: src/kernel/test/test_zombie_cleanup.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_buffer_pool_deterministic.o: src/kernel/test/test_buffer_pool_deterministic.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_atomic_context_switch.o: src/kernel/test/test_atomic_context_switch.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_jitter.o: src/kernel/test/test_jitter.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_task.o: src/kernel/test/test_task.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_starvation_deadlock.o: src/kernel/test/test_starvation_deadlock.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_debug.o: src/kernel/test/test_debug.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_memory.o: src/kernel/test/test_memory.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_idle_cleanup.o: src/kernel/test/test_idle_cleanup.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_slab_reclaim.o: src/kernel/test/test_slab_reclaim.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_ipc_lock_free.o: src/kernel/test/test_ipc_lock_free.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_ipc.o: src/kernel/test/test_ipc.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_cap_lifecycle.o: src/kernel/test/test_cap_lifecycle.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_shell_redirect.o: src/kernel/test/test_shell_redirect.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_virtio.o: src/kernel/test/test_virtio.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_random_seed.o: src/kernel/test/test_random_seed.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_registry.o: src/kernel/test/test_registry.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_pmm.o: src/kernel/test/test_pmm.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_cap_core.o: src/kernel/test/test_cap_core.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_infra.o: src/kernel/test/test_infra.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_elf.o: src/kernel/test/test_elf.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_checked_ptr.o: src/kernel/test/test_checked_ptr.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_init.o: src/kernel/test/test_init.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_memory_determinism.o: src/kernel/test/test_memory_determinism.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_lib.o: src/kernel/test/test_lib.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_pcp.o: src/kernel/test/test_pcp.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_waitpid.o: src/kernel/test/test_waitpid.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_net.o: src/kernel/test/test_net.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_random_syscall.o: src/kernel/test/test_random_syscall.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_ipc_extended.o: src/kernel/test/test_ipc_extended.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_tmpfs_invalid_mount.o: src/kernel/test/test_tmpfs_invalid_mount.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_cap_syscall.o: src/kernel/test/test_cap_syscall.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_resource_exhaustion.o: src/kernel/test/test_resource_exhaustion.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_config_checks.o: src/kernel/test/test_config_checks.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_rlimit.o: src/kernel/test/test_rlimit.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_kernel_isolation.o: src/kernel/test/test_kernel_isolation.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_tmpfs.o: src/kernel/test/test_tmpfs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_vmm.o: src/kernel/test/test_vmm.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_syscall_fuzz.o: src/kernel/test/test_syscall_fuzz.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_dmesg.o: src/kernel/test/test_dmesg.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_process.o: src/kernel/test/test_process.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_random.o: src/kernel/test/test_random.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_lock_validator.o: src/kernel/test/test_lock_validator.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_elf_loader.o: src/kernel/test/test_elf_loader.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_vfsd_auth.o: src/kernel/test/test_vfsd_auth.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_cap_ipc.o: src/kernel/test/test_cap_ipc.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_iocd.o: src/kernel/test/test_iocd.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_signals.o: src/kernel/test/test_signals.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_stack_alloc.o: src/kernel/test/test_stack_alloc.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_apic_timer.o: src/kernel/test/test_apic_timer.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_framebuffer.o: src/kernel/test/test_framebuffer.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_block_device.o: src/kernel/test/test_block_device.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_priority_inheritance.o: src/kernel/test/test_priority_inheritance.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_config.o: src/kernel/test/test_config.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_driver.o: src/kernel/test/test_driver.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_static_pools.o: src/kernel/test/test_static_pools.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_vfsd.o: src/kernel/test/test_vfsd.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_mutex_pcp.o: src/kernel/test/test_mutex_pcp.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_stack_profiler.o: src/kernel/test/test_stack_profiler.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_gcov.o: src/kernel/test/test_gcov.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_atomic.o: src/kernel/test/test_atomic.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_preemption_under_syscall.o: src/kernel/test/test_preemption_under_syscall.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_pipe.o: src/kernel/test/test_pipe.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_pci.o: src/kernel/test/test_pci.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/resource_tracker.o: src/kernel/test/resource_tracker.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_spinlock.o: src/kernel/test/test_spinlock.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_random_vfs_write.o: src/kernel/test/test_random_vfs_write.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_daemon_restart_crash.o: src/kernel/test/test_daemon_restart_crash.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_scheduler.o: src/kernel/test/test_scheduler.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_memory_safety.o: src/kernel/test/test_memory_safety.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_tcb_write_log.o: src/kernel/test/test_tcb_write_log.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_tmpfs_mount_unmount_failure.o: src/kernel/test/test_tmpfs_mount_unmount_failure.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_no_op_new.o: src/kernel/test/test_no_op_new.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_rtc.o: src/kernel/test/test_rtc.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_locking.o: src/kernel/test/test_locking.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_tls.o: src/kernel/test/test_tls.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_o1_scheduler.o: src/kernel/test/test_o1_scheduler.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_microkernel_transition.o: src/kernel/test/test_microkernel_transition.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_deadline_miss.o: src/kernel/test/test_deadline_miss.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_ipc_benchmark.o: src/kernel/test/test_ipc_benchmark.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_sporadic_server.o: src/kernel/test/test_sporadic_server.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_secure_exec.o: src/kernel/test/test_secure_exec.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_spinlock_stress.o: src/kernel/test/test_spinlock_stress.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_health.o: src/kernel/test/test_health.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_cpu_load.o: src/kernel/test/test_cpu_load.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_wcet_cleanup.o: src/kernel/test/test_wcet_cleanup.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_timing.o: src/kernel/test/test_timing.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_memory_isolation.o: src/kernel/test/test_memory_isolation.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_isolate.o: src/kernel/test/test_isolate.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_ss_deadline.o: src/kernel/test/test_ss_deadline.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_cleanup.o: src/kernel/test/test_cleanup.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_watchdog.o: src/kernel/test/test_watchdog.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_queue_pip.o: src/kernel/test/test_queue_pip.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_task_lifecycle.o: src/kernel/test/test_task_lifecycle.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_timer.o: src/kernel/test/test_timer.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_lock_order.o: src/kernel/test/test_lock_order.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_vfs_fat32.o: src/kernel/test/test_vfs_fat32.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_buffer_pool.o: src/kernel/test/test_buffer_pool.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_vfs.o: src/kernel/test/test_vfs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_page_tables.o: src/kernel/test/test_page_tables.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_random_vfs.o: src/kernel/test/test_random_vfs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_cross_arch.o: src/kernel/test/test_cross_arch.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_weak_stubs.o: src/kernel/test/test_weak_stubs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_fstab.o: src/kernel/test/test_fstab.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_hal_bits.o: src/kernel/test/test_hal_bits.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_sync.o: src/kernel/test/test_sync.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_cap_untyped.o: src/kernel/test/test_cap_untyped.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_preemption.o: src/kernel/test/test_preemption.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_wcet_memory.o: src/kernel/test/test_wcet_memory.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_freelist_consistency.o: src/kernel/test/test_freelist_consistency.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_deadline_action.o: src/kernel/test/test_deadline_action.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/test/test_spsc.o: src/kernel/test/test_spsc.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/driver/ahci.o: src/kernel/driver/ahci.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/driver/virtio_pci.o: src/kernel/driver/virtio_pci.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/driver/dma.o: src/kernel/driver/dma.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/driver/virtio_blk.o: src/kernel/driver/virtio_blk.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/driver/driver.o: src/kernel/driver/driver.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/driver/ata_pio.o: src/kernel/driver/ata_pio.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/driver/block_device.o: src/kernel/driver/block_device.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/driver/virtio_net.o: src/kernel/driver/virtio_net.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/driver/iocd.o: src/kernel/driver/iocd.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/random.o: src/kernel/random.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/cap/frame.o: src/kernel/cap/frame.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/cap/endpoint.o: src/kernel/cap/endpoint.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/cap/cap.o: src/kernel/cap/cap.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/cap/untyped.o: src/kernel/cap/untyped.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/irq_thread.o: src/kernel/irq_thread.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/daemon/daemon_mgr.o: src/kernel/daemon/daemon_mgr.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/task/taskdefs.o: src/kernel/task/taskdefs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/task/dmesg_task.o: src/kernel/task/dmesg_task.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/task/sporadic_server.o: src/kernel/task/sporadic_server.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/task/tcb_write_log.o: src/kernel/task/tcb_write_log.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/task/scheduler.o: src/kernel/task/scheduler.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/task/task.o: src/kernel/task/task.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/task/ready_queue_manager.o: src/kernel/task/ready_queue_manager.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/task/deadline_list.o: src/kernel/task/deadline_list.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/task/all_tasks_registry.o: src/kernel/task/all_tasks_registry.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/task/task_queue.o: src/kernel/task/task_queue.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/log/ring_buffer.o: src/kernel/log/ring_buffer.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/log/dmesg.o: src/kernel/log/dmesg.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/ipc/buffer_pool.o: src/kernel/ipc/buffer_pool.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/ipc/ipc.o: src/kernel/ipc/ipc.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/sync/mutex.o: src/kernel/sync/mutex.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/sync/eventgroup.o: src/kernel/sync/eventgroup.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/sync/sync.o: src/kernel/sync/sync.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/sync/notify.o: src/kernel/sync/notify.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/sync/queue.o: src/kernel/sync/queue.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/sync/semaphore.o: src/kernel/sync/semaphore.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/syscall/syscall_handlers_process.o: src/kernel/syscall/syscall_handlers_process.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/syscall/syscall.o: src/kernel/syscall/syscall.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/syscall/syscall_handlers_sync.o: src/kernel/syscall/syscall_handlers_sync.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/syscall/syscall_handlers_tls.o: src/kernel/syscall/syscall_handlers_tls.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/syscall/syscall_handlers_ipc.o: src/kernel/syscall/syscall_handlers_ipc.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/syscall/syscall_handlers_cap.o: src/kernel/syscall/syscall_handlers_cap.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/syscall/syscall_handlers_fs.o: src/kernel/syscall/syscall_handlers_fs.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/syscall/syscall_handlers_misc.o: src/kernel/syscall/syscall_handlers_misc.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/elf/elf_loader.o: src/kernel/elf/elf_loader.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/elf/elf.o: src/kernel/elf/elf.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/debug/dump.o: src/kernel/debug/dump.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/arch/pci.o: src/kernel/arch/pci.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/arch/x86_64/hal/idt.o: src/kernel/arch/x86_64/hal/idt.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/arch/x86_64/hal/timer.o: src/kernel/arch/x86_64/hal/timer.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/arch/x86_64/hal/apic.o: src/kernel/arch/x86_64/hal/apic.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/arch/x86_64/hal/gdt.o: src/kernel/arch/x86_64/hal/gdt.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/arch/x86_64/serial.o: src/kernel/arch/x86_64/serial.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/arch/x86_64/rtc.o: src/kernel/arch/x86_64/rtc.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
--build/kernel/arch/x86_64/keyboard.o: src/kernel/arch/x86_64/keyboard.cpp
--	@mkdir -p $(dir $@)
--	@printf "  %s %s\n" CC $@
--	$(CXX) $(CXXFLAGS) -c -o $@ $<
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index de47d907f..254f3198e 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -537,6 +537,13 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
-     memset(tcb, 0, sizeof(TaskControlBlock));
-     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
-     tcb->tls_base_ = 0; // issue #74: fresh image starts with no TLS
-+    // Issue #41: watchdog disarmed, never-armed generation (see
-+    // TaskControlBlock::create).
-+    tcb->wdog_armed = false;
-+    tcb->wdog_period_ticks = 0;
-+    tcb->wdog_last_kick_tick = 0;
-+    tcb->wdog_expiry_tick = 0;
-+    tcb->wdog_gen = 0;
-     tcb->magic = TaskControlBlock::TCB_MAGIC;
-     tcb->id = kernel::Scheduler::alloc_id();
-     tcb->state = TaskState::READY;
-diff --git a/src/kernel/log/dmesg_catalog.hpp b/src/kernel/log/dmesg_catalog.hpp
-index ef74b996d..e58360489 100644
---- a/src/kernel/log/dmesg_catalog.hpp
-+++ b/src/kernel/log/dmesg_catalog.hpp
-@@ -206,6 +206,8 @@ constexpr DmesgRecord kDmesgCatalog_TIMING[] = {
-      "Timing: Liu-Leyland bound exceeded"},
-     {ErrorSubsystem::TIMING, kDmesgBase_TIMING + 5, LogSeverity::WARN,
-      "Timing: WCET overrun"},
-+    {ErrorSubsystem::TIMING, kDmesgBase_TIMING + 6, LogSeverity::ERROR,
-+     "Timing: watchdog expired"},
- };
- 
- /// @brief Selftest records (canonical base kDmesgBase_TEST): leak and
-diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index d9c259883..70cd0a0fb 100644
---- a/src/kernel/nexios_config.h
-+++ b/src/kernel/nexios_config.h
-@@ -1030,6 +1030,13 @@
- #define CONFIG_DEADLINE_ACTION 0
- #endif
- 
-+/// Default action on per-task watchdog expiry (issue #41): mirrors the
-+/// CONFIG_DEADLINE_ACTION 0..4 contract (LOG_ONLY/PANIC/DEMOTE/KILL/
-+/// NOTIFY_MONITOR, KILL via defer_kill). Default 3 (KILL, fail-closed).
-+#ifndef CONFIG_WATCHDOG_ACTION
-+#define CONFIG_WATCHDOG_ACTION 3
-+#endif
-+
- /// Boot-time admission self-test (issue #24): read-only probes of the
- /// frozen LUB/WCET/budget gate math + miss-action range check, run once
- /// after Scheduler::init (zero alloc, zero table mutation, one success
-diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
-index 36416a65f..9d261c07c 100644
---- a/src/kernel/syscall/syscall.hpp
-+++ b/src/kernel/syscall/syscall.hpp
-@@ -120,7 +120,9 @@ enum class SyscallNumber : uint8_t {
-     TASK_DEBUG_WRITE_REGS = 88, ///< write target regs via handle (issue #225)
-     TASK_DEBUG_READ_MEM = 89, ///< read target memory via handle (issue #225)
-     TASK_DEBUG_WRITE_MEM = 90, ///< write target memory via handle (issue #225)
--    MAX_SYSCALL = 91,
-+    WATCHDOG_CREATE = 91, ///< arm self watchdog: arg0=period_ticks (issue #41)
-+    WATCHDOG_KICK = 92,   ///< kick self watchdog (issue #41)
-+    MAX_SYSCALL = 93,
- };
- 
- /// @brief Folds a list of FAST syscall numbers into a single bitmask
-@@ -402,6 +404,10 @@ class Syscall {
-                                             uint64_t, uint64_t *);
-     static uint64_t sys_task_debug_write_mem(uint64_t, uint64_t, uint64_t,
-                                              uint64_t, uint64_t *);
-+    static uint64_t sys_watchdog_create(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                        uint64_t *);
-+    static uint64_t sys_watchdog_kick(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                      uint64_t *);
-     static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
-                                       uint64_t *);
-     static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
-@@ -516,6 +522,8 @@ class Syscall {
-             &Syscall::sys_unimplemented, // 89
-             &Syscall::sys_unimplemented, // 90
- #endif
-+            &Syscall::sys_watchdog_create, // 91 WATCHDOG_CREATE (issue #41)
-+            &Syscall::sys_watchdog_kick,   // 92 WATCHDOG_KICK (issue #41)
-     };
- };
- 
-diff --git a/src/kernel/syscall/syscall_handlers_watchdog.cpp b/src/kernel/syscall/syscall_handlers_watchdog.cpp
-new file mode 100644
-index 000000000..9b24d4bba
---- /dev/null
-+++ b/src/kernel/syscall/syscall_handlers_watchdog.cpp
-@@ -0,0 +1,94 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file syscall_handlers_watchdog.cpp
-+/// @brief WATCHDOG_CREATE(91)/WATCHDOG_KICK(92) handlers (issue #41):
-+/// per-task software watchdog, self-only. Scalar stores into the caller's
-+/// own TCB — no user-pointer dereference — but stays out of
-+/// k_syscall_fast[] (issue #92 discipline: mutating path, full canary).
-+/// IrqGuard-serialized against the on_tick expiry scan; never blocks,
-+/// never reschedules, never allocates.
-+
-+#include <kernel/syscall/syscall.hpp>
-+#include <kernel/syscall/syscall_errors.hpp>
-+#include <kernel/syscall/syscall_helpers.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/arch/irq_guard.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/nexios_config.h>
-+
-+namespace kernel {
-+
-+/// @brief Arm (or re-arm) the calling task's watchdog (issue #41).
-+///        arg0 = period in ticks (> 0); arg1 reserved (must be 0).
-+///        One-shot semantics live in the expiry scan; re-CREATE simply
-+///        re-arms with a fresh generation.
-+/// @return 0, -SYS_ERR_SCHED_NO_CURRENT, -SYS_ERR_SCHED_INVALID_ARGS.
-+uint64_t Syscall::sys_watchdog_create(uint64_t arg0, uint64_t arg1, uint64_t,
-+                                      uint64_t, uint64_t *) {
-+    auto *t = syscall_task();
-+    if (t == nullptr)
-+        return static_cast<uint64_t>(-errors::SYS_ERR_SCHED_NO_CURRENT);
-+    if (arg0 == 0 || arg1 != 0)
-+        return static_cast<uint64_t>(-errors::SYS_ERR_SCHED_INVALID_ARGS);
-+    const uint64_t now = arch::Timer::ticks();
-+    // Saturating expiry: a period reaching past UINT64_MAX clamps instead
-+    // of wrapping (a wrapped expiry would fire immediately — fail-open).
-+    const uint64_t slack = static_cast<uint64_t>(-1) - now;
-+    const uint64_t expiry = (arg0 > slack) ? static_cast<uint64_t>(-1)
-+                                           : now + arg0;
-+    {
-+        arch::IrqGuard guard{};
-+        t->wdog_period_ticks = arg0;
-+        t->wdog_last_kick_tick = now;
-+        t->wdog_expiry_tick = expiry;
-+        t->wdog_armed = true;
-+        ++t->wdog_gen;
-+        if (t->wdog_gen == 0)
-+            t->wdog_gen = 1;
-+    }
-+    return 0;
-+}
-+
-+/// @brief Kick the calling task's watchdog (issue #41): restart the
-+///        period from now. All args reserved (must be 0).
-+/// @return 0, -SYS_ERR_SCHED_NO_CURRENT, -SYS_ERR_SCHED_INVALID_ARGS
-+///         (reserved args nonzero), -SYS_ERR_SCHED_INVALID_STATE (disarmed).
-+uint64_t Syscall::sys_watchdog_kick(uint64_t arg0, uint64_t arg1, uint64_t,
-+                                    uint64_t, uint64_t *) {
-+    auto *t = syscall_task();
-+    if (t == nullptr)
-+        return static_cast<uint64_t>(-errors::SYS_ERR_SCHED_NO_CURRENT);
-+    if (arg0 != 0 || arg1 != 0)
-+        return static_cast<uint64_t>(-errors::SYS_ERR_SCHED_INVALID_ARGS);
-+    const uint64_t now = arch::Timer::ticks();
-+    {
-+        arch::IrqGuard guard{};
-+        if (!t->wdog_armed || t->wdog_gen == 0)
-+            return static_cast<uint64_t>(-errors::SYS_ERR_SCHED_INVALID_STATE);
-+        const uint64_t slack = static_cast<uint64_t>(-1) - now;
-+        t->wdog_expiry_tick = (t->wdog_period_ticks > slack)
-+                                  ? static_cast<uint64_t>(-1)
-+                                  : now + t->wdog_period_ticks;
-+        t->wdog_last_kick_tick = now;
-+    }
-+    return 0;
-+}
-+
-+} // namespace kernel
-diff --git a/src/kernel/task/admission_selftest.cpp b/src/kernel/task/admission_selftest.cpp
-index 52b069f35..c0898e9f1 100644
---- a/src/kernel/task/admission_selftest.cpp
-+++ b/src/kernel/task/admission_selftest.cpp
-@@ -34,6 +34,11 @@ namespace kernel {
- static_assert(CONFIG_DEADLINE_ACTION <= 4,
-               "CONFIG_DEADLINE_ACTION out of range 0..4 (deadline.md §3)");
- 
-+// Watchdog expiry action is the same build-time contract (issue #41):
-+// only actions 0..4 exist. Mirrors the deadline static_assert above.
-+static_assert(CONFIG_WATCHDOG_ACTION <= 4,
-+              "CONFIG_WATCHDOG_ACTION out of range 0..4 (watchdog.md §3)");
-+
- namespace {
- 
- // Synthetic probe candidate: stack-constructed, never added to any table
-@@ -150,6 +155,16 @@ bool admission_boot_selftest() noexcept {
-         ok = false;
-     }
- 
-+    // (d2) Watchdog-action wiring (issue #41): same range contract as the
-+    // miss action above; handler behavior is covered by the watchdog_*
-+    // test classes on testbed — the boot path invokes nothing.
-+    if (CONFIG_WATCHDOG_ACTION > 4) {
-+        Logger::error("admission self-test: watchdog action %u out of "
-+                      "range 0..4",
-+                      CONFIG_WATCHDOG_ACTION);
-+        ok = false;
-+    }
-+
-     if (ok) {
-         Logger::info("[BOOT] admission self-test OK "
-                      "(lub-math/wcet/budget/miss-action=%u)",
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 8da413867..d8daff071 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -3407,6 +3407,13 @@ void Scheduler::on_tick() noexcept {
-         // (map_in_progress) are deferred this tick.
-         kernel::ipc::PagerRegistry::watchdog_scan(current_tick);
- 
-+        // Issue #41: per-task software watchdog expiry scan — single
-+        // bounded pass, disarmed/generation-mismatched tasks skipped.
-+        // Runs under the already-held scheduler_lock_ (same window as
-+        // the pager scan above); KILL defers via defer_kill, never
-+        // inline.
-+        scan_watchdogs_locked(current_tick);
-+
-         if (s_deferred_kill_count > 0)
-             Scheduler::process_deferred_kills();
- 
-@@ -5081,6 +5088,11 @@ void Scheduler::capture_task_fields(TaskFields *out) {
-         out[idx].recv_timed_out = t->recv_timed_out;
-         out[idx].sleep_armed = t->sleep_armed;
-         out[idx].sleep_expired = t->sleep_expired;
-+        out[idx].wdog_armed = t->wdog_armed;
-+        out[idx].wdog_period_ticks = t->wdog_period_ticks;
-+        out[idx].wdog_last_kick_tick = t->wdog_last_kick_tick;
-+        out[idx].wdog_expiry_tick = t->wdog_expiry_tick;
-+        out[idx].wdog_gen = t->wdog_gen;
-         out[idx].runq_next = t->runq_next_;
-         out[idx].runq_prev = t->runq_prev_;
-         out[idx].in_ready_queue = t->in_ready_queue_;
-@@ -5165,6 +5177,11 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
-             t->recv_timed_out = saved[j].recv_timed_out;
-             t->sleep_armed = saved[j].sleep_armed;
-             t->sleep_expired = saved[j].sleep_expired;
-+            t->wdog_armed = saved[j].wdog_armed;
-+            t->wdog_period_ticks = saved[j].wdog_period_ticks;
-+            t->wdog_last_kick_tick = saved[j].wdog_last_kick_tick;
-+            t->wdog_expiry_tick = saved[j].wdog_expiry_tick;
-+            t->wdog_gen = saved[j].wdog_gen;
-             // Snapshot does not capture SporadicServer state nor PMM page-table
-             // pools — clear the pointer and the intrusive object list so stale
-             // UAF (0xDD-poisoned block) from a restored MemPool free-list cannot
-@@ -5450,6 +5467,90 @@ deadline_miss_handler(TaskControlBlock &task,
+diff --git a/src/kernel/arch/aarch64/timer.cpp b/src/kernel/arch/aarch64/timer.cpp
+index 12d28d1f0..777d98648 100644
+--- a/src/kernel/arch/aarch64/timer.cpp
++++ b/src/kernel/arch/aarch64/timer.cpp
+@@ -105,6 +105,18 @@ uint64_t Timer::tsc_freq_hz() {
+     return counter_freq_hz_;
  }
- #endif
  
-+// Issue #41: per-task watchdog expiry scan. Caller holds scheduler_lock_
-+// (on_tick window). Single pass, no allocation, no blocking; expiry is
-+// one-shot (disarm first) and termination defers via defer_kill.
-+void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
-+    for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
-+        if (t->magic != TaskControlBlock::TCB_MAGIC)
-+            continue;
-+        if (!t->wdog_armed || t->wdog_gen == 0)
-+            continue;
-+        // NOTE (audit #41 iter-1, S1): no generation cross-check here.
-+        // t->generation is the global creation sequence, wdog_gen a per-TCB
-+        // arm counter — comparing them fail-open skips live watchdogs.
-+        // Staleness is covered by disarm-on-teardown + TaskFields rewind.
-+        if (now < t->wdog_expiry_tick)
-+            continue;
-+        // One-shot: disarm before dispatch so a slow handler cannot
-+        // re-fire on the same arm; re-CREATE re-arms with a fresh gen.
-+        t->wdog_armed = false;
-+        watchdog_expiry_handler(*t, now - t->wdog_expiry_tick);
-+    }
++uint64_t Timer::raw_counter() {
++    uint64_t cnt{};
++    asm volatile("mrs %0, cntpct_el0" : "=r"(cnt));
++    return cnt;
 +}
 +
-+__attribute__((weak)) void
-+watchdog_expiry_handler(TaskControlBlock &task,
-+                        uint64_t overdue_by_ticks) noexcept {
-+    // Issue #234/#41: every watchdog expiry enters the dmesg ring
-+    // (fail-closed record whatever the configured response).
-+    log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
-+                        log::kDmesgBase_TIMING + 6, log::LogSeverity::ERROR,
-+                        task.name, overdue_by_ticks);
++uint64_t Timer::raw_counter_freq_hz() {
++    uint64_t freq{};
++    asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
++    return freq;
++}
 +
-+#if CONFIG_WATCHDOG_ACTION == 1
-+    Logger::error("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
-+                  "(action=PANIC)",
-+                  task.id, task.name, overdue_by_ticks);
-+    panic("[WDOG] watchdog expiry (action=PANIC)");
-+#elif CONFIG_WATCHDOG_ACTION == 2
-+    Logger::warn("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
-+                 "(action=DEMOTE)",
-+                 task.id, task.name, overdue_by_ticks);
-+    if (task.priority > 1) {
-+        uint64_t old_prio = effective_priority(&task);
-+        task.priority >>= 1;
-+        uint64_t new_prio = effective_priority(&task);
-+        if (old_prio != new_prio)
-+            rq_task(task).move_priority(task, old_prio, new_prio);
-+    }
-+#elif CONFIG_WATCHDOG_ACTION == 3
-+    Logger::warn("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
-+                 "(action=KILL)",
-+                 task.id, task.name, overdue_by_ticks);
-+    task.state = TaskState::TERMINATED;
-+    task.exit_code =
-+        static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGKILL));
-+    Scheduler::wake_waiting_parent(task);
-+    Scheduler::defer_kill(&task);
-+#elif CONFIG_WATCHDOG_ACTION == 4
-+    Logger::info("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
-+                 "(action=NOTIFY_MONITOR)",
-+                 task.id, task.name, overdue_by_ticks);
-+    // Monitor resolution mirrors deadline ACTION==4 (compile-time PID
-+    // when set, otherwise the test-only override).
-+    {
-+        uint64_t monitor_pid = (CONFIG_DEADLINE_MONITOR_PID > 0)
-+                                   ? static_cast<uint64_t>(
-+                                         CONFIG_DEADLINE_MONITOR_PID)
-+                                   : (test_context_
-+                                          ? test_context_
-+                                                ->deadline_monitor_pid
-+                                          : 0);
-+        auto *monitor = Scheduler::find_task(monitor_pid);
-+        if (monitor && monitor->magic == TaskControlBlock::TCB_MAGIC &&
-+            monitor->state != TaskState::TERMINATED) {
-+            monitor->pending_signals |=
-+                (1ULL << static_cast<uint64_t>(Signal::SIGUSR1));
+ TickSource Timer::active_source() {
+     return active_source_;
+ }
+diff --git a/src/kernel/arch/hal/timer.hpp b/src/kernel/arch/hal/timer.hpp
+index e2fc4ea4f..a8b8899e5 100644
+--- a/src/kernel/arch/hal/timer.hpp
++++ b/src/kernel/arch/hal/timer.hpp
+@@ -122,6 +122,15 @@ class Timer {
+     static uint64_t remaining_ns();
+     /// @brief Return the calibrated TSC frequency in Hz.
+     static uint64_t tsc_freq_hz();
++    /// @brief Raw hardware counter, no init dependency (issue #45):
++    /// x86 rdtsc / aarch64 cntpct_el0 / riscv rdtime. IRQ-safe, callable
++    /// with IF=0 from the earliest entry code.
++    static uint64_t raw_counter();
++    /// @brief Raw counter frequency in Hz, no init dependency (issue #45).
++    /// x86 = calibrated TSC frequency (0 until calibrate()); aarch64 reads
++    /// cntfrq_el0 live; riscv returns the mtime constant. Zero means
++    /// "unusable yet" — callers fail closed, never divide by zero.
++    static uint64_t raw_counter_freq_hz();
+ 
+   private:
+     /// @brief Calibrate the TSC frequency using the PIT as a reference.
+@@ -185,6 +194,15 @@ class Timer {
+     static uint64_t remaining_ns();
+     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
+     static uint64_t tsc_freq_hz();
++    /// @brief Raw hardware counter, no init dependency (issue #45):
++    /// x86 rdtsc / aarch64 cntpct_el0 / riscv rdtime. IRQ-safe, callable
++    /// with IF=0 from the earliest entry code.
++    static uint64_t raw_counter();
++    /// @brief Raw counter frequency in Hz, no init dependency (issue #45).
++    /// x86 = calibrated TSC frequency (0 until calibrate()); aarch64 reads
++    /// cntfrq_el0 live; riscv returns the mtime constant. Zero means
++    /// "unusable yet" — callers fail closed, never divide by zero.
++    static uint64_t raw_counter_freq_hz();
+ 
+   private:
+     static constinit uint64_t ticks_;
+@@ -236,6 +254,15 @@ class Timer {
+     static uint64_t remaining_ns();
+     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
+     static uint64_t tsc_freq_hz();
++    /// @brief Raw hardware counter, no init dependency (issue #45):
++    /// x86 rdtsc / aarch64 cntpct_el0 / riscv rdtime. IRQ-safe, callable
++    /// with IF=0 from the earliest entry code.
++    static uint64_t raw_counter();
++    /// @brief Raw counter frequency in Hz, no init dependency (issue #45).
++    /// x86 = calibrated TSC frequency (0 until calibrate()); aarch64 reads
++    /// cntfrq_el0 live; riscv returns the mtime constant. Zero means
++    /// "unusable yet" — callers fail closed, never divide by zero.
++    static uint64_t raw_counter_freq_hz();
+ 
+   private:
+     static constinit uint64_t ticks_;
+diff --git a/src/kernel/arch/riscv64/timer.cpp b/src/kernel/arch/riscv64/timer.cpp
+index bc02009b0..bc1f76928 100644
+--- a/src/kernel/arch/riscv64/timer.cpp
++++ b/src/kernel/arch/riscv64/timer.cpp
+@@ -130,6 +130,16 @@ uint64_t Timer::tsc_freq_hz() {
+     return timer_freq_hz_;
+ }
+ 
++uint64_t Timer::raw_counter() {
++    uint64_t cnt{};
++    asm volatile("csrr %0, time" : "=r"(cnt));
++    return cnt;
++}
++
++uint64_t Timer::raw_counter_freq_hz() {
++    return RISCV_MTIME_FREQ_HZ;
++}
++
+ TickSource Timer::active_source() {
+     return active_source_;
+ }
+diff --git a/src/kernel/arch/x86_64/hal/timer.cpp b/src/kernel/arch/x86_64/hal/timer.cpp
+index 66f3a4059..755c635f8 100644
+--- a/src/kernel/arch/x86_64/hal/timer.cpp
++++ b/src/kernel/arch/x86_64/hal/timer.cpp
+@@ -307,6 +307,14 @@ uint64_t Timer::tsc_freq_hz() {
+     return tsc_freq_hz_;
+ }
+ 
++uint64_t Timer::raw_counter() {
++    return rdtsc();
++}
++
++uint64_t Timer::raw_counter_freq_hz() {
++    return tsc_freq_hz_;
++}
++
+ /// @brief Return the time elapsed since boot in nanoseconds.
+ /// Uses the calibrated TSC frequency to convert TSC ticks to nanoseconds.
+ /// @return Nanoseconds since boot, or 0 if the TSC has not been calibrated.
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 911c22f75..88f9e506a 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -707,21 +707,40 @@ static void init_pic() {
+ #endif
+ 
+ // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+-// Issue #45: per-stage boot WCET marks. TU-local static table, BOOT_ONLY
+-// writes from higherhalf_entry (single BSP, pre-scheduler — no locks, no
+-// alloc, no reschedule on the mark path). Bounds-checked recorder no-ops
+-// on bad index (boot instrumentation must never panic). Deltas are read
+-// out as u64 copies only; sampling lives test-side (see plan on #45).
++// Issue #45: per-stage boot WCET marks + raw entry stamp. TU-local
++// statics, BOOT_ONLY writes from higherhalf_entry (single BSP,
++// pre-scheduler — no locks, no alloc, no reschedule on these paths).
++// Raw hardware counters (Timer::raw_counter, no init dependency) because
++// Timer::ns()/ns_monotonic() read 0 until calibrate() sets the backing
++// frequency — a converted stamp would make the budget gate and all
++// pre-calibrate deltas permanently invalid. Conversion happens at use
++// (gate/print/delta) when the frequency is known.
+ namespace {
+ constexpr size_t kBootStageCount =
+     static_cast<size_t>(kernel::BootStage::COUNT);
+ uint64_t s_boot_marks_[5] = {};
++uint64_t s_boot_entry_raw_ = 0;
++
++/// @brief Convert a raw counter delta to ns (issue #16 overflow-split:
++/// 64-bit only, no 128-bit libcall). Zero frequency or unordered
++/// endpoints fail closed to 0 with valid=false, never a false reading.
++uint64_t boot_raw_delta_to_ns(uint64_t start, uint64_t end, bool &valid) {
++    valid = false;
++    const uint64_t freq = arch::Timer::raw_counter_freq_hz();
++    if (freq == 0 || end < start)
++        return 0;
++    const uint64_t delta = end - start;
++    const uint64_t sec = delta / freq;
++    const uint64_t rem = delta % freq;
++    valid = true;
++    return sec * 1000000000ULL + (rem * 1000000000ULL) / freq;
++}
+ 
+ void boot_mark(kernel::BootStage s) {
+     const size_t i = static_cast<size_t>(s);
+     if (i >= kBootStageCount)
+         return;
+-    s_boot_marks_[i] = arch::Timer::ns_monotonic();
++    s_boot_marks_[i] = arch::Timer::raw_counter();
+ }
+ } // namespace
+ 
+@@ -739,14 +758,15 @@ BootDelta boot_stage_delta(BootStage s) noexcept {
+     if (i >= kBootStageCount)
+         return d;
+     const uint64_t start =
+-        (i == 0) ? gs::get_kernel_entry_ns() : s_boot_marks_[i - 1];
+-    const uint64_t end = s_boot_marks_[i];
+-    if (start != 0 && end != 0 && end >= start) {
+-        d.ns = end - start;
+-        d.valid = true;
+-    }
++        (i == 0) ? s_boot_entry_raw_ : s_boot_marks_[i - 1];
++    d.ns = boot_raw_delta_to_ns(start, s_boot_marks_[i], d.valid);
+     return d;
+ }
++
++/// @brief Raw entry stamp for the boot budget gate (issue #45).
++uint64_t boot_entry_raw() noexcept {
++    return s_boot_entry_raw_;
++}
+ } // namespace kernel
+ 
+ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+@@ -786,6 +806,10 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+ 
+     kernel::Logger::init();
+     kernel::test::set_kernel_entry_ns();
++    // Issue #45: raw entry stamp for the boot budget gate — the ns stamp
++    // above reads 0 until Timer::init() calibrates (all archs), so the
++    // gate needs an init-independent counter (rdtsc/cntpct/rdtime).
++    s_boot_entry_raw_ = arch::Timer::raw_counter();
+     kernel::test::Registry::init();
+     debug_write("[BOOT] ");
+     debug_write(kernel::Version::string());
+@@ -1403,9 +1427,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+         for (size_t i = 0; i < kBootStageCount; ++i) {
+             const kernel::BootDelta d = kernel::boot_stage_delta(
+                 static_cast<kernel::BootStage>(i));
+-            kernel::Logger::debug("[BOOT] stage %s +%llu ns%s",
+-                                  k_boot_stage_names[i], d.ns,
+-                                  d.valid ? "" : " (invalid pre-calibrate)");
++            // Logger::debug is runtime-filtered below the default level;
++            // boot milestones use info (other [BOOT] lines do the same).
++            kernel::Logger::info("[BOOT] stage %s +%llu ns%s",
++                                 k_boot_stage_names[i], d.ns,
++                                 d.valid ? "" : " (no time source)");
+         }
+     }
+ #endif
+@@ -1417,29 +1443,32 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+     // still OPEN with no production arm primitive (only the test-harness
+     // kernel::test::watchdog_arm, which is test-only and x86-PIT-bound),
+     // so this gate owns a boot-only latch (armed timestamp + overrun
+-    // flag below); when #41 lands, the arm call moves to its primitive.
+-    // Clock: ns_monotonic() (post-calibrate, IRQ-safe, never decreases)
+-    // minus the kernel-entry stamp; zero start fails closed to
+-    // no-overrun with a diagnostic, never a false overrun. No locks, no
+-    // alloc, no reschedule on this path.
++    // flag below). Handoff note: when #41 lands, the arm call moves to
++    // its primitive (SYS_WATCHDOG_CREATE with the budget as period).
++    // Clock: raw hardware counter delta (entry stamp above → now),
++    // converted with the calibrated frequency. A zero frequency (x86
++    // calibration failed) fails closed to no-overrun with a diagnostic,
++    // never a false overrun. No locks, no alloc, no reschedule here.
+     // Owner policy: CONFIG-only budget (CONFIG_BOOT_BUDGET_MS); on
+     // overrun, DEBUG builds warn + enter the ring and continue degraded
+     // (shell still starts, mirroring the daemon-wait degraded mode);
+     // release builds fail closed with panic (no degraded RT set).
+     {
+-        const uint64_t boot_t0 = kernel::gs::get_kernel_entry_ns();
+-        const uint64_t boot_now = arch::Timer::ns_monotonic();
++        const uint64_t boot_now_raw = arch::Timer::raw_counter();
+         const uint64_t boot_budget_ns =
+             (uint64_t)CONFIG_BOOT_BUDGET_MS * 1000000ULL;
+         bool boot_overrun = false;
++        bool boot_valid = false;
+         uint64_t boot_elapsed_ms = 0;
+-        if (boot_t0 == 0) {
++        if (boot_budget_ns != 0) {
++            const uint64_t elapsed_ns = boot_raw_delta_to_ns(
++                s_boot_entry_raw_, boot_now_raw, boot_valid);
++            boot_elapsed_ms = elapsed_ns / 1000000ULL;
++            boot_overrun = boot_valid && (elapsed_ns > boot_budget_ns);
 +        }
-+    }
-+#else
-+    Logger::info("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
-+                 "(action=LOG_ONLY)",
-+                 task.id, task.name, overdue_by_ticks);
-+#endif
-+}
-+
- #if CONFIG_WCET_OVERRUN_DETECTION
- __attribute__((weak)) void
- wcet_overrun_handler(TaskControlBlock *task,
-diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index abb21bde9..6bef77c67 100644
---- a/src/kernel/task/scheduler.hpp
-+++ b/src/kernel/task/scheduler.hpp
-@@ -420,6 +420,12 @@ class Scheduler {
-     ///        perform inline KILL cleanup.  Guarded by
-     ///        #if CONFIG_DEADLINE_MONITOR_TASK.
-     static void scan_deadlines() noexcept;
-+    /// @brief Per-task watchdog expiry scan (issue #41): single bounded
-+    ///        pass over the task set; armed tasks past wdog_expiry_tick
-+    ///        are disarmed (one-shot) and handed to
-+    ///        watchdog_expiry_handler(). Caller holds scheduler_lock_
-+    ///        (on_tick window).
-+    static void scan_watchdogs_locked(uint64_t now) noexcept;
-     /// @brief Ensures the deadline-monitor task exists and is valid.
-     ///        Re-spawns it if the TCB was killed (e.g. by reload_daemon_tasks
-     ///        during snapshot restore).  Safe to call multiple times.
-@@ -699,6 +705,15 @@ class Scheduler {
-         ///        so no stale handle can outlive the wait it belonged to.
-         bool sleep_armed;
-         bool sleep_expired;
-+        /// @brief Per-task watchdog slot (issue #41): rewinds with the
-+        /// snapshot (captured pre-arm at suite setup, like the
-+        /// recv_timeout/sleep flags) so no stale expiry outlives the
-+        /// test that armed it.
-+        bool wdog_armed;
-+        uint64_t wdog_period_ticks;
-+        uint64_t wdog_last_kick_tick;
-+        uint64_t wdog_expiry_tick;
-+        uint32_t wdog_gen;
-         /// @brief Ready-queue intrusive list pointers (POD copy).
-         ///        These form doubly-linked lists; TCBs are in-place across
-         ///        snapshot cycles so pointer values remain valid.
-@@ -1318,4 +1333,12 @@ wcet_overrun_handler(TaskControlBlock *task,
-                      uint64_t overrun_by_ticks) noexcept;
- #endif
++        if (!boot_valid && boot_budget_ns != 0) {
+             kernel::Logger::warn(
+-                "boot: no entry timestamp, budget gate skipped");
+-        } else if (boot_now >= boot_t0 && boot_budget_ns != 0) {
+-            boot_elapsed_ms = (boot_now - boot_t0) / 1000000ULL;
+-            if ((boot_now - boot_t0) > boot_budget_ns)
+-                boot_overrun = true;
++                "boot: no usable time source, budget gate skipped");
+         }
+         if (boot_overrun) {
+             kernel::Logger::warn("boot: budget exceeded (%lu ms > %lu ms), "
+diff --git a/src/kernel/kernel.hpp b/src/kernel/kernel.hpp
+index 4d6c22c7b..863abfb28 100644
+--- a/src/kernel/kernel.hpp
++++ b/src/kernel/kernel.hpp
+@@ -86,18 +86,26 @@ enum class BootStage : uint8_t {
+     COUNT
+ };
  
-+/// @brief Weak callback invoked when a task's watchdog expires.
-+/// Called from ISR context (on_tick) under scheduler_lock_ — must not
-+/// block; KILL action defers via defer_kill() (deadline ACTION==3
-+/// precedent). Always enters the ring (TIMING+6 ERROR, fail-closed).
-+__attribute__((weak)) void
-+watchdog_expiry_handler(TaskControlBlock &task,
-+                        uint64_t overdue_by_ticks) noexcept;
+-/// @brief Raw ns_monotonic() mark for a boot stage (0 = never marked).
++/// @brief Raw hardware-counter mark for a boot stage (issue #45).
++/// Raw units (Timer::raw_counter), NOT nanoseconds: the backing
++/// frequency is unknown until calibrate(), so conversion happens at use
++/// (boot_stage_delta / budget gate / DEBUG print). 0 = never marked.
+ /// @param s Stage index (out of range returns 0, never panics).
+ uint64_t boot_stage_mark(BootStage s) noexcept;
+ 
+-/// @brief Pairwise stage delta with a validity flag.
+-/// delta(s) spans the previous mark (or the kernel-entry stamp for
+-/// ARCH_INIT) to mark[s]; valid requires both endpoints nonzero and
+-/// ordered (pre-calibrate zero reads are flagged, never asserted).
++/// @brief Pairwise stage delta converted to ns with a validity flag.
++/// delta(s) spans the previous mark (or the raw entry stamp for
++/// ARCH_INIT) to mark[s]; valid requires a nonzero backing frequency
++/// and ordered endpoints (fail-closed, never a false reading).
+ struct BootDelta {
+     uint64_t ns;
+     bool valid;
+ };
+ BootDelta boot_stage_delta(BootStage s) noexcept;
+ 
++/// @brief Raw hardware-counter stamp taken at kernel entry (issue #45).
++/// Feeds the boot budget gate; the legacy ns entry stamp
++/// (gs::get_kernel_entry_ns) is untouched.
++uint64_t boot_entry_raw() noexcept;
 +
  } // namespace kernel
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index a0ea61ffa..a2b18009c 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -960,6 +960,13 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
-     TCB_WRITE(tcb, id, Scheduler::alloc_id());
-     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
-     tcb->tls_base_ = 0; // issue #74: no TLS until TLS_SET
-+    // Issue #41: watchdog disarmed, never-armed generation (all-zero
-+    // already skips the scan; explicit per the TCB-memset discipline).
-+    tcb->wdog_armed = false;
-+    tcb->wdog_period_ticks = 0;
-+    tcb->wdog_last_kick_tick = 0;
-+    tcb->wdog_expiry_tick = 0;
-+    tcb->wdog_gen = 0;
-     {
-         char buf[CONFIG_TASK_NAME_LEN];
-         size_t pos = 0;
-@@ -1214,6 +1221,12 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
-     TCB_WRITE(tcb, id, Scheduler::alloc_id());
-     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
-     tcb->tls_base_ = 0; // issue #74: no TLS until TLS_SET
-+    // Issue #41: watchdog disarmed, never-armed generation (see create).
-+    tcb->wdog_armed = false;
-+    tcb->wdog_period_ticks = 0;
-+    tcb->wdog_last_kick_tick = 0;
-+    tcb->wdog_expiry_tick = 0;
-+    tcb->wdog_gen = 0;
-     TCB_WRITE(tcb, state, TaskState::READY);
-     tcb->priority = priority;
-     tcb->base_priority = priority;
-@@ -1413,6 +1426,12 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     TCB_WRITE(tcb, magic, TCB_MAGIC);
-     TCB_WRITE(tcb, id, Scheduler::alloc_id());
-     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
-+    // Issue #41: watchdog disarmed, never-armed generation (see create).
-+    tcb->wdog_armed = false;
-+    tcb->wdog_period_ticks = 0;
-+    tcb->wdog_last_kick_tick = 0;
-+    tcb->wdog_expiry_tick = 0;
-+    tcb->wdog_gen = 0;
-     __builtin_memcpy(tcb->name, parent->name, CONFIG_TASK_NAME_LEN);
-     tcb->parent_id = parent->id;
-     TCB_WRITE(tcb, state, TaskState::READY);
-@@ -1821,6 +1840,14 @@ void TaskControlBlock::cleanup() noexcept {
-     }
-     state = TaskState::REAPED;
- 
-+    // Issue #41: disarm the watchdog at teardown (bump the generation so
-+    // a recycled TCB slot can never match a stale expiry).
-+    wdog_armed = false;
-+    wdog_expiry_tick = 0;
-+    ++wdog_gen;
-+    if (wdog_gen == 0)
-+        wdog_gen = 1;
-+
-     // Pinned TCBs are part of the test-isolation baseline (snapshot).
-     // Their resources (sporadic_server, kernel stack, page tables) must
-     // survive intact — the snapshot restore puts back the original field
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index cb4ceb39e..f1c33fd8c 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -278,8 +278,10 @@ struct TaskControlBlock {
-             in_ready_queue_(false), ready_deferred_(false),
-            rq_priority_(0), all_bucket_(0),
-            zombie_next_(nullptr), waiting_child_pid(0),
--          waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
--          alarm_armed(false), recv_timeout_armed(false),
-+           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
-+           alarm_armed(false), wdog_armed(false), wdog_period_ticks(0),
-+           wdog_last_kick_tick(0), wdog_expiry_tick(0), wdog_gen(0),
-+           recv_timeout_armed(false),
-           recv_timed_out(false),
-           recv_timeout_handle{0, 0, time::TimerWheel::kInvalidGeneration},
-           recv_timeout_gen(0), sleep_armed(false), sleep_expired(false),
-@@ -543,6 +545,26 @@ struct TaskControlBlock {
-     /// @brief True if alarm is armed.
-     bool alarm_armed;
- 
-+    /// @brief Per-task software watchdog armed flag (issue #41).
-+    /// False after every memset site (create/create_user/clone/elf) and
-+    /// on teardown — the on_tick scan skips disarmed tasks outright.
-+    bool wdog_armed = false;
-+
-+    /// @brief Watchdog period in ticks (from SYS_WATCHDOG_CREATE arg0).
-+    uint64_t wdog_period_ticks = 0;
-+
-+    /// @brief Tick of the last arm/kick (absolute tick count).
-+    uint64_t wdog_last_kick_tick = 0;
-+
-+    /// @brief Absolute tick at which the watchdog fires (one-shot: the
-+    /// scan disarms before dispatching the expiry action, re-CREATE to
-+    /// re-arm). Zero when never armed.
-+    uint64_t wdog_expiry_tick = 0;
-+
-+    /// @brief TCB generation snapshot at arm time (ABA guard on TCB slot
-+    /// reuse: 0 = never armed; the scan skips generation mismatches).
-+    uint32_t wdog_gen = 0;
-+
-     /// @brief Bounded-receive timeout armed on the wheel (issue #18).
-     bool recv_timeout_armed;
- 
-diff --git a/src/kernel/vfs/procfs.cpp b/src/kernel/vfs/procfs.cpp
-index d98b6cf50..6ac5c2e45 100644
---- a/src/kernel/vfs/procfs.cpp
-+++ b/src/kernel/vfs/procfs.cpp
-@@ -431,6 +431,112 @@ static const VnodeOps pid_stat_ops = {
-     nullptr, // create
- };
- 
-+// ── pid watchdog vnode (issue #41) ──
-+/// @brief Vnode representing a process's watchdog file.
-+struct PidWatchdogVnode {
-+    Vnode base;             ///< Base Vnode.
-+    uint64_t pid;           ///< Process ID.
-+    TaskControlBlock *task; ///< Pointer to the task's TCB.
-+};
-+
-+/// @brief Read process watchdog info: armed/period/last-kick/expires.
-+/// Kick is exclusively via SYS_WATCHDOG_KICK (write returns VFS_INVALID).
-+static int64_t pid_watchdog_read(Vnode &self, uint8_t *buf, uint64_t count,
-+                                 uint64_t offset) {
-+    auto *pw = static_cast<PidWatchdogVnode *>(self.private_data);
-+    if (!pw || !pw->task)
-+        return VFS_INVALID;
-+
-+    char tmp[128];
-+    char num[32];
-+    size_t len = 0;
-+    const char *keys[] = {"armed=", " period=", " last_kick=", " expires="};
-+    uint64_t vals[4] = {pw->task->wdog_armed ? 1ULL : 0ULL,
-+                        pw->task->wdog_period_ticks,
-+                        pw->task->wdog_last_kick_tick,
-+                        pw->task->wdog_expiry_tick};
-+    for (size_t ki = 0; ki < 4; ++ki) {
-+        const char *k = keys[ki];
-+        while (*k && len < sizeof(tmp) - 24)
-+            tmp[len++] = *k++;
-+        uint64_to_str(num, vals[ki]);
-+        const char *s = num;
-+        while (*s && len < sizeof(tmp) - 2)
-+            tmp[len++] = *s++;
-+    }
-+    if (len < sizeof(tmp) - 1)
-+        tmp[len++] = '\n';
-+    tmp[len] = '\0';
-+
-+    if (offset >= len)
-+        return 0;
-+    uint64_t avail = len - offset;
-+    if (count > avail)
-+        count = avail;
-+    memcpy(buf, tmp + offset, count);
-+    return static_cast<int64_t>(count);
-+}
-+
-+/// @brief Write to process watchdog (not supported — kick via syscall).
-+static int64_t pid_watchdog_write(Vnode &, const uint8_t *, uint64_t,
-+                                  uint64_t) {
-+    return VFS_INVALID;
-+}
-+/// @brief Open process watchdog.
-+static int pid_watchdog_open(Vnode &, uint64_t) {
-+    return 0;
-+}
-+/// @brief Close process watchdog.
-+static void pid_watchdog_close(Vnode &) {
-+}
-+/// @brief Seek within process watchdog.
-+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-+static int64_t pid_watchdog_lseek(Vnode &self, int64_t offset, int whence,
-+                                  uint64_t *out_pos) {
-+    (void)self;
-+    uint64_t new_pos = 0;
-+    switch (whence) {
-+    case SEEK_SET:
-+        new_pos = static_cast<uint64_t>(offset);
-+        break;
-+    case SEEK_CUR:
-+        new_pos = *out_pos + static_cast<uint64_t>(offset);
-+        break;
-+    default:
-+        new_pos = static_cast<uint64_t>(offset);
-+        break;
-+    }
-+    if (new_pos > 256)
-+        new_pos = 256;
-+    *out_pos = new_pos;
-+    return static_cast<int64_t>(new_pos);
-+}
-+/// @brief Get process watchdog status.
-+static int pid_watchdog_fstat(Vnode &, VfsStat &) {
-+    return VFS_INVALID;
-+}
-+/// @brief I/O control on process watchdog (not supported).
-+static int pid_watchdog_ioctl(Vnode &, uint64_t,
-+                              kernel::CheckedPtr<uint8_t>) {
-+    return VFS_INVALID;
-+}
-+/// @brief Read directory on process watchdog (not supported).
-+static int pid_watchdog_readdir(Vnode &, uint64_t &, Dirent &) {
-+    return VFS_INVALID;
-+}
-+/// @brief Look up child in process watchdog (not supported).
-+static Vnode *pid_watchdog_lookup(Vnode &, const char *) {
-+    return nullptr;
-+}
-+
-+static const VnodeOps pid_watchdog_ops = {
-+    pid_watchdog_read,   pid_watchdog_write, pid_watchdog_open,
-+    pid_watchdog_close,  pid_watchdog_lseek, pid_watchdog_fstat,
-+    pid_watchdog_ioctl,  pid_watchdog_readdir, pid_watchdog_lookup,
-+    nullptr,             nullptr,
-+    nullptr, // create
-+};
-+
- // ── pid directory vnode ──
- /// @brief Vnode representing a per-process directory in /proc.
- struct PidDirVnode {
-@@ -439,6 +545,8 @@ struct PidDirVnode {
-     TaskControlBlock *task; ///< Pointer to the task's TCB.
-     Vnode stat_vnode;       ///< Embedded stat vnode.
-     PidStatVnode stat_data; ///< Embedded stat vnode data.
-+    Vnode watchdog_vnode;   ///< Embedded watchdog vnode (issue #41).
-+    PidWatchdogVnode watchdog_data; ///< Embedded watchdog vnode data.
- };
- 
- /// @brief Read from a PID directory (not supported).
-@@ -485,6 +593,8 @@ static Vnode *pid_dir_lookup(Vnode &self, const char *name) {
-         return nullptr;
-     if (strcmp(name, "stat") == 0)
-         return &pd->stat_vnode;
-+    if (strcmp(name, "watchdog") == 0)
-+        return &pd->watchdog_vnode;
-     return nullptr;
- }
- 
-@@ -517,6 +627,19 @@ static Vnode *self_lookup(Vnode &self, const char *name) {
-         cur_stat.base.parent = &self;
-         return &cur_stat.base;
-     }
-+    // Issue #41: same pattern for the watchdog file of the current task.
-+    if (strcmp(name, "watchdog") == 0) {
-+        static PidWatchdogVnode cur_wdog = {};
-+        cur_wdog.pid = task->id;
-+        cur_wdog.task = task;
-+        cur_wdog.base.ops = &pid_watchdog_ops;
-+        cur_wdog.base.ino = task->id;
-+        cur_wdog.base.size = 0;
-+        cur_wdog.base.mode = S_IFREG;
-+        cur_wdog.base.private_data = &cur_wdog;
-+        cur_wdog.base.parent = &self;
-+        return &cur_wdog.base;
-+    }
-     return nullptr;
- }
- 
-@@ -670,6 +793,14 @@ static Vnode *proc_root_lookup(Vnode &self, const char *name) {
-                 pd->stat_vnode.parent = &pd->base;
-                 pd->stat_data.pid = pid;
-                 pd->stat_data.task = t;
-+                pd->watchdog_vnode.ops = &pid_watchdog_ops;
-+                pd->watchdog_vnode.ino = pid;
-+                pd->watchdog_vnode.size = 0;
-+                pd->watchdog_vnode.mode = S_IFREG;
-+                pd->watchdog_vnode.private_data = &pd->watchdog_data;
-+                pd->watchdog_vnode.parent = &pd->base;
-+                pd->watchdog_data.pid = pid;
-+                pd->watchdog_data.task = t;
-                 return &pd->base;
-             }
-         }
-diff --git a/src/libc/syscall.h b/src/libc/syscall.h
-index b987eb98b..b98f4db52 100644
---- a/src/libc/syscall.h
-+++ b/src/libc/syscall.h
-@@ -238,6 +238,18 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
- #define SYS_ABI_VERSION     84
- #define SYS_TLS_SET         85
- 
-+// Issue #41 — per-task software watchdog ABI (matches kernel SyscallNumber).
-+#define SYS_WATCHDOG_CREATE 91
-+#define SYS_WATCHDOG_KICK   92
-+
-+static inline long sys_watchdog_create(unsigned long period_ticks) {
-+    return __syscall5(SYS_WATCHDOG_CREATE, (long)period_ticks, 0, 0, 0);
-+}
-+
-+static inline long sys_watchdog_kick(void) {
-+    return __syscall5(SYS_WATCHDOG_KICK, 0, 0, 0, 0);
-+}
-+
- // ABI v1.0 version macros (spec §3/§10, issues #69/#70): SYS_MAX ==
- // kernel MAX_SYSCALL; 80–85 appended by #70 (handlers for 80–83 land
- // with #76, TLS_SET with #74 — table slots fail-closed until then).

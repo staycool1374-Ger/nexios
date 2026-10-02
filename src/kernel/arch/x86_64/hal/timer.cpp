@@ -307,6 +307,14 @@ uint64_t Timer::tsc_freq_hz() {
     return tsc_freq_hz_;
 }
 
+uint64_t Timer::raw_counter() {
+    return rdtsc();
+}
+
+uint64_t Timer::raw_counter_freq_hz() {
+    return tsc_freq_hz_;
+}
+
 /// @brief Return the time elapsed since boot in nanoseconds.
 /// Uses the calibrated TSC frequency to convert TSC ticks to nanoseconds.
 /// @return Nanoseconds since boot, or 0 if the TSC has not been calibrated.

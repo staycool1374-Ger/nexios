@@ -707,21 +707,40 @@ static void init_pic() {
 #endif
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-// Issue #45: per-stage boot WCET marks. TU-local static table, BOOT_ONLY
-// writes from higherhalf_entry (single BSP, pre-scheduler — no locks, no
-// alloc, no reschedule on the mark path). Bounds-checked recorder no-ops
-// on bad index (boot instrumentation must never panic). Deltas are read
-// out as u64 copies only; sampling lives test-side (see plan on #45).
+// Issue #45: per-stage boot WCET marks + raw entry stamp. TU-local
+// statics, BOOT_ONLY writes from higherhalf_entry (single BSP,
+// pre-scheduler — no locks, no alloc, no reschedule on these paths).
+// Raw hardware counters (Timer::raw_counter, no init dependency) because
+// Timer::ns()/ns_monotonic() read 0 until calibrate() sets the backing
+// frequency — a converted stamp would make the budget gate and all
+// pre-calibrate deltas permanently invalid. Conversion happens at use
+// (gate/print/delta) when the frequency is known.
 namespace {
 constexpr size_t kBootStageCount =
     static_cast<size_t>(kernel::BootStage::COUNT);
 uint64_t s_boot_marks_[5] = {};
+uint64_t s_boot_entry_raw_ = 0;
+
+/// @brief Convert a raw counter delta to ns (issue #16 overflow-split:
+/// 64-bit only, no 128-bit libcall). Zero frequency or unordered
+/// endpoints fail closed to 0 with valid=false, never a false reading.
+uint64_t boot_raw_delta_to_ns(uint64_t start, uint64_t end, bool &valid) {
+    valid = false;
+    const uint64_t freq = arch::Timer::raw_counter_freq_hz();
+    if (freq == 0 || end < start)
+        return 0;
+    const uint64_t delta = end - start;
+    const uint64_t sec = delta / freq;
+    const uint64_t rem = delta % freq;
+    valid = true;
+    return sec * 1000000000ULL + (rem * 1000000000ULL) / freq;
+}
 
 void boot_mark(kernel::BootStage s) {
     const size_t i = static_cast<size_t>(s);
     if (i >= kBootStageCount)
         return;
-    s_boot_marks_[i] = arch::Timer::ns_monotonic();
+    s_boot_marks_[i] = arch::Timer::raw_counter();
 }
 } // namespace
 
@@ -739,13 +758,14 @@ BootDelta boot_stage_delta(BootStage s) noexcept {
     if (i >= kBootStageCount)
         return d;
     const uint64_t start =
-        (i == 0) ? gs::get_kernel_entry_ns() : s_boot_marks_[i - 1];
-    const uint64_t end = s_boot_marks_[i];
-    if (start != 0 && end != 0 && end >= start) {
-        d.ns = end - start;
-        d.valid = true;
-    }
+        (i == 0) ? s_boot_entry_raw_ : s_boot_marks_[i - 1];
+    d.ns = boot_raw_delta_to_ns(start, s_boot_marks_[i], d.valid);
     return d;
+}
+
+/// @brief Raw entry stamp for the boot budget gate (issue #45).
+uint64_t boot_entry_raw() noexcept {
+    return s_boot_entry_raw_;
 }
 } // namespace kernel
 
@@ -786,6 +806,10 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
     kernel::Logger::init();
     kernel::test::set_kernel_entry_ns();
+    // Issue #45: raw entry stamp for the boot budget gate — the ns stamp
+    // above reads 0 until Timer::init() calibrates (all archs), so the
+    // gate needs an init-independent counter (rdtsc/cntpct/rdtime).
+    s_boot_entry_raw_ = arch::Timer::raw_counter();
     kernel::test::Registry::init();
     debug_write("[BOOT] ");
     debug_write(kernel::Version::string());
@@ -1403,9 +1427,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         for (size_t i = 0; i < kBootStageCount; ++i) {
             const kernel::BootDelta d = kernel::boot_stage_delta(
                 static_cast<kernel::BootStage>(i));
-            kernel::Logger::debug("[BOOT] stage %s +%llu ns%s",
-                                  k_boot_stage_names[i], d.ns,
-                                  d.valid ? "" : " (invalid pre-calibrate)");
+            // Logger::debug is runtime-filtered below the default level;
+            // boot milestones use info (other [BOOT] lines do the same).
+            kernel::Logger::info("[BOOT] stage %s +%llu ns%s",
+                                 k_boot_stage_names[i], d.ns,
+                                 d.valid ? "" : " (no time source)");
         }
     }
 #endif
@@ -1417,29 +1443,32 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // still OPEN with no production arm primitive (only the test-harness
     // kernel::test::watchdog_arm, which is test-only and x86-PIT-bound),
     // so this gate owns a boot-only latch (armed timestamp + overrun
-    // flag below); when #41 lands, the arm call moves to its primitive.
-    // Clock: ns_monotonic() (post-calibrate, IRQ-safe, never decreases)
-    // minus the kernel-entry stamp; zero start fails closed to
-    // no-overrun with a diagnostic, never a false overrun. No locks, no
-    // alloc, no reschedule on this path.
+    // flag below). Handoff note: when #41 lands, the arm call moves to
+    // its primitive (SYS_WATCHDOG_CREATE with the budget as period).
+    // Clock: raw hardware counter delta (entry stamp above → now),
+    // converted with the calibrated frequency. A zero frequency (x86
+    // calibration failed) fails closed to no-overrun with a diagnostic,
+    // never a false overrun. No locks, no alloc, no reschedule here.
     // Owner policy: CONFIG-only budget (CONFIG_BOOT_BUDGET_MS); on
     // overrun, DEBUG builds warn + enter the ring and continue degraded
     // (shell still starts, mirroring the daemon-wait degraded mode);
     // release builds fail closed with panic (no degraded RT set).
     {
-        const uint64_t boot_t0 = kernel::gs::get_kernel_entry_ns();
-        const uint64_t boot_now = arch::Timer::ns_monotonic();
+        const uint64_t boot_now_raw = arch::Timer::raw_counter();
         const uint64_t boot_budget_ns =
             (uint64_t)CONFIG_BOOT_BUDGET_MS * 1000000ULL;
         bool boot_overrun = false;
+        bool boot_valid = false;
         uint64_t boot_elapsed_ms = 0;
-        if (boot_t0 == 0) {
+        if (boot_budget_ns != 0) {
+            const uint64_t elapsed_ns = boot_raw_delta_to_ns(
+                s_boot_entry_raw_, boot_now_raw, boot_valid);
+            boot_elapsed_ms = elapsed_ns / 1000000ULL;
+            boot_overrun = boot_valid && (elapsed_ns > boot_budget_ns);
+        }
+        if (!boot_valid && boot_budget_ns != 0) {
             kernel::Logger::warn(
-                "boot: no entry timestamp, budget gate skipped");
-        } else if (boot_now >= boot_t0 && boot_budget_ns != 0) {
-            boot_elapsed_ms = (boot_now - boot_t0) / 1000000ULL;
-            if ((boot_now - boot_t0) > boot_budget_ns)
-                boot_overrun = true;
+                "boot: no usable time source, budget gate skipped");
         }
         if (boot_overrun) {
             kernel::Logger::warn("boot: budget exceeded (%lu ms > %lu ms), "

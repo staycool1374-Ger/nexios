@@ -86,18 +86,26 @@ enum class BootStage : uint8_t {
     COUNT
 };
 
-/// @brief Raw ns_monotonic() mark for a boot stage (0 = never marked).
+/// @brief Raw hardware-counter mark for a boot stage (issue #45).
+/// Raw units (Timer::raw_counter), NOT nanoseconds: the backing
+/// frequency is unknown until calibrate(), so conversion happens at use
+/// (boot_stage_delta / budget gate / DEBUG print). 0 = never marked.
 /// @param s Stage index (out of range returns 0, never panics).
 uint64_t boot_stage_mark(BootStage s) noexcept;
 
-/// @brief Pairwise stage delta with a validity flag.
-/// delta(s) spans the previous mark (or the kernel-entry stamp for
-/// ARCH_INIT) to mark[s]; valid requires both endpoints nonzero and
-/// ordered (pre-calibrate zero reads are flagged, never asserted).
+/// @brief Pairwise stage delta converted to ns with a validity flag.
+/// delta(s) spans the previous mark (or the raw entry stamp for
+/// ARCH_INIT) to mark[s]; valid requires a nonzero backing frequency
+/// and ordered endpoints (fail-closed, never a false reading).
 struct BootDelta {
     uint64_t ns;
     bool valid;
 };
 BootDelta boot_stage_delta(BootStage s) noexcept;
+
+/// @brief Raw hardware-counter stamp taken at kernel entry (issue #45).
+/// Feeds the boot budget gate; the legacy ns entry stamp
+/// (gs::get_kernel_entry_ns) is untouched.
+uint64_t boot_entry_raw() noexcept;
 
 } // namespace kernel

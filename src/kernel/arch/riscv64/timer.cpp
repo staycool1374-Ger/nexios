@@ -130,6 +130,16 @@ uint64_t Timer::tsc_freq_hz() {
     return timer_freq_hz_;
 }
 
+uint64_t Timer::raw_counter() {
+    uint64_t cnt{};
+    asm volatile("csrr %0, time" : "=r"(cnt));
+    return cnt;
+}
+
+uint64_t Timer::raw_counter_freq_hz() {
+    return RISCV_MTIME_FREQ_HZ;
+}
+
 TickSource Timer::active_source() {
     return active_source_;
 }

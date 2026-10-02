@@ -122,6 +122,15 @@ class Timer {
     static uint64_t remaining_ns();
     /// @brief Return the calibrated TSC frequency in Hz.
     static uint64_t tsc_freq_hz();
+    /// @brief Raw hardware counter, no init dependency (issue #45):
+    /// x86 rdtsc / aarch64 cntpct_el0 / riscv rdtime. IRQ-safe, callable
+    /// with IF=0 from the earliest entry code.
+    static uint64_t raw_counter();
+    /// @brief Raw counter frequency in Hz, no init dependency (issue #45).
+    /// x86 = calibrated TSC frequency (0 until calibrate()); aarch64 reads
+    /// cntfrq_el0 live; riscv returns the mtime constant. Zero means
+    /// "unusable yet" — callers fail closed, never divide by zero.
+    static uint64_t raw_counter_freq_hz();
 
   private:
     /// @brief Calibrate the TSC frequency using the PIT as a reference.
@@ -185,6 +194,15 @@ class Timer {
     static uint64_t remaining_ns();
     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
     static uint64_t tsc_freq_hz();
+    /// @brief Raw hardware counter, no init dependency (issue #45):
+    /// x86 rdtsc / aarch64 cntpct_el0 / riscv rdtime. IRQ-safe, callable
+    /// with IF=0 from the earliest entry code.
+    static uint64_t raw_counter();
+    /// @brief Raw counter frequency in Hz, no init dependency (issue #45).
+    /// x86 = calibrated TSC frequency (0 until calibrate()); aarch64 reads
+    /// cntfrq_el0 live; riscv returns the mtime constant. Zero means
+    /// "unusable yet" — callers fail closed, never divide by zero.
+    static uint64_t raw_counter_freq_hz();
 
   private:
     static constinit uint64_t ticks_;
@@ -236,6 +254,15 @@ class Timer {
     static uint64_t remaining_ns();
     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
     static uint64_t tsc_freq_hz();
+    /// @brief Raw hardware counter, no init dependency (issue #45):
+    /// x86 rdtsc / aarch64 cntpct_el0 / riscv rdtime. IRQ-safe, callable
+    /// with IF=0 from the earliest entry code.
+    static uint64_t raw_counter();
+    /// @brief Raw counter frequency in Hz, no init dependency (issue #45).
+    /// x86 = calibrated TSC frequency (0 until calibrate()); aarch64 reads
+    /// cntfrq_el0 live; riscv returns the mtime constant. Zero means
+    /// "unusable yet" — callers fail closed, never divide by zero.
+    static uint64_t raw_counter_freq_hz();
 
   private:
     static constinit uint64_t ticks_;

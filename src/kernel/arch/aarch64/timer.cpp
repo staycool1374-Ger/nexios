@@ -105,6 +105,18 @@ uint64_t Timer::tsc_freq_hz() {
     return counter_freq_hz_;
 }
 
+uint64_t Timer::raw_counter() {
+    uint64_t cnt{};
+    asm volatile("mrs %0, cntpct_el0" : "=r"(cnt));
+    return cnt;
+}
+
+uint64_t Timer::raw_counter_freq_hz() {
+    uint64_t freq{};
+    asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+    return freq;
+}
+
 TickSource Timer::active_source() {
     return active_source_;
 }
