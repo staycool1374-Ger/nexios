@@ -189,6 +189,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 #endif
     {"deadline_recovery",     4,    0,       0      },  // DeadlineActionKillCleansUp + DeadlineDetectionMagicCheck + DeadlineDetectionMcdcCoverage + DeadlineActionNotifyMonitor
     {"deadline_action",       1,    0,       0      },  // single action-dispatch test per build (CONFIG_DEADLINE_ACTION)
+    {"boot_deterministic",    3,    0,       0      },  // boot stage stubs (issue #45): monotonic/valid, relative bounds, qemu-relative doc
+    {"task_watchdog",         6,    0,       0      },  // per-task watchdog stubs (issue #41): create/kick/expiry/proc/matrix/stale-gen
     {"deadline_ss",           3,   0,       0      },  // SsExhaustionTriggersDeadline + SsDeadlineMissDuringReplenish + SsReplenishAfterMiss
 
     // timing
@@ -280,7 +282,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"hal",                 110,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross (issue #173)
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        15,   0,       0      },  // smp_bringup + smp_sched, needs -smp 2 (issue #173)
-    {"deadline",            115,  0,       0      },  // wcet/deadline/timing/hrt/servers (issue #173)
+    {"deadline",            124,  0,       0      },  // wcet/deadline/timing/hrt/servers (issue #173) +9 boot/watchdog stubs (#45/#41)
     {"ui",                  68,   0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173)
     {"logging_debug",       29,   0,       0      },  // dmesg + klog + debug + gcov (issue #173)
     {"random",              17,   0,       0      },  // random_* (issue #173)

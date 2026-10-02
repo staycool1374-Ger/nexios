@@ -143,6 +143,8 @@ void register_ipc_robustness_tests();
 void register_syscall_fuzz_tests();
 void register_starvation_deadlock_tests();
 void register_deadline_miss_tests();
+void register_boot_deterministic_tests();
+void register_task_watchdog_tests();
 void register_wcet_overrun_tests();
 void register_wcet_scheduler_tests();
 void register_deadline_action_tests();
@@ -476,6 +478,10 @@ static void run_deadline_recovery_group() {
     register_deadline_recovery_tests();
 }
 static void run_deadline_action_group() { register_deadline_action_tests(); }
+static void run_boot_deterministic_group() {
+    register_boot_deterministic_tests();
+}
+static void run_task_watchdog_group() { register_task_watchdog_tests(); }
 static void run_deadline_ss_group() { register_ss_deadline_tests(); }
 static void run_timing_core_group() { register_timing_tests(); }
 static void run_hal_core_group() { register_hal_tests(); }
@@ -793,6 +799,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // class name to start with "be"; a "wcet_memory" name would filter them).
     {"bench_wcet_memory", []() { run_bench_wcet_memory_group(); }},
     {"deadline_miss", []() { run_deadline_miss_group(); }},
+    {"boot_deterministic", []() { run_boot_deterministic_group(); }},
+    {"task_watchdog", []() { run_task_watchdog_group(); }},
     {"deadline_recovery", []() { run_deadline_recovery_group(); }},
     {"deadline_action", []() { run_deadline_action_group(); }},
     {"deadline_ss", []() { run_deadline_ss_group(); }},
@@ -1132,6 +1140,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_deadline_miss_group();
          run_deadline_recovery_group();
          run_deadline_action_group();
+         run_boot_deterministic_group();
+         run_task_watchdog_group();
          run_deadline_ss_group();
          run_timing_core_group();
          run_timer_wheel_group();
