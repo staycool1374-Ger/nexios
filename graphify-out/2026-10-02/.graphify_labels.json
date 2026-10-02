@@ -1964,5 +1964,13 @@
   "1962": "register_scheduler_hrt_tests",
   "1963": "register_syscall_fastpath_tests",
   "1964": "register_vfs_errors_tests",
-  "1965": "register_vfs_tmpfs_corrupt_tests"
+  "1965": "register_vfs_tmpfs_corrupt_tests",
+  "1966": "register_wcet_memory_tests",
+  "1967": "register_rtc_datetime_tests",
+  "1968": "register_stack_profiler_tests",
+  "1969": "register_waitpid_tests",
+  "1970": "register_shell_interaction_tests",
+  "1971": "register_smp_bringup_tests",
+  "1972": "register_smp_ipi_tests",
+  "1973": "watchdog.md"
 }
