@@ -238,6 +238,18 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
 #define SYS_ABI_VERSION     84
 #define SYS_TLS_SET         85
 
+// Issue #41 — per-task software watchdog ABI (matches kernel SyscallNumber).
+#define SYS_WATCHDOG_CREATE 91
+#define SYS_WATCHDOG_KICK   92
+
+static inline long sys_watchdog_create(unsigned long period_ticks) {
+    return __syscall5(SYS_WATCHDOG_CREATE, (long)period_ticks, 0, 0, 0);
+}
+
+static inline long sys_watchdog_kick(void) {
+    return __syscall5(SYS_WATCHDOG_KICK, 0, 0, 0, 0);
+}
+
 // ABI v1.0 version macros (spec §3/§10, issues #69/#70): SYS_MAX ==
 // kernel MAX_SYSCALL; 80–85 appended by #70 (handlers for 80–83 land
 // with #76, TLS_SET with #74 — table slots fail-closed until then).

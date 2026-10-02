@@ -278,8 +278,10 @@ struct TaskControlBlock {
             in_ready_queue_(false), ready_deferred_(false),
            rq_priority_(0), all_bucket_(0),
            zombie_next_(nullptr), waiting_child_pid(0),
-          waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
-          alarm_armed(false), recv_timeout_armed(false),
+           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
+           alarm_armed(false), wdog_armed(false), wdog_period_ticks(0),
+           wdog_last_kick_tick(0), wdog_expiry_tick(0), wdog_gen(0),
+           recv_timeout_armed(false),
           recv_timed_out(false),
           recv_timeout_handle{0, 0, time::TimerWheel::kInvalidGeneration},
           recv_timeout_gen(0), sleep_armed(false), sleep_expired(false),
@@ -542,6 +544,26 @@ struct TaskControlBlock {
 
     /// @brief True if alarm is armed.
     bool alarm_armed;
+
+    /// @brief Per-task software watchdog armed flag (issue #41).
+    /// False after every memset site (create/create_user/clone/elf) and
+    /// on teardown — the on_tick scan skips disarmed tasks outright.
+    bool wdog_armed = false;
+
+    /// @brief Watchdog period in ticks (from SYS_WATCHDOG_CREATE arg0).
+    uint64_t wdog_period_ticks = 0;
+
+    /// @brief Tick of the last arm/kick (absolute tick count).
+    uint64_t wdog_last_kick_tick = 0;
+
+    /// @brief Absolute tick at which the watchdog fires (one-shot: the
+    /// scan disarms before dispatching the expiry action, re-CREATE to
+    /// re-arm). Zero when never armed.
+    uint64_t wdog_expiry_tick = 0;
+
+    /// @brief TCB generation snapshot at arm time (ABA guard on TCB slot
+    /// reuse: 0 = never armed; the scan skips generation mismatches).
+    uint32_t wdog_gen = 0;
 
     /// @brief Bounded-receive timeout armed on the wheel (issue #18).
     bool recv_timeout_armed;

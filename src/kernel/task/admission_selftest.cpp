@@ -34,6 +34,11 @@ namespace kernel {
 static_assert(CONFIG_DEADLINE_ACTION <= 4,
               "CONFIG_DEADLINE_ACTION out of range 0..4 (deadline.md §3)");
 
+// Watchdog expiry action is the same build-time contract (issue #41):
+// only actions 0..4 exist. Mirrors the deadline static_assert above.
+static_assert(CONFIG_WATCHDOG_ACTION <= 4,
+              "CONFIG_WATCHDOG_ACTION out of range 0..4 (watchdog.md §3)");
+
 namespace {
 
 // Synthetic probe candidate: stack-constructed, never added to any table
@@ -147,6 +152,16 @@ bool admission_boot_selftest() noexcept {
         Logger::error("admission self-test: deadline action %u out of "
                       "range 0..4",
                       CONFIG_DEADLINE_ACTION);
+        ok = false;
+    }
+
+    // (d2) Watchdog-action wiring (issue #41): same range contract as the
+    // miss action above; handler behavior is covered by the watchdog_*
+    // test classes on testbed — the boot path invokes nothing.
+    if (CONFIG_WATCHDOG_ACTION > 4) {
+        Logger::error("admission self-test: watchdog action %u out of "
+                      "range 0..4",
+                      CONFIG_WATCHDOG_ACTION);
         ok = false;
     }
 

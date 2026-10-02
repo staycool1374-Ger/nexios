@@ -1030,6 +1030,13 @@
 #define CONFIG_DEADLINE_ACTION 0
 #endif
 
+/// Default action on per-task watchdog expiry (issue #41): mirrors the
+/// CONFIG_DEADLINE_ACTION 0..4 contract (LOG_ONLY/PANIC/DEMOTE/KILL/
+/// NOTIFY_MONITOR, KILL via defer_kill). Default 3 (KILL, fail-closed).
+#ifndef CONFIG_WATCHDOG_ACTION
+#define CONFIG_WATCHDOG_ACTION 3
+#endif
+
 /// Boot-time admission self-test (issue #24): read-only probes of the
 /// frozen LUB/WCET/budget gate math + miss-action range check, run once
 /// after Scheduler::init (zero alloc, zero table mutation, one success

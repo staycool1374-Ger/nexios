@@ -53,7 +53,7 @@ Raw table codes and canonical numbers (`base + raw`) decode identically
 | BUFPOOL | 14000 | `BufPoolError` 0–7 (3 skipped upstream); all non-zero ERROR |
 | DRIVER | 15000 | `PciError` 0–4 (table) + events 1–10 (see §4) |
 | INIT | 16000 | events 1–17 (see §4) |
-| TIMING | 17000 | events 1–5 (see §4) |
+| TIMING | 17000 | events 1–6 (see §4) |
 | TEST | 18000 | events: 1 leak ERROR, 2 count-drift WARN |
 
 ## 3. Complete error-code list with severity
@@ -148,12 +148,14 @@ INIT 16001 rc-args WARN, 16002 rc-missing WARN, 16003 rc-invalid ERROR,
 16014 taskdef-create-fail ERROR, 16015 fstab-mount-fail ERROR,
 16016 daemons-ready INFO, 16017 shell-started INFO.
 TIMING 17001 deadline-missed ERROR, 17002 budget-exhausted ERROR,
-17003 admission-denied WARN, 17004 liu-leyland-exceed WARN, 17005 wcet-overrun WARN.
+17003 admission-denied WARN, 17004 liu-leyland-exceed WARN, 17005 wcet-overrun WARN,
+17006 watchdog-expired ERROR.
 TEST 18001 leak-detected ERROR, 18002 count-drift WARN.
 
 ## 5. Emission inventory (who pushes what)
 
 Scheduler: deadline/budget (TIMING 1/2 ERROR), WCET (TIMING 5 WARN),
+watchdog expiry (TIMING 6 ERROR, issue #41),
 admission incl. affinity partition (TIMING 3 WARN), Liu-Leyland
 (TIMING 4 WARN, first exceed only — the check fires per admission and
 would flood the ring; every occurrence stays on serial), TCB corruption

@@ -120,7 +120,9 @@ enum class SyscallNumber : uint8_t {
     TASK_DEBUG_WRITE_REGS = 88, ///< write target regs via handle (issue #225)
     TASK_DEBUG_READ_MEM = 89, ///< read target memory via handle (issue #225)
     TASK_DEBUG_WRITE_MEM = 90, ///< write target memory via handle (issue #225)
-    MAX_SYSCALL = 91,
+    WATCHDOG_CREATE = 91, ///< arm self watchdog: arg0=period_ticks (issue #41)
+    WATCHDOG_KICK = 92,   ///< kick self watchdog (issue #41)
+    MAX_SYSCALL = 93,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -402,6 +404,10 @@ class Syscall {
                                             uint64_t, uint64_t *);
     static uint64_t sys_task_debug_write_mem(uint64_t, uint64_t, uint64_t,
                                              uint64_t, uint64_t *);
+    static uint64_t sys_watchdog_create(uint64_t, uint64_t, uint64_t, uint64_t,
+                                        uint64_t *);
+    static uint64_t sys_watchdog_kick(uint64_t, uint64_t, uint64_t, uint64_t,
+                                      uint64_t *);
     static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
     static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -516,6 +522,8 @@ class Syscall {
             &Syscall::sys_unimplemented, // 89
             &Syscall::sys_unimplemented, // 90
 #endif
+            &Syscall::sys_watchdog_create, // 91 WATCHDOG_CREATE (issue #41)
+            &Syscall::sys_watchdog_kick,   // 92 WATCHDOG_KICK (issue #41)
     };
 };
 

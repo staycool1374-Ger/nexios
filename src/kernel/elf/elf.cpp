@@ -537,6 +537,13 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     memset(tcb, 0, sizeof(TaskControlBlock));
     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
     tcb->tls_base_ = 0; // issue #74: fresh image starts with no TLS
+    // Issue #41: watchdog disarmed, never-armed generation (see
+    // TaskControlBlock::create).
+    tcb->wdog_armed = false;
+    tcb->wdog_period_ticks = 0;
+    tcb->wdog_last_kick_tick = 0;
+    tcb->wdog_expiry_tick = 0;
+    tcb->wdog_gen = 0;
     tcb->magic = TaskControlBlock::TCB_MAGIC;
     tcb->id = kernel::Scheduler::alloc_id();
     tcb->state = TaskState::READY;

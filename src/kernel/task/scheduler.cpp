@@ -3407,6 +3407,13 @@ void Scheduler::on_tick() noexcept {
         // (map_in_progress) are deferred this tick.
         kernel::ipc::PagerRegistry::watchdog_scan(current_tick);
 
+        // Issue #41: per-task software watchdog expiry scan — single
+        // bounded pass, disarmed/generation-mismatched tasks skipped.
+        // Runs under the already-held scheduler_lock_ (same window as
+        // the pager scan above); KILL defers via defer_kill, never
+        // inline.
+        scan_watchdogs_locked(current_tick);
+
         if (s_deferred_kill_count > 0)
             Scheduler::process_deferred_kills();
 
@@ -5081,6 +5088,11 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].recv_timed_out = t->recv_timed_out;
         out[idx].sleep_armed = t->sleep_armed;
         out[idx].sleep_expired = t->sleep_expired;
+        out[idx].wdog_armed = t->wdog_armed;
+        out[idx].wdog_period_ticks = t->wdog_period_ticks;
+        out[idx].wdog_last_kick_tick = t->wdog_last_kick_tick;
+        out[idx].wdog_expiry_tick = t->wdog_expiry_tick;
+        out[idx].wdog_gen = t->wdog_gen;
         out[idx].runq_next = t->runq_next_;
         out[idx].runq_prev = t->runq_prev_;
         out[idx].in_ready_queue = t->in_ready_queue_;
@@ -5165,6 +5177,11 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->recv_timed_out = saved[j].recv_timed_out;
             t->sleep_armed = saved[j].sleep_armed;
             t->sleep_expired = saved[j].sleep_expired;
+            t->wdog_armed = saved[j].wdog_armed;
+            t->wdog_period_ticks = saved[j].wdog_period_ticks;
+            t->wdog_last_kick_tick = saved[j].wdog_last_kick_tick;
+            t->wdog_expiry_tick = saved[j].wdog_expiry_tick;
+            t->wdog_gen = saved[j].wdog_gen;
             // Snapshot does not capture SporadicServer state nor PMM page-table
             // pools — clear the pointer and the intrusive object list so stale
             // UAF (0xDD-poisoned block) from a restored MemPool free-list cannot
@@ -5449,6 +5466,90 @@ deadline_miss_handler(TaskControlBlock &task,
 #endif
 }
 #endif
+
+// Issue #41: per-task watchdog expiry scan. Caller holds scheduler_lock_
+// (on_tick window). Single pass, no allocation, no blocking; expiry is
+// one-shot (disarm first) and termination defers via defer_kill.
+void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
+    for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
+        if (t->magic != TaskControlBlock::TCB_MAGIC)
+            continue;
+        if (!t->wdog_armed || t->wdog_gen == 0)
+            continue;
+        // NOTE (audit #41 iter-1, S1): no generation cross-check here.
+        // t->generation is the global creation sequence, wdog_gen a per-TCB
+        // arm counter — comparing them fail-open skips live watchdogs.
+        // Staleness is covered by disarm-on-teardown + TaskFields rewind.
+        if (now < t->wdog_expiry_tick)
+            continue;
+        // One-shot: disarm before dispatch so a slow handler cannot
+        // re-fire on the same arm; re-CREATE re-arms with a fresh gen.
+        t->wdog_armed = false;
+        watchdog_expiry_handler(*t, now - t->wdog_expiry_tick);
+    }
+}
+
+__attribute__((weak)) void
+watchdog_expiry_handler(TaskControlBlock &task,
+                        uint64_t overdue_by_ticks) noexcept {
+    // Issue #234/#41: every watchdog expiry enters the dmesg ring
+    // (fail-closed record whatever the configured response).
+    log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                        log::kDmesgBase_TIMING + 6, log::LogSeverity::ERROR,
+                        task.name, overdue_by_ticks);
+
+#if CONFIG_WATCHDOG_ACTION == 1
+    Logger::error("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
+                  "(action=PANIC)",
+                  task.id, task.name, overdue_by_ticks);
+    panic("[WDOG] watchdog expiry (action=PANIC)");
+#elif CONFIG_WATCHDOG_ACTION == 2
+    Logger::warn("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
+                 "(action=DEMOTE)",
+                 task.id, task.name, overdue_by_ticks);
+    if (task.priority > 1) {
+        uint64_t old_prio = effective_priority(&task);
+        task.priority >>= 1;
+        uint64_t new_prio = effective_priority(&task);
+        if (old_prio != new_prio)
+            rq_task(task).move_priority(task, old_prio, new_prio);
+    }
+#elif CONFIG_WATCHDOG_ACTION == 3
+    Logger::warn("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
+                 "(action=KILL)",
+                 task.id, task.name, overdue_by_ticks);
+    task.state = TaskState::TERMINATED;
+    task.exit_code =
+        static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGKILL));
+    Scheduler::wake_waiting_parent(task);
+    Scheduler::defer_kill(&task);
+#elif CONFIG_WATCHDOG_ACTION == 4
+    Logger::info("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
+                 "(action=NOTIFY_MONITOR)",
+                 task.id, task.name, overdue_by_ticks);
+    // Monitor resolution mirrors deadline ACTION==4 (compile-time PID
+    // when set, otherwise the test-only override).
+    {
+        uint64_t monitor_pid = (CONFIG_DEADLINE_MONITOR_PID > 0)
+                                   ? static_cast<uint64_t>(
+                                         CONFIG_DEADLINE_MONITOR_PID)
+                                   : (test_context_
+                                          ? test_context_
+                                                ->deadline_monitor_pid
+                                          : 0);
+        auto *monitor = Scheduler::find_task(monitor_pid);
+        if (monitor && monitor->magic == TaskControlBlock::TCB_MAGIC &&
+            monitor->state != TaskState::TERMINATED) {
+            monitor->pending_signals |=
+                (1ULL << static_cast<uint64_t>(Signal::SIGUSR1));
+        }
+    }
+#else
+    Logger::info("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
+                 "(action=LOG_ONLY)",
+                 task.id, task.name, overdue_by_ticks);
+#endif
+}
 
 #if CONFIG_WCET_OVERRUN_DETECTION
 __attribute__((weak)) void

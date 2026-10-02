@@ -1,23 +1,18 @@
-diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
---- a/src/kernel/elf/elf_loader.cpp
-+++ b/src/kernel/elf/elf_loader.cpp
-@@ -457,12 +457,14 @@
-         canon = log::kDmesgBase_ELF + 7;
-         break;
-     case 0xDB08:
--        canon = log::kDmesgBase_ELF + 8;
--        sev = log::LogSeverity::WARN;
-+        // 0xDB08 is produced only by the missing-shared-lib site: the
-+        // canonical record is ELF+10 (ERROR), not ELF+8 (rejected/WARN).
-+        canon = log::kDmesgBase_ELF + 10;
-         break;
-     case 0xDB09:
--        canon = log::kDmesgBase_ELF + 9;
--        sev = log::LogSeverity::WARN;
-+        // 0xDB09 is produced only by the layout-conflict site: the
-+        // canonical record is ELF+11 (ERROR), not ELF+9 (rejected/WARN).
-+        canon = log::kDmesgBase_ELF + 11;
-         break;
-     case 0xDB0A:
-         canon = log::kDmesgBase_ELF + 12;
-
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -5476,10 +5476,11 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
+         if (t->magic != TaskControlBlock::TCB_MAGIC)
+             continue;
+         if (!t->wdog_armed || t->wdog_gen == 0)
+             continue;
+-        if (t->generation != 0 && t->wdog_gen != t->generation &&
+-            t->wdog_gen < t->generation)
+-            continue;
++        // NOTE (audit #41 iter-1, S1): no generation cross-check here.
++        // t->generation is the global creation sequence, wdog_gen a per-TCB
++        // arm counter — comparing them fail-open skips live watchdogs.
++        // Staleness is covered by disarm-on-teardown + TaskFields rewind.
+         if (now < t->wdog_expiry_tick)
+             continue;
+         // One-shot: disarm before dispatch so a slow handler cannot

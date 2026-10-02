@@ -420,6 +420,12 @@ class Scheduler {
     ///        perform inline KILL cleanup.  Guarded by
     ///        #if CONFIG_DEADLINE_MONITOR_TASK.
     static void scan_deadlines() noexcept;
+    /// @brief Per-task watchdog expiry scan (issue #41): single bounded
+    ///        pass over the task set; armed tasks past wdog_expiry_tick
+    ///        are disarmed (one-shot) and handed to
+    ///        watchdog_expiry_handler(). Caller holds scheduler_lock_
+    ///        (on_tick window).
+    static void scan_watchdogs_locked(uint64_t now) noexcept;
     /// @brief Ensures the deadline-monitor task exists and is valid.
     ///        Re-spawns it if the TCB was killed (e.g. by reload_daemon_tasks
     ///        during snapshot restore).  Safe to call multiple times.
@@ -699,6 +705,15 @@ class Scheduler {
         ///        so no stale handle can outlive the wait it belonged to.
         bool sleep_armed;
         bool sleep_expired;
+        /// @brief Per-task watchdog slot (issue #41): rewinds with the
+        /// snapshot (captured pre-arm at suite setup, like the
+        /// recv_timeout/sleep flags) so no stale expiry outlives the
+        /// test that armed it.
+        bool wdog_armed;
+        uint64_t wdog_period_ticks;
+        uint64_t wdog_last_kick_tick;
+        uint64_t wdog_expiry_tick;
+        uint32_t wdog_gen;
         /// @brief Ready-queue intrusive list pointers (POD copy).
         ///        These form doubly-linked lists; TCBs are in-place across
         ///        snapshot cycles so pointer values remain valid.
@@ -1317,5 +1332,13 @@ __attribute__((weak)) void
 wcet_overrun_handler(TaskControlBlock *task,
                      uint64_t overrun_by_ticks) noexcept;
 #endif
+
+/// @brief Weak callback invoked when a task's watchdog expires.
+/// Called from ISR context (on_tick) under scheduler_lock_ — must not
+/// block; KILL action defers via defer_kill() (deadline ACTION==3
+/// precedent). Always enters the ring (TIMING+6 ERROR, fail-closed).
+__attribute__((weak)) void
+watchdog_expiry_handler(TaskControlBlock &task,
+                        uint64_t overdue_by_ticks) noexcept;
 
 } // namespace kernel

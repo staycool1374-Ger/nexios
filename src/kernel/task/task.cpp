@@ -960,6 +960,13 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
     tcb->tls_base_ = 0; // issue #74: no TLS until TLS_SET
+    // Issue #41: watchdog disarmed, never-armed generation (all-zero
+    // already skips the scan; explicit per the TCB-memset discipline).
+    tcb->wdog_armed = false;
+    tcb->wdog_period_ticks = 0;
+    tcb->wdog_last_kick_tick = 0;
+    tcb->wdog_expiry_tick = 0;
+    tcb->wdog_gen = 0;
     {
         char buf[CONFIG_TASK_NAME_LEN];
         size_t pos = 0;
@@ -1214,6 +1221,12 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
     tcb->tls_base_ = 0; // issue #74: no TLS until TLS_SET
+    // Issue #41: watchdog disarmed, never-armed generation (see create).
+    tcb->wdog_armed = false;
+    tcb->wdog_period_ticks = 0;
+    tcb->wdog_last_kick_tick = 0;
+    tcb->wdog_expiry_tick = 0;
+    tcb->wdog_gen = 0;
     TCB_WRITE(tcb, state, TaskState::READY);
     tcb->priority = priority;
     tcb->base_priority = priority;
@@ -1413,6 +1426,12 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     TCB_WRITE(tcb, magic, TCB_MAGIC);
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+    // Issue #41: watchdog disarmed, never-armed generation (see create).
+    tcb->wdog_armed = false;
+    tcb->wdog_period_ticks = 0;
+    tcb->wdog_last_kick_tick = 0;
+    tcb->wdog_expiry_tick = 0;
+    tcb->wdog_gen = 0;
     __builtin_memcpy(tcb->name, parent->name, CONFIG_TASK_NAME_LEN);
     tcb->parent_id = parent->id;
     TCB_WRITE(tcb, state, TaskState::READY);
@@ -1820,6 +1839,14 @@ void TaskControlBlock::cleanup() noexcept {
         return;
     }
     state = TaskState::REAPED;
+
+    // Issue #41: disarm the watchdog at teardown (bump the generation so
+    // a recycled TCB slot can never match a stale expiry).
+    wdog_armed = false;
+    wdog_expiry_tick = 0;
+    ++wdog_gen;
+    if (wdog_gen == 0)
+        wdog_gen = 1;
 
     // Pinned TCBs are part of the test-isolation baseline (snapshot).
     // Their resources (sporadic_server, kernel stack, page tables) must

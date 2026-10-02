@@ -431,6 +431,112 @@ static const VnodeOps pid_stat_ops = {
     nullptr, // create
 };
 
+// ── pid watchdog vnode (issue #41) ──
+/// @brief Vnode representing a process's watchdog file.
+struct PidWatchdogVnode {
+    Vnode base;             ///< Base Vnode.
+    uint64_t pid;           ///< Process ID.
+    TaskControlBlock *task; ///< Pointer to the task's TCB.
+};
+
+/// @brief Read process watchdog info: armed/period/last-kick/expires.
+/// Kick is exclusively via SYS_WATCHDOG_KICK (write returns VFS_INVALID).
+static int64_t pid_watchdog_read(Vnode &self, uint8_t *buf, uint64_t count,
+                                 uint64_t offset) {
+    auto *pw = static_cast<PidWatchdogVnode *>(self.private_data);
+    if (!pw || !pw->task)
+        return VFS_INVALID;
+
+    char tmp[128];
+    char num[32];
+    size_t len = 0;
+    const char *keys[] = {"armed=", " period=", " last_kick=", " expires="};
+    uint64_t vals[4] = {pw->task->wdog_armed ? 1ULL : 0ULL,
+                        pw->task->wdog_period_ticks,
+                        pw->task->wdog_last_kick_tick,
+                        pw->task->wdog_expiry_tick};
+    for (size_t ki = 0; ki < 4; ++ki) {
+        const char *k = keys[ki];
+        while (*k && len < sizeof(tmp) - 24)
+            tmp[len++] = *k++;
+        uint64_to_str(num, vals[ki]);
+        const char *s = num;
+        while (*s && len < sizeof(tmp) - 2)
+            tmp[len++] = *s++;
+    }
+    if (len < sizeof(tmp) - 1)
+        tmp[len++] = '\n';
+    tmp[len] = '\0';
+
+    if (offset >= len)
+        return 0;
+    uint64_t avail = len - offset;
+    if (count > avail)
+        count = avail;
+    memcpy(buf, tmp + offset, count);
+    return static_cast<int64_t>(count);
+}
+
+/// @brief Write to process watchdog (not supported — kick via syscall).
+static int64_t pid_watchdog_write(Vnode &, const uint8_t *, uint64_t,
+                                  uint64_t) {
+    return VFS_INVALID;
+}
+/// @brief Open process watchdog.
+static int pid_watchdog_open(Vnode &, uint64_t) {
+    return 0;
+}
+/// @brief Close process watchdog.
+static void pid_watchdog_close(Vnode &) {
+}
+/// @brief Seek within process watchdog.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+static int64_t pid_watchdog_lseek(Vnode &self, int64_t offset, int whence,
+                                  uint64_t *out_pos) {
+    (void)self;
+    uint64_t new_pos = 0;
+    switch (whence) {
+    case SEEK_SET:
+        new_pos = static_cast<uint64_t>(offset);
+        break;
+    case SEEK_CUR:
+        new_pos = *out_pos + static_cast<uint64_t>(offset);
+        break;
+    default:
+        new_pos = static_cast<uint64_t>(offset);
+        break;
+    }
+    if (new_pos > 256)
+        new_pos = 256;
+    *out_pos = new_pos;
+    return static_cast<int64_t>(new_pos);
+}
+/// @brief Get process watchdog status.
+static int pid_watchdog_fstat(Vnode &, VfsStat &) {
+    return VFS_INVALID;
+}
+/// @brief I/O control on process watchdog (not supported).
+static int pid_watchdog_ioctl(Vnode &, uint64_t,
+                              kernel::CheckedPtr<uint8_t>) {
+    return VFS_INVALID;
+}
+/// @brief Read directory on process watchdog (not supported).
+static int pid_watchdog_readdir(Vnode &, uint64_t &, Dirent &) {
+    return VFS_INVALID;
+}
+/// @brief Look up child in process watchdog (not supported).
+static Vnode *pid_watchdog_lookup(Vnode &, const char *) {
+    return nullptr;
+}
+
+static const VnodeOps pid_watchdog_ops = {
+    pid_watchdog_read,   pid_watchdog_write, pid_watchdog_open,
+    pid_watchdog_close,  pid_watchdog_lseek, pid_watchdog_fstat,
+    pid_watchdog_ioctl,  pid_watchdog_readdir, pid_watchdog_lookup,
+    nullptr,             nullptr,
+    nullptr, // create
+};
+
 // ── pid directory vnode ──
 /// @brief Vnode representing a per-process directory in /proc.
 struct PidDirVnode {
@@ -439,6 +545,8 @@ struct PidDirVnode {
     TaskControlBlock *task; ///< Pointer to the task's TCB.
     Vnode stat_vnode;       ///< Embedded stat vnode.
     PidStatVnode stat_data; ///< Embedded stat vnode data.
+    Vnode watchdog_vnode;   ///< Embedded watchdog vnode (issue #41).
+    PidWatchdogVnode watchdog_data; ///< Embedded watchdog vnode data.
 };
 
 /// @brief Read from a PID directory (not supported).
@@ -485,6 +593,8 @@ static Vnode *pid_dir_lookup(Vnode &self, const char *name) {
         return nullptr;
     if (strcmp(name, "stat") == 0)
         return &pd->stat_vnode;
+    if (strcmp(name, "watchdog") == 0)
+        return &pd->watchdog_vnode;
     return nullptr;
 }
 
@@ -516,6 +626,19 @@ static Vnode *self_lookup(Vnode &self, const char *name) {
         cur_stat.base.private_data = &cur_stat;
         cur_stat.base.parent = &self;
         return &cur_stat.base;
+    }
+    // Issue #41: same pattern for the watchdog file of the current task.
+    if (strcmp(name, "watchdog") == 0) {
+        static PidWatchdogVnode cur_wdog = {};
+        cur_wdog.pid = task->id;
+        cur_wdog.task = task;
+        cur_wdog.base.ops = &pid_watchdog_ops;
+        cur_wdog.base.ino = task->id;
+        cur_wdog.base.size = 0;
+        cur_wdog.base.mode = S_IFREG;
+        cur_wdog.base.private_data = &cur_wdog;
+        cur_wdog.base.parent = &self;
+        return &cur_wdog.base;
     }
     return nullptr;
 }
@@ -670,6 +793,14 @@ static Vnode *proc_root_lookup(Vnode &self, const char *name) {
                 pd->stat_vnode.parent = &pd->base;
                 pd->stat_data.pid = pid;
                 pd->stat_data.task = t;
+                pd->watchdog_vnode.ops = &pid_watchdog_ops;
+                pd->watchdog_vnode.ino = pid;
+                pd->watchdog_vnode.size = 0;
+                pd->watchdog_vnode.mode = S_IFREG;
+                pd->watchdog_vnode.private_data = &pd->watchdog_data;
+                pd->watchdog_vnode.parent = &pd->base;
+                pd->watchdog_data.pid = pid;
+                pd->watchdog_data.task = t;
                 return &pd->base;
             }
         }

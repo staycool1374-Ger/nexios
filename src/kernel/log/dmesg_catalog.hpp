@@ -206,6 +206,8 @@ constexpr DmesgRecord kDmesgCatalog_TIMING[] = {
      "Timing: Liu-Leyland bound exceeded"},
     {ErrorSubsystem::TIMING, kDmesgBase_TIMING + 5, LogSeverity::WARN,
      "Timing: WCET overrun"},
+    {ErrorSubsystem::TIMING, kDmesgBase_TIMING + 6, LogSeverity::ERROR,
+     "Timing: watchdog expired"},
 };
 
 /// @brief Selftest records (canonical base kDmesgBase_TEST): leak and
