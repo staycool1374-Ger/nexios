@@ -72,3 +72,32 @@ class TaskControlBlock;
 ///                     0 when not applicable (generic "fault" wording).
 void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
                           uint64_t code_or_sig, uint64_t vector);
+
+namespace kernel {
+
+/// @brief Boot-stage marks for deterministic-boot WCET analysis (issue #45).
+/// Ordered along higherhalf_entry; COUNT bounds the mark table.
+enum class BootStage : uint8_t {
+    ARCH_INIT = 0,
+    MEMORY_INIT,
+    DRIVER_PROBE,
+    TIMER_CALIBRATE,
+    TABLE_REBUILD,
+    COUNT
+};
+
+/// @brief Raw ns_monotonic() mark for a boot stage (0 = never marked).
+/// @param s Stage index (out of range returns 0, never panics).
+uint64_t boot_stage_mark(BootStage s) noexcept;
+
+/// @brief Pairwise stage delta with a validity flag.
+/// delta(s) spans the previous mark (or the kernel-entry stamp for
+/// ARCH_INIT) to mark[s]; valid requires both endpoints nonzero and
+/// ordered (pre-calibrate zero reads are flagged, never asserted).
+struct BootDelta {
+    uint64_t ns;
+    bool valid;
+};
+BootDelta boot_stage_delta(BootStage s) noexcept;
+
+} // namespace kernel

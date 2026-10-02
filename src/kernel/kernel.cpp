@@ -707,6 +707,48 @@ static void init_pic() {
 #endif
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+// Issue #45: per-stage boot WCET marks. TU-local static table, BOOT_ONLY
+// writes from higherhalf_entry (single BSP, pre-scheduler — no locks, no
+// alloc, no reschedule on the mark path). Bounds-checked recorder no-ops
+// on bad index (boot instrumentation must never panic). Deltas are read
+// out as u64 copies only; sampling lives test-side (see plan on #45).
+namespace {
+constexpr size_t kBootStageCount =
+    static_cast<size_t>(kernel::BootStage::COUNT);
+uint64_t s_boot_marks_[5] = {};
+
+void boot_mark(kernel::BootStage s) {
+    const size_t i = static_cast<size_t>(s);
+    if (i >= kBootStageCount)
+        return;
+    s_boot_marks_[i] = arch::Timer::ns_monotonic();
+}
+} // namespace
+
+namespace kernel {
+uint64_t boot_stage_mark(BootStage s) noexcept {
+    const size_t i = static_cast<size_t>(s);
+    if (i >= kBootStageCount)
+        return 0;
+    return s_boot_marks_[i];
+}
+
+BootDelta boot_stage_delta(BootStage s) noexcept {
+    BootDelta d = {0, false};
+    const size_t i = static_cast<size_t>(s);
+    if (i >= kBootStageCount)
+        return d;
+    const uint64_t start =
+        (i == 0) ? gs::get_kernel_entry_ns() : s_boot_marks_[i - 1];
+    const uint64_t end = s_boot_marks_[i];
+    if (start != 0 && end != 0 && end >= start) {
+        d.ns = end - start;
+        d.valid = true;
+    }
+    return d;
+}
+} // namespace kernel
+
 extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::gs::boot_info() = BootInfo();
     [[maybe_unused]] kernel::gs::WriteContext ctx{
@@ -1033,6 +1075,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             arch::APIC::eoi();
         });
 #endif // CONFIG_ARCH_X86_64
+    boot_mark(kernel::BootStage::ARCH_INIT);
     if (kernel::gs::boot_info().cmdline[0]) {
         kernel::BootParams::parse_cstr(kernel::gs::boot_info().cmdline);
     }
@@ -1125,6 +1168,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::DriverRegistry::init();
     debug_write("[BOOT] Kernel init done\n");
     kernel::PMM::mark_init_done();
+    boot_mark(kernel::BootStage::MEMORY_INIT);
 
     service::Framebuffer::init();
     service::Terminal::init();
@@ -1246,6 +1290,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         }
     }
 #endif
+    boot_mark(kernel::BootStage::DRIVER_PROBE);
 
     // Initialize sampling profiler (must be before Timer::init() so record_sample is safe)
     kernel::profiling::Sampler::init();
@@ -1281,6 +1326,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::gs::try_set_boot_epoch(arch::RTC::read_seconds(), bctx);
     kernel::random_init();
     debug_write("[BOOT] Hardware init done\n");
+    boot_mark(kernel::BootStage::TIMER_CALIBRATE);
 
     kernel::DriverRegistry::register_driver("keyboard", "PS/2 Tastaturtreiber",
                                             nullptr, nullptr, 1);
@@ -1346,6 +1392,77 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // task exists yet.  Fork/exec converge toward the live root; drift
     // from this baseline is diagnosed, never fatal (paper §4 row 2).
     kernel::VMM::snapshot_kernel_template();
+    boot_mark(kernel::BootStage::TABLE_REBUILD);
+#if defined(CONFIG_DEBUG)
+    {
+        // Issue #45: bounded boot-stage table (DEBUG only, logging-only —
+        // per-stage data never enters the ring, no new catalog codes).
+        static const char *const k_boot_stage_names[] = {
+            "arch_init", "memory_init", "driver_probe", "timer_calibrate",
+            "table_rebuild"};
+        for (size_t i = 0; i < kBootStageCount; ++i) {
+            const kernel::BootDelta d = kernel::boot_stage_delta(
+                static_cast<kernel::BootStage>(i));
+            kernel::Logger::debug("[BOOT] stage %s +%llu ns%s",
+                                  k_boot_stage_names[i], d.ns,
+                                  d.valid ? "" : " (invalid pre-calibrate)");
+        }
+    }
+#endif
+
+    // Issue #45: deterministic boot budget gate + boot watchdog arm point.
+    // Position: immediately before reboot_from_table() spawns the first
+    // RT task — the watchdog is therefore armed before first RT
+    // activation by construction. Issue #41 (SYS_WATCHDOG_CREATE) is
+    // still OPEN with no production arm primitive (only the test-harness
+    // kernel::test::watchdog_arm, which is test-only and x86-PIT-bound),
+    // so this gate owns a boot-only latch (armed timestamp + overrun
+    // flag below); when #41 lands, the arm call moves to its primitive.
+    // Clock: ns_monotonic() (post-calibrate, IRQ-safe, never decreases)
+    // minus the kernel-entry stamp; zero start fails closed to
+    // no-overrun with a diagnostic, never a false overrun. No locks, no
+    // alloc, no reschedule on this path.
+    // Owner policy: CONFIG-only budget (CONFIG_BOOT_BUDGET_MS); on
+    // overrun, DEBUG builds warn + enter the ring and continue degraded
+    // (shell still starts, mirroring the daemon-wait degraded mode);
+    // release builds fail closed with panic (no degraded RT set).
+    {
+        const uint64_t boot_t0 = kernel::gs::get_kernel_entry_ns();
+        const uint64_t boot_now = arch::Timer::ns_monotonic();
+        const uint64_t boot_budget_ns =
+            (uint64_t)CONFIG_BOOT_BUDGET_MS * 1000000ULL;
+        bool boot_overrun = false;
+        uint64_t boot_elapsed_ms = 0;
+        if (boot_t0 == 0) {
+            kernel::Logger::warn(
+                "boot: no entry timestamp, budget gate skipped");
+        } else if (boot_now >= boot_t0 && boot_budget_ns != 0) {
+            boot_elapsed_ms = (boot_now - boot_t0) / 1000000ULL;
+            if ((boot_now - boot_t0) > boot_budget_ns)
+                boot_overrun = true;
+        }
+        if (boot_overrun) {
+            kernel::Logger::warn("boot: budget exceeded (%lu ms > %lu ms), "
+                                 "watchdog armed late",
+                                 boot_elapsed_ms,
+                                 (uint64_t)CONFIG_BOOT_BUDGET_MS);
+            kernel::log::dmesg_push_sev(
+                kernel::log::ErrorSubsystem::TIMING,
+                kernel::log::kDmesgBase_TIMING + 2,
+                kernel::log::LogSeverity::ERROR, "boot budget",
+                boot_elapsed_ms);
+#if defined(CONFIG_DEBUG)
+            // Debug/degraded-shell policy (owner call): continue to
+            // reboot_from_table(); the shell below still starts so the
+            // overrun is inspectable live.
+#else
+            panic("boot: boot budget exceeded");
+#endif
+        }
+#if defined(CONFIG_DEBUG)
+        debug_write("[BOOT] watchdog armed before first RT task\n");
+#endif
+    }
 
     // Kill all tasks and rebuild system from the task-definition table
     kernel::task::reboot_from_table();

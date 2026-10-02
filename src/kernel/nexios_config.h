@@ -1044,6 +1044,16 @@
 #define CONFIG_DEADLINE_MONITOR_PID 0
 #endif
 
+/// Deterministic boot budget (issue #45): wall-clock milliseconds from
+/// kernel entry to the first RT task activation gate in kernel_init
+/// (before reboot_from_table()). CONFIG-only by owner decision (no
+/// cmdline override). Default 30000 ms: measured QEMU-TCG boots land in
+/// the low seconds; 30 s keeps >=3x headroom per the relative-timing
+/// rule. 0 disables the gate (diagnostic only, never deny-all).
+#ifndef CONFIG_BOOT_BUDGET_MS
+#define CONFIG_BOOT_BUDGET_MS 30000
+#endif
+
 // ---------------------------------------------------------------------------
 // Custom Assertion Macro
 // ---------------------------------------------------------------------------
