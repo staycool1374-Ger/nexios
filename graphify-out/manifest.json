@@ -4400,8 +4400,8 @@
     "semantic_hash": ""
   },
   "src/kernel/arch/aarch64/timer.cpp": {
-    "mtime": 1790353865.276903,
-    "ast_hash": "f6963bf80a28603223d612cd69deb7e8",
+    "mtime": 1790956078.9325,
+    "ast_hash": "d6845afb8172fdc7ae28bbbca0ba1b6a",
     "semantic_hash": ""
   },
   "src/kernel/arch/context.hpp": {
@@ -4500,8 +4500,8 @@
     "semantic_hash": ""
   },
   "src/kernel/arch/hal/timer.hpp": {
-    "mtime": 1789910346.0340047,
-    "ast_hash": "70052a3817ec49f33eb05f17791b52da",
+    "mtime": 1790956068.8618646,
+    "ast_hash": "26a1e90aa7e294a2558a3092bfe99fb9",
     "semantic_hash": ""
   },
   "src/kernel/arch/idt.hpp": {
@@ -4625,8 +4625,8 @@
     "semantic_hash": ""
   },
   "src/kernel/arch/riscv64/timer.cpp": {
-    "mtime": 1790353865.2769034,
-    "ast_hash": "6de65063e78adbe376b7883b9245cdf2",
+    "mtime": 1790956078.9327128,
+    "ast_hash": "3ccbdcda4592c6b5ab11579850d5835d",
     "semantic_hash": ""
   },
   "src/kernel/arch/rtc.hpp": {
@@ -4685,8 +4685,8 @@
     "semantic_hash": ""
   },
   "src/kernel/arch/x86_64/hal/timer.cpp": {
-    "mtime": 1790663166.1893597,
-    "ast_hash": "255b1932a6c0826f0390b9be4290dfa5",
+    "mtime": 1790956078.9329853,
+    "ast_hash": "a2ddc0e12208fe489d612c17ef0b088c",
     "semantic_hash": ""
   },
   "src/kernel/arch/x86_64/keyboard.cpp": {
@@ -4830,8 +4830,8 @@
     "semantic_hash": ""
   },
   "src/kernel/elf/elf.cpp": {
-    "mtime": 1790870220.9569483,
-    "ast_hash": "5a72b04b673ad7907833ed00257960bb",
+    "mtime": 1790952268.4325829,
+    "ast_hash": "90231efce95b0a9e657d64d18c261225",
     "semantic_hash": ""
   },
   "src/kernel/elf/elf.hpp": {
@@ -4875,13 +4875,13 @@
     "semantic_hash": ""
   },
   "src/kernel/kernel.cpp": {
-    "mtime": 1790950678.7842097,
-    "ast_hash": "8a7717cd4d2f71de0997d86f416d191e",
+    "mtime": 1790956139.3090904,
+    "ast_hash": "e317b4d3bdde6278e5236ac0557fd320",
     "semantic_hash": ""
   },
   "src/kernel/kernel.hpp": {
-    "mtime": 1790950646.9513066,
-    "ast_hash": "36b6de010edf6e3dce9705ddc0942de0",
+    "mtime": 1790956106.3336408,
+    "ast_hash": "3d973a71b8a75ab7bb18070e67359cbd",
     "semantic_hash": ""
   },
   "src/kernel/log/dmesg.cpp": {
@@ -5115,8 +5115,8 @@
     "semantic_hash": ""
   },
   "src/kernel/syscall/syscall.hpp": {
-    "mtime": 1790417192.26062,
-    "ast_hash": "6d5ea98aacaae020f06ff77c71099129",
+    "mtime": 1790952292.7626562,
+    "ast_hash": "e9e9f0302de224d1b6eae5d363282cc5",
     "semantic_hash": ""
   },
   "src/kernel/syscall/syscall_errors.hpp": {
@@ -5180,13 +5180,13 @@
     "semantic_hash": ""
   },
   "src/kernel/task/scheduler.cpp": {
-    "mtime": 1790870911.7163186,
-    "ast_hash": "b69d54542f3617d691e074e83aa4ea51",
+    "mtime": 1790952877.1428127,
+    "ast_hash": "60a71a493e331a7ff4b44711053ac3d9",
     "semantic_hash": ""
   },
   "src/kernel/task/scheduler.hpp": {
-    "mtime": 1790838279.48436,
-    "ast_hash": "99dbe56608d20a682c27ebfc82491488",
+    "mtime": 1790952386.4891322,
+    "ast_hash": "0680106412f9e0e1f29895fac13ab83c",
     "semantic_hash": ""
   },
   "src/kernel/task/scheduler_errors.hpp": {
@@ -5205,13 +5205,13 @@
     "semantic_hash": ""
   },
   "src/kernel/task/task.cpp": {
-    "mtime": 1790870037.3933396,
-    "ast_hash": "b42c9fda3f36e4c4cb2e9f5a0724a304",
+    "mtime": 1790952283.4834719,
+    "ast_hash": "06c21c5ffb764bc4749fb49806094e66",
     "semantic_hash": ""
   },
   "src/kernel/task/task.hpp": {
-    "mtime": 1790837379.2245333,
-    "ast_hash": "7f28952b5045e9effc886308138f9a57",
+    "mtime": 1790952214.4940438,
+    "ast_hash": "2d22f42c90947cb07becd2ad66da57f2",
     "semantic_hash": ""
   },
   "src/kernel/task/task_errors.hpp": {
@@ -5810,8 +5810,8 @@
     "semantic_hash": ""
   },
   "src/kernel/vfs/procfs.cpp": {
-    "mtime": 1785795778.5013862,
-    "ast_hash": "24301efdc9d63f5be7e1787e07c2d5e3",
+    "mtime": 1790952482.471205,
+    "ast_hash": "82ad8147688ee944ca2e9116d891b635",
     "semantic_hash": ""
   },
   "src/kernel/vfs/procfs.hpp": {
@@ -6090,8 +6090,8 @@
     "semantic_hash": ""
   },
   "src/libc/syscall.h": {
-    "mtime": 1789858264.5593643,
-    "ast_hash": "532b64982de31f66d0224e8aa045628f",
+    "mtime": 1790952497.9091363,
+    "ast_hash": "bf22224b0acd4c7e93fa637ab5349ef0",
     "semantic_hash": ""
   },
   "src/libc/time.c": {
@@ -18690,8 +18690,8 @@
     "semantic_hash": ""
   },
   "test-history.txt": {
-    "mtime": 1790950875.40174,
-    "ast_hash": "eb9c3a7979fffc803805277f5d4d3343",
+    "mtime": 1790956438.5411928,
+    "ast_hash": "ed2f8a7966046a4fcb62d0de53b8387a",
     "semantic_hash": ""
   },
   "audits/run_asil_audit.sh": {
@@ -19140,8 +19140,8 @@
     "semantic_hash": ""
   },
   "src/kernel/nexios_config.h": {
-    "mtime": 1790920538.3249755,
-    "ast_hash": "49ba6966475fce57b77c34a235c9d1ad",
+    "mtime": 1790952197.2796497,
+    "ast_hash": "6d8e9723f0b19fe1ad3e5bc820c1a72b",
     "semantic_hash": ""
   },
   "src/kernel/task/scheduler_config.hpp": {
@@ -21240,8 +21240,8 @@
     "semantic_hash": ""
   },
   "prompts/LEARNINGS.md": {
-    "mtime": 1790871722.1016293,
-    "ast_hash": "f9b16888bced8440f8cf3c531cddb418",
+    "mtime": 1790956460.0827794,
+    "ast_hash": "34a019c0d2561c3ecdbaffad9075004f",
     "semantic_hash": ""
   },
   "prompts/LESSONS.md": {
@@ -24325,8 +24325,8 @@
     "semantic_hash": ""
   },
   "src/kernel/task/admission_selftest.cpp": {
-    "mtime": 1790060782.2958505,
-    "ast_hash": "27dddf6d741d5944c2c5f29ae223432d",
+    "mtime": 1790952202.882109,
+    "ast_hash": "1453b3cf5b86c4cbd093e82caf498449",
     "semantic_hash": ""
   },
   "src/kernel/task/admission_selftest.hpp": {
@@ -26155,8 +26155,8 @@
     "semantic_hash": ""
   },
   "src/kernel/log/dmesg_catalog.hpp": {
-    "mtime": 1790879095.0236652,
-    "ast_hash": "b0f3b5159e72efe51ac45573224914f6",
+    "mtime": 1790952436.2081656,
+    "ast_hash": "6f27d08aee0e65714393ba5d2d5f997e",
     "semantic_hash": ""
   },
   "userspace/hey.c": {
@@ -26295,8 +26295,8 @@
     "semantic_hash": ""
   },
   "docs/specs/dmesg.md": {
-    "mtime": 1790879306.213483,
-    "ast_hash": "933d3e6fcba2664cdea5873de879c769",
+    "mtime": 1790952440.451045,
+    "ast_hash": "223aae4fbb3bb6cfd48125165a7da99f",
     "semantic_hash": ""
   },
   "docs/specs/elf-rerun.md": {
@@ -26332,6 +26332,31 @@
   "audits/report-20261002T070500Z.md": {
     "mtime": 1790950748.7631102,
     "ast_hash": "9e875cab974c5a2287e65cbf935b341e",
+    "semantic_hash": ""
+  },
+  "src/kernel/syscall/syscall_handlers_watchdog.cpp": {
+    "mtime": 1790952328.5776799,
+    "ast_hash": "2a267667be84029bc0446c2b4a99c33f",
+    "semantic_hash": ""
+  },
+  "audits/report-20261002-145344.md": {
+    "mtime": 1790952842.8090687,
+    "ast_hash": "d002c236dd28c8384772e0acda141479",
+    "semantic_hash": ""
+  },
+  "audits/report-20261002-145523.md": {
+    "mtime": 1790952935.3976254,
+    "ast_hash": "59d7e1ef3c4893f2869d87ba3391f0f8",
+    "semantic_hash": ""
+  },
+  "audits/report-20261002T155253Z.md": {
+    "mtime": 1790956382.6507823,
+    "ast_hash": "33e1abd7ed18170140bf41d629a414db",
+    "semantic_hash": ""
+  },
+  "docs/specs/watchdog.md": {
+    "mtime": 1790952497.9141767,
+    "ast_hash": "16160875558d412c4b9caba4bdc7778f",
     "semantic_hash": ""
   }
 }

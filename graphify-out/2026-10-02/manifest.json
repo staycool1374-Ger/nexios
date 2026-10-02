@@ -4540,8 +4540,8 @@
     "semantic_hash": "65749616c650cb9f3825137737643502"
   },
   "src/kernel/arch/pci.cpp": {
-    "mtime": 1789810827.9203978,
-    "ast_hash": "d41b6089e1112b652023864a3f696d7d",
+    "mtime": 1790870376.7122476,
+    "ast_hash": "b4b85f85fccb0f67c6bf62685f1b3249",
     "semantic_hash": ""
   },
   "src/kernel/arch/pci.hpp": {
@@ -4720,8 +4720,8 @@
     "semantic_hash": ""
   },
   "src/kernel/daemon/daemon_mgr.cpp": {
-    "mtime": 1790866930.1893265,
-    "ast_hash": "f216b5acb37890efa2b6cfb7e3ca80a3",
+    "mtime": 1790870056.0913558,
+    "ast_hash": "1911f8bac88e27863503e9261f57d35e",
     "semantic_hash": ""
   },
   "src/kernel/daemon/daemon_mgr.hpp": {
@@ -4740,8 +4740,8 @@
     "semantic_hash": ""
   },
   "src/kernel/driver/ahci.cpp": {
-    "mtime": 1789712004.4622133,
-    "ast_hash": "51377edb2285cef7b3b21989dc537f1e",
+    "mtime": 1790870268.3630738,
+    "ast_hash": "8711045153fe9fa0bbb05f9c4165ea00",
     "semantic_hash": ""
   },
   "src/kernel/driver/ahci.hpp": {
@@ -4775,8 +4775,8 @@
     "semantic_hash": ""
   },
   "src/kernel/driver/dma.cpp": {
-    "mtime": 1788372362.4261677,
-    "ast_hash": "81fb7d1f2ff9af365671529b53a3083b",
+    "mtime": 1790870318.3495119,
+    "ast_hash": "19167dea7d8bd3b491eb09a630028d37",
     "semantic_hash": ""
   },
   "src/kernel/driver/dma.hpp": {
@@ -4805,8 +4805,8 @@
     "semantic_hash": ""
   },
   "src/kernel/driver/virtio_blk.cpp": {
-    "mtime": 1789712004.4629014,
-    "ast_hash": "a4e49a8a3447a4616f43d29365693ab9",
+    "mtime": 1790870299.3837824,
+    "ast_hash": "43d9b8e316ddedd6c0281447b4a9b966",
     "semantic_hash": ""
   },
   "src/kernel/driver/virtio_blk.hpp": {
@@ -4815,8 +4815,8 @@
     "semantic_hash": ""
   },
   "src/kernel/driver/virtio_net.cpp": {
-    "mtime": 1788372362.4280632,
-    "ast_hash": "1d123685a3ee80f80e876a4c10811dc9",
+    "mtime": 1790870318.3560972,
+    "ast_hash": "d52ecfe1a509748cceb76b0182b069f8",
     "semantic_hash": ""
   },
   "src/kernel/driver/virtio_net.hpp": {
@@ -4825,13 +4825,13 @@
     "semantic_hash": ""
   },
   "src/kernel/driver/virtio_pci.cpp": {
-    "mtime": 1786825261.1501944,
-    "ast_hash": "3e5ce527e412df38c58622fc168e1c00",
+    "mtime": 1790870318.3535833,
+    "ast_hash": "9eadff207b84866d7cdd03026de11947",
     "semantic_hash": ""
   },
   "src/kernel/elf/elf.cpp": {
-    "mtime": 1790837379.2476003,
-    "ast_hash": "40c919e39c06f55d15ff37bad7d1cc2f",
+    "mtime": 1790870220.9569483,
+    "ast_hash": "5a72b04b673ad7907833ed00257960bb",
     "semantic_hash": ""
   },
   "src/kernel/elf/elf.hpp": {
@@ -4875,23 +4875,23 @@
     "semantic_hash": ""
   },
   "src/kernel/kernel.cpp": {
-    "mtime": 1790866930.189692,
-    "ast_hash": "6e8258aa8c0127b799271ef80d0b46f6",
+    "mtime": 1790950678.7842097,
+    "ast_hash": "8a7717cd4d2f71de0997d86f416d191e",
     "semantic_hash": ""
   },
   "src/kernel/kernel.hpp": {
-    "mtime": 1790776117.8963845,
-    "ast_hash": "07330f8bad903ec2b5636c1f35de710f",
+    "mtime": 1790950646.9513066,
+    "ast_hash": "36b6de010edf6e3dce9705ddc0942de0",
     "semantic_hash": ""
   },
   "src/kernel/log/dmesg.cpp": {
-    "mtime": 1790866930.1898139,
-    "ast_hash": "060b971fee4ed954c224e4f1321c90db",
+    "mtime": 1790879242.9633865,
+    "ast_hash": "815e34f9304adc0f79c44023630dfdca",
     "semantic_hash": ""
   },
   "src/kernel/log/dmesg.hpp": {
-    "mtime": 1790866930.1899245,
-    "ast_hash": "9fcbd0996530f255eddf4edf7cb5dfd1",
+    "mtime": 1790879259.8549414,
+    "ast_hash": "0d1a699fbf462390027ddd336a37d259",
     "semantic_hash": ""
   },
   "src/kernel/log/ring_buffer.cpp": {
@@ -4930,8 +4930,8 @@
     "semantic_hash": ""
   },
   "src/kernel/memory/mempool.cpp": {
-    "mtime": 1789984706.6826923,
-    "ast_hash": "2afb74e8441966a701d9c49e9190b6ae",
+    "mtime": 1790870336.0345213,
+    "ast_hash": "947d0af652e86dbec36c5e2855f3ccaa",
     "semantic_hash": ""
   },
   "src/kernel/memory/mempool.hpp": {
@@ -4945,8 +4945,8 @@
     "semantic_hash": ""
   },
   "src/kernel/memory/pmm.cpp": {
-    "mtime": 1790064064.7634263,
-    "ast_hash": "89ece74e3c521b2908d5f4236fcce7b1",
+    "mtime": 1790870336.0351074,
+    "ast_hash": "aaf164d9115b5e7d5a2ddc7ba80cec3d",
     "semantic_hash": ""
   },
   "src/kernel/memory/pmm.hpp": {
@@ -5005,8 +5005,8 @@
     "semantic_hash": ""
   },
   "src/kernel/net/net.cpp": {
-    "mtime": 1789739853.9095428,
-    "ast_hash": "b0f15d718b5d28695bd913c314836ee6",
+    "mtime": 1790870239.7738156,
+    "ast_hash": "5433d6138650ecdbc3d06cd239865a25",
     "semantic_hash": ""
   },
   "src/kernel/net/net.hpp": {
@@ -5180,8 +5180,8 @@
     "semantic_hash": ""
   },
   "src/kernel/task/scheduler.cpp": {
-    "mtime": 1790838290.1293852,
-    "ast_hash": "5a1bce04208000484fc1d99bd898e136",
+    "mtime": 1790870911.7163186,
+    "ast_hash": "b69d54542f3617d691e074e83aa4ea51",
     "semantic_hash": ""
   },
   "src/kernel/task/scheduler.hpp": {
@@ -5205,8 +5205,8 @@
     "semantic_hash": ""
   },
   "src/kernel/task/task.cpp": {
-    "mtime": 1790705858.3445113,
-    "ast_hash": "a21fa5c6f7f203c1ea974158d0df1673",
+    "mtime": 1790870037.3933396,
+    "ast_hash": "b42c9fda3f36e4c4cb2e9f5a0724a304",
     "semantic_hash": ""
   },
   "src/kernel/task/task.hpp": {
@@ -5215,8 +5215,8 @@
     "semantic_hash": ""
   },
   "src/kernel/task/task_errors.hpp": {
-    "mtime": 1785795778.4830027,
-    "ast_hash": "c19a4e02cb31397ba714d455ef7f5975",
+    "mtime": 1790869743.598824,
+    "ast_hash": "423f95c461d9feed8e6aa446019742e6",
     "semantic_hash": ""
   },
   "src/kernel/task/task_fwd.hpp": {
@@ -5235,8 +5235,8 @@
     "semantic_hash": ""
   },
   "src/kernel/task/taskdefs.cpp": {
-    "mtime": 1790599328.6434588,
-    "ast_hash": "2ec2d5bc3f88da6576979cd937d396ae",
+    "mtime": 1790870200.1528873,
+    "ast_hash": "9e4f331c0ac0aecdd4832f00487caea4",
     "semantic_hash": ""
   },
   "src/kernel/task/taskdefs.hpp": {
@@ -5255,8 +5255,8 @@
     "semantic_hash": ""
   },
   "src/kernel/test/resource_tracker.cpp": {
-    "mtime": 1789857480.2613542,
-    "ast_hash": "a01ff2e56ab67689d2cf6fbe19fa23d2",
+    "mtime": 1790870336.0353057,
+    "ast_hash": "1685ded4cc30a6ff537bdb6c6a0e060c",
     "semantic_hash": ""
   },
   "src/kernel/test/resource_tracker.hpp": {
@@ -5345,8 +5345,8 @@
     "semantic_hash": ""
   },
   "src/kernel/test/test_expected_counts.hpp": {
-    "mtime": 1790867240.4967427,
-    "ast_hash": "85a6fb32eebb10dabb23f31528b41a6d",
+    "mtime": 1790870444.174005,
+    "ast_hash": "3b49f6efed47ba25933435c80dceb7c6",
     "semantic_hash": ""
   },
   "src/kernel/test/test_fat32.cpp": {
@@ -5585,8 +5585,8 @@
     "semantic_hash": ""
   },
   "src/kernel/test/test_registry.cpp": {
-    "mtime": 1790351126.4082072,
-    "ast_hash": "69ff2ee87f53872076a5f79aa65873c4",
+    "mtime": 1790870336.036091,
+    "ast_hash": "bee7a3e8105ab85a64f92f55f028886d",
     "semantic_hash": ""
   },
   "src/kernel/test/test_resource_exhaustion.cpp": {
@@ -5665,8 +5665,8 @@
     "semantic_hash": ""
   },
   "src/kernel/test/test_syscall.cpp": {
-    "mtime": 1790001869.481546,
-    "ast_hash": "b88bd62e508078608bae946b49846ada",
+    "mtime": 1790870917.54587,
+    "ast_hash": "cb82f39ec721adfea4d342f43c380fe3",
     "semantic_hash": ""
   },
   "src/kernel/test/test_syscall_fuzz.cpp": {
@@ -6135,8 +6135,8 @@
     "semantic_hash": ""
   },
   "src/services/shell.cpp": {
-    "mtime": 1790866930.190757,
-    "ast_hash": "a07b9b9b7f2593fc4edf2ef6a222460d",
+    "mtime": 1790879095.026743,
+    "ast_hash": "77ea54fcb2a59ae35f48bbf24814fdb3",
     "semantic_hash": ""
   },
   "src/services/shell.hpp": {
@@ -17615,8 +17615,8 @@
     "semantic_hash": ""
   },
   "src/kernel/test/test_dmesg.cpp": {
-    "mtime": 1790866930.1904671,
-    "ast_hash": "11c36fe7b7658715fc6dfc6bc8906e69",
+    "mtime": 1790879267.5786698,
+    "ast_hash": "f257694f533cca0dac3bbd13a3d56e30",
     "semantic_hash": ""
   },
   "src/kernel/test/test_jitter.cpp": {
@@ -18690,8 +18690,8 @@
     "semantic_hash": ""
   },
   "test-history.txt": {
-    "mtime": 1790867444.825315,
-    "ast_hash": "a223a8fbcb4388e36c6556d5b47e0f58",
+    "mtime": 1790950875.40174,
+    "ast_hash": "eb9c3a7979fffc803805277f5d4d3343",
     "semantic_hash": ""
   },
   "audits/run_asil_audit.sh": {
@@ -19140,8 +19140,8 @@
     "semantic_hash": ""
   },
   "src/kernel/nexios_config.h": {
-    "mtime": 1790838849.2064893,
-    "ast_hash": "771df7ef89e50501f14b78cc0cfae16b",
+    "mtime": 1790920538.3249755,
+    "ast_hash": "49ba6966475fce57b77c34a235c9d1ad",
     "semantic_hash": ""
   },
   "src/kernel/task/scheduler_config.hpp": {
@@ -19960,8 +19960,8 @@
     "semantic_hash": ""
   },
   "src/kernel/elf/elf_loader.cpp": {
-    "mtime": 1790866930.189485,
-    "ast_hash": "2bcc159c5162de3f7df8b0059c7c9c6d",
+    "mtime": 1790867709.9143658,
+    "ast_hash": "33658fa154728920650d1eb3d965875e",
     "semantic_hash": ""
   },
   "src/kernel/elf/elf_loader.hpp": {
@@ -20025,8 +20025,8 @@
     "semantic_hash": ""
   },
   "userspace/prime.c": {
-    "mtime": 1788372362.4572794,
-    "ast_hash": "9417af34c571d654b553f3e1b6c46f2c",
+    "mtime": 1790880612.7064595,
+    "ast_hash": "3882b250745efd3e2b34ac65771f6000",
     "semantic_hash": ""
   },
   ".github/ISSUE_TEMPLATE/bug_report.yml": {
@@ -21240,8 +21240,8 @@
     "semantic_hash": ""
   },
   "prompts/LEARNINGS.md": {
-    "mtime": 1790746194.310279,
-    "ast_hash": "3d5798881a3a2c675b3a10277f09fa08",
+    "mtime": 1790871722.1016293,
+    "ast_hash": "f9b16888bced8440f8cf3c531cddb418",
     "semantic_hash": ""
   },
   "prompts/LESSONS.md": {
@@ -21290,8 +21290,8 @@
     "semantic_hash": ""
   },
   "prompts/STATE.md": {
-    "mtime": 1790746224.1727018,
-    "ast_hash": "a664f112e29915b72d1ad88a71a3b094",
+    "mtime": 1790879601.9238577,
+    "ast_hash": "85f067bb6a3a3c7036eaee60654e0c64",
     "semantic_hash": ""
   },
   "prompts/testcases-v0.3.10.md": {
@@ -21995,8 +21995,8 @@
     "semantic_hash": ""
   },
   "src/kernel/elf/elf_shared.cpp": {
-    "mtime": 1790837379.2477684,
-    "ast_hash": "65c919995d9be228141f63ae60b41e42",
+    "mtime": 1790870220.9675581,
+    "ast_hash": "6bed74189fa01ff8c92d098f7fe7da6b",
     "semantic_hash": ""
   },
   "src/kernel/elf/elf_shared.hpp": {
@@ -26155,8 +26155,8 @@
     "semantic_hash": ""
   },
   "src/kernel/log/dmesg_catalog.hpp": {
-    "mtime": 1790866555.9799407,
-    "ast_hash": "ec2fd27835bcc77f4e00e4201739e6c2",
+    "mtime": 1790879095.0236652,
+    "ast_hash": "b0f3b5159e72efe51ac45573224914f6",
     "semantic_hash": ""
   },
   "userspace/hey.c": {
@@ -26295,13 +26295,43 @@
     "semantic_hash": ""
   },
   "docs/specs/dmesg.md": {
-    "mtime": 1790866776.460298,
-    "ast_hash": "0e446f23d4062d3f7cc801f5ae6fe14e",
+    "mtime": 1790879306.213483,
+    "ast_hash": "933d3e6fcba2664cdea5873de879c769",
     "semantic_hash": ""
   },
   "docs/specs/elf-rerun.md": {
     "mtime": 1790852996.4205601,
     "ast_hash": "9cf4977fea5fad938d742aa066b8c428",
+    "semantic_hash": ""
+  },
+  "audits/report-2026-10-01T00-00-00Z.md": {
+    "mtime": 1790867601.00078,
+    "ast_hash": "262cb0ed36841190e0e54cd2a9477ecc",
+    "semantic_hash": ""
+  },
+  "audits/report-2026-10-01T152109Z.md": {
+    "mtime": 1790868074.654933,
+    "ast_hash": "8d7e5240e64853300d4fbc6a4f6a0657",
+    "semantic_hash": ""
+  },
+  "audits/report-2026-10-01T161953Z.md": {
+    "mtime": 1790871611.251753,
+    "ast_hash": "77d27c92fc4ec19e2c403ac430cdca30",
+    "semantic_hash": ""
+  },
+  "audits/report-2026-10-01T183239Z.md": {
+    "mtime": 1790879573.229473,
+    "ast_hash": "6234acea7e5d6678010de42eb9d4a504",
+    "semantic_hash": ""
+  },
+  "audits/report-20261002T060454Z.md": {
+    "mtime": 1790921126.55297,
+    "ast_hash": "91b64134c1776be37c2188b577daa0ac",
+    "semantic_hash": ""
+  },
+  "audits/report-20261002T070500Z.md": {
+    "mtime": 1790950748.7631102,
+    "ast_hash": "9e875cab974c5a2287e65cbf935b341e",
     "semantic_hash": ""
   }
 }
