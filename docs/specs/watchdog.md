@@ -79,3 +79,26 @@
 /// SYS_WATCHDOG_CREATE with the budget as the period. This increment
 /// only reserves that call-site signature; the swap itself is a
 /// follow-up edit on the #45 thread.
+
+/// ## 7. Daemon-owned supervision (issue #277)
+///
+/// watchdogd (userspace/watchdogd.c, SPORADIC_SERVER prio 20 SS(1,10,0))
+/// is the first externalized microservice. vfsd 2/10 + iocd 3/10 + 1/10
+/// keeps U=0.6 under the n=3 Liu-Leyland bound (0.78).
+///
+/// Authority: WdogCap (CapType 10, single live cap per target pid,
+/// generation-matched, WRITE-gated). 91/92 take arg pid (0 = self,
+/// cap-free, byte-identical #41 path) plus cap handle; no new numbers.
+/// Kick model is explicit points only — a reply-hook would mask stuck
+/// handlers. This increment kicks supervised targets each loop
+/// iteration (a status-poll gate hook is reserved at the kick site);
+/// the loop uses a bounded RECEIVE quantum (10 ticks) so kicks never
+/// starve behind a blocking recv (which would suicide on the self
+/// watchdog, period 1000).
+///
+/// Handover: init mints one WdogCap per supervised daemon into
+/// watchdogd's CSpace after all-READY and delivers (pid, handle,
+/// period=500) via WDOG_SUPERVISE IPC; the kernel-local on_tick scan
+/// stays authoritative (grace + degraded-shell fallback). The daemon
+/// supervises liveness (death ⇒ missed kicks ⇒ expiry), not progress —
+/// a wedged-but-kicked task is out of scope for this increment.

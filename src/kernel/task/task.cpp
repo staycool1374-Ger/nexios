@@ -2163,6 +2163,12 @@ void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
             tcb->cleanup();
             Scheduler::remove_task(*tcb);
         }
+        // Baseline-owned (pinned) blocks are never freed: the snapshot
+        // owns the block and restore rewinds it (cleanup() already skips
+        // teardown for pinned for the same reason). In production nothing
+        // is pinned, so this changes nothing outside tests.
+        if (kernel::MemPool::is_block_pinned(tcb))
+            return;
         tcb->magic =
             0; // Prevent double-free if caller re-enters the destroy path
         MemPool::free(tcb);

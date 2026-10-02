@@ -215,6 +215,14 @@ JARVIS_TEST(posix_nanosleep_killed_by_signal, "PRE: none | POST: none") {
     test::yield_as(*sleeper);
     Scheduler::reschedule();
     __atomic_store_n(&sleeper->pending_signals, 0x1ULL, __ATOMIC_RELEASE);
+    // Issue #278: deterministic wake — the dispatch above is deferred to
+    // the next timer ISR, so without this the test depends on zero ticks
+    // landing between reschedule() and the store (sleeper parks unobserved
+    // and sleeps until the 60 s wheel). A direct store has no delivery wake
+    // (production sys_kill wakes); re-READY a still-BLOCKED sleeper so it
+    // observes the flag promptly. Never clobbers RUNNING (H2 guard).
+    if (sleeper->state == TaskState::BLOCKED)
+        Scheduler::set_task_ready(*sleeper);
     test::wait_for_termination_safe(sleeper);
     Scheduler::set_current(*original);
     JARVIS_ASSERT_EQ(kNegErrno(4), ctx.result);

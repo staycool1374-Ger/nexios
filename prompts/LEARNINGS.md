@@ -21,6 +21,7 @@
 - Cross-arch: link all three arches for shared-header edits; arch-guard test bodies; riscv low half is identity/MMIO (clone copies L0[0]); aarch64 needs HHDM aliases + 48-bit phys masks; S-mode cannot touch M-mode CSRs; riscv64 never folds __builtin_memcmp (no freestanding provider) — manual compares in tests.
 - TCG wall dilation is load-bearing (park-heavy riscv tests need ~30 s; ticks run ~0.6× wall): size every timeout tier from measured walls; re-verify flakes before bisecting.
 - Boot time needs init-independent raw counters (`Timer::ns()` is 0 pre-calibrate on all archs — a zero-skip gate fail-opens forever); convert at use, zero-freq fails closed. Never cross-check per-object arm counters against global sequences (fail-open); staleness via disarm-on-teardown + snapshot rewind.
+- Pinned snapshot-baseline blocks are never freed anywhere (scan, defer_kill/destroy, all four drain paths, reap_orphans) and never killed (watchdog/deadline actions skip with ring-only record); production pins nothing. Test helpers the harness doesn't hlt-wait on run below harness priority; no TCB field reads after teardown drains.
 
 ## Entry format
 
@@ -34,6 +35,11 @@
 ## Entries
 
 <!-- Newest first. Bodies carry durable guidance only. -->
+
+### #277 — watchdog daemon + pinned-free baseline corruption
+- **Learned:** (1) The snapshot pin invariant ("pinned blocks are never recycled") was enforced at pin time but violated by EVERY free path: scan kills, defer_kill/destroy, flush/drain/cleanup_step drains, reap_orphans. First live proof: the daemon's own self-watchdog killed PINNED watchdogd under stress_hrt load → pinned-free WARN → suite wedge. Fix extends the spare/skip rule to all 8 sites (production pins nothing, so zero behavior change there). (2) Straight-line harness code + higher-prio forever task = tick race: a prio-11 spinner preempts the prio-10 harness between add_task and teardown and never yields back — helper tasks that the harness doesn't hlt-wait on must run BELOW harness priority (prio 9). (3) Never read TCB fields after terminate_and_drain (drain frees; 0xDD poison reads nonzero) — assert live-block properties before teardown, slot-reuse properties after. (4) Suite wall outgrows fixed expect windows: deadline 115→139 tests measures up to 185 s vs the 120 s class timeout — TIMEOUT verdicts with complete S: lines mean undersized window, not failure; size from measured walls (moved to the 250 s list).
+- **Adapted:** pinned spare/skip in scan + 4 drain paths + destroy + reap can_reap; prio-9 helpers; watchdog.md §7 daemon section; Makefile deadline timeout.
+- **Style re-surface:** §11 (no new locks — is_block_pinned is lock-free reads, safe in ISR paths); §5 fail-closed preserved on every expiry path; §6 bounded loops untouched.
 
 ### #45 — raw-counter boot time source (T0=0 fail-open found live)
 - **Learned:** (1) `Timer::ns()` reads 0 until `Timer::init()` sets the freq var on ALL archs (x86 `tsc_freq_hz_`, aarch64 `counter_freq_hz_`, riscv `timer_freq_hz_`) — any entry-stamp taken through ns()/ns_monotonic() is 0, and a "skip when zero" gate fail-opens forever. Found by live boot, not by tests (no test boots through real calibration). (2) The fix is raw counters with no init dependency (rdtsc/cntpct/rdtime + live-or-constant freq) converted at use with the #16 overflow-split form; zero-freq fails closed. (3) `Logger::debug` is runtime-filtered below the default level — boot milestones must use info/debug_write or they vanish from serial (missing stage table misread as missing marks). (4) Planner stubs happen: a planner returning schema-claims without the document is a non-plan — verify the artifact exists before Phase 2, and say so on the thread.

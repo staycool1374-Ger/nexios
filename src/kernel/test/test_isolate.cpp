@@ -59,6 +59,8 @@
 #include <kernel/debug/debug_bind.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/cap/msix.hpp>
+#include <kernel/cap/wdog.hpp>
+#include <kernel/watchdog/watchdogd.hpp>
 #include <logger.hpp>
 #include "test_registry.gen.hpp"
 
@@ -194,8 +196,12 @@ static size_t off_iocd_pid() {
     return off_vfsd_pid() + sizeof(uint64_t);
 }
 
-static size_t off_bufpool() {
+static size_t off_watchdogd_pid() {
     return off_iocd_pid() + sizeof(uint64_t);
+}
+
+static size_t off_bufpool() {
+    return off_watchdogd_pid() + sizeof(uint64_t);
 }
 
 static constexpr uint64_t CANARY_BEFORE  = 0xCAFEBABE00000001ULL;
@@ -508,8 +514,11 @@ bool snapshot_create() {
         vfsd::get_vfsd_pid();
     *reinterpret_cast<uint64_t *>(g_snapshot + off_iocd_pid()) =
         iocd::get_iocd_pid();
-    Logger::info("[SNAP:SAVE] vfsd_pid=%u iocd_pid=%u", vfsd::get_vfsd_pid(),
-                 iocd::get_iocd_pid());
+    *reinterpret_cast<uint64_t *>(g_snapshot + off_watchdogd_pid()) =
+        watchdogd::get_watchdogd_pid();
+    Logger::info("[SNAP:SAVE] vfsd_pid=%u iocd_pid=%u watchdogd_pid=%u",
+                 vfsd::get_vfsd_pid(), iocd::get_iocd_pid(),
+                 watchdogd::get_watchdogd_pid());
 
     // ---- BufferPool ----
     BufferPool::capture_state(g_snapshot + off_bufpool(),
@@ -1594,8 +1603,11 @@ void snapshot_restore(const char *test_name) {
         *reinterpret_cast<uint64_t *>(g_snapshot + off_vfsd_pid()));
     iocd::set_iocd_pid(
         *reinterpret_cast<uint64_t *>(g_snapshot + off_iocd_pid()));
-    Logger::info("[SNAP:RESTORE] vfsd_pid=%u iocd_pid=%u", vfsd::get_vfsd_pid(),
-                 iocd::get_iocd_pid());
+    watchdogd::set_watchdogd_pid(
+        *reinterpret_cast<uint64_t *>(g_snapshot + off_watchdogd_pid()));
+    Logger::info("[SNAP:RESTORE] vfsd_pid=%u iocd_pid=%u watchdogd_pid=%u",
+                 vfsd::get_vfsd_pid(), iocd::get_iocd_pid(),
+                 watchdogd::get_watchdogd_pid());
 
     // ---- Reset monitor-task handoff flag ----
     // The static s_scan_requested_ may be stale after restore; reset so
@@ -1645,6 +1657,10 @@ void snapshot_restore(const char *test_name) {
         // test that created an MsixCap never leaves a recycled (bdf, entry)
         // un-claimable in the next cycle.
         cap::MsixCap::snapshot_reset();
+        // Reset the watchdog per-pid claim registry (issue #277) so a test
+        // that created a WdogCap never leaves a recycled pid un-claimable
+        // in the next cycle.
+        cap::WdogCap::snapshot_reset();
 #endif
     }
 

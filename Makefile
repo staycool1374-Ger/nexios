@@ -1070,7 +1070,7 @@ _do_execute_test:
 	elif [ "$(CLASS)" = "dump-counts" ]; then \
 	    $(call _run_dump_counts_qemu); \
 	else \
-	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter riscv64 riscv,$(ARCH)),$(TEST_TIMEOUT_RISCV),$(if $(filter core smp_multicpu ahci_live iommu_live,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS)))); \
+	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter riscv64 riscv,$(ARCH)),$(TEST_TIMEOUT_RISCV),$(if $(filter core smp_multicpu ahci_live iommu_live deadline,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS)))); \
 	fi
 
 # Full suite (issue #173, replaces the removed `all` class): run every
@@ -1218,6 +1218,10 @@ TEST_VERDICT_LOG := /tmp/jarvis-verdict.log
 #   else the watchdog can never fire before expect gives up.
 TEST_TIMEOUT_ALL    := 250
 TEST_TIMEOUT_CLASS  := 120
+# Issue #277: the deadline aggregate (139 tests incl. the stress_hrt
+# hammer) measures 44-185 s wall and outgrew the 120 s class window, so
+# it joins the 250 s list. Slow runs previously surfaced as TIMEOUT
+# verdicts despite green execution (all 139 S: lines present).
 # Issue #207: riscv64 classes run under QEMU TCG wall dilation — arch_riscv64
 # measures ~270 s wall (daemon boot + 24 tests).  Applies to every riscv64
 # class (only green-evidenced ones run there); x86_64 selection unchanged.

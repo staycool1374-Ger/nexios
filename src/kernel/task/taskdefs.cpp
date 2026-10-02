@@ -26,6 +26,7 @@
 #include <kernel/elf/elf.hpp>
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/driver/iocd.hpp>
+#include <kernel/watchdog/watchdogd.hpp>
 #include <kernel/task/dmesg_task.hpp>
 #include <initrd/initrd.hpp>
 #include <services/shell.hpp>
@@ -65,6 +66,13 @@ constexpr TaskDef g_task_defs[] = {
     // iocd: sporadic server for I/O, same prio as vfsd
     {"iocd", TaskType::SPORADIC_SERVER, true, nullptr, "iocd.c.elf", 20, 10, 0,
      3, 10, 0, "iocd", iocd::set_iocd_pid, iocd::get_iocd_pid, 1, 0, false},
+    // watchdogd: supervises vfsd/iocd watchdogs (issue #277). Sporadic
+    // server, cheapest share SS(1,10,0): vfsd 2/10 + iocd 3/10 + 1/10 =
+    // 0.6 < 0.78 (n=3 Liu-Leyland). Same prio band as its supervisees.
+    {"watchdogd", TaskType::SPORADIC_SERVER, true, nullptr,
+     "watchdogd.c.elf", 20, 10, 0, 1, 10, 0, "watchdogd",
+     watchdogd::set_watchdogd_pid, watchdogd::get_watchdogd_pid, 1, 0,
+     false},
     // user-app: generic userspace ELF placeholder — aperiodic (period 0)
     {"user-app", TaskType::USER_ELF, true, nullptr, "user-app.c.elf", 2, 0, 0,
      0, 0, 0, nullptr, nullptr, nullptr, 1, 0, false},

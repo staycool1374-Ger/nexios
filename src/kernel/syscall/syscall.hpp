@@ -120,8 +120,8 @@ enum class SyscallNumber : uint8_t {
     TASK_DEBUG_WRITE_REGS = 88, ///< write target regs via handle (issue #225)
     TASK_DEBUG_READ_MEM = 89, ///< read target memory via handle (issue #225)
     TASK_DEBUG_WRITE_MEM = 90, ///< write target memory via handle (issue #225)
-    WATCHDOG_CREATE = 91, ///< arm self watchdog: arg0=period_ticks (issue #41)
-    WATCHDOG_KICK = 92,   ///< kick self watchdog (issue #41)
+    WATCHDOG_CREATE = 91, ///< arm watchdog: arg0=period_ticks, arg1=pid (0=self, else needs WdogCap), arg2=cap handle (issues #41/#277)
+    WATCHDOG_KICK = 92,   ///< kick watchdog: arg0=pid (0=self, else needs WdogCap), arg1=cap handle, arg2=0 reserved (issues #41/#277)
     MAX_SYSCALL = 93,
 };
 

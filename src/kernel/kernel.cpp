@@ -52,6 +52,7 @@
 #include <kernel/elf/elf_loader.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/vfsd.hpp>
+#include <kernel/watchdog/watchdogd.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/driver/iocd.hpp>
 #include <kernel/driver/ata_pio.hpp>
@@ -394,6 +395,7 @@ void init_task_main() {
     } watch[] = {
         {"vfsd", kernel::vfsd::get_vfsd_pid(), false},
         {"iocd", kernel::iocd::get_iocd_pid(), false},
+        {"watchdogd", kernel::watchdogd::get_watchdogd_pid(), false},
     };
     size_t watch_count = sizeof(watch) / sizeof(watch[0]);
 
@@ -469,6 +471,39 @@ void init_task_main() {
                                     kernel::log::kDmesgBase_INIT + 16,
                                     kernel::log::LogSeverity::INFO,
                                     "daemons ready", 0);
+        // Issue #277: watchdog handover — mint one WdogCap per
+        // supervised daemon into watchdogd's CSpace and deliver the
+        // (pid, handle, period) set. watchdogd arms each target and
+        // owns subsequent kicks; the kernel-local on_tick scan stays
+        // authoritative throughout (grace + degraded fallback below
+        // never disable it).
+        {
+            const uint64_t supervised[] = {
+                kernel::vfsd::get_vfsd_pid(),
+                kernel::iocd::get_iocd_pid(),
+            };
+            constexpr uint64_t kSupervisedPeriod = 500;
+            uint64_t handles[2] = {static_cast<uint64_t>(-1),
+                                   static_cast<uint64_t>(-1)};
+            kernel::watchdogd::grant_supervision(supervised, 2, handles);
+            for (size_t si = 0; si < 2; ++si) {
+                if (supervised[si] == 0 || handles[si] == static_cast<uint64_t>(-1))
+                    continue;
+                kernel::Message grant{};
+                grant.sender_id = 1;
+                grant.type = kernel::watchdogd::WDOG_SUPERVISE;
+                // Wire layout (documented both sides): userspace reads
+                // {sender, type, arg0, arg1, data0} = {sender, type,
+                // priority, data[0], data[1]}.
+                grant.priority = supervised[si];
+                __builtin_memcpy(grant.data, &handles[si], sizeof(uint64_t));
+                __builtin_memcpy(grant.data + 8, &kSupervisedPeriod,
+                                 sizeof(uint64_t));
+                grant.data_size = 16;
+                kernel::IPC::send(kernel::watchdogd::get_watchdogd_pid(),
+                                  grant, 0);
+            }
+        }
     }
 
     // ── Run tests from init-task context (IF=1) ──────────────────

@@ -1198,6 +1198,20 @@ void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
                 zombie_tail_ = task;
                 continue;
             }
+            // Baseline-owned (pinned) zombies are never freed: the
+            // snapshot owns the block and restore rewinds it (same rule
+            // as TaskControlBlock::cleanup and the watchdog scan).
+            // Spared like AP-live above — re-queued, budget-bounded.
+            if (MemPool::is_block_pinned(task)) {
+                task->zombie_next_ = nullptr;
+                if (zombie_tail_ != nullptr) {
+                    zombie_tail_->zombie_next_ = task;
+                } else {
+                    zombie_head_ = task;
+                }
+                zombie_tail_ = task;
+                continue;
+            }
             if (task->in_ready_queue_)
                 rq_task(*task).remove(*task, effective_priority(task));
             // Issue #197 defense-in-depth: unlink a stale EDF entry.
@@ -1257,6 +1271,21 @@ void Scheduler::drain_zombie_list() noexcept {
                 }
                 continue;
             }
+            // Baseline-owned (pinned) zombies are never freed (see
+            // flush_zombies): rotate like AP-live above, budget-bounded.
+            if (MemPool::is_block_pinned(task)) {
+                if (task->zombie_next_ == nullptr || zombie_tail_ == task) {
+                    return;
+                }
+                zombie_head_ = task->zombie_next_;
+                task->zombie_next_ = nullptr;
+                zombie_tail_->zombie_next_ = task;
+                zombie_tail_ = task;
+                if (++spared >= pass_budget) {
+                    return;
+                }
+                continue;
+            }
             zombie_head_ = task->zombie_next_;
             if (!zombie_head_)
                 zombie_tail_ = nullptr;
@@ -1300,6 +1329,10 @@ void Scheduler::cleanup_step() noexcept {
         if (is_current_on_any_cpu(task)) {
             return;
         }
+        // Baseline-owned (pinned) heads are never freed — leave listed.
+        if (MemPool::is_block_pinned(task)) {
+            return;
+        }
         zombie_head_ = task->zombie_next_;
         if (!zombie_head_)
             zombie_tail_ = nullptr;
@@ -1340,6 +1373,10 @@ void Scheduler::cleanup_step_try() noexcept {
         }
         // Issue #197: spare an AP-live head (never free a live stack).
         if (is_current_on_any_cpu(task)) {
+            return;
+        }
+        // Baseline-owned (pinned) heads are never freed — leave listed.
+        if (MemPool::is_block_pinned(task)) {
             return;
         }
         zombie_head_ = task->zombie_next_;
@@ -3596,6 +3633,12 @@ void Scheduler::reap_orphans() noexcept {
         bool can_reap = (t->parent_id == 0) ||
                         (init_task && t->parent_id == init_task->id &&
                          init_task->state == TaskState::RUNNING);
+        // Baseline-owned (pinned) blocks are never freed: the snapshot
+        // owns the block and restore rewinds it (same rule as the
+        // zombie-drain paths and TaskControlBlock::cleanup/destroy).
+        // In production nothing is pinned.
+        if (can_reap && MemPool::is_block_pinned(t))
+            can_reap = false;
         if (!can_reap) {
             bool parent_found = false;
             for (TaskIter it(0);;) {
@@ -3655,7 +3698,10 @@ void Scheduler::reap_orphans() noexcept {
                     fb_terminated_line(t->name, t->id); // issue #269
                 }
                 t->cleanup();
-                MemPool::free(t);
+                // Baseline-owned (pinned) blocks are never freed (see
+                // can_reap gate above and the zombie-drain paths).
+                if (!MemPool::is_block_pinned(t))
+                    MemPool::free(t);
                 new_idle = created;
             } else {
                 if (!suppress_terminated_log_)
@@ -3676,7 +3722,9 @@ void Scheduler::reap_orphans() noexcept {
                 fb_terminated_line(t->name, t->id); // issue #269
             }
             t->cleanup();
-            MemPool::free(t);
+            // Baseline-owned (pinned) blocks are never freed (see above).
+            if (!MemPool::is_block_pinned(t))
+                MemPool::free(t);
         }
     }
 
@@ -5485,6 +5533,20 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
         // One-shot: disarm before dispatch so a slow handler cannot
         // re-fire on the same arm; re-CREATE re-arms with a fresh gen.
         t->wdog_armed = false;
+        if (kernel::MemPool::is_block_pinned(t)) {
+            // Test-isolation baseline (issue #277): pinned TCBs are part
+            // of the snapshot (daemons in the test harness). Killing one
+            // would free a pinned block and corrupt the baseline — the
+            // same reason cleanup() skips teardown for pinned tasks.
+            // Record the expiry in the ring, skip the action. In
+            // production nothing is pinned, so this changes nothing
+            // outside tests.
+            log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                                log::kDmesgBase_TIMING + 6,
+                                log::LogSeverity::ERROR, t->name,
+                                now - t->wdog_expiry_tick);
+            continue;
+        }
         watchdog_expiry_handler(*t, now - t->wdog_expiry_tick);
     }
 }

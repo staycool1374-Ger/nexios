@@ -40,6 +40,7 @@ enum class CapType : uint8_t {
     Irq = 7,     ///< hardware IRQ vector (v0.4.2, issue #2)
     IoMmuDma = 8, ///< IOMMU DMA protection domain (v0.4.2, issue #4)
     Msix = 9,     ///< per-vector MSI-X entry on a PCI device (v0.4.2, issue #10)
+    Wdog = 10,    ///< cross-task watchdog arm/kick authority (issue #277)
 };
 
 /// @brief Rights bitmap, checked by the operation that consumes the cap.

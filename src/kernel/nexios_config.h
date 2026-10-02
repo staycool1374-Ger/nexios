@@ -570,6 +570,20 @@
 #define CONFIG_CAP_MAX_MSIX 8
 #endif
 
+/// Maximum number of live WdogCap objects (issue #277).  Enforced by a
+/// TU-local live counter plus a static single-owner claim registry in
+/// cap/wdog.cpp (MsixCap entry-claim precedent).
+#ifndef CONFIG_CAP_MAX_WDOG
+#define CONFIG_CAP_MAX_WDOG 8
+#endif
+
+/// Boot-grace ticks for the watchdog daemon handover (issue #277): the
+/// kernel-local boot budget enforcement stays authoritative until
+/// watchdogd reports READY (or this grace expires, then degraded mode).
+#ifndef CONFIG_WATCHDOG_GRACE_TICKS
+#define CONFIG_WATCHDOG_GRACE_TICKS 500
+#endif
+
 /// Maximum number of concurrent per-task I/O-port bitmap (IOPB) slots
 /// (x86_64, sys_ioport_grant).  Each slot is an 8 KiB all-1s bitmap in a
 /// static pool.  Bounded so the pool is a fixed .bss allocation — no
