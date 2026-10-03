@@ -36,6 +36,11 @@
 
 <!-- Newest first. Bodies carry durable guidance only. -->
 
+### #279 — session discipline failure (redundant pipeline)
+- **Learned:** Before starting ANY pipeline, re-read prompts/STATE.md + git log + issue thread: a committed, pushed increment looks exactly like unstarted work if you only read the issue body. I re-ran a full #232 implementation cycle (planner, work-begun post, ~20 edits, host tests) against already-committed code — all edits no-ops, plus a spurious thread comment requiring correction. Cost: a full session segment for zero delta.
+- **Adapted:** this entry; correction comments on #232/#279 stand as the audit trail.
+- **Style re-surface:** evidence-before-synthesis applies to session state too (git log + STATE.md are cheap local evidence).
+
 ### #232 — debugd Phase 4 loop + grants
 - **Learned:** (1) A Logger gate consulted from tick paths must be lock-free: an atomic live-counter (updated under the table lock at every transition) beats a locking scan — a spinlock take inside info()/warn() self-deadlocks against a preempted table holder when the tick fires. Count every transition (mint/clear/revoke/drain/reset-zero) or the predicate drifts. (2) Sibling-verb interface extensions force all fakes to grow — one FakeController, mechanical stubs. (3) Disabled taskdef rows still need valid pid fns for validate_all — TU-local cell, no new module.
 - **Adapted:** g_live_binding_count + session predicate; DebugLoop header + 7 host tests; disabled debugd row; sel9 + grantor-death disposition.
