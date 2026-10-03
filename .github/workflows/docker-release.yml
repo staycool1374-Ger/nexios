@@ -82,4 +82,17 @@ jobs:
         run: docker run --rm ghcr.io/staycool1374-ger/nexios-env:${{ github.ref_name }} make build
 
       - name: Quick test class inside the image
-        run: docker run --rm ghcr.io/staycool1374-ger/nexios-env:${{ github.ref_name }} make execute-test x86_64 debug debug_syscall
+        # Retry-once: the QEMU harness has a known intermittent pre-test
+        # stall class (issue #280 — zero serial progress, reruns green).
+        # A deterministic regression fails both attempts; a flake passes
+        # the retry. No blanket timeout extension: a hung guest makes no
+        # progress at any timeout.
+        run: |
+          for attempt in 1 2; do
+            if docker run --rm ghcr.io/staycool1374-ger/nexios-env:${{ github.ref_name }} make execute-test x86_64 debug debug_syscall; then
+              echo "dogfood green on attempt $attempt"
+              exit 0
+            fi
+            echo "dogfood attempt $attempt failed"
+          done
+          exit 1
