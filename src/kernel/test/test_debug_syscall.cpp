@@ -1928,6 +1928,8 @@ JARVIS_TEST(debug_attach_sel9_stop_request, "PRE: none | POST: none") {
     uint64_t stub_phys = 0;
     TaskControlBlock *t = debug_spawn_spinner(stub_phys);
     JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    uint64_t const scratch_phys = debug_map_scratch();
+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
     uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
     JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx",
                       h);
@@ -1952,6 +1954,7 @@ JARVIS_TEST(debug_attach_sel9_stop_request, "PRE: none | POST: none") {
     JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) ==
                           0,
                       "detach failed");
+    debug_unmap_scratch(scratch_phys);
     debug_free_spinner_page(t, stub_phys);
     debug_reap_child(t);
     JARVIS_TEST_PASS();
