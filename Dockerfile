@@ -17,7 +17,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential git make python3 wget ccache cpio meson ninja-build \
+    build-essential git make python3 python3-pip wget ccache cpio \
     nasm \
     xorriso mtools dosfstools grub-common \
     $(if [ "$TARGETARCH" = "amd64" ]; then echo grub-pc-bin grub-efi-amd64-bin; fi) \
@@ -31,16 +31,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/x86_64-linux-gnu-gdb \
  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/aarch64-linux-gnu-gdb \
  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/riscv64-linux-gnu-gdb \
- # Bare-metal x86_64-elf-* toolchain for tools/build-picolibc.sh
- # (tools/picolibc-x86_64-elf.ini): mirrors the host-symlink fake in
- # .github/workflows/ci.yml (Setup cross-compiler symlinks) — the
- # Linux-triplet packages above serve the kernel build, not picolibc.
- && ln -sf /usr/bin/gcc /usr/local/bin/x86_64-elf-gcc \
- && ln -sf /usr/bin/g++ /usr/local/bin/x86_64-elf-g++ \
- && ln -sf /usr/bin/ld /usr/local/bin/x86_64-elf-ld \
- && ln -sf /usr/bin/ar /usr/local/bin/x86_64-elf-ar \
- && ln -sf /usr/bin/objcopy /usr/local/bin/x86_64-elf-objcopy \
- && rm -rf /var/lib/apt/lists/*
+  # Bare-metal x86_64-elf-* toolchain for tools/build-picolibc.sh
+  # (tools/picolibc-x86_64-elf.ini): the x86_64-linux-gnu triplet, NOT the
+  # host-native /usr/bin/gcc — on arm64 hosts the native compiler is
+  # AArch64 and rejects the x86 flags (-m64/-mno-red-zone, issue #243).
+  # Triplet packages install on every host arch (ports carry the cross
+  # toolchains, mirroring the unconditional aarch64/riscv64 lines above).
+  # as/strip were missing entirely although the .ini references them.
+  && ln -sf /usr/bin/x86_64-linux-gnu-gcc /usr/local/bin/x86_64-elf-gcc \
+  && ln -sf /usr/bin/x86_64-linux-gnu-g++ /usr/local/bin/x86_64-elf-g++ \
+  && ln -sf /usr/bin/x86_64-linux-gnu-as /usr/local/bin/x86_64-elf-as \
+  && ln -sf /usr/bin/x86_64-linux-gnu-ld /usr/local/bin/x86_64-elf-ld \
+  && ln -sf /usr/bin/x86_64-linux-gnu-ar /usr/local/bin/x86_64-elf-ar \
+  && ln -sf /usr/bin/x86_64-linux-gnu-objcopy /usr/local/bin/x86_64-elf-objcopy \
+  && ln -sf /usr/bin/x86_64-linux-gnu-strip /usr/local/bin/x86_64-elf-strip \
+  && rm -rf /var/lib/apt/lists*
+
+# Pinned pip meson/ninja (tools/build-picolibc.sh pins meson 1.12.0,
+# ninja 1.13.2): Ubuntu 24.04 apt ships meson 1.3.2, whose link-based
+# compiler sanity check fails under the freestanding flags
+# (-nostdlib -static); 1.12 checks compile-only (issue #243).
+RUN pip install --break-system-packages "meson==1.12.0" "ninja==1.13.2"
 
 # Tag this image was built for; the entrypoint clones it by default.
 # Overridden per release by docker/metadata-action (NEXIOS_TAG=$ref).
