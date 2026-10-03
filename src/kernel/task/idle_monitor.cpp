@@ -175,6 +175,36 @@ bool idle_note_exec_sample(TaskControlBlock &t) noexcept {
     return false;
 }
 
+IdleScanProgress idle_scan_mem(IdleScanCursor &cursor,
+                                 uint64_t budget) noexcept {
+    const auto check = [](TaskControlBlock *t) noexcept {
+        const uint64_t outstanding = (t->mem_alloc_ops_ >= t->mem_free_ops_)
+                                         ? t->mem_alloc_ops_ - t->mem_free_ops_
+                                         : 0;
+        const uint64_t min_ops = static_cast<uint64_t>(
+            CONFIG_IDLE_MONITOR_MEM_MIN_OPS);
+        if (outstanding > t->mem_prev_outstanding_ + min_ops &&
+            t->memory_used_pages_ == t->mem_prev_used_) {
+            if (t->mem_leak_streak_ < UINT32_MAX)
+                ++t->mem_leak_streak_;
+        } else {
+            t->mem_leak_streak_ = 0;
+        }
+        t->mem_prev_outstanding_ = outstanding;
+        t->mem_prev_used_ = t->memory_used_pages_;
+        if (t->mem_leak_streak_ ==
+            static_cast<uint32_t>(CONFIG_IDLE_MONITOR_MEM_PASSES)) {
+            // Report only (M6): no kill, no reap, no handler — one WARN
+            // per streak, auto re-armed when the streak breaks.
+            log::dmesg_push_sev(log::ErrorSubsystem::PMM,
+                                log::kDmesgBase_PMM + 1,
+                                log::LogSeverity::WARN, t->name,
+                                outstanding);
+        }
+    };
+    return scan_chunk(cursor, budget, check);
+}
+
 void idle_publish_stack_low_water(uint64_t low_water_rsp, uint64_t stack_top,
                                   uint32_t &dst) noexcept {
     if (low_water_rsp == 0 || stack_top <= low_water_rsp) {
@@ -194,6 +224,7 @@ void idle_monitor_slice() noexcept {
     static IdleScanCursor stack_cursor = {};
     static IdleScanCursor stall_cursor = {};
     static IdleScanCursor util_cursor = {};
+    static IdleScanCursor mem_cursor = {};
     constexpr uint64_t kChunk =
         static_cast<uint64_t>(CONFIG_IDLE_MONITOR_CHUNK);
 #if CONFIG_IDLE_MONITOR_STACK_CHECK
@@ -204,6 +235,9 @@ void idle_monitor_slice() noexcept {
 #endif
 #if CONFIG_IDLE_MONITOR_UTIL
     (void)idle_aggregate_util(util_cursor, kChunk);
+#endif
+#if CONFIG_IDLE_MONITOR_MEM
+    (void)idle_scan_mem(mem_cursor, kChunk);
 #endif
 #endif
 }

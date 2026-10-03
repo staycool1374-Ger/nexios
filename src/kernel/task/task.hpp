@@ -508,6 +508,20 @@ struct TaskControlBlock {
     uint64_t memory_budget_pages_;
     /// @brief Current pages charged to this task.
     uint64_t memory_used_pages_;
+    /// @brief Idle-monitor P5a counters (issues #43/#284). Successful PMM
+    ///        alloc calls attributed to this task (bumped beside every
+    ///        memory_used_pages_ charge) and explicit credits (bumped in
+    ///        credit_task_memory only — PMM::free_page is globally
+    ///        unattributed by design, see spec §2.3). Ops, not pages:
+    ///        page balance already lives in memory_used_pages_.
+    uint64_t mem_alloc_ops_ = 0;
+    uint64_t mem_free_ops_ = 0;
+    /// @brief Leak-heuristic snapshot state (issues #43/#284). Previous
+    ///        pass outstanding ops + used pages, and the current
+    ///        consecutive-suspicious-pass streak. Owned by idle_scan_mem.
+    uint64_t mem_prev_outstanding_ = 0;
+    uint64_t mem_prev_used_ = 0;
+    uint32_t mem_leak_streak_ = 0;
 
     vfs::FdTable fd_table;
     char cwd[CONFIG_VFS_MAX_PATH];

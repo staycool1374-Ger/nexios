@@ -555,6 +555,11 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     tcb->exec_period_ns = 0;
     tcb->exec_stamp_ns = 0;
     tcb->wcet_observed_ns = 0; // issue #283 (see TaskControlBlock::create)
+    tcb->mem_alloc_ops_ = 0;   // issue #284 (see TaskControlBlock::create)
+    tcb->mem_free_ops_ = 0;
+    tcb->mem_prev_outstanding_ = 0;
+    tcb->mem_prev_used_ = 0;
+    tcb->mem_leak_streak_ = 0;
     tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (AUTO=0; explicit)
     tcb->edf_exempt = false;
     tcb->edf_next_ = nullptr;

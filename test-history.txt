@@ -2426,3 +2426,7 @@
 2026-10-03 19:56:25 syscall_core PASSED: 32 FAILED: 0 TIME: 1130ms
 2026-10-03 19:59:35 selftest PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT pre-test-1 stall (intermittent, rerun green, #280 class)
 2026-10-03 19:59:36 selftest PASSED: 139 FAILED: 0 TIME: 7554ms
+2026-10-03 21:33:51 scheduler_idle PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT pre-test stall (intermittent, reruns green, #280 class)
+2026-10-03 21:33:51 scheduler_idle PASSED: 29 FAILED: 0 TIME: 1906ms
+2026-10-03 21:33:51 core PASSED: 515 FAILED: 0 TIME: 28811ms
+2026-10-03 21:33:51 selftest PASSED: 139 FAILED: 0 TIME: 7617ms

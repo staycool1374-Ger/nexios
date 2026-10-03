@@ -210,6 +210,13 @@ constexpr DmesgRecord kDmesgCatalog_TIMING[] = {
      "Timing: watchdog expired"},
 };
 
+/// @brief PMM records (canonical base kDmesgBase_PMM): leak-suspect
+/// reports from the idle-monitor P5a heuristic (issue #284). Report-only.
+constexpr DmesgRecord kDmesgCatalog_PMM[] = {
+    {ErrorSubsystem::PMM, kDmesgBase_PMM + 1, LogSeverity::WARN,
+     "Memory: leak suspected"},
+};
+
 /// @brief Selftest records (canonical base kDmesgBase_TEST): leak and
 /// count-drift detectors of the test infrastructure itself.
 constexpr DmesgRecord kDmesgCatalog_TEST[] = {
@@ -259,6 +266,10 @@ inline const DmesgRecord *catalog_lookup(ErrorSubsystem subsys,
     case ErrorSubsystem::TEST:
         table = kDmesgCatalog_TEST;
         count = sizeof(kDmesgCatalog_TEST) / sizeof(kDmesgCatalog_TEST[0]);
+        break;
+    case ErrorSubsystem::PMM:
+        table = kDmesgCatalog_PMM;
+        count = sizeof(kDmesgCatalog_PMM) / sizeof(kDmesgCatalog_PMM[0]);
         break;
     default:
         return nullptr;
@@ -377,5 +388,6 @@ static_assert(catalog_table_valid(kDmesgCatalog_DRIVER), "DRIVER catalog");
 static_assert(catalog_table_valid(kDmesgCatalog_INIT), "INIT catalog");
 static_assert(catalog_table_valid(kDmesgCatalog_TIMING), "TIMING catalog");
 static_assert(catalog_table_valid(kDmesgCatalog_TEST), "TEST catalog");
+static_assert(catalog_table_valid(kDmesgCatalog_PMM), "PMM catalog");
 
 } // namespace kernel::log::catalog

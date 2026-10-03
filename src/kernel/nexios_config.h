@@ -1141,4 +1141,20 @@ extern "C" void panic(const char *msg);
 #define CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS 1000
 #endif
 
+/// Per-metric kill-switch for the P5a memory heuristic (issues #43/#284).
+#ifndef CONFIG_IDLE_MONITOR_MEM
+#define CONFIG_IDLE_MONITOR_MEM 1
+#endif
+
+/// Consecutive suspicious passes before one leak report (issues #43/#284).
+#ifndef CONFIG_IDLE_MONITOR_MEM_PASSES
+#define CONFIG_IDLE_MONITOR_MEM_PASSES 3
+#endif
+
+/// Minimum outstanding-op growth over the previous pass to count as
+/// suspicious (issues #43/#284).
+#ifndef CONFIG_IDLE_MONITOR_MEM_MIN_OPS
+#define CONFIG_IDLE_MONITOR_MEM_MIN_OPS 1
+#endif
+
 #endif // JARVIS_CONFIG_H

@@ -387,8 +387,11 @@ uint64_t PMM::alloc_page() {
     }
 #endif
     sync::IrqSpinLockGuard lock(pmm_lock_);
-#if CONFIG_MEMORY_BUDGET
+    // Issue #284: current-task attribution read is always on (one pointer
+    // read; the budget check below stays gated). PMM frees are globally
+    // unattributed by design — see spec §2.3.
     auto *cur = Scheduler::current_task();
+#if CONFIG_MEMORY_BUDGET
     // Issue #20: per-task budget 0 == unlimited (no task sets a budget by
     // default).  Without the > 0 guard every task (used=0, budget=0) would
     // fail every alloc once the global default flipped ON.
@@ -400,10 +403,13 @@ uint64_t PMM::alloc_page() {
 #endif
     uint64_t result = try_alloc_kernel(1);
     if (result) {
+        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
 #if CONFIG_MEMORY_BUDGET
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC)
             cur->memory_used_pages_ += 1;
 #endif
+            if (cur->mem_alloc_ops_ < UINT64_MAX)
+                ++cur->mem_alloc_ops_;
+        }
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         return result;
     }
@@ -413,9 +419,7 @@ uint64_t PMM::alloc_page() {
         lock.unlock();
         oom_retry = oom_handler_();
         lock.lock();
-#if CONFIG_MEMORY_BUDGET
         cur = Scheduler::current_task();
-#endif
     }
     if (oom_retry) {
         result = try_alloc_kernel(1);
@@ -424,10 +428,13 @@ uint64_t PMM::alloc_page() {
         ASSERT(errors::PmmError::PMM_ERR_OOM);
     }
     if (result) {
+        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
 #if CONFIG_MEMORY_BUDGET
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC)
             cur->memory_used_pages_ += 1;
 #endif
+            if (cur->mem_alloc_ops_ < UINT64_MAX)
+                ++cur->mem_alloc_ops_;
+        }
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
     }
     return result;
@@ -452,8 +459,8 @@ uint64_t PMM::alloc_contiguous(size_t count) {
     if (count == 0 || count > total_pages_)
         return 0;
     sync::IrqSpinLockGuard lock(pmm_lock_);
+    auto *cur = Scheduler::current_task(); // issue #284: always-on read
 #if CONFIG_MEMORY_BUDGET
-    auto *cur = Scheduler::current_task();
     // Issue #20: per-task budget 0 == unlimited (see alloc_page).
     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
         cur->memory_budget_pages_ > 0 &&
@@ -463,10 +470,13 @@ uint64_t PMM::alloc_contiguous(size_t count) {
 #endif
     uint64_t result = try_alloc_kernel(count);
     if (result) {
+        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
 #if CONFIG_MEMORY_BUDGET
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC)
             cur->memory_used_pages_ += count;
 #endif
+            if (cur->mem_alloc_ops_ < UINT64_MAX)
+                ++cur->mem_alloc_ops_;
+        }
         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
         return result;
     }
@@ -476,9 +486,7 @@ uint64_t PMM::alloc_contiguous(size_t count) {
         lock.unlock();
         oom_retry = oom_handler_();
         lock.lock();
-#if CONFIG_MEMORY_BUDGET
         cur = Scheduler::current_task();
-#endif
     }
     if (oom_retry) {
         result = try_alloc_kernel(count);
@@ -487,10 +495,13 @@ uint64_t PMM::alloc_contiguous(size_t count) {
         ASSERT(errors::PmmError::PMM_ERR_OOM);
     }
     if (result) {
+        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
 #if CONFIG_MEMORY_BUDGET
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC)
             cur->memory_used_pages_ += count;
 #endif
+            if (cur->mem_alloc_ops_ < UINT64_MAX)
+                ++cur->mem_alloc_ops_;
+        }
         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
     }
     return result;
@@ -535,8 +546,8 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
     }
 #endif
     sync::IrqSpinLockGuard lock(pmm_lock_);
+    auto *cur = Scheduler::current_task(); // issue #284: always-on read
 #if CONFIG_MEMORY_BUDGET
-    auto *cur = Scheduler::current_task();
     // Issue #20: per-task budget 0 == unlimited (see alloc_page).
     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
         cur->memory_budget_pages_ > 0 &&
@@ -546,10 +557,13 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
 #endif
     uint64_t result = try_alloc_colored_kernel(color);
     if (result) {
+        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
 #if CONFIG_MEMORY_BUDGET
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC)
             cur->memory_used_pages_ += 1;
 #endif
+            if (cur->mem_alloc_ops_ < UINT64_MAX)
+                ++cur->mem_alloc_ops_;
+        }
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         return result;
     }
@@ -558,9 +572,7 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
         lock.unlock();
         oom_retry = oom_handler_();
         lock.lock();
-#if CONFIG_MEMORY_BUDGET
         cur = Scheduler::current_task();
-#endif
     }
     if (oom_retry) {
         result = try_alloc_colored_kernel(color);
@@ -569,10 +581,13 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
         ASSERT(errors::PmmError::PMM_ERR_OOM);
     }
     if (result) {
+        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
 #if CONFIG_MEMORY_BUDGET
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC)
             cur->memory_used_pages_ += 1;
 #endif
+            if (cur->mem_alloc_ops_ < UINT64_MAX)
+                ++cur->mem_alloc_ops_;
+        }
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
     }
     return result;

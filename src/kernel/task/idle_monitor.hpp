@@ -102,6 +102,18 @@ void idle_note_period_reload(TaskControlBlock &t) noexcept;
 /// @return True iff an exceed entry was pushed.
 bool idle_note_exec_sample(TaskControlBlock &t) noexcept;
 
+/// @brief Scan per-task memory counters for leak suspects (issues
+///        #43/#284, P5a). Per visited TCB per pass: outstanding ops =
+///        alloc_ops − free_ops (saturating); if outstanding grew by more
+///        than CONFIG_IDLE_MONITOR_MEM_MIN_OPS while used_pages stayed
+///        flat vs the previous pass, the streak grows, else it resets.
+///        At streak == CONFIG_IDLE_MONITOR_MEM_PASSES pushes one PMM+1
+///        WARN (report only, M6) — fire-once per streak, auto re-armed
+///        when the streak breaks. MemPool is out of scope (no owner tags,
+///        spec §2.3); PMM frees are globally unattributed (see header).
+IdleScanProgress idle_scan_mem(IdleScanCursor &cursor,
+                               uint64_t budget) noexcept;
+
 /// @brief Publish the switch-path low-water sample as saturated bytes.
 /// @param low_water_rsp Lowest kernel-stack RSP observed (kstack_low_water_
 ///        semantics: 0 = never switched out).

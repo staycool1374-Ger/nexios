@@ -1013,6 +1013,11 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
                                   // explicit per the TCB-memset discipline
     tcb->memory_budget_pages_ = 0;
     tcb->memory_used_pages_ = 0;
+    tcb->mem_alloc_ops_ = 0; // issue #284 (see task.hpp; memset covers)
+    tcb->mem_free_ops_ = 0;
+    tcb->mem_prev_outstanding_ = 0;
+    tcb->mem_prev_used_ = 0;
+    tcb->mem_leak_streak_ = 0;
     init_task_common(*tcb);
 
     uint64_t stack_size = stack_size_for_priority(priority);
@@ -1251,6 +1256,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     tcb->remaining_ticks = period_ticks;
     tcb->memory_budget_pages_ = 0;
     tcb->memory_used_pages_ = 0;
+    tcb->mem_alloc_ops_ = 0; // issue #284 (see create)
+    tcb->mem_free_ops_ = 0;
+    tcb->mem_prev_outstanding_ = 0;
+    tcb->mem_prev_used_ = 0;
+    tcb->mem_leak_streak_ = 0;
     tcb->wcet_ticks = 0;
     tcb->wcet_overrun_fired = false;
     tcb->wcet_observed_ns = 0; // issue #283 (see create)
@@ -1451,6 +1461,11 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (clone starts AUTO;
     tcb->edf_exempt = false;               // no policy inheritance)
     tcb->wcet_observed_ns = 0;          // issue #283: fresh observed max
+    tcb->mem_alloc_ops_ = 0;               // issue #284: fresh counters
+    tcb->mem_free_ops_ = 0;
+    tcb->mem_prev_outstanding_ = 0;
+    tcb->mem_prev_used_ = 0;
+    tcb->mem_leak_streak_ = 0;
     tcb->edf_next_ = nullptr;
     tcb->edf_prev_ = nullptr;
     tcb->in_edf_queue_ = false;

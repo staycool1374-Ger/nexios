@@ -26,6 +26,10 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/idle_monitor.hpp>
 #include <kernel/nexios_config.h>
+#include <kernel/arch/io.hpp>
+#include <kernel/arch/irq_guard.hpp>
+#include <kernel/memory/pmm.hpp>
+#include <kernel/log/dmesg.hpp>
 #include "test_sched_helpers.hpp"
 
 using namespace kernel;
@@ -366,6 +370,191 @@ JARVIS_TEST(idle_monstat_util_source, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: The P5a counter + snapshot fields start at zero (extends the
+// P1a/P4 zero-init contract; explicit inits at all 4 creation sites).
+// Input: Fresh create()/create_user() TCBs.
+// Expect: all 5 fields zero.
+JARVIS_TEST(idle_mem_zero_init, "PRE: none | POST: none") {
+    auto *t1 = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t1 != nullptr);
+    JARVIS_ASSERT(t1->mem_alloc_ops_ == 0);
+    JARVIS_ASSERT(t1->mem_free_ops_ == 0);
+    JARVIS_ASSERT(t1->mem_prev_outstanding_ == 0);
+    JARVIS_ASSERT(t1->mem_prev_used_ == 0);
+    JARVIS_ASSERT(t1->mem_leak_streak_ == 0);
+    TaskControlBlock::destroy(t1);
+    auto *t2 = TaskControlBlock::create_user(forever_entry, 5, 10,
+                                             32_KiB);
+    JARVIS_ASSERT(t2 != nullptr);
+    JARVIS_ASSERT(t2->mem_alloc_ops_ == 0);
+    JARVIS_ASSERT(t2->mem_free_ops_ == 0);
+    JARVIS_ASSERT(t2->mem_prev_outstanding_ == 0);
+    JARVIS_ASSERT(t2->mem_prev_used_ == 0);
+    JARVIS_ASSERT(t2->mem_leak_streak_ == 0);
+    t2->cleanup();
+    delete t2;
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Alloc/free ops count at the attribution points, via an
+// impersonated task (ScopedCurrentTask) so the harness is untouched.
+// Input: Driven task with a budget; charge/credit pairs + one real
+// PMM::alloc_page/free_page round trip.
+// Expect: charge bumps alloc_ops (and used_pages); credit bumps free_ops;
+// the PMM path bumps alloc_ops exactly once per successful call.
+JARVIS_TEST(idle_mem_alloc_free_counting, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->memory_budget_pages_ = 100000;
+    {
+        ScopedCurrentTask impersonate(*t);
+        JARVIS_ASSERT(Scheduler::charge_task_memory(3));
+        JARVIS_ASSERT(t->mem_alloc_ops_ == 1);
+        JARVIS_ASSERT(t->memory_used_pages_ == 3);
+        Scheduler::credit_task_memory(1);
+        JARVIS_ASSERT(t->mem_free_ops_ == 1);
+        JARVIS_ASSERT(t->memory_used_pages_ == 2);
+        const uint64_t ops_before = t->mem_alloc_ops_;
+        const uint64_t page = PMM::alloc_page();
+        JARVIS_ASSERT(page != 0);
+        JARVIS_ASSERT(t->mem_alloc_ops_ == ops_before + 1);
+        PMM::free_page(page);
+    }
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The leak heuristic fires exactly once per streak: growth with
+// flat usage over PASSES consecutive passes pushes one PMM+1 WARN; further
+// growth does not re-fire; flat input resets the streak and re-arms.
+// Input: Registered BLOCKED task with seeded counters; direct field bumps
+// between full-budget idle_scan_mem passes (the seam reads TCB state).
+// Expect: streak 0,0→ no fire; streak==PASSES → exactly one new PMM+1
+// entry; streak>PASSES → no second entry; flat pass → streak 0, re-arm.
+JARVIS_TEST(idle_mem_leak_fires_once, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->state = TaskState::BLOCKED;
+    Scheduler::register_task(*t);
+    t->mem_alloc_ops_ = 10;
+    t->memory_used_pages_ = 5;
+    t->mem_prev_outstanding_ = 8;
+    t->mem_prev_used_ = 5;
+
+    auto pmm_warn_count = []() {
+        uint64_t found = 0;
+        log::DmesgService::instance().for_each(
+            [&found](const log::LogEntry &e) {
+                if (e.subsystem == log::ErrorSubsystem::PMM &&
+                    e.error_code ==
+                        log::kDmesgBase_PMM + 1)
+                    ++found;
+            });
+        return found;
+    };
+    const uint64_t base = pmm_warn_count();
+    const uint64_t passes = static_cast<uint64_t>(
+        CONFIG_IDLE_MONITOR_MEM_PASSES);
+    for (uint64_t pass = 0; pass < passes - 1; ++pass) {
+        IdleScanCursor cursor = {};
+        (void)idle_scan_mem(cursor, 1000000ULL);
+        JARVIS_ASSERT(t->mem_leak_streak_ == pass + 1);
+        JARVIS_ASSERT(pmm_warn_count() == base);
+        t->mem_alloc_ops_ += 2;
+    }
+    {
+        IdleScanCursor cursor = {};
+        (void)idle_scan_mem(cursor, 1000000ULL);
+    }
+    JARVIS_ASSERT(t->mem_leak_streak_ == passes);
+    JARVIS_ASSERT(pmm_warn_count() == base + 1);
+    t->mem_alloc_ops_ += 2;
+    {
+        IdleScanCursor cursor = {};
+        (void)idle_scan_mem(cursor, 1000000ULL);
+    }
+    JARVIS_ASSERT(t->mem_leak_streak_ == passes + 1);
+    JARVIS_ASSERT(pmm_warn_count() == base + 1);
+    {
+        IdleScanCursor cursor = {};
+        (void)idle_scan_mem(cursor, 1000000ULL);
+    }
+    JARVIS_ASSERT(t->mem_leak_streak_ == 0);
+    JARVIS_ASSERT(pmm_warn_count() == base + 1);
+
+    Scheduler::remove_task(*t);
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Used-pages growth (not just ops growth) never suspects: the
+// heuristic keys on ops-with-flat-usage per spec §2.3.
+// Input: Registered BLOCKED task, both counters and usage growing.
+// Expect: streak stays 0 across passes.
+JARVIS_TEST(idle_mem_usage_growth_not_suspect, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->state = TaskState::BLOCKED;
+    Scheduler::register_task(*t);
+    t->mem_alloc_ops_ = 10;
+    t->memory_used_pages_ = 5;
+    for (uint64_t pass = 0; pass < 6; ++pass) {
+        IdleScanCursor cursor = {};
+        (void)idle_scan_mem(cursor, 1000000ULL);
+        JARVIS_ASSERT(t->mem_leak_streak_ == 0);
+        t->mem_alloc_ops_ += 2;
+        t->memory_used_pages_ += 1;
+    }
+    Scheduler::remove_task(*t);
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Attribution overhead is bounded (acceptance: measured number).
+// Input: 10000 charge+credit pairs on an impersonated task (frozen ticks)
+// + one full idle_scan_mem pass; rdtsc deltas.
+// Expect: pairs total < 10M cycles (1000/pair headroom); scan < 1M cycles.
+JARVIS_TEST(idle_mem_overhead_bounded, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->memory_budget_pages_ = 100000;
+    {
+        ScopedCurrentTask impersonate(*t);
+        arch::IrqGuard guard;
+        const uint64_t t0 = arch::rdtsc();
+        for (uint64_t i = 0; i < 10000; ++i) {
+            (void)Scheduler::charge_task_memory(1);
+            Scheduler::credit_task_memory(1);
+        }
+        const uint64_t elapsed = arch::rdtsc() - t0;
+        Logger::info("[WCET] idle_mem charge+credit x10000: %lu cycles",
+                     elapsed);
+        JARVIS_ASSERT_FMT(elapsed < 10000000ULL,
+                          "charge/credit overhead %lu cycles", elapsed);
+    }
+    t->state = TaskState::BLOCKED;
+    Scheduler::register_task(*t);
+    {
+        arch::IrqGuard guard;
+        IdleScanCursor cursor = {};
+        const uint64_t t0 = arch::rdtsc();
+        (void)idle_scan_mem(cursor, 1000000ULL);
+        const uint64_t elapsed = arch::rdtsc() - t0;
+        Logger::info("[WCET] idle_scan_mem full pass: %lu cycles",
+                     elapsed);
+        JARVIS_ASSERT_FMT(elapsed < 1000000ULL,
+                          "idle_scan_mem overhead %lu cycles", elapsed);
+    }
+    Scheduler::remove_task(*t);
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
 void register_idle_monitor_tests() {
     Logger::info("Registering idle monitor tests");
     JARVIS_REGISTER_TEST(idle_monitor_zero_init);
@@ -381,4 +570,9 @@ void register_idle_monitor_tests() {
     JARVIS_REGISTER_TEST(idle_meets_latch);
     JARVIS_REGISTER_TEST(idle_observed_max_and_log_once);
     JARVIS_REGISTER_TEST(idle_monstat_util_source);
+    JARVIS_REGISTER_TEST(idle_mem_zero_init);
+    JARVIS_REGISTER_TEST(idle_mem_alloc_free_counting);
+    JARVIS_REGISTER_TEST(idle_mem_leak_fires_once);
+    JARVIS_REGISTER_TEST(idle_mem_usage_growth_not_suspect);
+    JARVIS_REGISTER_TEST(idle_mem_overhead_bounded);
 }

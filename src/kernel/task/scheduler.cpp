@@ -2698,6 +2698,9 @@ bool Scheduler::charge_task_memory(uint64_t pages) {
     if (cur->memory_used_pages_ + pages > cur->memory_budget_pages_)
         return false;  // over budget
     cur->memory_used_pages_ += pages;
+    // Issue #284: attribution ops-counter (always on, saturating).
+    if (cur->mem_alloc_ops_ < UINT64_MAX)
+        ++cur->mem_alloc_ops_;
     return true;
 }
 
@@ -2709,6 +2712,10 @@ void Scheduler::credit_task_memory(uint64_t pages) {
         cur->memory_used_pages_ = 0;
     else
         cur->memory_used_pages_ -= pages;
+    // Issue #284: free-ops bump lives ONLY here (PMM::free_page is
+    // globally unattributed — freeing task != allocating task).
+    if (cur->mem_free_ops_ < UINT64_MAX)
+        ++cur->mem_free_ops_;
 }
 
 // ---------------------------------------------------------------------------
