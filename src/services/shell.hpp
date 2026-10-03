@@ -129,6 +129,9 @@ private:
     /// @brief Built-in: shows boot stage timings (issue #281, read-only
     ///        on the kernel::boot_stage_* API — no new syscalls).
     static void cmd_bootstat(int argc, const char** argv);
+    /// @brief Built-in: shows per-task monitor snapshot (issue #288,
+    ///        read-only on task_at + TCB monitor fields).
+    static void cmd_monstat(int argc, const char** argv);
     /// @brief Built-in: lists background jobs.
     static void cmd_jobs(int argc, const char** argv);
     /// @brief Built-in: loads a kernel driver.

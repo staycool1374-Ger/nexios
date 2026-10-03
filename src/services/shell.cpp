@@ -204,6 +204,7 @@ void Shell::init() {
     register_command("run",     "Run a registered program",         cmd_run);
     register_command("version", "Show kernel version info",         cmd_version);
     register_command("bootstat","Show boot stage timings",             cmd_bootstat);
+    register_command("monstat", "Show per-task monitor snapshot",          cmd_monstat);
     register_command("jobs",    "List background tasks",            cmd_jobs);
     register_command("modprobe","Load/init a kernel driver",        cmd_modprobe);
     register_command("modlist", "List available kernel drivers",    cmd_modlist);
@@ -1787,6 +1788,78 @@ void Shell::cmd_bootstat(int argc, const char**) {
                static_cast<uint64_t>(CONFIG_BOOT_BUDGET_MS));
     Terminal::write("%)\n");
 #endif
+}
+
+void Shell::cmd_monstat(int argc, const char**) {
+    // Issue #288: read-only per-task monitor snapshot. Iterates
+    // task_count()/task_at() and reads TCB monitor fields only — no new
+    // syscalls, no scheduler writes.
+    if (argc != 1) {
+        Terminal::write("Usage: monstat\n");
+        return;
+    }
+    auto field = [](const char *s, int width, bool right) {
+        int len = 0;
+        while (s[len] && len < width) ++len;
+        if (right) {
+            for (int i = len; i < width; ++i) Terminal::putchar(' ');
+        }
+        for (int i = 0; i < len; ++i) Terminal::putchar(s[i]);
+        if (!right) {
+            for (int i = len; i < width; ++i) Terminal::putchar(' ');
+        }
+        Terminal::putchar(' ');
+    };
+    auto dashes = [](int width) {
+        for (int i = 0; i < width; ++i) Terminal::putchar('-');
+        Terminal::putchar(' ');
+    };
+    char numbuf[24];
+    auto num = [&numbuf](uint64_t v) {
+        char rev[24];
+        int r = 0;
+        if (v == 0)
+            rev[r++] = '0';
+        while (v > 0 && r < 23) {
+            rev[r++] = static_cast<char>('0' + (v % 10));
+            v /= 10;
+        }
+        int p = 0;
+        while (r > 0) numbuf[p++] = rev[--r];
+        numbuf[p] = '\0';
+        return numbuf;
+    };
+
+    field("ID", 3, true);
+    field("NAME", 11, false);
+    field("STATE", 8, false);
+    field("UTIL", 5, true);
+    field("STK_LO", 6, true);
+    field("STUCK", 5, false);
+    field("DL_OK", 5, true);
+    Terminal::write("\n");
+    dashes(3); dashes(11); dashes(8); dashes(5); dashes(6); dashes(5);
+    dashes(5);
+    Terminal::write("\n");
+
+    const auto count = kernel::Scheduler::task_count();
+    for (uint64_t i = 0; i < count; ++i) {
+        auto *t = kernel::Scheduler::task_at(i);
+        if (!t || !kernel::TaskControlBlock::is_valid(t))
+            continue;
+        if (t->state == kernel::TaskState::TERMINATED)
+            continue;
+        field(num(t->id), 3, true);
+        field(t->name, 11, false);
+        field(state_name(t->state), 8, false);
+        // util_per_mille is aggregation-unfed until #283: never print
+        // a number without a source (bootstat fail-closed precedent).
+        field("n/a", 5, true);
+        field(num(t->stack_low_water_bytes), 6, true);
+        field(t->stuck_suspected ? "yes" : "no", 5, false);
+        field(num(t->deadline_meets), 5, true);
+        Terminal::write("\n");
+    }
 }
 
 void Shell::cmd_jobs(int, const char**) {

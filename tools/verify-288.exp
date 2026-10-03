@@ -1,0 +1,33 @@
+#!/usr/bin/expect -f
+# Live acceptance for #288 (monstat shell command).
+# Usage: expect -f tools/verify-288.exp run-debug-mode
+set timeout 600
+eval spawn make $argv
+expect {
+    -re {\$ $} { puts "VERIFY: prompt reached" }
+    timeout { puts "VERIFY: TIMEOUT waiting for prompt"; exit 1 }
+    eof { puts "VERIFY: EOF before prompt"; exit 1 }
+}
+send "monstat\r"
+expect {
+    -re {ID.*NAME.*UTIL.*STK_LO.*STUCK.*DL_OK} { puts "VERIFY: header present" }
+    timeout { puts "VERIFY: TIMEOUT waiting monstat header"; exit 1 }
+    eof { puts "VERIFY: EOF waiting monstat header"; exit 1 }
+}
+expect {
+    -re {n/a} { puts "VERIFY: UTIL n/a present" }
+    timeout { puts "VERIFY: TIMEOUT waiting UTIL column"; exit 1 }
+    eof { puts "VERIFY: EOF waiting UTIL column"; exit 1 }
+}
+expect {
+    -re {\$ $} { puts "VERIFY: monstat done" }
+    timeout { puts "VERIFY: TIMEOUT after monstat"; exit 1 }
+    eof { puts "VERIFY: EOF after monstat"; exit 1 }
+}
+send "monstat extra-arg\r"
+expect {
+    -re {Usage: monstat} { puts "VERIFY: usage on extra args" }
+    timeout { puts "VERIFY: TIMEOUT waiting usage line"; exit 1 }
+    eof { puts "VERIFY: EOF waiting usage line"; exit 1 }
+}
+puts "VERIFY: ALL OK"
