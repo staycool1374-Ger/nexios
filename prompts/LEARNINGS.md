@@ -34,6 +34,12 @@
 
 ## Entries
 
+### #45 — deterministic boot, final increment (real WCET asserts)
+
+- **Learned:** (1) Raw-counter deltas are host-load-independent (instruction-driven under TCG) — asserting on them, relatively, makes timing tests immune to the #279 wall-dilation class by construction. (2) Some stubs can't become asserts in place: serial self-parse is impossible in-kernel, so T3 was redesigned as a structural check (ordering + fail-closed guards) rather than forced into its pseudocode. (3) Testbed→main merge is routine now (test file + history + report, count rows unchanged, graph chore on top).
+- **Adapted:** 3 real boot_deterministic tests (validity+total, per-stage half-budget, structural ordering/OOR guards); #45 closed.
+- **Style re-surface:** test-file idiom (JARVIS_ASSERT_FMT + u64 casts, namespaced helpers, include <kernel/kernel.hpp> + <kernel/nexios_config.h>).
+
 <!-- Newest first. Bodies carry durable guidance only. -->
 
 ### #279 — session discipline failure (redundant pipeline)
