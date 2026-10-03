@@ -5140,8 +5140,8 @@
     "semantic_hash": ""
   },
   "src/kernel/syscall/syscall_handlers_process.cpp": {
-    "mtime": 1790975400.5033698,
-    "ast_hash": "64c00dc61eb1ca6ec9ce563811d19d5b",
+    "mtime": 1790964352.3064847,
+    "ast_hash": "da4ab3162dfdf53d799fdb0be088c821",
     "semantic_hash": ""
   },
   "src/kernel/syscall/syscall_handlers_sync.cpp": {
@@ -5180,8 +5180,8 @@
     "semantic_hash": ""
   },
   "src/kernel/task/scheduler.cpp": {
-    "mtime": 1790975416.3583498,
-    "ast_hash": "90d3c8ee41a6d6b799fade88a4bfc1b8",
+    "mtime": 1790972761.980392,
+    "ast_hash": "7ba2d3f4527f1545d0347d3ac8370cc6",
     "semantic_hash": ""
   },
   "src/kernel/task/scheduler.hpp": {
@@ -5235,8 +5235,8 @@
     "semantic_hash": ""
   },
   "src/kernel/task/taskdefs.cpp": {
-    "mtime": 1791022131.9829473,
-    "ast_hash": "7e7c9aa2ca9d2bb80ef87066509fcbcd",
+    "mtime": 1790973545.3976803,
+    "ast_hash": "1cddb3f8948b31cae678274592f9fbd6",
     "semantic_hash": ""
   },
   "src/kernel/task/taskdefs.hpp": {
@@ -5345,8 +5345,8 @@
     "semantic_hash": ""
   },
   "src/kernel/test/test_expected_counts.hpp": {
-    "mtime": 1791025904.0765328,
-    "ast_hash": "3fe93610499735a865a68a4e16a27661",
+    "mtime": 1790967028.6592128,
+    "ast_hash": "44208c2a4290f7f8f23f5ff5c91f87a9",
     "semantic_hash": ""
   },
   "src/kernel/test/test_fat32.cpp": {
@@ -5935,8 +5935,8 @@
     "semantic_hash": "440673528704f752218efe89423c741f"
   },
   "src/lib/logger.cpp": {
-    "mtime": 1791022090.1098337,
-    "ast_hash": "0cc5e7322ddd4ddd95310616642a0d60",
+    "mtime": 1788372362.455579,
+    "ast_hash": "272aa580bee420da8632afb8efee97d1",
     "semantic_hash": ""
   },
   "src/lib/logger.hpp": {
@@ -18690,8 +18690,8 @@
     "semantic_hash": ""
   },
   "test-history.txt": {
-    "mtime": 1790976746.9817736,
-    "ast_hash": "a2074a67dc46b3dd7cc29ca5d81a74cd",
+    "mtime": 1790974199.6168828,
+    "ast_hash": "5a8e4d4761775bd22ea594a02e1eab5e",
     "semantic_hash": ""
   },
   "audits/run_asil_audit.sh": {
@@ -21240,8 +21240,8 @@
     "semantic_hash": ""
   },
   "prompts/LEARNINGS.md": {
-    "mtime": 1791026032.2947798,
-    "ast_hash": "eec3b79230e45e49d0c7ff1c6db49b86",
+    "mtime": 1790974216.2704873,
+    "ast_hash": "bad203d725db4e229daf917454482254",
     "semantic_hash": ""
   },
   "prompts/LESSONS.md": {
@@ -24650,8 +24650,8 @@
     "semantic_hash": ""
   },
   "src/kernel/syscall/syscall_handlers_posix_time.cpp": {
-    "mtime": 1790975390.3132727,
-    "ast_hash": "122962243ec62f2922f1180dc9ed22cc",
+    "mtime": 1790964352.3063526,
+    "ast_hash": "0bb0bee1e118c61c2e81c33436ceb175",
     "semantic_hash": ""
   },
   "src/kernel/syscall/syscall_handlers_tls.cpp": {
@@ -25615,8 +25615,8 @@
     "semantic_hash": ""
   },
   "src/kernel/debug/debug_bind.hpp": {
-    "mtime": 1791022009.8852212,
-    "ast_hash": "c20d0dd9f44754d9f22065b80b6c94cc",
+    "mtime": 1790964352.2993217,
+    "ast_hash": "4ef5ee7aac2b421c4d645cb3b609eab6",
     "semantic_hash": ""
   },
   "src/kernel/debug/debug_regs.cpp": {
@@ -25640,13 +25640,13 @@
     "semantic_hash": ""
   },
   "src/kernel/syscall/syscall_handlers_debug.cpp": {
-    "mtime": 1791022048.129204,
-    "ast_hash": "1ecee8c4cfd2eb9d8e730dc516dedccd",
+    "mtime": 1790964352.3058293,
+    "ast_hash": "4f0f30471d3f0d1dce4d7e47c61d9916",
     "semantic_hash": ""
   },
   "src/kernel/test/test_debug_syscall.cpp": {
-    "mtime": 1791022590.7450004,
-    "ast_hash": "b3c1503a5d708ec65040d00bdbee2069",
+    "mtime": 1790964352.3136091,
+    "ast_hash": "fe137db0c2072dc614bfd4560ab556b5",
     "semantic_hash": ""
   },
   "tools/debugd/include/gdb_rsp.hpp": {
@@ -25655,8 +25655,8 @@
     "semantic_hash": ""
   },
   "tools/debugd/include/target_controller.hpp": {
-    "mtime": 1791022185.2390819,
-    "ast_hash": "cd5282c95327b91a45a5a531a004f5df",
+    "mtime": 1790964352.3358881,
+    "ast_hash": "c43eb71e9852f1da59cd80f3a6e3cc35",
     "semantic_hash": ""
   },
   "tools/debugd/tests/mock_transport.hpp": {
@@ -25665,8 +25665,8 @@
     "semantic_hash": ""
   },
   "tools/debugd/tests/test_main.cpp": {
-    "mtime": 1791022191.7802658,
-    "ast_hash": "1ec4c438d44b14b2511219d909f44f27",
+    "mtime": 1790964352.336099,
+    "ast_hash": "4cc4aae2878d46d26b7a5e67dac90876",
     "semantic_hash": ""
   },
   ".github/workflows/docker-release.yml": {
@@ -26412,26 +26412,6 @@
   "audits/report-20261002T205102Z.md": {
     "mtime": 1790974267.0642548,
     "ast_hash": "0fe553a636eb40a3e7105443eaec994e",
-    "semantic_hash": ""
-  },
-  "tools/debugd/include/debug_loop.hpp": {
-    "mtime": 1791022261.131511,
-    "ast_hash": "dc1e9dc8f66555b6fd2f55665e498efd",
-    "semantic_hash": ""
-  },
-  "tools/debugd/tests/test_loop.cpp": {
-    "mtime": 1791022261.1318552,
-    "ast_hash": "ecdee9b6185ba45fc61cb4c28cbcaa1e",
-    "semantic_hash": ""
-  },
-  "audits/report-2026-10-03T11-13-24Z.md": {
-    "mtime": 1791026010.967424,
-    "ast_hash": "972139aa8ee1ca1b65894cc963c53ab7",
-    "semantic_hash": ""
-  },
-  "audits/report-20261002T212753Z.md": {
-    "mtime": 1790976479.4293787,
-    "ast_hash": "665e781f375d783423fb70d47fca84c0",
     "semantic_hash": ""
   }
 }
