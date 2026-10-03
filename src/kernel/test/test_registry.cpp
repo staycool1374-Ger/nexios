@@ -67,6 +67,7 @@ void register_zombie_cleanup_tests();
 void register_tcb_write_log_tests();
 void register_wcet_cleanup_tests();
 void register_idle_cleanup_tests();
+void register_idle_monitor_tests();
 void register_testrunner_tests();
 void register_expected_panic_tests();
 void register_freelist_consistency_tests();
@@ -344,6 +345,7 @@ static void run_scheduler_sporadic_group() {
 static void run_scheduler_idle_group() {
     register_idle_task_tests();
     register_idle_cleanup_tests();
+    register_idle_monitor_tests();
 }
 static void run_scheduler_zombie_group() {
     register_zombie_cleanup_tests();

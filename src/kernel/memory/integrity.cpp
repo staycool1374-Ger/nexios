@@ -17,6 +17,7 @@
  */
 
 #include <kernel/memory/integrity.hpp>
+#include <kernel/task/idle_monitor.hpp>
 #include <crc32.hpp>
 #include <logger.hpp>
 #include <assert.hpp>
@@ -164,6 +165,11 @@ void idle_task_main() {
         check_section_markers();
         crc_process_chunk();
         auth_verify_poll();
+#if CONFIG_IDLE_MONITOR_ENABLED
+        // Issues #43/#282: bounded monitor slice (M1-M3: BSP-idle only,
+        // chunk-budgeted, noexcept, no alloc). Never skips hlt (M2).
+        idle_monitor_slice();
+#endif
         arch::hlt();
     }
 }

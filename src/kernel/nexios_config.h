@@ -1101,4 +1101,44 @@ extern "C" void panic(const char *msg);
 /// deleting the marked blocks in kernel.cpp.
 // #define CONFIG_USER_FAULT_VERBOSE 1
 
+// ---------------------------------------------------------------------------
+// Idle-Task Safety Monitors (issues #43/#282)
+// ---------------------------------------------------------------------------
+/// Master switch for the idle-monitor slice (spec docs/specs/idle_monitor.md
+/// M1-M6). 1 on DEBUG (qualified incrementally), 0 on release until the
+/// P1a+P2 sub-issue (#282) qualifies it.
+#ifndef CONFIG_IDLE_MONITOR_ENABLED
+#if defined(CONFIG_DEBUG)
+#define CONFIG_IDLE_MONITOR_ENABLED 1
+#else
+#define CONFIG_IDLE_MONITOR_ENABLED 0
+#endif
+#endif
+
+/// Per-metric kill-switches (0/1).
+#ifndef CONFIG_IDLE_MONITOR_STACK_CHECK
+#define CONFIG_IDLE_MONITOR_STACK_CHECK 1
+#endif
+#ifndef CONFIG_IDLE_MONITOR_UTIL
+#define CONFIG_IDLE_MONITOR_UTIL 1
+#endif
+#ifndef CONFIG_IDLE_MONITOR_STALL
+#define CONFIG_IDLE_MONITOR_STALL 1
+#endif
+
+/// TCBs scanned per idle pass (M2 chunk budget, crc_process_chunk style).
+#ifndef CONFIG_IDLE_MONITOR_CHUNK
+#define CONFIG_IDLE_MONITOR_CHUNK 4
+#endif
+
+/// Stall threshold in ticks (P6-thin #285 compares now - last_progress_tick).
+#ifndef CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS
+#define CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS 5000
+#endif
+
+/// March C- ALU test period in ms (P3-reserved, inert until P3 lands).
+#ifndef CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS
+#define CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS 1000
+#endif
+
 #endif // JARVIS_CONFIG_H

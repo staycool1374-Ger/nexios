@@ -326,6 +326,16 @@ struct TaskControlBlock {
     uint64_t deadline_ticks;
     bool deadline_missed;
     uint64_t deadline_miss_count;
+    /// @brief Idle-monitor foundation fields (issues #43/#282, P1a).
+    ///        Integer per-mille only (no float in kernel); all zero after
+    ///        every memset site (create/create_user/clone/elf finalize).
+    ///        Utilization aggregation lands in P4 (#283); stall
+    ///        escalation in P6-thin (#285); this cycle only publishes.
+    uint32_t util_per_mille = 0;
+    uint32_t block_per_mille = 0;
+    uint32_t preempt_per_mille = 0;
+    /// @brief Count of met deadlines (misses: deadline_miss_count).
+    uint32_t deadline_meets = 0;
     uint64_t executed_ticks;
     uint64_t remaining_ticks;
     /// @brief Lifetime executed time in ns, saturating at UINT64_MAX
@@ -435,6 +445,18 @@ struct TaskControlBlock {
     ///        least once.  Used by the `tasks` command to report stack
     ///        high-water (bytes consumed) / low-water (bytes remaining).
     uint64_t kstack_low_water_;
+    /// @brief Published stack low-water snapshot in bytes (issues
+    ///        #43/#282, P2). The switch path samples kstack_low_water_;
+    ///        the idle slice publishes the saturated byte count here.
+    uint32_t stack_low_water_bytes = 0;
+    /// @brief Last progress tick (issues #43/#282, P1a). Bumped on
+    ///        state change; the stall scanner (P6-thin, #285) compares
+    ///        against CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS.
+    uint64_t last_progress_tick = 0;
+    /// @brief Stall suspected flag (issues #43/#282). Set by the
+    ///        scanner only — never kills, reaps, or escalates by
+    ///        itself (M6: escalation is P6-thin scope).
+    bool stuck_suspected = false;
 
     /// @brief Loaded user-image segment sizes (bytes), captured at ELF load
     ///        from the program-header table (PT_LOAD, memsz):
