@@ -9,10 +9,11 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # Buildx target arch (auto-filled: amd64/arm64). The x86 GRUB modules
 # (grub-pc-bin, grub-efi-amd64-bin) exist only in the amd64 archive, not
-# in Ubuntu ports — on arm64 they arrive via multiarch below, so BOTH legs
-# build UEFI-bootable x86 ISOs. Without them grub-mkrescue produces an
-# ISO with no UEFI entry and OVMF falls through to PXE (issue #243).
-# aarch64/riscv64 boot via -kernel ELF and never touch GRUB.
+# in Ubuntu ports — on arm64 they arrive via the download-and-extract
+# step below, so BOTH legs build UEFI-bootable x86 ISOs. Without them
+# grub-mkrescue produces an ISO with no UEFI entry and OVMF falls
+# through to PXE (issue #243). aarch64/riscv64 boot via -kernel ELF
+# and never touch GRUB.
 ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -46,12 +47,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && ln -sf /usr/bin/x86_64-linux-gnu-strip /usr/local/bin/x86_64-elf-strip \
   && rm -rf /var/lib/apt/lists*
 
-# x86 GRUB modules on arm64 hosts (issue #243): ports carries no amd64
-# binaries, so multiarch needs the amd64 archive source first. The
-# modules are target code (packed into the ISO by grub-mkrescue, run by
-# the emulated x86 CPU) — host arch is irrelevant. The amd64 leg is
-# untouched (both packages already installed above unconditionally).
-RUN if [ "$(dpkg --print-architecture)" != "amd64" ]; then dpkg --add-architecture amd64 && echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble main universe" > /etc/apt/sources.list.d/amd64.list && apt-get update && apt-get install -y --no-install-recommends grub-pc-bin:amd64 grub-efi-amd64-bin:amd64 && rm -rf /var/lib/apt/lists/*; fi
+# x86 GRUB modules on arm64 hosts (issue #243, verified in-container):
+# apt-get install would drag the whole amd64 dependency tree (libc6:amd64
+# vs the arm64 userland — unresolvable), and the extracted amd64
+# grub-mkimage binary could not execute on arm64 anyway. Instead
+# download + dpkg-deb-extract (no dependency resolution, no execution):
+# the .mod files are pure target data, and the NATIVE grub-mkimage builds
+# x86_64-efi + i386-pc images from them (proven: EFI-BUILD-OK +
+# PC-BUILD-OK on the arm64 image). The amd64 leg is untouched (both
+# packages already installed above unconditionally). The ports source is
+# scoped to arm64 first — otherwise apt queries amd64 indexes on
+# ports.ubuntu.com (404 -> exit 100).
+RUN if [ "$(dpkg --print-architecture)" != "amd64" ]; then \
+    dpkg --add-architecture amd64 \
+    && sed -i 's/^Components:/Architectures: arm64\nComponents:/' /etc/apt/sources.list.d/ubuntu.sources \
+    && printf 'deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble noble-updates noble-security main universe\n' > /etc/apt/sources.list.d/amd64.list \
+    && apt-get update \
+    && cd /tmp && apt-get download grub-pc-bin:amd64 grub-efi-amd64-bin:amd64 \
+    && dpkg-deb -x grub-pc-bin*.deb / && dpkg-deb -x grub-efi-amd64-bin*.deb / \
+    && rm -f /tmp/grub*.deb && rm -rf /var/lib/apt/lists/*; \
+  fi
 
 # Pinned pip meson/ninja (tools/build-picolibc.sh pins meson 1.12.0,
 # ninja 1.13.2): Ubuntu 24.04 apt ships meson 1.3.2, whose link-based
