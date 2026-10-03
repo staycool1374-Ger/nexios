@@ -22,10 +22,14 @@
 ///        read/write mem. Handles are kernel-minted (target, debugger,
 ///        gen) bindings — never pids. Raw pid lookup does not exist; the
 ///        only mint paths are launcher-claim (parenthood proof, selector 1)
-///        and supervisor grant (deferred to Phase 4 with debugd).
+///        and supervisor grant (selectors 7/8, issue #239; loop wiring in
+///        Phase 4 with debugd, issue #232).
 ///        Data calls on RUNNING/READY targets arm the deferred stop and
 ///        return EAGAIN; BLOCKED tasks are read directly (frames stable).
 ///        Release builds map these slots to sys_unimplemented (table level).
+///        Control selectors need no new syscall numbers (ABI frozen):
+///        2 = poll, 3/4 = breakpoint insert/clear, 5 = step, 6 = continue,
+///        9 = stop-request (Ctrl-C hook, issue #232).
 
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
@@ -75,6 +79,10 @@ constexpr size_t kDebugBindings = 64;
 
 DebugBinding g_bindings[kDebugBindings]{};
 uint64_t g_debug_gen = 1; // gen 0 is never minted (decode sentinel)
+/// @brief Live-binding count for debug_session_active() (issue #232).
+/// Updated at every live=true/false transition under g_bind_lock;
+/// the predicate reads it lock-free (any context, including tick/ISR).
+static uint64_t g_live_binding_count = 0;
 
 // Serializes binding mint/clear/resolve (task context only; the tick park
 // hook never takes this lock, so nesting it outside scheduler_lock_ in
@@ -146,7 +154,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
         return static_cast<uint64_t>(-static_cast<int64_t>(kEsrch));
     if (sel == 0) {
         // Handle path: a valid owned handle toggles DETACH (supervisor
-        // grants arrive in Phase 4). Disposition (spec §4): a fault-stopped
+        // grants, selectors 7/8, issue #239). Disposition (spec §4): a fault-stopped
         // target (stop kind latched by the router) applies the default
         // disposition (terminate); a cleanly-stopped target resumes.
         SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
@@ -166,6 +174,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
                     uint64_t dead_id = owned.target_id;
                     uint32_t dead_gen = owned.target_gen;
                     owned.live = false;
+                    __atomic_fetch_sub(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
                     owned.target_gen = 0;
                     debug::debug_drop_target(dead_id, dead_gen);
                     return 0;
@@ -186,6 +195,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
             // not synthesize signals); waitpid parents observe it as-is.
             debug::debug_drop_target(tgt->id, tgt->generation);
             slot->live = false;
+            __atomic_fetch_sub(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
             slot->target_gen = 0;
             __atomic_store_n(&tgt->debugger_id, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&tgt->debug_stop_requested, false,
@@ -208,6 +218,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
         Scheduler::debugger_resume(*tgt);
         debug::debug_drop_target(tgt->id, tgt->generation);
         slot->live = false;
+        __atomic_fetch_sub(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
         slot->target_gen = 0;
         __atomic_store_n(&tgt->debugger_id, 0, __ATOMIC_RELEASE);
         return 0;
@@ -241,6 +252,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
             g_bindings[i].gen = gen;
             g_bindings[i].target_gen = tgt->generation;
             g_bindings[i].live = true;
+            __atomic_fetch_add(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
             g_bindings[i].grantor_id = 0;
             g_bindings[i].granted = false;
             g_bindings[i].attenuation = 0;
@@ -287,6 +299,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
             g_bindings[i].gen = gen;
             g_bindings[i].target_gen = tgt->generation;
             g_bindings[i].live = true;
+            __atomic_fetch_add(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
             g_bindings[i].grantor_id = caller->id;
             g_bindings[i].granted = true;
             g_bindings[i].attenuation = 0;
@@ -322,6 +335,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
             __atomic_load_n(&tgt->debugger_id, __ATOMIC_ACQUIRE) !=
                 slot.debugger_id) {
             slot.live = false;
+            __atomic_fetch_sub(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
             slot.target_gen = 0;
             slot.granted = false;
             slot.grantor_id = 0;
@@ -337,6 +351,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
         debug_apply_disposition(*tgt);
         debug::debug_drop_target(tgt->id, tgt->generation);
         slot.live = false;
+        __atomic_fetch_sub(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
         slot.target_gen = 0;
         slot.granted = false;
         slot.grantor_id = 0;
@@ -412,10 +427,40 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
         return ok ? 0
                   : static_cast<uint64_t>(-static_cast<int64_t>(kEinval));
     }
+    if (sel == 9) {
+        // Stop-request (issue #232, Ctrl-C hook, §13.3): arm the
+        // deferred stop on a runnable target, no-op on a parked one.
+        // Never touches trap frames (unlike the read_regs EAGAIN-arm
+        // side path). No new errno: unknown/foreign handles fail with
+        // the original EBADF/ESRCH via debug_resolve, dead targets ESRCH.
+        SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
+        DebugBinding *slot = nullptr;
+        TaskControlBlock *tgt = nullptr;
+        uint64_t err = debug_resolve(caller->id, id, slot, tgt);
+        if (err != 0)
+            return err;
+        (void)slot;
+        if (!debug_target_ok(*tgt))
+            return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
+        if (tgt->state == TaskState::RUNNING ||
+            tgt->state == TaskState::READY) {
+            __atomic_store_n(&tgt->debug_stop_requested, true,
+                             __ATOMIC_RELEASE);
+            return 0;
+        }
+        return 0; // parked/terminated-adjacent: no-op, stays stopped
+    }
     return static_cast<uint64_t>(-static_cast<int64_t>(kEbadf));
 }
 
 namespace debug {
+
+bool debug_session_active() noexcept {
+    // Lock-free relaxed read (see g_live_binding_count): safe from any
+    // context including tick/ISR, where taking g_bind_lock could
+    // self-deadlock against a preempted task-context holder.
+    return __atomic_load_n(&g_live_binding_count, __ATOMIC_RELAXED) != 0;
+}
 
 bool debug_validate_handle(uint64_t caller_id, uint64_t handle) noexcept {
     uint32_t idx = static_cast<uint32_t>(handle & 0xFFFFFFFFULL);
@@ -434,6 +479,11 @@ void debug_drain_debugger(TaskControlBlock &dying) noexcept {
         uint64_t target_id;
         uint32_t target_gen;
         size_t slot;
+        // Third-party grantor death (issue #232, spec §14.5 literal):
+        // this slot was granted BY the dying task TO a live grantee.
+        // Recorded here because the dispose loop below can no longer
+        // tell grantor-death from debugger-death once slots clear.
+        bool grantor_death;
     };
     Owned owned[kDebugBindings];
     size_t n_owned = 0;
@@ -444,6 +494,7 @@ void debug_drain_debugger(TaskControlBlock &dying) noexcept {
                 owned[n_owned].target_id = g_bindings[i].target_id;
                 owned[n_owned].target_gen = g_bindings[i].target_gen;
                 owned[n_owned].slot = i;
+                owned[n_owned].grantor_death = false;
                 ++n_owned;
             }
             // Grantor death (issue #239, spec §14.5): slots this task
@@ -456,6 +507,7 @@ void debug_drain_debugger(TaskControlBlock &dying) noexcept {
                 owned[n_owned].target_id = g_bindings[i].target_id;
                 owned[n_owned].target_gen = g_bindings[i].target_gen;
                 owned[n_owned].slot = i;
+                owned[n_owned].grantor_death = true;
                 ++n_owned;
             }
         }
@@ -500,11 +552,31 @@ void debug_drain_debugger(TaskControlBlock &dying) noexcept {
                 __atomic_store_n(&tgt->debug_rearm_va, 0, __ATOMIC_RELEASE);
             }
             debug::debug_drop_target(tgt->id, tgt->generation);
+        } else if (owned[i].grantor_death) {
+            // Third-party grantor death with a live grantee (issue #232,
+            // spec §14.5 literal): the shared disposition applies even
+            // though the debugger is alive — otherwise the target parks
+            // forever with a stale debugger_id (permanent EBUSY). Mirrors
+            // the sel8 live-target path: disposition first (resume needs
+            // the live id), then drop + slot clear with gen burn below.
+            TaskControlBlock *t2 =
+                Scheduler::find_task(owned[i].target_id);
+            if (t2 != nullptr && TaskControlBlock::is_valid(t2) &&
+                t2->state != TaskState::TERMINATED &&
+                t2->state != TaskState::REAPED &&
+                t2->generation == owned[i].target_gen) {
+                debug_apply_disposition(*t2);
+                debug::debug_drop_target(t2->id, t2->generation);
+            } else {
+                debug::debug_drop_target(owned[i].target_id,
+                                         owned[i].target_gen);
+            }
         } else {
             debug::debug_drop_target(owned[i].target_id, owned[i].target_gen);
         }
         SpinLockGuard<sync::SpinLock> guard(g_bind_lock);
         g_bindings[owned[i].slot].live = false;
+        __atomic_fetch_sub(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
         g_bindings[owned[i].slot].target_gen = 0;
         g_bindings[owned[i].slot].granted = false;
         g_bindings[owned[i].slot].grantor_id = 0;
@@ -548,6 +620,7 @@ void debug_bindings_reset() noexcept {
         g_bindings[i].attenuation = 0;
         g_bindings[i].grant_flags = 0;
     }
+    __atomic_store_n(&g_live_binding_count, 0, __ATOMIC_RELAXED);
     // g_debug_gen stays monotonic (never mint a repeated generation).
 }
 

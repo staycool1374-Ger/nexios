@@ -49,6 +49,18 @@ namespace kernel {
 namespace task {
 namespace {
 
+// Issue #232: debugd PID cell for the disabled documentation row below.
+// Real daemons use namespace-owned cells (vfsd::/iocd::); debugd never
+// auto-starts, so a TU-local cell satisfies validate_all without
+// implying a live daemon.
+uint64_t g_debugd_pid_cell = 0;
+void set_debugd_pid_cell(uint64_t pid) {
+    g_debugd_pid_cell = pid;
+}
+uint64_t get_debugd_pid_cell() {
+    return g_debugd_pid_cell;
+}
+
 // ── Task definition table ────────────────────────────────────────────────
 
 constexpr TaskDef g_task_defs[] = {
@@ -81,6 +93,14 @@ constexpr TaskDef g_task_defs[] = {
     // kept here for documentation/validation parity.
     {"shell", TaskType::KERNEL, false, service::Shell::shell_task_main, nullptr,
      2, 0, 0, 0, 0, 0, nullptr, nullptr, nullptr, 1, 0, false},
+    // debugd: GDB remote stub task (issue #232, §10 envelope). Disabled
+    // in the table — started only on explicit request, never by the boot
+    // gate (kernel.cpp DaemonWatch stays vfsd/iocd/watchdogd only);
+    // values kept here for documentation/validation parity. Lowest
+    // debuggable priority under a bounded sporadic-server budget.
+    {"debugd", TaskType::SPORADIC_SERVER, false, nullptr, "debugd.c.elf",
+     2, 10, 0, 1, 10, 0, "debugd", set_debugd_pid_cell,
+     get_debugd_pid_cell, 1, 0, false},
     // dmesg: background logger with very long period
     {"dmesg", TaskType::KERNEL, false, dmesg_task_main, nullptr, 1, 500, 0, 0,
      0, 0, nullptr, nullptr, nullptr, 1, 0, false},

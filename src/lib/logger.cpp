@@ -21,6 +21,7 @@
 #include <kernel/arch/serial.hpp>
 #include <kernel/log/ring_buffer.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/debug/debug_bind.hpp>
 
 namespace kernel {
 
@@ -245,6 +246,12 @@ void Logger::debug(const char* fmt, ...) {
 }
 
 void Logger::info(const char* fmt, ...) {
+    // Issue #232 §7: formatted shared-UART output is muted while a GDB
+    // session is live (interleaved bytes invalidate RSP framing). Lock-free
+    // predicate, safe from tick paths. raw_write/panic/fault paths below
+    // never mute (fail-fast visibility preserved).
+    if (kernel::debug::debug_session_active())
+        return;
     __va_list args;
     va_start(args, fmt);
     vprint(LogLevel::INFO, fmt, args);
@@ -252,6 +259,9 @@ void Logger::info(const char* fmt, ...) {
 }
 
 void Logger::warn(const char* fmt, ...) {
+    // Same session mute as info() above.
+    if (kernel::debug::debug_session_active())
+        return;
     __va_list args;
     va_start(args, fmt);
     vprint(LogLevel::WARN, fmt, args);

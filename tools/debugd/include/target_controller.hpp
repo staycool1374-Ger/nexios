@@ -66,6 +66,20 @@ class TargetTaskController {
     virtual DbgErr cont() = 0;
     /// @brief Last stop reason, GDB stop-reply format (e.g. "T05", "W00").
     virtual std::string_view stop_reason() = 0;
+    /// @brief Attach to a caller-supplied or granted handle (issue #232,
+    ///        §13.6 discovery rule): handle-less attach attempts never
+    ///        reach here (the loop answers EPERM — no pid-scan API).
+    virtual DbgErr attach(std::uint64_t handle) = 0;
+    /// @brief Detach with target resumed (sel0 semantics, issue #232).
+    virtual DbgErr detach() = 0;
+    /// @brief Stop-request on the outstanding continue set (sel9 hook for
+    ///        Ctrl-C, issue #232): arms the deferred stop, never touches
+    ///        trap frames.
+    virtual DbgErr stop_request() = 0;
+    /// @brief Poll one stop event (sel2 hook, issue #232): true with the
+    ///        stop-reply payload when an event is pending, false (EAGAIN
+    ///        equivalent) when the queue is empty.
+    virtual bool poll_event(std::string_view &reason_out) = 0;
 
   protected:
     TargetTaskController() = default;

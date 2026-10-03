@@ -36,6 +36,11 @@
 
 <!-- Newest first. Bodies carry durable guidance only. -->
 
+### #232 — debugd Phase 4 loop + grants
+- **Learned:** (1) A Logger gate consulted from tick paths must be lock-free: an atomic live-counter (updated under the table lock at every transition) beats a locking scan — a spinlock take inside info()/warn() self-deadlocks against a preempted table holder when the tick fires. Count every transition (mint/clear/revoke/drain/reset-zero) or the predicate drifts. (2) Sibling-verb interface extensions force all fakes to grow — one FakeController, mechanical stubs. (3) Disabled taskdef rows still need valid pid fns for validate_all — TU-local cell, no new module.
+- **Adapted:** g_live_binding_count + session predicate; DebugLoop header + 7 host tests; disabled debugd row; sel9 + grantor-death disposition.
+- **Style re-surface:** §11 (lock-free predicate, no new locks); header-only zero-heap loop; no new syscall numbers.
+
 ### #277 — watchdog daemon + pinned-free baseline corruption
 - **Learned:** (1) The snapshot pin invariant ("pinned blocks are never recycled") was enforced at pin time but violated by EVERY free path: scan kills, defer_kill/destroy, flush/drain/cleanup_step drains, reap_orphans. First live proof: the daemon's own self-watchdog killed PINNED watchdogd under stress_hrt load → pinned-free WARN → suite wedge. Fix extends the spare/skip rule to all 8 sites (production pins nothing, so zero behavior change there). (2) Straight-line harness code + higher-prio forever task = tick race: a prio-11 spinner preempts the prio-10 harness between add_task and teardown and never yields back — helper tasks that the harness doesn't hlt-wait on must run BELOW harness priority (prio 9). (3) Never read TCB fields after terminate_and_drain (drain frees; 0xDD poison reads nonzero) — assert live-block properties before teardown, slot-reuse properties after. (4) Suite wall outgrows fixed expect windows: deadline 115→139 tests measures up to 185 s vs the 120 s class timeout — TIMEOUT verdicts with complete S: lines mean undersized window, not failure; size from measured walls (moved to the 250 s list).
 - **Adapted:** pinned spare/skip in scan + 4 drain paths + destroy + reap can_reap; prio-9 helpers; watchdog.md §7 daemon section; Makefile deadline timeout.

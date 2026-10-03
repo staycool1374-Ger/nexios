@@ -29,6 +29,7 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <constants.hpp>
+#include "test_sched_helpers.hpp"
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -39,6 +40,7 @@
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/page_table.hpp>
 #include <kernel/debug/debug_regs.hpp>
+#include <kernel/debug/debug_bind.hpp>
 #if defined(CONFIG_ARCH_AARCH64)
 // TMP-DIAG (#235): post-mortem EL0 fault latch (file scope: function-local
 // externs mislink on this toolchain; only ESR exists — EC classifies the
@@ -680,6 +682,7 @@ constexpr uint64_t kSelCont = 6;
 /// @brief Grant selectors (issue #239, spec §14 — still no new syscall
 ///        numbers, selectors on the attach call).
 constexpr uint64_t kSelGrant = 7;
+constexpr uint64_t kSelStop = 9; // stop-request, Ctrl-C hook (issue #232)
 constexpr uint64_t kSelRevoke = 8;
 
 /// @brief Stop kinds (mirrors StopKind in debug_stop.hpp).
@@ -1852,6 +1855,134 @@ JARVIS_TEST(debug_grant_target_death, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Testidea: Third-party grantor death applies the shared disposition
+//           with a live grantee (issue #232, spec §14.5 literal):
+//           target resumes (clean) instead of parking forever EBUSY.
+// Input: Driven grantor G spawns spinner T (T.parent=G), grants T to
+//        a blocked daemon D, then exits; drain(G) hits the grantor-death
+//        branch while D lives.
+// Expect: T RUNNING/READY with debugger_id cleared; old handle EBADF;
+//         re-grant path free (no EBUSY residue); T reaped cleanly.
+// Depends: debug_drain_debugger grantor branch, sel7 (issue #239)
+JARVIS_TEST(debug_grant_grantor_death_disposition, "PRE: none | POST: none") {
+    static uint64_t g_grant_rc = 0;
+    static uint64_t g_target_id = 0;
+    static uint64_t g_handle = 0;
+    static uint64_t g_stub_phys = 0;
+    static uint64_t g_did = 0;
+    const uint64_t did = debug_find_blocked_daemon();
+    JARVIS_ASSERT_FMT(did != 0, "no blocked daemon found");
+    g_did = did;
+    g_grant_rc = 0;
+    g_target_id = 0;
+    g_handle = 0;
+    g_stub_phys = 0;
+    auto *g = TaskControlBlock::create(
+        []() {
+            uint64_t stub = 0;
+            TaskControlBlock *t = debug_spawn_spinner(stub, true);
+            if (t == nullptr)
+                return;
+            g_target_id = t->id;
+            g_stub_phys = stub;
+            g_grant_rc = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH,
+                                   kSelGrant, t->id, g_did);
+            if (g_grant_rc != 0 && g_grant_rc != Neg(kEbusy) &&
+                g_grant_rc != Neg(kEperm))
+                g_handle = g_grant_rc;
+        },
+        11, 10);
+    JARVIS_ASSERT_FMT(g != nullptr, "grantor spawn failed");
+    Scheduler::add_task(*g);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(g);
+    kernel::test::terminate_if_live(g);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_FMT(g_grant_rc != 0 && g_grant_rc != Neg(kEbusy) &&
+                          g_grant_rc != Neg(kEperm),
+                      "grant failed: 0x%lx", g_grant_rc);
+    TaskControlBlock *t = Scheduler::find_task(g_target_id);
+    JARVIS_ASSERT_FMT(t != nullptr, "target gone");
+    JARVIS_ASSERT_FMT(t->state == TaskState::RUNNING ||
+                          t->state == TaskState::READY,
+                      "target not runnable after grantor death");
+    JARVIS_ASSERT_FMT(t->debugger_id == 0, "debugger id not cleared");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0,
+                                g_handle) == Neg(kEbadf),
+                      "dead handle not EBADF");
+    debug_free_spinner_page(t, g_stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
+// Testidea: sel9 stop-request arms the deferred stop on runnable
+//           targets, no-ops on parked ones, rejects bad handles
+//           (issue #232, §13.3 Ctrl-C hook).
+// Input: Attach spinner (launcher claim); sel9 while spinning;
+//        park it; sel9 again; sel9 on garbage + dead ids.
+// Expect: RUNNING -> 0 with stop_requested set; parked -> 0;
+//         garbage -> EBADF; terminated target -> ESRCH. No trap-frame
+//         touch.
+// Depends: sel9, debug_stop_requested (issue #232)
+JARVIS_TEST(debug_attach_sel9_stop_request, "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx",
+                      h);
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelStop,
+                                h) == 0,
+                      "sel9 on running failed");
+    JARVIS_ASSERT_FMT(__atomic_load_n(&t->debug_stop_requested,
+                                      __ATOMIC_ACQUIRE) != 0,
+                      "stop not armed");
+    const uint64_t pc = debug_park_and_get_pc(h);
+    JARVIS_ASSERT_FMT(pc != 0, "park failed");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelStop,
+                                h) == 0,
+                      "sel9 on parked failed");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelStop,
+                                0xDEAD) == Neg(kEbadf),
+                      "garbage handle not EBADF");
+    (void)Scheduler::terminate_err(*t, 0);
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelStop,
+                                h) == Neg(kEsrch),
+                      "dead target not ESRCH");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) ==
+                          0,
+                      "detach failed");
+    debug_free_spinner_page(t, stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
+// Testidea: Session-active predicate tracks binding lifetime
+//           (issue #232, Logger-mute predicate).
+// Input: debug_session_active() before mint, after attach, after detach.
+// Expect: false -> true -> false. Reset per test keeps it isolated.
+// Depends: debug_session_active (issue #232)
+JARVIS_TEST(debug_session_active_predicate, "PRE: none | POST: none") {
+    JARVIS_ASSERT_FMT(!kernel::debug::debug_session_active(),
+                      "session active with no bindings");
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx",
+                      h);
+    JARVIS_ASSERT_FMT(kernel::debug::debug_session_active(),
+                      "session inactive with live binding");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) ==
+                          0,
+                      "detach failed");
+    JARVIS_ASSERT_FMT(!kernel::debug::debug_session_active(),
+                      "session active after detach");
+    debug_free_spinner_page(t, stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all debugger-syscall tests.
 void register_debug_syscall_tests() {
     Logger::info("Registering debug syscall tests");
@@ -1872,4 +2003,7 @@ void register_debug_syscall_tests() {
     JARVIS_REGISTER_TEST(debug_grant_revoke_parked_disposition);
     JARVIS_REGISTER_TEST(debug_grant_grantee_death);
     JARVIS_REGISTER_TEST(debug_grant_target_death);
+    JARVIS_REGISTER_TEST(debug_grant_grantor_death_disposition);
+    JARVIS_REGISTER_TEST(debug_attach_sel9_stop_request);
+    JARVIS_REGISTER_TEST(debug_session_active_predicate);
 }

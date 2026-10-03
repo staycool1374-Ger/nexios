@@ -54,8 +54,14 @@ void debug_drain_debugger(TaskControlBlock &dying) noexcept;
 /// @brief Test-isolation reset for the binding table (issue #226).
 void debug_bindings_reset() noexcept;
 
-/// @brief Owned-target snapshot for the stop poll (issue #226): collects
-///        all (target_id, target_gen) pairs owned by @p debugger_id (up to
+/// @brief Live-binding query for the Logger-mute predicate (issue #232):
+/// true when any binding is live. Backed by a lock-free live counter
+/// (updated under g_bind_lock at every transition), so it is safe from
+/// any context including tick/ISR — Logger::info/warn consult it on
+/// paths reachable from the timer tick.
+bool debug_session_active() noexcept;
+
+/// @brief Owned-target snapshot for the stop poll (issue #226): collects///        all (target_id, target_gen) pairs owned by @p debugger_id (up to
 ///        @p cap) under g_bind_lock and releases it before returning, so
 ///        the poll can scan the stop queue WITHOUT nesting bind inside
 ///        the queue lock (lock order is bind -> stop everywhere; nesting

@@ -272,6 +272,12 @@ class FakeController : public debugd::TargetTaskController {
     debugd::DbgErr step() override { return debugd::DbgErr::kOk; }
     debugd::DbgErr cont() override { return debugd::DbgErr::kOk; }
     std::string_view stop_reason() override { return "T05"; }
+    debugd::DbgErr attach(std::uint64_t) override {
+        return debugd::DbgErr::kOk;
+    }
+    debugd::DbgErr detach() override { return debugd::DbgErr::kOk; }
+    debugd::DbgErr stop_request() override { return debugd::DbgErr::kOk; }
+    bool poll_event(std::string_view &) override { return false; }
 
     debugd::BreakpointTable table_;
 };

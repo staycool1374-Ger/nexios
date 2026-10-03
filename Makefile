@@ -1467,6 +1467,17 @@ test-debugd-host:
 	    -I tools/debugd/include -I tools/debugd/tests \
 	    tools/debugd/tests/test_main.cpp -o build/host/test_debugd_asan && \
 	    ./build/host/test_debugd_asan
+	@printf '  %-7s %s\n' 'HOST' 'debugd main-loop unit tests…'
+	@CXX_HOST="$(CXX_HOST)"; \
+	if [ -z "$$CXX_HOST" ]; then CXX_HOST=c++; fi; \
+	$$CXX_HOST -std=c++20 -Wall -Wextra -Werror \
+	    -I tools/debugd/include -I tools/debugd/tests \
+	    tools/debugd/tests/test_loop.cpp -o build/host/test_debugd_loop && \
+	    ./build/host/test_debugd_loop && \
+	$$CXX_HOST -std=c++20 -Wall -Wextra -Werror -fsanitize=address,undefined \
+	    -I tools/debugd/include -I tools/debugd/tests \
+	    tools/debugd/tests/test_loop.cpp -o build/host/test_debugd_loop_asan && \
+	    ./build/host/test_debugd_loop_asan
 	@printf '  %-7s %s\n' 'HOST' 'hosted-header ban (freestanding portability)…'
 	@if grep -rnE '#include <(vector|string|iostream|map|set|list|deque|forward_list|functional|memory|sstream|fstream|cstdio|cstring|cstdlib|new|typeinfo|exception|stdexcept|system_error|thread|mutex|future|chrono|ratio|optional|variant|tuple|bitset|iterator|limits|numeric|random|regex|algorithm)>' \
 	    tools/debugd/include/; then \
