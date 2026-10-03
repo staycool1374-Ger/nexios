@@ -1,16 +1,16 @@
 # Graph Report - jarvis  (2026-10-03)
 
 ## Corpus Check
-- 2260 files · ~4,412,373 words
+- 2264 files · ~4,415,780 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 12298 nodes · 20101 edges · 1963 communities (1771 shown, 192 thin omitted)
+- 12328 nodes · 20129 edges · 1999 communities (1799 shown, 200 thin omitted)
 - Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 1396 edges (avg confidence: 0.79)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0325d9e5`
+- Built from commit: `f981f9e1`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -591,6 +591,7 @@
 - [[_COMMUNITY_admission_boot_selftest|admission_boot_selftest]]
 - [[_COMMUNITY_register_config_checks_tests|register_config_checks_tests]]
 - [[_COMMUNITY_register_dmesg_tests|register_dmesg_tests]]
+- [[_COMMUNITY_concepts.hpp|concepts.hpp]]
 - [[_COMMUNITY_types.h|types.h]]
 - [[_COMMUNITY_AUDIT REPORT 2026-09-14T16-12-10Z|AUDIT REPORT 2026-09-14T16-12-10Z]]
 - [[_COMMUNITY_AUDIT REPORT 2026-09-14T18-56-16Z|AUDIT REPORT 2026-09-14T18-56-16Z]]
@@ -663,6 +664,7 @@
 - [[_COMMUNITY_register_cap_lifecycle_tests|register_cap_lifecycle_tests]]
 - [[_COMMUNITY_register_cap_pager_tests|register_cap_pager_tests]]
 - [[_COMMUNITY_register_core_isolation_tests|register_core_isolation_tests]]
+- [[_COMMUNITY_register_initrd_parser_tests|register_initrd_parser_tests]]
 - [[_COMMUNITY_VirtqUsed|VirtqUsed]]
 - [[_COMMUNITY_register_jitter_tests|register_jitter_tests]]
 - [[_COMMUNITY_IrqSpinLockGuard|IrqSpinLockGuard]]
@@ -771,6 +773,41 @@
 - [[_COMMUNITY_OCtx|OCtx]]
 - [[_COMMUNITY_SCtx|SCtx]]
 - [[_COMMUNITY_register_pipe_blocking_tests|register_pipe_blocking_tests]]
+- [[_COMMUNITY_debug_write|debug_write]]
+- [[_COMMUNITY_GDTEntry|GDTEntry]]
+- [[_COMMUNITY_VirtqUsed|VirtqUsed]]
+- [[_COMMUNITY_TEST_CLASS|TEST_CLASS]]
+- [[_COMMUNITY_AUDIT REPORT 2026-10-03T15-25-29Z|AUDIT REPORT 2026-10-03T15-25-29Z]]
+- [[_COMMUNITY_demo.cpp|demo.cpp]]
+- [[_COMMUNITY_watchdogd.c|watchdogd.c]]
+- [[_COMMUNITY_parse_test_config|parse_test_config]]
+- [[_COMMUNITY_SIL 3 Audit Report — NexIOS RTOS issue 232 (test-only follow-up)|SIL 3 Audit Report — NexIOS RTOS issue #232 (test-only follow-up)]]
+- [[_COMMUNITY_SIL 3 Audit — Issue 45 (Deterministic Boot), final increment (testbed)|SIL 3 Audit — Issue #45 (Deterministic Boot), final increment (testbed)]]
+- [[_COMMUNITY_TSSBlock|TSSBlock]]
+- [[_COMMUNITY_MsixCacheEntry|MsixCacheEntry]]
+- [[_COMMUNITY_MsixEntryClaim|MsixEntryClaim]]
+- [[_COMMUNITY_MapOut|MapOut]]
+- [[_COMMUNITY_BenchResult|BenchResult]]
+- [[_COMMUNITY_test_aperiodic_servers.cpp|test_aperiodic_servers.cpp]]
+- [[_COMMUNITY_install_dest_cspace|install_dest_cspace]]
+- [[_COMMUNITY_wait_state|wait_state]]
+- [[_COMMUNITY_QueuePhys|QueuePhys]]
+- [[_COMMUNITY_Entry16|Entry16]]
+- [[_COMMUNITY_AbiTs|AbiTs]]
+- [[_COMMUNITY_register_hal_bits_tests|register_hal_bits_tests]]
+- [[_COMMUNITY_Timeval|Timeval]]
+- [[_COMMUNITY_register_cap_death_tests|register_cap_death_tests]]
+- [[_COMMUNITY_register_cap_shm_tests|register_cap_shm_tests]]
+- [[_COMMUNITY_register_initrd_fs_tests|register_initrd_fs_tests]]
+- [[_COMMUNITY_register_ipi_batching_tests|register_ipi_batching_tests]]
+- [[_COMMUNITY_register_lapic_tests|register_lapic_tests]]
+- [[_COMMUNITY_register_rtc_datetime_tests|register_rtc_datetime_tests]]
+- [[_COMMUNITY_register_vmm_tests|register_vmm_tests]]
+- [[_COMMUNITY_register_shell_commands_tests|register_shell_commands_tests]]
+- [[_COMMUNITY_register_stress_hrt_tests|register_stress_hrt_tests]]
+- [[_COMMUNITY_register_syscall_fastpath_tests|register_syscall_fastpath_tests]]
+- [[_COMMUNITY_register_vfs_procfs_tests|register_vfs_procfs_tests]]
+- [[_COMMUNITY_register_vfs_tmpfs_corrupt_tests|register_vfs_tmpfs_corrupt_tests]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `Scheduler` - 485 edges
@@ -781,7 +818,7 @@
 6. `PMM` - 162 edges
 7. `Syscall` - 133 edges
 8. `VMM` - 116 edges
-9. `Entries` - 108 edges
+9. `Entries` - 109 edges
 10. `Terminal` - 102 edges
 
 ## Surprising Connections (you probably didn't know these)
@@ -789,8 +826,8 @@
   scripts/gate.py → docs/doxygen/html/jquery.js
 - `rec()` --indirect_call--> `e()`  [INFERRED]
   tools/gdb/catch_uaf.py → docs/doxygen/html/jquery.js
-- `iocd_handle_irq_event()` --calls--> `ipc_send()`  [INFERRED]
-  userspace/iocd.c → src/libc/ipc.c
+- `main()` --calls--> `ipc_send()`  [INFERRED]
+  userspace/watchdogd.c → src/libc/ipc.c
 - `write()` --calls--> `_write()`  [INFERRED]
   userspace/picolibc/nexios_glue.c → src/libc/picolib_stubs.c
 - `read()` --calls--> `_read()`  [INFERRED]
@@ -799,7 +836,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (1963 total, 192 thin omitted)
+## Communities (1999 total, 200 thin omitted)
 
 ### Community 0 - "Hardware Abstraction Layer"
 Cohesion: 0.03
@@ -807,15 +844,15 @@ Nodes (76): ArchContext, cs, elr_el1, error_code, gp, r10, r11, r12 (+68 more)
 
 ### Community 1 - "Test Infrastructure / Address Space"
 Cohesion: 0.02
-Nodes (198): pci_enumeration_bounded_time, register_aarch64_tests(), register_riscv64_tests(), alloc_buffer(), pci_set_bus_master(), init, on_completion, enable_irq (+190 more)
+Nodes (192): pci_enumeration_bounded_time, register_aarch64_tests(), register_riscv64_tests(), init, start, pci_set_bus_master(), on_completion, enable_irq (+184 more)
 
 ### Community 2 - "Scheduler / Daemon Management"
-Cohesion: 0.05
-Nodes (110): AuthStepResult, panic(), is_block_pinned, Syscall::sys_exit(), Syscall::sys_fork(), Syscall::sys_tls_set(), charge_exec(), SchedulerError (+102 more)
+Cohesion: 0.04
+Nodes (134): AuthStepResult, iocd_crash_restarts, ensure_running(), terminate(), free, is_block_pinned, debug_apply_disposition(), debug_drain_debugger() (+126 more)
 
 ### Community 3 - "Boot Integrity / Daemon Mgr"
-Cohesion: 0.07
-Nodes (14): read_cr2(), TaskControlBlock, deliver_signal_to_user(), dump_regs(), exception_dispatch_probe(), exception_name(), format_datetime(), handle_interrupt_c() (+6 more)
+Cohesion: 0.11
+Nodes (16): QemuDebugcon, DEBUGCON_PORT, read_cr2(), TaskControlBlock, deliver_signal_to_user(), dump_regs(), exception_dispatch_probe(), exception_name() (+8 more)
 
 ### Community 4 - "Device / VFS Core"
 Cohesion: 0.04
@@ -827,19 +864,19 @@ Nodes (31): Any, AssertionsChecker, Checker, collect_source_files(), config_path
 
 ### Community 6 - "Shell / Terminal Services"
 Cohesion: 0.07
-Nodes (59): parse_ip(), print_ip(), print_mac(), cmd_bg, cmd_cancel_load, cmd_dirs, cmd_disown, cmd_dmesg (+51 more)
+Nodes (67): draw_prompt(), parse_ip(), print_ip(), print_mac(), readline(), cmd_bg, cmd_cancel_load, cmd_dirs (+59 more)
 
 ### Community 7 - "Syscall Dispatch"
 Cohesion: 0.02
-Nodes (108): Syscall, init, k_syscall_fast, s_fastpath_enabled_, sys_abi_version, sys_alarm, sys_brk, sys_buf_alloc (+100 more)
+Nodes (107): Syscall, handle_fast, init, k_syscall_fast, s_fastpath_enabled_, sys_abi_version, sys_alarm, sys_brk (+99 more)
 
 ### Community 8 - "VFS File Operations"
 Cohesion: 0.09
 Nodes (42): VfsError, create(), create_err(), FdTable, alloc, alloc_err, fds, free (+34 more)
 
 ### Community 9 - "Ready Queue / Task Priority Map"
-Cohesion: 0.12
-Nodes (44): alloc_zeroed_table_page(), bdf_valid(), cascade_free_empty(), clear_leaf(), FrameCap, ctx_cache_invalidate(), ctx_index(), Entry16 (+36 more)
+Cohesion: 0.14
+Nodes (39): alloc_zeroed_table_page(), bdf_valid(), cascade_free_empty(), clear_leaf(), FrameCap, ctx_cache_invalidate(), ctx_index(), IoMmuManager (+31 more)
 
 ### Community 12 - "Terminal / Framebuffer"
 Cohesion: 0.13
@@ -854,36 +891,36 @@ Cohesion: 0.04
 Nodes (46): TaskContext, cs, elr_el1, error_code, gp, r10, r11, r12 (+38 more)
 
 ### Community 15 - "ProcFS / PMM Stats"
-Cohesion: 0.09
-Nodes (25): DeadlineActionDemote, DeadlineActionKill, DeadlineActionKillCleansUp, DeadlineActionLogOnly, DeadlineActionNotifyMonitor, DeadlineActionNotifyProbe, DeadlineActionPanics, DeadlineDetectionMagicCheck (+17 more)
+Cohesion: 0.12
+Nodes (15): DeadlineActionDemote, DeadlineActionKill, DeadlineActionLogOnly, DeadlineActionNotifyProbe, DeadlineActionPanics, TestContext, deadline_monitor_pid, dummy_save_rsp (+7 more)
 
 ### Community 16 - "IPC Tests / Buffer Handle"
-Cohesion: 0.04
-Nodes (82): IpcBidirectionalSendSync, IpcBlockedSenderOnReceiverCleanup, IpcBufHandleTransferRoundtrip, IpcConcurrentSenders, IpcLatencyJitter, IpcMisformedMessages, IpcPriorityOrderedWake, IpcQueueWraparoundEdge (+74 more)
+Cohesion: 0.03
+Nodes (100): IpcBidirectionalSendSync, IpcBlockedSenderOnReceiverCleanup, IpcBufHandleTransferRoundtrip, IpcConcurrentSenders, IpcLatencyJitter, IpcMisformedMessages, IpcPriorityOrderedWake, IpcQueueWraparoundEdge (+92 more)
 
 ### Community 17 - "Boot Params / Multiboot"
 Cohesion: 0.18
 Nodes (11): MemoryMapEntry, base_addr, length, reserved, type, MemoryMapTag, entries, entry_size (+3 more)
 
 ### Community 18 - "AArch64 HAL / Timer"
-Cohesion: 0.06
-Nodes (33): Register, RTC::read_time(), RTC, CMOS_DATA, CMOS_INDEX, init, make_timestamp, read_register (+25 more)
+Cohesion: 0.13
+Nodes (18): Register, RTC, CMOS_DATA, CMOS_INDEX, init, make_timestamp, read_register, read_time (+10 more)
 
 ### Community 19 - "GDB Debug Scripts"
 Cohesion: 0.10
 Nodes (12): PanicInfoCommand, Pml4Command, List all kernel tasks with state, priority, PID., Show detailed info for a task by index or PID., Print general-purpose + control registers with RFLAGS decode., Dump current task, backtrace, and registers at the stop point., Walk 4-level page table from CR3 (default) or given phys address., RegsCommand (+4 more)
 
 ### Community 20 - "GDT / Segment Registers"
-Cohesion: 0.10
-Nodes (20): TSS, iopb_offset, ist1, ist2, ist3, ist4, ist5, ist6 (+12 more)
+Cohesion: 0.12
+Nodes (16): TSS, iopb_offset, ist1, ist2, ist3, ist4, ist5, ist6 (+8 more)
 
 ### Community 21 - "RISC-V 64 HAL"
-Cohesion: 0.05
-Nodes (7): ArchIO, read_cr3(), read_satp(), sfence_vma(), write_cr3(), write_cr3_notlbi(), write_satp()
+Cohesion: 0.07
+Nodes (6): read_cr3(), read_satp(), sfence_vma(), write_cr3(), write_cr3_notlbi(), write_satp()
 
 ### Community 22 - "Test Registry / Report"
 Cohesion: 0.06
-Nodes (59): kernel::test::dump_class_counts(), kernel::test::register_class(), add_task_named(), ClassSection, count, name, start, TaskControlBlock (+51 more)
+Nodes (60): kernel::test::dump_class_counts(), kernel::test::register_class(), add_task_named(), ClassSection, count, name, start, TaskControlBlock (+52 more)
 
 ### Community 23 - "Shell Command Parser"
 Cohesion: 0.05
@@ -895,39 +932,39 @@ Nodes (30): SporadicServer, Replenishment, ServerMode, Replenishment, ServerMode
 
 ### Community 25 - "RISC-V / AArch64 Rand"
 Cohesion: 0.02
-Nodes (38): BufPoolError, TaskControlBlock, TaskControlBlock, TaskControlBlock, Fat32Partition, Nic, TaskControlBlock, VirtioBlkReqHdr (+30 more)
+Nodes (13): TaskControlBlock, encode_handle(), encode_user_handle(), TaskControlBlock, Fat32Partition, Nic, TaskControlBlock, IrqCap (+5 more)
 
 ### Community 26 - "RISC-V Page Table"
 Cohesion: 0.09
 Nodes (32): arch_page_table_activate(), arch_page_table_current(), arch_page_table_tlb_flush(), arch_page_table_tlb_flush_all(), ArchPageTable, attr_from_flags, DESC_A, DESC_AF (+24 more)
 
 ### Community 27 - "Memory Diagnostics / PMM"
-Cohesion: 0.13
+Cohesion: 0.11
 Nodes (40): POOL_COUNT, all_tasks_, capture_rqpod, capture_task_fields, current_sp(), off_bufpool(), off_canary_after(), off_canary_before() (+32 more)
 
 ### Community 29 - "VirtIO Transport"
-Cohesion: 0.11
-Nodes (31): virtio_is_virtio_device(), virtio_notify(), virtio_read_common(), virtio_read_common16(), virtio_read_common8(), virtio_read_status(), virtio_write_common(), virtio_write_common16() (+23 more)
+Cohesion: 0.12
+Nodes (30): virtio_is_virtio_device(), virtio_notify(), virtio_read_common(), virtio_read_common16(), virtio_read_common8(), virtio_read_status(), virtio_write_common(), virtio_write_common16() (+22 more)
 
 ### Community 30 - "Sync Queue / Message Queue"
 Cohesion: 0.09
-Nodes (47): SyncError, TaskControlBlock, TaskControlBlock, Queue, add_recv_waiter, add_send_waiter, boost_receiver, boost_sender (+39 more)
+Nodes (50): dispose, MessageQueue::~MessageQueue(), SyncError, TaskControlBlock, TaskControlBlock, Queue, add_recv_waiter, add_send_waiter (+42 more)
 
 ### Community 31 - "Mutex / Deadlock Detection"
-Cohesion: 0.11
-Nodes (27): SyncError, TaskControlBlock, TaskControlBlock, Mutex, add_waiter, holder_priority_, inherit_priority, init (+19 more)
+Cohesion: 0.08
+Nodes (36): panic(), SyncError, TaskControlBlock, TaskControlBlock, Mutex, add_waiter, holder_priority_, inherit_priority (+28 more)
 
 ### Community 32 - "AArch64 Page Table"
 Cohesion: 0.07
 Nodes (37): read_ttbr1_el1(), tlbi_vae1(), arch_page_table_current(), arch_page_table_tlb_flush(), arch_page_table_tlb_flush_all(), ArchPageTable, AP_RO, AP_RW (+29 more)
 
 ### Community 33 - "Physical Memory Manager"
-Cohesion: 0.06
-Nodes (63): PtPoolSnapshot, PmmError, first_congruent_from(), PMM, alloc_contiguous_err, alloc_page, alloc_page_colored, alloc_page_colored_err (+55 more)
+Cohesion: 0.05
+Nodes (69): PtPoolSnapshot, probe, MockBlockDevice::MockBlockDevice(), alloc_buffer(), PmmError, first_congruent_from(), PMM, alloc_contiguous (+61 more)
 
 ### Community 34 - "Libc Syscall / IPC Wrappers"
-Cohesion: 0.05
-Nodes (65): ipc_event_set(), ipc_event_wait(), ipc_notify(), ipc_notify_wait(), ipc_recv(), ipc_send(), ipc_send_sync(), getchar() (+57 more)
+Cohesion: 0.06
+Nodes (45): ipc_event_set(), ipc_event_wait(), ipc_notify(), ipc_notify_wait(), ipc_send_sync(), getchar(), exit(), pid_t (+37 more)
 
 ### Community 35 - "ELF Loader"
 Cohesion: 0.08
@@ -943,7 +980,7 @@ Nodes (48): 10.1 Driver Registry (driver.cpp/hpp), 10. Drivers (driver/), 11.1 L
 
 ### Community 38 - "VMM / DMA Scatter-Gather"
 Cohesion: 0.01
-Nodes (90): register_block_device_tests(), register_buffer_pool_deterministic_tests(), register_cache_coloring_tests(), register_cap_iommu_tests(), register_cap_irq_notify_tests(), register_cap_irq_tests(), register_cap_mmio_tests(), register_cap_mmio_user_tests() (+82 more)
+Nodes (86): register_acpi_parse_tests(), register_apic_tpr_tests(), register_block_device_tests(), register_buffer_pool_deterministic_tests(), register_cap_core_tests(), register_cap_iommu_tests(), register_cap_ipc_tests(), register_cap_irq_notify_tests() (+78 more)
 
 ### Community 39 - "Semaphore / Locking Tests"
 Cohesion: 0.12
@@ -955,15 +992,15 @@ Nodes (8): pan_init(), clac(), read_cr3(), read_ttbr0_el1(), tlbi_alle1(), write
 
 ### Community 41 - "DMA / Tmpfs Tests"
 Cohesion: 0.06
-Nodes (61): TaskControlBlock, free_buffer(), shutdown, VmmError, VMM, clone_kernel_pml4_err, current_pml4, free_user_pages_err (+53 more)
+Nodes (73): free_buffer(), cleanup_and_idle, TaskControlBlock, map_one_page(), release_task_libs(), unmap_acquired_ro(), is_user_string(), alloc_user_page (+65 more)
 
 ### Community 42 - "Spinlock / Sync Tests"
 Cohesion: 0.07
 Nodes (49): TaskControlBlock, debug_frame_is_user(), debug_frame_slot(), debug_read_regs(), debug_step_arm(), debug_step_disarm(), debug_write_regs(), bp_insn_len() (+41 more)
 
 ### Community 43 - "Scheduler Validation / Logger"
-Cohesion: 0.17
-Nodes (27): pci_dump_tree(), h2_dump_ring(), rsp_in_stack_range(), validate_switch(), dump_tcb_write_log(), dump_pte_walk(), dbg_dump_pml4(), register_timing_tests() (+19 more)
+Cohesion: 0.16
+Nodes (26): h2_dump_ring(), rsp_in_stack_range(), validate_switch(), dump_tcb_write_log(), dump_pte_walk(), dbg_dump_pml4(), register_timing_tests(), watchdog_panic() (+18 more)
 
 ### Community 44 - "Agent / Documentation Rules"
 Cohesion: 0.06
@@ -975,23 +1012,23 @@ Nodes (41): 1. JRVS-SCHED-001 — Unbounded id_table_insert Probe (CRITICAL), 2.
 
 ### Community 46 - "Block Device Abstraction"
 Cohesion: 0.08
-Nodes (42): IrqCap, MsixCap, IrqCap, create, dispose, reg_idx_, revoke, vector (+34 more)
+Nodes (39): IrqCap, MsixCap, IrqCap, create, dispose, reg_idx_, revoke, vector (+31 more)
 
 ### Community 47 - "Dmesg Buffer"
 Cohesion: 0.11
 Nodes (8): DMESG_CAPACITY, DmesgBuffer, buffer, head, MASK, tail, DmesgService, buffer_
 
 ### Community 48 - "Ring Buffer Logger"
-Cohesion: 0.17
-Nodes (14): printf(), chdir(), main(), main(), main(), main(), main(), close() (+6 more)
+Cohesion: 0.60
+Nodes (5): execute_pipeline(), main(), parse_line(), print_prompt(), read_line()
 
 ### Community 49 - "PRNG / Random"
-Cohesion: 0.03
-Nodes (18): arch::early_irq_init(), EarlyIrqResult, aarch64_el1_unexpected_fault(), fm_cleanup(), fm_write_file(), DmesgRecord, error_string(), VmmError (+10 more)
+Cohesion: 0.05
+Nodes (16): arch::early_irq_init(), EarlyIrqResult, InterruptVector, ISRHandler, IDT::register_handler(), IDT::register_handler_raw(), aarch64_el1_unexpected_fault(), InterruptVector (+8 more)
 
 ### Community 50 - "Driver Framework"
-Cohesion: 0.16
-Nodes (13): DriverState, Driver, description, irq_line, name, state, DriverRegistry, drivers_ (+5 more)
+Cohesion: 0.15
+Nodes (15): DriverState, Driver, description, irq_line, name, state, DriverRegistry, drivers_ (+7 more)
 
 ### Community 51 - "Buffer Pool"
 Cohesion: 0.10
@@ -1002,12 +1039,12 @@ Cohesion: 0.12
 Nodes (19): Controller, DebugLoop, kMaxOut, kMaxPayload, kMaxTimeouts, timeouts_, FramePacket(), DbgErr (+11 more)
 
 ### Community 54 - "Memory Allocation / TCB"
-Cohesion: 0.08
-Nodes (42): BootStage, boot_mark(), boot_raw_delta_to_ns(), boot_stage_delta(), boot_stage_mark(), BootDelta, ns, valid (+34 more)
+Cohesion: 0.24
+Nodes (20): fdt_check_header(), fdt_first_child(), fdt_get_mem_rsv(), fdt_get_name(), fdt_getprop_by_offset(), fdt_getprop_namelen(), fdt_next_sibling(), fdt_next_subnode() (+12 more)
 
 ### Community 55 - "VFS Daemon (VFSD)"
-Cohesion: 0.09
-Nodes (23): TaskControlBlock, release_task(), fstat(), stat(), iocd_dispatch(), iocd_handle_irq_event(), iocd_handle_keyboard_read(), iocd_handle_mmio_map() (+15 more)
+Cohesion: 0.18
+Nodes (14): fstat(), stat(), close(), vfsd_dispatch(), vfsd_handle_chdir(), vfsd_handle_close(), vfsd_handle_fstat(), vfsd_handle_getcwd() (+6 more)
 
 ### Community 56 - "FAT32 Directory Operations"
 Cohesion: 0.09
@@ -1018,16 +1055,16 @@ Cohesion: 0.03
 Nodes (59): Mode, APIC, APIC_BASE_ENABLE, APIC_BASE_X2APIC, APIC_TIMER_VECTOR, bus_freq_hz_, enabled_, IOAPIC_DATA (+51 more)
 
 ### Community 58 - "VirtIO Network Driver"
-Cohesion: 0.07
-Nodes (29): add_rx_buf(), Nic, rx_ring_fill_locked(), virtio_net_poll(), VirtioNetDevice, lock_, nic, queue_size (+21 more)
+Cohesion: 0.08
+Nodes (26): Nic, VirtioNetDevice, lock_, nic, queue_size, rx_avail, rx_avail_idx, rx_avail_phys (+18 more)
 
 ### Community 59 - "Syscall Pipe/Readdir / Checked Ptr"
 Cohesion: 0.11
 Nodes (10): isb(), write_tpidr_el0(), write_ttbr1_el1(), arch_page_table_activate(), TickSource, Timer::active_source(), Timer::handle_irq(), Timer::oneshot() (+2 more)
 
 ### Community 60 - "VirtIO Block Driver"
-Cohesion: 0.08
-Nodes (25): Mutex, VirtioBlkDriver, avail_, avail_idx_, avail_phys_, compl_, compl_lock_, desc_ (+17 more)
+Cohesion: 0.06
+Nodes (30): Mutex, VirtioBlkDriver, avail_, avail_idx_, avail_phys_, compl_, compl_lock_, desc_ (+22 more)
 
 ### Community 61 - "Initrd Filesystem"
 Cohesion: 0.10
@@ -1039,19 +1076,19 @@ Nodes (27): pci_device_exists_ecam(), pci_ecam_addr(), pci_ecam_readb(), pci_eca
 
 ### Community 63 - "AArch64 Barrier / TLB"
 Cohesion: 0.06
-Nodes (51): LoadResult, PostKind, copy_bounded(), LoadState, TaskControlBlock, elf_loader_task_main(), ElfLoader, cancel_requested_ (+43 more)
+Nodes (39): LoadResult, LoadState, TaskControlBlock, elf_loader_task_main(), ElfLoader, cancel_requested_, chunk_buf_, completed_tcb_ (+31 more)
 
 ### Community 64 - "Timer / Interrupt HAL"
-Cohesion: 0.11
-Nodes (31): append_four_digit(), append_size(), append_two_digit(), TaskState, draw_prompt(), print_uint(), readline(), cmd_clear (+23 more)
+Cohesion: 0.12
+Nodes (28): append_four_digit(), append_size(), append_two_digit(), TaskState, print_uint(), cmd_clear, cmd_cpuinfo, cmd_meminfo (+20 more)
 
 ### Community 65 - "ARP / ICMP / Networking"
 Cohesion: 0.05
 Nodes (40): 10. Test Strategy (class `cap_pager`, TF_KERNEL, stub-first), 11. OPEN QUESTIONS, 12. Non-Goals (reprise), 1. Purpose, 2.1 Motivation, 2.2 Non-Goals, 2. Motivation & Non-Goals, 3.1 The existing #PF paths (must remain untouched) (+32 more)
 
 ### Community 66 - "FAT32 Partition / Cluster"
-Cohesion: 0.08
-Nodes (45): add_dir_entry(), Fat32Partition, DirEntryRaw, access_date, attrs, cluster_high, cluster_low, creation_date (+37 more)
+Cohesion: 0.13
+Nodes (32): alloc, add_dir_entry(), Fat32Partition, Fat32Partition, alloc_cluster, bpb_, clear_cluster, cluster_to_lba (+24 more)
 
 ### Community 67 - "PCI Enumeration / BAR"
 Cohesion: 0.11
@@ -1062,36 +1099,36 @@ Cohesion: 0.07
 Nodes (25): riscv64_boot_mvendorid, riscv64_context_save_restore, riscv64_context_sret_frame, riscv64_fpu_extension_detection, riscv64_medeleg_selected, riscv64_pci_ecam_read, riscv64_plic_claim_complete, riscv64_plic_init (+17 more)
 
 ### Community 69 - "CPUID / Random Tests"
-Cohesion: 0.12
-Nodes (17): mmio_read32(), mmio_write32(), Serial::getchar(), Serial::init(), Serial::poll_getchar(), Serial::putchar(), Serial::puts(), Serial (+9 more)
+Cohesion: 0.18
+Nodes (11): Serial::puts(), Serial, getchar, init, poll_getchar, putchar, puts, write_count (+3 more)
 
 ### Community 71 - "AArch64 Boot / Exception"
-Cohesion: 0.24
-Nodes (9): va_list, print_dec(), print_hex(), putchar(), puts(), snprintf(), sprintf(), vsnprintf() (+1 more)
+Cohesion: 0.14
+Nodes (14): va_list, print_dec(), print_hex(), printf(), putchar(), puts(), snprintf(), sprintf() (+6 more)
 
 ### Community 72 - "Memory Pool Allocator"
-Cohesion: 0.06
-Nodes (41): Pool, PoolMeta, FrameCap, create, IoMmuDmaCap, create, dispose, domain_idx_ (+33 more)
+Cohesion: 0.13
+Nodes (22): Pool, PoolMeta, MemPoolError, MemPool, alloc_err, capture_pool_data, capture_pool_meta, contains (+14 more)
 
 ### Community 73 - "Task Signals / EventGroup"
-Cohesion: 0.07
-Nodes (29): E, IpcError, PciError, error_string(), error_string(), error_string(), from_bufpool_error(), from_ipc_error() (+21 more)
+Cohesion: 0.06
+Nodes (25): BufPoolError, E, IpcError, PciError, error_string(), error_string(), error_string(), error_string() (+17 more)
 
 ### Community 74 - "PS/2 Keyboard HAL"
-Cohesion: 0.05
-Nodes (32): Keyboard, DATA_PORT, flush, getchar, handle_irq, init, MOD_ALT, MOD_CAPS (+24 more)
+Cohesion: 0.06
+Nodes (28): Keyboard, DATA_PORT, flush, getchar, handle_irq, init, MOD_ALT, MOD_CAPS (+20 more)
 
 ### Community 75 - "PCI Config Access"
-Cohesion: 0.09
-Nodes (49): pci_config_readb(), pci_config_readl(), pci_config_readw(), pci_config_writeb(), pci_config_writel(), pci_config_writew(), pci_make_addr(), fmt_dec() (+41 more)
+Cohesion: 0.10
+Nodes (46): pci_config_readb(), pci_config_readl(), pci_config_readw(), pci_config_writeb(), pci_config_writel(), pci_config_writew(), pci_make_addr(), fmt_dec() (+38 more)
 
 ### Community 76 - "AHCI Driver Core"
 Cohesion: 0.08
 Nodes (20): AhciDriver, abar_phys_, abar_virt_, active_port_, cl_phys_, cl_virt_, cmd_lock_, compl_ (+12 more)
 
 ### Community 77 - "AHCI Protocol / FIS"
-Cohesion: 0.11
-Nodes (18): CmdFIS, aux, command, control, count_hi, count_lo, device, features (+10 more)
+Cohesion: 0.07
+Nodes (28): CmdFIS, aux, command, control, count_hi, count_lo, device, features (+20 more)
 
 ### Community 78 - "Tmpfs Filesystem"
 Cohesion: 0.13
@@ -1102,20 +1139,20 @@ Cohesion: 0.14
 Nodes (5): div128_trap(), __divti3(), __modti3(), __udivti3(), __umodti3()
 
 ### Community 80 - "Libc Stdlib / Abort"
-Cohesion: 0.07
-Nodes (13): Rlimit, rlim_cur, rlim_max, Timeval, tv_sec, tv_usec, jarvis_pretty_printer(), PageAddressPrinter (+5 more)
+Cohesion: 0.11
+Nodes (8): reserved_exception_hook(), jarvis_pretty_printer(), PageAddressPrinter, PhysicalAddressPrinter, TaskContextPrinter, TaskControlBlockPrinter, _type_name(), VirtualAddressPrinter
 
 ### Community 81 - "AArch64 Interrupt Controller"
-Cohesion: 0.19
-Nodes (18): gic_v3_read_iar(), gic_v3_set_igrpen1(), gic_v3_set_pmr(), gic_v3_set_sre(), gic_v3_write_eoir(), gicc_reg(), gicd_reg(), gicr_rd_reg() (+10 more)
+Cohesion: 0.21
+Nodes (17): gic_v3_read_iar(), gic_v3_set_igrpen1(), gic_v3_set_pmr(), gic_v3_set_sre(), gic_v3_write_eoir(), gicc_reg(), gicd_reg(), gicr_rd_reg() (+9 more)
 
 ### Community 82 - "AArch64 Test / Context"
 Cohesion: 0.03
-Nodes (124): DeadlineMissWithinWcet, DeadlockNestedMutexLoad, PcpCeilingDisabled, PcpNestedCeilings, PcpPipFallback, PriorityInversionChain5, SchedPolicy, SchedulerStarvation (+116 more)
+Nodes (93): DeadlineActionKillCleansUp, DeadlineActionNotifyMonitor, DeadlineDetectionMagicCheck, DeadlineDetectionMcdcCoverage, DeadlineMissWithinWcet, DeadlockNestedMutexLoad, PcpCeilingDisabled, PcpNestedCeilings (+85 more)
 
 ### Community 84 - "IDT / ISR Handlers"
-Cohesion: 0.13
-Nodes (21): Timer::init(), ISRHandler, IDT, desc_, entries_, handle_interrupt, handlers_, has_handler (+13 more)
+Cohesion: 0.11
+Nodes (28): Timer::init(), ISRHandler, IDT, desc_, entries_, handlers_, has_handler, init (+20 more)
 
 ### Community 85 - "PCI Enumeration"
 Cohesion: 0.06
@@ -1138,8 +1175,8 @@ Cohesion: 0.05
 Nodes (36): 10.1 Const Correctness, 10.2 Prefer References Over Pointers, 10.3 All Variables Must Be Initialized, 10.4 Constructor Initializer Lists, 10.5 Meaningful Sentinel Definitions, 10.6 Descriptive Names — No Single Characters, 10.7 const_cast Is Forbidden, 10. Kernel-Specific Rules (`src/kernel/` only) (+28 more)
 
 ### Community 90 - "Notify Synchronization"
-Cohesion: 0.11
-Nodes (20): ISRHandler, ISRHandler, TaskControlBlock, IrqThread, count_, create, destroy, for_vector (+12 more)
+Cohesion: 0.04
+Nodes (16): Signal, RTC::read_time(), read_seconds, RTC::read_time(), TaskControlBlock, TaskControlBlock, Rlimit, rlim_cur (+8 more)
 
 ### Community 91 - "Task Definitions"
 Cohesion: 0.09
@@ -1162,20 +1199,20 @@ Cohesion: 0.13
 Nodes (21): Held, Request, Error, TlbShootdown, coalesce_and_apply, DEFAULT_TIMEOUT_TICKS, hold, MAX_PENDING (+13 more)
 
 ### Community 96 - "AArch64 PCI ECAM"
-Cohesion: 0.20
-Nodes (10): TaskControlBlock, FLAGS_IF, KERNEL_CS, KERNEL_SS, name, NO_PERIOD, STACK_SIZE, TCB_MAGIC (+2 more)
+Cohesion: 0.10
+Nodes (27): FrameCap, FrameCap, count, create, dispose, is_user, phys, revoke (+19 more)
 
 ### Community 97 - "Test Expected Counts"
 Cohesion: 0.13
-Nodes (20): fast_regs_to_msg(), TaskControlBlock, Syscall::sys_buf_alloc(), Syscall::sys_buf_free(), Syscall::sys_buf_map(), Syscall::sys_buf_unmap(), Syscall::sys_send(), Syscall::sys_send_fast() (+12 more)
+Nodes (19): TaskControlBlock, Syscall::sys_dup2(), Syscall::sys_lseek(), Syscall::sys_buf_alloc(), Syscall::sys_buf_free(), Syscall::sys_buf_map(), Syscall::sys_buf_unmap(), Syscall::sys_send() (+11 more)
 
 ### Community 98 - "Interrupt Controller HAL"
 Cohesion: 0.15
-Nodes (9): ArchInterruptController, IrqState, gic_mask, pic1_mask, pic2_mask, plic_enable_first, plic_threshold, ArchInterruptController::restore() (+1 more)
+Nodes (9): ArchInterruptController::snapshot(), ArchInterruptController, IrqState, gic_mask, pic1_mask, pic2_mask, plic_enable_first, plic_threshold (+1 more)
 
 ### Community 99 - "I/O Control Daemon (IOCD)"
 Cohesion: 0.06
-Nodes (35): CapRights, KernelObject, dispose, flags_, kPoolBacked, ref_count_, task_obj_next_, task_obj_prev_ (+27 more)
+Nodes (23): CapRights, dispose, KernelObject, flags_, kPoolBacked, ref_count_, task_obj_next_, task_obj_prev_ (+15 more)
 
 ### Community 100 - "ELF Execution / Loading"
 Cohesion: 0.06
@@ -1206,16 +1243,16 @@ Cohesion: 0.23
 Nodes (11): AtaPioDriver, drive_head_, drive_present_, identify, init, poll_status, port_base_, probe_first_drive (+3 more)
 
 ### Community 107 - "Daemon Manager Entry"
-Cohesion: 0.15
-Nodes (14): TaskControlBlock, to_fast_call(), to_receiver_entry(), to_sender_entry(), to_spawn_receiver(), to_spawn_sender(), ToFastFrame, regs (+6 more)
+Cohesion: 0.25
+Nodes (9): TaskControlBlock, to_spawn_receiver(), to_spawn_sender(), ToRecvCtx, peer_id, result, send_type, spin_iters (+1 more)
 
 ### Community 108 - "AHCI Protocol Tables"
 Cohesion: 0.05
 Nodes (39): 10. Configuration, 1. Motivation, 2.1 TCB field (`src/kernel/task/task.hpp`), 2.2 Scheduler members (`src/kernel/task/scheduler.hpp`), 2. Data Structures, 3.1 `Scheduler::release_zombie(TaskControlBlock &task)` — new, 3.2 `Scheduler::terminate()` — refactored, 3.3 `IdleTask::cleanup_step()` — new (+31 more)
 
 ### Community 109 - "DMA PRD Entries"
-Cohesion: 0.11
-Nodes (18): DmaBuffer, owned, phys_addr, size, virt_addr, ChainCallback, PingPongDma, active_ (+10 more)
+Cohesion: 0.14
+Nodes (13): ChainCallback, PingPongDma, active_, buf_size_, bufs_, chain_cb_, chain_ctx_, completed_ (+5 more)
 
 ### Community 110 - "FAT32 Directory Entry"
 Cohesion: 0.15
@@ -1251,7 +1288,7 @@ Nodes (26): 10. Kernel Boot Sequence, 11. Shell Task (ksh, PRI 2, aperiodic), 12
 
 ### Community 118 - "Syscall Tests"
 Cohesion: 0.08
-Nodes (23): DirEntry, attrs, cluster, is_directory, name, size, valid, Fat32Bpb (+15 more)
+Nodes (24): DirEntry, attrs, cluster, is_directory, name, size, valid, Fat32Bpb (+16 more)
 
 ### Community 119 - "Readdir / VFS Directory"
 Cohesion: 0.23
@@ -1267,19 +1304,19 @@ Nodes (32): 1. VULN-IPC-01 — `IPC::send()` Interrupts-Disabled Rollback Omissi
 
 ### Community 122 - "Stdio / Va Args"
 Cohesion: 0.24
-Nodes (11): main(), more_page(), open(), read(), write(), emit_num_line(), emit_prime_record(), emit_str() (+3 more)
+Nodes (11): main(), main(), more_page(), read(), write(), emit_num_line(), emit_prime_record(), emit_str() (+3 more)
 
 ### Community 123 - "Fix Line Length Tool"
 Cohesion: 0.22
 Nodes (12): find_break_points(), fix_file(), get_ast_break_points(), is_in_comment_or_string(), is_in_macro_continuation(), main(), Path, Use AST to find semantic break points for long lines. (+4 more)
 
 ### Community 124 - "Boot Info / Memory Regions"
-Cohesion: 0.04
-Nodes (78): is_iocd_task(), canary_check_on_full_path(), Syscall::sys_death_recv(), Syscall::sys_death_unwatch(), Syscall::sys_death_watch(), Syscall::sys_mmio_unmap(), Syscall::sys_pager_abort(), Syscall::sys_pager_map() (+70 more)
+Cohesion: 0.09
+Nodes (20): ap_ipi_worker_entry(), ap_parked_on_idle(), ap_worker_entry(), ApRendezvous, done, ran_on, task_id, bsp_worker_entry() (+12 more)
 
 ### Community 126 - "IRQ Guard"
-Cohesion: 0.11
-Nodes (29): CNode, clear_grant, create, cspace_id, depth_, dispose, install, lock_ (+21 more)
+Cohesion: 0.12
+Nodes (26): CNode, clear_grant, create, cspace_id, depth_, install, lock_, parent_ (+18 more)
 
 ### Community 127 - "x86_64 CPUID"
 Cohesion: 0.20
@@ -1291,15 +1328,15 @@ Nodes (28): gcda_relpath(), _leaf_gcda_dirs(), log(), main(), merge_dirs(), pars
 
 ### Community 129 - "Syscall Error Codes"
 Cohesion: 0.10
-Nodes (22): cleanup_and_idle, DepResolveContext, acquired, acquired_count, budget_pages, exec_base, exec_size, fail_chain (+14 more)
+Nodes (21): DepResolveContext, acquired, acquired_count, budget_pages, exec_base, exec_size, fail_chain, generation (+13 more)
 
 ### Community 130 - "Uname / Version"
 Cohesion: 0.06
 Nodes (32): 0. Priority Convention (binding), 1. Requirements (the contract), 2. Invariants, 3.1 `ReadyQueueManager`, 3.2 `next_task()` — Current Implementation (scheduler.cpp:479), 3.3 `reschedule()` — Current Implementation (scheduler.cpp:1846), 3.4 `set_current()` — Current Invariant (scheduler.cpp:530), 3.5 WEDGE Detector (scheduler.cpp:826–957, CONFIG_DEBUG) (+24 more)
 
 ### Community 131 - "Test Runner / Base"
-Cohesion: 0.10
-Nodes (21): TaskControlBlock, LoadedLibrary, file_size, in_progress, load_base, load_size, num_phys_pages, phys_pages (+13 more)
+Cohesion: 0.12
+Nodes (19): LoadedLibrary, file_size, in_progress, load_base, load_size, num_phys_pages, phys_pages, refcount (+11 more)
 
 ### Community 132 - "Test Registry Generator"
 Cohesion: 0.21
@@ -1334,8 +1371,8 @@ Cohesion: 0.08
 Nodes (24): Change, Design, Design, Design, Design, Diagrams, Files Summary, Files touched (+16 more)
 
 ### Community 140 - "AArch64 CPUID"
-Cohesion: 0.05
-Nodes (63): probe, MockBlockDevice::MockBlockDevice(), VirtioNetDevice::~VirtioNetDevice(), alloc_user_stack_and_heap(), ELF64Header, ELF64ProgramHeader, TaskControlBlock, exec_into_current() (+55 more)
+Cohesion: 0.07
+Nodes (34): TaskControlBlock, merge_kernel_half, alloc_id, alloc_kslot(), canary_expected(), canary_install_kernel_stack(), canary_install_user_segments(), canary_verify_user_segments() (+26 more)
 
 ### Community 141 - "RISC-V CPUID"
 Cohesion: 0.11
@@ -1346,8 +1383,8 @@ Cohesion: 0.10
 Nodes (20): Branch: testbed only, Cache Coloring — test_cache_coloring.cpp, Core Affinity — test_affinity.cpp, Core State Isolation — test_core_isolation.cpp, Distributed Run Queues — test_percpu_sched.cpp, I/O APIC — test_ioapic.cpp, IPI Batching — test_ipi_batching.cpp, IRQ Priority (TPR) — test_irq_priority.cpp (+12 more)
 
 ### Community 143 - "x86_64 IDT"
-Cohesion: 0.17
-Nodes (18): append_dec(), append_hex(), append_str(), base_error_string(), current_wall_ms(), default_severity_for(), dmesg_push(), dmesg_push_base() (+10 more)
+Cohesion: 0.22
+Nodes (16): base_error_string(), default_severity_for(), dmesg_push(), dmesg_push_base(), dmesg_push_sev(), DmesgRecord, error_string(), for_each() (+8 more)
 
 ### Community 144 - "DMA Buffer / Callback"
 Cohesion: 0.14
@@ -1378,28 +1415,28 @@ Cohesion: 0.10
 Nodes (19): Current state, Current state, Current state, Files Summary, Files touched, Files touched, Files touched, Implementation (+11 more)
 
 ### Community 151 - "Ctype / Character"
-Cohesion: 0.13
-Nodes (35): checked(), is_user_string(), safe_copy_to_user(), strncpy_from_user(), resolve_parent_then_authorize(), resolve_then_authorize(), Syscall::sys_chdir(), Syscall::sys_close() (+27 more)
+Cohesion: 0.20
+Nodes (21): checked(), safe_copy_to_user(), Syscall::sys_fstat(), Syscall::sys_ioctl(), Syscall::sys_pipe(), Syscall::sys_read(), Syscall::sys_readdir(), Syscall::sys_write() (+13 more)
 
 ### Community 152 - "DMA Direction / Transfer"
 Cohesion: 0.10
 Nodes (19): Assessment, Clean Areas, Findings — HIGH, Findings — LOW, Findings — MEDIUM, H-1. AHCI: no locks on shared port state, H-2. FLAW-04 still open: `GHC_IE` enabled without ISR, H-3. virtio_blk: entire submit path unlocked (+11 more)
 
 ### Community 153 - "IDT Entry Format"
-Cohesion: 0.07
+Cohesion: 0.06
 Nodes (20): InterruptVector, ISRHandler, IDT::init(), IDT::register_handler(), IDT::register_handler_raw(), make_entry(), ap_main(), bring_up() (+12 more)
 
 ### Community 154 - "RISC-V Timer"
-Cohesion: 0.08
-Nodes (27): sighandler_t, SyncError, Notify, init, init_err, initialized_, lock_, notify_err (+19 more)
+Cohesion: 0.04
+Nodes (38): Endpoint, create, TaskControlBlock, Mutex, VirtioBlkReqHdr, reserved, sector, type (+30 more)
 
 ### Community 155 - "VirtIO PCI Capability"
 Cohesion: 0.13
 Nodes (11): _sbrk(), atoi(), atol(), brk(), calloc(), malloc(), sbrk(), sys_brk() (+3 more)
 
 ### Community 156 - "AHCI Command Header"
-Cohesion: 0.10
-Nodes (17): calibrate_tsc, remaining_ns, resolve_source, tsc_freq_hz, TickSource, hrt_ns_to_tsc(), ticks_to_ns(), Timer::active_source() (+9 more)
+Cohesion: 0.12
+Nodes (13): calibrate_tsc, tsc_freq_hz, TickSource, hrt_ns_to_tsc(), ticks_to_ns(), Timer::active_source(), Timer::calibrate(), Timer::ns() (+5 more)
 
 ### Community 157 - "DMA Engine"
 Cohesion: 0.10
@@ -1422,11 +1459,11 @@ Cohesion: 0.10
 Nodes (19): Audit Limitation, C-1 · Spinlock held across context switch in `Semaphore::wait()` / `wait_err()`, C-2 · Blocking semaphore wait never removes the task from the ready queue, C-3 · Sporadic Server permanently loses budget when the replenishment ring is full, CRITICAL, Executive Summary, H-1 · Spinlock held across context switch in `EventGroup::wait_bits()` / `wait_bits_err()`, H-2 · `Notify` wakes REAPED tasks (UAF) — inconsistent dead-state filter (+11 more)
 
 ### Community 162 - "Preemption Under Syscall Tests"
-Cohesion: 0.15
-Nodes (33): IpiMode, arm_deadline, calibrate_bus_hz, enable_local, eoi, get_ppr, init, init_ap (+25 more)
+Cohesion: 0.14
+Nodes (36): IpiMode, arm_deadline, calibrate_bus_hz, enable_local, eoi, get_ppr, get_tpr_class, init (+28 more)
 
 ### Community 163 - "Pipe Buffer"
-Cohesion: 0.11
+Cohesion: 0.10
 Nodes (12): arch_page_table_tlb_flush(), ArchPageTable, ENTRIES, PAGE_SIZE, PD_MASK, PD_SHIFT, PDPT_MASK, PDPT_SHIFT (+4 more)
 
 ### Community 164 - "Heap / Operator New"
@@ -1442,8 +1479,8 @@ Cohesion: 0.10
 Nodes (19): 1. Pre-Implementation & Test Sanctity, 2. Workflow & Branching, CI Pipeline (`.github/workflows/ci.yml`), Execution Protocols, Host-Side Watchdog, Known Test Patterns, Objective, Output Format (v0.2.19+) (+11 more)
 
 ### Community 167 - "Page Flags HAL"
-Cohesion: 0.15
-Nodes (38): cancel_pending, apply_relocations(), apply_view(), chain_append(), count_needed(), ELF64Header, ELF64ProgramHeader, ElfError (+30 more)
+Cohesion: 0.19
+Nodes (26): apply_rela_table(), apply_relocations(), apply_view(), chain_append(), count_needed(), ELF64Header, ELF64ProgramHeader, dynstr_ok() (+18 more)
 
 ### Community 168 - "x86_64 Keyboard"
 Cohesion: 0.09
@@ -1482,8 +1519,8 @@ Cohesion: 0.18
 Nodes (17): apply_t11(), ensure_helper_include(), find_test_body_ranges(), is_blank(), is_comment(), is_relocatable_assert(), main(), process_file() (+9 more)
 
 ### Community 177 - "VirtIO Used Ring"
-Cohesion: 0.21
-Nodes (11): disarm_target(), release_claim(), WdogCap, dispose, revoke, snapshot_reset, target_gen, target_pid (+3 more)
+Cohesion: 0.20
+Nodes (12): disarm_target(), release_claim(), WdogCap, create, dispose, revoke, snapshot_reset, target_gen (+4 more)
 
 ### Community 178 - "IOCD Protocol"
 Cohesion: 0.29
@@ -1494,12 +1531,12 @@ Cohesion: 0.12
 Nodes (16): 1. Replace `next_task()` body (lines 479–528), 2. D2 re-enqueue guard in `switch_to_task()` (lines 1671–1684) — NO CHANGE, 3. Remove the lazy-rebuild safety comment in `restore_pod()` (ready_queue_manager.cpp:150–151), Behavioral Impact on Tests, Changes Required, Current Code, Edge Case Analysis: send_sync BLOCKED-in-runq, Edge Cases (+8 more)
 
 ### Community 180 - "Utsname / Sys Info"
-Cohesion: 0.22
-Nodes (17): AbiItimerspec, it_interval, it_value, AbiTimespec, tv_nsec, tv_sec, copy_timespec_in(), is_timerfd_vnode() (+9 more)
+Cohesion: 0.21
+Nodes (18): AbiItimerspec, it_interval, it_value, AbiTimespec, tv_nsec, tv_sec, copy_timespec_in(), is_timerfd_vnode() (+10 more)
 
 ### Community 181 - "Scheduler Errors"
-Cohesion: 0.11
-Nodes (14): for_each(), Fn, RwLock, k_pending, k_writer, state_, atomic_compare_exchange(), atomic_exchange() (+6 more)
+Cohesion: 0.13
+Nodes (12): RwLock, k_pending, k_writer, state_, atomic_compare_exchange(), atomic_exchange(), atomic_fetch_add(), atomic_fetch_and() (+4 more)
 
 ### Community 182 - "Test Class Section"
 Cohesion: 0.12
@@ -1566,12 +1603,12 @@ Cohesion: 0.22
 Nodes (9): e(), fe(), ge(), H(), I(), It(), j(), t() (+1 more)
 
 ### Community 199 - "Test Config Parser"
-Cohesion: 0.07
-Nodes (53): FrameCap, count, dispose, is_user, phys, revoke, FrameCap, Slot (+45 more)
+Cohesion: 0.14
+Nodes (30): FrameCap, TaskControlBlock, Slot, PagerFaultMsg, client_id, fault_flags, fault_id, fault_va (+22 more)
 
 ### Community 200 - "FPU Multi-Task Tests"
-Cohesion: 0.29
-Nodes (12): InvpcidType, has_invpcid(), invpcid_build_desc(), invpcid_emit(), InvpcidDesc, addr, pcid, read_cr3() (+4 more)
+Cohesion: 0.25
+Nodes (14): InvpcidType, has_invpcid(), invpcid_build_desc(), invpcid_emit(), InvpcidDesc, addr, pcid, read_cr3() (+6 more)
 
 ### Community 201 - "RLimit Tests"
 Cohesion: 0.18
@@ -1626,8 +1663,8 @@ Cohesion: 0.22
 Nodes (10): IrqLatencyHistogram, BUCKETS, count_, dump, init, max_ns_, RANGE_NS, record (+2 more)
 
 ### Community 219 - "Coding Style / Ensure Assert"
-Cohesion: 0.06
-Nodes (32): PriorityMap, bitmap_hi_, bitmap_lo_, STARVABLE_NONE, TaskControlBlock, ReadyQueueManager, bitmap_, capture_pod (+24 more)
+Cohesion: 0.14
+Nodes (21): TaskControlBlock, ReadyQueueManager, bitmap_, capture_pod, clear_all, depth, dequeue_highest, dequeue_level (+13 more)
 
 ### Community 220 - "Healthcheck Script"
 Cohesion: 0.09
@@ -1647,11 +1684,11 @@ Nodes (25): CpuContext, current, last_switch_tick, ticks, TaskControlBlock, Sche
 
 ### Community 226 - "Tmpfs Mount Failure Tests"
 Cohesion: 0.23
-Nodes (10): is_user_range(), safe_copy_from_user(), debug_data_begin(), debug_target_ok(), debug_validate_handle(), Syscall::sys_task_debug_read_mem(), Syscall::sys_task_debug_read_regs(), Syscall::sys_task_debug_write_mem() (+2 more)
+Nodes (13): is_user_range(), safe_copy_from_user(), TaskControlBlock, debug_data_begin(), debug_resolve(), debug_target_ok(), debug_validate_handle(), Syscall::sys_task_debug_attach() (+5 more)
 
 ### Community 227 - "Watchdog Test Docs"
-Cohesion: 0.03
-Nodes (33): copy_strings(), count_strings(), setup_user_stack(), total_string_len(), print_backtrace(), read_fp(), ResField, name (+25 more)
+Cohesion: 0.02
+Nodes (23): FaultWaitContext, child_id_, resumed_, slot0_, status_, fm_cleanup(), fm_write_file(), open_owned_file (+15 more)
 
 ### Community 238 - "Reschedule Briefing"
 Cohesion: 0.12
@@ -1659,7 +1696,7 @@ Nodes (15): 24-Hour Stress Test — test_stress_24h.cpp, Branch: testbed only, C
 
 ### Community 239 - "Switch To Task Briefing"
 Cohesion: 0.11
-Nodes (23): __cyg_profile_func_enter(), find_or_add_func(), gcda_dump_cb(), gcda_put(), gcda_put_dec(), gcda_puts(), GcdaContext, checksum (+15 more)
+Nodes (22): __cyg_profile_func_enter(), find_or_add_func(), gcda_dump_cb(), gcda_put(), gcda_put_dec(), gcda_puts(), GcdaContext, checksum (+14 more)
 
 ### Community 240 - "Code Review / RTOS Pillars"
 Cohesion: 0.13
@@ -1674,8 +1711,8 @@ Cohesion: 0.14
 Nodes (13): PtPoolSnapshot, base, bitmap, clean, crc32, generation, mapped, owner (+5 more)
 
 ### Community 246 - "Daemon Restart Crash Test"
-Cohesion: 0.11
-Nodes (21): TprGuard, saved_, get_tpr_class, tpr_raise, tpr_restore, cpu_id(), cpu_index(), TaskControlBlock (+13 more)
+Cohesion: 0.12
+Nodes (18): TprGuard, saved_, cpu_id(), cpu_index(), TaskControlBlock, lapic_id(), per_cpu_current(), PerCpu (+10 more)
 
 ### Community 248 - "DevFS Header"
 Cohesion: 0.17
@@ -1702,8 +1739,8 @@ Cohesion: 0.27
 Nodes (3): CleanupBP, PanicBP, TcbWatch
 
 ### Community 259 - "System Integration Docs"
-Cohesion: 0.12
-Nodes (26): MmioCap, Slot, TaskControlBlock, PciBarType, Slot, MmioCap, bar_type, create_from_bar (+18 more)
+Cohesion: 0.11
+Nodes (29): MmioCap, PciBarType, Slot, TaskControlBlock, PciBarType, Slot, MmioCap, bar_type (+21 more)
 
 ### Community 260 - "Safety Hardening Docs"
 Cohesion: 0.15
@@ -1714,20 +1751,20 @@ Cohesion: 0.25
 Nodes (7): PageFlags, CACHE_DISABLED, HUGE, NX, PRESENT, USER, WRITE
 
 ### Community 262 - "Deadlock Detection Docs"
-Cohesion: 0.11
-Nodes (17): 0. Corrections to the issue texts (binding), 10. RT and safety constraints (binding), 11. Verification strategy, 12. Phased delivery (proposed sub-issues — no code scheduled here), 13. debugd main loop v1 (normative — reduced Phase 4 scope), 14. Supervisor-grant model for non-child attach (normative), 15. Open questions (for audit, not blockers), 1. Goals and non-goals (+9 more)
+Cohesion: 0.08
+Nodes (24): 0. Corrections to the issue texts (binding), 10. RT and safety constraints (binding), 11. Verification strategy, 12. Phased delivery (proposed sub-issues — no code scheduled here), 13. debugd main loop v1 (normative — reduced Phase 4 scope), 14. Supervisor-grant model for non-child attach (normative), 15. Open questions (for audit, not blockers), 1. Goals and non-goals (+16 more)
 
 ### Community 263 - "Idle Monitor Docs"
 Cohesion: 0.50
 Nodes (3): APPENDIX — DISMISSED AS FALSE POSITIVE / UNSUPPORTED (no action), Jarvis RTOS — Verified Kernel Audit Report (ASIL-D Gate), VERIFIED FLAWS — ACTION REQUIRED
 
 ### Community 264 - "Network Stack Docs"
-Cohesion: 0.29
-Nodes (11): off_t, _close(), _fstat(), _getpid(), _kill(), _lseek(), map_err(), _open() (+3 more)
+Cohesion: 0.24
+Nodes (12): off_t, _close(), _fstat(), _getpid(), _kill(), _lseek(), map_err(), _open() (+4 more)
 
 ### Community 265 - "TaskControlBlock"
 Cohesion: 0.06
-Nodes (39): apply_rela_table(), DynView, dyn, dyn_count, jmprel, pltrel_type, pltrelsz, rela (+31 more)
+Nodes (35): DynView, dyn, dyn_count, jmprel, pltrel_type, pltrelsz, rela, relaent (+27 more)
 
 ### Community 266 - "check"
 Cohesion: 0.20
@@ -1818,7 +1855,7 @@ Cohesion: 0.50
 Nodes (3): Analyse, Hardware, Mandelbrot CPU-Benchmark
 
 ### Community 294 - "Preemptive Priority-Based Scheduling + Priority Inversion Mitigation (Pillar 3)"
-Cohesion: 0.17
+Cohesion: 0.20
 Nodes (9): T, TcbWriteLog, caller, field_offset, new_value, old_value, seq, tcb_addr (+1 more)
 
 ### Community 295 - "Phase 9: Hardware Drivers & Protocols (0.9.x)"
@@ -1839,19 +1876,15 @@ Nodes (11): Active Development — v0.4.0, Background ELF Loader (2026-08-14, co
 
 ### Community 309 - "handle"
 Cohesion: 0.18
-Nodes (9): Endpoint, Endpoint, badge, bound_receiver, create, disposed_, lock_, q (+1 more)
+Nodes (27): alloc_user_stack_and_heap(), copy_strings(), count_strings(), ELF64Header, ELF64ProgramHeader, TaskControlBlock, exec_into_current(), finalize_loaded_task() (+19 more)
 
 ### Community 311 - "Kernel Boot Sequence"
 Cohesion: 0.17
 Nodes (11): aarch64 bring-up fixes landed (issue #100, 2026-08-31 — uncommitted, SIL 3 audit pending), Active, Active Summary, Blocked, Completed, Important Details, Next Move, Objective (+3 more)
 
 ### Community 312 - "Context Switch Assembly (isr_stubs.asm)"
-Cohesion: 0.14
-Nodes (18): build_canonical_path(), cmd_alias, cmd_cat, cmd_cd, cmd_less, cmd_loadelf, cmd_ls, cmd_pushd (+10 more)
-
-### Community 313 - "Deferred Context Switch"
-Cohesion: 0.11
-Nodes (9): GDTEntry, access, base_high, base_low, base_mid, granularity, limit_low, GDT::init() (+1 more)
+Cohesion: 0.19
+Nodes (13): build_canonical_path(), cmd_alias, cmd_cat, cmd_cd, cmd_less, cmd_loadelf, cmd_ls, cmd_pushd (+5 more)
 
 ### Community 314 - "Framebuffer/Terminal"
 Cohesion: 0.18
@@ -1874,8 +1907,8 @@ Cohesion: 0.29
 Nodes (6): 1. Contract, 2. API, 3. Implementation (PMM extension, not a pool), 4. Tests (stub→real, names kept), 5. WCET impact, Cache Coloring Allocator
 
 ### Community 319 - "O(1) Bitmap Scheduler"
-Cohesion: 0.19
-Nodes (9): build_exec(), build_so(), emit_dynamic(), ExecSpec, base, needs, nneeds, want_jump (+1 more)
+Cohesion: 0.13
+Nodes (15): build_exec(), build_so(), emit_dynamic(), ExecSpec, base, needs, nneeds, want_jump (+7 more)
 
 ### Community 320 - "PriorityMap"
 Cohesion: 0.20
@@ -1883,7 +1916,7 @@ Nodes (10): 0. Implementation reconciliation (issue #92), 1. Current State (veri
 
 ### Community 321 - "rate_monotonic_schedule"
 Cohesion: 0.02
-Nodes (108): #100 — aarch64 runtime bring-up, #101 — Hard RT measurement under QEMU, #102 — Scheduler tests with hard-RT assertions, #103 — aarch64 deep_copy_user_pages descriptors, #104 — aarch64 boot + fork prerequisites (open), #105 Part B — Crash Supervisor notifications, #106 — Zero-copy cap shared-memory rings, #107 — External Pager Protocol (+100 more)
+Nodes (109): #100 — aarch64 runtime bring-up, #101 — Hard RT measurement under QEMU, #102 — Scheduler tests with hard-RT assertions, #103 — aarch64 deep_copy_user_pages descriptors, #104 — aarch64 boot + fork prerequisites (open), #105 Part B — Crash Supervisor notifications, #106 — Zero-copy cap shared-memory rings, #107 — External Pager Protocol (+101 more)
 
 ### Community 322 - "ReadyQueueManager"
 Cohesion: 0.22
@@ -1926,7 +1959,7 @@ Cohesion: 0.22
 Nodes (9): 1. Severity semantics, 2. Codebase identifiers and canonical numbers, 3. Complete error-code list with severity, 4. Event records (emission catalogue), 5. Emission inventory (who pushes what), 6. Legacy compatibility (old → new map), 7. Render format, 8. Concurrency & safety contract (+1 more)
 
 ### Community 334 - "ErrorOr T"
-Cohesion: 0.29
+Cohesion: 0.25
 Nodes (7): 1. Current State (verified), 2. The Merge Idea (adapted), 3. Design Details, 4. Semantics Gained, 5. Test Plan, 6. Non-Goals, Kernel-Half Merge — Lazy Page-Table Synchronization
 
 ### Community 1264 - "FPU Test Suite (clone, multi, xmm_all)"
@@ -1934,8 +1967,8 @@ Cohesion: 0.25
 Nodes (7): #021 — all-1 GPF at IpcConcurrentSenders (test 80/745), #022 — PCP mutex retry budget exhaustion, H2 — deferred-switch race (Scheduler / IPC, `ipc_send_sync_roundtrip` hang), Kernel — ElfLoader (H2 deferred-switch family), Kernel — VM / Page Table, Open Issues, Resolved
 
 ### Community 1265 - "SporadicServer 14-Test Suite"
-Cohesion: 0.17
-Nodes (7): plic_complete(), plic_priority_reg(), ArchInterruptController::eoi(), ArchInterruptController::init(), handle_kernel_exception(), riscv64_exception_dispatch(), riscv64_u_fault_handler()
+Cohesion: 0.14
+Nodes (11): handle_interrupt, plic_claim(), plic_complete(), plic_priority_reg(), ArchInterruptController::eoi(), ArchInterruptController::init(), ArchInterruptController::restore(), handle_kernel_exception() (+3 more)
 
 ### Community 1266 - "Starvation & Deadlock Test Suite (4 Classes)"
 Cohesion: 0.68
@@ -1970,8 +2003,8 @@ Cohesion: 0.29
 Nodes (7): IPC/Sync Audit (6 findings), Memory Audit (11 findings), Prior v0.3.6 completed work, Scheduler Audit (8 findings), v0.3.6 development-session completion (moved from ROADMAP.md), v0.3.6 — Memory + Scheduler + IPC/Sync Audit Remediation, v0.3.6 — Released (rebrand + boundary audit)
 
 ### Community 1275 - "make execute-test Unified Target"
-Cohesion: 0.16
-Nodes (13): TaskControlBlock, fast_call(), FastFrame, regs, FastIpcCtx, out_, payload_, peer_id_ (+5 more)
+Cohesion: 0.13
+Nodes (16): SchedPolicy, set_sched_policy, debug_spawn_child(), TaskControlBlock, fast_call(), FastFrame, regs, FastIpcCtx (+8 more)
 
 ### Community 1276 - "Autonomous Lead Quality Engineer (Testbed Role)"
 Cohesion: 0.20
@@ -2014,8 +2047,8 @@ Cohesion: 0.33
 Nodes (5): Branch: testbed only, Hot-Path Secure Call Sequence — test_call_sequence.cpp, Network Stack — test_net.cpp, Test Cases — v0.9.x (Phase 9: Hardware Drivers & Protocols), USB Stack — test_usb.cpp
 
 ### Community 1291 - "concepts.hpp"
-Cohesion: 0.33
-Nodes (3): F, drive_until(), frame_handle()
+Cohesion: 0.21
+Nodes (9): F, FrameCap, TaskControlBlock, drive_until(), frame_handle(), install_frame(), load_pager_probe(), make_parked() (+1 more)
 
 ### Community 1292 - "types.h"
 Cohesion: 0.18
@@ -2024,6 +2057,10 @@ Nodes (10): DECISION, F1 — S1 — Committed `SYS_PAGER_MAP` cap pins are never
 ### Community 1293 - "idt.hpp"
 Cohesion: 0.25
 Nodes (8): TaskControlBlock, VirtioBlkComplRecord, arm_used, done, head_idx, status, waiter, waiter_gen
+
+### Community 1294 - "Phase 4: Hard Real-Time (v0.3.x)"
+Cohesion: 0.18
+Nodes (13): ipc_recv(), ipc_send(), getpid(), iocd_dispatch(), iocd_handle_irq_event(), iocd_handle_keyboard_read(), iocd_handle_mmio_map(), iocd_handle_mmio_unmap() (+5 more)
 
 ### Community 1295 - "Phase 5: SMP + Multicore (v0.4.x)"
 Cohesion: 0.29
@@ -2046,8 +2083,8 @@ Cohesion: 0.29
 Nodes (7): CmdHeader, ctba, ctbau, opts, prdbc, prdtl, rsvd1
 
 ### Community 1300 - "Technical Debt: TaskDef Builder Pattern Refactor"
-Cohesion: 0.22
-Nodes (10): Direction, BmDmaChannel, abort, bm_io_base_, handle_irq, init, is_busy, start (+2 more)
+Cohesion: 0.32
+Nodes (5): BmDmaChannel, abort, bm_io_base_, handle_irq, is_busy
 
 ### Community 1301 - "VFS Touched Flag (Test Isolation Optimization)"
 Cohesion: 0.40
@@ -2062,8 +2099,8 @@ Cohesion: 0.19
 Nodes (8): Arch, DbgErr, span, string_view, uint64_t, uint8_t, FakeController, table_
 
 ### Community 1310 - "test_preemption_under_syscall.cpp"
-Cohesion: 0.22
-Nodes (6): cpuid(), CpuIdResult, eax, ebx, ecx, edx
+Cohesion: 0.07
+Nodes (20): cpuid(), CpuIdResult, eax, ebx, ecx, edx, error_string(), VmmError (+12 more)
 
 ### Community 1311 - "Memory Subsystem Audit — Fix Specification"
 Cohesion: 0.22
@@ -2075,7 +2112,7 @@ Nodes (3): counter(), freq_hz(), probe()
 
 ### Community 1313 - "Utsname"
 Cohesion: 0.08
-Nodes (31): init, TickSource, Timer, active_source, calibrate, calibrate_ok_, calibrated_, counter_freq_hz_ (+23 more)
+Nodes (25): TickSource, Timer, active_source, calibrate_ok_, calibrated_, counter_freq_hz_, deadline_tsc_, handle_irq (+17 more)
 
 ### Community 1314 - "2. VULN-002 — Unsynchronized PMM/MemPool Mutation (CRITICAL)"
 Cohesion: 0.10
@@ -2101,9 +2138,13 @@ Nodes (8): Corrective patch, FINDINGS, S1 — `src/kernel/irq_delivery.cpp:109-1
 Cohesion: 0.22
 Nodes (8): DECISION: APPROVED, FINDINGS, Iteration-2 findings F1–F6 — verification of closure, Scope item 2 — NEW defects from the corrective patch, Scope item 3 — no regression of verified-clean iteration-2 items, Scope item 4 — S3 hygiene, Scope item 5 — concurrency, SIL 3 Audit Report — Issue #2 (IRQ caps + user-space IRQ delivery), Iteration 3 (RE-AUDIT)
 
+### Community 1320 - "5. VULN-005 — Non-Atomic Memory Budget Counter (MEDIUM)"
+Cohesion: 0.20
+Nodes (14): set_priority, cleanup_image_file(), cleanup_stdin_file(), run_verify_impl(), run_verify_program(), run_verify_wired(), VerifyOutcome, capture (+6 more)
+
 ### Community 1321 - "6. VULN-006 — Unbounded WCET in Address-Space Teardown/Clone (MEDIUM)"
-Cohesion: 0.07
-Nodes (41): DeadlineMissWhileBlocked, DeadlineMissWhileTerminatedSkipped, DeadlineMonitorDetectsMiss, DeadlineMonitorTaskSpawned, DeadlineRearmOnPeriodRollover, dispose, ensure_running(), notify_death() (+33 more)
+Cohesion: 0.05
+Nodes (48): DeadlineMissWhileBlocked, DeadlineMissWhileTerminatedSkipped, DeadlineMonitorDetectsMiss, DeadlineMonitorTaskSpawned, DeadlineRearmOnPeriodRollover, ISRHandler, TaskControlBlock, ISRHandler (+40 more)
 
 ### Community 1322 - "7. VULN-007 — Unbounded Scans in reserve/pool_used_pages (LOW)"
 Cohesion: 0.29
@@ -2118,7 +2159,7 @@ Cohesion: 0.50
 Nodes (3): Appendix — Findings Filtered as False Positives / Out of Scope, Confirmed Findings, Jarvis RTOS — Kernel Audit Report: `src/kernel/task/*`
 
 ### Community 1328 - "Rlimit"
-Cohesion: 0.24
+Cohesion: 0.25
 Nodes (13): iopb_load, iopb_mask_all, TaskControlBlock, iopb_claim(), iopb_grant_count(), iopb_grant_range(), iopb_ledger_add(), iopb_ledger_clear_cap() (+5 more)
 
 ### Community 1329 - "11. VULN-011 — Unsynchronized CRC State (LOW)"
@@ -2166,8 +2207,8 @@ Cohesion: 0.70
 Nodes (4): restore_config(), run_one(), set_define(), run_config_matrix.sh script
 
 ### Community 1369 - "syscall_is_user_task"
-Cohesion: 0.33
-Nodes (7): TaskControlBlock, release_task(), spawn_ss_exhausted(), TEST_CLASS(), SsDeadlineMissDuringReplenish, SsExhaustionTriggersDeadline, SsObjectListSnapshotCycle
+Cohesion: 0.13
+Nodes (4): PriorityMap, bitmap_hi_, bitmap_lo_, STARVABLE_NONE
 
 ### Community 1370 - "IcmpHeader"
 Cohesion: 0.29
@@ -2206,16 +2247,16 @@ Cohesion: 0.40
 Nodes (5): 9. VULN-009 — free_page_err Missing owner_set_kernel (LOW), Files, Fix, Problem, Risk
 
 ### Community 1379 - "Asynchronous Task-Death Notification — Crash Supervisor (issue #105 Part B)"
-Cohesion: 0.40
-Nodes (5): FaultWaitContext, child_id_, resumed_, slot0_, status_
+Cohesion: 0.22
+Nodes (7): TaskControlBlock, TaskControlBlock, TaskQueue, contains, pop_front, push_back, remove
 
 ### Community 1380 - "checked_ptr.hpp"
 Cohesion: 0.11
 Nodes (21): prng_next_block(), PrngState, blocks_generated, buffer, counter, have_rdrand, have_rdseed, key (+13 more)
 
 ### Community 1381 - "atomic.hpp"
-Cohesion: 0.17
-Nodes (9): arch_page_table_activate(), arch_page_table_current(), tlb_flush_stats(), TlbFlushStats, all_fallback, all_invpcid, ctx_fallback, ctx_invpcid (+1 more)
+Cohesion: 0.29
+Nodes (7): tlb_flush_stats(), TlbFlushStats, all_fallback, all_invpcid, ctx_fallback, ctx_invpcid, single_va
 
 ### Community 1382 - "walk4"
 Cohesion: 0.70
@@ -2270,8 +2311,8 @@ Cohesion: 0.23
 Nodes (4): CpioBuilder, overflowed, pos, install_synth()
 
 ### Community 1395 - "time.c"
-Cohesion: 0.29
-Nodes (4): InterruptVector, ISRHandler, IDT::register_handler(), IDT::register_handler_raw()
+Cohesion: 0.21
+Nodes (10): fdt_static_build(), fdt_static_put32(), fdt_static_put64(), fdt_static_put_prop(), fdt_static_put_str(), FdtStaticLayout, chosen_node, mem_node (+2 more)
 
 ### Community 1396 - "OCtx"
 Cohesion: 0.25
@@ -2290,8 +2331,8 @@ Cohesion: 0.50
 Nodes (4): Commits, KernelObject Shared-Reference-Count Foundation (2026-08-13, commits `ee2f24c0`..`62467804`), Ownership classes, Validation
 
 ### Community 1405 - "reg_wr"
-Cohesion: 0.20
-Nodes (10): CmdTable, atapi_cmd, cfis, prd, rsvd0, PrdHbaEntry, byte_count, dba (+2 more)
+Cohesion: 0.18
+Nodes (12): sighandler_t, CNode, EventGroup, get_cspace(), get_signal_handler(), get_sporadic_server(), Queue, Mutex (+4 more)
 
 ### Community 1411 - "Branch: testbed only"
 Cohesion: 0.50
@@ -2342,8 +2383,8 @@ Cohesion: 0.29
 Nodes (4): CpioWriter, overflowed, pos, install_synth()
 
 ### Community 1464 - "test_virtio_blk_req.cpp"
-Cohesion: 0.16
-Nodes (12): arm_transport(), T, destroy_driver(), init_driver(), pump_available(), pump_task_entry(), QueuePhys, avail (+4 more)
+Cohesion: 0.23
+Nodes (8): arm_transport(), T, destroy_driver(), init_driver(), pump_available(), pump_task_entry(), reset_mock(), va_of()
 
 ### Community 1465 - "FINDINGS"
 Cohesion: 0.29
@@ -2405,9 +2446,13 @@ Nodes (8): 1.1 Send-path rollback (VULN-IPC-01) [IMPLEMENTED], 1. Message-Queue 
 Cohesion: 0.25
 Nodes (7): 1. Definitions, 2. Grant of Copyright License, 3. Grant of Patent License, 4. Ownership and Flexibility, 5. Your Warranties, 6. No Warranty (As-Is), Contributor License Agreement (CLA) for NexIOS RTOS
 
+### Community 1480 - "idt.cpp"
+Cohesion: 0.18
+Nodes (11): IrqGuard, irq_was_, create_forever_task(), TaskControlBlock, ScopedCurrentTask, guard_, saved_, terminate_and_drain() (+3 more)
+
 ### Community 1481 - "VirtualAddress"
-Cohesion: 0.10
-Nodes (19): VirtqAvail, flags, idx, ring, VirtqDesc, addr, flags, len (+11 more)
+Cohesion: 0.12
+Nodes (17): VirtqAvail, flags, idx, ring, VirtqDesc, addr, flags, len (+9 more)
 
 ### Community 1482 - "ReadyQueuePOD"
 Cohesion: 0.50
@@ -2462,8 +2507,8 @@ Cohesion: 0.47
 Nodes (4): Fn, ScopeGuard, active_, fn_
 
 ### Community 1498 - "FramebufferInfo"
-Cohesion: 0.22
-Nodes (9): prd_from_sg(), prd_reset(), PrdEntry, byte_count, flags, phys_addr, PrdTable, count (+1 more)
+Cohesion: 0.17
+Nodes (12): Direction, DmaCallback, start_transfer, prd_from_sg(), prd_reset(), PrdEntry, byte_count, flags (+4 more)
 
 ### Community 1499 - "Test Cases — v0.4.0 (Memory Protection)"
 Cohesion: 0.29
@@ -2482,8 +2527,8 @@ Cohesion: 0.40
 Nodes (4): AUDIT REPORT 2026-08-25T17-01-35Z, DECISION: APPROVED, FINDINGS, PATCH
 
 ### Community 1503 - "ScopedCurrentTask"
-Cohesion: 0.15
-Nodes (3): read_live_tls(), tls_ping_body(), tls_yield()
+Cohesion: 0.17
+Nodes (15): error_string(), from_bufpool_error(), from_ipc_error(), from_mempool_error(), from_pmm_error(), from_sched_error(), from_sync_error(), from_task_error() (+7 more)
 
 ### Community 1504 - "IopbGrantEntry"
 Cohesion: 0.25
@@ -2498,8 +2543,8 @@ Cohesion: 0.40
 Nodes (4): AUDIT REPORT 20260825T060240Z, DECISION: APPROVED, FINDINGS, PATCH
 
 ### Community 1507 - "sh.c"
-Cohesion: 0.29
-Nodes (7): SoSpec, base, has_func, has_got_reloc, needs, nneeds, soname
+Cohesion: 0.25
+Nodes (12): dispose, CNode, current_cspace(), Syscall::sys_cap_copy(), Syscall::sys_cap_grant(), Syscall::sys_cap_mint(), Syscall::sys_cap_retype(), Syscall::sys_cap_revoke() (+4 more)
 
 ### Community 1508 - "AUDIT REPORT 20260903-165844"
 Cohesion: 0.40
@@ -2563,11 +2608,15 @@ Nodes (4): AUDIT REPORT 20260920T190825Z, FINDINGS, PATCH, VERIFIED CLEAN (no fi
 
 ### Community 1527 - "AUDIT REPORT 2026-09-01T07-20-38Z"
 Cohesion: 0.03
-Nodes (79): iocd_crash_restarts, MailboxEntry, wake_one, TaskControlBlock, debug_apply_disposition(), debug_drain_debugger(), debug_resolve(), Syscall::sys_task_debug_attach() (+71 more)
+Nodes (108): MailboxEntry, create, is_iocd_task(), copy_bounded(), ensure_task, request_load, mapping_count, Syscall::sys_death_recv() (+100 more)
 
 ### Community 1528 - "AUDIT REPORT 2026-09-01T13-45-05Z"
 Cohesion: 0.29
 Nodes (6): register_freelist_consistency_tests(), register_infra_tests(), register_external_test_classes(), run_testrunner_group(), register_expected_panic_tests(), register_testrunner_tests()
+
+### Community 1529 - "AUDIT REPORT 2026-09-01T15-12-36Z"
+Cohesion: 0.17
+Nodes (9): DmaBuffer, owned, phys_addr, size, virt_addr, prepare_buf, xfer_buf, Local (+1 more)
 
 ### Community 1530 - "AUDIT REPORT 2026-09-01T15-23-23Z"
 Cohesion: 0.50
@@ -2627,7 +2676,7 @@ Nodes (3): AUDIT REPORT 2026-09-01T07-20-38Z, FINDINGS, PATCH
 
 ### Community 1544 - "VirtqAvail"
 Cohesion: 0.03
-Nodes (38): Signal, SimpleTaskPtr, encode_handle(), encode_user_handle(), Mutex, Semaphore, TaskControlBlock, make_srv_task() (+30 more)
+Nodes (32): SimpleTaskPtr, TaskDeleter, Pred, Pred, TaskControlBlock, task_blocked(), yield_wait_until(), yield_wait_until() (+24 more)
 
 ### Community 1546 - "install_dest_cspace"
 Cohesion: 0.50
@@ -2642,8 +2691,8 @@ Cohesion: 0.43
 Nodes (6): pit0_elapsed_ns(), pit0_latch_start(), pit1_arm(), pit1_expired(), watchdog_arm(), watchdog_check_inline()
 
 ### Community 1549 - "LifecycleWaitContext"
-Cohesion: 0.33
-Nodes (6): F, CycleStats, avg, max, min, measure_cycles()
+Cohesion: 0.17
+Nodes (12): tm, tm_hour, tm_isdst, tm_mday, tm_min, tm_mon, tm_sec, tm_wday (+4 more)
 
 ### Community 1550 - "MockVirtio"
 Cohesion: 0.50
@@ -2798,8 +2847,8 @@ Cohesion: 0.50
 Nodes (3): AUDIT REPORT 2026-09-13T22-11-21Z, CHECKS SUMMARY, FINDINGS
 
 ### Community 1705 - "register_memory_determinism_tests"
-Cohesion: 0.40
-Nodes (3): TaskControlBlock, SimpleTaskDeleter, TaskDeleter
+Cohesion: 0.18
+Nodes (8): migration_count, set_affinity, TaskControlBlock, SimpleTaskDeleter, TaskControlBlock, destroy_queued_task(), make_queued_task(), total_migrations()
 
 ### Community 1706 - "QueuePhys"
 Cohesion: 0.40
@@ -2833,25 +2882,33 @@ Nodes (3): AUDIT REPORT 2026-10-03T11-13-24Z, CHECKS (PROMPT-audit.md 1-7, issue
 Cohesion: 0.50
 Nodes (3): Active cautions (curated digest — read at session start; cap ~12 lines), Entry format, LEARNINGS — Knowledge Base (FEEDBACK transition artifact)
 
-### Community 1718 - "register_config_checks_tests"
+### Community 1717 - "concepts.hpp"
 Cohesion: 0.33
+Nodes (12): strncpy_from_user(), resolve_parent_then_authorize(), resolve_then_authorize(), Syscall::sys_chdir(), Syscall::sys_close(), Syscall::sys_dup(), Syscall::sys_mkdir(), Syscall::sys_open() (+4 more)
+
+### Community 1718 - "register_config_checks_tests"
+Cohesion: 0.40
 Nodes (3): TestTarget, g_dispose_count, g_revoke_count
 
 ### Community 1753 - "register_dmesg_tests"
 Cohesion: 0.26
 Nodes (12): base_code_is_info(), catalog_lookup(), catalog_table_valid(), catalog_text(), DmesgRecord, error_nr, severity, subsystem (+4 more)
 
+### Community 1755 - "concepts.hpp"
+Cohesion: 0.15
+Nodes (5): Case, command, expected, TaskControlBlock, top_name_task()
+
 ### Community 1756 - "types.h"
-Cohesion: 0.50
-Nodes (4): RecentTask, entry, tcb, ticks
+Cohesion: 0.15
+Nodes (13): DirEntryRaw, access_date, attrs, cluster_high, cluster_low, creation_date, creation_tenths, creation_time (+5 more)
 
 ### Community 1813 - "v0.3.11 — BufferPool +1 PMM Leak (Completed 2026-08-06)"
 Cohesion: 0.67
 Nodes (3): BufferPool user-stack PT-page +1 leak (FIXED 2026-08-06 — ZERO PMM WARNs), v0.3.11 — BufferPool +1 PMM Leak (Completed 2026-08-06), v0.3.11 — Released (BufferPool +1 PMM leak + Test-Suite Compliance + Notify deadlock fix)
 
 ### Community 1814 - "TaskControlBlock::init_sporadic_server"
-Cohesion: 0.29
-Nodes (4): InterruptVector, ISRHandler, IDT::register_handler(), IDT::register_handler_raw()
+Cohesion: 0.27
+Nodes (12): sys_alarm(), sys_clock_gettime(), sys_gettod(), sys_nanosleep(), alarm(), clock_gettime(), gettimeofday(), map_err() (+4 more)
 
 ### Community 1816 - "IpcCtx"
 Cohesion: 0.67
@@ -2860,6 +2917,10 @@ Nodes (3): IpcCtx, out_, peer_id_
 ### Community 1819 - "Rlimit"
 Cohesion: 0.25
 Nodes (7): DmaChannel, abort, handle_irq, init, is_busy, start, DmaEngine::DmaEngine()
+
+### Community 1825 - "register_cap_lifecycle_tests"
+Cohesion: 0.20
+Nodes (12): BootStage, boot_mark(), boot_raw_delta_to_ns(), boot_stage_delta(), boot_stage_mark(), BootDelta, ns, valid (+4 more)
 
 ### Community 1827 - "register_core_isolation_tests"
 Cohesion: 0.50
@@ -2882,8 +2943,8 @@ Cohesion: 0.29
 Nodes (7): Utsname, domainname, machine, nodename, release, sysname, version
 
 ### Community 1833 - "ReadyQueuePOD"
-Cohesion: 0.20
-Nodes (6): register_acpi_parse_tests(), register_per_cpu_tests(), run_acpi_parse_group(), run_per_cpu_group(), run_smp_madt_group(), register_smp_madt_tests()
+Cohesion: 0.47
+Nodes (10): cancel_pending, ElfError, free_image_pages(), load_fresh(), load_one(), load_shared_object(), map_hit(), map_image() (+2 more)
 
 ### Community 1834 - "register_virtio_blk_req_tests"
 Cohesion: 0.47
@@ -3009,6 +3070,10 @@ Nodes (4): LifecycleWaitContext, child_id_, status_, woke_
 Cohesion: 0.50
 Nodes (3): AUDIT REPORT 2026-10-01T00:00:00Z, FINDINGS, PATCH
 
+### Community 1878 - "AuditEntry"
+Cohesion: 0.33
+Nodes (8): PostKind, next_msg_slot, post_event, append_dec(), append_hex(), append_str(), current_wall_ms(), format_dmesg_entry()
+
 ### Community 1924 - "v0.3.2 — Strict Deadline Adherence (Released)"
 Cohesion: 0.67
 Nodes (3): 0.3.4 Minimal & Known Interrupt Latency Jitter (Pillar 4), Completed in v0.3.2:, v0.3.2 — Strict Deadline Adherence (Released)
@@ -3022,8 +3087,8 @@ Cohesion: 0.67
 Nodes (3): FrameCap, TaskControlBlock, install_frame()
 
 ### Community 1928 - "test_invpcid.cpp"
-Cohesion: 0.50
-Nodes (3): alloc_zero_page(), register_invpcid_tests(), run_invpcid_group()
+Cohesion: 0.25
+Nodes (7): §9.4 FOLLOW-UP EDIT (no new contradiction), AUDIT REPORT 2026-10-03T15-29-26Z, CHECK 7 (retrieval, note-only per precedent), PATCH, RE-SCAN CHECKS 1–6 (no new issues), SCOPE, VERIFICATION OF ITER-1 FINDINGS (all resolved)
 
 ### Community 1930 - "SCtx"
 Cohesion: 0.67
@@ -3050,32 +3115,120 @@ Cohesion: 0.67
 Nodes (3): SleepReq, tv_nsec, tv_sec
 
 ### Community 1959 - "OCtx"
-Cohesion: 0.67
-Nodes (3): OCtx, gate_, mutex_
+Cohesion: 0.36
+Nodes (6): mmio_read32(), mmio_write32(), Serial::getchar(), Serial::init(), Serial::poll_getchar(), Serial::putchar()
 
 ### Community 1960 - "SCtx"
 Cohesion: 0.67
 Nodes (3): SCtx, out_, recv_
 
+### Community 1961 - "register_pipe_blocking_tests"
+Cohesion: 0.29
+Nodes (5): IoMmuDmaCap, dispose, domain_idx_, owner_task_id_, revoke
+
+### Community 1962 - "debug_write"
+Cohesion: 0.36
+Nodes (8): notify_death(), restart_stale_daemons(), debug_putchar(), debug_task_switch(), debug_write(), debug_write_dec(), debug_write_hex(), init_task_main()
+
+### Community 1963 - "GDTEntry"
+Cohesion: 0.29
+Nodes (7): GDTEntry, access, base_high, base_low, base_mid, granularity, limit_low
+
+### Community 1964 - "VirtqUsed"
+Cohesion: 0.29
+Nodes (7): VirtqUsed, flags, idx, ring, VirtqUsedElem, id, len
+
+### Community 1965 - "TEST_CLASS"
+Cohesion: 0.29
+Nodes (7): TaskControlBlock, release_task(), TEST_CLASS(), SyscallFuzzBounds, SyscallFuzzFlags, SyscallFuzzPrivilege, SyscallFuzzStates
+
+### Community 1966 - "AUDIT REPORT 2026-10-03T15-25-29Z"
+Cohesion: 0.33
+Nodes (5): AUDIT REPORT 2026-10-03T15-25-29Z, CHECKED WITH NO FINDING, FINDINGS, PATCH, SCOPE
+
+### Community 1967 - "demo.cpp"
+Cohesion: 0.53
+Nodes (4): demo_main(), draw_mandelbrot(), draw_spinning_rect(), mandelbrot_iter()
+
+### Community 1968 - "watchdogd.c"
+Cohesion: 0.60
+Nodes (5): main(), wdogd_dispatch(), wdogd_handle_disarm(), wdogd_handle_status(), wdogd_handle_supervise()
+
+### Community 1970 - "SIL 3 Audit Report — NexIOS RTOS issue #232 (test-only follow-up)"
+Cohesion: 0.50
+Nodes (3): DECISION: APPROVED, FINDINGS, SIL 3 Audit Report — NexIOS RTOS issue #232 (test-only follow-up)
+
+### Community 1971 - "SIL 3 Audit — Issue #45 (Deterministic Boot), final increment (testbed)"
+Cohesion: 0.50
+Nodes (3): DECISION: APPROVED, FINDINGS, SIL 3 Audit — Issue #45 (Deterministic Boot), final increment (testbed)
+
+### Community 1972 - "TSSBlock"
+Cohesion: 0.50
+Nodes (4): TSSBlock, iopb, iopb_terminator, tss
+
+### Community 1974 - "MsixCacheEntry"
+Cohesion: 0.50
+Nodes (4): MsixCacheEntry, bdf, tbl, valid
+
+### Community 1975 - "MsixEntryClaim"
+Cohesion: 0.50
+Nodes (4): MsixEntryClaim, bdf, entry_index, occupied
+
+### Community 1976 - "MapOut"
+Cohesion: 0.50
+Nodes (4): MapOut, count, phys, writable
+
+### Community 1977 - "BenchResult"
+Cohesion: 0.50
+Nodes (4): BenchResult, avg, max, min
+
+### Community 1978 - "test_aperiodic_servers.cpp"
+Cohesion: 0.67
+Nodes (3): Semaphore, TaskControlBlock, make_srv_task()
+
+### Community 1979 - "install_dest_cspace"
+Cohesion: 0.67
+Nodes (4): CNode, TaskControlBlock, install_dest_cspace(), teardown_dest_cspace()
+
+### Community 1980 - "wait_state"
+Cohesion: 0.50
+Nodes (4): TaskControlBlock, TaskState, release_task(), wait_state()
+
+### Community 1981 - "QueuePhys"
+Cohesion: 0.50
+Nodes (4): QueuePhys, avail, desc, used
+
+### Community 1982 - "Entry16"
+Cohesion: 0.67
+Nodes (3): Entry16, hi, lo
+
+### Community 1983 - "AbiTs"
+Cohesion: 0.67
+Nodes (3): AbiTs, tv_nsec, tv_sec
+
+### Community 1985 - "Timeval"
+Cohesion: 0.67
+Nodes (3): Timeval, tv_sec, tv_usec
+
 ## Knowledge Gaps
-- **4034 isolated node(s):** `entrypoint.sh script`, `codefold`, `dynsection`, `codefold`, `/opt/homebrew/opt/python@3.14/bin/python3.14` (+4029 more)
+- **4055 isolated node(s):** `entrypoint.sh script`, `codefold`, `dynsection`, `codefold`, `/opt/homebrew/opt/python@3.14/bin/python3.14` (+4050 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **192 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **200 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Scheduler` connect `AUDIT REPORT 2026-09-01T07-20-38Z` to `Scheduler / Daemon Management`, `VFS File Operations`, `Ready Queue / Task Priority Map`, `AArch64 CPUID`, `OwnerCtx`, `searchResults`, `ipc_blocking — Root-Cause Analysis (C): deferred-switch single-slot buffer corruption`, `IPC Tests / Buffer Handle`, `ProcFS / PMM Stats`, `Test Registry / Report`, `Sporadic Server`, `RISC-V / AArch64 Rand`, `RISC-V Timer`, `Memory Diagnostics / PMM`, `Sync Queue / Message Queue`, `Mutex / Deadlock Detection`, `Physical Memory Manager`, `Syscall Latency Bench`, `Page Flags HAL`, `6. VULN-006 — Unbounded WCET in Address-Space Teardown/Clone (MEDIUM)`, `Spinlock / Sync Tests`, `DMA / Tmpfs Tests`, `register_memory_determinism_tests`, `Scheduler Validation / Logger`, `Block Device Abstraction`, `VirtIO Used Ring`, `Buffer Pool`, `Utsname / Sys Info`, `AArch64 Barrier / TLB`, `BlockDevice`, `VirtIO Block Request`, `Test Config Parser`, `Memory Pool Allocator`, `RLimit Tests`, `Keyboard IRQ / Ring`, `AArch64 Test / Context`, `AHCI Init / Slot Alloc`, `syscall_is_user_task`, `Notify Synchronization`, `Coding Style / Ensure Assert`, `Test Expected Counts`, `Tmpfs I/O Timeout`, `I/O Control Daemon (IOCD)`, `Daemon Manager Entry`, `FAT32 Directory Entry`, `endpoint.cpp`, `.outb`, `FAT32 FS Header`, `make execute-test Unified Target`, `Boot Info / Memory Regions`?**
-  _High betweenness centrality (0.025) - this node is a cross-community bridge._
+- **Why does `Scheduler` connect `AUDIT REPORT 2026-09-01T07-20-38Z` to `Scheduler / Daemon Management`, `VFS File Operations`, `concepts.hpp`, `AArch64 CPUID`, `OwnerCtx`, `searchResults`, `ipc_blocking — Root-Cause Analysis (C): deferred-switch single-slot buffer corruption`, `IPC Tests / Buffer Handle`, `ProcFS / PMM Stats`, `Test Registry / Report`, `Ctype / Character`, `Sporadic Server`, `RISC-V Timer`, `Memory Diagnostics / PMM`, `Sync Queue / Message Queue`, `Mutex / Deadlock Detection`, `Physical Memory Manager`, `Syscall Latency Bench`, `5. VULN-005 — Non-Atomic Memory Budget Counter (MEDIUM)`, `ReadyQueuePOD`, `Spinlock / Sync Tests`, `6. VULN-006 — Unbounded WCET in Address-Space Teardown/Clone (MEDIUM)`, `DMA / Tmpfs Tests`, `register_memory_determinism_tests`, `Block Device Abstraction`, `TEST_CLASS`, `Scheduler Validation / Logger`, `VirtIO Used Ring`, `Buffer Pool`, `Utsname / Sys Info`, `handle`, `VirtIO Block Driver`, `AArch64 Barrier / TLB`, `BlockDevice`, `VirtIO Block Request`, `Test Config Parser`, `Memory Pool Allocator`, `RLimit Tests`, `idt.cpp`, `Keyboard IRQ / Ring`, `AArch64 Test / Context`, `AHCI Init / Slot Alloc`, `Coding Style / Ensure Assert`, `Test Expected Counts`, `Tmpfs Mount Failure Tests`, `sh.c`, `Tmpfs I/O Timeout`, `FAT32 Directory Entry`, `endpoint.cpp`, `.outb`, `FAT32 FS Header`, `make execute-test Unified Target`, `Boot Info / Memory Regions`?**
+  _High betweenness centrality (0.026) - this node is a cross-community bridge._
 - **Why does `Shell` connect `Shell Command Parser` to `Timer / Interrupt HAL`, `IPv4 Header`, `Shell / Terminal Services`, `Program Registry`, `Context Switch Assembly (isr_stubs.asm)`?**
   _High betweenness centrality (0.022) - this node is a cross-community bridge._
-- **Why does `SpinLock` connect `RISC-V / AArch64 Rand` to `System Integration Docs`, `Test Runner / Base`, `VirtqAvail`, `TaskControlBlock`, `Ready Queue / Task Priority Map`, `OwnerCtx`, `RISC-V CPUID`, `ipc_blocking — Root-Cause Analysis (C): deferred-switch single-slot buffer corruption`, `IPC Tests / Buffer Handle`, `chacha20_block`, `RISC-V Timer`, `Sync Queue / Message Queue`, `Mutex / Deadlock Detection`, `Semaphore / Locking Tests`, `Rlimit`, `PRNG / Random`, `handle`, `Scheduler Errors`, `VirtIO Network Driver`, `VirtIO Block Driver`, `AArch64 Barrier / TLB`, `Timer / Interrupt HAL`, `Test Config Parser`, `AHCI Driver Core`, `Libc Stdlib / Abort`, `Tmpfs I/O Timeout`, `Watchdog Test Docs`, `IPC / MemPool Errors`, `DMA PRD Entries`, `FAT32 Directory Entry`, `Test Framework Prompt`, `Daemon Restart Crash Test`, `AUDIT REPORT 2026-09-01T07-20-38Z`, `IRQ Guard`?**
+- **Why does `SpinLock` connect `RISC-V Timer` to `System Integration Docs`, `Test Runner / Base`, `VirtqAvail`, `TaskControlBlock`, `Ready Queue / Task Priority Map`, `OwnerCtx`, `RISC-V CPUID`, `ipc_blocking — Root-Cause Analysis (C): deferred-switch single-slot buffer corruption`, `IPC Tests / Buffer Handle`, `chacha20_block`, `RISC-V / AArch64 Rand`, `Sync Queue / Message Queue`, `Mutex / Deadlock Detection`, `Semaphore / Locking Tests`, `Rlimit`, `Scheduler Errors`, `VirtIO Network Driver`, `VirtIO Block Driver`, `AArch64 Barrier / TLB`, `Timer / Interrupt HAL`, `Test Config Parser`, `VirtualAddress`, `AHCI Driver Core`, `Notify Synchronization`, `AArch64 PCI ECAM`, `Tmpfs I/O Timeout`, `IPC / MemPool Errors`, `DMA PRD Entries`, `FAT32 Directory Entry`, `Test Framework Prompt`, `Daemon Restart Crash Test`, `AUDIT REPORT 2026-09-01T07-20-38Z`, `reg_wr`, `IRQ Guard`?**
   _High betweenness centrality (0.021) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `info` (e.g. with `vprint` and `init`) actually correct?**
   _`info` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 18 inferred relationships involving `current_task` (e.g. with `charge_task_memory` and `cleanup_test_tasks`) actually correct?**
   _`current_task` has 18 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `entrypoint.sh script`, `codefold`, `dynsection` to the rest of the system?**
-  _4101 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _4122 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Hardware Abstraction Layer` be split into smaller, more focused modules?**
   _Cohesion score 0.02631578947368421 - nodes in this community are weakly interconnected._
