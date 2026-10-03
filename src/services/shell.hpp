@@ -126,6 +126,11 @@ private:
     static void cmd_run(int argc, const char** argv);
     /// @brief Built-in: shows kernel version.
     static void cmd_version(int argc, const char** argv);
+    /// @brief Built-in: shows boot stage timings (issue #281, read-only
+    ///        on the kernel::boot_stage_* API — no new syscalls).
+    /// @note Takes the last free command-table slot (64/64); the next
+    ///       command needs a MAX_COMMANDS bump.
+    static void cmd_bootstat(int argc, const char** argv);
     /// @brief Built-in: lists background jobs.
     static void cmd_jobs(int argc, const char** argv);
     /// @brief Built-in: loads a kernel driver.

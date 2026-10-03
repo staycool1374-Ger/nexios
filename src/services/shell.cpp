@@ -203,6 +203,7 @@ void Shell::init() {
     register_command("reboot",  "Reboot the system",                cmd_reboot);
     register_command("run",     "Run a registered program",         cmd_run);
     register_command("version", "Show kernel version info",         cmd_version);
+    register_command("bootstat","Show boot stage timings",             cmd_bootstat);
     register_command("jobs",    "List background tasks",            cmd_jobs);
     register_command("modprobe","Load/init a kernel driver",        cmd_modprobe);
     register_command("modlist", "List available kernel drivers",    cmd_modlist);
@@ -1746,6 +1747,46 @@ void Shell::cmd_version(int, const char**) {
     Terminal::write(" ");
     Terminal::write(kernel::Version::build_time());
     Terminal::write("\n");
+}
+
+void Shell::cmd_bootstat(int argc, const char**) {
+    // Issue #281: read-only boot-stage statistics. Only calls
+    // kernel::boot_stage_delta() — no new syscalls, no scheduler writes.
+    if (argc != 1) {
+        Terminal::write("Usage: bootstat\n");
+        return;
+    }
+    static const char* const k_names[5] = {
+        "ARCH_INIT", "MEMORY_INIT", "DRIVER_PROBE", "TIMER_CALIBRATE",
+        "TABLE_REBUILD"};
+    uint64_t total_ns = 0;
+    for (size_t i = 0; i < 5; ++i) {
+        const kernel::BootDelta d = kernel::boot_stage_delta(
+            static_cast<kernel::BootStage>(i));
+        Terminal::write(k_names[i]);
+        Terminal::write(": ");
+        if (d.valid) {
+            print_uint(d.ns / 1000000ULL);
+            Terminal::write(" ms\n");
+            total_ns += d.ns;
+        } else {
+            // Fail-closed display: never print a number without a source.
+            Terminal::write("n/a (invalid)\n");
+        }
+    }
+    Terminal::write("total: ");
+    const uint64_t total_ms = total_ns / 1000000ULL;
+    print_uint(total_ms);
+#if CONFIG_BOOT_BUDGET_MS == 0
+    Terminal::write(" ms (no budget configured)\n");
+#else
+    Terminal::write(" ms / budget ");
+    print_uint(static_cast<uint64_t>(CONFIG_BOOT_BUDGET_MS));
+    Terminal::write(" ms (");
+    print_uint((total_ms * 100ULL) /
+               static_cast<uint64_t>(CONFIG_BOOT_BUDGET_MS));
+    Terminal::write("%)\n");
+#endif
 }
 
 void Shell::cmd_jobs(int, const char**) {
