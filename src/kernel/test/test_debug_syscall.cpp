@@ -1936,9 +1936,16 @@ JARVIS_TEST(debug_attach_sel9_stop_request, "PRE: none | POST: none") {
     JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelStop,
                                 h) == 0,
                       "sel9 on running failed");
+    // The tick legitimately consumes the arm (parks the spinner + clears
+    // the flag) in the window between the sel9 return and this read — far
+    // likelier on fast (KVM) runners. The observable contract is that the
+    // target parks, proven by debug_park_and_get_pc below; accept
+    // armed-or-already-parked here, never a bare flag read.
     JARVIS_ASSERT_FMT(__atomic_load_n(&t->debug_stop_requested,
-                                      __ATOMIC_ACQUIRE) != 0,
-                      "stop not armed");
+                                      __ATOMIC_ACQUIRE) != 0 ||
+                          __atomic_load_n(&t->debug_parked,
+                                          __ATOMIC_ACQUIRE),
+                      "stop neither armed nor parked");
     const uint64_t pc = debug_park_and_get_pc(h);
     JARVIS_ASSERT_FMT(pc != 0, "park failed");
     JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelStop,
