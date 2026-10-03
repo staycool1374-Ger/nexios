@@ -304,6 +304,99 @@ debugd doubles as the introspection engine — no second mechanism:
   ELF symbol awareness comes from the file on the host (GDB
   `file prog.elf`), never from kernel parsing.
 
+### 9.1 `runelf --debug` flag contract (normative, issue #231)
+
+`runelf --debug prog.elf` (argv form, parsed in `cmd_runelf` before
+`take_completed`; bare `runelf` behavior is unchanged per #77).
+Usage contract: exactly `runelf --debug <path>` is accepted; any other
+arity (lone `--debug`, extra args such as `runelf --debug a b`) prints
+the `runelf` usage line and launches nothing. Debug-build-only: release
+builds refuse the flag with the normal `runelf` usage line (carve-out
+§10/N4 extended to the flag).
+
+### 9.2 Hold-at-entry mechanism (normative order)
+
+Selector grounding: sel1 is the §3 launcher-claim (`attach(1,
+child-pid)`), sel3 is the §4–§5 breakpoint-insert (pure table write,
+no park needed), sel7/sel8 are the §14.2 grant-mint/revoke selectors,
+and sel9 is the §4/§13.3 stop-request; §14.2's "number assigned at
+implementation" is fixed to 7 (mint) and 8 (revoke), control selectors
+to 2 (poll), 3/4 (breakpoint insert/clear), 5 (step), 6 (continue),
+9 (stop-request).
+
+(a) `take_completed`; (b) settle priority/policy + `add_task_err`
+admission (fail closed on denial via the existing denial paths; a
+denied TCB is destroyed via the never-added path, never admitted);
+(c) claim/grant/stop per §9.3–§9.4; (d) insert the entry breakpoint
+at `hdr->entry` via the bound breakpoint-insert selector (requires
+the §9.3 binding — insert on an unbound target is rejected) and check
+its return: on insert failure tear down per (e); the claim→grant→stop
+sequence bounds the pre-breakpoint window (sel9 parks at the next
+user-mode boundary per §4) but this spec claims no zero-instruction
+guarantee before the entry breakpoint is confirmed present;
+(e) on any post-add failure terminate the just-added task via the
+admitted-task teardown path and drop its binding slot (breakpoint
+shadows of bound targets restore via the shared disposition path; a
+never-bound target holds no shadow entry) — never leave it running.
+
+### 9.3 Attach handoff (decided: shell-as-launcher claim+grant)
+
+`cmd_runelf` sets the taken TCB's `parent_id` to the shell task BEFORE
+`add_task_err`, then after add: sel1 launcher-claim (parenthood now
+provable) followed immediately by sel7 grant-mint naming the debugd
+pid as grantee. REJECTED: PID-1-per-launch mint (needs a new
+shell→init IPC for an event init cannot otherwise observe);
+debugd-as-parent (inverts §13.6 discovery — the loop learns targets
+via grants, it does not spawn them); shell-handle passing (a transfer
+op is a new selector in disguise, §14.2 dishonest). PID 1 remains
+grantor-of-last-resort and sel8 revoker, not the per-launch path.
+
+### 9.4 Grant timing rule
+
+sel7 is minted after `add_task` (`find_task` requires a live target).
+The claim→grant→stop sequence bounds the pre-breakpoint window
+(sel9 parks at the next user-mode boundary per §4), but this spec
+claims no zero-instruction guarantee before the entry breakpoint is
+confirmed present per §9.2(d).
+Post-grant, the shell arms sel9 stop-request as belt (tick parks at
+the next user-mode boundary per the §4 rule for RUNNING targets).
+
+### 9.5 debugd on-demand startup
+
+If the debugd pid cell (owner: taskdefs `g_debugd_pid_cell`, set on
+successful spawn and cleared on debugd death/exit; a cell naming a
+dead generation counts as unset) is unset, spawn debugd from the
+taskdefs row values (SPORADIC_SERVER, prio 2, SS(1,10,0) envelope per
+§10) via the named runtime daemon-spawn path (not `reboot_from_table`,
+which is noreturn and boot-only) in shell task context BEFORE
+`take_completed`; the DaemonWatch array and the row's `enabled=false`
+flag are never touched, and on-demand debugd death applies the §10
+debugger-death disposition with restart-on-next-`--debug` (no
+DaemonWatch restart). If debugd is already live, reuse it. Spawn
+failure fails closed before `take_completed` (nothing to tear down).
+
+### 9.6 Introspection read-only rule
+
+`runelf --debug` adds no scheduler-introspection surface beyond §4
+stop-event snapshots (state/priority/budget) plus the §3 debug data
+plane (`read_regs`/`read_mem`, with the session's break/step/continue/
+stop control per §4–§6); no new syscall, no scheduler-state write path
+(reprioritize/rebudget forbidden — §9 sentence 2 stands); ELF symbol
+awareness stays host-side.
+
+### 9.7 Failure semantics (decided: fail closed everywhere)
+
+Loader failure → existing `runelf` errors; debugd spawn failure →
+refuse before `take_completed`; entry-breakpoint insert failure →
+tear down per §9.2(e); post-add claim/grant/stop failure
+(EBUSY/EPERM/ESRCH on the mint path, EBADF/ESRCH on the resolve path —
+no new errno) → admitted-task teardown of the added task + drop of
+its binding slot + shell error naming the errno; breakpoint shadows of
+bound targets restore via the shared disposition path. RATIONALE: a
+`--debug` launch that cannot be observed must not execute (silent
+full-speed fallback would run a possibly-faulty image outside the
+promised session).
+
 ## 10. RT and safety constraints (binding)
 
 - debugd runs at the lowest debuggable priority under a bounded
@@ -370,7 +463,19 @@ debugd doubles as the introspection engine — no second mechanism:
    UART-IPC transport endpoint are deferred to later milestones —
    deferred, not denied. No normative transport-byte or runtime
    sentence may appear outside this pointer until those phases.
-5. `runelf --debug` integration (§9, gated on #77).
+5. `runelf --debug` integration (§9, gated on #77 — satisfied,
+   take_completed path landed). Acceptance (issue #231): flag parse
+   (accept `runelf --debug <path>`; `runelf --debug a b` and lone
+   `--debug` print the usage line and launch nothing); entry-bp
+   insert return checked after grant with teardown on failure;
+   claim(sel1)→grant(sel7)→stop(sel9) sequence with the denial
+   table preserved (EBUSY on already-debugged, EPERM on non-launcher
+   mint and on non-grantor, ESRCH on dead target, EBADF on
+   unknown/foreign handle — no new errno); DaemonWatch membership
+   unchanged after on-demand spawn; release-build refusal;
+   fail-closed teardown (no READY/RUNNING residue, no leaked binding
+   slot, no leaked breakpoint-shadow entry) on claim-, grant-,
+   stop-, and bp-insert-failure and on debugd-spawn-failure.
 6. Bare-metal checklist audit (§8) against RPi4/RISC-V bring-up.
 7. TCP transport (§7 v2, gated on Phase 9 netstack #55).
 8. Determinism qualification (§10–§11 envelope tests).
@@ -434,8 +539,7 @@ reconciliation with #50, which MUST NOT be interpreted until then.
 - §14.2 Grant record shape: (grantee debugger-id, target
   reference, nonce/generation, single-use-or-expiry flag, opaque
   `attenuation` reservation). Mint path (decided): a DEDICATED
-  NEW attach selector (number assigned at implementation —
-  RECOMMENDED next free after the Phase-2 selectors; no new
+  NEW attach selector, fixed as sel7 (revoke: sel8; no new
   syscall number, selectors are cheap) taking
   (target-selector, grantee-id), callable only by §14.1 grantors.
   REJECTED alternative: mint-for-others through the existing
@@ -484,3 +588,9 @@ reconciliation with #50, which MUST NOT be interpreted until then.
 - Q4: `qXfer:features` / target XML — needed for modern GDB arch
   detection; deferred to implementation (fixed minimal XML per
   arch, no dynamic generation).
+- Q5: second `runelf --debug` while one session is live — queue,
+  refuse EBUSY, or attach a second target (multi-target debugd, cf.
+  Q3)? Non-blocking and explicitly deferred: until decided, the
+  implementation MUST document its choice and, if refusing, refuse
+  with EBUSY on the usage/error surface (no silent queue, no second
+  target by accident).
