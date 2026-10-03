@@ -117,6 +117,14 @@ make build
 make execute-test x86_64 debug debug_syscall
 ```
 
+> **Apple Silicon / arm64 hosts:** `docker pull` fetches the arm64 image
+> by default, which emulates x86_64 via TCG (slower, same results). If
+> you hit `BdsDxe ... Not Found` followed by `Start PXE over IPv4`, your
+> image predates the multiarch GRUB fix — pull again, or force the amd64
+> image explicitly (runs emulated, needs Rosetta/QEMU user-static):
+> `docker pull --platform linux/amd64 ...` /
+> `docker run --platform linux/amd64 ...`.
+
 Run a gate directly without an interactive shell:
 
 ```bash

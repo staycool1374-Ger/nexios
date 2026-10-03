@@ -8,12 +8,11 @@ FROM ubuntu:24.04
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Buildx target arch (auto-filled: amd64/arm64). The x86 GRUB modules
-# exist only on amd64 (neither grub-pc-bin nor grub-efi-amd64-bin is in
-# Ubuntu ports) — install them conditionally so the arm64 leg builds.
-# x86_64 QEMU tests need the UEFI El Torito entry for OVMF (BIOS-only
-# ISOs fail with BdsDxe Not Found); aarch64/riscv64 boot via -kernel
-# ELF and never touch GRUB, so the arm64 image simply cannot build
-# x86 ISOs (documented limitation).
+# (grub-pc-bin, grub-efi-amd64-bin) exist only in the amd64 archive, not
+# in Ubuntu ports — on arm64 they arrive via multiarch below, so BOTH legs
+# build UEFI-bootable x86 ISOs. Without them grub-mkrescue produces an
+# ISO with no UEFI entry and OVMF falls through to PXE (issue #243).
+# aarch64/riscv64 boot via -kernel ELF and never touch GRUB.
 ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -46,6 +45,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && ln -sf /usr/bin/x86_64-linux-gnu-objcopy /usr/local/bin/x86_64-elf-objcopy \
   && ln -sf /usr/bin/x86_64-linux-gnu-strip /usr/local/bin/x86_64-elf-strip \
   && rm -rf /var/lib/apt/lists*
+
+# x86 GRUB modules on arm64 hosts (issue #243): ports carries no amd64
+# binaries, so multiarch needs the amd64 archive source first. The
+# modules are target code (packed into the ISO by grub-mkrescue, run by
+# the emulated x86 CPU) — host arch is irrelevant. The amd64 leg is
+# untouched (both packages already installed above unconditionally).
+RUN if [ "$(dpkg --print-architecture)" != "amd64" ]; then dpkg --add-architecture amd64 && echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble main universe" > /etc/apt/sources.list.d/amd64.list && apt-get update && apt-get install -y --no-install-recommends grub-pc-bin:amd64 grub-efi-amd64-bin:amd64 && rm -rf /var/lib/apt/lists/*; fi
 
 # Pinned pip meson/ninja (tools/build-picolibc.sh pins meson 1.12.0,
 # ninja 1.13.2): Ubuntu 24.04 apt ships meson 1.3.2, whose link-based
