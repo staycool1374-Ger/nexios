@@ -261,6 +261,7 @@ struct TaskControlBlock {
            exec_stamp_ns(0), sched_policy(SchedPolicy::AUTO),
            edf_exempt(false), edf_next_(nullptr), edf_prev_(nullptr),
            in_edf_queue_(false), wcet_ticks(0), wcet_overrun_fired(false),
+          wcet_observed_ns(0),
           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
@@ -362,6 +363,12 @@ struct TaskControlBlock {
     uint64_t
         wcet_ticks; ///< explicit WCET for utilisation calc; 0 = implicit 100%
     bool wcet_overrun_fired; ///< latch to fire WCET handler once per period
+    /// @brief Lifetime observed-maximum current-period execution, in
+    ///        nanoseconds (issues #43/#283, P4). Bumped in the tick path
+    ///        only (max, never reset, never written by idle). Exceed
+    ///        -vs-design only logs (spec §2.5: never re-buckets, never
+    ///        fails admission).
+    uint64_t wcet_observed_ns = 0;
     uint8_t ss_state_on_deadline_miss; ///< captured SporadicServer::state() at
                                        ///< deadline miss
     uint64_t ss_budget_on_deadline_miss; ///< captured remaining_budget() at

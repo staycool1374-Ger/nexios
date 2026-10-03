@@ -21,6 +21,7 @@
 ///        rate-monotonic dispatch, context switching, and test isolation.
 
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/idle_monitor.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/elf/elf.hpp>
 #include <crc32.hpp>
@@ -3286,6 +3287,10 @@ void Scheduler::on_tick() noexcept {
             if (task == running) {
                 ++task->executed_ticks;
                 charge_exec(*task); // issue #21: ns billing, running task only
+                // Issue #283: lifetime observed-maximum + exceed log live
+                // in the idle_monitor seam (M5: unit-testable); the tick
+                // path only invokes it for the running task.
+                (void)idle_note_exec_sample(*task);
             }
 
             if (task->state == TaskState::RUNNING ||
@@ -3295,6 +3300,15 @@ void Scheduler::on_tick() noexcept {
                     --task->remaining_ticks;
                 if (prev_rem == 0 && task->period_ticks > 0) {
                     task->remaining_ticks = task->period_ticks;
+                    // Issue #283: clean-boundary meet accounting lives in
+                    // the idle_monitor seam (M5: unit-testable). Caveat:
+                    // under CONFIG_DEADLINE_MONITOR_TASK the miss flag is
+                    // transient (scan_deadlines sets then clears it in one
+                    // pass), so meets there count reloads while misses stay
+                    // exact in deadline_miss_count — the ratio still trends
+                    // correctly; meets are a monitoring aid, never a
+                    // safety invariant.
+                    idle_note_period_reload(*task);
                     // Issue #21: new period, fresh budget clock (this
                     // tick was already billed into the old period above).
                     task->exec_period_ns = 0;

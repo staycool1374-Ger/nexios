@@ -28,6 +28,8 @@
 #include <kernel/task/task.hpp>
 #include <kernel/nexios_config.h>
 #include <kernel/arch/hal/timer.hpp>
+#include <kernel/log/dmesg.hpp>
+#include <kernel/log/dmesg_catalog.hpp>
 
 namespace kernel {
 
@@ -119,6 +121,60 @@ IdleScanProgress idle_scan_stall(IdleScanCursor &cursor, uint64_t budget,
     return scan_chunk(cursor, budget, flag);
 }
 
+IdleScanProgress idle_aggregate_util(IdleScanCursor &cursor,
+                                     uint64_t budget) noexcept {
+    const auto aggregate = [](TaskControlBlock *t) noexcept {
+        t->util_per_mille = idle_util_for(t->exec_period_ns,
+                                          t->period_ticks);
+        // block_per_mille / preempt_per_mille intentionally untouched:
+        // no such sinks exist (see header). deadline_meets is owned by
+        // the period-reload sites, never written here.
+    };
+    return scan_chunk(cursor, budget, aggregate);
+}
+
+uint32_t idle_util_for(uint64_t exec_ns, uint64_t period_ticks) noexcept {
+    constexpr uint64_t kNsPerTick = 1000000ULL;
+    constexpr uint64_t kPerMilleMax = 1000;
+    if (period_ticks == 0 ||
+        period_ticks == TaskControlBlock::NO_PERIOD)
+        return 0;
+    const uint64_t period_ns = period_ticks * kNsPerTick;
+    if (period_ns == 0)
+        return 0;
+    uint64_t util = kPerMilleMax;
+    if (exec_ns <= UINT64_MAX / kPerMilleMax)
+        util = (exec_ns * kPerMilleMax) / period_ns;
+    if (util > kPerMilleMax)
+        util = kPerMilleMax;
+    return static_cast<uint32_t>(util);
+}
+
+void idle_note_period_reload(TaskControlBlock &t) noexcept {
+    if (!t.deadline_missed && t.deadline_meets < UINT32_MAX)
+        ++t.deadline_meets;
+}
+
+bool idle_note_exec_sample(TaskControlBlock &t) noexcept {
+    if (t.exec_period_ns <= t.wcet_observed_ns)
+        return false;
+    const uint64_t prev_observed = t.wcet_observed_ns;
+    t.wcet_observed_ns = t.exec_period_ns;
+    constexpr uint64_t kNsPerTick = 1000000ULL;
+    const uint64_t bound_ns = (t.wcet_ticks > UINT64_MAX / kNsPerTick)
+                                  ? UINT64_MAX
+                                  : t.wcet_ticks * kNsPerTick;
+    if (t.wcet_ticks > 0 && prev_observed <= bound_ns &&
+        t.wcet_observed_ns > bound_ns) {
+        log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                            log::kDmesgBase_TIMING + 5,
+                            log::LogSeverity::WARN, t.name,
+                            t.wcet_observed_ns - bound_ns);
+        return true;
+    }
+    return false;
+}
+
 void idle_publish_stack_low_water(uint64_t low_water_rsp, uint64_t stack_top,
                                   uint32_t &dst) noexcept {
     if (low_water_rsp == 0 || stack_top <= low_water_rsp) {
@@ -137,6 +193,7 @@ void idle_monitor_slice() noexcept {
 #else
     static IdleScanCursor stack_cursor = {};
     static IdleScanCursor stall_cursor = {};
+    static IdleScanCursor util_cursor = {};
     constexpr uint64_t kChunk =
         static_cast<uint64_t>(CONFIG_IDLE_MONITOR_CHUNK);
 #if CONFIG_IDLE_MONITOR_STACK_CHECK
@@ -144,6 +201,9 @@ void idle_monitor_slice() noexcept {
 #endif
 #if CONFIG_IDLE_MONITOR_STALL
     (void)idle_scan_stall(stall_cursor, kChunk, arch::Timer::ticks());
+#endif
+#if CONFIG_IDLE_MONITOR_UTIL
+    (void)idle_aggregate_util(util_cursor, kChunk);
 #endif
 #endif
 }

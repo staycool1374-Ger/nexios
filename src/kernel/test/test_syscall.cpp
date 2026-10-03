@@ -868,6 +868,12 @@ JARVIS_TEST(syscall_klog_read, "PRE: none | POST: none") {
     auto *t = run_syscall_task([]() {
         for (size_t i = 0; i < sizeof(g_buf); ++i)
             g_buf[i] = 0;
+        // Issue #283: clear first — the ring accumulates entries across
+        // the suite, so content volume is suite-size-dependent. Clearing
+        // makes the probe self-contained and deterministic.
+        (void)Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::KLOG), 0, 0, 1, 0,
+            nullptr);
         log::dmesg_push_base(0xD0D0, "KLOGPROBE");
         g_ret = Syscall::handle(
             static_cast<uint64_t>(SyscallNumber::KLOG),
@@ -885,11 +891,14 @@ JARVIS_TEST(syscall_klog_read, "PRE: none | POST: none") {
         }
     });
     JARVIS_ASSERT(t != nullptr);
+    // Release BEFORE asserting on content: assert failure aborts the body,
+    // and cleanup after the asserts would be skipped, misreported as a
+    // leak (the +1 task is the unreaped probe, not a real leak).
+    release_task(t);
+    Scheduler::drain_zombie_list();
     JARVIS_ASSERT(g_ret > 0);
     JARVIS_ASSERT(g_ret < sizeof(g_buf));
     JARVIS_ASSERT_EQ(1ULL, g_found);
-    release_task(t);
-    Scheduler::drain_zombie_list();
     JARVIS_TEST_PASS();
 }
 

@@ -1852,9 +1852,13 @@ void Shell::cmd_monstat(int argc, const char**) {
         field(num(t->id), 3, true);
         field(t->name, 11, false);
         field(state_name(t->state), 8, false);
-        // util_per_mille is aggregation-unfed until #283: never print
-        // a number without a source (bootstat fail-closed precedent).
-        field("n/a", 5, true);
+        // Issue #283: util_per_mille is aggregation-fed (idle_aggregate_util);
+        // aperiodic tasks read 0 by definition. Clamped at write time as
+        // defense; the source owns the range.
+        uint64_t util = t->util_per_mille;
+        if (util > 1000)
+            util = 1000;
+        field(num(util), 5, true);
         field(num(t->stack_low_water_bytes), 6, true);
         field(t->stuck_suspected ? "yes" : "no", 5, false);
         field(num(t->deadline_meets), 5, true);

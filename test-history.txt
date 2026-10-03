@@ -2415,3 +2415,14 @@
 2026-10-03 18:49:29 scheduler_idle PASSED: 18 FAILED: 0 TIME: 1534ms
 2026-10-03 18:49:29 memory_determinism PASSED: 4 FAILED: 0 TIME: 6201ms
 2026-10-03 18:49:29 boot_deterministic PASSED: 3 FAILED: 0 TIME: 83ms
+2026-10-03 19:27:02 scheduler_idle PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT (host-load transient; rerun green, see next row)
+2026-10-03 19:27:02 scheduler_idle PASSED: 24 FAILED: 0 TIME: 1742ms
+2026-10-03 19:56:25 core PASSED: 509 FAILED: 1 TIME: 38779ms NOTE: klog_read volume assert + secondary leak (fixed this cycle)
+2026-10-03 19:56:25 core PASSED: 0 FAILED: 0 TIME: 220000ms STATUS: TIMEOUT at test 195 breaker (intermittent, standalone green, #280 class)
+2026-10-03 19:56:25 core PASSED: 509 FAILED: 1 TIME: 52000ms NOTE: klog_read volume assert (pre-fix rerun)
+2026-10-03 19:56:25 core PASSED: 0 FAILED: 0 TIME: 250000ms STATUS: TIMEOUT pre-test-1 stall (intermittent, #280 class)
+2026-10-03 19:56:25 core PASSED: 510 FAILED: 0 TIME: 29449ms
+2026-10-03 19:56:25 scheduler_idle PASSED: 24 FAILED: 0 TIME: 1742ms
+2026-10-03 19:56:25 syscall_core PASSED: 32 FAILED: 0 TIME: 1130ms
+2026-10-03 19:59:35 selftest PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT pre-test-1 stall (intermittent, rerun green, #280 class)
+2026-10-03 19:59:36 selftest PASSED: 139 FAILED: 0 TIME: 7554ms

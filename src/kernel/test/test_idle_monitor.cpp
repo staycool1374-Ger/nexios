@@ -228,6 +228,144 @@ JARVIS_TEST(idle_publish_low_water, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: idle_util_for is exact integer math with defined edges.
+// Input: Synthetic (exec_ns, period_ticks) pairs.
+// Expect: mid value exact; zero exec → 0; period 0/NO_PERIOD → 0;
+// over-100% clamps at 1000.
+JARVIS_TEST(idle_util_for_math, "PRE: none | POST: none") {
+    JARVIS_ASSERT(idle_util_for(5000000ULL, 10) == 500);
+    JARVIS_ASSERT(idle_util_for(0, 10) == 0);
+    JARVIS_ASSERT(idle_util_for(5000000ULL, 0) == 0);
+    JARVIS_ASSERT(idle_util_for(5000000ULL, TaskControlBlock::NO_PERIOD) ==
+                  0);
+    JARVIS_ASSERT(idle_util_for(10000000ULL, 10) == 1000);
+    JARVIS_ASSERT(idle_util_for(UINT64_MAX, 10) == 1000);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The P4 observed-max field starts at zero (extends the P1a
+// zero-init contract to wcet_observed_ns, all creation sites via the
+// explicit inits + memset).
+// Input: Fresh create()/create_user() TCBs.
+// Expect: wcet_observed_ns == 0.
+JARVIS_TEST(idle_observed_zero_init, "PRE: none | POST: none") {
+    auto *t1 = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t1 != nullptr);
+    JARVIS_ASSERT(t1->wcet_observed_ns == 0);
+    TaskControlBlock::destroy(t1);
+    auto *t2 = TaskControlBlock::create_user(forever_entry, 5, 10,
+                                             32_KiB);
+    JARVIS_ASSERT(t2 != nullptr);
+    JARVIS_ASSERT(t2->wcet_observed_ns == 0);
+    t2->cleanup();
+    delete t2;
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: idle_aggregate_util publishes exact per-mille from seeded
+// tick-charged samples; aperiodic reads 0; block/preempt stay 0 (no
+// sinks — never fabricated).
+// Input: Registered BLOCKED periodic task (exec seeded) + aperiodic
+// task, full-budget aggregate.
+// Expect: periodic exact 500; aperiodic 0; block/preempt 0; scanned.
+JARVIS_TEST(idle_aggregate_util_publishes, "PRE: none | POST: none") {
+    auto *periodic = TaskControlBlock::create(forever_entry, 5, 10);
+    auto *aperiodic = TaskControlBlock::create(forever_entry, 5, 0);
+    JARVIS_ASSERT(periodic != nullptr && aperiodic != nullptr);
+    periodic->state = TaskState::BLOCKED;
+    aperiodic->state = TaskState::BLOCKED;
+    Scheduler::register_task(*periodic);
+    Scheduler::register_task(*aperiodic);
+    periodic->exec_period_ns = 5000000ULL;
+
+    IdleScanCursor cursor = {};
+    const IdleScanProgress progress = idle_aggregate_util(cursor,
+                                                          1000000ULL);
+    JARVIS_ASSERT(progress.scanned >= 2);
+    JARVIS_ASSERT(periodic->util_per_mille == 500);
+    JARVIS_ASSERT(aperiodic->util_per_mille == 0);
+    JARVIS_ASSERT(periodic->block_per_mille == 0);
+    JARVIS_ASSERT(periodic->preempt_per_mille == 0);
+
+    Scheduler::remove_task(*periodic);
+    Scheduler::remove_task(*aperiodic);
+    TaskControlBlock::destroy(periodic);
+    TaskControlBlock::destroy(aperiodic);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The meet latch counts clean boundaries only (seam-level,
+// no tick driving).
+// Input: Unregistered TCBs through idle_note_period_reload.
+// Expect: !missed → meets+1; missed → unchanged; UINT32_MAX saturates.
+JARVIS_TEST(idle_meets_latch, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->deadline_missed = false;
+    idle_note_period_reload(*t);
+    JARVIS_ASSERT(t->deadline_meets == 1);
+    t->deadline_missed = true;
+    idle_note_period_reload(*t);
+    JARVIS_ASSERT(t->deadline_meets == 1);
+    t->deadline_missed = false;
+    t->deadline_meets = UINT32_MAX;
+    idle_note_period_reload(*t);
+    JARVIS_ASSERT(t->deadline_meets == UINT32_MAX);
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Observed-max is monotonic with a single transition-fired
+// exceed log; the design bound is never modified (spec §2.5).
+// Input: Unregistered TCB (wcet_ticks=10 → 10ms bound) through
+// idle_note_exec_sample with rising samples.
+// Expect: below → false + observed set; crossing → true + observed set
+// + design still 10; above again → false (no re-fire) + max tracks.
+JARVIS_TEST(idle_observed_max_and_log_once, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->wcet_ticks = 10;
+    t->exec_period_ns = 5000000ULL;
+    JARVIS_ASSERT(idle_note_exec_sample(*t) == false);
+    JARVIS_ASSERT(t->wcet_observed_ns == 5000000ULL);
+    t->exec_period_ns = 15000000ULL;
+    JARVIS_ASSERT(idle_note_exec_sample(*t) == true);
+    JARVIS_ASSERT(t->wcet_observed_ns == 15000000ULL);
+    JARVIS_ASSERT(t->wcet_ticks == 10);
+    t->exec_period_ns = 20000000ULL;
+    JARVIS_ASSERT(idle_note_exec_sample(*t) == false);
+    JARVIS_ASSERT(t->wcet_observed_ns == 20000000ULL);
+    JARVIS_ASSERT(t->wcet_ticks == 10);
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Aggregation feeds the monstat source (guards the #288 UTIL
+// flip against aggregation-unfed regression).
+// Input: Seeded registered task + full-budget aggregate.
+// Expect: util_per_mille becomes nonzero.
+JARVIS_TEST(idle_monstat_util_source, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->state = TaskState::BLOCKED;
+    Scheduler::register_task(*t);
+    t->exec_period_ns = 1000000ULL;
+
+    IdleScanCursor cursor = {};
+    (void)idle_aggregate_util(cursor, 1000000ULL);
+    JARVIS_ASSERT(t->util_per_mille == 100);
+
+    Scheduler::remove_task(*t);
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
 void register_idle_monitor_tests() {
     Logger::info("Registering idle monitor tests");
     JARVIS_REGISTER_TEST(idle_monitor_zero_init);
@@ -237,4 +375,10 @@ void register_idle_monitor_tests() {
     JARVIS_REGISTER_TEST(idle_scan_chunk_cursor_resumes);
     JARVIS_REGISTER_TEST(idle_stall_flag_no_kill);
     JARVIS_REGISTER_TEST(idle_publish_low_water);
+    JARVIS_REGISTER_TEST(idle_util_for_math);
+    JARVIS_REGISTER_TEST(idle_observed_zero_init);
+    JARVIS_REGISTER_TEST(idle_aggregate_util_publishes);
+    JARVIS_REGISTER_TEST(idle_meets_latch);
+    JARVIS_REGISTER_TEST(idle_observed_max_and_log_once);
+    JARVIS_REGISTER_TEST(idle_monstat_util_source);
 }

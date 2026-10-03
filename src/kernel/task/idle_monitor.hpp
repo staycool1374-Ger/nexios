@@ -66,6 +66,42 @@ IdleScanProgress idle_scan_stack(IdleScanCursor &cursor,
 IdleScanProgress idle_scan_stall(IdleScanCursor &cursor, uint64_t budget,
                                  uint64_t now_tick) noexcept;
 
+/// @brief Aggregate per-mille utilization for up to @p budget TCBs.
+/// @return Progress counts. Computes util_per_mille from the
+///         tick-charged exec_period_ns sample (per-period exec ÷
+///         period_ns, integer-only, saturating, div-by-zero-proof;
+///         aperiodic tasks read 0 by definition). block_per_mille and
+///         preempt_per_mille stay 0: no blocked-time/preempt-count
+///         sinks exist in-tree (issues #43/#283 P4) — not measured,
+///         never fabricated (bootstat fail-closed precedent).
+///         deadline_meets is owned by the period-reload sites, read
+///         here never written.
+IdleScanProgress idle_aggregate_util(IdleScanCursor &cursor,
+                                     uint64_t budget) noexcept;
+
+/// @brief Pure per-mille utilization math (issues #43/#283, P4).
+/// @param exec_ns Current-period executed ns (tick-charged sample).
+/// @param period_ticks Task period in ticks (1 tick = 1 ms).
+/// @return min(1000, exec_ns*1000/(period_ticks*1e6)); 0 for aperiodic
+///         (period 0/NO_PERIOD) or zero period_ns. Integer-only,
+///         saturating, div-by-zero-proof.
+uint32_t idle_util_for(uint64_t exec_ns, uint64_t period_ticks) noexcept;
+
+/// @brief Record a clean period boundary for @p t (issues #43/#283).
+/// Bumps deadline_meets (saturating) iff no miss is latched. Called
+/// from the scheduler period-reload site; unit-callable (M5).
+void idle_note_period_reload(TaskControlBlock &t) noexcept;
+
+/// @brief Fold an execution sample into the observed maximum (issues
+///        #43/#283). Max-only bump of wcet_observed_ns; on the first
+///        crossing of the design bound (wcet_ticks>0) pushes one
+///        TIMING+5 WARN (transition-triggered: observed is monotonic,
+///        so exactly one crossing per bound). Never re-buckets, never
+///        touches admission (spec §2.5). Called from the scheduler
+///        charge site for the running task; unit-callable (M5).
+/// @return True iff an exceed entry was pushed.
+bool idle_note_exec_sample(TaskControlBlock &t) noexcept;
+
 /// @brief Publish the switch-path low-water sample as saturated bytes.
 /// @param low_water_rsp Lowest kernel-stack RSP observed (kstack_low_water_
 ///        semantics: 0 = never switched out).

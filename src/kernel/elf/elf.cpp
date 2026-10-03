@@ -554,6 +554,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     tcb->exec_ns_total = 0;
     tcb->exec_period_ns = 0;
     tcb->exec_stamp_ns = 0;
+    tcb->wcet_observed_ns = 0; // issue #283 (see TaskControlBlock::create)
     tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (AUTO=0; explicit)
     tcb->edf_exempt = false;
     tcb->edf_next_ = nullptr;

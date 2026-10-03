@@ -1009,6 +1009,8 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     tcb->remaining_ticks = period_ticks;
     tcb->wcet_ticks = 0;
     tcb->wcet_overrun_fired = false;
+    tcb->wcet_observed_ns = 0; // issue #283: memset already zero;
+                                  // explicit per the TCB-memset discipline
     tcb->memory_budget_pages_ = 0;
     tcb->memory_used_pages_ = 0;
     init_task_common(*tcb);
@@ -1251,6 +1253,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     tcb->memory_used_pages_ = 0;
     tcb->wcet_ticks = 0;
     tcb->wcet_overrun_fired = false;
+    tcb->wcet_observed_ns = 0; // issue #283 (see create)
     init_task_common(*tcb);
 
     size_t kernel_stack_pages = (STACK_SIZE + 4095) / arch::PAGE_SIZE;
@@ -1447,6 +1450,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->exec_stamp_ns = 0;
     tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (clone starts AUTO;
     tcb->edf_exempt = false;               // no policy inheritance)
+    tcb->wcet_observed_ns = 0;          // issue #283: fresh observed max
     tcb->edf_next_ = nullptr;
     tcb->edf_prev_ = nullptr;
     tcb->in_edf_queue_ = false;
