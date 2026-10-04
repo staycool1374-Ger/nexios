@@ -36,6 +36,9 @@
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/elf/elf.hpp>
 #include <kernel/vfs/vfs.hpp>
+#include <kernel/vfs/vfsd.hpp>
+#include <kernel/driver/iocd.hpp>
+#include <kernel/watchdog/watchdogd.hpp>
 #include <initrd/initrd.hpp>
 #include <version.hpp>
 #include <kernel/driver/driver.hpp>
@@ -1994,6 +1997,39 @@ static void monstat_show_detail(const kernel::TaskControlBlock *t) {
     Terminal::write("\n");
 }
 
+/// @brief Find the primary user task (issue #293): first live ring-3
+///        task that is not a daemon (vfsd / iocd / watchdogd PIDs
+///        excluded). Covers the user-app placeholder and any runelf'd
+///        program. Falls back to the most recently seen TERMINATED match
+///        (post-mortem: the detail screen shows exit_code) when nothing
+///        is live. Returns nullptr when no candidate exists at all.
+static const kernel::TaskControlBlock *monstat_find_user_task() {
+    const uint64_t vfsd = kernel::vfsd::get_vfsd_pid();
+    const uint64_t iocd = kernel::iocd::get_iocd_pid();
+    const uint64_t watchdogd = kernel::watchdogd::get_watchdogd_pid();
+    const auto is_candidate = [&](const kernel::TaskControlBlock *t) {
+        return t != nullptr &&
+               kernel::TaskControlBlock::is_valid(t) && t->is_user_ &&
+               t->id != vfsd && t->id != iocd && t->id != watchdogd;
+    };
+    const auto count = kernel::Scheduler::task_count();
+    for (uint64_t i = 0; i < count; ++i) {
+        auto *t = kernel::Scheduler::task_at(i);
+        if (!is_candidate(t) || t->state == kernel::TaskState::TERMINATED)
+            continue;
+        return t;
+    }
+    const kernel::TaskControlBlock *fallen = nullptr;
+    for (uint64_t i = 0; i < count; ++i) {
+        auto *t = kernel::Scheduler::task_at(i);
+        if (!is_candidate(t))
+            continue;
+        if (t->state == kernel::TaskState::TERMINATED)
+            fallen = t;
+    }
+    return fallen;
+}
+
 void Shell::cmd_monstat(int argc, const char** argv) {
     // Issue #288: read-only per-task monitor snapshot. Iterates
     // task_count()/task_at() and reads TCB monitor fields only — no new
@@ -2001,10 +2037,19 @@ void Shell::cmd_monstat(int argc, const char** argv) {
     // full detail screen immediately; bare monstat prints the table then
     // prompts for an id (empty aborts).
     if (argc > 2) {
-        Terminal::write("Usage: monstat [id]\n");
+        Terminal::write("Usage: monstat [id|user]\n");
         return;
     }
     if (argc == 2) {
+        if (str_cmp(argv[1], "user") == 0) {
+            auto *u = monstat_find_user_task();
+            if (u == nullptr) {
+                Terminal::write("monstat: no user task\n");
+                return;
+            }
+            monstat_show_detail(u);
+            return;
+        }
         uint64_t id = 0;
         if (!parse_monstat_id(argv[1], id)) {
             Terminal::write("monstat: invalid id\n");
@@ -2050,6 +2095,7 @@ void Shell::cmd_monstat(int argc, const char** argv) {
         return numbuf;
     };
 
+    field("U", 1, false);
     field("ID", 3, true);
     field("NAME", 11, false);
     field("STATE", 8, false);
@@ -2058,8 +2104,8 @@ void Shell::cmd_monstat(int argc, const char** argv) {
     field("STUCK", 5, false);
     field("DL_OK", 5, true);
     Terminal::write("\n");
-    dashes(3); dashes(11); dashes(8); dashes(5); dashes(6); dashes(5);
-    dashes(5);
+    dashes(1); dashes(3); dashes(11); dashes(8); dashes(5); dashes(6);
+    dashes(5); dashes(5);
     Terminal::write("\n");
 
     const auto count = kernel::Scheduler::task_count();
@@ -2069,6 +2115,9 @@ void Shell::cmd_monstat(int argc, const char** argv) {
             continue;
         if (t->state == kernel::TaskState::TERMINATED)
             continue;
+        // Issue #293: the ring-3 task is the primary one to watch —
+        // mark it so the eye lands there first.
+        field(t->is_user_ ? "*" : " ", 1, false);
         field(num(t->id), 3, true);
         field(t->name, 11, false);
         field(state_name(t->state), 8, false);

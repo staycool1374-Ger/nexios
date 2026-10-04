@@ -41,6 +41,17 @@ expect {
     timeout { puts "VERIFY: TIMEOUT after detail"; exit 1 }
     eof { puts "VERIFY: EOF after detail"; exit 1 }
 }
+send "monstat user\r"
+expect {
+    -re {Task .*\(} { puts "VERIFY: user detail screen" }
+    timeout { puts "VERIFY: TIMEOUT waiting user detail"; exit 1 }
+    eof { puts "VERIFY: EOF waiting user detail"; exit 1 }
+}
+expect {
+    -re {\$ $} { puts "VERIFY: user detail done" }
+    timeout { puts "VERIFY: TIMEOUT after user detail"; exit 1 }
+    eof { puts "VERIFY: EOF after user detail"; exit 1 }
+}
 send "monstat 99999\r"
 expect {
     -re {no such task} { puts "VERIFY: unknown id rejected" }
@@ -58,5 +69,25 @@ expect {
     -re {Usage: monstat} { puts "VERIFY: usage on extra args" }
     timeout { puts "VERIFY: TIMEOUT waiting usage line"; exit 1 }
     eof { puts "VERIFY: EOF waiting usage line"; exit 1 }
+}
+send "loadelf burn.c.elf\r"
+puts "VERIFY: load requested, settling for the background load..."
+sleep 10
+send "runelf\r"
+expect {
+    -re {Started task} { puts "VERIFY: burner started" }
+    timeout { puts "VERIFY: TIMEOUT waiting burner start"; exit 1 }
+    eof { puts "VERIFY: EOF waiting burner start"; exit 1 }
+}
+send "monstat user\r"
+expect {
+    -re {exec_ns=} { puts "VERIFY: live user task has exec stats" }
+    timeout { puts "VERIFY: TIMEOUT waiting live user detail"; exit 1 }
+    eof { puts "VERIFY: EOF waiting live user detail"; exit 1 }
+}
+expect {
+    -re {\$ $} { puts "VERIFY: live user detail done" }
+    timeout { puts "VERIFY: TIMEOUT after live user detail"; exit 1 }
+    eof { puts "VERIFY: EOF after live user detail"; exit 1 }
 }
 puts "VERIFY: ALL OK"
