@@ -90,4 +90,28 @@ expect {
     timeout { puts "VERIFY: TIMEOUT after live user detail"; exit 1 }
     eof { puts "VERIFY: EOF after live user detail"; exit 1 }
 }
+puts "VERIFY: waiting for the burner to exit (post-mortem check)..."
+set found 0
+for {set i 0} {$i < 15} {incr i} {
+    sleep 20
+    send "monstat user\r"
+    expect {
+        -re {POST-MORTEM} { set found 1; break }
+        -re {\$ $} { puts "VERIFY: still live, waiting..." }
+        timeout { puts "VERIFY: TIMEOUT polling post-mortem"; exit 1 }
+        eof { puts "VERIFY: EOF polling post-mortem"; exit 1 }
+    }
+}
+if {!$found} { puts "VERIFY: burner never exited in 300s"; exit 1 }
+puts "VERIFY: post-mortem record present"
+expect {
+    -re {exit=0} { puts "VERIFY: post-mortem exit code 0" }
+    timeout { puts "VERIFY: TIMEOUT waiting exit code"; exit 1 }
+    eof { puts "VERIFY: EOF waiting exit code"; exit 1 }
+}
+expect {
+    -re {\$ $} { puts "VERIFY: post-mortem done" }
+    timeout { puts "VERIFY: TIMEOUT after post-mortem"; exit 1 }
+    eof { puts "VERIFY: EOF after post-mortem"; exit 1 }
+}
 puts "VERIFY: ALL OK"

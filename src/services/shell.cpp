@@ -39,6 +39,7 @@
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/driver/iocd.hpp>
 #include <kernel/watchdog/watchdogd.hpp>
+#include <kernel/task/exit_record.hpp>
 #include <initrd/initrd.hpp>
 #include <version.hpp>
 #include <kernel/driver/driver.hpp>
@@ -2030,6 +2031,42 @@ static const kernel::TaskControlBlock *monstat_find_user_task() {
     return fallen;
 }
 
+/// @brief Post-mortem detail screen from an exit record (issue #294):
+///        timing/wcet/monitor/memory subsets only — stack addresses,
+///        queue flags, watchdog, signals and debug are live-only or
+///        freed. Values match what the same TCB rendered pre-death.
+static void monstat_show_exit_record(const kernel::TaskExitRecord *r) {
+    Terminal::write("Task ");
+    print_uint(r->id);
+    Terminal::write(" (");
+    Terminal::write(r->name);
+    Terminal::write(") POST-MORTEM ended@");
+    print_uint(r->end_tick);
+    Terminal::write("\n  exit=");
+    print_uint(r->exit_code);
+    Terminal::write("\n  timing: exec_ticks=");
+    print_uint(r->executed_ticks);
+    Terminal::write(" exec_ns=");
+    print_uint(r->exec_ns_total);
+    Terminal::write("/");
+    print_uint(r->exec_period_ns);
+    Terminal::write("\n  wcet: observed_ns=");
+    print_uint(r->wcet_observed_ns);
+    Terminal::write("\n  monitor: util=");
+    print_uint(r->util_per_mille);
+    Terminal::write("/1000 meets=");
+    print_uint(r->deadline_meets);
+    Terminal::write(" miss=");
+    print_uint(r->deadline_miss_count);
+    Terminal::write("\n  memory: used=");
+    print_uint(r->memory_used_pages_);
+    Terminal::write(" pages alloc_ops=");
+    print_uint(r->mem_alloc_ops_);
+    Terminal::write(" free_ops=");
+    print_uint(r->mem_free_ops_);
+    Terminal::write("\n");
+}
+
 void Shell::cmd_monstat(int argc, const char** argv) {
     // Issue #288: read-only per-task monitor snapshot. Iterates
     // task_count()/task_at() and reads TCB monitor fields only — no new
@@ -2043,11 +2080,18 @@ void Shell::cmd_monstat(int argc, const char** argv) {
     if (argc == 2) {
         if (str_cmp(argv[1], "user") == 0) {
             auto *u = monstat_find_user_task();
-            if (u == nullptr) {
-                Terminal::write("monstat: no user task\n");
+            if (u != nullptr) {
+                monstat_show_detail(u);
                 return;
             }
-            monstat_show_detail(u);
+            // Issue #294: no live or lingering user task — fall back to
+            // the exit record (post-mortem totals survive the reap).
+            auto *rec = kernel::idle_find_exit_record_for_user();
+            if (rec != nullptr) {
+                monstat_show_exit_record(rec);
+                return;
+            }
+            Terminal::write("monstat: no user task\n");
             return;
         }
         uint64_t id = 0;
@@ -2057,6 +2101,12 @@ void Shell::cmd_monstat(int argc, const char** argv) {
         }
         auto *t = kernel::Scheduler::find_task(id);
         if (t == nullptr || !kernel::TaskControlBlock::is_valid(t)) {
+            // Issue #294: reaped tasks leave an exit record behind.
+            auto *rec = kernel::idle_find_exit_record(id);
+            if (rec != nullptr) {
+                monstat_show_exit_record(rec);
+                return;
+            }
             Terminal::write("monstat: no such task\n");
             return;
         }
@@ -2166,6 +2216,20 @@ void Shell::cmd_monstat(int argc, const char** argv) {
     Terminal::putchar('\n');
     if (pos == 0)
         return;
+    if (str_cmp(line, "user") == 0) {
+        auto *u = monstat_find_user_task();
+        if (u != nullptr) {
+            monstat_show_detail(u);
+            return;
+        }
+        auto *urec = kernel::idle_find_exit_record_for_user();
+        if (urec != nullptr) {
+            monstat_show_exit_record(urec);
+            return;
+        }
+        Terminal::write("monstat: no user task\n");
+        return;
+    }
     uint64_t id = 0;
     if (!parse_monstat_id(line, id)) {
         Terminal::write("monstat: invalid id\n");
@@ -2173,6 +2237,11 @@ void Shell::cmd_monstat(int argc, const char** argv) {
     }
     auto *picked = kernel::Scheduler::find_task(id);
     if (picked == nullptr || !kernel::TaskControlBlock::is_valid(picked)) {
+        auto *rec = kernel::idle_find_exit_record(id);
+        if (rec != nullptr) {
+            monstat_show_exit_record(rec);
+            return;
+        }
         Terminal::write("monstat: no such task\n");
         return;
     }

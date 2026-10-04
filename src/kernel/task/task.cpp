@@ -21,6 +21,7 @@
 /// cleanup.
 
 #include <kernel/task/task.hpp>
+#include <kernel/task/exit_record.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/time/posix_time.hpp>
@@ -1875,6 +1876,13 @@ void TaskControlBlock::cleanup() noexcept {
     // (MemPool::free on a pinned block is a no-op).
     if (kernel::MemPool::is_block_pinned(this))
         return;
+
+    // Issue #294: snapshot user-task exit stats before teardown frees
+    // anything (post-mortem ring for `monstat user`). Scalar copy only,
+    // no allocation, no locks; daemons + kernel tasks excluded inside.
+    // Placed after the pinned early-return (baseline never recorded)
+    // and before unregister (PIDs still valid for daemon exclusion).
+    kernel::idle_record_task_exit(*this, arch::Timer::ticks());
 
     // Unregister from the scheduler's live tables so we never leave a dangling
     // tasks_[]/id_table_ entry that aliases a later allocation (which

@@ -25,6 +25,8 @@
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/idle_monitor.hpp>
+#include <kernel/task/exit_record.hpp>
+#include <kernel/vfs/vfsd.hpp>
 #include <kernel/nexios_config.h>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
@@ -823,6 +825,158 @@ JARVIS_TEST(idle_escalate_never_arms_fresh, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: A dying user task leaves a complete exit record (issue #294).
+// Input: create_user + add_task_err + seeded counters, terminate_err(42),
+// drain. Expect: ring holds id/name/exit=42/end_tick + all counters equal
+// the pre-death snapshot.
+JARVIS_TEST(exit_record_content_on_user_death, "PRE: none | POST: none") {
+    idle_clear_exit_records();
+    auto *t = TaskControlBlock::create_user(forever_entry, 5, 10, 32_KiB);
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(Scheduler::add_task_err(*t) == errors::SCHED_ERR_OK);
+    t->exec_ns_total = 123456;
+    t->exec_period_ns = 1000;
+    t->executed_ticks = 7;
+    t->util_per_mille = 250;
+    t->deadline_meets = 3;
+    t->deadline_miss_count = 1;
+    t->wcet_observed_ns = 9000;
+    t->mem_alloc_ops_ = 11;
+    t->mem_free_ops_ = 4;
+    t->memory_used_pages_ = 9;
+    const uint64_t tid = t->id;
+    JARVIS_ASSERT(Scheduler::terminate_err(*t, 42) == errors::SCHED_ERR_OK);
+    Scheduler::drain_zombie_list();
+    const kernel::TaskExitRecord *r = kernel::idle_find_exit_record(tid);
+    JARVIS_ASSERT(r != nullptr);
+    JARVIS_ASSERT(r->exit_code == 42);
+    JARVIS_ASSERT(r->end_tick != 0);
+    JARVIS_ASSERT(r->exec_ns_total == 123456);
+    JARVIS_ASSERT(r->exec_period_ns == 1000);
+    JARVIS_ASSERT(r->executed_ticks == 7);
+    JARVIS_ASSERT(r->util_per_mille == 250);
+    JARVIS_ASSERT(r->deadline_meets == 3);
+    JARVIS_ASSERT(r->deadline_miss_count == 1);
+    JARVIS_ASSERT(r->wcet_observed_ns == 9000);
+    JARVIS_ASSERT(r->mem_alloc_ops_ == 11);
+    JARVIS_ASSERT(r->mem_free_ops_ == 4);
+    JARVIS_ASSERT(r->memory_used_pages_ == 9);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The ring keeps the last 4 exits (issue #294).
+// Input: 5 distinct user deaths. Expect: ids of deaths 2-5 present in
+// order of end_tick; death 1 evicted.
+JARVIS_TEST(exit_record_ring_overwrite_keeps_last_4, "PRE: none | POST: none") {
+    idle_clear_exit_records();
+    uint64_t ids[5] = {};
+    for (int i = 0; i < 5; ++i) {
+        auto *t = TaskControlBlock::create_user(forever_entry, 5, 10,
+                                                32_KiB);
+        JARVIS_ASSERT(t != nullptr);
+        JARVIS_ASSERT(Scheduler::add_task_err(*t) == errors::SCHED_ERR_OK);
+        ids[i] = t->id;
+        JARVIS_ASSERT(Scheduler::terminate_err(*t, 100 + i) ==
+                      errors::SCHED_ERR_OK);
+        Scheduler::drain_zombie_list();
+    }
+    JARVIS_ASSERT(kernel::idle_find_exit_record(ids[0]) == nullptr);
+    const kernel::TaskExitRecord *prev = nullptr;
+    for (int i = 1; i < 5; ++i) {
+        const kernel::TaskExitRecord *r =
+            kernel::idle_find_exit_record(ids[i]);
+        JARVIS_ASSERT(r != nullptr);
+        JARVIS_ASSERT(r->exit_code == static_cast<uint64_t>(100 + i));
+        if (prev != nullptr)
+            JARVIS_ASSERT(r->end_tick >= prev->end_tick);
+        prev = r;
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Kernel deaths and daemon-id deaths never enter the ring
+// (issue #294 exclusion rule).
+// Input: kernel task death via the real path; user task whose id is
+// spoofed to the live vfsd pid, recorded via the seam directly.
+// Expect: ring count unchanged in both cases.
+JARVIS_TEST(exit_record_daemon_and_kernel_excluded, "PRE: none | POST: none") {
+    idle_clear_exit_records();
+    auto ring_empty = []() {
+        return kernel::idle_find_exit_record_for_user() == nullptr;
+    };
+    auto *k = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(k != nullptr);
+    JARVIS_ASSERT(Scheduler::add_task_err(*k) == errors::SCHED_ERR_OK);
+    JARVIS_ASSERT(Scheduler::terminate_err(*k, 7) == errors::SCHED_ERR_OK);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT(ring_empty());
+    auto *u = TaskControlBlock::create_user(forever_entry, 5, 10, 32_KiB);
+    JARVIS_ASSERT(u != nullptr);
+    JARVIS_ASSERT(kernel::vfsd::get_vfsd_pid() != 0);
+    const uint64_t saved_id = u->id;
+    u->id = kernel::vfsd::get_vfsd_pid();
+    kernel::idle_record_task_exit(*u, arch::Timer::ticks());
+    JARVIS_ASSERT(ring_empty());
+    u->id = saved_id;
+    u->cleanup();
+    delete u;
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: monstat user falls back to the exit record after the reap
+// (issue #294 finder order).
+// Input: user death + drain (TCB gone), then finder calls.
+// Expect: live/terminated lookup misses; record lookup hits with
+// matching id + exit.
+JARVIS_TEST(monstat_user_falls_back_to_record, "PRE: none | POST: none") {
+    idle_clear_exit_records();
+    auto *t = TaskControlBlock::create_user(forever_entry, 5, 10, 32_KiB);
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(Scheduler::add_task_err(*t) == errors::SCHED_ERR_OK);
+    const uint64_t tid = t->id;
+    JARVIS_ASSERT(Scheduler::terminate_err(*t, 42) == errors::SCHED_ERR_OK);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT(Scheduler::find_task(tid) == nullptr);
+    const kernel::TaskExitRecord *r =
+        kernel::idle_find_exit_record_for_user();
+    JARVIS_ASSERT(r != nullptr);
+    JARVIS_ASSERT(r->id == tid);
+    JARVIS_ASSERT(r->exit_code == 42);
+    JARVIS_ASSERT(kernel::idle_find_exit_record(tid) == r);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Exit end_ticks are non-decreasing across consecutive deaths
+// (issue #294 ordering for most-recent selection).
+// Input: 2 user deaths back to back. Expect: second end_tick >= first.
+JARVIS_TEST(exit_record_end_tick_ordered, "PRE: none | POST: none") {
+    idle_clear_exit_records();
+    uint64_t first_end = 0;
+    for (int i = 0; i < 2; ++i) {
+        auto *t = TaskControlBlock::create_user(forever_entry, 5, 10,
+                                                32_KiB);
+        JARVIS_ASSERT(t != nullptr);
+        JARVIS_ASSERT(Scheduler::add_task_err(*t) == errors::SCHED_ERR_OK);
+        const uint64_t tid = t->id;
+        JARVIS_ASSERT(Scheduler::terminate_err(*t, i) ==
+                      errors::SCHED_ERR_OK);
+        Scheduler::drain_zombie_list();
+        const kernel::TaskExitRecord *r =
+            kernel::idle_find_exit_record(tid);
+        JARVIS_ASSERT(r != nullptr);
+        if (i == 0)
+            first_end = r->end_tick;
+        else
+            JARVIS_ASSERT(r->end_tick >= first_end);
+    }
+    JARVIS_TEST_PASS();
+}
+
 void register_idle_monitor_tests() {
     Logger::info("Registering idle monitor tests");
     JARVIS_REGISTER_TEST(idle_monitor_zero_init);
@@ -849,4 +1003,9 @@ void register_idle_monitor_tests() {
     JARVIS_REGISTER_TEST(idle_escalate_armed_expired_routes);
     JARVIS_REGISTER_TEST(idle_escalate_armed_future_no_fire);
     JARVIS_REGISTER_TEST(idle_escalate_never_arms_fresh);
+    JARVIS_REGISTER_TEST(exit_record_content_on_user_death);
+    JARVIS_REGISTER_TEST(exit_record_ring_overwrite_keeps_last_4);
+    JARVIS_REGISTER_TEST(exit_record_daemon_and_kernel_excluded);
+    JARVIS_REGISTER_TEST(monstat_user_falls_back_to_record);
+    JARVIS_REGISTER_TEST(exit_record_end_tick_ordered);
 }
