@@ -1,5 +1,5 @@
 #!/usr/bin/expect -f
-# Live acceptance for #288 (monstat shell command).
+# Live acceptance for #288 (monstat) + #292 (drill-down detail view).
 # Usage: expect -f tools/verify-288.exp run-debug-mode
 set timeout 600
 eval spawn make $argv
@@ -15,16 +15,45 @@ expect {
     eof { puts "VERIFY: EOF waiting monstat header"; exit 1 }
 }
 expect {
-    -re {n/a} { puts "VERIFY: UTIL n/a present" }
-    timeout { puts "VERIFY: TIMEOUT waiting UTIL column"; exit 1 }
-    eof { puts "VERIFY: EOF waiting UTIL column"; exit 1 }
+    -re {Task id} { puts "VERIFY: drill-down prompt present" }
+    timeout { puts "VERIFY: TIMEOUT waiting task-id prompt"; exit 1 }
+    eof { puts "VERIFY: EOF waiting task-id prompt"; exit 1 }
+}
+send "\r"
+expect {
+    -re {\$ $} { puts "VERIFY: empty input aborts cleanly" }
+    timeout { puts "VERIFY: TIMEOUT after empty abort"; exit 1 }
+    eof { puts "VERIFY: EOF after empty abort"; exit 1 }
+}
+send "monstat 1\r"
+expect {
+    -re {Task 1} { puts "VERIFY: detail screen for id 1" }
+    timeout { puts "VERIFY: TIMEOUT waiting detail screen"; exit 1 }
+    eof { puts "VERIFY: EOF waiting detail screen"; exit 1 }
 }
 expect {
-    -re {\$ $} { puts "VERIFY: monstat done" }
-    timeout { puts "VERIFY: TIMEOUT after monstat"; exit 1 }
-    eof { puts "VERIFY: EOF after monstat"; exit 1 }
+    -re {watchdog:} { puts "VERIFY: watchdog section present" }
+    timeout { puts "VERIFY: TIMEOUT waiting watchdog section"; exit 1 }
+    eof { puts "VERIFY: EOF waiting watchdog section"; exit 1 }
 }
-send "monstat extra-arg\r"
+expect {
+    -re {\$ $} { puts "VERIFY: detail done" }
+    timeout { puts "VERIFY: TIMEOUT after detail"; exit 1 }
+    eof { puts "VERIFY: EOF after detail"; exit 1 }
+}
+send "monstat 99999\r"
+expect {
+    -re {no such task} { puts "VERIFY: unknown id rejected" }
+    timeout { puts "VERIFY: TIMEOUT waiting no-such-task"; exit 1 }
+    eof { puts "VERIFY: EOF waiting no-such-task"; exit 1 }
+}
+send "monstat abc\r"
+expect {
+    -re {invalid id} { puts "VERIFY: non-numeric id rejected" }
+    timeout { puts "VERIFY: TIMEOUT waiting invalid-id"; exit 1 }
+    eof { puts "VERIFY: EOF waiting invalid-id"; exit 1 }
+}
+send "monstat a b\r"
 expect {
     -re {Usage: monstat} { puts "VERIFY: usage on extra args" }
     timeout { puts "VERIFY: TIMEOUT waiting usage line"; exit 1 }

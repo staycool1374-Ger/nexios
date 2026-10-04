@@ -1790,12 +1790,232 @@ void Shell::cmd_bootstat(int argc, const char**) {
 #endif
 }
 
-void Shell::cmd_monstat(int argc, const char**) {
+static void print_hex64(uint64_t v) {
+    Terminal::write("0x");
+    for (int i = 15; i >= 0; --i) {
+        const uint64_t n = (v >> (static_cast<uint64_t>(i) * 4)) & 0xFULL;
+        Terminal::putchar(static_cast<char>(
+            n < 10 ? '0' + n : 'a' + (n - 10)));
+    }
+}
+
+/// @brief Strict task-id parse (issue #292): digits only, no empty,
+///        saturating overflow guard (unlike cmd_sleep, which checks
+///        nothing).
+static bool parse_monstat_id(const char *s, uint64_t &out) {
+    if (s == nullptr || s[0] == '\0')
+        return false;
+    uint64_t acc = 0;
+    for (size_t i = 0; s[i] != '\0'; ++i) {
+        if (s[i] < '0' || s[i] > '9')
+            return false;
+        const uint64_t d = static_cast<uint64_t>(s[i] - '0');
+        if (acc > (UINT64_MAX - d) / 10)
+            return false;
+        acc = acc * 10 + d;
+    }
+    out = acc;
+    return true;
+}
+
+/// @brief Full detail screen for one task (issue #292): every scalar TCB
+///        field, sectioned. Read-only (find_task + field reads + pure
+///        canary verify); nested structs stay counts/addresses.
+static void monstat_show_detail(const kernel::TaskControlBlock *t) {
+    Terminal::write("Task ");
+    print_uint(t->id);
+    Terminal::write(" (");
+    Terminal::write(t->name);
+    Terminal::write(")\n");
+    Terminal::write("  identity: parent=");
+    print_uint(t->parent_id);
+    Terminal::write(" state=");
+    Terminal::write(state_name(t->state));
+    Terminal::write(" gen=");
+    print_uint(t->generation);
+    Terminal::write(t->is_user_ ? " user" : " kernel");
+    Terminal::write(" exit=");
+    print_uint(t->exit_code);
+    Terminal::write("\n  sched: prio=");
+    print_uint(t->priority);
+    Terminal::write(" (base ");
+    print_uint(t->base_priority);
+    Terminal::write(") policy=");
+    switch (t->sched_policy) {
+        case kernel::SchedPolicy::FIXED: Terminal::write("FIXED"); break;
+        case kernel::SchedPolicy::EDF: Terminal::write("EDF"); break;
+        default: Terminal::write("AUTO"); break;
+    }
+    Terminal::write(t->edf_exempt ? " edf-exempt" : "");
+    Terminal::write(" cpu=");
+    if (t->running_on_cpu == kernel::TaskControlBlock::CPU_PLACEMENT_NONE)
+        Terminal::write("never");
+    else
+        print_uint(t->running_on_cpu);
+    Terminal::write(" affinity=");
+    print_hex64(t->cpu_affinity);
+    Terminal::write("\n  timing: period=");
+    print_uint(t->period_ticks);
+    Terminal::write(" deadline=");
+    print_uint(t->deadline_ticks);
+    Terminal::write(t->deadline_missed ? " MISSED" : "");
+    Terminal::write(" miss=");
+    print_uint(t->deadline_miss_count);
+    Terminal::write(" meet=");
+    print_uint(t->deadline_meets);
+    Terminal::write(" exec_ticks=");
+    print_uint(t->executed_ticks);
+    Terminal::write("/");
+    print_uint(t->remaining_ticks);
+    Terminal::write(" exec_ns=");
+    print_uint(t->exec_ns_total);
+    Terminal::write("/");
+    print_uint(t->exec_period_ns);
+    Terminal::write("\n  wcet: design=");
+    print_uint(t->wcet_ticks);
+    Terminal::write(" observed_ns=");
+    print_uint(t->wcet_observed_ns);
+    Terminal::write(t->wcet_overrun_fired ? " overrun-fired" : "");
+    Terminal::write(" ss_state=");
+    print_uint(t->ss_state_on_deadline_miss);
+    Terminal::write(" ss_budget=");
+    print_uint(t->ss_budget_on_deadline_miss);
+    Terminal::write("\n  monitor: util=");
+    uint64_t util = t->util_per_mille;
+    if (util > 1000)
+        util = 1000;
+    print_uint(util);
+    Terminal::write("/1000 block=");
+    print_uint(t->block_per_mille);
+    Terminal::write(" preempt=");
+    print_uint(t->preempt_per_mille);
+    Terminal::write(" progress=");
+    print_uint(t->last_progress_tick);
+    Terminal::write(t->stuck_suspected ? " STUCK" : "");
+    Terminal::write(t->stall_reported ? " reported" : "");
+    Terminal::write("\n  stack: top=");
+    print_hex64(t->kernel_stack_top);
+    Terminal::write(" low_water=");
+    print_uint(t->stack_low_water_bytes);
+    Terminal::write("B slot=");
+    print_hex64(t->kstack_slot_va_);
+    Terminal::write("/");
+    print_uint(t->kstack_slot_size_);
+    Terminal::write(" user_stack=");
+    print_hex64(t->user_stack_);
+    Terminal::write("/");
+    print_uint(t->user_stack_size_);
+    Terminal::write(" canary=");
+    Terminal::write(kernel::canary_verify_kernel_stack(t) ? "ok" : "BROKEN");
+    Terminal::write(" fpu=");
+    Terminal::write(t->fpu_used ? "used" : "-");
+    Terminal::write("\n  memory: budget=");
+    print_uint(t->memory_budget_pages_);
+    Terminal::write(" used=");
+    print_uint(t->memory_used_pages_);
+    Terminal::write(" pages alloc_ops=");
+    print_uint(t->mem_alloc_ops_);
+    Terminal::write(" free_ops=");
+    print_uint(t->mem_free_ops_);
+    Terminal::write(" leak_streak=");
+    print_uint(t->mem_leak_streak_);
+    Terminal::write(" brk=");
+    print_hex64(t->program_break);
+    Terminal::write("/");
+    print_hex64(t->program_break_start);
+    Terminal::write(" text/data/bss=");
+    print_uint(t->text_size_);
+    Terminal::write("/");
+    print_uint(t->data_size_);
+    Terminal::write("/");
+    print_uint(t->bss_size_);
+    Terminal::write(" pt=");
+    print_hex64(t->page_table_);
+    Terminal::write(" pcid=");
+    print_uint(t->pcid_);
+    Terminal::write(" tls=");
+    print_hex64(t->tls_base_);
+    Terminal::write("\n  watchdog: ");
+    Terminal::write(t->wdog_armed ? "armed" : "disarmed");
+    Terminal::write(" period=");
+    print_uint(t->wdog_period_ticks);
+    Terminal::write(" last_kick=");
+    print_uint(t->wdog_last_kick_tick);
+    Terminal::write(" expiry=");
+    print_uint(t->wdog_expiry_tick);
+    Terminal::write(" gen=");
+    print_uint(t->wdog_gen);
+    Terminal::write("\n  signals: pending=");
+    print_hex64(t->pending_signals);
+    Terminal::write(" alarm=");
+    Terminal::write(t->alarm_armed ? "armed@" : "-@");
+    print_uint(t->alarm_ticks);
+    Terminal::write(" children=");
+    print_uint(t->num_children);
+    Terminal::write(" waiting_child=");
+    print_uint(t->waiting_child_pid);
+    Terminal::write(" recv_timeout=");
+    Terminal::write(t->recv_timeout_armed ? "armed" : "-");
+    Terminal::write(t->recv_timed_out ? "/fired" : "");
+    Terminal::write(" sleep=");
+    Terminal::write(t->sleep_armed ? "armed" : "-");
+    Terminal::write(t->sleep_expired ? "/expired" : "");
+    Terminal::write("@");
+    print_uint(t->sleep_expiry_ns);
+    Terminal::write("\n  debug: debugger=");
+    print_uint(t->debugger_id);
+    Terminal::write(t->debug_stop_requested ? " stop-requested" : "");
+    Terminal::write(t->debug_parked ? " parked" : "");
+    Terminal::write(t->has_utrap_frame ? " utrap" : "");
+    Terminal::write(" kind=");
+    print_uint(t->debug_stop_kind);
+    Terminal::write(" va=");
+    print_hex64(t->debug_stop_va);
+    Terminal::write(" rearm=");
+    print_hex64(t->debug_rearm_va);
+    Terminal::write("\n  queue: in_ready=");
+    Terminal::write(t->in_ready_queue_ ? "yes" : "no");
+    Terminal::write(" deferred=");
+    Terminal::write(t->ready_deferred_ ? "yes" : "no");
+    Terminal::write(" rq_prio=");
+    print_uint(t->rq_priority_);
+    Terminal::write(" edf=");
+    Terminal::write(t->in_edf_queue_ ? "yes" : "no");
+    Terminal::write(" blocked_recv=");
+    Terminal::write(t->blocked_in_recv ? "yes" : "no");
+    Terminal::write(" reply_wait=");
+    Terminal::write(t->reply_wait ? "yes" : "no");
+    Terminal::write(" wait(mtx/sem/grp/q/pager)=");
+    Terminal::write(t->waiting_on_mutex != nullptr ? "y" : "-");
+    Terminal::write(t->waiting_on_semaphore != nullptr ? "y" : "-");
+    Terminal::write(t->waiting_on_eventgroup != nullptr ? "y" : "-");
+    Terminal::write(t->waiting_on_queue != nullptr ? "y" : "-");
+    Terminal::write(t->blocked_on_pager_fault != nullptr ? "y" : "-");
+    Terminal::write("\n");
+}
+
+void Shell::cmd_monstat(int argc, const char** argv) {
     // Issue #288: read-only per-task monitor snapshot. Iterates
     // task_count()/task_at() and reads TCB monitor fields only — no new
-    // syscalls, no scheduler writes.
-    if (argc != 1) {
-        Terminal::write("Usage: monstat\n");
+    // syscalls, no scheduler writes. Issue #292: monstat <id> shows the
+    // full detail screen immediately; bare monstat prints the table then
+    // prompts for an id (empty aborts).
+    if (argc > 2) {
+        Terminal::write("Usage: monstat [id]\n");
+        return;
+    }
+    if (argc == 2) {
+        uint64_t id = 0;
+        if (!parse_monstat_id(argv[1], id)) {
+            Terminal::write("monstat: invalid id\n");
+            return;
+        }
+        auto *t = kernel::Scheduler::find_task(id);
+        if (t == nullptr || !kernel::TaskControlBlock::is_valid(t)) {
+            Terminal::write("monstat: no such task\n");
+            return;
+        }
+        monstat_show_detail(t);
         return;
     }
     auto field = [](const char *s, int width, bool right) {
@@ -1864,6 +2084,50 @@ void Shell::cmd_monstat(int argc, const char**) {
         field(num(t->deadline_meets), 5, true);
         Terminal::write("\n");
     }
+    // Issue #292: prompt for a drill-down id (cmd_read input idiom:
+    // serial poll -> keyboard fallback -> idle nap; empty aborts).
+    Terminal::write("Task id (empty aborts): ");
+    char line[16];
+    size_t pos = 0;
+    for (;;) {
+        char c = 0;
+        bool got = arch::Serial::poll_getchar(c);
+        if (!got)
+            got = arch::Keyboard::getchar(c);
+        if (!got) {
+            shell_idle_nap(20000);
+            continue;
+        }
+        if (c == '\r')
+            c = '\n';
+        if (c == '\n') {
+            line[pos] = '\0';
+            break;
+        }
+        if ((c == '\b' || c == 0x7F) && pos > 0) {
+            --pos;
+            Terminal::putchar('\b');
+            continue;
+        }
+        if (pos < sizeof(line) - 1) {
+            line[pos++] = c;
+            Terminal::putchar(c);
+        }
+    }
+    Terminal::putchar('\n');
+    if (pos == 0)
+        return;
+    uint64_t id = 0;
+    if (!parse_monstat_id(line, id)) {
+        Terminal::write("monstat: invalid id\n");
+        return;
+    }
+    auto *picked = kernel::Scheduler::find_task(id);
+    if (picked == nullptr || !kernel::TaskControlBlock::is_valid(picked)) {
+        Terminal::write("monstat: no such task\n");
+        return;
+    }
+    monstat_show_detail(picked);
 }
 
 void Shell::cmd_jobs(int, const char**) {
