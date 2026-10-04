@@ -426,6 +426,16 @@ class Scheduler {
     ///        watchdog_expiry_handler(). Caller holds scheduler_lock_
     ///        (on_tick window).
     static void scan_watchdogs_locked(uint64_t now) noexcept;
+    /// @brief Fire a flagged stall's armed+expired watchdog (issues
+    ///        #43/#285, P6-thin). Takes scheduler_lock_; exact replica
+    ///        of the scan_watchdogs_locked fire sequence (re-check under
+    ///        lock, disarm-first, pinned ring-only, same weak
+    ///        watchdog_expiry_handler — all CONFIG_WATCHDOG_ACTION
+    ///        dispositions preserved). Called from the idle escalation
+    ///        seam; the tick scan remains the other firer. Disarm-first
+    ///        ordering means no double-fire whichever observes first.
+    static void fire_stall_watchdog(TaskControlBlock &task,
+                                    uint64_t now) noexcept;
     /// @brief Ensures the deadline-monitor task exists and is valid.
     ///        Re-spawns it if the TCB was killed (e.g. by reload_daemon_tasks
     ///        during snapshot restore).  Safe to call multiple times.

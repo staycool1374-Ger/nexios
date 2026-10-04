@@ -205,6 +205,49 @@ IdleScanProgress idle_scan_mem(IdleScanCursor &cursor,
     return scan_chunk(cursor, budget, check);
 }
 
+void idle_note_progress(TaskControlBlock &t, uint64_t now) noexcept {
+    t.last_progress_tick = now;
+    // A new episode starts: the flag + report latch clear together so
+    // the next stall reports exactly once (never spam, never silence).
+    t.stuck_suspected = false;
+    t.stall_reported = false;
+}
+
+void idle_escalate_stall(IdleScanCursor &cursor, uint64_t budget,
+                         uint64_t now) noexcept {
+    const auto escalate = [now](TaskControlBlock *t) noexcept {
+        if (!t->stuck_suspected)
+            return;
+        if (t->wdog_armed && t->wdog_gen != 0) {
+            // An armed watchdog owns the episode: unexpired → silent
+            // (it will fire or be kicked; reporting would noise every
+            // supervised task once). Expired → route below.
+            if (now < t->wdog_expiry_tick)
+                return;
+        } else {
+            // Report only (M6): one TIMING+7 WARN per episode. Never
+            // arms, never routes — hard rule (spec §5).
+            if (!t->stall_reported) {
+                log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                                    log::kDmesgBase_TIMING + 7,
+                                    log::LogSeverity::WARN, t->name,
+                                    now - t->last_progress_tick);
+                t->stall_reported = true;
+            }
+            return;
+        }
+        // Armed + expired: exact tick-scan replica lives in
+        // Scheduler::fire_stall_watchdog (disarm-first under
+        // scheduler_lock_, pinned ring-only, same weak handler — all
+        // CONFIG_WATCHDOG_ACTION dispositions preserved). Marks the
+        // episode handled so a disarmed survivor reports at most the
+        // single WARN above instead of re-firing.
+        Scheduler::fire_stall_watchdog(*t, now);
+        t->stall_reported = true;
+    };
+    scan_chunk(cursor, budget, escalate);
+}
+
 void idle_publish_stack_low_water(uint64_t low_water_rsp, uint64_t stack_top,
                                   uint32_t &dst) noexcept {
     if (low_water_rsp == 0 || stack_top <= low_water_rsp) {
@@ -223,6 +266,7 @@ void idle_monitor_slice() noexcept {
 #else
     static IdleScanCursor stack_cursor = {};
     static IdleScanCursor stall_cursor = {};
+    static IdleScanCursor escalate_cursor = {};
     static IdleScanCursor util_cursor = {};
     static IdleScanCursor mem_cursor = {};
     constexpr uint64_t kChunk =
@@ -232,6 +276,8 @@ void idle_monitor_slice() noexcept {
 #endif
 #if CONFIG_IDLE_MONITOR_STALL
     (void)idle_scan_stall(stall_cursor, kChunk, arch::Timer::ticks());
+    (void)idle_escalate_stall(escalate_cursor, kChunk,
+                              arch::Timer::ticks());
 #endif
 #if CONFIG_IDLE_MONITOR_UTIL
     (void)idle_aggregate_util(util_cursor, kChunk);

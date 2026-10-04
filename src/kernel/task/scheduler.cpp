@@ -1424,6 +1424,8 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
     const bool wake_live = (task.state != TaskState::TERMINATED &&
                             task.state != TaskState::REAPED);
     task.state = TaskState::READY;
+    // Issue #285: wake = forward progress for the stall detector.
+    idle_note_progress(task, arch::Timer::ticks());
     uint64_t target = queue_target(task);
     if (task.is_user_ && target != 0)
         target = 0; // shared-TSS backstop (see enqueue_ready)
@@ -4060,6 +4062,9 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     // add+restamp pairs are atomic — no double-charge, no lost quantum.
     charge_exec(*current);
     stamp_exec(next);
+    // Issue #285: dispatch = forward progress for the stall detector.
+    // Runs under the caller's scheduler_lock_/IRQ-off discipline.
+    idle_note_progress(next, arch::Timer::ticks());
 
     uint64_t *save_target = &task_stack_ptr(current);
     bool cur_is_boot_stack = false;
@@ -5576,6 +5581,28 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
         }
         watchdog_expiry_handler(*t, now - t->wdog_expiry_tick);
     }
+}
+
+// Issue #285: idle-escalation fire path. Exact replica of the
+// scan_watchdogs_locked fire sequence above (re-check under lock,
+// disarm-first, pinned ring-only, same weak handler). Disarm-first
+// ordering means the tick scan and the idle seam never double-fire,
+// whichever observes the expiry first.
+void Scheduler::fire_stall_watchdog(TaskControlBlock &task,
+                                     uint64_t now) noexcept {
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    if (!task.wdog_armed || task.wdog_gen == 0 ||
+        now < task.wdog_expiry_tick)
+        return;
+    task.wdog_armed = false;
+    if (kernel::MemPool::is_block_pinned(&task)) {
+        log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                            log::kDmesgBase_TIMING + 6,
+                            log::LogSeverity::ERROR, task.name,
+                            now - task.wdog_expiry_tick);
+        return;
+    }
+    watchdog_expiry_handler(task, now - task.wdog_expiry_tick);
 }
 
 __attribute__((weak)) void

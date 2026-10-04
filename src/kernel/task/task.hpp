@@ -464,6 +464,11 @@ struct TaskControlBlock {
     ///        scanner only — never kills, reaps, or escalates by
     ///        itself (M6: escalation is P6-thin scope).
     bool stuck_suspected = false;
+    /// @brief Stall episode reported (issues #43/#285, P6). Set when
+    ///        the escalate seam reports/routes this flag episode;
+    ///        cleared by progress (idle_note_progress). One report per
+    ///        episode, never log spam.
+    bool stall_reported = false;
 
     /// @brief Loaded user-image segment sizes (bytes), captured at ELF load
     ///        from the program-header table (PT_LOAD, memsz):

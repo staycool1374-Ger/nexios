@@ -28,6 +28,7 @@
 #include <kernel/nexios_config.h>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/log/dmesg.hpp>
 #include "test_sched_helpers.hpp"
@@ -51,6 +52,7 @@ JARVIS_TEST(idle_monitor_zero_init, "PRE: none | POST: none") {
     JARVIS_ASSERT(t1->stack_low_water_bytes == 0);
     JARVIS_ASSERT(t1->last_progress_tick == 0);
     JARVIS_ASSERT(t1->stuck_suspected == false);
+    JARVIS_ASSERT(t1->stall_reported == false);
     TaskControlBlock::destroy(t1);
 
     auto *t2 = TaskControlBlock::create_user(
@@ -555,6 +557,272 @@ JARVIS_TEST(idle_mem_overhead_bounded, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: A wake stamps progress (seam via the set_task_ready choke
+// point, issues #43/#285).
+// Input: Registered BLOCKED task with a stale stamp; set_task_ready.
+// Expect: stamp advances to (approximately) current ticks; state READY.
+JARVIS_TEST(idle_stall_progress_bump_on_wake, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->state = TaskState::BLOCKED;
+    Scheduler::register_task(*t);
+    t->last_progress_tick = 100;
+    const uint64_t before = arch::Timer::ticks();
+    Scheduler::set_task_ready(*t);
+    JARVIS_ASSERT(t->state == TaskState::READY);
+    JARVIS_ASSERT(t->last_progress_tick >= before);
+    JARVIS_ASSERT(t->stuck_suspected == false);
+    JARVIS_ASSERT(t->stall_reported == false);
+    Scheduler::remove_task(*t);
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The progress seam stamps and clears the flag episode
+// (unit-level; the switch_to_task call site is covered by inspection —
+// adjacent to stamp_exec under the same lock/IRQ discipline).
+// Input: Unregistered TCB with stale stamp + set flag + reported latch.
+// Expect: stamp exact; flag and latch cleared (next stall re-reports).
+JARVIS_TEST(idle_stall_progress_bump_seam, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->last_progress_tick = 100;
+    t->stuck_suspected = true;
+    t->stall_reported = true;
+    idle_note_progress(*t, 5000);
+    JARVIS_ASSERT(t->last_progress_tick == 5000);
+    JARVIS_ASSERT(t->stuck_suspected == false);
+    JARVIS_ASSERT(t->stall_reported == false);
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Unarmed stall reports exactly once and never arms, kills,
+// or changes state (M6 + hard rule).
+// Input: Registered BLOCKED stale task (wdog disarmed) through
+// idle_escalate_stall twice.
+// Expect: exactly one new TIMING+7 WARN; still flagged; wdog stays
+// disarmed; state still BLOCKED; second pass silent.
+JARVIS_TEST(idle_escalate_unarmed_reports_only, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->state = TaskState::BLOCKED;
+    Scheduler::register_task(*t);
+    t->last_progress_tick = 100;
+    t->stuck_suspected = true;
+    t->wdog_armed = false;
+
+    auto timing7_count = []() {
+        uint64_t found = 0;
+        log::DmesgService::instance().for_each(
+            [&found](const log::LogEntry &e) {
+                if (e.subsystem == log::ErrorSubsystem::TIMING &&
+                    e.error_code == log::kDmesgBase_TIMING + 7)
+                    ++found;
+            });
+        return found;
+    };
+    // Clear-first: the shared ring churns under tick DMD traffic and
+    // wraps (evicting old entries), so deltas against a live base are
+    // nondeterministic. klog_read precedent: self-contained probes.
+    log::DmesgService::instance().clear();
+    const uint64_t base = timing7_count();
+    // Real-time now (not synthetic): the shared registry must not see
+    // far-future time (see never_arms test).
+    arch::IrqGuard measure_guard{};
+    const uint64_t now = arch::Timer::ticks();
+    {
+        IdleScanCursor cursor = {};
+        (void)idle_escalate_stall(cursor, 1000000ULL, now);
+    }
+    JARVIS_ASSERT(timing7_count() == base + 1);
+    JARVIS_ASSERT(t->stuck_suspected == true);
+    JARVIS_ASSERT(t->wdog_armed == false);
+    JARVIS_ASSERT(t->state == TaskState::BLOCKED);
+    {
+        IdleScanCursor cursor = {};
+        (void)idle_escalate_stall(cursor, 1000000ULL, now);
+    }
+    JARVIS_ASSERT(timing7_count() == base + 1);
+
+    Scheduler::remove_task(*t);
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Armed + expired stall routes to the EXISTING handler (all of
+// #41's disposition preserved), one-shot, no re-fire.
+// Input: Registered task, stale + flagged, direct field arm with past
+// expiry under IrqGuard (identical stores to sys_watchdog_create;
+// guard freezes ticks so no tick scan can interleave); seam under the
+// same guard.
+// Expect: wdog disarmed; exactly one new TIMING+6 (real handler ran);
+// helper TERMINATED by the action=3 disposition; second pass adds no
+// TIMING+6.
+JARVIS_TEST(idle_escalate_armed_expired_routes, "PRE: none | POST: none") {
+    // BLOCKED + registered (never enqueued, never dispatched): a live
+    // READY helper could dispatch between setup and seam, and the
+    // dispatch progress stamp would clear the flag under test.
+    auto *helper = TaskControlBlock::create(forever_entry, 9, 10);
+    JARVIS_ASSERT(helper != nullptr);
+    helper->state = TaskState::BLOCKED;
+    Scheduler::register_task(*helper);
+    helper->last_progress_tick = 100;
+    helper->stuck_suspected = true;
+
+    auto timing6_count = []() {
+        uint64_t found = 0;
+        log::DmesgService::instance().for_each(
+            [&found](const log::LogEntry &e) {
+                if (e.subsystem == log::ErrorSubsystem::TIMING &&
+                    e.error_code == log::kDmesgBase_TIMING + 6)
+                    ++found;
+            });
+        return found;
+    };
+    // Clear-first (see unarmed test): ring churn makes live-base
+    // deltas nondeterministic. The whole measure window runs under one
+    // IrqGuard: ring pushes race tick DMD traffic (multi-producer on an
+    // SPSC ring), so counts are only exact with ticks frozen.
+    log::DmesgService::instance().clear();
+    const uint64_t base = timing6_count();
+    {
+        arch::IrqGuard guard{};
+        const uint64_t now = arch::Timer::ticks();
+        helper->wdog_period_ticks = 5;
+        helper->wdog_last_kick_tick = now;
+        helper->wdog_expiry_tick = now - 1;
+        helper->wdog_armed = true;
+        helper->wdog_gen = 1;
+        IdleScanCursor cursor = {};
+        (void)idle_escalate_stall(cursor, 1000000ULL, now);
+        JARVIS_ASSERT(helper->wdog_armed == false);
+        JARVIS_ASSERT(timing6_count() == base + 1);
+        IdleScanCursor cursor2 = {};
+        (void)idle_escalate_stall(cursor2, 1000000ULL, now);
+        JARVIS_ASSERT(timing6_count() == base + 1);
+    }
+    // Cleanup: the helper is TERMINATED via the real action=3 path but
+    // sits in the tick's deferred-kill queue, not the zombie list — so
+    // remove + destroy directly (a later tick's deferred entry sees the
+    // 0xDD-poisoned magic and skips safely). Waiting for tick reap here
+    // would work too but costs up to 500 ticks of wall time.
+    Scheduler::remove_task(*helper);
+    TaskControlBlock::destroy(helper);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Armed but unexpired stall neither routes nor reports.
+// Input: Registered BLOCKED flagged task, armed with future expiry.
+// Expect: no TIMING+6 delta; wdog stays armed; no TIMING+7 either
+// (the armed path never reports — the watchdog owns the episode).
+JARVIS_TEST(idle_escalate_armed_future_no_fire, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->state = TaskState::BLOCKED;
+    Scheduler::register_task(*t);
+    t->last_progress_tick = 100;
+    t->stuck_suspected = true;
+
+    auto timing6_count = []() {
+        uint64_t found = 0;
+        log::DmesgService::instance().for_each(
+            [&found](const log::LogEntry &e) {
+                if (e.subsystem == log::ErrorSubsystem::TIMING &&
+                    e.error_code == log::kDmesgBase_TIMING + 6)
+                    ++found;
+            });
+        return found;
+    };
+    // Clear-first (see unarmed test): ring churn makes live-base
+    // deltas nondeterministic.
+    log::DmesgService::instance().clear();
+    const uint64_t base = timing6_count();
+    const uint64_t now = arch::Timer::ticks();
+    // Ticks frozen across arm + seam + count: the ring races tick DMD
+    // traffic, and a tick could otherwise fire nothing here but pollute
+    // the no-delta assert via unrelated expiries.
+    arch::IrqGuard measure_guard{};
+    t->wdog_period_ticks = 100000;
+    t->wdog_last_kick_tick = now;
+    t->wdog_expiry_tick = now + 10000;
+    t->wdog_armed = true;
+    t->wdog_gen = 1;
+    {
+        IdleScanCursor cursor = {};
+        (void)idle_escalate_stall(cursor, 1000000ULL, now);
+    }
+    JARVIS_ASSERT(t->wdog_armed == true);
+    t->wdog_armed = false;
+    JARVIS_ASSERT(timing6_count() == base);
+
+    Scheduler::remove_task(*t);
+    TaskControlBlock::destroy(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The monitor never arms a watchdog (hard rule, spec §5):
+// full escalate passes over disarmed tasks leave every arm off.
+// Input: Two registered BLOCKED tasks with flags set directly, through
+// idle_escalate_stall (the scan seam that sets flags is covered by the
+// stall tests; running a synthetic-time scan over the shared registry
+// here would flag unrelated tasks and make the count
+// environment-dependent).
+// Expect: both wdog_armed false; exactly one TIMING+7 each (report-only,
+// M6); no TIMING+6.
+JARVIS_TEST(idle_escalate_never_arms_fresh, "PRE: none | POST: none") {
+    auto *a = TaskControlBlock::create(forever_entry, 5, 10);
+    auto *b = TaskControlBlock::create(forever_entry, 5, 10);
+    JARVIS_ASSERT(a != nullptr && b != nullptr);
+    a->state = TaskState::BLOCKED;
+    b->state = TaskState::BLOCKED;
+    Scheduler::register_task(*a);
+    Scheduler::register_task(*b);
+    a->last_progress_tick = 100;
+    b->last_progress_tick = 100;
+    a->stuck_suspected = true;
+    b->stuck_suspected = true;
+
+    auto timing7_count = []() {
+        uint64_t found = 0;
+        log::DmesgService::instance().for_each(
+            [&found](const log::LogEntry &e) {
+                if (e.subsystem == log::ErrorSubsystem::TIMING &&
+                    e.error_code == log::kDmesgBase_TIMING + 7)
+                    ++found;
+            });
+        return found;
+    };
+    // Clear-first (see unarmed test): ring churn makes live-base
+    // deltas nondeterministic. Ticks frozen across the whole window:
+    // ring pushes race tick DMD traffic on the shared SPSC ring.
+    // Real-time now (not synthetic): the shared registry must not see
+    // far-future time, which would flag unrelated tasks.
+    log::DmesgService::instance().clear();
+    const uint64_t base = timing7_count();
+    arch::IrqGuard measure_guard{};
+    const uint64_t now = arch::Timer::ticks();
+    {
+        IdleScanCursor cursor = {};
+        (void)idle_escalate_stall(cursor, 1000000ULL, now);
+    }
+    JARVIS_ASSERT(a->wdog_armed == false);
+    JARVIS_ASSERT(b->wdog_armed == false);
+    JARVIS_ASSERT(timing7_count() == base + 2);
+
+    Scheduler::remove_task(*a);
+    Scheduler::remove_task(*b);
+    TaskControlBlock::destroy(a);
+    TaskControlBlock::destroy(b);
+    JARVIS_TEST_PASS();
+}
+
 void register_idle_monitor_tests() {
     Logger::info("Registering idle monitor tests");
     JARVIS_REGISTER_TEST(idle_monitor_zero_init);
@@ -575,4 +843,10 @@ void register_idle_monitor_tests() {
     JARVIS_REGISTER_TEST(idle_mem_leak_fires_once);
     JARVIS_REGISTER_TEST(idle_mem_usage_growth_not_suspect);
     JARVIS_REGISTER_TEST(idle_mem_overhead_bounded);
+    JARVIS_REGISTER_TEST(idle_stall_progress_bump_on_wake);
+    JARVIS_REGISTER_TEST(idle_stall_progress_bump_seam);
+    JARVIS_REGISTER_TEST(idle_escalate_unarmed_reports_only);
+    JARVIS_REGISTER_TEST(idle_escalate_armed_expired_routes);
+    JARVIS_REGISTER_TEST(idle_escalate_armed_future_no_fire);
+    JARVIS_REGISTER_TEST(idle_escalate_never_arms_fresh);
 }

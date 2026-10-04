@@ -114,6 +114,23 @@ bool idle_note_exec_sample(TaskControlBlock &t) noexcept;
 IdleScanProgress idle_scan_mem(IdleScanCursor &cursor,
                                uint64_t budget) noexcept;
 
+/// @brief Record forward progress for @p t at tick @p now (issues
+///        #43/#285, P6). Called from the wake + dispatch choke points;
+///        unit-callable (M5).
+void idle_note_progress(TaskControlBlock &t, uint64_t now) noexcept;
+
+/// @brief Escalate flagged stalls through existing handler paths
+///        (issues #43/#285, P6-thin). Per visited TCB: unflagged → skip;
+///        flagged + armed + unexpired → silent (the live watchdog owns
+///        the episode); flagged + unarmed → one TIMING+7 WARN (report
+///        only); flagged + armed + expired → exact tick-scan replica
+///        (disarm-first under scheduler_lock_, pinned ring-only, same
+///        weak watchdog_expiry_handler — all CONFIG_WATCHDOG_ACTION
+///        dispositions preserved, no new action value, no new errno).
+///        Zero wdog_armed=true writes (hard rule, audit-greppable).
+void idle_escalate_stall(IdleScanCursor &cursor, uint64_t budget,
+                         uint64_t now) noexcept;
+
 /// @brief Publish the switch-path low-water sample as saturated bytes.
 /// @param low_water_rsp Lowest kernel-stack RSP observed (kstack_low_water_
 ///        semantics: 0 = never switched out).

@@ -208,6 +208,8 @@ constexpr DmesgRecord kDmesgCatalog_TIMING[] = {
      "Timing: WCET overrun"},
     {ErrorSubsystem::TIMING, kDmesgBase_TIMING + 6, LogSeverity::ERROR,
      "Timing: watchdog expired"},
+    {ErrorSubsystem::TIMING, kDmesgBase_TIMING + 7, LogSeverity::WARN,
+     "Timing: stall suspected"},
 };
 
 /// @brief PMM records (canonical base kDmesgBase_PMM): leak-suspect
