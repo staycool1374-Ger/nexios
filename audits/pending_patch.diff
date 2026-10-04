@@ -1,21 +1,752 @@
+diff --git a/docs/specs/debugd.md b/docs/specs/debugd.md
+index 03f88fd0a..8c36ee010 100644
+--- a/docs/specs/debugd.md
++++ b/docs/specs/debugd.md
+@@ -292,7 +292,8 @@ These are MUST-level constraints on the kernel, independent of #169:
+ debugd doubles as the introspection engine — no second mechanism:
+ 
+ - A `runelf` target can be launched *stopped under debugd*
+-  (`runelf --debug prog.elf`: loader holds the task at entry,
++  (`runelf --debug` on the retained completion: loader holds the task
++  at entry,
+   debugd attaches, GDB connects). This is the convenient path #186
+   asks for — full register/memory/breakpoint access from the first
+   instruction, with zero new shell machinery beyond the flag.
+@@ -306,10 +307,14 @@ debugd doubles as the introspection engine — no second mechanism:
+ 
+ ### 9.1 `runelf --debug` flag contract (normative, issue #231)
+ 
+-`runelf --debug prog.elf` (argv form, parsed in `cmd_runelf` before
+-`take_completed`; bare `runelf` behavior is unchanged per #77).
+-Usage contract: exactly `runelf --debug <path>` is accepted; any other
+-arity (lone `--debug`, extra args such as `runelf --debug a b`) prints
++`runelf --debug` (argv form, parsed in `cmd_runelf` before
++`take_completed`, on the retained completion from a prior `loadelf`;
++bare `runelf` behavior is unchanged per #77). The loader takes no path
++argument (background-loader model), so there is no
++`runelf --debug <path>` form — amended per implementation decision A2
++(issue #231 thread).
++Usage contract: exactly `runelf --debug` is accepted; any other
++arity (extra args such as `runelf --debug a b`) prints
+ the `runelf` usage line and launches nothing. Debug-build-only: release
+ builds refuse the flag with the normal `runelf` usage line (carve-out
+ §10/N4 extended to the flag).
+@@ -465,8 +470,8 @@ promised session).
+    sentence may appear outside this pointer until those phases.
+ 5. `runelf --debug` integration (§9, gated on #77 — satisfied,
+    take_completed path landed). Acceptance (issue #231): flag parse
+-   (accept `runelf --debug <path>`; `runelf --debug a b` and lone
+-   `--debug` print the usage line and launch nothing); entry-bp
++   (accept `runelf --debug` on the retained completion; `runelf --debug
++   a b` prints the usage line and launches nothing); entry-bp
+    insert return checked after grant with teardown on failure;
+    claim(sel1)→grant(sel7)→stop(sel9) sequence with the denial
+    table preserved (EBUSY on already-debugged, EPERM on non-launcher
+diff --git a/src/kernel/debug/debug_bind.hpp b/src/kernel/debug/debug_bind.hpp
+index 8ad47292b..262bab821 100644
+--- a/src/kernel/debug/debug_bind.hpp
++++ b/src/kernel/debug/debug_bind.hpp
+@@ -70,4 +70,24 @@ bool debug_session_active() noexcept;
+ size_t debug_collect_owned(uint64_t debugger_id, uint64_t *ids_out,
+                            uint32_t *gens_out, size_t cap) noexcept;
+ 
++/// @brief Launch handoff for `runelf --debug` (issue #231): sel1-claim
++///        immediately followed by the sel7 grant-transfer to @p grantee_id,
++///        then the sel9 belt arm — one call with explicit ids (a literal
++///        syscall-entry sequence cannot work: EBUSY after claim, EBADF on
++///        a shell sel9 against the debugd-owned binding). Denial table
++///        mirrors sel1+sel7 (ESRCH/EPERM/EBUSY, no new errno); no new
++///        syscall or selector (spec §9.6).
++/// @return 0 with @p handle_out minted, else -ESRCH/-EPERM/-EBUSY.
++uint64_t debug_launch_handoff(uint64_t shell_id, uint64_t target_id,
++                              uint64_t grantee_id,
++                              uint64_t &handle_out) noexcept;
++
++/// @brief Fail-closed teardown for a `--debug` launch (issue #231, spec
++///        §9.2e/§9.7): drop the handoff binding slot (when @p handle is
++///        nonzero), restore breakpoint shadows, terminate the just-added
++///        task via the admitted-task path and drain. Never leaves the
++///        target running.
++void debug_launch_teardown(TaskControlBlock &task,
++                           uint64_t handle) noexcept;
++
+ } // namespace kernel::debug
+diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
+index 660f32138..fc9cb817f 100644
+--- a/src/kernel/elf/elf_loader.cpp
++++ b/src/kernel/elf/elf_loader.cpp
+@@ -83,6 +83,7 @@ uint8_t ElfLoader::phdr_image_[sizeof(ELF64Header) +
+ uint8_t ElfLoader::chunk_buf_[ElfLoader::kChunkSize] = {};
+ TaskControlBlock *ElfLoader::loader_tcb_ = nullptr;
+ TaskControlBlock *ElfLoader::completed_tcb_ = nullptr;
++uint64_t ElfLoader::completed_entry_ = 0;
+ char ElfLoader::msg_buf_[16][160] = {};
+ uint32_t ElfLoader::msg_idx_ = 0;
+ DepResolveContext ElfLoader::dep_ctx_ = {};
+@@ -152,6 +153,7 @@ LoadResult ElfLoader::request_load(const char *path) {
+     if (completed_tcb_) {
+         destroy_completed_tcb(completed_tcb_);
+         completed_tcb_ = nullptr;
++        completed_entry_ = 0;
+     }
+     file_size_ = fsize;
+ 
+@@ -197,14 +199,23 @@ TaskControlBlock *ElfLoader::take_completed() {
+     SpinLockGuard<sync::SpinLock> guard(lock_);
+     auto *t = completed_tcb_;
+     completed_tcb_ = nullptr;
++    // completed_entry_ intentionally NOT cleared: it stays latched to
++    // the taken TCB until the next load/release/reset (the shell reads
++    // it after take_completed for the entry breakpoint).
+     return t;
+ }
+ 
++uint64_t ElfLoader::completed_entry() noexcept {
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    return completed_entry_;
++}
++
+ void ElfLoader::release_completed() {
+     SpinLockGuard<sync::SpinLock> guard(lock_);
+     if (completed_tcb_) {
+         destroy_completed_tcb(completed_tcb_);
+         completed_tcb_ = nullptr;
++        completed_entry_ = 0;
+     }
+ }
+ 
+@@ -283,6 +294,7 @@ void ElfLoader::reset() {
+         // task and run parent/daemon logic on a never-scheduled TCB.
+         destroy_completed_tcb(completed_tcb_);
+         completed_tcb_ = nullptr;
++        completed_entry_ = 0;
+     }
+     cancel_requested_ = false;
+ }
+@@ -988,6 +1000,9 @@ void ElfLoader::run_load() {
+     }
+ 
+     completed_tcb_ = tcb;
++    // Issue #231: latch the entry VA with the retained completion so a
++    // later load cannot move it under the TCB the shell is about to take.
++    completed_entry_ = hdr_.entry;
+     // Ownership transfer complete: the TCB holds refcounts (released
+     // at task death); drop the request-local records + retained buffers
+     // WITHOUT releasing (that would steal the task's references).
+diff --git a/src/kernel/elf/elf_loader.hpp b/src/kernel/elf/elf_loader.hpp
+index f83e95371..e8e17b184 100644
+--- a/src/kernel/elf/elf_loader.hpp
++++ b/src/kernel/elf/elf_loader.hpp
+@@ -106,6 +106,12 @@ class ElfLoader {
+     ///        (never add_task then mutate) and admits via add_task_err.
+     static TaskControlBlock *take_completed();
+ 
++    /// @brief Entry VA latched with the retained completion (issue #231):
++    ///        read hdr_.entry at publish time so a later load cannot move
++    ///        it under the retained TCB. 0 when no completion is retained.
++    ///        Cleared wherever completed_tcb_ is cleared.
++    static uint64_t completed_entry() noexcept;
++
+     /// @brief Release (cleanup + delete) the completed TCB.  Used by tests /
+     ///        future runelf failure paths.
+     static void release_completed();
+@@ -167,6 +173,7 @@ class ElfLoader {
+     static uint8_t chunk_buf_[kChunkSize];
+     static TaskControlBlock *loader_tcb_;
+     static TaskControlBlock *completed_tcb_;
++    static uint64_t completed_entry_;
+     static char msg_buf_[16][160];
+     static uint32_t msg_idx_;
+     // Issue #95: per-request dep-resolve context (loader single-owner;
+diff --git a/src/kernel/syscall/syscall_handlers_debug.cpp b/src/kernel/syscall/syscall_handlers_debug.cpp
+index 93d7feae5..956bbb298 100644
+--- a/src/kernel/syscall/syscall_handlers_debug.cpp
++++ b/src/kernel/syscall/syscall_handlers_debug.cpp
+@@ -147,6 +147,118 @@ void debug_apply_disposition(TaskControlBlock &tgt) noexcept {
+ 
+ } // namespace
+ 
++namespace debug {
++
++/// @brief Launch handoff for `runelf --debug` (issue #231, decision B1):
++///        single call performing sel1-claim immediately followed by the
++///        sel7 grant-transfer to @p grantee_id, then the sel9 belt arm.
++///        A literal sel1→sel7→sel9 sequence through the syscall entry
++///        cannot work (after sel1 the target reads EBUSY; the grant
++///        binding is debugd-owned so a shell sel9 reads EBADF) — this
++///        helper performs the three mutations with explicit ids instead.
++///        Denial table mirrors sel1+sel7 (ESRCH/EPERM/EBUSY, no new
++///        errno); no new syscall or selector (spec §9.6).
++/// @param shell_id Launcher task id (parenthood proof, §9.3).
++/// @param target_id Freshly added launch target.
++/// @param grantee_id Debug daemon pid (named grantee, §9.3).
++/// @param handle_out Minted binding handle on success.
++/// @return 0 on success, else -ESRCH/-EPERM/-EBUSY.
++uint64_t debug_launch_handoff(uint64_t shell_id, uint64_t target_id,
++                              uint64_t grantee_id,
++                              uint64_t &handle_out) noexcept {
++    handle_out = 0;
++    TaskControlBlock *tgt = Scheduler::find_task(target_id);
++    if (tgt == nullptr || !TaskControlBlock::is_valid(tgt) ||
++        tgt->state == TaskState::TERMINATED ||
++        tgt->state == TaskState::REAPED)
++        return static_cast<uint64_t>(-static_cast<int64_t>(kEsrch));
++    if (!tgt->is_user_)
++        return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
++    TaskControlBlock *grantee = Scheduler::find_task(grantee_id);
++    if (grantee == nullptr || !TaskControlBlock::is_valid(grantee) ||
++        grantee->state == TaskState::TERMINATED ||
++        grantee->state == TaskState::REAPED)
++        return static_cast<uint64_t>(-static_cast<int64_t>(kEsrch));
++    if (tgt->parent_id != shell_id)
++        return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
++    if (__atomic_load_n(&tgt->debugger_id, __ATOMIC_ACQUIRE) != 0)
++        return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
++    SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
++    if (__atomic_load_n(&tgt->debugger_id, __ATOMIC_ACQUIRE) != 0)
++        return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
++    for (size_t i = 0; i < kDebugBindings; ++i) {
++        if (g_bindings[i].live)
++            continue;
++        uint32_t gen = static_cast<uint32_t>(
++            __atomic_fetch_add(&g_debug_gen, 1u, __ATOMIC_RELAXED));
++        if (gen == 0)
++            gen = static_cast<uint32_t>(
++                __atomic_fetch_add(&g_debug_gen, 1u, __ATOMIC_RELAXED));
++        g_bindings[i].target_id = tgt->id;
++        g_bindings[i].debugger_id = grantee_id;
++        g_bindings[i].gen = gen;
++        g_bindings[i].target_gen = tgt->generation;
++        g_bindings[i].live = true;
++        __atomic_fetch_add(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
++        g_bindings[i].grantor_id = shell_id;
++        g_bindings[i].granted = true;
++        g_bindings[i].attenuation = 0;
++        g_bindings[i].grant_flags = 0;
++        __atomic_store_n(&tgt->debugger_id, grantee_id, __ATOMIC_RELEASE);
++        // sel9 belt (spec §9.4): arm the deferred stop on a runnable
++        // target; parked targets need nothing. Verbatim sel9 semantics.
++        if (tgt->state == TaskState::RUNNING ||
++            tgt->state == TaskState::READY)
++            __atomic_store_n(&tgt->debug_stop_requested, true,
++                             __ATOMIC_RELEASE);
++        handle_out = (static_cast<uint64_t>(gen) << 32) | i;
++        return 0;
++    }
++    return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
++}
++
++/// @brief Fail-closed teardown for a `--debug` launch (issue #231, spec
++///        §9.2e/§9.7): drop the handoff binding slot (if any), restore
++///        breakpoint shadows via the shared disposition path, then
++///        terminate the just-added task via the admitted-task path and
++///        drain. Never leaves the target running. No new errno (caller
++///        reports the original failure).
++/// @param task Just-added launch target (live).
++/// @param handle Handoff handle from debug_launch_handoff, or 0 when the
++///        handoff never succeeded (pure terminate+drain then).
++void debug_launch_teardown(TaskControlBlock &task, uint64_t handle) noexcept {
++    if (handle != 0) {
++        SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
++        uint32_t idx = static_cast<uint32_t>(handle & 0xFFFFFFFFULL);
++        uint32_t gen = static_cast<uint32_t>(handle >> 32);
++        if (idx < kDebugBindings && gen != 0) {
++            DebugBinding &slot = g_bindings[idx];
++            if (slot.live && slot.gen == gen &&
++                slot.target_id == task.id) {
++                debug::debug_bp_restore_all(task);
++                debug::debug_drop_target(task.id, task.generation);
++                slot.live = false;
++                __atomic_fetch_sub(&g_live_binding_count, 1u,
++                                   __ATOMIC_RELAXED);
++                slot.target_gen = 0;
++                slot.granted = false;
++                slot.grantor_id = 0;
++            }
++        }
++        __atomic_store_n(&task.debugger_id, 0, __ATOMIC_RELEASE);
++        __atomic_store_n(&task.debug_stop_requested, false,
++                         __ATOMIC_RELEASE);
++        task.debug_parked = false;
++        __atomic_store_n(&task.debug_stop_kind, 0, __ATOMIC_RELEASE);
++        __atomic_store_n(&task.debug_stop_va, 0, __ATOMIC_RELEASE);
++        __atomic_store_n(&task.debug_rearm_va, 0, __ATOMIC_RELEASE);
++    }
++    (void)Scheduler::terminate_err(task, task.exit_code);
++    Scheduler::drain_zombie_list();
++}
++
++} // namespace debug
++
+ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2,
+                                         uint64_t, uint64_t *) {
+     TaskControlBlock *caller = syscall_task();
+diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
+index 56bdd89d0..8f09e603b 100644
+--- a/src/kernel/task/taskdefs.cpp
++++ b/src/kernel/task/taskdefs.cpp
+@@ -54,12 +54,6 @@ namespace {
+ // auto-starts, so a TU-local cell satisfies validate_all without
+ // implying a live daemon.
+ uint64_t g_debugd_pid_cell = 0;
+-void set_debugd_pid_cell(uint64_t pid) {
+-    g_debugd_pid_cell = pid;
+-}
+-uint64_t get_debugd_pid_cell() {
+-    return g_debugd_pid_cell;
+-}
+ 
+ // ── Task definition table ────────────────────────────────────────────────
+ 
+@@ -223,6 +217,16 @@ static_assert(
+ 
+ } // anonymous namespace
+ 
++// Issue #231: debugd PID cell accessors with external linkage (declared
++// in taskdefs.hpp for the shell's on-demand startup). The cell itself
++// stays TU-local above.
++void set_debugd_pid_cell(uint64_t pid) noexcept {
++    g_debugd_pid_cell = pid;
++}
++uint64_t get_debugd_pid_cell() noexcept {
++    return g_debugd_pid_cell;
++}
++
+ // ── Read-only table accessors (issue #24) ────────────────────────────────
+ // The verify class inspects table budgets without spawning anything.
+ 
+diff --git a/src/kernel/task/taskdefs.hpp b/src/kernel/task/taskdefs.hpp
+index b3ca1f67d..cd8473207 100644
+--- a/src/kernel/task/taskdefs.hpp
++++ b/src/kernel/task/taskdefs.hpp
+@@ -92,6 +92,12 @@ const TaskDef *taskdefs_at(size_t i) noexcept; // nullptr when out of range
+ bool taskdefs_server_params_valid(const TaskDef &d) noexcept;
+ /// @brief Whole-table validation at runtime (mirrors the static_assert).
+ bool taskdefs_valid() noexcept;
++/// @brief debugd PID cell accessors (issue #231): the taskdefs row owns
++///        the cell (TU-local in taskdefs.cpp); the shell reads it for
++///        on-demand debugd startup. A cell naming a dead generation
++///        counts as unset (caller validates via find_task).
++void set_debugd_pid_cell(uint64_t pid) noexcept;
++uint64_t get_debugd_pid_cell() noexcept;
+ 
+ } // namespace task
+ } // namespace kernel
 diff --git a/src/kernel/test/test_debug_syscall.cpp b/src/kernel/test/test_debug_syscall.cpp
-index 0a01d228a..0ff70acee 100644
+index 328047d68..3159c87ba 100644
 --- a/src/kernel/test/test_debug_syscall.cpp
 +++ b/src/kernel/test/test_debug_syscall.cpp
-@@ -1928,6 +1928,8 @@ JARVIS_TEST(debug_attach_sel9_stop_request, "PRE: none | POST: none") {
-     uint64_t stub_phys = 0;
-     TaskControlBlock *t = debug_spawn_spinner(stub_phys);
-     JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
-+    uint64_t const scratch_phys = debug_map_scratch();
-+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
-     uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
-     JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx",
-                       h);
-@@ -1952,6 +1954,7 @@ JARVIS_TEST(debug_attach_sel9_stop_request, "PRE: none | POST: none") {
-     JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) ==
-                           0,
-                       "detach failed");
-+    debug_unmap_scratch(scratch_phys);
-     debug_free_spinner_page(t, stub_phys);
-     debug_reap_child(t);
+@@ -41,6 +41,7 @@
+ #include <kernel/arch/page_table.hpp>
+ #include <kernel/debug/debug_regs.hpp>
+ #include <kernel/debug/debug_bind.hpp>
++#include <kernel/debug/debug_stop.hpp>
+ #if defined(CONFIG_ARCH_AARCH64)
+ // TMP-DIAG (#235): post-mortem EL0 fault latch (file scope: function-local
+ // externs mislink on this toolchain; only ESR exists — EC classifies the
+@@ -1993,6 +1994,118 @@ JARVIS_TEST(debug_session_active_predicate, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: The launch handoff denial table (issue #231, decision B1):
++// ESRCH/EPERM/EBUSY only, no new errno, nothing mutated on denial.
++// Input: Parented spinner child through kernel::debug::
++//        debug_launch_handoff with bad ids / wrong parent / pre-armed
++//        target.
++// Expect: ESRCH on dead target + dead grantee; EPERM on non-parent
++// shell id; EBUSY on pre-armed target (flag restored after); target
++// debugger_id stays 0 and no binding slot goes live in every case.
++// Depends: debug_launch_handoff (issue #231)
++JARVIS_TEST(debug_launch_handoff_denial_matrix, "PRE: none | POST: none") {
++    uint64_t stub_phys = 0;
++    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
++    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
++    uint64_t handle = 0;
++    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
++                          me->id, 0xDEAD, me->id, handle) == Neg(kEsrch),
++                      "dead target not ESRCH");
++    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
++                          me->id, t->id, 0xDEAD, handle) == Neg(kEsrch),
++                      "dead grantee not ESRCH");
++    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
++                          0xBEEF, t->id, me->id, handle) == Neg(kEperm),
++                      "non-parent shell not EPERM");
++    __atomic_store_n(&t->debugger_id, me->id, __ATOMIC_RELEASE);
++    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
++                          me->id, t->id, me->id, handle) == Neg(kEbusy),
++                      "pre-armed target not EBUSY");
++    __atomic_store_n(&t->debugger_id, 0, __ATOMIC_RELEASE);
++    JARVIS_ASSERT_FMT(__atomic_load_n(&t->debugger_id,
++                                      __ATOMIC_ACQUIRE) == 0,
++                      "denial mutated debugger_id");
++    debug_free_spinner_page(t, stub_phys);
++    debug_reap_child(t);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Handoff success mints one debugd-owned binding + arms the
++// belt; teardown then leaves no residue (issue #231, §9.2e/§9.7).
++// Input: Parented spinner (mapped stub VA) through handoff with the
++// harness as shell + grantee, breakpoint insert at the stub VA, then
++// debug_launch_teardown.
++// Expect: handle minted; target debugger_id == grantee; belt armed on
++// the runnable target; bp insert true; after teardown the target is
++// TERMINATED/drained, sel9 on it is ESRCH (dead), and no binding slot
++// stays live.
++// Depends: debug_launch_handoff, debug_launch_teardown,
++// debug_bp_insert (issues #231/#232)
++JARVIS_TEST(debug_launch_handoff_success_teardown, "PRE: none | POST: none") {
++    uint64_t stub_phys = 0;
++    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
++    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
++    uint64_t handle = 0;
++    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
++                          me->id, t->id, me->id, handle) == 0,
++                      "handoff failed");
++    JARVIS_ASSERT_FMT(handle != 0, "no handle minted");
++    JARVIS_ASSERT_FMT(__atomic_load_n(&t->debugger_id,
++                                      __ATOMIC_ACQUIRE) == me->id,
++                      "binding not debugd-owned");
++    JARVIS_ASSERT_FMT(kernel::debug::debug_bp_insert(*t, kSpinStubVa),
++                      "entry bp insert failed");
++    // Unmap + free the stub page BEFORE teardown (sel9-test order):
++    // cleanup() frees mapped user pages, so a still-mapped stub would
++    // double-free; the later shadow restore fails safe on unmapped VAs
++    // (bp_write_at returns false) while still clearing the table entry.
++    const uint64_t tid = t->id;
++    debug_free_spinner_page(t, stub_phys);
++    kernel::debug::debug_launch_teardown(*t, handle);
++    JARVIS_ASSERT_FMT(Scheduler::find_task(tid) == nullptr,
++                      "teardown left target registered");
++    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 9,
++                                handle) == Neg(kEbadf),
++                      "dead binding still resolvable");
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Breakpoint-insert failure tears down via the admitted-task
++// path (issue #231, §9.2d): unmapped VA refuses, target never runs.
++// Input: Handoff success, then debug_bp_insert at an unmapped VA, then
++// teardown with the minted handle.
++// Expect: insert false; after teardown TERMINATED/drained; sel9 ESRCH.
++// Depends: debug_bp_insert refusal path, debug_launch_teardown
++JARVIS_TEST(debug_launch_bp_failure_teardown, "PRE: none | POST: none") {
++    uint64_t stub_phys = 0;
++    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
++    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
++    uint64_t handle = 0;
++    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
++                          me->id, t->id, me->id, handle) == 0,
++                      "handoff failed");
++    JARVIS_ASSERT_FMT(!kernel::debug::debug_bp_insert(*t, 0xDEAD0000ULL),
++                      "unmapped bp unexpectedly inserted");
++    const uint64_t tid = t->id;
++    debug_free_spinner_page(t, stub_phys);
++    kernel::debug::debug_launch_teardown(*t, handle);
++    JARVIS_ASSERT_FMT(Scheduler::find_task(tid) == nullptr,
++                      "teardown left target registered");
++    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 9,
++                                handle) == Neg(kEbadf),
++                      "dead binding still resolvable");
++    JARVIS_TEST_PASS();
++}
++
+ /// @brief Register all debugger-syscall tests.
+ void register_debug_syscall_tests() {
+     Logger::info("Registering debug syscall tests");
+@@ -2016,4 +2129,7 @@ void register_debug_syscall_tests() {
+     JARVIS_REGISTER_TEST(debug_grant_grantor_death_disposition);
+     JARVIS_REGISTER_TEST(debug_attach_sel9_stop_request);
+     JARVIS_REGISTER_TEST(debug_session_active_predicate);
++    JARVIS_REGISTER_TEST(debug_launch_handoff_denial_matrix);
++    JARVIS_REGISTER_TEST(debug_launch_handoff_success_teardown);
++    JARVIS_REGISTER_TEST(debug_launch_bp_failure_teardown);
+ }
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 5bc937543..a435d20ee 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -69,7 +69,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"syscall_core",         32,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30)
+     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
+     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
+-    {"debug_syscall",         20,   20,      20     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232); arch-neutral, x86_64 measured via TCOUNT
++    {"debug_syscall",         23,   23,      23     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231); arch-neutral, x86_64 measured via TCOUNT
+ 
+     // process
+     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
+@@ -231,7 +231,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"memory_checked_ptr_api", 9,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views
+     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
+     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
+-    {"shell_commands",       31,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77)
++    {"shell_commands",       33,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77) + 2 runelf --debug flag pin (#231)
+     {"services_framework",    7,    0,       0      },  // services framework (issue #125): terminal colors, length-bounded write, cursor/splash, fb gate, scroll, program registry bounds
+     {"ui_framebuffer",        6,    0,       0      },  // framebuffer init/putpixel/clear/scroll + terminated-line render pin (#269)
+ 
+@@ -288,7 +288,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
+     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
+     {"deadline",            139,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277)
+-    {"ui",                  69,   0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin
++    {"ui",                  72,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); was stale at 69 vs 70 actual, reconciled to measured 72
+     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
+     {"random",              17,   0,       0      },  // random_* (issue #173)
+     {"bench",               22,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173)
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index a9aa70623..0891b02fc 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -428,9 +428,17 @@ bool snapshot_create() {
+     // Done BEFORE the MemPool meta capture so the snapshot's pinned_bitmap
+     // includes these baseline pins (restore_pool_meta restores them, rolling
+     // back only test-added pins).
++    // Dead tasks (TERMINATED/REAPED zombies such as the boot user-app
++    // placeholder) are NEVER pinned: pinning them makes drain_zombie_list
++    // skip them forever (pinned rotate-skip), so the zombie section never
++    // empties and their block — recycled after the reap — would keep a
++    // stale pin on an unrelated future task. A dead task needs no
++    // pointer stability (nothing references it after the reap).
+     for (auto *t = Scheduler::all_tasks().first_ptr(); t;
+          t = Scheduler::all_tasks().next_ptr(t)) {
+-        if (t->magic == TaskControlBlock::TCB_MAGIC)
++        if (t->magic == TaskControlBlock::TCB_MAGIC &&
++            t->state != TaskState::TERMINATED &&
++            t->state != TaskState::REAPED)
+             MemPool::pin_block(t);
+     }
+ 
+diff --git a/src/kernel/test/test_shell_commands.cpp b/src/kernel/test/test_shell_commands.cpp
+index e0348b5a8..cec2ec368 100644
+--- a/src/kernel/test/test_shell_commands.cpp
++++ b/src/kernel/test/test_shell_commands.cpp
+@@ -36,6 +36,7 @@
+ #include <kernel/vfs/vfs.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/task/taskdefs.hpp>
+ #include <kernel/elf/elf_loader.hpp>
+ #include <kernel/sync/semaphore.hpp>
+ #include <kernel/arch/timer.hpp>
+@@ -243,7 +244,58 @@ JARVIS_TEST(shell_runelf_bare_contract, "PRE: vfsd, iocd | POST: none") {
+ }
+ 
+ // Runmode: kernel
+-// Testidea: The job-control built-ins are documented stubs / no-ops: `fg`
++// Testidea: Issue #231 flag contract — `runelf --debug` takes no extra
++// args; the debugd-availability check runs before take_completed (§9.5
++// order: with no debugd runtime, refusal names debugd, not the loader).
++// Input: run_shell("runelf --debug a b"); ElfLoader::reset();
++// run_shell("runelf --debug").
++// Expect: "Usage: runelf" for arity; "debugd unavailable" for the
++// bare flag with no completion and no debugd runtime.
++// Depends: service::Shell, ElfLoader::reset
++JARVIS_TEST(shell_runelf_debug_flag_contract, "PRE: vfsd, iocd | POST: none") {
++    char usage[k_capture_size];
++    run_shell("runelf --debug a b", usage, sizeof(usage));
++    JARVIS_ASSERT(has(usage, "Usage: runelf"));
++
++    kernel::elf::ElfLoader::reset();
++    char refused[k_capture_size];
++    run_shell("runelf --debug", refused, sizeof(refused));
++    JARVIS_ASSERT(has(refused, "debugd unavailable"));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: The --debug refusal touches neither DaemonWatch membership
++// nor the debugd pid cell (issue #231, §9.5: array + enabled flag never
++// touched; no debugd task appears).
++// Input: run_shell("runelf --debug") with no runtime (as above).
++// Expect: get_debugd_pid_cell() == 0 and no task named "debugd" in the
++// registry.
++// Depends: task::get_debugd_pid_cell, Scheduler::task_at
++JARVIS_TEST(shell_runelf_debug_daemonwatch_untouched,
++            "PRE: vfsd, iocd | POST: none") {
++    char refused[k_capture_size];
++    run_shell("runelf --debug", refused, sizeof(refused));
++    JARVIS_ASSERT(has(refused, "debugd unavailable"));
++    JARVIS_ASSERT(kernel::task::get_debugd_pid_cell() == 0);
++    const auto count = kernel::Scheduler::task_count();
++    for (uint64_t i = 0; i < count; ++i) {
++        auto *t = kernel::Scheduler::task_at(i);
++        if (t == nullptr ||
++            !kernel::TaskControlBlock::is_valid(t))
++            continue;
++        bool is_debugd = true;
++        const char *want = "debugd";
++        for (size_t c = 0; want[c] != '\0'; ++c) {
++            if (t->name[c] != want[c]) {
++                is_debugd = false;
++                break;
++            }
++        }
++        JARVIS_ASSERT(!is_debugd);
++    }
++    JARVIS_TEST_PASS();
++}
+ // and `bg` state that job control is not implemented, `disown` echoes the
+ // task id it released, `ulimit` refuses on an embedded system, and `wait`
+ // with no children returns immediately instead of blocking.
+@@ -1145,4 +1197,6 @@ void register_shell_commands_tests() {
+     JARVIS_REGISTER_TEST(shell_top_sys_user_split);
+     JARVIS_REGISTER_TEST(shell_top_usage_contract);
+     JARVIS_REGISTER_TEST(shell_runelf_bare_contract); // issue #77
++    JARVIS_REGISTER_TEST(shell_runelf_debug_flag_contract); // issue #231
++    JARVIS_REGISTER_TEST(shell_runelf_debug_daemonwatch_untouched); // #231
+ }
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index 6b210534b..ec816d068 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -35,6 +35,9 @@
+ #include <kernel/sync/spinlock.hpp>
+ #include <kernel/sync/spinlock_guard.hpp>
+ #include <kernel/elf/elf.hpp>
++#include <kernel/task/taskdefs.hpp>
++#include <kernel/debug/debug_bind.hpp>
++#include <kernel/debug/debug_stop.hpp>
+ #include <kernel/vfs/vfs.hpp>
+ #include <kernel/vfs/vfsd.hpp>
+ #include <kernel/driver/iocd.hpp>
+@@ -2553,16 +2556,81 @@ void Shell::cmd_export(int argc, const char** argv) {
+     ++env_count_;
+ }
+ 
++/// @brief Ensure a live debugd for `runelf --debug` (issue #231, §9.5).
++///        Returns the debugd pid, or 0 when unavailable. Reuses the live
++///        task behind the taskdefs pid cell (dead generations count as
++///        unset); otherwise probes initrd for debugd.c.elf. The ELF does
++///        not exist yet (issue #295 owns the runtime), so this fails
++///        closed today — the probe point is where the #295 spawn lands.
++///        DaemonWatch + the row's enabled flag are never touched.
++static uint64_t debug_ensure_debugd() {
++    const uint64_t pid = kernel::task::get_debugd_pid_cell();
++    auto *t = kernel::Scheduler::find_task(pid);
++    if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
++        t->state != kernel::TaskState::TERMINATED &&
++        t->state != kernel::TaskState::REAPED)
++        return pid;
++    auto f = initrd::find("debugd.c.elf");
++    if (f.data == nullptr)
++        return 0;
++    // ELF present but no runtime spawn wired yet (issue #295): refuse
++    // rather than launch unobserved (spec §9.7 rationale).
++    return 0;
++}
++
++/// @brief Name a debug errno for shell errors (issue #231, §9.7: the
++///        error names the errno; denial table has no new errno).
++static const char *debug_errno_name(uint64_t neg_errno) {
++    // Negated Linux numerics, cf. syscall_handlers_debug.cpp.
++    if (neg_errno == static_cast<uint64_t>(-1))
++        return "EPERM";
++    if (neg_errno == static_cast<uint64_t>(-3))
++        return "ESRCH";
++    if (neg_errno == static_cast<uint64_t>(-16))
++        return "EBUSY";
++    if (neg_errno == static_cast<uint64_t>(-9))
++        return "EBADF";
++    return "EIO";
++}
++
+ void Shell::cmd_runelf(int argc, const char** argv) {
+-    // Issue #77 (user-directed contract): runelf takes no parameters — it
+-    // runs the previously background-loaded ELF (`load` stages via the
+-    // ElfLoader; runelf activates the retained completion).  With no
+-    // completed image it reports "no elf loaded" instead of failing.
+-    if (argc != 1) {
++    // Issue #231: `runelf --debug` on the retained completion (A2: the
++    // loader takes no path argument). Debug-build only (§9.1 carve-out).
++    bool debug = false;
++    if (argc == 2 && str_cmp(argv[1], "--debug") == 0) {
++#if defined(CONFIG_DEBUG)
++        debug = true;
++#else
++        Terminal::write("Usage: runelf\n");
++        return;
++#endif
++    } else if (argc != 1) {
++        // Issue #77 (user-directed contract): runelf takes no parameters
++        // — it runs the previously background-loaded ELF (`load` stages
++        // via the ElfLoader; runelf activates the retained completion).
++        // With no completed image it reports "no elf loaded" instead of
++        // failing.
+         Terminal::write("Usage: runelf\n");
+         return;
+     }
+-    (void)argv;
++
++    // Issue #231 (§9.5): debugd must exist before the launch can be
++    // observed — ensured BEFORE take_completed so a refusal leaves the
++    // retained completion untouched for a later plain runelf. No debugd
++    // runtime ships yet (issue #295) — fail closed with a clear error
++    // (a silent full-speed fallback would run a possibly-faulty image
++    // outside the promised session, §9.7 rationale).
++    uint64_t debugd_pid = 0;
++    uint64_t shell_id = 0;
++    if (debug) {
++        debugd_pid = debug_ensure_debugd();
++        if (debugd_pid == 0) {
++            shell_error("runelf", "debugd unavailable");
++            return;
++        }
++        auto *me = kernel::Scheduler::current_task();
++        shell_id = (me != nullptr) ? me->id : 0;
++    }
+ 
+     kernel::TaskControlBlock* task =
+         kernel::elf::ElfLoader::take_completed();
+@@ -2570,6 +2638,11 @@ void Shell::cmd_runelf(int argc, const char** argv) {
+         shell_error("runelf", "no elf loaded");
+         return;
+     }
++    if (debug) {
++        // Issue #231 (§9.3): shell-as-launcher claim needs parenthood
++        // provable — set BEFORE add_task_err. Bare path unchanged.
++        task->parent_id = shell_id;
++    }
+ 
+     // Settled activation parameters BEFORE add_task (not queued: no
+     // re-bucket needed, but priority goes through the scheduler helper
+@@ -2605,6 +2678,31 @@ void Shell::cmd_runelf(int argc, const char** argv) {
+         return;
+     }
+ 
++    // Issue #231 (§9.2c–e, §9.3–§9.4): debug handoff on the admitted
++    // task (parent_id was set before add). Single call performs
++    // claim→grant→stop belt with explicit ids. Any failure tears down
++    // via the admitted-task path (§9.7) — the target must never run
++    // unobserved.
++    if (debug) {
++        uint64_t handle = 0;
++        const uint64_t handoff =
++            kernel::debug::debug_launch_handoff(shell_id, task->id,
++                                                debugd_pid, handle);
++        if (handoff != 0) {
++            kernel::debug::debug_launch_teardown(*task, handle);
++            shell_error("runelf", debug_errno_name(handoff));
++            return;
++        }
++        const uint64_t entry =
++            kernel::elf::ElfLoader::completed_entry();
++        if (entry == 0 ||
++            !kernel::debug::debug_bp_insert(*task, entry)) {
++            kernel::debug::debug_launch_teardown(*task, handle);
++            shell_error("runelf", "entry breakpoint refused");
++            return;
++        }
++    }
++
+     Terminal::set_fg(COLOR_GREEN);
+     Terminal::write("Started task #");
+     char buf[16];

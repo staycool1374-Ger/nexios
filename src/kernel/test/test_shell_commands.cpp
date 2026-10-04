@@ -36,6 +36,7 @@
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/taskdefs.hpp>
 #include <kernel/elf/elf_loader.hpp>
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/arch/timer.hpp>
@@ -243,7 +244,58 @@ JARVIS_TEST(shell_runelf_bare_contract, "PRE: vfsd, iocd | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: The job-control built-ins are documented stubs / no-ops: `fg`
+// Testidea: Issue #231 flag contract — `runelf --debug` takes no extra
+// args; the debugd-availability check runs before take_completed (§9.5
+// order: with no debugd runtime, refusal names debugd, not the loader).
+// Input: run_shell("runelf --debug a b"); ElfLoader::reset();
+// run_shell("runelf --debug").
+// Expect: "Usage: runelf" for arity; "debugd unavailable" for the
+// bare flag with no completion and no debugd runtime.
+// Depends: service::Shell, ElfLoader::reset
+JARVIS_TEST(shell_runelf_debug_flag_contract, "PRE: vfsd, iocd | POST: none") {
+    char usage[k_capture_size];
+    run_shell("runelf --debug a b", usage, sizeof(usage));
+    JARVIS_ASSERT(has(usage, "Usage: runelf"));
+
+    kernel::elf::ElfLoader::reset();
+    char refused[k_capture_size];
+    run_shell("runelf --debug", refused, sizeof(refused));
+    JARVIS_ASSERT(has(refused, "debugd unavailable"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The --debug refusal touches neither DaemonWatch membership
+// nor the debugd pid cell (issue #231, §9.5: array + enabled flag never
+// touched; no debugd task appears).
+// Input: run_shell("runelf --debug") with no runtime (as above).
+// Expect: get_debugd_pid_cell() == 0 and no task named "debugd" in the
+// registry.
+// Depends: task::get_debugd_pid_cell, Scheduler::task_at
+JARVIS_TEST(shell_runelf_debug_daemonwatch_untouched,
+            "PRE: vfsd, iocd | POST: none") {
+    char refused[k_capture_size];
+    run_shell("runelf --debug", refused, sizeof(refused));
+    JARVIS_ASSERT(has(refused, "debugd unavailable"));
+    JARVIS_ASSERT(kernel::task::get_debugd_pid_cell() == 0);
+    const auto count = kernel::Scheduler::task_count();
+    for (uint64_t i = 0; i < count; ++i) {
+        auto *t = kernel::Scheduler::task_at(i);
+        if (t == nullptr ||
+            !kernel::TaskControlBlock::is_valid(t))
+            continue;
+        bool is_debugd = true;
+        const char *want = "debugd";
+        for (size_t c = 0; want[c] != '\0'; ++c) {
+            if (t->name[c] != want[c]) {
+                is_debugd = false;
+                break;
+            }
+        }
+        JARVIS_ASSERT(!is_debugd);
+    }
+    JARVIS_TEST_PASS();
+}
 // and `bg` state that job control is not implemented, `disown` echoes the
 // task id it released, `ulimit` refuses on an embedded system, and `wait`
 // with no children returns immediately instead of blocking.
@@ -1145,4 +1197,6 @@ void register_shell_commands_tests() {
     JARVIS_REGISTER_TEST(shell_top_sys_user_split);
     JARVIS_REGISTER_TEST(shell_top_usage_contract);
     JARVIS_REGISTER_TEST(shell_runelf_bare_contract); // issue #77
+    JARVIS_REGISTER_TEST(shell_runelf_debug_flag_contract); // issue #231
+    JARVIS_REGISTER_TEST(shell_runelf_debug_daemonwatch_untouched); // #231
 }

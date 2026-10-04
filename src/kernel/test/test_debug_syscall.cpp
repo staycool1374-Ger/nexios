@@ -41,6 +41,7 @@
 #include <kernel/arch/page_table.hpp>
 #include <kernel/debug/debug_regs.hpp>
 #include <kernel/debug/debug_bind.hpp>
+#include <kernel/debug/debug_stop.hpp>
 #if defined(CONFIG_ARCH_AARCH64)
 // TMP-DIAG (#235): post-mortem EL0 fault latch (file scope: function-local
 // externs mislink on this toolchain; only ESR exists — EC classifies the
@@ -1993,6 +1994,118 @@ JARVIS_TEST(debug_session_active_predicate, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: The launch handoff denial table (issue #231, decision B1):
+// ESRCH/EPERM/EBUSY only, no new errno, nothing mutated on denial.
+// Input: Parented spinner child through kernel::debug::
+//        debug_launch_handoff with bad ids / wrong parent / pre-armed
+//        target.
+// Expect: ESRCH on dead target + dead grantee; EPERM on non-parent
+// shell id; EBUSY on pre-armed target (flag restored after); target
+// debugger_id stays 0 and no binding slot goes live in every case.
+// Depends: debug_launch_handoff (issue #231)
+JARVIS_TEST(debug_launch_handoff_denial_matrix, "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    auto *me = Scheduler::current_task();
+    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
+    uint64_t handle = 0;
+    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
+                          me->id, 0xDEAD, me->id, handle) == Neg(kEsrch),
+                      "dead target not ESRCH");
+    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
+                          me->id, t->id, 0xDEAD, handle) == Neg(kEsrch),
+                      "dead grantee not ESRCH");
+    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
+                          0xBEEF, t->id, me->id, handle) == Neg(kEperm),
+                      "non-parent shell not EPERM");
+    __atomic_store_n(&t->debugger_id, me->id, __ATOMIC_RELEASE);
+    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
+                          me->id, t->id, me->id, handle) == Neg(kEbusy),
+                      "pre-armed target not EBUSY");
+    __atomic_store_n(&t->debugger_id, 0, __ATOMIC_RELEASE);
+    JARVIS_ASSERT_FMT(__atomic_load_n(&t->debugger_id,
+                                      __ATOMIC_ACQUIRE) == 0,
+                      "denial mutated debugger_id");
+    debug_free_spinner_page(t, stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Handoff success mints one debugd-owned binding + arms the
+// belt; teardown then leaves no residue (issue #231, §9.2e/§9.7).
+// Input: Parented spinner (mapped stub VA) through handoff with the
+// harness as shell + grantee, breakpoint insert at the stub VA, then
+// debug_launch_teardown.
+// Expect: handle minted; target debugger_id == grantee; belt armed on
+// the runnable target; bp insert true; after teardown the target is
+// TERMINATED/drained, sel9 on it is ESRCH (dead), and no binding slot
+// stays live.
+// Depends: debug_launch_handoff, debug_launch_teardown,
+// debug_bp_insert (issues #231/#232)
+JARVIS_TEST(debug_launch_handoff_success_teardown, "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    auto *me = Scheduler::current_task();
+    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
+    uint64_t handle = 0;
+    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
+                          me->id, t->id, me->id, handle) == 0,
+                      "handoff failed");
+    JARVIS_ASSERT_FMT(handle != 0, "no handle minted");
+    JARVIS_ASSERT_FMT(__atomic_load_n(&t->debugger_id,
+                                      __ATOMIC_ACQUIRE) == me->id,
+                      "binding not debugd-owned");
+    JARVIS_ASSERT_FMT(kernel::debug::debug_bp_insert(*t, kSpinStubVa),
+                      "entry bp insert failed");
+    // Unmap + free the stub page BEFORE teardown (sel9-test order):
+    // cleanup() frees mapped user pages, so a still-mapped stub would
+    // double-free; the later shadow restore fails safe on unmapped VAs
+    // (bp_write_at returns false) while still clearing the table entry.
+    const uint64_t tid = t->id;
+    debug_free_spinner_page(t, stub_phys);
+    kernel::debug::debug_launch_teardown(*t, handle);
+    JARVIS_ASSERT_FMT(Scheduler::find_task(tid) == nullptr,
+                      "teardown left target registered");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 9,
+                                handle) == Neg(kEbadf),
+                      "dead binding still resolvable");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Breakpoint-insert failure tears down via the admitted-task
+// path (issue #231, §9.2d): unmapped VA refuses, target never runs.
+// Input: Handoff success, then debug_bp_insert at an unmapped VA, then
+// teardown with the minted handle.
+// Expect: insert false; after teardown TERMINATED/drained; sel9 ESRCH.
+// Depends: debug_bp_insert refusal path, debug_launch_teardown
+JARVIS_TEST(debug_launch_bp_failure_teardown, "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    auto *me = Scheduler::current_task();
+    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
+    uint64_t handle = 0;
+    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
+                          me->id, t->id, me->id, handle) == 0,
+                      "handoff failed");
+    JARVIS_ASSERT_FMT(!kernel::debug::debug_bp_insert(*t, 0xDEAD0000ULL),
+                      "unmapped bp unexpectedly inserted");
+    const uint64_t tid = t->id;
+    debug_free_spinner_page(t, stub_phys);
+    kernel::debug::debug_launch_teardown(*t, handle);
+    JARVIS_ASSERT_FMT(Scheduler::find_task(tid) == nullptr,
+                      "teardown left target registered");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 9,
+                                handle) == Neg(kEbadf),
+                      "dead binding still resolvable");
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all debugger-syscall tests.
 void register_debug_syscall_tests() {
     Logger::info("Registering debug syscall tests");
@@ -2016,4 +2129,7 @@ void register_debug_syscall_tests() {
     JARVIS_REGISTER_TEST(debug_grant_grantor_death_disposition);
     JARVIS_REGISTER_TEST(debug_attach_sel9_stop_request);
     JARVIS_REGISTER_TEST(debug_session_active_predicate);
+    JARVIS_REGISTER_TEST(debug_launch_handoff_denial_matrix);
+    JARVIS_REGISTER_TEST(debug_launch_handoff_success_teardown);
+    JARVIS_REGISTER_TEST(debug_launch_bp_failure_teardown);
 }

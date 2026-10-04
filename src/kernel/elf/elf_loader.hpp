@@ -106,6 +106,12 @@ class ElfLoader {
     ///        (never add_task then mutate) and admits via add_task_err.
     static TaskControlBlock *take_completed();
 
+    /// @brief Entry VA latched with the retained completion (issue #231):
+    ///        read hdr_.entry at publish time so a later load cannot move
+    ///        it under the retained TCB. 0 when no completion is retained.
+    ///        Cleared wherever completed_tcb_ is cleared.
+    static uint64_t completed_entry() noexcept;
+
     /// @brief Release (cleanup + delete) the completed TCB.  Used by tests /
     ///        future runelf failure paths.
     static void release_completed();
@@ -167,6 +173,7 @@ class ElfLoader {
     static uint8_t chunk_buf_[kChunkSize];
     static TaskControlBlock *loader_tcb_;
     static TaskControlBlock *completed_tcb_;
+    static uint64_t completed_entry_;
     static char msg_buf_[16][160];
     static uint32_t msg_idx_;
     // Issue #95: per-request dep-resolve context (loader single-owner;

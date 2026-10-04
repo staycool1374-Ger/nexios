@@ -147,6 +147,118 @@ void debug_apply_disposition(TaskControlBlock &tgt) noexcept {
 
 } // namespace
 
+namespace debug {
+
+/// @brief Launch handoff for `runelf --debug` (issue #231, decision B1):
+///        single call performing sel1-claim immediately followed by the
+///        sel7 grant-transfer to @p grantee_id, then the sel9 belt arm.
+///        A literal sel1→sel7→sel9 sequence through the syscall entry
+///        cannot work (after sel1 the target reads EBUSY; the grant
+///        binding is debugd-owned so a shell sel9 reads EBADF) — this
+///        helper performs the three mutations with explicit ids instead.
+///        Denial table mirrors sel1+sel7 (ESRCH/EPERM/EBUSY, no new
+///        errno); no new syscall or selector (spec §9.6).
+/// @param shell_id Launcher task id (parenthood proof, §9.3).
+/// @param target_id Freshly added launch target.
+/// @param grantee_id Debug daemon pid (named grantee, §9.3).
+/// @param handle_out Minted binding handle on success.
+/// @return 0 on success, else -ESRCH/-EPERM/-EBUSY.
+uint64_t debug_launch_handoff(uint64_t shell_id, uint64_t target_id,
+                              uint64_t grantee_id,
+                              uint64_t &handle_out) noexcept {
+    handle_out = 0;
+    TaskControlBlock *tgt = Scheduler::find_task(target_id);
+    if (tgt == nullptr || !TaskControlBlock::is_valid(tgt) ||
+        tgt->state == TaskState::TERMINATED ||
+        tgt->state == TaskState::REAPED)
+        return static_cast<uint64_t>(-static_cast<int64_t>(kEsrch));
+    if (!tgt->is_user_)
+        return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
+    TaskControlBlock *grantee = Scheduler::find_task(grantee_id);
+    if (grantee == nullptr || !TaskControlBlock::is_valid(grantee) ||
+        grantee->state == TaskState::TERMINATED ||
+        grantee->state == TaskState::REAPED)
+        return static_cast<uint64_t>(-static_cast<int64_t>(kEsrch));
+    if (tgt->parent_id != shell_id)
+        return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
+    if (__atomic_load_n(&tgt->debugger_id, __ATOMIC_ACQUIRE) != 0)
+        return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
+    SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
+    if (__atomic_load_n(&tgt->debugger_id, __ATOMIC_ACQUIRE) != 0)
+        return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
+    for (size_t i = 0; i < kDebugBindings; ++i) {
+        if (g_bindings[i].live)
+            continue;
+        uint32_t gen = static_cast<uint32_t>(
+            __atomic_fetch_add(&g_debug_gen, 1u, __ATOMIC_RELAXED));
+        if (gen == 0)
+            gen = static_cast<uint32_t>(
+                __atomic_fetch_add(&g_debug_gen, 1u, __ATOMIC_RELAXED));
+        g_bindings[i].target_id = tgt->id;
+        g_bindings[i].debugger_id = grantee_id;
+        g_bindings[i].gen = gen;
+        g_bindings[i].target_gen = tgt->generation;
+        g_bindings[i].live = true;
+        __atomic_fetch_add(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
+        g_bindings[i].grantor_id = shell_id;
+        g_bindings[i].granted = true;
+        g_bindings[i].attenuation = 0;
+        g_bindings[i].grant_flags = 0;
+        __atomic_store_n(&tgt->debugger_id, grantee_id, __ATOMIC_RELEASE);
+        // sel9 belt (spec §9.4): arm the deferred stop on a runnable
+        // target; parked targets need nothing. Verbatim sel9 semantics.
+        if (tgt->state == TaskState::RUNNING ||
+            tgt->state == TaskState::READY)
+            __atomic_store_n(&tgt->debug_stop_requested, true,
+                             __ATOMIC_RELEASE);
+        handle_out = (static_cast<uint64_t>(gen) << 32) | i;
+        return 0;
+    }
+    return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
+}
+
+/// @brief Fail-closed teardown for a `--debug` launch (issue #231, spec
+///        §9.2e/§9.7): drop the handoff binding slot (if any), restore
+///        breakpoint shadows via the shared disposition path, then
+///        terminate the just-added task via the admitted-task path and
+///        drain. Never leaves the target running. No new errno (caller
+///        reports the original failure).
+/// @param task Just-added launch target (live).
+/// @param handle Handoff handle from debug_launch_handoff, or 0 when the
+///        handoff never succeeded (pure terminate+drain then).
+void debug_launch_teardown(TaskControlBlock &task, uint64_t handle) noexcept {
+    if (handle != 0) {
+        SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
+        uint32_t idx = static_cast<uint32_t>(handle & 0xFFFFFFFFULL);
+        uint32_t gen = static_cast<uint32_t>(handle >> 32);
+        if (idx < kDebugBindings && gen != 0) {
+            DebugBinding &slot = g_bindings[idx];
+            if (slot.live && slot.gen == gen &&
+                slot.target_id == task.id) {
+                debug::debug_bp_restore_all(task);
+                debug::debug_drop_target(task.id, task.generation);
+                slot.live = false;
+                __atomic_fetch_sub(&g_live_binding_count, 1u,
+                                   __ATOMIC_RELAXED);
+                slot.target_gen = 0;
+                slot.granted = false;
+                slot.grantor_id = 0;
+            }
+        }
+        __atomic_store_n(&task.debugger_id, 0, __ATOMIC_RELEASE);
+        __atomic_store_n(&task.debug_stop_requested, false,
+                         __ATOMIC_RELEASE);
+        task.debug_parked = false;
+        __atomic_store_n(&task.debug_stop_kind, 0, __ATOMIC_RELEASE);
+        __atomic_store_n(&task.debug_stop_va, 0, __ATOMIC_RELEASE);
+        __atomic_store_n(&task.debug_rearm_va, 0, __ATOMIC_RELEASE);
+    }
+    (void)Scheduler::terminate_err(task, task.exit_code);
+    Scheduler::drain_zombie_list();
+}
+
+} // namespace debug
+
 uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2,
                                         uint64_t, uint64_t *) {
     TaskControlBlock *caller = syscall_task();

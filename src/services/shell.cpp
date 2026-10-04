@@ -35,6 +35,9 @@
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/elf/elf.hpp>
+#include <kernel/task/taskdefs.hpp>
+#include <kernel/debug/debug_bind.hpp>
+#include <kernel/debug/debug_stop.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/driver/iocd.hpp>
@@ -2553,22 +2556,92 @@ void Shell::cmd_export(int argc, const char** argv) {
     ++env_count_;
 }
 
+/// @brief Ensure a live debugd for `runelf --debug` (issue #231, §9.5).
+///        Returns the debugd pid, or 0 when unavailable. Reuses the live
+///        task behind the taskdefs pid cell (dead generations count as
+///        unset); otherwise probes initrd for debugd.c.elf. The ELF does
+///        not exist yet (issue #295 owns the runtime), so this fails
+///        closed today — the probe point is where the #295 spawn lands.
+///        DaemonWatch + the row's enabled flag are never touched.
+static uint64_t debug_ensure_debugd() {
+    const uint64_t pid = kernel::task::get_debugd_pid_cell();
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
+        t->state != kernel::TaskState::TERMINATED &&
+        t->state != kernel::TaskState::REAPED)
+        return pid;
+    auto f = initrd::find("debugd.c.elf");
+    if (f.data == nullptr)
+        return 0;
+    // ELF present but no runtime spawn wired yet (issue #295): refuse
+    // rather than launch unobserved (spec §9.7 rationale).
+    return 0;
+}
+
+/// @brief Name a debug errno for shell errors (issue #231, §9.7: the
+///        error names the errno; denial table has no new errno).
+static const char *debug_errno_name(uint64_t neg_errno) {
+    // Negated Linux numerics, cf. syscall_handlers_debug.cpp.
+    if (neg_errno == static_cast<uint64_t>(-1))
+        return "EPERM";
+    if (neg_errno == static_cast<uint64_t>(-3))
+        return "ESRCH";
+    if (neg_errno == static_cast<uint64_t>(-16))
+        return "EBUSY";
+    if (neg_errno == static_cast<uint64_t>(-9))
+        return "EBADF";
+    return "EIO";
+}
+
 void Shell::cmd_runelf(int argc, const char** argv) {
-    // Issue #77 (user-directed contract): runelf takes no parameters — it
-    // runs the previously background-loaded ELF (`load` stages via the
-    // ElfLoader; runelf activates the retained completion).  With no
-    // completed image it reports "no elf loaded" instead of failing.
-    if (argc != 1) {
+    // Issue #231: `runelf --debug` on the retained completion (A2: the
+    // loader takes no path argument). Debug-build only (§9.1 carve-out).
+    bool debug = false;
+    if (argc == 2 && str_cmp(argv[1], "--debug") == 0) {
+#if defined(CONFIG_DEBUG)
+        debug = true;
+#else
+        Terminal::write("Usage: runelf\n");
+        return;
+#endif
+    } else if (argc != 1) {
+        // Issue #77 (user-directed contract): runelf takes no parameters
+        // — it runs the previously background-loaded ELF (`load` stages
+        // via the ElfLoader; runelf activates the retained completion).
+        // With no completed image it reports "no elf loaded" instead of
+        // failing.
         Terminal::write("Usage: runelf\n");
         return;
     }
-    (void)argv;
+
+    // Issue #231 (§9.5): debugd must exist before the launch can be
+    // observed — ensured BEFORE take_completed so a refusal leaves the
+    // retained completion untouched for a later plain runelf. No debugd
+    // runtime ships yet (issue #295) — fail closed with a clear error
+    // (a silent full-speed fallback would run a possibly-faulty image
+    // outside the promised session, §9.7 rationale).
+    uint64_t debugd_pid = 0;
+    uint64_t shell_id = 0;
+    if (debug) {
+        debugd_pid = debug_ensure_debugd();
+        if (debugd_pid == 0) {
+            shell_error("runelf", "debugd unavailable");
+            return;
+        }
+        auto *me = kernel::Scheduler::current_task();
+        shell_id = (me != nullptr) ? me->id : 0;
+    }
 
     kernel::TaskControlBlock* task =
         kernel::elf::ElfLoader::take_completed();
     if (!task) {
         shell_error("runelf", "no elf loaded");
         return;
+    }
+    if (debug) {
+        // Issue #231 (§9.3): shell-as-launcher claim needs parenthood
+        // provable — set BEFORE add_task_err. Bare path unchanged.
+        task->parent_id = shell_id;
     }
 
     // Settled activation parameters BEFORE add_task (not queued: no
@@ -2603,6 +2676,31 @@ void Shell::cmd_runelf(int argc, const char** argv) {
             "runelf admission denied", static_cast<uintptr_t>(admit));
         shell_error("runelf", "admission denied");
         return;
+    }
+
+    // Issue #231 (§9.2c–e, §9.3–§9.4): debug handoff on the admitted
+    // task (parent_id was set before add). Single call performs
+    // claim→grant→stop belt with explicit ids. Any failure tears down
+    // via the admitted-task path (§9.7) — the target must never run
+    // unobserved.
+    if (debug) {
+        uint64_t handle = 0;
+        const uint64_t handoff =
+            kernel::debug::debug_launch_handoff(shell_id, task->id,
+                                                debugd_pid, handle);
+        if (handoff != 0) {
+            kernel::debug::debug_launch_teardown(*task, handle);
+            shell_error("runelf", debug_errno_name(handoff));
+            return;
+        }
+        const uint64_t entry =
+            kernel::elf::ElfLoader::completed_entry();
+        if (entry == 0 ||
+            !kernel::debug::debug_bp_insert(*task, entry)) {
+            kernel::debug::debug_launch_teardown(*task, handle);
+            shell_error("runelf", "entry breakpoint refused");
+            return;
+        }
     }
 
     Terminal::set_fg(COLOR_GREEN);

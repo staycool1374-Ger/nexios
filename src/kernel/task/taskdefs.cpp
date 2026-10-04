@@ -54,12 +54,6 @@ namespace {
 // auto-starts, so a TU-local cell satisfies validate_all without
 // implying a live daemon.
 uint64_t g_debugd_pid_cell = 0;
-void set_debugd_pid_cell(uint64_t pid) {
-    g_debugd_pid_cell = pid;
-}
-uint64_t get_debugd_pid_cell() {
-    return g_debugd_pid_cell;
-}
 
 // ── Task definition table ────────────────────────────────────────────────
 
@@ -222,6 +216,16 @@ static_assert(
     "(see nexios_config.h)");
 
 } // anonymous namespace
+
+// Issue #231: debugd PID cell accessors with external linkage (declared
+// in taskdefs.hpp for the shell's on-demand startup). The cell itself
+// stays TU-local above.
+void set_debugd_pid_cell(uint64_t pid) noexcept {
+    g_debugd_pid_cell = pid;
+}
+uint64_t get_debugd_pid_cell() noexcept {
+    return g_debugd_pid_cell;
+}
 
 // ── Read-only table accessors (issue #24) ────────────────────────────────
 // The verify class inspects table budgets without spawning anything.

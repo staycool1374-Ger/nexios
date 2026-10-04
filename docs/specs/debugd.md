@@ -292,7 +292,8 @@ These are MUST-level constraints on the kernel, independent of #169:
 debugd doubles as the introspection engine — no second mechanism:
 
 - A `runelf` target can be launched *stopped under debugd*
-  (`runelf --debug prog.elf`: loader holds the task at entry,
+  (`runelf --debug` on the retained completion: loader holds the task
+  at entry,
   debugd attaches, GDB connects). This is the convenient path #186
   asks for — full register/memory/breakpoint access from the first
   instruction, with zero new shell machinery beyond the flag.
@@ -306,10 +307,14 @@ debugd doubles as the introspection engine — no second mechanism:
 
 ### 9.1 `runelf --debug` flag contract (normative, issue #231)
 
-`runelf --debug prog.elf` (argv form, parsed in `cmd_runelf` before
-`take_completed`; bare `runelf` behavior is unchanged per #77).
-Usage contract: exactly `runelf --debug <path>` is accepted; any other
-arity (lone `--debug`, extra args such as `runelf --debug a b`) prints
+`runelf --debug` (argv form, parsed in `cmd_runelf` before
+`take_completed`, on the retained completion from a prior `loadelf`;
+bare `runelf` behavior is unchanged per #77). The loader takes no path
+argument (background-loader model), so there is no
+`runelf --debug <path>` form — amended per implementation decision A2
+(issue #231 thread).
+Usage contract: exactly `runelf --debug` is accepted; any other
+arity (extra args such as `runelf --debug a b`) prints
 the `runelf` usage line and launches nothing. Debug-build-only: release
 builds refuse the flag with the normal `runelf` usage line (carve-out
 §10/N4 extended to the flag).
@@ -465,8 +470,8 @@ promised session).
    sentence may appear outside this pointer until those phases.
 5. `runelf --debug` integration (§9, gated on #77 — satisfied,
    take_completed path landed). Acceptance (issue #231): flag parse
-   (accept `runelf --debug <path>`; `runelf --debug a b` and lone
-   `--debug` print the usage line and launch nothing); entry-bp
+   (accept `runelf --debug` on the retained completion; `runelf --debug
+   a b` prints the usage line and launches nothing); entry-bp
    insert return checked after grant with teardown on failure;
    claim(sel1)→grant(sel7)→stop(sel9) sequence with the denial
    table preserved (EBUSY on already-debugged, EPERM on non-launcher

@@ -428,9 +428,17 @@ bool snapshot_create() {
     // Done BEFORE the MemPool meta capture so the snapshot's pinned_bitmap
     // includes these baseline pins (restore_pool_meta restores them, rolling
     // back only test-added pins).
+    // Dead tasks (TERMINATED/REAPED zombies such as the boot user-app
+    // placeholder) are NEVER pinned: pinning them makes drain_zombie_list
+    // skip them forever (pinned rotate-skip), so the zombie section never
+    // empties and their block — recycled after the reap — would keep a
+    // stale pin on an unrelated future task. A dead task needs no
+    // pointer stability (nothing references it after the reap).
     for (auto *t = Scheduler::all_tasks().first_ptr(); t;
          t = Scheduler::all_tasks().next_ptr(t)) {
-        if (t->magic == TaskControlBlock::TCB_MAGIC)
+        if (t->magic == TaskControlBlock::TCB_MAGIC &&
+            t->state != TaskState::TERMINATED &&
+            t->state != TaskState::REAPED)
             MemPool::pin_block(t);
     }
 

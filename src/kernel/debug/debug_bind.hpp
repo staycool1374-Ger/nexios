@@ -70,4 +70,24 @@ bool debug_session_active() noexcept;
 size_t debug_collect_owned(uint64_t debugger_id, uint64_t *ids_out,
                            uint32_t *gens_out, size_t cap) noexcept;
 
+/// @brief Launch handoff for `runelf --debug` (issue #231): sel1-claim
+///        immediately followed by the sel7 grant-transfer to @p grantee_id,
+///        then the sel9 belt arm — one call with explicit ids (a literal
+///        syscall-entry sequence cannot work: EBUSY after claim, EBADF on
+///        a shell sel9 against the debugd-owned binding). Denial table
+///        mirrors sel1+sel7 (ESRCH/EPERM/EBUSY, no new errno); no new
+///        syscall or selector (spec §9.6).
+/// @return 0 with @p handle_out minted, else -ESRCH/-EPERM/-EBUSY.
+uint64_t debug_launch_handoff(uint64_t shell_id, uint64_t target_id,
+                              uint64_t grantee_id,
+                              uint64_t &handle_out) noexcept;
+
+/// @brief Fail-closed teardown for a `--debug` launch (issue #231, spec
+///        §9.2e/§9.7): drop the handoff binding slot (when @p handle is
+///        nonzero), restore breakpoint shadows, terminate the just-added
+///        task via the admitted-task path and drain. Never leaves the
+///        target running.
+void debug_launch_teardown(TaskControlBlock &task,
+                           uint64_t handle) noexcept;
+
 } // namespace kernel::debug

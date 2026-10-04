@@ -83,6 +83,7 @@ uint8_t ElfLoader::phdr_image_[sizeof(ELF64Header) +
 uint8_t ElfLoader::chunk_buf_[ElfLoader::kChunkSize] = {};
 TaskControlBlock *ElfLoader::loader_tcb_ = nullptr;
 TaskControlBlock *ElfLoader::completed_tcb_ = nullptr;
+uint64_t ElfLoader::completed_entry_ = 0;
 char ElfLoader::msg_buf_[16][160] = {};
 uint32_t ElfLoader::msg_idx_ = 0;
 DepResolveContext ElfLoader::dep_ctx_ = {};
@@ -152,6 +153,7 @@ LoadResult ElfLoader::request_load(const char *path) {
     if (completed_tcb_) {
         destroy_completed_tcb(completed_tcb_);
         completed_tcb_ = nullptr;
+        completed_entry_ = 0;
     }
     file_size_ = fsize;
 
@@ -197,7 +199,15 @@ TaskControlBlock *ElfLoader::take_completed() {
     SpinLockGuard<sync::SpinLock> guard(lock_);
     auto *t = completed_tcb_;
     completed_tcb_ = nullptr;
+    // completed_entry_ intentionally NOT cleared: it stays latched to
+    // the taken TCB until the next load/release/reset (the shell reads
+    // it after take_completed for the entry breakpoint).
     return t;
+}
+
+uint64_t ElfLoader::completed_entry() noexcept {
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    return completed_entry_;
 }
 
 void ElfLoader::release_completed() {
@@ -205,6 +215,7 @@ void ElfLoader::release_completed() {
     if (completed_tcb_) {
         destroy_completed_tcb(completed_tcb_);
         completed_tcb_ = nullptr;
+        completed_entry_ = 0;
     }
 }
 
@@ -283,6 +294,7 @@ void ElfLoader::reset() {
         // task and run parent/daemon logic on a never-scheduled TCB.
         destroy_completed_tcb(completed_tcb_);
         completed_tcb_ = nullptr;
+        completed_entry_ = 0;
     }
     cancel_requested_ = false;
 }
@@ -988,6 +1000,9 @@ void ElfLoader::run_load() {
     }
 
     completed_tcb_ = tcb;
+    // Issue #231: latch the entry VA with the retained completion so a
+    // later load cannot move it under the TCB the shell is about to take.
+    completed_entry_ = hdr_.entry;
     // Ownership transfer complete: the TCB holds refcounts (released
     // at task death); drop the request-local records + retained buffers
     // WITHOUT releasing (that would steal the task's references).

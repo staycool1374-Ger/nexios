@@ -92,6 +92,12 @@ const TaskDef *taskdefs_at(size_t i) noexcept; // nullptr when out of range
 bool taskdefs_server_params_valid(const TaskDef &d) noexcept;
 /// @brief Whole-table validation at runtime (mirrors the static_assert).
 bool taskdefs_valid() noexcept;
+/// @brief debugd PID cell accessors (issue #231): the taskdefs row owns
+///        the cell (TU-local in taskdefs.cpp); the shell reads it for
+///        on-demand debugd startup. A cell naming a dead generation
+///        counts as unset (caller validates via find_task).
+void set_debugd_pid_cell(uint64_t pid) noexcept;
+uint64_t get_debugd_pid_cell() noexcept;
 
 } // namespace task
 } // namespace kernel
