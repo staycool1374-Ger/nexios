@@ -41,6 +41,10 @@ enum OpenFlags : uint16_t {
     O_RDWR = 2,
     O_NONBLOCK = 0x800,
     O_CREAT = 0x200,
+    // Raw tty mode (issue #295): no CR->LF translation, serial bytes
+    // only (no keyboard merge). For the GDB RSP transport, where any
+    // byte mangling invalidates framing.
+    O_RAWTTY = 0x1000,
 };
 
 enum SeekWhence : int8_t {

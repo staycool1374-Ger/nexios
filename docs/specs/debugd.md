@@ -356,15 +356,19 @@ via grants, it does not spawn them); shell-handle passing (a transfer
 op is a new selector in disguise, §14.2 dishonest). PID 1 remains
 grantor-of-last-resort and sel8 revoker, not the per-launch path.
 
-### 9.4 Grant timing rule
+### 9.4 Grant timing rule (issue #295: pre-add order)
 
-sel7 is minted after `add_task` (`find_task` requires a live target).
-The claim→grant→stop sequence bounds the pre-breakpoint window
-(sel9 parks at the next user-mode boundary per §4), but this spec
-claims no zero-instruction guarantee before the entry breakpoint is
-confirmed present per §9.2(d).
-Post-grant, the shell arms sel9 stop-request as belt (tick parks at
-the next user-mode boundary per the §4 rule for RUNNING targets).
+The claim→grant→stop belt plus the entry breakpoint all land BEFORE
+`add_task`, via the pointer-based handoff on the taken (never
+registered, hence unresolvable by `find_task` — and unrunnable)
+completion. The target cannot execute a single instruction before the
+entry breakpoint is confirmed present per §9.2(d): zero-instruction
+guarantee (the pre-add window that once let a microsecond run slip
+between add and bp_insert is closed by construction). The sel9 belt
+still arms on the unqueued TCB and fires at the first post-add tick
+per the §4 rule; a tick park pairs with a stop event (§4) so the
+debugger learns pre-fetch stops. Post-grant, the shell delivers the
+grant (NONBLOCK) and only then admits the task.
 
 ### 9.5 debugd on-demand startup
 
@@ -392,12 +396,13 @@ awareness stays host-side.
 ### 9.7 Failure semantics (decided: fail closed everywhere)
 
 Loader failure → existing `runelf` errors; debugd spawn failure →
-refuse before `take_completed`; entry-breakpoint insert failure →
-tear down per §9.2(e); post-add claim/grant/stop failure
-(EBUSY/EPERM/ESRCH on the mint path, EBADF/ESRCH on the resolve path —
-no new errno) → admitted-task teardown of the added task + drop of
-its binding slot + shell error naming the errno; breakpoint shadows of
-bound targets restore via the shared disposition path. RATIONALE: a
+refuse before `take_completed`; handoff/entry-breakpoint/grant
+failure (all pre-add) → slot undo (no terminate: never added) +
+completion destroy + shell error naming the errno (denial table
+unchanged: ESRCH/EPERM/EBUSY, no new errno); admission denial
+→ same undo + destroy. Breakpoint shadows restore via the shared
+disposition path on every undo. The post-add admitted-task teardown path
+(terminate + drain) remains for already-admitted targets. RATIONALE: a
 `--debug` launch that cannot be observed must not execute (silent
 full-speed fallback would run a possibly-faulty image outside the
 promised session).

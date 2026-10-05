@@ -69,7 +69,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"syscall_core",         32,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
-    {"debug_syscall",         23,   23,      23     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231); arch-neutral, x86_64 measured via TCOUNT
+    {"debug_syscall",         24,   24,      24     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295); arch-neutral, x86_64 measured via TCOUNT
 
     // process
     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
@@ -231,7 +231,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"memory_checked_ptr_api", 9,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views
     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
-    {"shell_commands",       33,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77) + 2 runelf --debug flag pin (#231)
+    {"shell_commands",       34,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77) + --debug flag pin (#231) + --debug spawn success (#295, replaces refusal pin) + --debug no-image refusal (#295 audit)
     {"services_framework",    7,    0,       0      },  // services framework (issue #125): terminal colors, length-bounded write, cursor/splash, fb gate, scroll, program registry bounds
     {"ui_framebuffer",        6,    0,       0      },  // framebuffer init/putpixel/clear/scroll + terminated-line render pin (#269)
 

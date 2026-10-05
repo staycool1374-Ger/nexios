@@ -41,6 +41,7 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/debug/dump.hpp>
+#include <kernel/debug/debug_stop.hpp>
 #include <kernel/debug/ipc_sched_trace.hpp>
 
 extern "C" void debug_write(const char *s);
@@ -4577,23 +4578,32 @@ void Scheduler::rate_monotonic_schedule() noexcept {
     // is taken only at a user-mode boundary: stop requested + RUNNING +
     // recorded interrupted PC below the user limit (nested ticks record
     // kernel PCs and skip for a later tick). Consumes the request; marks
-    // has_utrap_frame (the tick wrote the U-frame slot). Task-context
-    // on_tick() callers (tests) are unaffected: only flagged user tasks
-    // park, and none exist outside debugger tests.
+    // has_utrap_frame (the tick wrote the U-frame slot). The park is
+    // notified via debug_note_requested_park (event + poke, mirroring
+    // the trap path): without it a pre-fetch park strands the target —
+    // the debugger never learns the stop and sel2 polls empty forever
+    // (issue #295). Detached tasks (id 0) never park: nobody could
+    // resume them.
     {
         uint64_t cpu = sched_cpu();
+        uint64_t tick_pc = (cpu < CONFIG_MAX_CPUS)
+                               ? __atomic_load_n(&debug_tick_pc_[cpu],
+                                                 __ATOMIC_RELAXED)
+                               : CONFIG_USER_SPACE_LIMIT;
         if (cpu < CONFIG_MAX_CPUS &&
             __atomic_load_n(&current->debug_stop_requested,
                             __ATOMIC_ACQUIRE) &&
+            __atomic_load_n(&current->debugger_id, __ATOMIC_ACQUIRE) !=
+                0 &&
             current->state == TaskState::RUNNING &&
-            __atomic_load_n(&debug_tick_pc_[cpu], __ATOMIC_RELAXED) <
-                CONFIG_USER_SPACE_LIMIT) {
+            tick_pc < CONFIG_USER_SPACE_LIMIT) {
             __atomic_store_n(&current->debug_stop_requested, false,
                              __ATOMIC_RELEASE);
             __atomic_store_n(&current->debug_parked, true, __ATOMIC_RELEASE);
             __atomic_store_n(&current->has_utrap_frame, true, __ATOMIC_RELEASE);
             current->state = TaskState::BLOCKED;
             dequeue_ready(*current);
+            kernel::debug::debug_note_requested_park(*current, tick_pc);
         }
     }
 

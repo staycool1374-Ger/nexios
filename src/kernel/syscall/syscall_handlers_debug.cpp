@@ -163,18 +163,19 @@ namespace debug {
 /// @param grantee_id Debug daemon pid (named grantee, §9.3).
 /// @param handle_out Minted binding handle on success.
 /// @return 0 on success, else -ESRCH/-EPERM/-EBUSY.
-uint64_t debug_launch_handoff(uint64_t shell_id, uint64_t target_id,
-                              uint64_t grantee_id,
-                              uint64_t &handle_out) noexcept {
+/// @brief Shared handoff core: denial checks + slot mint on resolved
+///        pointers (no registry lookup). Denial order mirrors sel1+sel7.
+static uint64_t handoff_mint(uint64_t shell_id, TaskControlBlock *tgt,
+                             TaskControlBlock *grantee,
+                             uint64_t grantee_id,
+                             uint64_t &handle_out) noexcept {
     handle_out = 0;
-    TaskControlBlock *tgt = Scheduler::find_task(target_id);
     if (tgt == nullptr || !TaskControlBlock::is_valid(tgt) ||
         tgt->state == TaskState::TERMINATED ||
         tgt->state == TaskState::REAPED)
         return static_cast<uint64_t>(-static_cast<int64_t>(kEsrch));
     if (!tgt->is_user_)
         return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
-    TaskControlBlock *grantee = Scheduler::find_task(grantee_id);
     if (grantee == nullptr || !TaskControlBlock::is_valid(grantee) ||
         grantee->state == TaskState::TERMINATED ||
         grantee->state == TaskState::REAPED)
@@ -217,6 +218,21 @@ uint64_t debug_launch_handoff(uint64_t shell_id, uint64_t target_id,
     return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
 }
 
+uint64_t debug_launch_handoff(uint64_t shell_id, uint64_t target_id,
+                              uint64_t grantee_id,
+                              uint64_t &handle_out) noexcept {
+    TaskControlBlock *tgt = Scheduler::find_task(target_id);
+    TaskControlBlock *grantee = Scheduler::find_task(grantee_id);
+    return handoff_mint(shell_id, tgt, grantee, grantee_id, handle_out);
+}
+
+uint64_t debug_launch_handoff_tc(uint64_t shell_id, TaskControlBlock &tgt,
+                                 uint64_t grantee_id,
+                                 uint64_t &handle_out) noexcept {
+    TaskControlBlock *grantee = Scheduler::find_task(grantee_id);
+    return handoff_mint(shell_id, &tgt, grantee, grantee_id, handle_out);
+}
+
 /// @brief Fail-closed teardown for a `--debug` launch (issue #231, spec
 ///        §9.2e/§9.7): drop the handoff binding slot (if any), restore
 ///        breakpoint shadows via the shared disposition path, then
@@ -226,33 +242,38 @@ uint64_t debug_launch_handoff(uint64_t shell_id, uint64_t target_id,
 /// @param task Just-added launch target (live).
 /// @param handle Handoff handle from debug_launch_handoff, or 0 when the
 ///        handoff never succeeded (pure terminate+drain then).
-void debug_launch_teardown(TaskControlBlock &task, uint64_t handle) noexcept {
-    if (handle != 0) {
-        SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
-        uint32_t idx = static_cast<uint32_t>(handle & 0xFFFFFFFFULL);
-        uint32_t gen = static_cast<uint32_t>(handle >> 32);
-        if (idx < kDebugBindings && gen != 0) {
-            DebugBinding &slot = g_bindings[idx];
-            if (slot.live && slot.gen == gen &&
-                slot.target_id == task.id) {
-                debug::debug_bp_restore_all(task);
-                debug::debug_drop_target(task.id, task.generation);
-                slot.live = false;
-                __atomic_fetch_sub(&g_live_binding_count, 1u,
-                                   __ATOMIC_RELAXED);
-                slot.target_gen = 0;
-                slot.granted = false;
-                slot.grantor_id = 0;
-            }
+/// @brief Pre-add fail-closed undo (issue #295, see header): the
+///        slot-drop + shadow-restore + flag-clear half of teardown
+///        WITHOUT terminate/drain (the target was never added).
+void debug_launch_undo(TaskControlBlock &task, uint64_t handle) noexcept {
+    if (handle == 0)
+        return;
+    SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
+    uint32_t idx = static_cast<uint32_t>(handle & 0xFFFFFFFFULL);
+    uint32_t gen = static_cast<uint32_t>(handle >> 32);
+    if (idx < kDebugBindings && gen != 0) {
+        DebugBinding &slot = g_bindings[idx];
+        if (slot.live && slot.gen == gen && slot.target_id == task.id) {
+            debug::debug_bp_restore_all(task);
+            debug::debug_drop_target(task.id, task.generation);
+            slot.live = false;
+            __atomic_fetch_sub(&g_live_binding_count, 1u,
+                               __ATOMIC_RELAXED);
+            slot.target_gen = 0;
+            slot.granted = false;
+            slot.grantor_id = 0;
         }
-        __atomic_store_n(&task.debugger_id, 0, __ATOMIC_RELEASE);
-        __atomic_store_n(&task.debug_stop_requested, false,
-                         __ATOMIC_RELEASE);
-        task.debug_parked = false;
-        __atomic_store_n(&task.debug_stop_kind, 0, __ATOMIC_RELEASE);
-        __atomic_store_n(&task.debug_stop_va, 0, __ATOMIC_RELEASE);
-        __atomic_store_n(&task.debug_rearm_va, 0, __ATOMIC_RELEASE);
     }
+    __atomic_store_n(&task.debugger_id, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&task.debug_stop_requested, false, __ATOMIC_RELEASE);
+    task.debug_parked = false;
+    __atomic_store_n(&task.debug_stop_kind, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&task.debug_stop_va, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&task.debug_rearm_va, 0, __ATOMIC_RELEASE);
+}
+
+void debug_launch_teardown(TaskControlBlock &task, uint64_t handle) noexcept {
+    debug_launch_undo(task, handle);
     (void)Scheduler::terminate_err(task, task.exit_code);
     Scheduler::drain_zombie_list();
 }

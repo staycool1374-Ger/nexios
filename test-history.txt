@@ -2447,3 +2447,26 @@
 2026-10-04 13:41:32 core PASSED: 529 FAILED: 0 TIME: 31056ms
 2026-10-04 13:42:05 selftest PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT pre-test stall (intermittent, #280 class)
 2026-10-04 13:42:05 selftest PASSED: 139 FAILED: 0 TIME: 7160ms
+2026-10-05 09:39:47 debug_syscall PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (host load 2.3+, rerun pending)
+2026-10-05 09:43:50 debug_syscall PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (host load 2.65, other sessions active)
+2026-10-05 09:30:15 debug_syscall PASSED: 21 FAILED: 3 TIME: 3000ms STATUS: FAIL-break_insert_hit_clear+step_once+fault_routed (under investigation, host load 2.2+)
+2026-10-05 10:17:30 debug_syscall PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (host load 5.1)
+2026-10-05 10:33:30 debug_syscall PASSED: 24 FAILED: 0 TIME: 902ms
+2026-10-05 10:38:00 shell_commands PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (pre-test stall class)
+2026-10-05 10:47:00 shell_commands PASSED: 33 FAILED: 0 TIME: 1052ms
+2026-10-05 10:52:00 core PASSED: 530 FAILED: 0 TIME: 30132ms
+2026-10-05 10:58:00 selftest PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary
+2026-10-05 16:20:00 selftest PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (host load 1.79, QEMU reniced -15, zero S: post SNAP:SAVE)
+2026-10-05 16:58:00 o1_scheduler PASSED: 0 FAILED: 0 TIME: 3000ms STATUS: QEMU_EXIT-invalid-class-name (correct class is scheduler_o1)
+2026-10-05 17:05:00 scheduler_o1 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (13-test class, SNAP:SAVE present, no TEST_START)
+2026-10-05 17:20:00 scheduler_o1 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (harness, SNAP:SAVE present, no TEST_START)
+2026-10-05 17:27:00 scheduler_o1-clean2 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (CLEAN TREE stalls too: my-diff hypothesis REJECTED)
+2026-10-05 17:55:16 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 20000ms STATUS: loop280-iter1
+2026-10-05 17:55:36 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 20000ms STATUS: loop280-iter2
+2026-10-05 17:55:56 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 20000ms STATUS: loop280-iter3
+2026-10-05 17:56:16 scheduler_o1 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary loop280-iter4 (host load spike ~4.0)
+2026-10-05 17:58:33 scheduler_o1 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary loop280-iter5 (host load spike ~4.0)
+2026-10-05 18:00:49 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 40000ms STATUS: loop280-iter6 PASS test=80ms (load easing ~2.5)
+2026-10-05 18:15:00 selftest PASSED: 139 FAILED: 0 TIME: 7250ms
+2026-10-05 19:52:00 shell_commands PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (host load 3.8)
+2026-10-05 19:58:00 shell_commands PASSED: 34 FAILED: 0 TIME: 1111ms

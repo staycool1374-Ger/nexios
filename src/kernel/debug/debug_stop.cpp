@@ -265,6 +265,37 @@ bp_insn_len(uint64_t va, const TaskControlBlock &target) noexcept {
 
 } // namespace
 
+/// @brief Notify helper for the tick deferred-stop park (see header).
+///        Lives in the exported scope (not the anonymous TU-local one):
+///        the scheduler's tick path calls it across TUs.
+void debug_note_requested_park(TaskControlBlock &tgt, uint64_t pc) noexcept {
+    uint64_t debugger_id =
+        __atomic_load_n(&tgt.debugger_id, __ATOMIC_ACQUIRE);
+    if (debugger_id == 0)
+        return;
+    // Latch kind 0 (cleanly parked — the header's own definition): no
+    // trap occurred here, so debug_continue plain-resumes and a planted
+    // entry breakpoint refires as a real trap (the debugger then steps
+    // over deliberately). Latching BREAKPOINT would wrongly engage the
+    // continue step-over for a stop no trap produced (issue #295: it
+    // broke debug_stop_break_insert_hit_clear's CONT-then-BP flow).
+    // The enqueued EVENT still reports BP-class (T05 initial-stop).
+    __atomic_store_n(&tgt.debug_stop_kind, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&tgt.debug_stop_va, pc, __ATOMIC_RELEASE);
+    __atomic_store_n(&tgt.debug_rearm_va, 0, __ATOMIC_RELEASE);
+    StopEvent event{};
+    event.target_id = tgt.id;
+    event.target_gen = tgt.generation;
+    event.kind = static_cast<uint64_t>(StopKind::BREAKPOINT);
+    event.fault_num = 0; // no trap vector: deferred (sel9-belt) stop
+    event.fault_addr = pc;
+    event.snap_state = static_cast<uint64_t>(TaskState::BLOCKED);
+    event.snap_prio = tgt.priority;
+    event.snap_budget = 0; // Phase 2: budget export is zero (see §9)
+    stop_enqueue(event);
+    poke_debugger(debugger_id);
+}
+
 /// @brief Forward: STEP-completion trailer (defined below).
 void debug_step_complete(TaskControlBlock &target) noexcept;
 

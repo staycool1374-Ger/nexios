@@ -1478,6 +1478,17 @@ test-debugd-host:
 	    -I tools/debugd/include -I tools/debugd/tests \
 	    tools/debugd/tests/test_loop.cpp -o build/host/test_debugd_loop_asan && \
 	    ./build/host/test_debugd_loop_asan
+	@printf '  %-7s %s\n' 'HOST' 'debugd C protocol unit tests…'
+	@CC_HOST="$(CC_HOST)"; \
+	if [ -z "$$CC_HOST" ]; then CC_HOST=cc; fi; \
+	$$CC_HOST -std=c17 -Wall -Wextra -Werror \
+	    -I userspace \
+	    tools/debugd/tests/test_cproto.c -o build/host/test_cproto && \
+	    ./build/host/test_cproto && \
+	$$CC_HOST -std=c17 -Wall -Wextra -Werror -fsanitize=address,undefined \
+	    -I userspace \
+	    tools/debugd/tests/test_cproto.c -o build/host/test_cproto_asan && \
+	    ./build/host/test_cproto_asan
 	@printf '  %-7s %s\n' 'HOST' 'hosted-header ban (freestanding portability)…'
 	@if grep -rnE '#include <(vector|string|iostream|map|set|list|deque|forward_list|functional|memory|sstream|fstream|cstdio|cstring|cstdlib|new|typeinfo|exception|stdexcept|system_error|thread|mutex|future|chrono|ratio|optional|variant|tuple|bitset|iterator|limits|numeric|random|regex|algorithm)>' \
 	    tools/debugd/include/; then \

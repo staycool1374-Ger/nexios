@@ -35,6 +35,7 @@
 #define O_RDWR     2
 #define O_NONBLOCK 0x800
 #define O_CREAT    0x200
+#define O_RAWTTY   0x1000
 
 extern char** environ;
 

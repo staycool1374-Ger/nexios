@@ -1,151 +1,59 @@
---- a/docs/specs/debugd.md
-+++ b/docs/specs/debugd.md
-@@ -308,20 +308,36 @@
+diff --git a/userspace/debugd_proto.h b/userspace/debugd_proto.h
+--- a/userspace/debugd_proto.h
++++ b/userspace/debugd_proto.h
+@@ -37,8 +37,16 @@
+ /* RSP packet ceiling (qSupported PacketSize we advertise). */
+ #define DBG_RSP_MAX_PACKET 1024
  
- `runelf --debug prog.elf` (argv form, parsed in `cmd_runelf` before
- `take_completed`; bare `runelf` behavior is unchanged per #77).
--Debug-build-only: release builds refuse the flag with the normal
--`runelf` usage line (carve-out §10/N4 extended to the flag).
-+Usage contract: exactly `runelf --debug <path>` is accepted; any other
-+arity (lone `--debug`, extra args such as `runelf --debug a b`) prints
-+the `runelf` usage line and launches nothing. Debug-build-only: release
-+builds refuse the flag with the normal `runelf` usage line (carve-out
-+§10/N4 extended to the flag).
+-/* x86_64 GDB register blob: 164 bytes, GDB order (debug_regs.cpp). */
++/* Register-blob size follows the kernel arch-dependent GDB layout
++ * (debug_regs.cpp: 164 x86_64 / 272 aarch64 / 264 riscv64), GDB order.
++ * Compiler predefines only -- no build-system dependency. */
++#if defined(__aarch64__)
++#define DBG_BLOB_BYTES 272
++#elif defined(__riscv)
++#define DBG_BLOB_BYTES 264
++#else
+ #define DBG_BLOB_BYTES 164
++#endif
  
- ### 9.2 Hold-at-entry mechanism (normative order)
+ static unsigned dbg_hex_val(char c) {
+     if (c >= '0' && c <= '9')
+diff --git a/userspace/debugd.c b/userspace/debugd.c
+--- a/userspace/debugd.c
++++ b/userspace/debugd.c
+@@ -107,11 +107,16 @@
+  * alive (session watchdog below). */
+ static unsigned long g_last_byte_tick = 0;
  
--(a) `take_completed`; (b) insert the entry breakpoint at `hdr->entry`
--via the breakpoint-insert table-write path (sel3 semantics: pure
--table write, no park needed) BEFORE `add_task_err` — the first user
--instruction traps into the §4 router even if first dispatch beats
--claim/grant/stop, so zero instructions execute unobserved;
--(c) settle priority/policy + `add_task_err` admission (fail closed on
--denial via the existing denial paths); (d) claim/grant/stop per
--§9.3–§9.4; (e) on any post-add failure `terminate_and_drain` the
--just-added task — never leave it running.
-+Selector grounding: sel1 is the §3 launcher-claim (`attach(1,
-+child-pid)`), sel3 is the §4–§5 breakpoint-insert (pure table write,
-+no park needed), sel7/sel8 are the §14.2 grant-mint/revoke selectors,
-+and sel9 is the §4/§13.3 stop-request; §14.2's "number assigned at
-+implementation" is fixed to 7 (mint) and 8 (revoke), control selectors
-+to 2 (poll), 3/4 (breakpoint insert/clear), 5 (step), 6 (continue),
-+9 (stop-request).
-+
-+(a) `take_completed`; (b) settle priority/policy + `add_task_err`
-+admission (fail closed on denial via the existing denial paths; a
-+denied TCB is destroyed via the never-added path, never admitted);
-+(c) claim/grant/stop per §9.3–§9.4; (d) insert the entry breakpoint
-+at `hdr->entry` via the bound breakpoint-insert selector (requires
-+the §9.3 binding — insert on an unbound target is rejected) and check
-+its return: on insert failure tear down per (e); the claim→grant→stop
-+sequence bounds the pre-breakpoint window (sel9 parks at the next
-+user-mode boundary per §4) but this spec claims no zero-instruction
-+guarantee before the entry breakpoint is confirmed present;
-+(e) on any post-add failure terminate the just-added task via the
-+admitted-task teardown path and drop its binding slot (breakpoint
-+shadows of bound targets restore via the shared disposition path; a
-+never-bound target holds no shadow entry) — never leave it running.
+-static unsigned long g_reg_qwords[DBG_BLOB_BYTES / 8];
++/* Round up: 164 is not a multiple of 8, and the kernel copies
++ * debug_blob_bytes() (164/272/264 by arch) here. */
++static unsigned long g_reg_qwords[(DBG_BLOB_BYTES + 7) / 8];
+ static unsigned char g_mem_buf[1024];
+ static struct DbgStopEvent g_stop_ev;
+ static char g_packet[DBG_RSP_MAX_PACKET + 1];
+-static char g_reply[2 * DBG_BLOB_BYTES + 64];
++/* Reply ceiling: worst case is the hex of a full g_mem_buf read
++ * (2*1024+1); the register-blob hex (2*272+1 on aarch64) and every
++ * control reply fit inside the same bound. */
++static char g_reply[2 * sizeof(g_mem_buf) + 64];
  
- ### 9.3 Attach handoff (decided: shell-as-launcher claim+grant)
- 
-@@ -345,30 +361,39 @@
- 
- ### 9.5 debugd on-demand startup
- 
--If the debugd pid cell is unset or names a dead task, spawn debugd
--from the taskdefs row values (SPORADIC_SERVER, prio 2, SS(1,10,0)
--envelope per §10) via the existing boot daemon-spawn helper in
--init/shell task context BEFORE `take_completed`; the DaemonWatch
--array and the row's `enabled=false` flag are never touched. If
--debugd is already live, reuse it. Spawn failure fails closed before
--`take_completed` (nothing to tear down).
-+If the debugd pid cell (owner: taskdefs `g_debugd_pid_cell`, set on
-+successful spawn and cleared on debugd death/exit; a cell naming a
-+dead generation counts as unset) is unset, spawn debugd from the
-+taskdefs row values (SPORADIC_SERVER, prio 2, SS(1,10,0) envelope per
-+§10) via the named runtime daemon-spawn path (not `reboot_from_table`,
-+which is noreturn and boot-only) in shell task context BEFORE
-+`take_completed`; the DaemonWatch array and the row's `enabled=false`
-+flag are never touched, and on-demand debugd death applies the §10
-+debugger-death disposition with restart-on-next-`--debug` (no
-+DaemonWatch restart). If debugd is already live, reuse it. Spawn
-+failure fails closed before `take_completed` (nothing to tear down).
- 
- ### 9.6 Introspection read-only rule
- 
--`runelf --debug` exposes NOTHING beyond §4 stop-event snapshots
--(state/priority/budget) + `read_regs`/`read_mem`; no new syscall, no
--scheduler-state write path (reprioritize/rebudget forbidden — §9
--sentence 2 stands); ELF symbol awareness stays host-side.
-+`runelf --debug` adds no scheduler-introspection surface beyond §4
-+stop-event snapshots (state/priority/budget) plus the §3 debug data
-+plane (`read_regs`/`read_mem`, with the session's break/step/continue/
-+stop control per §4–§6); no new syscall, no scheduler-state write path
-+(reprioritize/rebudget forbidden — §9 sentence 2 stands); ELF symbol
-+awareness stays host-side.
- 
- ### 9.7 Failure semantics (decided: fail closed everywhere)
- 
- Loader failure → existing `runelf` errors; debugd spawn failure →
--refuse before `take_completed`; post-add claim/grant/stop failure
--(EBUSY/EPERM/ESRCH) → `terminate_and_drain` the added task + shell
--error naming the errno; the entry breakpoint clears via the shared
--disposition path. RATIONALE: a `--debug` launch that cannot be
--observed must not execute (silent full-speed fallback would run a
--possibly-faulty image outside the promised session).
-+refuse before `take_completed`; entry-breakpoint insert failure →
-+tear down per §9.2(e); post-add claim/grant/stop failure
-+(EBUSY/EPERM/ESRCH on the mint path, EBADF/ESRCH on the resolve path —
-+no new errno) → admitted-task teardown of the added task + drop of
-+its binding slot + shell error naming the errno; breakpoint shadows of
-+bound targets restore via the shared disposition path. RATIONALE: a
-+`--debug` launch that cannot be observed must not execute (silent
-+full-speed fallback would run a possibly-faulty image outside the
-+promised session).
- 
- ## 10. RT and safety constraints (binding)
- 
-@@ -438,13 +463,17 @@
-    sentence may appear outside this pointer until those phases.
- 5. `runelf --debug` integration (§9, gated on #77 — satisfied,
-    take_completed path landed). Acceptance (issue #231): flag parse
--   (incl. `runelf --debug a b` usage contract); entry-bp present
--   before add_task; claim(sel1)→grant(sel7)→stop(sel9) sequence with
--   the denial table preserved (EBUSY on already-debugged, EPERM on
--   non-launcher, ESRCH on dead target — no new errno); DaemonWatch
--   membership unchanged after on-demand spawn; release-build refusal;
-+   (accept `runelf --debug <path>`; `runelf --debug a b` and lone
-+   `--debug` print the usage line and launch nothing); entry-bp
-+   insert return checked after grant with teardown on failure;
-+   claim(sel1)→grant(sel7)→stop(sel9) sequence with the denial
-+   table preserved (EBUSY on already-debugged, EPERM on non-launcher
-+   mint and on non-grantor, ESRCH on dead target, EBADF on
-+   unknown/foreign handle — no new errno); DaemonWatch membership
-+   unchanged after on-demand spawn; release-build refusal;
-    fail-closed teardown (no READY/RUNNING residue, no leaked binding
--   slot) on grant-refusal and on debugd-spawn-failure.
-+   slot, no leaked breakpoint-shadow entry) on claim-, grant-,
-+   stop-, and bp-insert-failure and on debugd-spawn-failure.
- 6. Bare-metal checklist audit (§8) against RPi4/RISC-V bring-up.
- 7. TCP transport (§7 v2, gated on Phase 9 netstack #55).
- 8. Determinism qualification (§10–§11 envelope tests).
-@@ -508,8 +537,7 @@
- - §14.2 Grant record shape: (grantee debugger-id, target
-   reference, nonce/generation, single-use-or-expiry flag, opaque
-   `attenuation` reservation). Mint path (decided): a DEDICATED
--  NEW attach selector (number assigned at implementation —
--  RECOMMENDED next free after the Phase-2 selectors; no new
-+  NEW attach selector, fixed as sel7 (revoke: sel8; no new
-   syscall number, selectors are cheap) taking
-   (target-selector, grantee-id), callable only by §14.1 grantors.
-   REJECTED alternative: mint-for-others through the existing
-@@ -560,5 +588,7 @@
-   arch, no dynamic generation).
- - Q5: second `runelf --debug` while one session is live — queue,
-   refuse EBUSY, or attach a second target (multi-target debugd, cf.
--  Q3)? Non-blocking; the implementer may pick refuse-EBUSY as
--  default.
-+  Q3)? Non-blocking and explicitly deferred: until decided, the
-+  implementation MUST document its choice and, if refusing, refuse
-+  with EBUSY on the usage/error surface (no silent queue, no second
-+  target by accident).
+ static unsigned long dbg_ticks(void) {
+     return (unsigned long)__syscall5(5, 0, 0, 0, 0);
+@@ -486,10 +491,11 @@
+     if (packet[1] == 'S') {
+         /* qSupported: minimal viable set; no-ack NOT offered (host
+          * keeps ACKing, which our retransmit loop relies on). */
+-        return rsp_send_packet("PacketSize=1024;qXfer:features:read-;"
+-                               "QStartNoAckMode-;swbreak+;hwbreak-;"
+-                               "vContSupported-",
+-                               91);
++        static const char qsup[] =
++            "PacketSize=1024;qXfer:features:read-;"
++            "QStartNoAckMode-;swbreak+;hwbreak-;"
++            "vContSupported-";
++        return rsp_send_packet(qsup, sizeof(qsup) - 1);
+     }
+     return rsp_send_empty();
+ }

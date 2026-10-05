@@ -34,6 +34,9 @@
 #include <services/terminal/terminal.hpp>
 #include <services/program.hpp>
 #include <kernel/vfs/vfs.hpp>
+#include <kernel/vfs/vfsd.hpp>
+#include <kernel/driver/iocd.hpp>
+#include <kernel/watchdog/watchdogd.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/taskdefs.hpp>
@@ -245,55 +248,100 @@ JARVIS_TEST(shell_runelf_bare_contract, "PRE: vfsd, iocd | POST: none") {
 
 // Runmode: kernel
 // Testidea: Issue #231 flag contract — `runelf --debug` takes no extra
-// args; the debugd-availability check runs before take_completed (§9.5
-// order: with no debugd runtime, refusal names debugd, not the loader).
-// Input: run_shell("runelf --debug a b"); ElfLoader::reset();
-// run_shell("runelf --debug").
-// Expect: "Usage: runelf" for arity; "debugd unavailable" for the
-// bare flag with no completion and no debugd runtime.
-// Depends: service::Shell, ElfLoader::reset
+// args (usage); the bare flag reaches the loader path.
+// Input: run_shell("runelf --debug a b").
+// Expect: "Usage: runelf" for arity; nothing launched.
+// Depends: service::Shell
 JARVIS_TEST(shell_runelf_debug_flag_contract, "PRE: vfsd, iocd | POST: none") {
     char usage[k_capture_size];
     run_shell("runelf --debug a b", usage, sizeof(usage));
     JARVIS_ASSERT(has(usage, "Usage: runelf"));
-
-    kernel::elf::ElfLoader::reset();
-    char refused[k_capture_size];
-    run_shell("runelf --debug", refused, sizeof(refused));
-    JARVIS_ASSERT(has(refused, "debugd unavailable"));
     JARVIS_TEST_PASS();
 }
 
 // Runmode: kernel
-// Testidea: The --debug refusal touches neither DaemonWatch membership
-// nor the debugd pid cell (issue #231, §9.5: array + enabled flag never
-// touched; no debugd task appears).
-// Input: run_shell("runelf --debug") with no runtime (as above).
-// Expect: get_debugd_pid_cell() == 0 and no task named "debugd" in the
-// registry.
-// Depends: task::get_debugd_pid_cell, Scheduler::task_at
-JARVIS_TEST(shell_runelf_debug_daemonwatch_untouched,
-            "PRE: vfsd, iocd | POST: none") {
-    char refused[k_capture_size];
-    run_shell("runelf --debug", refused, sizeof(refused));
-    JARVIS_ASSERT(has(refused, "debugd unavailable"));
-    JARVIS_ASSERT(kernel::task::get_debugd_pid_cell() == 0);
-    const auto count = kernel::Scheduler::task_count();
-    for (uint64_t i = 0; i < count; ++i) {
-        auto *t = kernel::Scheduler::task_at(i);
-        if (t == nullptr ||
-            !kernel::TaskControlBlock::is_valid(t))
-            continue;
-        bool is_debugd = true;
-        const char *want = "debugd";
-        for (size_t c = 0; want[c] != '\0'; ++c) {
-            if (t->name[c] != want[c]) {
-                is_debugd = false;
-                break;
-            }
+// Testidea: Issue #295 — with the debugd runtime present, `runelf
+// --debug` spawns debugd on demand and launches the target held for
+// debug (success path of the #231 fail-closed slice). Cleanup
+// restores pre-test state (bindings auto-reset in isolation; tasks +
+// pid cell are manual).
+// Input: run_shell("loadelf hey.c.elf"); wait_loader_idle();
+// run_shell("runelf --debug").
+// Expect: "Started task #N"; debugd pid cell set to a live task;
+// DaemonWatch trio unchanged; after terminate+drain+cell-clear both
+// tasks are gone and the cell is 0.
+// Depends: service::Shell, ElfLoader, task::pid cell, Scheduler
+JARVIS_TEST(shell_runelf_debug_spawn_success, "PRE: vfsd, iocd | POST: none") {
+    const uint64_t vfsd_before = kernel::vfsd::get_vfsd_pid();
+    const uint64_t iocd_before = kernel::iocd::get_iocd_pid();
+    const uint64_t watchdogd_before = kernel::watchdogd::get_watchdogd_pid();
+    char load[k_capture_size];
+    run_shell("loadelf hey.c.elf", load, sizeof(load));
+    kernel::elf::ElfLoader::wait_loader_idle();
+    char started[k_capture_size];
+    run_shell("runelf --debug", started, sizeof(started));
+    JARVIS_ASSERT(has(started, "Started task #"));
+    const uint64_t debugd = kernel::task::get_debugd_pid_cell();
+    JARVIS_ASSERT(debugd != 0);
+    auto *dt = kernel::Scheduler::find_task(debugd);
+    JARVIS_ASSERT(dt != nullptr && kernel::TaskControlBlock::is_valid(dt));
+    JARVIS_ASSERT(kernel::vfsd::get_vfsd_pid() == vfsd_before);
+    JARVIS_ASSERT(kernel::iocd::get_iocd_pid() == iocd_before);
+    JARVIS_ASSERT(kernel::watchdogd::get_watchdogd_pid() == watchdogd_before);
+    // Parse "Started task #N" for the target id, then tear down both
+    // tasks and the cell (order-independent cleanup for later tests).
+    uint64_t target_id = 0;
+    for (size_t i = 0; started[i] != '\0'; ++i) {
+        if (started[i] == '#') {
+            for (size_t j = i + 1; started[j] >= '0' && started[j] <= '9';
+                 ++j)
+                target_id = target_id * 10 +
+                            static_cast<uint64_t>(started[j] - '0');
+            break;
         }
-        JARVIS_ASSERT(!is_debugd);
     }
+    JARVIS_ASSERT(target_id != 0);
+    auto *target = kernel::Scheduler::find_task(target_id);
+    JARVIS_ASSERT(target != nullptr);
+    JARVIS_ASSERT(kernel::Scheduler::terminate_err(*target, 0) ==
+                  kernel::errors::SCHED_ERR_OK);
+    JARVIS_ASSERT(kernel::Scheduler::terminate_err(*dt, 0) ==
+                  kernel::errors::SCHED_ERR_OK);
+    kernel::Scheduler::drain_zombie_list();
+    kernel::task::set_debugd_pid_cell(0);
+    JARVIS_ASSERT(kernel::Scheduler::find_task(target_id) == nullptr);
+    JARVIS_ASSERT(kernel::Scheduler::find_task(debugd) == nullptr);
+    JARVIS_ASSERT(kernel::task::get_debugd_pid_cell() == 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Issue #295 — `runelf --debug` with no completed image fails
+// closed AFTER ensuring debugd (ensure-before-take order): reports
+// "no elf loaded", launches no target, and the ensured debugd persists
+// for later runs (reused, not orphaned). Restores the refusal pin the
+// spawn-success test replaced (audit #295: NO_ELF/LOAD_FAILED branches
+// need coverage; the missing-ELF initrd variants are not constructible
+// in-QEMU, so this pins the reachable refusal).
+// Input: ElfLoader::reset(); run_shell("runelf --debug").
+// Expect: "no elf loaded"; pid cell set to a live debugd task; cleanup
+// terminates it and clears the cell.
+// Depends: service::Shell, ElfLoader, task::pid cell, Scheduler
+JARVIS_TEST(shell_runelf_debug_no_image, "PRE: vfsd, iocd | POST: none") {
+    kernel::elf::ElfLoader::reset();
+    char out[k_capture_size];
+    run_shell("runelf --debug", out, sizeof(out));
+    JARVIS_ASSERT(has(out, "no elf loaded"));
+    const uint64_t debugd = kernel::task::get_debugd_pid_cell();
+    JARVIS_ASSERT(debugd != 0);
+    auto *dt = kernel::Scheduler::find_task(debugd);
+    JARVIS_ASSERT(dt != nullptr && kernel::TaskControlBlock::is_valid(dt));
+    JARVIS_ASSERT(kernel::Scheduler::terminate_err(*dt, 0) ==
+                  kernel::errors::SCHED_ERR_OK);
+    kernel::Scheduler::drain_zombie_list();
+    kernel::task::set_debugd_pid_cell(0);
+    JARVIS_ASSERT(kernel::Scheduler::find_task(debugd) == nullptr);
+    JARVIS_ASSERT(kernel::task::get_debugd_pid_cell() == 0);
     JARVIS_TEST_PASS();
 }
 // and `bg` state that job control is not implemented, `disown` echoes the
@@ -1198,5 +1246,6 @@ void register_shell_commands_tests() {
     JARVIS_REGISTER_TEST(shell_top_usage_contract);
     JARVIS_REGISTER_TEST(shell_runelf_bare_contract); // issue #77
     JARVIS_REGISTER_TEST(shell_runelf_debug_flag_contract); // issue #231
-    JARVIS_REGISTER_TEST(shell_runelf_debug_daemonwatch_untouched); // #231
+    JARVIS_REGISTER_TEST(shell_runelf_debug_spawn_success); // issue #295
+    JARVIS_REGISTER_TEST(shell_runelf_debug_no_image); // issue #295 (audit refusal pin)
 }

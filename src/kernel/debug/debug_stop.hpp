@@ -82,6 +82,20 @@ bool debug_route_fault(TaskControlBlock &target, uint64_t kind, uint64_t num,
 ///         this debugger (caller reports EAGAIN).
 bool debug_poll_event(uint64_t debugger_id, StopEvent &out) noexcept;
 
+/// @brief Notify helper for the tick deferred-stop park (issue #295):
+///        the scheduler's tick path holds scheduler_lock_ so it cannot
+///        call debug_park_stop (non-recursive lock) — it parks open-coded
+///        and calls here for the notification half. Latches kind 0
+///        (cleanly parked: no trap occurred, so debug_continue
+///        plain-resumes and a planted breakpoint refires as a real
+///        trap) with the interrupted PC as stop VA, and enqueues a
+///        BP-class event (GDB reports any initial stop as T05) + pokes,
+///        mirroring the trap path's post-park sequence (lock order
+///        scheduler -> stop kept: stop_enqueue takes g_stop_lock, the
+///        poke is lock-free). No-op when detached (id 0).
+/// @param pc Interrupted user PC latched as the stop VA.
+void debug_note_requested_park(TaskControlBlock &tgt, uint64_t pc) noexcept;
+
 /// @brief Events dropped (overflow) since boot. Reported alongside polls.
 /// @return Monotonic drop-oldest count (death-evicted deaths counted too).
 uint64_t debug_dropped_count() noexcept;

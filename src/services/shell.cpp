@@ -38,6 +38,7 @@
 #include <kernel/task/taskdefs.hpp>
 #include <kernel/debug/debug_bind.hpp>
 #include <kernel/debug/debug_stop.hpp>
+#include <kernel/ipc/ipc.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/driver/iocd.hpp>
@@ -657,6 +658,16 @@ void Shell::shell_task_main() {
     char line[BUF_SIZE];
 
     while (true) {
+        // Issue #295: while a GDB session is live, the serial line
+        // carries RSP framing — the shell must not consume (or echo)
+        // those bytes as command input, nor redraw the prompt over
+        // them. GDB owns the console until detach ends the session
+        // (bindings drop → predicate clears → prompt returns). Logger
+        // info/warn already mute the same way (#232).
+        if (kernel::debug::debug_session_active()) {
+            shell_idle_nap(20000);
+            continue;
+        }
         update_status_bar();
 
         draw_prompt(last_exit_code_);
@@ -2556,26 +2567,86 @@ void Shell::cmd_export(int argc, const char** argv) {
     ++env_count_;
 }
 
-/// @brief Ensure a live debugd for `runelf --debug` (issue #231, §9.5).
+/// @brief Ensure a live debugd for `runelf --debug` (issue #231 §9.5,
+///        #295 runtime now present).
 ///        Returns the debugd pid, or 0 when unavailable. Reuses the live
 ///        task behind the taskdefs pid cell (dead generations count as
-///        unset); otherwise probes initrd for debugd.c.elf. The ELF does
-///        not exist yet (issue #295 owns the runtime), so this fails
-///        closed today — the probe point is where the #295 spawn lands.
-///        DaemonWatch + the row's enabled flag are never touched.
-static uint64_t debug_ensure_debugd() {
-    const uint64_t pid = kernel::task::get_debugd_pid_cell();
+///        unset); otherwise spawns from the taskdefs row values
+///        (SPORADIC_SERVER, prio 2, SS(1,10,0) envelope per spec §10)
+///        via initrd find + validate + elf::load + add — mirroring the
+///        reboot_from_table SPORADIC_SERVER arm, but NOT the background
+///        ElfLoader (which would destroy the retained user completion).
+///        DaemonWatch array and the row's enabled=false flag are never
+///        touched. Spawn failure fails closed (0 → clean refusal).
+///        Failure stages are distinguished for diagnostics (missing ELF
+///        vs load/admission failure — both refuse identically safe).
+enum class DebugdEnsure : uint64_t {
+    OK = 0,
+    NO_ELF = 1,
+    LOAD_FAILED = 2,
+};
+
+/// @brief True when @p pid names a live debugd task (issue #295).
+///        Pid 0 is never valid (idle owns id 0 — a zero cell must read
+///        as unset, or every boot would "reuse" the idle task and mint
+///        debugger_id 0, which means "no debugger" downstream). The name
+///        check closes recycled-id aliasing: only the spawn path below
+///        names tasks "debugd".
+static bool debugd_task_live(uint64_t pid) {
+    if (pid == 0)
+        return false;
     auto *t = kernel::Scheduler::find_task(pid);
-    if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
-        t->state != kernel::TaskState::TERMINATED &&
-        t->state != kernel::TaskState::REAPED)
-        return pid;
+    if (t == nullptr || !kernel::TaskControlBlock::is_valid(t) ||
+        t->state == kernel::TaskState::TERMINATED ||
+        t->state == kernel::TaskState::REAPED)
+        return false;
+    const char *want = "debugd";
+    for (size_t i = 0; want[i] != '\0'; ++i) {
+        if (t->name[i] != want[i])
+            return false;
+    }
+    return true;
+}
+
+static DebugdEnsure debug_ensure_debugd(uint64_t &pid_out) {
+    pid_out = 0;
+    const uint64_t pid = kernel::task::get_debugd_pid_cell();
+    if (debugd_task_live(pid)) {
+        pid_out = pid;
+        return DebugdEnsure::OK;
+    }
     auto f = initrd::find("debugd.c.elf");
     if (f.data == nullptr)
-        return 0;
-    // ELF present but no runtime spawn wired yet (issue #295): refuse
-    // rather than launch unobserved (spec §9.7 rationale).
-    return 0;
+        return DebugdEnsure::NO_ELF;
+    auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
+    if (!kernel::elf::validate_header(hdr))
+        return DebugdEnsure::LOAD_FAILED;
+    auto *spawned =
+        kernel::elf::load(hdr, f.data, static_cast<uint64_t>(f.size));
+    if (spawned == nullptr)
+        return DebugdEnsure::LOAD_FAILED;
+    {
+        const char *name = "debugd";
+        size_t i = 0;
+        while (name[i] && i < CONFIG_TASK_NAME_LEN - 1) {
+            spawned->name[i] = name[i];
+            ++i;
+        }
+        spawned->name[i] = '\0';
+    }
+    spawned->priority = 2;
+    spawned->base_priority = 2;
+    spawned->period_ticks = 10;
+    spawned->init_sporadic_server(1, 10, 0, 1);
+    kernel::Scheduler::set_edf_exempt(*spawned, true);
+    if (kernel::Scheduler::add_task_err(*spawned) !=
+        kernel::errors::SCHED_ERR_OK) {
+        kernel::elf::ElfLoader::destroy_completed_tcb(spawned);
+        return DebugdEnsure::LOAD_FAILED;
+    }
+    kernel::task::set_debugd_pid_cell(spawned->id);
+    pid_out = spawned->id;
+    return DebugdEnsure::OK;
 }
 
 /// @brief Name a debug errno for shell errors (issue #231, §9.7: the
@@ -2616,16 +2687,18 @@ void Shell::cmd_runelf(int argc, const char** argv) {
 
     // Issue #231 (§9.5): debugd must exist before the launch can be
     // observed — ensured BEFORE take_completed so a refusal leaves the
-    // retained completion untouched for a later plain runelf. No debugd
-    // runtime ships yet (issue #295) — fail closed with a clear error
-    // (a silent full-speed fallback would run a possibly-faulty image
-    // outside the promised session, §9.7 rationale).
+    // retained completion untouched for a later plain runelf. Fail
+    // closed with a clear error naming the stage (a silent full-speed
+    // fallback would run a possibly-faulty image outside the promised
+    // session, §9.7 rationale).
     uint64_t debugd_pid = 0;
     uint64_t shell_id = 0;
     if (debug) {
-        debugd_pid = debug_ensure_debugd();
-        if (debugd_pid == 0) {
-            shell_error("runelf", "debugd unavailable");
+        const DebugdEnsure ensured = debug_ensure_debugd(debugd_pid);
+        if (ensured != DebugdEnsure::OK) {
+            shell_error("runelf", ensured == DebugdEnsure::NO_ELF
+                                       ? "debugd unavailable"
+                                       : "debugd spawn failed");
             return;
         }
         auto *me = kernel::Scheduler::current_task();
@@ -2660,12 +2733,71 @@ void Shell::cmd_runelf(int argc, const char** argv) {
         shell_error("runelf", "policy rejected");
         return;
     }
+    // Issue #295 (fail-closed launch, §9.7): the debug handoff runs
+    // BEFORE admission. add_task_err publishes the task to the run
+    // queues; anything between add and the belt + entry breakpoint is
+    // a run-unobserved window (a tick can dispatch the target before
+    // the next tick's belt park, and a microsecond run fits between
+    // ticks — observed live: hey printed + exited pre-bp). The taken
+    // completion was never registered, so the pointer-based handoff
+    // variant is used (find_task cannot resolve it). Any failure undoes
+    // the slot (no terminate: never added) and destroys the completion.
+    uint64_t dbg_handle = 0;
+    if (debug) {
+        const uint64_t handoff =
+            kernel::debug::debug_launch_handoff_tc(shell_id, *task,
+                                                   debugd_pid, dbg_handle);
+        if (handoff != 0) {
+            kernel::debug::debug_launch_undo(*task, dbg_handle);
+            kernel::elf::ElfLoader::destroy_completed_tcb(task);
+            shell_error("runelf", debug_errno_name(handoff));
+            return;
+        }
+        const uint64_t entry =
+            kernel::elf::ElfLoader::completed_entry();
+        if (entry == 0) {
+            kernel::debug::debug_launch_undo(*task, dbg_handle);
+            kernel::elf::ElfLoader::destroy_completed_tcb(task);
+            shell_error("runelf", "no entry point latched");
+            return;
+        }
+        if (!kernel::debug::debug_bp_insert(*task, entry)) {
+            kernel::debug::debug_launch_undo(*task, dbg_handle);
+            kernel::elf::ElfLoader::destroy_completed_tcb(task);
+            shell_error("runelf", "entry breakpoint refused");
+            return;
+        }
+        // Issue #295 (§13.6 discovery): deliver the grant to debugd so
+        // its loop learns the target — never pid-scans. NONBLOCK send:
+        // a full queue fails closed via undo, never blocks the
+        // shell. Message layout mirrors the WDOG_SUPERVISE delivery
+        // (kernel.cpp): data[0] = target pid, data[1] = handle.
+        {
+            kernel::Message grant{};
+            grant.type = 310;
+            grant.priority = 0;
+            __builtin_memcpy(grant.data, &task->id, sizeof(uint64_t));
+            __builtin_memcpy(grant.data + 8, &dbg_handle,
+                             sizeof(uint64_t));
+            grant.data_size = 16;
+            if (!kernel::IPC::send(debugd_pid, grant,
+                                   kernel::IPC_NONBLOCK)) {
+                kernel::debug::debug_launch_undo(*task, dbg_handle);
+                kernel::elf::ElfLoader::destroy_completed_tcb(task);
+                shell_error("runelf", "grant undeliverable");
+                return;
+            }
+        }
+    }
     // Admission BEFORE activation (S1): fail closed with the denial code;
     // a denied image is destroyed via the loader teardown (never
-    // cleanup()+delete on a never-added TCB, never leaked).
+    // cleanup()+delete on a never-added TCB, never leaked). In --debug
+    // mode the handoff slot is undone first (same pre-add rule).
     kernel::errors::SchedulerError admit =
         kernel::Scheduler::add_task_err(*task);
     if (admit != kernel::errors::SCHED_ERR_OK) {
+        if (debug)
+            kernel::debug::debug_launch_undo(*task, dbg_handle);
         kernel::elf::ElfLoader::destroy_completed_tcb(task);
         kernel::Logger::warn("runelf: admission denied: %s",
                              kernel::errors::error_string(admit));
@@ -2676,31 +2808,6 @@ void Shell::cmd_runelf(int argc, const char** argv) {
             "runelf admission denied", static_cast<uintptr_t>(admit));
         shell_error("runelf", "admission denied");
         return;
-    }
-
-    // Issue #231 (§9.2c–e, §9.3–§9.4): debug handoff on the admitted
-    // task (parent_id was set before add). Single call performs
-    // claim→grant→stop belt with explicit ids. Any failure tears down
-    // via the admitted-task path (§9.7) — the target must never run
-    // unobserved.
-    if (debug) {
-        uint64_t handle = 0;
-        const uint64_t handoff =
-            kernel::debug::debug_launch_handoff(shell_id, task->id,
-                                                debugd_pid, handle);
-        if (handoff != 0) {
-            kernel::debug::debug_launch_teardown(*task, handle);
-            shell_error("runelf", debug_errno_name(handoff));
-            return;
-        }
-        const uint64_t entry =
-            kernel::elf::ElfLoader::completed_entry();
-        if (entry == 0 ||
-            !kernel::debug::debug_bp_insert(*task, entry)) {
-            kernel::debug::debug_launch_teardown(*task, handle);
-            shell_error("runelf", "entry breakpoint refused");
-            return;
-        }
     }
 
     Terminal::set_fg(COLOR_GREEN);

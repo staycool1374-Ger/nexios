@@ -53,39 +53,43 @@ static int64_t tty_read(Vnode &self, uint8_t *buffer, uint64_t count,
                         uint64_t) {
     if (count == 0)
         return 0;
-    // VULN-W2: previously spun on arch::pause() for UINT64_MAX iterations
-    // without descheduling, monopolising the CPU core (WCET violation).  Use
-    // the same cooperative blocking pattern as Syscall::sys_receive: mark
-    // BLOCKED, reschedule, and re-check only after being re-dispatched.
-    while (true) {
-        if (serial_has_data()) {
+    // VULN-W2 history: spinning on arch::pause() monopolised the core
+    // (WCET violation); the cooperative BLOCKED+reschedule replacement
+    // slept eternally instead — no waker exists anywhere in the tree
+    // for tty readers (no UART IRQ handler, no waitqueue, no timeout
+    // wheel arm; BLOCKED tasks are never re-dispatched, so
+    // reschedule() never returns to the blocker). A no-data read
+    // therefore returns VFS_INVALID immediately (sys_read maps negative
+    // to -1: EAGAIN-style poll semantics). The sole read() consumer,
+    // debugd's RSP transport, already polls with deadline+yield and
+    // treats -1 as try-again; the shell never uses this path (it polls
+    // the UART directly via arch::Serial::poll_getchar), so nothing
+    // needs blocking tty reads.
+    if (serial_has_data()) {
 #if defined(CONFIG_ARCH_X86_64)
-            char character = static_cast<char>(arch::inb(arch::COM1));
-            buffer[0] = (character == '\r') ? '\n' : character;
-            return 1;
-#endif
-        }
-        char key_char = 0;
-        if (arch::Keyboard::getchar(key_char)) {
-            buffer[0] = static_cast<uint8_t>(key_char);
-            return 1;
-        }
+        char character = static_cast<char>(arch::inb(arch::COM1));
+        // Issue #295: raw mode passes bytes through untouched (RSP
+        // framing); cooked mode keeps the historic CR->LF mapping.
+        // Raw mode also skips the keyboard merge below: during a GDB
+        // session any console byte would invalidate framing.
         if (self.private_data &&
-            (reinterpret_cast<uint64_t>(self.private_data) & O_NONBLOCK)) {
-            return VFS_INVALID;
+            (reinterpret_cast<uint64_t>(self.private_data) & O_RAWTTY)) {
+            buffer[0] = static_cast<uint8_t>(character);
+            return 1;
         }
-        auto *cur = kernel::Scheduler::current_task();
-        if (!cur)
-            return VFS_INVALID;
-        cur->state = TaskState::BLOCKED;
-        kernel::Scheduler::reschedule();
-        // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait pattern.
-        if (cur->is_user_) {
-            arch::sti();
-            arch::hlt();
-            arch::cli();
-        }
+        buffer[0] = (character == '\r') ? '\n' : character;
+        return 1;
+#endif
     }
+    char key_char = 0;
+    const bool raw =
+        self.private_data &&
+        (reinterpret_cast<uint64_t>(self.private_data) & O_RAWTTY);
+    if (!raw && arch::Keyboard::getchar(key_char)) {
+        buffer[0] = static_cast<uint8_t>(key_char);
+        return 1;
+    }
+    return VFS_INVALID;
 }
 
 /// @brief Write to the tty device (serial output).

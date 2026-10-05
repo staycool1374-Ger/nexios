@@ -42,6 +42,7 @@
 #include <kernel/debug/debug_regs.hpp>
 #include <kernel/debug/debug_bind.hpp>
 #include <kernel/debug/debug_stop.hpp>
+#include <kernel/elf/elf_loader.hpp>
 #if defined(CONFIG_ARCH_AARCH64)
 // TMP-DIAG (#235): post-mortem EL0 fault latch (file scope: function-local
 // externs mislink on this toolchain; only ESR exists — EC classifies the
@@ -695,7 +696,9 @@ constexpr uint64_t kKindDeath = 4;
 /// @brief Bounded poll for one stop event: 100 x 2ms sleeps (the parked
 ///        target is resumed/running meanwhile; the event lands in the
 ///        queue + Notify pulse, no host involved).
-bool debug_wait_event(uint64_t h, uint64_t &kind_out, uint64_t &addr_out) {
+bool debug_wait_event(uint64_t h, uint64_t &kind_out, uint64_t &addr_out,
+                      uint64_t *id_out = nullptr,
+                      uint64_t *gen_out = nullptr) {
     kind_out = 0;
     addr_out = 0;
     for (int i = 0; i < 100; ++i) {
@@ -705,6 +708,10 @@ bool debug_wait_event(uint64_t h, uint64_t &kind_out, uint64_t &addr_out) {
                 arch::HHDM_OFFSET +
                 VMM::virt_to_phys_in_pml4(
                     kDebugScratchVa, Scheduler::current_task()->page_table_));
+            if (id_out != nullptr)
+                *id_out = scratch[0];
+            if (gen_out != nullptr)
+                *gen_out = scratch[1];
             kind_out = scratch[2];
             addr_out = scratch[4];
             return true;
@@ -865,6 +872,23 @@ JARVIS_TEST(debug_stop_break_insert_hit_clear, "PRE: none | POST: none") {
     JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
     const uint64_t pc = debug_park_and_get_pc(h);
     JARVIS_ASSERT_FMT(pc != 0, "park/pc failed");
+    // Belt event first (issue #295): the park above is always the
+    // EAGAIN-armed tick park, which now pairs every park with a stop
+    // event (kind BP). Consume it before staging the real breakpoint
+    // so the later wait observes the trap, not the belt.
+    {
+        uint64_t belt_kind = 0;
+        uint64_t belt_addr = 0;
+        uint64_t belt_id = 0;
+        uint64_t belt_gen = 0;
+        JARVIS_ASSERT_FMT(
+            debug_wait_event(h, belt_kind, belt_addr, &belt_id, &belt_gen),
+            "no belt event");
+        JARVIS_ASSERT_FMT(belt_kind == kKindBp,
+                          "belt kind not BP: 0x%lx id=0x%lx gen=0x%lx self=0x%lx/%lx",
+                          belt_kind, belt_id, belt_gen, t->id,
+                          t->generation);
+    }
     // Snapshot the original byte at pc for the restore check below.
     uint64_t bphys0 = VMM::virt_to_phys_in_pml4(pc, t->page_table_);
     JARVIS_ASSERT_FMT(bphys0 != 0, "pc unmapped");
@@ -973,6 +997,17 @@ JARVIS_TEST(debug_stop_step_once, "PRE: none | POST: none") {
         debug_sleep_ms(2);
     }
     JARVIS_ASSERT_FMT(parked, "target never parked");
+    // Belt event first (issue #295): the park above is always the
+    // EAGAIN-armed tick park, which now pairs every park with a stop
+    // event (kind BP). Consume it so the later wait observes the STEP.
+    {
+        uint64_t belt_kind = 0;
+        uint64_t belt_addr = 0;
+        JARVIS_ASSERT_FMT(debug_wait_event(h, belt_kind, belt_addr),
+                          "no belt event");
+        JARVIS_ASSERT_FMT(belt_kind == kKindBp, "belt kind not BP: 0x%lx",
+                          belt_kind);
+    }
 #if defined(CONFIG_ARCH_RISCV64) || defined(CONFIG_ARCH_AARCH64)
     auto *scratch =
         reinterpret_cast<volatile uint64_t *>(arch::HHDM_OFFSET + scratch_phys);
@@ -1143,6 +1178,18 @@ JARVIS_TEST(debug_stop_fault_routed, "PRE: none | POST: none") {
     JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
     const uint64_t pc = debug_park_and_get_pc(h);
     JARVIS_ASSERT_FMT(pc != 0, "park/pc failed");
+    // Belt event first (issue #295): the park above is always the
+    // EAGAIN-armed tick park, which now pairs every park with a stop
+    // event (kind BP). Consume it before staging the fault so the
+    // later wait observes the fault, not the belt.
+    {
+        uint64_t belt_kind = 0;
+        uint64_t belt_addr = 0;
+        JARVIS_ASSERT_FMT(debug_wait_event(h, belt_kind, belt_addr),
+                          "no belt event");
+        JARVIS_ASSERT_FMT(belt_kind == kKindBp, "belt kind not BP: 0x%lx",
+                          belt_kind);
+    }
 #if defined(CONFIG_ARCH_AARCH64)
     // Redirect pc to unmapped memory: resume faults with an instruction
     // abort (EC 0x20/0x21) instead of relying on an illegal encoding.
@@ -2106,6 +2153,73 @@ JARVIS_TEST(debug_launch_bp_failure_teardown, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: A real int3 trap on a dispatched target parks it with a
+// stop event (issue #295: proves the trap→router path live, not just
+// table insert/teardown).
+// Input: hey.c.elf via the background loader; add + handoff (harness
+// as shell + grantee); bp insert at the latched entry; then let ticks
+// dispatch it (bounded poll — reschedule() only requests a deferred
+// switch and never dispatches synchronously).
+// Expect: insert true; the target ends BLOCKED+parked (it stopped at
+// entry, never ran user code); a BREAKPOINT stop event is pollable.
+// Depends: ElfLoader, debug_launch_handoff, debug_bp_insert,
+// sel2 poll, tick dispatch
+JARVIS_TEST(debug_launch_entry_trap_parks, "PRE: vfsd, iocd | POST: none") {
+    JARVIS_ASSERT(elf::ElfLoader::request_load("hey.c.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr, "no hey completion");
+    auto *me = Scheduler::current_task();
+    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
+    const uint64_t entry = elf::ElfLoader::completed_entry();
+    JARVIS_ASSERT_FMT(entry != 0, "no entry latched");
+    t->parent_id = me->id;
+    t->period_ticks = 100;
+    JARVIS_ASSERT(Scheduler::add_task_err(*t) == errors::SCHED_ERR_OK);
+    uint64_t handle = 0;
+    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
+                          me->id, t->id, me->id, handle) == 0,
+                      "handoff failed");
+    JARVIS_ASSERT_FMT(kernel::debug::debug_bp_insert(*t, entry),
+                      "entry bp insert failed");
+    const uint64_t tid = t->id;
+    // Let ticks dispatch it (bounded hlt wait — bare pause-spins starve
+    // ticks under TCG). Either it parks at the entry breakpoint or it
+    // runs past to termination; both end the wait deterministically.
+    const uint64_t start = arch::Timer::ticks();
+    for (;;) {
+        auto *live = Scheduler::find_task(tid);
+        if (live == nullptr || !TaskControlBlock::is_valid(live))
+            break;
+        if (live->state == TaskState::BLOCKED ||
+            live->state == TaskState::TERMINATED)
+            break;
+        if (arch::Timer::ticks() - start >= 500)
+            break;
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(),
+                         true, __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+    auto *after = Scheduler::find_task(tid);
+    JARVIS_ASSERT_FMT(after != nullptr &&
+                          TaskControlBlock::is_valid(after),
+                      "target vanished");
+    JARVIS_ASSERT_FMT(after->state == TaskState::BLOCKED,
+                      "trap did not park target (state=%u)",
+                      static_cast<unsigned>(after->state));
+    JARVIS_ASSERT_FMT(__atomic_load_n(&after->debug_parked,
+                                      __ATOMIC_ACQUIRE),
+                      "park flag not set");
+    // Cleanup via the admitted-task teardown (binding + shadows drop,
+    // terminate + drain), then verify disappearance.
+    kernel::debug::debug_launch_teardown(*after, handle);
+    JARVIS_ASSERT_FMT(Scheduler::find_task(tid) == nullptr,
+                      "teardown left target registered");
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all debugger-syscall tests.
 void register_debug_syscall_tests() {
     Logger::info("Registering debug syscall tests");
@@ -2132,4 +2246,5 @@ void register_debug_syscall_tests() {
     JARVIS_REGISTER_TEST(debug_launch_handoff_denial_matrix);
     JARVIS_REGISTER_TEST(debug_launch_handoff_success_teardown);
     JARVIS_REGISTER_TEST(debug_launch_bp_failure_teardown);
+    JARVIS_REGISTER_TEST(debug_launch_entry_trap_parks);
 }

@@ -82,6 +82,18 @@ uint64_t debug_launch_handoff(uint64_t shell_id, uint64_t target_id,
                               uint64_t grantee_id,
                               uint64_t &handle_out) noexcept;
 
+/// @brief Pointer-based handoff for the pre-add window (issue #295):
+///        identical checks + slot mint as debug_launch_handoff, but the
+///        target is passed directly — a freshly taken completion was
+///        never registered, so find_task cannot resolve it, and
+///        registering it first (add_task) would open a run-unobserved
+///        window before the belt + entry breakpoint land (§9.7
+///        fail-closed: handoff → bp → grant all precede add_task).
+/// @return Same denial table as debug_launch_handoff.
+uint64_t debug_launch_handoff_tc(uint64_t shell_id, TaskControlBlock &tgt,
+                                 uint64_t grantee_id,
+                                 uint64_t &handle_out) noexcept;
+
 /// @brief Fail-closed teardown for a `--debug` launch (issue #231, spec
 ///        §9.2e/§9.7): drop the handoff binding slot (when @p handle is
 ///        nonzero), restore breakpoint shadows, terminate the just-added
@@ -89,5 +101,12 @@ uint64_t debug_launch_handoff(uint64_t shell_id, uint64_t target_id,
 ///        target running.
 void debug_launch_teardown(TaskControlBlock &task,
                            uint64_t handle) noexcept;
+
+/// @brief Pre-add fail-closed undo for a `--debug` launch (issue #295):
+///        the slot-drop + shadow-restore + flag-clear half of teardown
+///        WITHOUT terminate/drain — the target was never added, so
+///        terminate_err (registry removal) must not run. Pair with
+///        ElfLoader::destroy_completed_tcb on the same failure paths.
+void debug_launch_undo(TaskControlBlock &task, uint64_t handle) noexcept;
 
 } // namespace kernel::debug
