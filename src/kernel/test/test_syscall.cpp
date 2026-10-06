@@ -1011,6 +1011,49 @@ JARVIS_TEST(syscall_error_string_maps, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Pin the frozen 0-79 syscall number mirror (issues #69/#70):
+//           src/libc/syscall.h numbers must equal the kernel
+//           SyscallNumber values, and the ABI_VERSION query (84) must
+//           return (NEXIOS_ABI_MAJOR << 16) | MINOR via the real handler.
+// Input: Static enum asserts for the band boundaries (literals cite
+//        syscall.h lines); dispatched task calls Syscall::handle(84).
+// Expect: All mirror pairs equal; version == 0x10000; MAX_SYSCALL > 79
+//         (table grew past the frozen band — SYS_MAX drift is issue
+//         material, not pinned here).
+// Depends: SyscallNumber, Syscall::sys_abi_version.
+JARVIS_TEST(syscall_abi_surface_mirror_and_version, "PRE: none | POST: none") {
+    static uint64_t g_ver = 0;
+    JARVIS_ASSERT_EQ(0ULL, static_cast<uint64_t>(SyscallNumber::YIELD));
+    JARVIS_ASSERT_EQ(48ULL, static_cast<uint64_t>(SyscallNumber::KLOG));
+    JARVIS_ASSERT_EQ(49ULL, static_cast<uint64_t>(SyscallNumber::REBOOT));
+    JARVIS_ASSERT_EQ(50ULL, static_cast<uint64_t>(SyscallNumber::HALT));
+    JARVIS_ASSERT_EQ(51ULL, static_cast<uint64_t>(SyscallNumber::CAP_GRANT));
+    JARVIS_ASSERT_EQ(57ULL,
+                     static_cast<uint64_t>(SyscallNumber::IRQ_REGISTER));
+    JARVIS_ASSERT_EQ(63ULL,
+                     static_cast<uint64_t>(SyscallNumber::FRAME_CREATE));
+    JARVIS_ASSERT_EQ(69ULL,
+                     static_cast<uint64_t>(SyscallNumber::PAGER_REGISTER));
+    JARVIS_ASSERT_EQ(74ULL, static_cast<uint64_t>(SyscallNumber::SEND_FAST));
+    JARVIS_ASSERT_EQ(77ULL,
+                     static_cast<uint64_t>(SyscallNumber::SET_AFFINITY));
+    JARVIS_ASSERT_EQ(79ULL, static_cast<uint64_t>(SyscallNumber::TIMES));
+    JARVIS_ASSERT_EQ(84ULL, static_cast<uint64_t>(SyscallNumber::ABI_VERSION));
+    JARVIS_ASSERT(static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL) > 79ULL);
+    auto *t = run_syscall_task([]() {
+        g_ver = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::ABI_VERSION), 0, 0, 0, 0,
+            nullptr);
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_FMT(g_ver == 0x10000ULL,
+                      "ABI_VERSION returned %lx, want 0x10000", g_ver);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
 #if defined(CONFIG_ARCH_X86_64)
 
 // Runmode: kernel
@@ -1139,6 +1182,7 @@ void register_syscall_tests() {
     JARVIS_REGISTER_TEST(syscall_user_exec_valid_argv);
     JARVIS_REGISTER_TEST(syscall_user_exec_hostile_argv);
     JARVIS_REGISTER_TEST(syscall_error_string_maps);
+    JARVIS_REGISTER_TEST(syscall_abi_surface_mirror_and_version);
 
 #if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(syscall_abi_x86_bridge_conform);

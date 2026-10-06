@@ -245,6 +245,57 @@ JARVIS_TEST(task_clone_no_page_table_leak, "PRE: none | POST: none") {
 // Input: None
 // Expect: All task_* tests are registered via JARVIS_REGISTER_TEST
 // Depends: kernel test framework
+namespace kernel {
+namespace debug {
+// Issue #264: per-slot single-writer contract (task.cpp). The ring is
+// write-only diagnostics with no header declaration, so the test declares
+// the two entry points locally (definitions in task.cpp).
+void record_task_entry(uint64_t entry, uint64_t tcb);
+uint64_t find_entry_owner(uint64_t value);
+} // namespace debug
+} // namespace kernel
+
+// Runmode: kernel
+// Testidea: v0.5.x issue #264 — record_task_entry claims each slot with
+// an atomic fetch-add, so sequential writers land in distinct slots: no
+// mixed entry-from-A/tcb-from-B records, no lost updates.
+// Input: Record 10 distinct (entry, tcb) marker pairs with sentinel high
+// bits, then 64 more to force a full 64-slot wrap; resolve each via
+// find_entry_owner. Markers are pre-checked absent first, so a real task
+// entry recorded at boot can never alias them into a false pass/fail.
+// Expect: Every marker resolves to exactly its own tcb (pre-wrap batch
+// and post-wrap last-64 alike); no stale record survives. Pure sequential
+// calls — no tasks, no IRQs, TCG-deterministic. (True concurrent-writer
+// coverage is not deterministic under QEMU timing; the atomic claim
+// itself is reviewed, not raced here.)
+// Depends: kernel::debug::record_task_entry/find_entry_owner (task.cpp).
+JARVIS_TEST(task_recent_ring_claim_distinct_slots, "PRE: none | POST: none") {
+    for (uint64_t idx = 0; idx < 10; ++idx) {
+        const uint64_t marker = 0x5A5A0000ULL + idx;
+        JARVIS_ASSERT_FMT(kernel::debug::find_entry_owner(marker) == 0,
+                          "marker %lx already owned before insert", marker);
+    }
+    for (uint64_t idx = 0; idx < 10; ++idx) {
+        kernel::debug::record_task_entry(0x5A5A0000ULL + idx, 0x7000ULL + idx);
+    }
+    for (uint64_t idx = 0; idx < 10; ++idx) {
+        const uint64_t marker = 0x5A5A0000ULL + idx;
+        const uint64_t want = 0x7000ULL + idx;
+        JARVIS_ASSERT_FMT(kernel::debug::find_entry_owner(marker) == want,
+                          "marker %lx owner mismatch", marker);
+    }
+    for (uint64_t idx = 10; idx < 74; ++idx) {
+        kernel::debug::record_task_entry(0x5A5A0000ULL + idx, 0x7000ULL + idx);
+    }
+    for (uint64_t idx = 10; idx < 74; ++idx) {
+        const uint64_t marker = 0x5A5A0000ULL + idx;
+        const uint64_t want = 0x7000ULL + idx;
+        JARVIS_ASSERT_FMT(kernel::debug::find_entry_owner(marker) == want,
+                          "post-wrap marker %lx owner mismatch", marker);
+    }
+    JARVIS_TEST_PASS();
+}
+
 void register_task_tests() {
     Logger::info("Registering task tests");
     JARVIS_REGISTER_TEST(task_cleanup_frees_resources);
@@ -253,5 +304,6 @@ void register_task_tests() {
     JARVIS_REGISTER_TEST(task_elf_load_inits_ipc_objects);
     JARVIS_REGISTER_TEST(task_fork_child_cleanup_preserves_parent_pages);
     JARVIS_REGISTER_TEST(task_clone_no_page_table_leak);
+    JARVIS_REGISTER_TEST(task_recent_ring_claim_distinct_slots);
 }
 #endif

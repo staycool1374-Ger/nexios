@@ -1,762 +1,530 @@
-diff --git a/docs/specs/ipc.md b/docs/specs/ipc.md
-index 010ef72a7..85bbb95db 100644
---- a/docs/specs/ipc.md
-+++ b/docs/specs/ipc.md
-@@ -47,16 +47,34 @@ Entry guard: `ENSURE(task.blocked_on_queue == &q)`.
-   may only `return false` when the sender's own reply queue is genuinely empty.
-   A delivered reply (`IPC::send` → WAKE into the sender's queue) must be
-   consumed by the existing `pop(reply)` — "reply in own queue ⇒ success".
-+- **Reply matching by sender (issue #296, IMPLEMENTED):** only a queued
-+  message whose `sender_id` is the `send_sync` destination is ever consumed
-+  as the reply (priority-min, FIFO within a priority among matching —
-+  INV-P preserved). Non-matching messages (grants, pulses, other senders'
-+  traffic, stale replies from anyone else) are never touched and stay
-+  queued for their real consumer. Match key is `sender_id` only; type,
-+  payload, and syscall signatures are untouched (no wire/task ABI change).
-+  Same-sender stale replies remain indistinguishable by construction and
-+  are accepted as current — declared residual; callers keep strict 1:1
-+  request/reply pairing (e.g. vfsd authorize). A clamped oversized
-+  matching reply stays queued with immediate `false` (issue #11 rule,
-+  no block); dest death with nothing matching returns `false` with the
-+  queue intact; spurious wakeups on non-matching arrivals re-block.
- - **Spin-wait:** the reply wait is a `hlt()` loop (not a bare pause-spin).
- 
- ```
-- peer terminated? ── no ──▶ wait for reply
-+ loop: matching reply (sender==dest) queued? ── yes ──▶ pop, success
-       │
--      ▼ yes
-- reply in own queue? ── yes ──▶ pop(reply), success
-+      ▼ no
-+ clamped with a matching-but-oversized reply? ── yes ──▶ false (stays queued)
-       │
-       ▼ no
-- return false
-+ peer terminated? ── no ──▶ block (reply_wait, hlt), wake re-checks
-+      │
-+      ▼ yes
-+ unclamped match present? ── yes ──▶ consume next iteration
-+      │
-+      ▼ no ──▶ false (queue intact)
- ```
- 
- ## 3. Mutex / PCP Contract
-diff --git a/src/kernel/ipc/ipc.cpp b/src/kernel/ipc/ipc.cpp
-index ae1062746..6ce0d63b4 100644
---- a/src/kernel/ipc/ipc.cpp
-+++ b/src/kernel/ipc/ipc.cpp
-@@ -185,6 +185,67 @@ bool MessageQueue::pop_clamped(Message &msg, uint32_t max_size) {
-     return true;
+diff --git a/src/kernel/arch/aarch64/test_aarch64.cpp b/src/kernel/arch/aarch64/test_aarch64.cpp
+index dce4dd0f7..8f5e682d9 100644
+--- a/src/kernel/arch/aarch64/test_aarch64.cpp
++++ b/src/kernel/arch/aarch64/test_aarch64.cpp
+@@ -38,6 +38,7 @@
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/arch/irq_guard.hpp>
++#include <kernel/core/global_state.hpp>
+ #include <kernel/debug/debug_regs.hpp>
+ #include <kernel/test/test_sched_helpers.hpp>
+ #include <kernel/test/test_isolate.hpp>
+@@ -1238,6 +1239,71 @@ JARVIS_TEST(aarch64_clone_frame_readback, "PRE: none | POST: none") {
  }
  
-+/// @brief Index of the highest-priority message from @p sender_id (issue
-+///        #296).  Priority-min with first-index-wins ties — the same order
-+///        as find_best_index, so selective removal preserves INV-P.
-+/// @return IPC_MAX_QUEUE_MSG when no message from @p sender_id is queued.
-+///         Caller MUST hold lock_.
-+size_t MessageQueue::find_best_from_sender(uint64_t sender_id) const {
-+    size_t best_prio = IPC_PRIORITY_LEVELS + 1;
-+    size_t best_idx = IPC_MAX_QUEUE_MSG;
-+    for (size_t i = 0; i < count; ++i) {
-+        size_t idx = (head + i) % IPC_MAX_QUEUE_MSG;
-+        if (msgs[idx].sender_id != sender_id)
-+            continue;
-+        if (msgs[idx].priority < best_prio) {
-+            best_prio = msgs[idx].priority;
-+            best_idx = idx;
-+            if (best_prio == 0)
-+                break;
+ /// @brief Register all AArch64 architecture test cases.
++extern "C" uint64_t aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
++                                                 uint64_t elr);
++
++// Runmode: kernel
++// Testidea: v0.5.x issue #214 — EL1 sync faults must reach the fail-stop
++// handler, never the legacy silent skip. Part A pins the vector routing
++// statically (no fault executed): both EL1 sync slots (EL1t +0x000,
++// EL1h +0x200) must hold a `b` to a COMMON target (branch targets live
++// in .text, far outside the 2KB table by design). Part B pins the C
++// handler's recovery contract: with armed safe_copy recovery it applies
++// recovery (ELR_EL1 := recover IP) and returns 0 without dumping or
++// panicking. The non-recovery path (dump + debug panic) is deliberately
++// not executed.
++// Input: mrs vbar_el1 + slot decode; direct
++// aarch64_el1_unexpected_fault() call with armed sentinel recovery.
++// Expect: Both slots are `b` with identical targets (a single-slot
++// repointing to the skip path diverges and fails); handler returns 0,
++// recovery disarmed, ELR_EL1 reprogrammed to the sentinel; ELR_EL1
++// restored afterwards. LIMIT: target identity (vs default_exception)
++// is not pinned — el1_sync_unexpected is file-local in vectors.S and
++// naming it needs a .globl (production change, out of QE scope).
++// Depends: vectors.S layout, aarch64_el1_unexpected_fault (issue #214).
++JARVIS_TEST(aarch64_el1_sync_unexpected_failstop_routing) {
++    uint64_t vbar = 0;
++    asm volatile("mrs %0, vbar_el1" : "=r"(vbar));
++    const uint64_t slots[2] = {vbar + 0x000, vbar + 0x200};
++    uint64_t first_target = 0;
++    for (size_t s = 0; s < 2; ++s) {
++        const uint32_t instr =
++            *reinterpret_cast<uint32_t *>(slots[s]);
++        JARVIS_ASSERT_FMT((instr & 0xFC000000U) == 0x14000000U,
++                          "EL1 sync slot %lx holds 0x%x, not b",
++                          static_cast<uint64_t>(s), instr);
++        const int64_t off =
++            (static_cast<int64_t>(instr & 0x03FFFFFFU) << 38) >> 36;
++        const uint64_t target =
++            slots[s] + static_cast<uint64_t>(off);
++        if (s == 0) {
++            first_target = target;
++        } else {
++            JARVIS_ASSERT_FMT(target == first_target,
++                              "EL1 sync slots diverge: 0x%lx vs 0x%lx",
++                              target, first_target);
 +        }
 +    }
-+    return best_idx;
++
++    uint64_t saved_elr = 0;
++    asm volatile("mrs %0, elr_el1" : "=r"(saved_elr));
++    kernel::gs::user_access_recover_ip() = 0xA11CEULL;
++    const uint64_t ret = aarch64_el1_unexpected_fault(0x2000000ULL,
++                                                     0x400000ULL,
++                                                     saved_elr);
++    JARVIS_ASSERT_FMT(ret == 0, "recovery path returned %lx, want 0", ret);
++    JARVIS_ASSERT_FMT(kernel::gs::user_access_recover_ip() == 0,
++                      "recovery left armed: 0x%lx",
++                      kernel::gs::user_access_recover_ip());
++    uint64_t elr_now = 0;
++    asm volatile("mrs %0, elr_el1" : "=r"(elr_now));
++    JARVIS_ASSERT_FMT(elr_now == 0xA11CEULL,
++                      "ELR_EL1 is 0x%lx, want recovery sentinel", elr_now);
++    asm volatile("msr elr_el1, %0" ::"r"(saved_elr));
++    asm volatile("isb");
++    JARVIS_TEST_PASS();
 +}
 +
-+/// @brief Remove the highest-priority message from @p sender_id (issue #296).
-+///        Non-matching messages are never touched.
-+/// @return true with @p out filled; false when none is queued.
-+bool MessageQueue::pop_from_sender(Message &out, uint64_t sender_id) {
-+    SpinLockGuard<sync::SpinLock> guard(lock_);
-+    size_t best_idx = find_best_from_sender(sender_id);
-+    if (best_idx >= IPC_MAX_QUEUE_MSG)
-+        return false;
-+
-+    out = msgs[best_idx];
-+    remove_at(best_idx);
-+    return true;
-+}
-+
-+/// @brief pop_from_sender with the issue #11 clamp (issue #296): an
-+///        oversized best matching message stays queued (returns false);
-+///        non-matching messages never count as oversized and are never
-+///        consumed.
-+bool MessageQueue::pop_from_sender_clamped(Message &out, uint32_t max_size,
-+                                            uint64_t sender_id) {
-+    SpinLockGuard<sync::SpinLock> guard(lock_);
-+    size_t best_idx = find_best_from_sender(sender_id);
-+    if (best_idx >= IPC_MAX_QUEUE_MSG)
-+        return false;
-+    if (msgs[best_idx].data_size > max_size)
-+        return false;
-+
-+    out = msgs[best_idx];
-+    remove_at(best_idx);
-+    return true;
-+}
-+
-+/// @brief Non-destructive probe for a queued message from @p sender_id
-+///        (issue #296, send_sync dest-death path).
-+bool MessageQueue::has_from(uint64_t sender_id) {
-+    SpinLockGuard<sync::SpinLock> guard(lock_);
-+    return find_best_from_sender(sender_id) < IPC_MAX_QUEUE_MSG;
-+}
-+
- /// @brief Return the highest priority that has at least one message.
- /// @return IPC_PRIORITY_LEVELS if empty.
- size_t MessageQueue::highest_priority() const {
-@@ -412,6 +473,12 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
+ void register_aarch64_tests() {
+     Logger::info("Registering aarch64 architecture tests");
+ 
+@@ -1273,6 +1339,7 @@ void register_aarch64_tests() {
+     JARVIS_REGISTER_TEST(aarch64_el0_fault_wakes_waitpid_parent);  // #217
+     JARVIS_REGISTER_TEST(aarch64_el0_fault_frame_in_debug_slot);  // #236
+     JARVIS_REGISTER_TEST(aarch64_pl011_poll_idle_false);  // issue #245
++    JARVIS_REGISTER_TEST(aarch64_el1_sync_unexpected_failstop_routing);
  }
  
- /// @brief Send and block until a reply arrives (client-side synchronous IPC).
-+///        Reply matching (issue #296): only a message whose sender_id is
-+///        @p dest_id is ever consumed as the reply.  Non-matching messages
-+///        (grants, pulses, other senders' traffic) are never touched — they
-+///        stay queued for their real consumer.  All other dispositions are
-+///        unchanged from the v1 contract (dest-death reply preservation,
-+///        #11 oversized-stays-queued clamp, arrival-triggered wake).
- bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-                     uint32_t reply_max_size) {
-     // Send the request message
-@@ -426,25 +493,47 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-     bool was_blocked = false;
-     IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id,
-                     "ty=", msg.type, "q=", cur->msg_queue.count);
--    while (cur->msg_queue.is_empty()) {
-+    for (;;) {
-+        // Matching reply already queued (covers the reply-arrived-first
-+        // and peer-died-after-reply cases): consume it without blocking.
-+        // A clamped oversized match stays queued per the #11 contract.
-+        bool got = (reply_max_size != 0)
-+                       ? cur->msg_queue.pop_from_sender_clamped(
-+                             reply, reply_max_size, dest_id)
-+                       : cur->msg_queue.pop_from_sender(reply, dest_id);
-+        if (got) {
-+            cur->reply_wait = false;
-+            if (was_blocked) {
-+                cur->remaining_ticks = cur->period_ticks;
-+            }
-+            return true;
-+        }
-+        // Clamped with a matching-but-oversized reply queued: fail closed
-+        // at once (no block) so the fastpath caller falls back to a full
-+        // RECEIVE — the pre-#296 immediate-false contract, preserved.
-+        if (reply_max_size != 0 && cur->msg_queue.has_from(dest_id)) {
-+            cur->reply_wait = false;
-+            if (was_blocked) {
-+                cur->remaining_ticks = cur->period_ticks;
-+            }
-+            return false;
-+        }
-         // If destination died while we were waiting for a reply, bail out.
--        // BUT: a reply may already be queued (the peer delivered its reply and
--        // then terminated normally).  In that case the IPC contract is
--        // satisfied — a reply is waiting in our own queue — so we must NOT
--        // discard it; break out and let the pop() below consume it.  Only a
--        // genuinely empty queue means the peer died before replying.
-+        // BUT: a reply may already be queued (the peer delivered its reply
-+        // and then terminated normally).  In that case the IPC contract is
-+        // satisfied — pop it above on the next iteration instead of
-+        // discarding it; only a queue with genuinely nothing from the peer
-+        // means the peer died before replying.  Non-matching messages are
-+        // never consumed here, so the queue is left intact on failure.
-         auto *dest = Scheduler::find_task(dest_id);
-         if (!dest || dest->state == TaskState::TERMINATED) {
--            if (cur->msg_queue.is_empty()) {
--                IPC_SCHED_TRACE("[SYNC-FAIL]", "dest-gone-empty cur=", cur->id,
--                                "dest=", dest_id, "q=", cur->msg_queue.count,
--                                "x=", 0u);
--                return false;
-+            if (reply_max_size == 0 && cur->msg_queue.has_from(dest_id)) {
-+                continue; // unclamped match present: consume next iteration
-             }
--            IPC_SCHED_TRACE("[SYNC-FAIL]", "dest-gone-reply cur=", cur->id,
-+            IPC_SCHED_TRACE("[SYNC-FAIL]", "dest-gone cur=", cur->id,
-                             "dest=", dest_id, "q=", cur->msg_queue.count,
-                             "x=", 0u);
--            break;
-+            return false;
-         }
+ #endif
+\ No newline at end of file
+diff --git a/src/kernel/test/test_checked_ptr_api.cpp b/src/kernel/test/test_checked_ptr_api.cpp
+index 6b56504ea..c7a8ccafb 100644
+--- a/src/kernel/test/test_checked_ptr_api.cpp
++++ b/src/kernel/test/test_checked_ptr_api.cpp
+@@ -40,13 +40,18 @@
  
-         cur->reply_wait = true;
-@@ -460,18 +549,9 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-         } else {
-             arch::hlt();
-         }
-+        // Resume (reply arrival or spurious non-matching wake): re-check
-+        // for the matching reply at the top; otherwise re-block.
-     }
--    cur->reply_wait = false;
--    if (was_blocked) {
--        cur->remaining_ticks = cur->period_ticks;
--    }
--
--    // Issue #11 fastpath: a non-zero reply clamp means an oversized reply is
--    // NOT consumed (stays queued for a later full RECEIVE).  Default 0 keeps
--    // the v1 full-path contract (consume any reply).
--    if (reply_max_size != 0)
--        return cur->msg_queue.pop_clamped(reply, reply_max_size);
--    return cur->msg_queue.pop(reply);
+ #include <test.hpp>
+ #include <logger.hpp>
++#include <kernel/arch/timer.hpp>
++#include <kernel/core/global_state.hpp>
++#include <kernel/kernel.hpp>
+ #include <kernel/memory/checked_ptr.hpp>
+ #include <kernel/ipc/death_notify.hpp>
+ #include <kernel/ipc/pager_registry.hpp>
++#include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/vfs/vfs.hpp>
+ #include <signal.hpp>
+ #include <string.hpp>
++#include "test_sched_helpers.hpp"
+ 
+ using namespace kernel;
+ 
+@@ -123,6 +128,26 @@ void expect_rejected(const SweepResult &result) {
+     JARVIS_ASSERT(!result.write);
  }
  
- /// @brief Return a reference to a task's message queue (asserts existence).
-diff --git a/src/kernel/ipc/ipc.hpp b/src/kernel/ipc/ipc.hpp
-index 70a32bb1a..1dc6dbe81 100644
---- a/src/kernel/ipc/ipc.hpp
-+++ b/src/kernel/ipc/ipc.hpp
-@@ -103,10 +103,14 @@ class IPC {
-     static bool recv(Message &msg);
++#if defined(CONFIG_ARCH_X86_64)
++/// @brief Dispatch a REAL kernel task (prio 11) and wait for termination,
++///        mirroring the syscall bridge tests (issue #30 pattern).
++TaskControlBlock *run_recovery_task(void (*entry)()) {
++    auto *t = TaskControlBlock::create(entry, 11, 10);
++    if (t == nullptr)
++        return nullptr;
++    Scheduler::add_task(*t);
++    Scheduler::reschedule();
++    kernel::test::wait_for_termination_safe(t);
++    return t;
++}
++
++void release_recovery_task(TaskControlBlock *t) {
++    if (t == nullptr)
++        return;
++    kernel::test::terminate_if_live(t);
++}
++#endif // defined(CONFIG_ARCH_X86_64)
++
+ } // namespace
  
-     /// @brief Sends and blocks until a reply arrives.
-+    ///        Reply matching (issue #296): only a queued message whose
-+    ///        sender_id is @p dest_id is consumed as the reply; anything
-+    ///        else stays queued for its real consumer (signatures and
-+    ///        wire layout unchanged).
-     /// @param reply_max_size If non-zero, the reply is only consumed when it
--    ///        fits this budget (issue #11 fastpath); an oversized reply stays
--    ///        queued for a later RECEIVE.  Zero keeps the full-path contract
--    ///        (consume any reply).  Default 0 => byte-identical to v1.
-+    ///        fits this budget (issue #11 fastpath); an oversized matching
-+    ///        reply stays queued with immediate false (no block).  Zero keeps
-+    ///        the full-path contract (consume the matching reply).
-     static bool send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-                           uint32_t reply_max_size = 0);
+ // Runmode: kernel
+@@ -354,6 +379,48 @@ JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
+     JARVIS_TEST_PASS();
+ }
  
-diff --git a/src/kernel/task/deadline_list.cpp b/src/kernel/task/deadline_list.cpp
-index fb86f7269..85310910b 100644
---- a/src/kernel/task/deadline_list.cpp
-+++ b/src/kernel/task/deadline_list.cpp
-@@ -5,6 +5,15 @@
- namespace kernel {
- 
- void DeadlineList::insert(TaskControlBlock &t) noexcept {
-+    // Issue #297 (live-caught wedge): self-heal against double-insert.
-+    // Inserting an already-linked task — same head twice, a re-insert
-+    // without a matching remove from any path (task, tick, restore) —
-+    // links the task to itself (head self-loop) and every later insert
-+    // spins forever in the walk below with zero diagnostic output.
-+    // Unlink first (no-op when absent): the end state is then always a
-+    // singly-linked member with an exact size_ count, whatever path led
-+    // here. Cost is one bounded scan; membership is small.
-+    remove(t);
-     t.dl_next_ = nullptr;
-     t.dl_prev_ = nullptr;
- 
-@@ -23,9 +32,18 @@ void DeadlineList::insert(TaskControlBlock &t) noexcept {
-     }
- 
-     TaskControlBlock *cur = head_;
-+    // Bounded walk (issue #297): a correct list visits at most size_
-+    // nodes, so exceeding it proves a cycle (stray writer, dangling
-+    // node, or a missed unlink elsewhere). Fail stop with location
-+    // instead of hanging the machine silently for a harness timeout.
-+    size_t trips = 0;
-     while (cur->dl_next_ &&
-            cur->dl_next_->deadline_ticks <= t.deadline_ticks) {
-         cur = cur->dl_next_;
-+        if (++trips > size_) {
-+            ENSURE(false && "deadline list cycle detected");
-+            return;
-+        }
-     }
- 
-     t.dl_next_ = cur->dl_next_;
-@@ -51,8 +69,17 @@ void DeadlineList::remove(TaskControlBlock &t) noexcept {
-     }
- 
-     TaskControlBlock *cur = head_;
--    while (cur && cur != &t)
-+    // Bounded walk (issue #297, mirrors insert): insert() routes every call
-+    // through this scan first, so an unbounded walk here would hang before
-+    // insert's own trip-count guard on a cyclic list. Fail stop instead.
-+    size_t trips = 0;
-+    while (cur && cur != &t) {
-         cur = cur->dl_next_;
-+        if (++trips > size_) {
-+            ENSURE(false && "deadline list cycle detected");
-+            return;
-+        }
-+    }
-     if (!cur)
-         return;
- 
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index 65635cd77..f2cf8e284 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -98,6 +98,22 @@ struct MessageQueue {
-     ///        an oversized best match is NOT removed (returns false).
-     ///        Callers disambiguate empty-vs-oversized with is_empty().
-     bool pop_clamped(Message &msg, uint32_t max_size);
-+    /// @brief Pop the highest-priority message from @p sender_id only
-+    ///        (issue #296): non-matching messages are never touched, so a
-+    ///        send_sync waiter cannot eat another sender's message as its
-+    ///        reply. FIFO within a priority among matching (INV-P kept).
-+    /// @return true with @p out filled; false when no message from
-+    ///         @p sender_id is queued.
-+    bool pop_from_sender(Message &out, uint64_t sender_id);
-+    /// @brief pop_from_sender with the issue #11 clamp: an oversized best
-+    ///        matching message stays queued (returns false); non-matching
-+    ///        messages never count as oversized and are never consumed.
-+    bool pop_from_sender_clamped(Message &out, uint32_t max_size,
-+                                 uint64_t sender_id);
-+    /// @brief Non-destructive probe: is any message from @p sender_id
-+    ///        queued? Used for the send_sync dest-death path (a reply that
-+    ///        arrived before the peer died must still be consumed).
-+    bool has_from(uint64_t sender_id);
- 
-     bool is_empty() const {
-         return __atomic_load_n(&count, __ATOMIC_RELAXED) == 0;
-@@ -118,6 +134,11 @@ struct MessageQueue {
-     ///        Shared by pop() and pop_clamped() so the selection never drifts
-     ///        (INV-P, paper §3.9).
-     size_t find_best_index() const;
-+    /// @brief find_best_index restricted to @p sender_id (issue #296).
-+    ///        Same priority-min/first-index-wins order among matching, so
-+    ///        selective removal cannot reorder or invert INV-P.
-+    ///        Caller MUST hold lock_.  Returns IPC_MAX_QUEUE_MSG when none.
-+    size_t find_best_from_sender(uint64_t sender_id) const;
-     /// @brief Remove the message at @p best_idx (compaction + prio_bitmap
-     ///        rebuild).  Caller MUST hold lock_.
-     void remove_at(size_t best_idx);
++#if defined(CONFIG_ARCH_X86_64)
++
++// Runmode: kernel
++// Testidea: A non-#PF vector must not consume armed safe_copy fault
++//           recovery (issue #252): pre-fix, ANY vector took the ungated
++//           recovery branch — clobbering the frame RIP and disarming
++//           recovery (in production this skipped tail EOI and wedged the
++//           APIC). Post-fix the branch is gated on vector 14.
++// Input: Dispatched kernel task arms g_user_access_recover_ip, plants a
++//        frame marker, and calls handle_interrupt_c(0xFF) synchronously.
++//        0xFF (spurious) runs the full dispatch tail incl. EOI but no
++//        scheduler tick: a 0xE0/tick or direct on_tick() variant wedges
++//        the kernel when driven synchronously from a non-harness task
++//        (filed kernel bug — task-context on_tick + termination race),
++//        so the gate is pinned on the spurious vector instead. The
++//        vector-14 consume side is pinned by the real-#PF test above.
++// Expect: Recovery still armed, frame marker intact. Pre-fix both are
++//         clobbered (clean FAIL, no wedge).
++// Depends: handle_interrupt_c vector gate (kernel.cpp:2168).
++JARVIS_TEST(checked_ptr_api_safe_copy_non_pf_vector_preserves_recovery,
++            "PRE: vfsd, iocd | POST: none") {
++    static uint64_t g_recover_after = 0;
++    static uint64_t g_rip_after = 0;
++    auto *t = run_recovery_task([]() {
++        kernel::gs::user_access_recover_ip() = 0xA11CEULL;
++        uint64_t regs[22] = {};
++        regs[17] = 0xBEEFULL;
++        handle_interrupt_c(0xFF, 0, 0x1000, regs, 0);
++        g_recover_after = kernel::gs::user_access_recover_ip();
++        g_rip_after = regs[17];
++        kernel::gs::user_access_recover_ip() = 0;
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(0xA11CEULL, g_recover_after);
++    JARVIS_ASSERT_EQ(0xBEEFULL, g_rip_after);
++    release_recovery_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++#endif // defined(CONFIG_ARCH_X86_64)
++
+ // Runmode: kernel
+ // Testidea: The IPC record types that cross the user boundary on death
+ //           notification drain (DeathRecord) and pager fault drain
+@@ -422,5 +489,9 @@ void register_checked_ptr_api_tests() {
+     JARVIS_REGISTER_TEST(checked_ptr_api_zero_count_is_noop);
+     JARVIS_REGISTER_TEST(checked_ptr_api_safe_copy_templates_fail_closed);
+     JARVIS_REGISTER_TEST(checked_ptr_api_safe_copy_fault_recovery);
++#if defined(CONFIG_ARCH_X86_64)
++    JARVIS_REGISTER_TEST(
++        checked_ptr_api_safe_copy_non_pf_vector_preserves_recovery);
++#endif
+     JARVIS_REGISTER_TEST(checked_ptr_api_task_times_and_const_views);
+ }
+diff --git a/src/kernel/test/test_dmesg.cpp b/src/kernel/test/test_dmesg.cpp
+index 5b58fbdb3..4312ca0e5 100644
+--- a/src/kernel/test/test_dmesg.cpp
++++ b/src/kernel/test/test_dmesg.cpp
+@@ -777,6 +777,9 @@ JARVIS_TEST(dmesg_render_format, "PRE: none | POST: none") {
+ // Testidea: Full #234 taxonomy resolves: every wired table serves text
+ // for code 0 and its max code, canonical numbers strip to the same text,
+ // the panic code decodes, and unknown pairs stay UNKNOWN/ERROR.
++// Catalog records take precedence over stripping (dmesg.hpp): the strip
++// probe must use a code with no catalog record — PMM base+1 is owned by
++// the #284 leak-suspect record, so the probe uses base+2 (raw USER_OOM).
+ // Input: code 0 / max / canonical / huge codes across all 19 subsystems
+ // Expect: real texts for defined codes, UNKNOWN only for undefined
+ // Depends: error_string, strip_canonical, lookup_severity, base codes
+@@ -788,9 +791,9 @@ JARVIS_TEST(dmesg_full_taxonomy, "PRE: none | POST: none") {
+             == 0,
+         "PMM OOM text");
+     JARVIS_ASSERT_FMT(
+-        __builtin_strcmp("Out of memory — no free physical pages",
++        __builtin_strcmp("Out of memory — no free user physical pages",
+                          log::error_string(log::ErrorSubsystem::PMM,
+-                                           log::kDmesgBase_PMM + 1))
++                                           log::kDmesgBase_PMM + 2))
+             == 0,
+         "PMM canonical strip");
+     JARVIS_ASSERT_FMT(
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 826fa575f..2ff1bf396 100644
+index 2ff1bf396..3a1a71271 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -141,7 +141,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"ipc_timeout",           7,    0,       0      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
-     {"ipc_extended",          11,   0,       0      },  // size limits, mid-queue removal, timeout, inversion + 2 arrival-wake gate tests (issue #208)
-     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
--    {"ipc_robustness",        7,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A)
-+    {"ipc_robustness",       11,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A) + 4 send_sync reply-matching regressions (issue #296; mid-wait DestDeath skipped, see test)
-     {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
+@@ -58,7 +58,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"scheduler_hrt",         4,    0,       0      },  // hard-RT time assertions on real dispatch (issue #102): rdtsc canary + IPC/semaphore wake latency + release jitter
  
-     // vfs
-diff --git a/src/kernel/test/test_ipc_robustness.cpp b/src/kernel/test/test_ipc_robustness.cpp
-index e9b972d7d..8a600a9b3 100644
---- a/src/kernel/test/test_ipc_robustness.cpp
-+++ b/src/kernel/test/test_ipc_robustness.cpp
-@@ -31,6 +31,7 @@
- #include <kernel/sync/semaphore.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/task/scheduler.hpp>
-+#include <kernel/arch/timer.hpp>
- #include <kernel/arch/irq_guard.hpp>
- #include <kernel/memory/vmm.hpp>
- #include "test_sched_helpers.hpp"
-@@ -383,13 +384,18 @@ TEST_CLASS(IpcBidirectionalSendSync) {
-     // synchronously when the test task (A) blocks on send_sync().
-     auto *peer = TaskControlBlock::create(
-         []() {
-+            auto *self = Scheduler::current_task();
-             Message msg{}, reply{};
-             while (!IPC::recv(msg)) {
-                 Scheduler::reschedule();
-                 arch::hlt();
-             }
-             JARVIS_ASSERT(msg.type == 10ULL);
--            reply.sender_id = msg.sender_id;
-+            // Sender stamp is load-bearing (issue #296): replies must bear
-+            // the replier's own id so send_sync's sender match consumes
-+            // them; stamping the requester's id (as here before) starves
-+            // the waiter under matching (the old blind pop tolerated it).
-+            reply.sender_id = self->id;
-             reply.type = 20;
-             reply.priority = 0;
-             reply.data_size = 0;
-@@ -401,7 +407,7 @@ TEST_CLASS(IpcBidirectionalSendSync) {
-                 arch::hlt();
-             }
-             JARVIS_ASSERT(msg.type == 30ULL);
--            reply.sender_id = msg.sender_id;
-+            reply.sender_id = self->id;
-             reply.type = 40;
-             reply.priority = 0;
-             reply.data_size = 0;
-@@ -631,6 +637,366 @@ TEST_CLASS(IpcPriorityOrderedWake) {
+     // task
+-    {"task_core",             6,    0,       0      },  // TCB cleanup/page tables/clone
++    {"task_core",             7,    0,       0      },  // TCB cleanup/page tables/clone + recent-ring claim (#264)
+     {"task_lifecycle",        9,    0,       0      },  // exit/zombie/reparent
+     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
+     {"task_init",             5,    0,       0      },  // init task exists/reparents + reaper notify/IPC wake (issue #155)
+@@ -66,7 +66,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
+ 
+     // syscall
+-    {"syscall_core",         32,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30)
++    {"syscall_core",         33,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70)
+     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
+     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
+     {"debug_syscall",         24,   24,      24     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295); arch-neutral, x86_64 measured via TCOUNT
+@@ -166,7 +166,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"memory_determinism",    4,    0,       0      },  // PMM exhaustion + no-dynamic-alloc neutral cycles (v0.3.8)
+     {"memory_checked_ptr",    4,    0,       0      },  // Checked pointer + signal frame tests
+     {"memory_resource_exhaustion", 5, 0,      0      },  // FdTable, TaskLimit, MaxBuffers, MempoolFrag, PmmExhaustion
+-    {"memory_stack_alloc",   11,    0,       0      },  // stack allocation, guard pages, overflow hook (8 + 3 MP-6)
++    {"memory_stack_alloc",   12,    0,       0      },  // stack allocation, guard pages, overflow hook (8 + 3 MP-6) + null-slot round-trip (#263)
+     {"memory_stack_profiler", 6,    0,       0      },  // kernel stack depth profiling
+ #if CONFIG_STATIC_POOLS_ONLY
+     {"memory_static_pools",   6,    0,       0      },  // CONFIG_STATIC_POOLS_ONLY, MemPool::reserve
+@@ -228,7 +228,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
+     {"kernel_top",            22, 0,       0      },  // Top-level kernel (#131): histogram + random + IrqThread (#144, unknown-vec/sync-ack/guard) + datetime + global_state accessors (#136)
+     {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
+-    {"memory_checked_ptr_api", 9,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views
++    {"memory_checked_ptr_api", 10,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views + non-#PF vector gate (#252)
+     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
+     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
+     {"shell_commands",       34,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77) + --debug flag pin (#231) + --debug spawn success (#295, replaces refusal pin) + --debug no-image refusal (#295 audit)
+@@ -251,7 +251,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // arch
+     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
+ #if defined(CONFIG_ARCH_AARCH64)
+-    {"arch_aarch64",          0,   32,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245)
++    {"arch_aarch64",          0,   33,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245) + 1 EL1 fail-stop routing (#214)
+ #endif
+ #if defined(CONFIG_ARCH_RISCV64)
+     {"arch_riscv64",          0,    0,      30      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall) + 2 UART poll tests (issue #247) — row was stale at 24 while 28 registered, corrected to 30
+@@ -276,7 +276,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+ 
+     // Structural/semantic aggregates (issue #173).  Values are filled
+     // from measured `dump-counts` output; 0 disables validation.
+-    {"core",                470,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294)
++    {"core",                474,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294)
+     {"ipc",                 81,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208)
+     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
+     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
+diff --git a/src/kernel/test/test_stack_alloc.cpp b/src/kernel/test/test_stack_alloc.cpp
+index 860cc3c32..cb5c4b403 100644
+--- a/src/kernel/test/test_stack_alloc.cpp
++++ b/src/kernel/test/test_stack_alloc.cpp
+@@ -280,6 +280,57 @@ JARVIS_TEST(kstack_slot_snapshot_restore_safe, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
- };
- 
-+// Manually wake the scheduler once (peer tasks below run at lower priority
-+// than the harness; one reschedule+h‏lt hands them the CPU).
-+static void sync296_yield_once() {
-+    __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
-+                     __ATOMIC_RELEASE);
-+    Scheduler::reschedule();
-+    arch::hlt();
-+}
-+
-+// Bounded wait until our own queue holds at least n messages (delivery
-+// sync for decoy tasks below). Fails the test on timeout.
-+static bool sync296_wait_queued(TaskControlBlock *me, size_t n) {
-+    for (int i = 0; i < 1000; ++i) {
-+        if (me->msg_queue.count >= n)
-+            return true;
-+        sync296_yield_once();
-+    }
-+    return false;
-+}
-+
-+// Testidea: send_sync skips non-replies (issue #296): a pre-queued grant
-+// from a third party must survive a synchronous exchange with a peer —
-+// the old blind pop consumed it as the reply. Grant-shaped decoy (type
-+// 310, 16-byte payload) + real peer roundtrip on the same inbox.
-+// Input: decoy task sends one grant to us and exits; peer task recvs our
-+// request and replies; we send_sync the peer.
-+// Expect: send_sync true with the peer's reply; the decoy is still
-+// queued afterwards with sender/type/payload intact; queue empty at end.
-+// Depends: IPC::send_sync selective pop, MessageQueue::pop
-+TEST_CLASS(IpcSendSyncSkipsNonReply) {
-+    auto *me = Scheduler::current_task();
-+    CT_ASSERT(me != nullptr);
-+    static volatile uint64_t s_target = 0;
-+    s_target = me->id;
-+
-+    auto *decoy = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            Message m{};
-+            m.sender_id = self->id;
-+            m.type = 310;
-+            m.priority = 0;
-+            m.data_size = 16;
-+            for (size_t i = 0; i < 16; ++i)
-+                m.data[i] = 0xAB;
-+            (void)IPC::send(s_target, m, 0);
-+        },
-+        11, 10);
-+    CT_ASSERT(decoy != nullptr);
-+    const uint64_t decoy_id = decoy->id;
-+    auto *peer = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            Message msg{}, reply{};
-+            while (!IPC::recv(msg)) {
-+                Scheduler::reschedule();
-+                arch::hlt();
-+            }
-+            reply.sender_id = self->id;
-+            reply.type = 20;
-+            reply.priority = 0;
-+            reply.data_size = 0;
-+            (void)IPC::send(msg.sender_id, reply, 0);
-+        },
-+        11, 10);
-+    CT_ASSERT(peer != nullptr);
-+    const uint64_t peer_id = peer->id;
-+    Scheduler::add_task(*decoy);
-+    Scheduler::add_task(*peer);
-+    CT_ASSERT(sync296_wait_queued(me, 1));
-+
-+    Message req{}, reply{};
-+    req.sender_id = me->id;
-+    req.type = 10;
-+    req.priority = 0;
-+    req.data_size = 0;
-+    bool ok = IPC::send_sync(peer_id, req, reply);
-+    JARVIS_ASSERT(ok);
-+    JARVIS_ASSERT(reply.type == 20ULL);
-+
-+    // The decoy must be untouched: blind pop would have eaten it above.
-+    Message rest{};
-+    JARVIS_ASSERT(me->msg_queue.pop(rest));
-+    JARVIS_ASSERT(rest.type == 310ULL);
-+    JARVIS_ASSERT(rest.sender_id == decoy_id);
-+    JARVIS_ASSERT(rest.data_size == 16);
-+    for (size_t i = 0; i < 16; ++i)
-+        JARVIS_ASSERT(rest.data[i] == 0xAB);
-+    JARVIS_ASSERT(me->msg_queue.is_empty());
-+
-+    kernel::test::terminate_and_drain2(decoy, peer);
-+    JARVIS_TEST_PASS();
-+};
-+
-+// Testidea: send_sync dest-death preserves non-matching (issue #296):
-+// SKIPPED — kept for the record, not registered. The mid-wait death
-+// path (has_from + continue) needs the waiter to observe the death,
-+// which needs tick-driven hlt-wakes plus peer dispatch; this variant
-+// hangs intermittently with zero diagnostic output (no S:, no FAIL, no
-+// panic, no DMD) across loads 1.8-5 on healthy trees, while the
-+//Debugger-independent DeadPeerFailsFast below passes deterministically.
-+// ~10 investigation cycles could not distinguish tick-death from
-+// dispatch-skip from host starvation (GDB evidence ambiguous across
-+// runs: identical RIP samples during starvation prove nothing, port
-+// fights mixed guests, blind channels hid S: lines). The fail-closed +
-+// preservation contract IS pinned by IpcSendSyncDeadPeerFailsFast
-+// (dead-at-entry, no wait). Re-enable deliberately (not casually:
-+// it must pass repeatedly before it counts).
-+#if 0 // issue #296: hangs intermittently, mechanism undetermined
-+TEST_CLASS(IpcSendSyncDestDeathPreservesNonMatching) {
-+    auto *me = Scheduler::current_task();
-+    CT_ASSERT(me != nullptr);
-+    static volatile uint64_t s_target2 = 0;
-+    s_target2 = me->id;
-+
-+    auto *decoy = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            Message m{};
-+            m.sender_id = self->id;
-+            m.type = 310;
-+            m.priority = 0;
-+            m.data_size = 16;
-+            (void)IPC::send(s_target2, m, 0);
-+        },
-+        11, 10);
-+    CT_ASSERT(decoy != nullptr);
-+    const uint64_t decoy_id = decoy->id;
-+    auto *peer = TaskControlBlock::create(
-+        []() {
-+            uint64_t start = arch::Timer::ticks();
-+            while (arch::Timer::ticks() - start < 200) {
-+                Scheduler::reschedule();
-+                arch::hlt();
-+            }
-+        },
-+        11, 10);
-+    CT_ASSERT(peer != nullptr);
-+    Scheduler::add_task(*decoy);
-+    Scheduler::add_task(*peer);
-+    CT_ASSERT(sync296_wait_queued(me, 1));
-+
-+    Message req{}, reply{};
-+    req.sender_id = me->id;
-+    req.type = 10;
-+    req.priority = 0;
-+    req.data_size = 0;
-+    bool ok = IPC::send_sync(peer->id, req, reply);
-+    JARVIS_ASSERT(!ok);
-+
-+    Message rest{};
-+    JARVIS_ASSERT(me->msg_queue.pop(rest));
-+    JARVIS_ASSERT(rest.type == 310ULL);
-+    JARVIS_ASSERT(rest.sender_id == decoy_id);
-+    JARVIS_ASSERT(me->msg_queue.is_empty());
-+
-+    kernel::test::terminate_and_drain2(decoy, peer);
-+    JARVIS_TEST_PASS();
-+};
-+#endif // issue #296: DestDeath variant skipped (see above)
-+
-+// Testidea: send_sync to an already-dead peer fails fast (issue #296):
-+// the send itself is refused, so no wait begins and pre-queued
-+// non-matching mail is untouched. Deterministic without any wakeup.
-+// Input: peer that exits immediately + pre-queued decoy; wait for the
-+// peer's death, then send_sync.
-+// Expect: false; decoy intact; queue empty at end.
-+// Depends: send-failure early-out, queue preservation
-+TEST_CLASS(IpcSendSyncDeadPeerFailsFast) {
-+    auto *me = Scheduler::current_task();
-+    CT_ASSERT(me != nullptr);
-+    static volatile uint64_t s_target5 = 0;
-+    s_target5 = me->id;
-+
-+    auto *decoy = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            Message m{};
-+            m.sender_id = self->id;
-+            m.type = 320;
-+            m.priority = 0;
-+            m.data_size = 8;
-+            (void)IPC::send(s_target5, m, 0);
-+        },
-+        11, 10);
-+    CT_ASSERT(decoy != nullptr);
-+    const uint64_t decoy_id = decoy->id;
-+    auto *peer = TaskControlBlock::create([]() {}, 11, 10);
-+    CT_ASSERT(peer != nullptr);
-+    const uint64_t peer_id = peer->id;
-+    Scheduler::add_task(*decoy);
-+    Scheduler::add_task(*peer);
-+    CT_ASSERT(sync296_wait_queued(me, 1));
-+    // Wait until the instant-exit peer is reaped as TERMINATED (bounded:
-+    // a live peer here means the test, not the kernel, is broken).
-+    bool dead = false;
-+    for (int i = 0; i < 1000 && !dead; ++i) {
-+        TaskControlBlock *p = Scheduler::find_task(peer_id);
-+        dead = (p == nullptr) || (p->state == TaskState::TERMINATED);
-+        if (!dead)
-+            sync296_yield_once();
-+    }
-+    CT_ASSERT(dead);
-+
-+    Message req{}, reply{};
-+    req.sender_id = me->id;
-+    req.type = 10;
-+    req.priority = 0;
-+    req.data_size = 0;
-+    bool ok = IPC::send_sync(peer_id, req, reply);
-+    JARVIS_ASSERT(!ok);
-+
-+    Message rest{};
-+    JARVIS_ASSERT(me->msg_queue.pop(rest));
-+    JARVIS_ASSERT(rest.type == 320ULL);
-+    JARVIS_ASSERT(rest.sender_id == decoy_id);
-+    JARVIS_ASSERT(me->msg_queue.is_empty());
-+
-+    kernel::test::terminate_and_drain2(decoy, peer);
-+    JARVIS_TEST_PASS();
-+};
-+
-+// Testidea: send_sync clamped oversized match stays queued (issues #11 +
-+// #296): a fitting non-matching decoy must not satisfy the clamp, and
-+// the oversized peer reply must stay for a later full RECEIVE.
-+// Input: small decoy + peer replying 64 bytes; send_sync with clamp 16.
-+// Expect: false; both messages still queued (decoy first: FIFO at prio
-+// 0, queued first); full pop retrieves the big reply intact.
-+// Depends: pop_from_sender_clamped, #11 stays-queued rule
-+TEST_CLASS(IpcSendSyncOversizedMatchStaysClamped) {
-+    auto *me = Scheduler::current_task();
-+    CT_ASSERT(me != nullptr);
-+    static volatile uint64_t s_target3 = 0;
-+    s_target3 = me->id;
-+
-+    auto *decoy = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            Message m{};
-+            m.sender_id = self->id;
-+            m.type = 310;
-+            m.priority = 0;
-+            m.data_size = 8;
-+            (void)IPC::send(s_target3, m, 0);
-+        },
-+        11, 10);
-+    CT_ASSERT(decoy != nullptr);
-+    const uint64_t decoy_id = decoy->id;
-+    auto *peer = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            Message msg{}, reply{};
-+            while (!IPC::recv(msg)) {
-+                Scheduler::reschedule();
-+                arch::hlt();
-+            }
-+            reply.sender_id = self->id;
-+            reply.type = 20;
-+            reply.priority = 0;
-+            reply.data_size = 64;
-+            for (size_t i = 0; i < 64; ++i)
-+                reply.data[i] = static_cast<uint8_t>(i);
-+            (void)IPC::send(msg.sender_id, reply, 0);
-+        },
-+        11, 10);
-+    CT_ASSERT(peer != nullptr);
-+    const uint64_t peer_id = peer->id;
-+    Scheduler::add_task(*decoy);
-+    Scheduler::add_task(*peer);
-+    CT_ASSERT(sync296_wait_queued(me, 1));
-+
-+    Message req{}, reply{};
-+    req.sender_id = me->id;
-+    req.type = 10;
-+    req.priority = 0;
-+    req.data_size = 0;
-+    bool ok = IPC::send_sync(peer_id, req, reply, 16);
-+    JARVIS_ASSERT(!ok);
-+
-+    // Neither consumed: decoy (FIFO first at prio 0) then the big reply.
-+    Message first{}, second{};
-+    JARVIS_ASSERT(me->msg_queue.pop(first));
-+    JARVIS_ASSERT(first.type == 310ULL);
-+    JARVIS_ASSERT(first.sender_id == decoy_id);
-+    JARVIS_ASSERT(me->msg_queue.pop(second));
-+    JARVIS_ASSERT(second.type == 20ULL);
-+    JARVIS_ASSERT(second.sender_id == peer_id);
-+    JARVIS_ASSERT(second.data_size == 64);
-+    for (size_t i = 0; i < 64; ++i)
-+        JARVIS_ASSERT(second.data[i] == static_cast<uint8_t>(i));
-+    JARVIS_ASSERT(me->msg_queue.is_empty());
-+
-+    kernel::test::terminate_and_drain2(decoy, peer);
-+    JARVIS_TEST_PASS();
-+};
-+
-+// Testidea: same-sender stale replies keep priority order (issue #296
-+// residual): with two stale same-sender messages queued, send_sync
-+// consumes priority-min/FIFO-first — locking the documented residual
-+// order so a future reorder cannot slip in silently. The helper stages
-+// all three messages up front (no rendezvous: the stales already
-+// satisfy the match, so a recv-waiting helper would never run).
-+// Input: helper sends stale prio-0 pair + fresh prio-5, then exits;
-+// we send_sync.
-+// Expect: consumed reply is the FIRST stale (type 51); then stale2 (52),
-+// then fresh (53); queue empty at end.
-+// Depends: find_best_from_sender order (priority-min, first-index wins)
-+TEST_CLASS(IpcSendSyncStaleSameSenderOrder) {
-+    auto *me = Scheduler::current_task();
-+    CT_ASSERT(me != nullptr);
-+    static volatile uint64_t s_target4 = 0;
-+    s_target4 = me->id;
-+
-+    auto *helper = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            const uint64_t types[3] = {51, 52, 53};
-+            const uint64_t prios[3] = {0, 0, 5};
-+            for (int i = 0; i < 3; ++i) {
-+                Message m{};
-+                m.sender_id = self->id;
-+                m.type = types[i];
-+                m.priority = prios[i];
-+                m.data_size = 0;
-+                (void)IPC::send(s_target4, m, 0);
-+            }
-+            // Park forever: the peer must stay alive so send_sync's
-+            // send succeeds (a dead peer fails fast without consuming).
-+            for (;;) {
-+                Scheduler::reschedule();
-+                arch::hlt();
-+            }
-+        },
-+        11, 10);
-+    CT_ASSERT(helper != nullptr);
-+    const uint64_t helper_id = helper->id;
-+    Scheduler::add_task(*helper);
-+    CT_ASSERT(sync296_wait_queued(me, 3));
-+
-+    Message req{}, reply{};
-+    req.sender_id = me->id;
-+    req.type = 10;
-+    req.priority = 0;
-+    req.data_size = 0;
-+    bool ok = IPC::send_sync(helper_id, req, reply);
-+    JARVIS_ASSERT(ok);
-+    JARVIS_ASSERT(reply.type == 51ULL);
-+    JARVIS_ASSERT(reply.sender_id == helper_id);
-+
-+    Message second{}, third{};
-+    JARVIS_ASSERT(me->msg_queue.pop(second));
-+    JARVIS_ASSERT(second.type == 52ULL);
-+    JARVIS_ASSERT(me->msg_queue.pop(third));
-+    JARVIS_ASSERT(third.type == 53ULL);
-+    JARVIS_ASSERT(me->msg_queue.is_empty());
-+
-+    kernel::test::terminate_and_drain(*helper);
-+    JARVIS_TEST_PASS();
-+};
-+
- void register_ipc_robustness_tests() {
-     Logger::info("Registering IPC robustness tests");
-     REGISTER_CLASS(IpcMisformedMessages);
-@@ -642,6 +1008,11 @@ void register_ipc_robustness_tests() {
-     REGISTER_CLASS(IpcBidirectionalSendSync);
-     REGISTER_CLASS(IpcBlockedSenderOnReceiverCleanup);
-     REGISTER_CLASS(IpcPriorityOrderedWake);
-+    REGISTER_CLASS(IpcSendSyncSkipsNonReply);
-+    // IpcSendSyncDestDeathPreservesNonMatching skipped (see #if 0 above).
-+    REGISTER_CLASS(IpcSendSyncDeadPeerFailsFast);
-+    REGISTER_CLASS(IpcSendSyncOversizedMatchStaysClamped);
-+    REGISTER_CLASS(IpcSendSyncStaleSameSenderOrder);
  }
- #ifndef __clang__
- #pragma GCC diagnostic pop
+ 
++// Runmode: kernel
++// Testidea: v0.5.x issue #263 — kslot_snapshot_restore must advance the
++// buffer offset unconditionally, mirroring capture (which writes a dense
++// layout: zeros for null PT slots, always advances). Skipping the advance
++// on null slots shifts every later page read plus the trailing
++// bump/list/pool reads — silent wrong-state restore.
++// Input: Capture live state L; craft C = L with the second page slot
++// zeroed (null-slot shape) and the trailing bookkeeping region filled
++// with a sentinel; restore(C); capture(O); restore(L).
++// Expect: O byte-equals C over the full kslot_snapshot_bytes() length;
++// live state fully reinstalled; zero PMM delta. Contract-pinning: all 8
++// window PT pages are boot-allocated in the test env, so no live null
++// slot exists that would fail pre-fix — but the byte-contract guards
++// the exact lines #263 changed.
++// Depends: kslot snapshot helpers (task.cpp).
++JARVIS_TEST(kstack_snapshot_null_page_slot_roundtrip,
++            "PRE: none | POST: none") {
++    uint64_t free_before = PMM::free_pages_ref();
++    static constexpr size_t KSLOT_SNAP_SIZE = 8 * arch::PAGE_SIZE + 4096;
++    static uint8_t s_live_buf[KSLOT_SNAP_SIZE];
++    static uint8_t s_craft_buf[KSLOT_SNAP_SIZE];
++    static uint8_t s_out_buf[KSLOT_SNAP_SIZE];
++    const size_t snap_bytes = kernel::kslot_snapshot_bytes();
++    JARVIS_ASSERT(snap_bytes <= KSLOT_SNAP_SIZE);
++
++    kernel::kslot_snapshot_capture(s_live_buf);
++    for (size_t idx = 0; idx < snap_bytes; ++idx) {
++        s_craft_buf[idx] = s_live_buf[idx];
++    }
++    for (size_t idx = 0; idx < arch::PAGE_SIZE; ++idx) {
++        s_craft_buf[arch::PAGE_SIZE + idx] = 0;
++    }
++    for (size_t idx = 8 * arch::PAGE_SIZE; idx < snap_bytes; ++idx) {
++        s_craft_buf[idx] = 0xA5;
++    }
++
++    kernel::kslot_snapshot_restore(s_craft_buf);
++    kernel::kslot_snapshot_capture(s_out_buf);
++    for (size_t idx = 0; idx < snap_bytes; ++idx) {
++        JARVIS_ASSERT_FMT(s_out_buf[idx] == s_craft_buf[idx],
++                          "kslot round-trip mismatch at byte %lx",
++                          static_cast<uint64_t>(idx));
++    }
++
++    kernel::kslot_snapshot_restore(s_live_buf);
++    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
++                      "PMM delta %ld pages after kslot round-trip",
++                      (long)(PMM::free_pages_ref() - free_before));
++    JARVIS_TEST_PASS();
++}
++
+ JARVIS_TEST(stack_alloc_user_stack_phys_freed_on_cleanup,
+             "PRE: none | POST: none") {
+     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+@@ -312,5 +363,6 @@ void register_stack_alloc_tests() {
+     // v0.4.0 MP-6 tests (kstack_overflow_invokes_hook registered LAST).
+     JARVIS_REGISTER_TEST(kstack_guard_base_unmapped);
+     JARVIS_REGISTER_TEST(kstack_slot_snapshot_restore_safe);
++    JARVIS_REGISTER_TEST(kstack_snapshot_null_page_slot_roundtrip);
+     JARVIS_REGISTER_TEST(kstack_overflow_invokes_hook);
+ }
+diff --git a/src/kernel/test/test_syscall.cpp b/src/kernel/test/test_syscall.cpp
+index 4f7f41c88..d08b71e6d 100644
+--- a/src/kernel/test/test_syscall.cpp
++++ b/src/kernel/test/test_syscall.cpp
+@@ -1011,6 +1011,49 @@ JARVIS_TEST(syscall_error_string_maps, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: Pin the frozen 0-79 syscall number mirror (issues #69/#70):
++//           src/libc/syscall.h numbers must equal the kernel
++//           SyscallNumber values, and the ABI_VERSION query (84) must
++//           return (NEXIOS_ABI_MAJOR << 16) | MINOR via the real handler.
++// Input: Static enum asserts for the band boundaries (literals cite
++//        syscall.h lines); dispatched task calls Syscall::handle(84).
++// Expect: All mirror pairs equal; version == 0x10000; MAX_SYSCALL > 79
++//         (table grew past the frozen band — SYS_MAX drift is issue
++//         material, not pinned here).
++// Depends: SyscallNumber, Syscall::sys_abi_version.
++JARVIS_TEST(syscall_abi_surface_mirror_and_version, "PRE: none | POST: none") {
++    static uint64_t g_ver = 0;
++    JARVIS_ASSERT_EQ(0ULL, static_cast<uint64_t>(SyscallNumber::YIELD));
++    JARVIS_ASSERT_EQ(48ULL, static_cast<uint64_t>(SyscallNumber::KLOG));
++    JARVIS_ASSERT_EQ(49ULL, static_cast<uint64_t>(SyscallNumber::REBOOT));
++    JARVIS_ASSERT_EQ(50ULL, static_cast<uint64_t>(SyscallNumber::HALT));
++    JARVIS_ASSERT_EQ(51ULL, static_cast<uint64_t>(SyscallNumber::CAP_GRANT));
++    JARVIS_ASSERT_EQ(57ULL,
++                     static_cast<uint64_t>(SyscallNumber::IRQ_REGISTER));
++    JARVIS_ASSERT_EQ(63ULL,
++                     static_cast<uint64_t>(SyscallNumber::FRAME_CREATE));
++    JARVIS_ASSERT_EQ(69ULL,
++                     static_cast<uint64_t>(SyscallNumber::PAGER_REGISTER));
++    JARVIS_ASSERT_EQ(74ULL, static_cast<uint64_t>(SyscallNumber::SEND_FAST));
++    JARVIS_ASSERT_EQ(77ULL,
++                     static_cast<uint64_t>(SyscallNumber::SET_AFFINITY));
++    JARVIS_ASSERT_EQ(79ULL, static_cast<uint64_t>(SyscallNumber::TIMES));
++    JARVIS_ASSERT_EQ(84ULL, static_cast<uint64_t>(SyscallNumber::ABI_VERSION));
++    JARVIS_ASSERT(static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL) > 79ULL);
++    auto *t = run_syscall_task([]() {
++        g_ver = Syscall::handle(
++            static_cast<uint64_t>(SyscallNumber::ABI_VERSION), 0, 0, 0, 0,
++            nullptr);
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_FMT(g_ver == 0x10000ULL,
++                      "ABI_VERSION returned %lx, want 0x10000", g_ver);
++    release_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
+ #if defined(CONFIG_ARCH_X86_64)
+ 
+ // Runmode: kernel
+@@ -1139,6 +1182,7 @@ void register_syscall_tests() {
+     JARVIS_REGISTER_TEST(syscall_user_exec_valid_argv);
+     JARVIS_REGISTER_TEST(syscall_user_exec_hostile_argv);
+     JARVIS_REGISTER_TEST(syscall_error_string_maps);
++    JARVIS_REGISTER_TEST(syscall_abi_surface_mirror_and_version);
+ 
+ #if defined(CONFIG_ARCH_X86_64)
+     JARVIS_REGISTER_TEST(syscall_abi_x86_bridge_conform);
+diff --git a/src/kernel/test/test_task.cpp b/src/kernel/test/test_task.cpp
+index e12f9f6a9..1a2d94e37 100644
+--- a/src/kernel/test/test_task.cpp
++++ b/src/kernel/test/test_task.cpp
+@@ -245,6 +245,57 @@ JARVIS_TEST(task_clone_no_page_table_leak, "PRE: none | POST: none") {
+ // Input: None
+ // Expect: All task_* tests are registered via JARVIS_REGISTER_TEST
+ // Depends: kernel test framework
++namespace kernel {
++namespace debug {
++// Issue #264: per-slot single-writer contract (task.cpp). The ring is
++// write-only diagnostics with no header declaration, so the test declares
++// the two entry points locally (definitions in task.cpp).
++void record_task_entry(uint64_t entry, uint64_t tcb);
++uint64_t find_entry_owner(uint64_t value);
++} // namespace debug
++} // namespace kernel
++
++// Runmode: kernel
++// Testidea: v0.5.x issue #264 — record_task_entry claims each slot with
++// an atomic fetch-add, so sequential writers land in distinct slots: no
++// mixed entry-from-A/tcb-from-B records, no lost updates.
++// Input: Record 10 distinct (entry, tcb) marker pairs with sentinel high
++// bits, then 64 more to force a full 64-slot wrap; resolve each via
++// find_entry_owner. Markers are pre-checked absent first, so a real task
++// entry recorded at boot can never alias them into a false pass/fail.
++// Expect: Every marker resolves to exactly its own tcb (pre-wrap batch
++// and post-wrap last-64 alike); no stale record survives. Pure sequential
++// calls — no tasks, no IRQs, TCG-deterministic. (True concurrent-writer
++// coverage is not deterministic under QEMU timing; the atomic claim
++// itself is reviewed, not raced here.)
++// Depends: kernel::debug::record_task_entry/find_entry_owner (task.cpp).
++JARVIS_TEST(task_recent_ring_claim_distinct_slots, "PRE: none | POST: none") {
++    for (uint64_t idx = 0; idx < 10; ++idx) {
++        const uint64_t marker = 0x5A5A0000ULL + idx;
++        JARVIS_ASSERT_FMT(kernel::debug::find_entry_owner(marker) == 0,
++                          "marker %lx already owned before insert", marker);
++    }
++    for (uint64_t idx = 0; idx < 10; ++idx) {
++        kernel::debug::record_task_entry(0x5A5A0000ULL + idx, 0x7000ULL + idx);
++    }
++    for (uint64_t idx = 0; idx < 10; ++idx) {
++        const uint64_t marker = 0x5A5A0000ULL + idx;
++        const uint64_t want = 0x7000ULL + idx;
++        JARVIS_ASSERT_FMT(kernel::debug::find_entry_owner(marker) == want,
++                          "marker %lx owner mismatch", marker);
++    }
++    for (uint64_t idx = 10; idx < 74; ++idx) {
++        kernel::debug::record_task_entry(0x5A5A0000ULL + idx, 0x7000ULL + idx);
++    }
++    for (uint64_t idx = 10; idx < 74; ++idx) {
++        const uint64_t marker = 0x5A5A0000ULL + idx;
++        const uint64_t want = 0x7000ULL + idx;
++        JARVIS_ASSERT_FMT(kernel::debug::find_entry_owner(marker) == want,
++                          "post-wrap marker %lx owner mismatch", marker);
++    }
++    JARVIS_TEST_PASS();
++}
++
+ void register_task_tests() {
+     Logger::info("Registering task tests");
+     JARVIS_REGISTER_TEST(task_cleanup_frees_resources);
+@@ -253,5 +304,6 @@ void register_task_tests() {
+     JARVIS_REGISTER_TEST(task_elf_load_inits_ipc_objects);
+     JARVIS_REGISTER_TEST(task_fork_child_cleanup_preserves_parent_pages);
+     JARVIS_REGISTER_TEST(task_clone_no_page_table_leak);
++    JARVIS_REGISTER_TEST(task_recent_ring_claim_distinct_slots);
+ }
+ #endif
+diff --git a/test-history.txt b/test-history.txt
+index 2d187433f..6c213b6ec 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -2489,3 +2489,39 @@
+ 2026-10-06 12:45:00 ipc_robustness PASSED: 11 FAILED: 0 TIME: 554ms
+ 2026-10-06 12:46:00 core PASSED: 530 FAILED: 0 TIME: 30000ms
+ 2026-10-06 12:50:00 selftest PASSED: 139 FAILED: 0 TIME: 8203ms
++2026-10-06 20:55:42 syscall_core PASSED: 33 FAILED: 0 TIME: 959ms
++2026-10-06 21:37:37 memory_checked_ptr_api PASSED: 10 FAILED: 0 TIME: 249ms
++2026-10-06 21:42:39 memory_stack_alloc PASSED: 12 FAILED: 0 TIME: 337ms
++2026-10-06 21:47:43 task_core PASSED: 7 FAILED: 0 TIME: 252ms
++2026-10-06 22:02:32 memory_checked_ptr_api PASSED: 10 FAILED: 0 TIME: 245ms
++2026-10-06 22:11:59 core PASSED: 534 FAILED: 0 TIME: 29152ms
++2026-10-06 22:20:33 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 309ms
++2026-10-06 22:26:00 core PASSED: 534 FAILED: 0 TIME: 29527ms
++2026-10-06 22:30:51 core PASSED: 534 FAILED: 0 TIME: 30207ms
++2026-10-06 22:31:07 ipc PASSED: 85 FAILED: 0 TIME: 3518ms
++2026-10-06 22:33:20 capability PASSED: 0 FAILED: 0 TIME: 132865ms STATUS: TIMEOUT
++2026-10-06 22:35:33 proc_elf PASSED: 0 FAILED: 0 TIME: 132997ms STATUS: TIMEOUT
++2026-10-06 22:35:49 storage PASSED: 147 FAILED: 0 TIME: 3396ms
++2026-10-06 22:36:05 servers PASSED: 62 FAILED: 0 TIME: 1642ms
++2026-10-06 22:36:44 drivers PASSED: 107 FAILED: 0 TIME: 11799ms
++2026-10-06 22:37:01 hal PASSED: 122 FAILED: 0 TIME: 0ms
++2026-10-06 22:39:13 smp PASSED: 0 FAILED: 0 TIME: 132286ms STATUS: TIMEOUT
++2026-10-06 22:39:28 smp_multicpu PASSED: 18 FAILED: 0 TIME: 515ms
++2026-10-06 22:39:59 deadline PASSED: 139 FAILED: 0 TIME: 47003ms
++2026-10-06 22:40:16 ui PASSED: 73 FAILED: 0 TIME: 5994ms
++2026-10-06 22:40:31 logging_debug PASSED: 35 FAILED: 1 TIME: 757ms
++2026-10-06 22:40:46 random PASSED: 17 FAILED: 0 TIME: 405ms
++2026-10-06 22:41:01 bench PASSED: 22 FAILED: 0 TIME: 700ms
++2026-10-06 22:43:14 task_tcb_log PASSED: 0 FAILED: 0 TIME: 132172ms STATUS: TIMEOUT
++2026-10-06 22:43:29 task_fpu PASSED: 0 FAILED: 0 TIME: 14909ms STATUS: NO_TESTS_REGISTERED
++2026-10-06 22:43:45 ahci_live PASSED: 5 FAILED: 0 TIME: 5991ms
++2026-10-06 22:43:58 iommu_live PASSED: 6 FAILED: 0 TIME: 163ms
++2026-10-06 22:46:10 testrunner PASSED: 0 FAILED: 0 TIME: 132022ms STATUS: TIMEOUT
++
++SUMMARY: total=20 ok=14 fail=6
++2026-10-06 22:54:28 logging_debug PASSED: 36 FAILED: 0 TIME: 800ms
++2026-10-06 22:55:04 capability PASSED: 148 FAILED: 0 TIME: 5492ms
++2026-10-06 22:55:27 proc_elf PASSED: 91 FAILED: 0 TIME: 4947ms
++2026-10-06 22:55:49 smp PASSED: 81 FAILED: 0 TIME: 3096ms
++2026-10-06 23:01:06 task_tcb_log PASSED: 1 FAILED: 0 TIME: 55ms
++2026-10-06 23:03:35 testrunner PASSED: 16 FAILED: 0 TIME: 120s

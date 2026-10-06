@@ -40,13 +40,18 @@
 
 #include <test.hpp>
 #include <logger.hpp>
+#include <kernel/arch/timer.hpp>
+#include <kernel/core/global_state.hpp>
+#include <kernel/kernel.hpp>
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/ipc/death_notify.hpp>
 #include <kernel/ipc/pager_registry.hpp>
+#include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <signal.hpp>
 #include <string.hpp>
+#include "test_sched_helpers.hpp"
 
 using namespace kernel;
 
@@ -122,6 +127,26 @@ void expect_rejected(const SweepResult &result) {
     JARVIS_ASSERT(!result.copy_to);
     JARVIS_ASSERT(!result.write);
 }
+
+#if defined(CONFIG_ARCH_X86_64)
+/// @brief Dispatch a REAL kernel task (prio 11) and wait for termination,
+///        mirroring the syscall bridge tests (issue #30 pattern).
+TaskControlBlock *run_recovery_task(void (*entry)()) {
+    auto *t = TaskControlBlock::create(entry, 11, 10);
+    if (t == nullptr)
+        return nullptr;
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    return t;
+}
+
+void release_recovery_task(TaskControlBlock *t) {
+    if (t == nullptr)
+        return;
+    kernel::test::terminate_if_live(t);
+}
+#endif // defined(CONFIG_ARCH_X86_64)
 
 } // namespace
 
@@ -354,6 +379,48 @@ JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
     JARVIS_TEST_PASS();
 }
 
+#if defined(CONFIG_ARCH_X86_64)
+
+// Runmode: kernel
+// Testidea: A non-#PF vector must not consume armed safe_copy fault
+//           recovery (issue #252): pre-fix, ANY vector took the ungated
+//           recovery branch — clobbering the frame RIP and disarming
+//           recovery (in production this skipped tail EOI and wedged the
+//           APIC). Post-fix the branch is gated on vector 14.
+// Input: Dispatched kernel task arms g_user_access_recover_ip, plants a
+//        frame marker, and calls handle_interrupt_c(0xFF) synchronously.
+//        0xFF (spurious) runs the full dispatch tail incl. EOI but no
+//        scheduler tick: a 0xE0/tick or direct on_tick() variant wedges
+//        the kernel when driven synchronously from a non-harness task
+//        (filed kernel bug — task-context on_tick + termination race),
+//        so the gate is pinned on the spurious vector instead. The
+//        vector-14 consume side is pinned by the real-#PF test above.
+// Expect: Recovery still armed, frame marker intact. Pre-fix both are
+//         clobbered (clean FAIL, no wedge).
+// Depends: handle_interrupt_c vector gate (kernel.cpp:2168).
+JARVIS_TEST(checked_ptr_api_safe_copy_non_pf_vector_preserves_recovery,
+            "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_recover_after = 0;
+    static uint64_t g_rip_after = 0;
+    auto *t = run_recovery_task([]() {
+        kernel::gs::user_access_recover_ip() = 0xA11CEULL;
+        uint64_t regs[22] = {};
+        regs[17] = 0xBEEFULL;
+        handle_interrupt_c(0xFF, 0, 0x1000, regs, 0);
+        g_recover_after = kernel::gs::user_access_recover_ip();
+        g_rip_after = regs[17];
+        kernel::gs::user_access_recover_ip() = 0;
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(0xA11CEULL, g_recover_after);
+    JARVIS_ASSERT_EQ(0xBEEFULL, g_rip_after);
+    release_recovery_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+#endif // defined(CONFIG_ARCH_X86_64)
+
 // Runmode: kernel
 // Testidea: The IPC record types that cross the user boundary on death
 //           notification drain (DeathRecord) and pager fault drain
@@ -422,5 +489,9 @@ void register_checked_ptr_api_tests() {
     JARVIS_REGISTER_TEST(checked_ptr_api_zero_count_is_noop);
     JARVIS_REGISTER_TEST(checked_ptr_api_safe_copy_templates_fail_closed);
     JARVIS_REGISTER_TEST(checked_ptr_api_safe_copy_fault_recovery);
+#if defined(CONFIG_ARCH_X86_64)
+    JARVIS_REGISTER_TEST(
+        checked_ptr_api_safe_copy_non_pf_vector_preserves_recovery);
+#endif
     JARVIS_REGISTER_TEST(checked_ptr_api_task_times_and_const_views);
 }

@@ -280,6 +280,57 @@ JARVIS_TEST(kstack_slot_snapshot_restore_safe, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: v0.5.x issue #263 — kslot_snapshot_restore must advance the
+// buffer offset unconditionally, mirroring capture (which writes a dense
+// layout: zeros for null PT slots, always advances). Skipping the advance
+// on null slots shifts every later page read plus the trailing
+// bump/list/pool reads — silent wrong-state restore.
+// Input: Capture live state L; craft C = L with the second page slot
+// zeroed (null-slot shape) and the trailing bookkeeping region filled
+// with a sentinel; restore(C); capture(O); restore(L).
+// Expect: O byte-equals C over the full kslot_snapshot_bytes() length;
+// live state fully reinstalled; zero PMM delta. Contract-pinning: all 8
+// window PT pages are boot-allocated in the test env, so no live null
+// slot exists that would fail pre-fix — but the byte-contract guards
+// the exact lines #263 changed.
+// Depends: kslot snapshot helpers (task.cpp).
+JARVIS_TEST(kstack_snapshot_null_page_slot_roundtrip,
+            "PRE: none | POST: none") {
+    uint64_t free_before = PMM::free_pages_ref();
+    static constexpr size_t KSLOT_SNAP_SIZE = 8 * arch::PAGE_SIZE + 4096;
+    static uint8_t s_live_buf[KSLOT_SNAP_SIZE];
+    static uint8_t s_craft_buf[KSLOT_SNAP_SIZE];
+    static uint8_t s_out_buf[KSLOT_SNAP_SIZE];
+    const size_t snap_bytes = kernel::kslot_snapshot_bytes();
+    JARVIS_ASSERT(snap_bytes <= KSLOT_SNAP_SIZE);
+
+    kernel::kslot_snapshot_capture(s_live_buf);
+    for (size_t idx = 0; idx < snap_bytes; ++idx) {
+        s_craft_buf[idx] = s_live_buf[idx];
+    }
+    for (size_t idx = 0; idx < arch::PAGE_SIZE; ++idx) {
+        s_craft_buf[arch::PAGE_SIZE + idx] = 0;
+    }
+    for (size_t idx = 8 * arch::PAGE_SIZE; idx < snap_bytes; ++idx) {
+        s_craft_buf[idx] = 0xA5;
+    }
+
+    kernel::kslot_snapshot_restore(s_craft_buf);
+    kernel::kslot_snapshot_capture(s_out_buf);
+    for (size_t idx = 0; idx < snap_bytes; ++idx) {
+        JARVIS_ASSERT_FMT(s_out_buf[idx] == s_craft_buf[idx],
+                          "kslot round-trip mismatch at byte %lx",
+                          static_cast<uint64_t>(idx));
+    }
+
+    kernel::kslot_snapshot_restore(s_live_buf);
+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
+                      "PMM delta %ld pages after kslot round-trip",
+                      (long)(PMM::free_pages_ref() - free_before));
+    JARVIS_TEST_PASS();
+}
+
 JARVIS_TEST(stack_alloc_user_stack_phys_freed_on_cleanup,
             "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
@@ -312,5 +363,6 @@ void register_stack_alloc_tests() {
     // v0.4.0 MP-6 tests (kstack_overflow_invokes_hook registered LAST).
     JARVIS_REGISTER_TEST(kstack_guard_base_unmapped);
     JARVIS_REGISTER_TEST(kstack_slot_snapshot_restore_safe);
+    JARVIS_REGISTER_TEST(kstack_snapshot_null_page_slot_roundtrip);
     JARVIS_REGISTER_TEST(kstack_overflow_invokes_hook);
 }

@@ -38,6 +38,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/arch/irq_guard.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/debug/debug_regs.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/test/test_isolate.hpp>
@@ -1238,6 +1239,71 @@ JARVIS_TEST(aarch64_clone_frame_readback, "PRE: none | POST: none") {
 }
 
 /// @brief Register all AArch64 architecture test cases.
+extern "C" uint64_t aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
+                                                 uint64_t elr);
+
+// Runmode: kernel
+// Testidea: v0.5.x issue #214 — EL1 sync faults must reach the fail-stop
+// handler, never the legacy silent skip. Part A pins the vector routing
+// statically (no fault executed): both EL1 sync slots (EL1t +0x000,
+// EL1h +0x200) must hold a `b` to a COMMON target (branch targets live
+// in .text, far outside the 2KB table by design). Part B pins the C
+// handler's recovery contract: with armed safe_copy recovery it applies
+// recovery (ELR_EL1 := recover IP) and returns 0 without dumping or
+// panicking. The non-recovery path (dump + debug panic) is deliberately
+// not executed.
+// Input: mrs vbar_el1 + slot decode; direct
+// aarch64_el1_unexpected_fault() call with armed sentinel recovery.
+// Expect: Both slots are `b` with identical targets (a single-slot
+// repointing to the skip path diverges and fails); handler returns 0,
+// recovery disarmed, ELR_EL1 reprogrammed to the sentinel; ELR_EL1
+// restored afterwards. LIMIT: target identity (vs default_exception)
+// is not pinned — el1_sync_unexpected is file-local in vectors.S and
+// naming it needs a .globl (production change, out of QE scope).
+// Depends: vectors.S layout, aarch64_el1_unexpected_fault (issue #214).
+JARVIS_TEST(aarch64_el1_sync_unexpected_failstop_routing) {
+    uint64_t vbar = 0;
+    asm volatile("mrs %0, vbar_el1" : "=r"(vbar));
+    const uint64_t slots[2] = {vbar + 0x000, vbar + 0x200};
+    uint64_t first_target = 0;
+    for (size_t s = 0; s < 2; ++s) {
+        const uint32_t instr =
+            *reinterpret_cast<uint32_t *>(slots[s]);
+        JARVIS_ASSERT_FMT((instr & 0xFC000000U) == 0x14000000U,
+                          "EL1 sync slot %lx holds 0x%x, not b",
+                          static_cast<uint64_t>(s), instr);
+        const int64_t off =
+            (static_cast<int64_t>(instr & 0x03FFFFFFU) << 38) >> 36;
+        const uint64_t target =
+            slots[s] + static_cast<uint64_t>(off);
+        if (s == 0) {
+            first_target = target;
+        } else {
+            JARVIS_ASSERT_FMT(target == first_target,
+                              "EL1 sync slots diverge: 0x%lx vs 0x%lx",
+                              target, first_target);
+        }
+    }
+
+    uint64_t saved_elr = 0;
+    asm volatile("mrs %0, elr_el1" : "=r"(saved_elr));
+    kernel::gs::user_access_recover_ip() = 0xA11CEULL;
+    const uint64_t ret = aarch64_el1_unexpected_fault(0x2000000ULL,
+                                                     0x400000ULL,
+                                                     saved_elr);
+    JARVIS_ASSERT_FMT(ret == 0, "recovery path returned %lx, want 0", ret);
+    JARVIS_ASSERT_FMT(kernel::gs::user_access_recover_ip() == 0,
+                      "recovery left armed: 0x%lx",
+                      kernel::gs::user_access_recover_ip());
+    uint64_t elr_now = 0;
+    asm volatile("mrs %0, elr_el1" : "=r"(elr_now));
+    JARVIS_ASSERT_FMT(elr_now == 0xA11CEULL,
+                      "ELR_EL1 is 0x%lx, want recovery sentinel", elr_now);
+    asm volatile("msr elr_el1, %0" ::"r"(saved_elr));
+    asm volatile("isb");
+    JARVIS_TEST_PASS();
+}
+
 void register_aarch64_tests() {
     Logger::info("Registering aarch64 architecture tests");
 
@@ -1273,6 +1339,7 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_el0_fault_wakes_waitpid_parent);  // #217
     JARVIS_REGISTER_TEST(aarch64_el0_fault_frame_in_debug_slot);  // #236
     JARVIS_REGISTER_TEST(aarch64_pl011_poll_idle_false);  // issue #245
+    JARVIS_REGISTER_TEST(aarch64_el1_sync_unexpected_failstop_routing);
 }
 
 #endif
