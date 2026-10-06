@@ -103,10 +103,14 @@ class IPC {
     static bool recv(Message &msg);
 
     /// @brief Sends and blocks until a reply arrives.
+    ///        Reply matching (issue #296): only a queued message whose
+    ///        sender_id is @p dest_id is consumed as the reply; anything
+    ///        else stays queued for its real consumer (signatures and
+    ///        wire layout unchanged).
     /// @param reply_max_size If non-zero, the reply is only consumed when it
-    ///        fits this budget (issue #11 fastpath); an oversized reply stays
-    ///        queued for a later RECEIVE.  Zero keeps the full-path contract
-    ///        (consume any reply).  Default 0 => byte-identical to v1.
+    ///        fits this budget (issue #11 fastpath); an oversized matching
+    ///        reply stays queued with immediate false (no block).  Zero keeps
+    ///        the full-path contract (consume the matching reply).
     static bool send_sync(uint64_t dest_id, const Message &msg, Message &reply,
                           uint32_t reply_max_size = 0);
 

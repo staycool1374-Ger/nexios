@@ -1,59 +1,22 @@
-diff --git a/userspace/debugd_proto.h b/userspace/debugd_proto.h
---- a/userspace/debugd_proto.h
-+++ b/userspace/debugd_proto.h
-@@ -37,8 +37,16 @@
- /* RSP packet ceiling (qSupported PacketSize we advertise). */
- #define DBG_RSP_MAX_PACKET 1024
- 
--/* x86_64 GDB register blob: 164 bytes, GDB order (debug_regs.cpp). */
-+/* Register-blob size follows the kernel arch-dependent GDB layout
-+ * (debug_regs.cpp: 164 x86_64 / 272 aarch64 / 264 riscv64), GDB order.
-+ * Compiler predefines only -- no build-system dependency. */
-+#if defined(__aarch64__)
-+#define DBG_BLOB_BYTES 272
-+#elif defined(__riscv)
-+#define DBG_BLOB_BYTES 264
-+#else
- #define DBG_BLOB_BYTES 164
-+#endif
- 
- static unsigned dbg_hex_val(char c) {
-     if (c >= '0' && c <= '9')
-diff --git a/userspace/debugd.c b/userspace/debugd.c
---- a/userspace/debugd.c
-+++ b/userspace/debugd.c
-@@ -107,11 +107,16 @@
-  * alive (session watchdog below). */
- static unsigned long g_last_byte_tick = 0;
- 
--static unsigned long g_reg_qwords[DBG_BLOB_BYTES / 8];
-+/* Round up: 164 is not a multiple of 8, and the kernel copies
-+ * debug_blob_bytes() (164/272/264 by arch) here. */
-+static unsigned long g_reg_qwords[(DBG_BLOB_BYTES + 7) / 8];
- static unsigned char g_mem_buf[1024];
- static struct DbgStopEvent g_stop_ev;
- static char g_packet[DBG_RSP_MAX_PACKET + 1];
--static char g_reply[2 * DBG_BLOB_BYTES + 64];
-+/* Reply ceiling: worst case is the hex of a full g_mem_buf read
-+ * (2*1024+1); the register-blob hex (2*272+1 on aarch64) and every
-+ * control reply fit inside the same bound. */
-+static char g_reply[2 * sizeof(g_mem_buf) + 64];
- 
- static unsigned long dbg_ticks(void) {
-     return (unsigned long)__syscall5(5, 0, 0, 0, 0);
-@@ -486,10 +491,11 @@
-     if (packet[1] == 'S') {
-         /* qSupported: minimal viable set; no-ack NOT offered (host
-          * keeps ACKing, which our retransmit loop relies on). */
--        return rsp_send_packet("PacketSize=1024;qXfer:features:read-;"
--                               "QStartNoAckMode-;swbreak+;hwbreak-;"
--                               "vContSupported-",
--                               91);
-+        static const char qsup[] =
-+            "PacketSize=1024;qXfer:features:read-;"
-+            "QStartNoAckMode-;swbreak+;hwbreak-;"
-+            "vContSupported-";
-+        return rsp_send_packet(qsup, sizeof(qsup) - 1);
+diff --git a/src/kernel/task/deadline_list.cpp b/src/kernel/task/deadline_list.cpp
+--- a/src/kernel/task/deadline_list.cpp
++++ b/src/kernel/task/deadline_list.cpp
+@@ -71,7 +71,16 @@ void DeadlineList::remove(TaskControlBlock &t) noexcept {
      }
-     return rsp_send_empty();
- }
+ 
+     TaskControlBlock *cur = head_;
+-    while (cur && cur != &t)
++    // Bounded walk (issue #297, mirrors insert): insert() routes every call
++    // through this scan first, so an unbounded walk here would hang before
++    // insert's own trip-count guard on a cyclic list. Fail stop instead.
++    size_t trips = 0;
++    while (cur && cur != &t) {
+         cur = cur->dl_next_;
++        if (++trips > size_) {
++            ENSURE(false && "deadline list cycle detected");
++            return;
++        }
++    }
+     if (!cur)
+         return;
+ 

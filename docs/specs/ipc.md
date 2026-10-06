@@ -47,16 +47,34 @@ Entry guard: `ENSURE(task.blocked_on_queue == &q)`.
   may only `return false` when the sender's own reply queue is genuinely empty.
   A delivered reply (`IPC::send` → WAKE into the sender's queue) must be
   consumed by the existing `pop(reply)` — "reply in own queue ⇒ success".
+- **Reply matching by sender (issue #296, IMPLEMENTED):** only a queued
+  message whose `sender_id` is the `send_sync` destination is ever consumed
+  as the reply (priority-min, FIFO within a priority among matching —
+  INV-P preserved). Non-matching messages (grants, pulses, other senders'
+  traffic, stale replies from anyone else) are never touched and stay
+  queued for their real consumer. Match key is `sender_id` only; type,
+  payload, and syscall signatures are untouched (no wire/task ABI change).
+  Same-sender stale replies remain indistinguishable by construction and
+  are accepted as current — declared residual; callers keep strict 1:1
+  request/reply pairing (e.g. vfsd authorize). A clamped oversized
+  matching reply stays queued with immediate `false` (issue #11 rule,
+  no block); dest death with nothing matching returns `false` with the
+  queue intact; spurious wakeups on non-matching arrivals re-block.
 - **Spin-wait:** the reply wait is a `hlt()` loop (not a bare pause-spin).
 
 ```
- peer terminated? ── no ──▶ wait for reply
-      │
-      ▼ yes
- reply in own queue? ── yes ──▶ pop(reply), success
+ loop: matching reply (sender==dest) queued? ── yes ──▶ pop, success
       │
       ▼ no
- return false
+ clamped with a matching-but-oversized reply? ── yes ──▶ false (stays queued)
+      │
+      ▼ no
+ peer terminated? ── no ──▶ block (reply_wait, hlt), wake re-checks
+      │
+      ▼ yes
+ unclamped match present? ── yes ──▶ consume next iteration
+      │
+      ▼ no ──▶ false (queue intact)
 ```
 
 ## 3. Mutex / PCP Contract

@@ -185,6 +185,67 @@ bool MessageQueue::pop_clamped(Message &msg, uint32_t max_size) {
     return true;
 }
 
+/// @brief Index of the highest-priority message from @p sender_id (issue
+///        #296).  Priority-min with first-index-wins ties — the same order
+///        as find_best_index, so selective removal preserves INV-P.
+/// @return IPC_MAX_QUEUE_MSG when no message from @p sender_id is queued.
+///         Caller MUST hold lock_.
+size_t MessageQueue::find_best_from_sender(uint64_t sender_id) const {
+    size_t best_prio = IPC_PRIORITY_LEVELS + 1;
+    size_t best_idx = IPC_MAX_QUEUE_MSG;
+    for (size_t i = 0; i < count; ++i) {
+        size_t idx = (head + i) % IPC_MAX_QUEUE_MSG;
+        if (msgs[idx].sender_id != sender_id)
+            continue;
+        if (msgs[idx].priority < best_prio) {
+            best_prio = msgs[idx].priority;
+            best_idx = idx;
+            if (best_prio == 0)
+                break;
+        }
+    }
+    return best_idx;
+}
+
+/// @brief Remove the highest-priority message from @p sender_id (issue #296).
+///        Non-matching messages are never touched.
+/// @return true with @p out filled; false when none is queued.
+bool MessageQueue::pop_from_sender(Message &out, uint64_t sender_id) {
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    size_t best_idx = find_best_from_sender(sender_id);
+    if (best_idx >= IPC_MAX_QUEUE_MSG)
+        return false;
+
+    out = msgs[best_idx];
+    remove_at(best_idx);
+    return true;
+}
+
+/// @brief pop_from_sender with the issue #11 clamp (issue #296): an
+///        oversized best matching message stays queued (returns false);
+///        non-matching messages never count as oversized and are never
+///        consumed.
+bool MessageQueue::pop_from_sender_clamped(Message &out, uint32_t max_size,
+                                            uint64_t sender_id) {
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    size_t best_idx = find_best_from_sender(sender_id);
+    if (best_idx >= IPC_MAX_QUEUE_MSG)
+        return false;
+    if (msgs[best_idx].data_size > max_size)
+        return false;
+
+    out = msgs[best_idx];
+    remove_at(best_idx);
+    return true;
+}
+
+/// @brief Non-destructive probe for a queued message from @p sender_id
+///        (issue #296, send_sync dest-death path).
+bool MessageQueue::has_from(uint64_t sender_id) {
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    return find_best_from_sender(sender_id) < IPC_MAX_QUEUE_MSG;
+}
+
 /// @brief Return the highest priority that has at least one message.
 /// @return IPC_PRIORITY_LEVELS if empty.
 size_t MessageQueue::highest_priority() const {
@@ -412,6 +473,12 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
 }
 
 /// @brief Send and block until a reply arrives (client-side synchronous IPC).
+///        Reply matching (issue #296): only a message whose sender_id is
+///        @p dest_id is ever consumed as the reply.  Non-matching messages
+///        (grants, pulses, other senders' traffic) are never touched — they
+///        stay queued for their real consumer.  All other dispositions are
+///        unchanged from the v1 contract (dest-death reply preservation,
+///        #11 oversized-stays-queued clamp, arrival-triggered wake).
 bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
                     uint32_t reply_max_size) {
     // Send the request message
@@ -426,25 +493,47 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
     bool was_blocked = false;
     IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id,
                     "ty=", msg.type, "q=", cur->msg_queue.count);
-    while (cur->msg_queue.is_empty()) {
+    for (;;) {
+        // Matching reply already queued (covers the reply-arrived-first
+        // and peer-died-after-reply cases): consume it without blocking.
+        // A clamped oversized match stays queued per the #11 contract.
+        bool got = (reply_max_size != 0)
+                       ? cur->msg_queue.pop_from_sender_clamped(
+                             reply, reply_max_size, dest_id)
+                       : cur->msg_queue.pop_from_sender(reply, dest_id);
+        if (got) {
+            cur->reply_wait = false;
+            if (was_blocked) {
+                cur->remaining_ticks = cur->period_ticks;
+            }
+            return true;
+        }
+        // Clamped with a matching-but-oversized reply queued: fail closed
+        // at once (no block) so the fastpath caller falls back to a full
+        // RECEIVE — the pre-#296 immediate-false contract, preserved.
+        if (reply_max_size != 0 && cur->msg_queue.has_from(dest_id)) {
+            cur->reply_wait = false;
+            if (was_blocked) {
+                cur->remaining_ticks = cur->period_ticks;
+            }
+            return false;
+        }
         // If destination died while we were waiting for a reply, bail out.
-        // BUT: a reply may already be queued (the peer delivered its reply and
-        // then terminated normally).  In that case the IPC contract is
-        // satisfied — a reply is waiting in our own queue — so we must NOT
-        // discard it; break out and let the pop() below consume it.  Only a
-        // genuinely empty queue means the peer died before replying.
+        // BUT: a reply may already be queued (the peer delivered its reply
+        // and then terminated normally).  In that case the IPC contract is
+        // satisfied — pop it above on the next iteration instead of
+        // discarding it; only a queue with genuinely nothing from the peer
+        // means the peer died before replying.  Non-matching messages are
+        // never consumed here, so the queue is left intact on failure.
         auto *dest = Scheduler::find_task(dest_id);
         if (!dest || dest->state == TaskState::TERMINATED) {
-            if (cur->msg_queue.is_empty()) {
-                IPC_SCHED_TRACE("[SYNC-FAIL]", "dest-gone-empty cur=", cur->id,
-                                "dest=", dest_id, "q=", cur->msg_queue.count,
-                                "x=", 0u);
-                return false;
+            if (reply_max_size == 0 && cur->msg_queue.has_from(dest_id)) {
+                continue; // unclamped match present: consume next iteration
             }
-            IPC_SCHED_TRACE("[SYNC-FAIL]", "dest-gone-reply cur=", cur->id,
+            IPC_SCHED_TRACE("[SYNC-FAIL]", "dest-gone cur=", cur->id,
                             "dest=", dest_id, "q=", cur->msg_queue.count,
                             "x=", 0u);
-            break;
+            return false;
         }
 
         cur->reply_wait = true;
@@ -460,18 +549,9 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
         } else {
             arch::hlt();
         }
+        // Resume (reply arrival or spurious non-matching wake): re-check
+        // for the matching reply at the top; otherwise re-block.
     }
-    cur->reply_wait = false;
-    if (was_blocked) {
-        cur->remaining_ticks = cur->period_ticks;
-    }
-
-    // Issue #11 fastpath: a non-zero reply clamp means an oversized reply is
-    // NOT consumed (stays queued for a later full RECEIVE).  Default 0 keeps
-    // the v1 full-path contract (consume any reply).
-    if (reply_max_size != 0)
-        return cur->msg_queue.pop_clamped(reply, reply_max_size);
-    return cur->msg_queue.pop(reply);
 }
 
 /// @brief Return a reference to a task's message queue (asserts existence).

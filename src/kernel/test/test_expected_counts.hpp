@@ -141,7 +141,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ipc_timeout",           7,    0,       0      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
     {"ipc_extended",          11,   0,       0      },  // size limits, mid-queue removal, timeout, inversion + 2 arrival-wake gate tests (issue #208)
     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
-    {"ipc_robustness",        7,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A)
+    {"ipc_robustness",       11,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A) + 4 send_sync reply-matching regressions (issue #296; mid-wait DestDeath skipped, see test)
     {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
 
     // vfs

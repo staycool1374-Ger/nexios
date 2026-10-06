@@ -98,6 +98,22 @@ struct MessageQueue {
     ///        an oversized best match is NOT removed (returns false).
     ///        Callers disambiguate empty-vs-oversized with is_empty().
     bool pop_clamped(Message &msg, uint32_t max_size);
+    /// @brief Pop the highest-priority message from @p sender_id only
+    ///        (issue #296): non-matching messages are never touched, so a
+    ///        send_sync waiter cannot eat another sender's message as its
+    ///        reply. FIFO within a priority among matching (INV-P kept).
+    /// @return true with @p out filled; false when no message from
+    ///         @p sender_id is queued.
+    bool pop_from_sender(Message &out, uint64_t sender_id);
+    /// @brief pop_from_sender with the issue #11 clamp: an oversized best
+    ///        matching message stays queued (returns false); non-matching
+    ///        messages never count as oversized and are never consumed.
+    bool pop_from_sender_clamped(Message &out, uint32_t max_size,
+                                 uint64_t sender_id);
+    /// @brief Non-destructive probe: is any message from @p sender_id
+    ///        queued? Used for the send_sync dest-death path (a reply that
+    ///        arrived before the peer died must still be consumed).
+    bool has_from(uint64_t sender_id);
 
     bool is_empty() const {
         return __atomic_load_n(&count, __ATOMIC_RELAXED) == 0;
@@ -118,6 +134,11 @@ struct MessageQueue {
     ///        Shared by pop() and pop_clamped() so the selection never drifts
     ///        (INV-P, paper §3.9).
     size_t find_best_index() const;
+    /// @brief find_best_index restricted to @p sender_id (issue #296).
+    ///        Same priority-min/first-index-wins order among matching, so
+    ///        selective removal cannot reorder or invert INV-P.
+    ///        Caller MUST hold lock_.  Returns IPC_MAX_QUEUE_MSG when none.
+    size_t find_best_from_sender(uint64_t sender_id) const;
     /// @brief Remove the message at @p best_idx (compaction + prio_bitmap
     ///        rebuild).  Caller MUST hold lock_.
     void remove_at(size_t best_idx);

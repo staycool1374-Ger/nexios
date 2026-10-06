@@ -5,6 +5,15 @@
 namespace kernel {
 
 void DeadlineList::insert(TaskControlBlock &t) noexcept {
+    // Issue #297 (live-caught wedge): self-heal against double-insert.
+    // Inserting an already-linked task — same head twice, a re-insert
+    // without a matching remove from any path (task, tick, restore) —
+    // links the task to itself (head self-loop) and every later insert
+    // spins forever in the walk below with zero diagnostic output.
+    // Unlink first (no-op when absent): the end state is then always a
+    // singly-linked member with an exact size_ count, whatever path led
+    // here. Cost is one bounded scan; membership is small.
+    remove(t);
     t.dl_next_ = nullptr;
     t.dl_prev_ = nullptr;
 
@@ -23,9 +32,18 @@ void DeadlineList::insert(TaskControlBlock &t) noexcept {
     }
 
     TaskControlBlock *cur = head_;
+    // Bounded walk (issue #297): a correct list visits at most size_
+    // nodes, so exceeding it proves a cycle (stray writer, dangling
+    // node, or a missed unlink elsewhere). Fail stop with location
+    // instead of hanging the machine silently for a harness timeout.
+    size_t trips = 0;
     while (cur->dl_next_ &&
            cur->dl_next_->deadline_ticks <= t.deadline_ticks) {
         cur = cur->dl_next_;
+        if (++trips > size_) {
+            ENSURE(false && "deadline list cycle detected");
+            return;
+        }
     }
 
     t.dl_next_ = cur->dl_next_;
@@ -51,8 +69,17 @@ void DeadlineList::remove(TaskControlBlock &t) noexcept {
     }
 
     TaskControlBlock *cur = head_;
-    while (cur && cur != &t)
+    // Bounded walk (issue #297, mirrors insert): insert() routes every call
+    // through this scan first, so an unbounded walk here would hang before
+    // insert's own trip-count guard on a cyclic list. Fail stop instead.
+    size_t trips = 0;
+    while (cur && cur != &t) {
         cur = cur->dl_next_;
+        if (++trips > size_) {
+            ENSURE(false && "deadline list cycle detected");
+            return;
+        }
+    }
     if (!cur)
         return;
 

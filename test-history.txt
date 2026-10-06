@@ -2470,3 +2470,22 @@
 2026-10-05 18:15:00 selftest PASSED: 139 FAILED: 0 TIME: 7250ms
 2026-10-05 19:52:00 shell_commands PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (host load 3.8)
 2026-10-05 19:58:00 shell_commands PASSED: 34 FAILED: 0 TIME: 1111ms
+2026-10-05 20:50:00 ipc_robustness PASSED: 7 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hung-in-new-test-8-SendSyncSkipsNonReply (pre-existing 7 pass, zero DMD)
+2026-10-05 21:05:00 ipc_robustness PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-pre-TEST_START-classic (zero S:, DMD flood)
+2026-10-05 22:35:00 ipc_robustness PASSED: 8 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hung-in-test-9-DestDeath (1-8 pass incl. new SkipsNonReply, no ENSURE panic)
+2026-10-05 22:45:00 ipc_robustness PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-pre-TEST_START-classic (zero S:, post-fix tree)
+2026-10-05 22:50:00 ipc_robustness PASSED: 8 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hung-in-test-9-DestDeath-again (zero DMD this run)
+2026-10-06 09:20:00 ipc_robustness PASSED: 8 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hung-in-test-9 (zero DMD entire run, helpers vanish-or-unpicked)
+2026-10-06 09:25:00 ipc_robustness PASSED: 8 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hang-inside-send_sync-test9 (T9 markers: spawned+delivered+sending, no return; peer alive-never-exits)
+2026-10-06 11:10:00 ipc_robustness PASSED: 8 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hung-in-test-9-DestDeath (peer-dispatch vs tick-death unresolved; mid-wait path kept for coverage, flake disclosed)
+2026-10-06 11:10:00 ipc_blocking PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-pre-TEST_START (DMDx771, zero S:)
+2026-10-06 11:15:00 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 3000ms (long-budget run, fast pass)
+2026-10-06 11:30:00 scheduler_edf PASSED: 7 FAILED: 0 TIME: 651ms
+2026-10-06 12:00:00 ipc_robustness PASSED: 11 FAILED: 0 TIME: 564ms
+2026-10-06 12:10:00 ipc_timeout PASSED: 6 FAILED: 1 TIME: 3000ms STATUS: FAIL-recv_timeout_fastpath_no_arm wheel live_count!=0 (2x, out of #296 scope, filing separately)
+2026-10-06 12:16:00 core PASSED: 530 FAILED: 0 TIME: 30703ms
+2026-10-06 12:20:00 selftest PASSED: 139 FAILED: 0 TIME: 7172ms
+2026-10-06 12:40:00 ipc_robustness PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-pre-TEST_START (zero S:, #280-classic)
+2026-10-06 12:45:00 ipc_robustness PASSED: 11 FAILED: 0 TIME: 554ms
+2026-10-06 12:46:00 core PASSED: 530 FAILED: 0 TIME: 30000ms
+2026-10-06 12:50:00 selftest PASSED: 139 FAILED: 0 TIME: 8203ms
