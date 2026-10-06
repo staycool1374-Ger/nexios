@@ -22,8 +22,6 @@
 /// @brief Fixed-size block memory pool allocator (k malloc).  O(1) alloc/free
 ///        via embedded free-list per pool class (9 classes, 16–4480 bytes).
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/memory/mempool_errors.hpp>
 
@@ -232,12 +230,37 @@ class MemPool {
     static Pool pools_[POOL_COUNT];
     static constinit bool ready_;
 
+    /// @brief No-pool sentinel (issue #254 H5/H6: was a bare
+    ///        `static_cast<size_t>(-1)` at the find_pool return site).
+    ///        Value-identical to the old literal.
+    static constexpr size_t kNoPool = static_cast<size_t>(-1);
+
     /// @brief Finds the smallest pool class that satisfies a given size.
     ///        Linear scan over POOL_COUNT (9) entries — O(1) with small
     ///        constant.
     /// @param size Requested allocation size.
-    /// @return Pool index, or POOL_COUNT if too large.
+    /// @return Pool index, or kNoPool if too large.
     static size_t find_pool(size_t size);
+
+    /// @brief Pop the head block of pool @p idx (issue #254 H8: shared by
+    ///        alloc/alloc_err — the pop + double-ENSURE sequence was
+    ///        duplicated).  Caller holds mempool_lock_.  WCET: O(1) flat.
+    /// @return Popped block index.
+    static size_t pop_block_locked(size_t idx);
+    /// @brief Push @p block_idx of pool @p idx back onto its free list
+    ///        (issue #254 H8: shared by free/free_err — the double-free
+    ///        ENSURE + poison + push + track sequence was duplicated).
+    ///        Caller holds mempool_lock_.  WCET: O(1) flat.
+    static void push_block_locked(size_t idx, uint8_t *block_ptr,
+                                  size_t block_idx);
+    /// @brief Locate the pool owning @p block (issue #254 H8: shared by
+    ///        free/free_err/contains/pin/unpin/is_block_pinned — the
+    ///        initialized-skip + range walk was duplicated six times).
+    ///        Lock-agnostic: callers hold mempool_lock_ except the
+    ///        lock-free contains() probe (unchanged from before).
+    /// @return true on hit with pool/offset/block indices filled.
+    static bool find_owner_pool(void *block, size_t &pool_idx_out,
+                                size_t &offset_out, size_t &block_idx_out);
 };
 
 } // namespace kernel

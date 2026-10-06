@@ -191,23 +191,30 @@ void PMM::rebuild_free_list() noexcept {
     }
 }
 
-/// @brief O(1) free-list KERNEL alloc for single pages, bitmap scan for
+/// @brief O(1) free-list alloc for single pages, bitmap scan for
 ///        multi-page contiguous requests (list rebuilt afterward).
+///        Shared kernel/user core (issue #254 H8): ownership is a
+///        compile-time bit, so both wrappers stay branch-identical to
+///        the old duplicated bodies.
 /// @param count Number of contiguous pages.
 /// @return Physical address or 0.
-uint64_t PMM::try_alloc_kernel(size_t count) {
+template <bool kUserOwned>
+uint64_t PMM::alloc_from_window_locked(size_t count) {
     if (count == 0) {
         return 0;
     }
     if (count == 1) {
         // O(1) fast path: pop from free list (pages within the allocatable
         // window).
-        if (free_head_ >= window_base_page_ &&
-            free_head_ < window_end_page_) {
+        if (is_free_head_valid(free_head_)) {
             uint64_t idx = free_head_;
             free_head_ = reinterpret_cast<uint64_t *>(free_list_)[idx];
             bitmap_set(idx);
-            owner_set_kernel(idx);
+            if constexpr (kUserOwned) {
+                owner_set_user(idx);
+            } else {
+                owner_set_kernel(idx);
+            }
             --free_pages_;
             return idx * PAGE_SIZE;
         }
@@ -217,7 +224,11 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
              ++idx) {
             if (!bitmap_test(idx)) {
                 bitmap_set(idx);
-                owner_set_kernel(idx);
+                if constexpr (kUserOwned) {
+                    owner_set_user(idx);
+                } else {
+                    owner_set_kernel(idx);
+                }
                 --free_pages_;
                 return idx * PAGE_SIZE;
             }
@@ -236,7 +247,11 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
         if (ok) {
             for (size_t j = 0; j < count; ++j) {
                 bitmap_set(idx + j);
-                owner_set_kernel(idx + j);
+                if constexpr (kUserOwned) {
+                    owner_set_user(idx + j);
+                } else {
+                    owner_set_kernel(idx + j);
+                }
                 --free_pages_;
             }
             rebuild_free_list();
@@ -246,55 +261,20 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
     return 0;
 }
 
+/// @brief O(1) free-list KERNEL alloc for single pages, bitmap scan for
+///        multi-page contiguous requests (list rebuilt afterward).
+/// @param count Number of contiguous pages.
+/// @return Physical address or 0.
+uint64_t PMM::try_alloc_kernel(size_t count) {
+    return alloc_from_window_locked<false>(count);
+}
+
 /// @brief O(1) free-list USER alloc for single pages, bitmap scan for
 ///        multi-page contiguous requests (list rebuilt afterward).
 /// @param count Number of contiguous pages.
 /// @return Physical address or 0.
 uint64_t PMM::try_alloc_user(size_t count) {
-    if (count == 0) {
-        return 0;
-    }
-    if (count == 1) {
-        if (free_head_ >= window_base_page_ &&
-            free_head_ < window_end_page_) {
-            uint64_t idx = free_head_;
-            free_head_ = reinterpret_cast<uint64_t *>(free_list_)[idx];
-            bitmap_set(idx);
-            owner_set_user(idx);
-            --free_pages_;
-            return idx * PAGE_SIZE;
-        }
-        for (uint64_t idx = window_base_page_; idx < window_end_page_;
-             ++idx) {
-            if (!bitmap_test(idx)) {
-                bitmap_set(idx);
-                owner_set_user(idx);
-                --free_pages_;
-                return idx * PAGE_SIZE;
-            }
-        }
-        return 0;
-    }
-    for (uint64_t idx = window_base_page_;
-         idx + count <= window_end_page_; ++idx) {
-        bool ok = true;
-        for (size_t j = 0; j < count; ++j) {
-            if (bitmap_test(idx + j)) {
-                ok = false;
-                break;
-            }
-        }
-        if (ok) {
-            for (size_t j = 0; j < count; ++j) {
-                bitmap_set(idx + j);
-                owner_set_user(idx + j);
-                --free_pages_;
-            }
-            rebuild_free_list();
-            return idx * PAGE_SIZE;
-        }
-    }
-    return 0;
+    return alloc_from_window_locked<true>(count);
 }
 
 /// @brief First window index at/after @p from with page-index color
@@ -308,12 +288,14 @@ static uint64_t first_congruent_from(uint64_t from, uint64_t color) {
     return start;
 }
 
-/// @brief Allocate one page of @p color with KERNEL ownership
-///        (issue #62).  Color-strided bitmap scan from the per-color
-///        cursor (wraps once); bitmap/owner/counter accounting mirrors
-///        try_alloc_kernel, then rebuild_free_list() re-syncs the free
-///        list the scan bypassed.  Caller holds pmm_lock_.
-uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
+/// @brief Allocate one page of @p color (issue #62).  Shared
+///        kernel/user core (issue #254 H8): ownership is a compile-time
+///        bit.  Color-strided bitmap scan from the per-color cursor
+///        (wraps once); bitmap/owner/counter accounting mirrors
+///        alloc_from_window_locked, then rebuild_free_list() re-syncs the
+///        free list the scan bypassed.  Caller holds pmm_lock_.
+template <bool kUserOwned>
+uint64_t PMM::alloc_colored_locked(uint64_t color) {
     constexpr uint64_t k_num = cache::NUM_COLORS;
     if (color >= k_num)
         return 0;
@@ -329,7 +311,11 @@ uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
         for (uint64_t idx = start; idx < limit; idx += k_num) {
             if (!bitmap_test(idx)) {
                 bitmap_set(idx);
-                owner_set_kernel(idx);
+                if constexpr (kUserOwned) {
+                    owner_set_user(idx);
+                } else {
+                    owner_set_kernel(idx);
+                }
                 --free_pages_;
                 color_cursor_[color] = idx + k_num;
                 rebuild_free_list();
@@ -341,34 +327,72 @@ uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
     return 0;
 }
 
+/// @brief Allocate one page of @p color with KERNEL ownership
+///        (issue #62).  Color-strided bitmap scan from the per-color
+///        cursor (wraps once); bitmap/owner/counter accounting mirrors
+///        try_alloc_kernel, then rebuild_free_list() re-syncs the free
+///        list the scan bypassed.  Caller holds pmm_lock_.
+uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
+    return alloc_colored_locked<false>(color);
+}
+
 /// @brief Allocate one page of @p color with USER ownership
 ///        (issue #62).  Same scan as the KERNEL variant above.
 uint64_t PMM::try_alloc_colored_user(uint64_t color) {
-    constexpr uint64_t k_num = cache::NUM_COLORS;
-    if (color >= k_num)
-        return 0;
-    uint64_t cur = color_cursor_[color];
-    if (cur < window_base_page_ || cur >= window_end_page_)
-        cur = window_base_page_;
-    uint64_t start0 = first_congruent_from(cur, color);
-    for (int pass = 0; pass < 2; ++pass) {
-        uint64_t start =
-            (pass == 0) ? start0
-                        : first_congruent_from(window_base_page_, color);
-        uint64_t limit = (pass == 0) ? window_end_page_ : start0;
-        for (uint64_t idx = start; idx < limit; idx += k_num) {
-            if (!bitmap_test(idx)) {
-                bitmap_set(idx);
-                owner_set_user(idx);
-                --free_pages_;
-                color_cursor_[color] = idx + k_num;
-                rebuild_free_list();
-                return idx * PAGE_SIZE;
-            }
-        }
-        cur = window_base_page_;
+    return alloc_colored_locked<true>(color);
+}
+
+PMM::OomOutcome PMM::run_oom_handler_locked(sync::IrqSpinLockGuard &lock) {
+    if (!oom_handler_) {
+        return {false, false};
     }
-    return 0;
+    lock.unlock();
+    bool retry = oom_handler_();
+    lock.lock();
+    return {true, retry};
+}
+
+void PMM::attribute_alloc_to_current(TaskControlBlock *cur, size_t count) {
+    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
+#if CONFIG_MEMORY_BUDGET
+        cur->memory_used_pages_ += count;
+#endif
+        if (cur->mem_alloc_ops_ < UINT64_MAX)
+            ++cur->mem_alloc_ops_;
+    }
+}
+
+bool PMM::is_over_budget(TaskControlBlock *cur, size_t count) {
+#if CONFIG_MEMORY_BUDGET
+    // Issue #20: per-task budget 0 == unlimited (no task sets a budget by
+    // default).  Without the > 0 guard every task (used=0, budget=0) would
+    // fail every alloc once the global default flipped ON.
+    if (!cur || cur->magic != TaskControlBlock::TCB_MAGIC ||
+        cur->memory_budget_pages_ == 0) {
+        return false;
+    }
+    if (count <= 1) {
+        return cur->memory_used_pages_ >= cur->memory_budget_pages_;
+    }
+    return cur->memory_used_pages_ + count > cur->memory_budget_pages_;
+#else
+    (void)cur;
+    (void)count;
+    return false;
+#endif
+}
+
+bool PMM::is_free_head_valid(uint64_t head) {
+    return head >= window_base_page_ && head < window_end_page_;
+}
+
+bool PMM::is_table_pool_configured() {
+    return is_table_pool_range_configured(page_table_pool_start_,
+                                          page_table_pool_end_);
+}
+
+bool PMM::is_table_pool_range_configured(uint64_t start, uint64_t end) {
+    return start != 0 && end != 0;
 }
 
 void PMM::reset_color_cursor() noexcept {
@@ -392,35 +416,22 @@ uint64_t PMM::alloc_page() {
     // unattributed by design — see spec §2.3.
     auto *cur = Scheduler::current_task();
 #if CONFIG_MEMORY_BUDGET
-    // Issue #20: per-task budget 0 == unlimited (no task sets a budget by
-    // default).  Without the > 0 guard every task (used=0, budget=0) would
-    // fail every alloc once the global default flipped ON.
-    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
-        cur->memory_budget_pages_ > 0 &&
-        cur->memory_used_pages_ >= cur->memory_budget_pages_) {
+    if (is_over_budget(cur, 1)) {
         return 0;
     }
 #endif
     uint64_t result = try_alloc_kernel(1);
     if (result) {
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
-#if CONFIG_MEMORY_BUDGET
-            cur->memory_used_pages_ += 1;
-#endif
-            if (cur->mem_alloc_ops_ < UINT64_MAX)
-                ++cur->mem_alloc_ops_;
-        }
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         return result;
     }
     // OOM handler: release lock, call handler, re-acquire for retry.
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
+    OomOutcome oom = run_oom_handler_locked(lock);
+    if (oom.handler_ran) {
         cur = Scheduler::current_task();
     }
+    bool oom_retry = oom.retry;
     if (oom_retry) {
         result = try_alloc_kernel(1);
     }
@@ -428,13 +439,7 @@ uint64_t PMM::alloc_page() {
         ASSERT(errors::PmmError::PMM_ERR_OOM);
     }
     if (result) {
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
-#if CONFIG_MEMORY_BUDGET
-            cur->memory_used_pages_ += 1;
-#endif
-            if (cur->mem_alloc_ops_ < UINT64_MAX)
-                ++cur->mem_alloc_ops_;
-        }
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
     }
     return result;
@@ -461,33 +466,22 @@ uint64_t PMM::alloc_contiguous(size_t count) {
     sync::IrqSpinLockGuard lock(pmm_lock_);
     auto *cur = Scheduler::current_task(); // issue #284: always-on read
 #if CONFIG_MEMORY_BUDGET
-    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
-    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
-        cur->memory_budget_pages_ > 0 &&
-        cur->memory_used_pages_ + count > cur->memory_budget_pages_) {
+    if (is_over_budget(cur, count)) {
         return 0;
     }
 #endif
     uint64_t result = try_alloc_kernel(count);
     if (result) {
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
-#if CONFIG_MEMORY_BUDGET
-            cur->memory_used_pages_ += count;
-#endif
-            if (cur->mem_alloc_ops_ < UINT64_MAX)
-                ++cur->mem_alloc_ops_;
-        }
+        attribute_alloc_to_current(cur, count);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
         return result;
     }
     // OOM handler: release lock, call handler, re-acquire for retry.
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
+    OomOutcome oom = run_oom_handler_locked(lock);
+    if (oom.handler_ran) {
         cur = Scheduler::current_task();
     }
+    bool oom_retry = oom.retry;
     if (oom_retry) {
         result = try_alloc_kernel(count);
     }
@@ -495,13 +489,7 @@ uint64_t PMM::alloc_contiguous(size_t count) {
         ASSERT(errors::PmmError::PMM_ERR_OOM);
     }
     if (result) {
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
-#if CONFIG_MEMORY_BUDGET
-            cur->memory_used_pages_ += count;
-#endif
-            if (cur->mem_alloc_ops_ < UINT64_MAX)
-                ++cur->mem_alloc_ops_;
-        }
+        attribute_alloc_to_current(cur, count);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
     }
     return result;
@@ -516,12 +504,7 @@ uint64_t PMM::alloc_user_page() {
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         return result;
     }
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
-    }
+    bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
         result = try_alloc_user(1);
     }
@@ -548,32 +531,22 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
     sync::IrqSpinLockGuard lock(pmm_lock_);
     auto *cur = Scheduler::current_task(); // issue #284: always-on read
 #if CONFIG_MEMORY_BUDGET
-    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
-    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
-        cur->memory_budget_pages_ > 0 &&
-        cur->memory_used_pages_ >= cur->memory_budget_pages_) {
+    if (is_over_budget(cur, 1)) {
         return 0;
     }
 #endif
     uint64_t result = try_alloc_colored_kernel(color);
     if (result) {
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
-#if CONFIG_MEMORY_BUDGET
-            cur->memory_used_pages_ += 1;
-#endif
-            if (cur->mem_alloc_ops_ < UINT64_MAX)
-                ++cur->mem_alloc_ops_;
-        }
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         return result;
     }
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
+    // OOM handler: release lock, call handler, re-acquire for retry.
+    OomOutcome oom = run_oom_handler_locked(lock);
+    if (oom.handler_ran) {
         cur = Scheduler::current_task();
     }
+    bool oom_retry = oom.retry;
     if (oom_retry) {
         result = try_alloc_colored_kernel(color);
     }
@@ -581,13 +554,7 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
         ASSERT(errors::PmmError::PMM_ERR_OOM);
     }
     if (result) {
-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
-#if CONFIG_MEMORY_BUDGET
-            cur->memory_used_pages_ += 1;
-#endif
-            if (cur->mem_alloc_ops_ < UINT64_MAX)
-                ++cur->mem_alloc_ops_;
-        }
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
     }
     return result;
@@ -603,12 +570,7 @@ errors::PmmError PMM::alloc_page_colored_err(uint64_t color,
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
     }
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
-    }
+    bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
         result = try_alloc_colored_kernel(color);
     }
@@ -630,12 +592,7 @@ uint64_t PMM::alloc_user_page_colored(uint64_t color) {
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         return result;
     }
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
-    }
+    bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
         result = try_alloc_colored_user(color);
     }
@@ -657,12 +614,7 @@ errors::PmmError PMM::alloc_user_page_colored_err(uint64_t color,
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
     }
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
-    }
+    bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
         result = try_alloc_colored_user(color);
     }
@@ -686,12 +638,7 @@ uint64_t PMM::alloc_user_contiguous(size_t count) {
         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
         return result;
     }
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
-    }
+    bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
         result = try_alloc_user(count);
     }
@@ -707,7 +654,7 @@ uint64_t PMM::alloc_user_contiguous(size_t count) {
 ///        Falls back to alloc_page() when the pool is exhausted.
 /// @return Physical address, or 0 (asserts on OOM).
 uint64_t PMM::alloc_page_table() {
-    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0) {
+    if (!is_table_pool_configured()) {
         return alloc_page();
     }
     {
@@ -757,7 +704,7 @@ void PMM::free_page(uint64_t phys_addr) {
         // free_page calls before pool is set up).
         uint64_t pool_start = page_table_pool_start_;
         uint64_t pool_end = page_table_pool_end_;
-        if (pool_start != 0 && pool_end != 0) {
+        if (is_table_pool_range_configured(pool_start, pool_end)) {
             uint64_t ps = pool_start / PAGE_SIZE;
             uint64_t pe = pool_end / PAGE_SIZE;
             if (index >= ps && index < pe) {
@@ -969,12 +916,7 @@ errors::PmmError PMM::alloc_page_err(uint64_t &out_phys_addr) {
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
     }
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
-    }
+    bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
         result = try_alloc_kernel(1);
     }
@@ -1002,12 +944,7 @@ errors::PmmError PMM::alloc_contiguous_err(size_t count,
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
     }
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
-    }
+    bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
         result = try_alloc_kernel(count);
     }
@@ -1030,12 +967,7 @@ errors::PmmError PMM::alloc_user_page_err(uint64_t &out_phys_addr) {
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
     }
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
-    }
+    bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
         result = try_alloc_user(1);
     }
@@ -1063,12 +995,7 @@ errors::PmmError PMM::alloc_user_contiguous_err(size_t count,
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
     }
-    bool oom_retry = false;
-    if (oom_handler_) {
-        lock.unlock();
-        oom_retry = oom_handler_();
-        lock.lock();
-    }
+    bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
         result = try_alloc_user(count);
     }
@@ -1085,7 +1012,7 @@ errors::PmmError PMM::alloc_user_contiguous_err(size_t count,
 /// @param[out] out_phys_addr Physical address on success.
 /// @return PmmError code.
 errors::PmmError PMM::alloc_page_table_err(uint64_t &out_phys_addr) {
-    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0) {
+    if (!is_table_pool_configured()) {
         return alloc_page_err(out_phys_addr);
     }
     uint64_t pool_start_page = page_table_pool_start_ / PAGE_SIZE;
@@ -1198,7 +1125,7 @@ void PMM::post_snapshot_overlay_clear() noexcept {
 
 void PMM::post_snapshot_overlay_apply() noexcept {
     sync::IrqSpinLockGuard lock(pmm_lock_);
-    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
+    if (!is_table_pool_configured())
         return;
     auto *bits = reinterpret_cast<uint8_t *>(bitmap_);
     uint64_t start_bit = page_table_pool_start_ / PAGE_SIZE;
@@ -1220,7 +1147,7 @@ void PMM::post_snapshot_overlay_apply() noexcept {
 }
 
 uint64_t PMM::pool_used_pages() noexcept {
-    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
+    if (!is_table_pool_configured())
         return 0;
     uint64_t start = page_table_pool_start_ / PAGE_SIZE;
     uint64_t end   = page_table_pool_end_   / PAGE_SIZE;
@@ -1233,7 +1160,7 @@ uint64_t PMM::pool_used_pages() noexcept {
 }
 
 uint64_t PMM::pool_total_pages() noexcept {
-    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
+    if (!is_table_pool_configured())
         return 0;
     return (page_table_pool_end_ - page_table_pool_start_) / PAGE_SIZE;
 }

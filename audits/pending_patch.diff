@@ -1,530 +1,1770 @@
-diff --git a/src/kernel/arch/aarch64/test_aarch64.cpp b/src/kernel/arch/aarch64/test_aarch64.cpp
-index dce4dd0f7..8f5e682d9 100644
---- a/src/kernel/arch/aarch64/test_aarch64.cpp
-+++ b/src/kernel/arch/aarch64/test_aarch64.cpp
-@@ -38,6 +38,7 @@
- #include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/arch/irq_guard.hpp>
-+#include <kernel/core/global_state.hpp>
- #include <kernel/debug/debug_regs.hpp>
- #include <kernel/test/test_sched_helpers.hpp>
- #include <kernel/test/test_isolate.hpp>
-@@ -1238,6 +1239,71 @@ JARVIS_TEST(aarch64_clone_frame_readback, "PRE: none | POST: none") {
+diff --git a/src/kernel/memory/address.hpp b/src/kernel/memory/address.hpp
+index 9ad423fa2..36c7dde8e 100644
+--- a/src/kernel/memory/address.hpp
++++ b/src/kernel/memory/address.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Type-safe physical and virtual address wrappers (MISRA C++ 2023
+ /// compliant).
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ namespace kernel {
+diff --git a/src/kernel/memory/checked_ptr.hpp b/src/kernel/memory/checked_ptr.hpp
+index d48f69f8c..a956da777 100644
+--- a/src/kernel/memory/checked_ptr.hpp
++++ b/src/kernel/memory/checked_ptr.hpp
+@@ -18,8 +18,6 @@
+  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  */
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <string.hpp>
+ #include <concepts.hpp>
+diff --git a/src/kernel/memory/integrity.cpp b/src/kernel/memory/integrity.cpp
+index 379dcb1e2..887f519d1 100644
+--- a/src/kernel/memory/integrity.cpp
++++ b/src/kernel/memory/integrity.cpp
+@@ -49,38 +49,52 @@ extern uint64_t _text_end[];
+ extern uint64_t _expected_code_crc[];
  }
  
- /// @brief Register all AArch64 architecture test cases.
-+extern "C" uint64_t aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
-+                                                 uint64_t elr);
++// Issue #254 H5: named expected section-marker tags (were raw literals at
++// the comparison sites below).  Values are linker-script ASCII tags;
++// mechanical substitution only, values byte-identical.
++static constexpr uint64_t kMagicTextStart = 0x545254535F545854ULL;
++static constexpr uint64_t kMagicTextEnd = 0x5F444E455F545854ULL;
++static constexpr uint64_t kMagicRodataStart = 0x545254535F544452ULL;
++static constexpr uint64_t kMagicRodataEnd = 0x5F444E455F544452ULL;
++static constexpr uint64_t kMagicDataStart = 0x545254535F415444ULL;
++static constexpr uint64_t kMagicDataEnd = 0x5F444E455F415444ULL;
++static constexpr uint64_t kMagicBssStart = 0x545254535F535342ULL;
++static constexpr uint64_t kMagicBssEnd = 0x5F444E455F535342ULL;
++static constexpr uint64_t kMagicStackBefore = 0x5F5246425F4B5453ULL;
++static constexpr uint64_t kMagicStackAfter = 0x5F5446415F4B5453ULL;
 +
-+// Runmode: kernel
-+// Testidea: v0.5.x issue #214 — EL1 sync faults must reach the fail-stop
-+// handler, never the legacy silent skip. Part A pins the vector routing
-+// statically (no fault executed): both EL1 sync slots (EL1t +0x000,
-+// EL1h +0x200) must hold a `b` to a COMMON target (branch targets live
-+// in .text, far outside the 2KB table by design). Part B pins the C
-+// handler's recovery contract: with armed safe_copy recovery it applies
-+// recovery (ELR_EL1 := recover IP) and returns 0 without dumping or
-+// panicking. The non-recovery path (dump + debug panic) is deliberately
-+// not executed.
-+// Input: mrs vbar_el1 + slot decode; direct
-+// aarch64_el1_unexpected_fault() call with armed sentinel recovery.
-+// Expect: Both slots are `b` with identical targets (a single-slot
-+// repointing to the skip path diverges and fails); handler returns 0,
-+// recovery disarmed, ELR_EL1 reprogrammed to the sentinel; ELR_EL1
-+// restored afterwards. LIMIT: target identity (vs default_exception)
-+// is not pinned — el1_sync_unexpected is file-local in vectors.S and
-+// naming it needs a .globl (production change, out of QE scope).
-+// Depends: vectors.S layout, aarch64_el1_unexpected_fault (issue #214).
-+JARVIS_TEST(aarch64_el1_sync_unexpected_failstop_routing) {
-+    uint64_t vbar = 0;
-+    asm volatile("mrs %0, vbar_el1" : "=r"(vbar));
-+    const uint64_t slots[2] = {vbar + 0x000, vbar + 0x200};
-+    uint64_t first_target = 0;
-+    for (size_t s = 0; s < 2; ++s) {
-+        const uint32_t instr =
-+            *reinterpret_cast<uint32_t *>(slots[s]);
-+        JARVIS_ASSERT_FMT((instr & 0xFC000000U) == 0x14000000U,
-+                          "EL1 sync slot %lx holds 0x%x, not b",
-+                          static_cast<uint64_t>(s), instr);
-+        const int64_t off =
-+            (static_cast<int64_t>(instr & 0x03FFFFFFU) << 38) >> 36;
-+        const uint64_t target =
-+            slots[s] + static_cast<uint64_t>(off);
-+        if (s == 0) {
-+            first_target = target;
-+        } else {
-+            JARVIS_ASSERT_FMT(target == first_target,
-+                              "EL1 sync slots diverge: 0x%lx vs 0x%lx",
-+                              target, first_target);
+ /// @brief Verify section markers — compares each linker-placed magic constant
+ ///        against its expected ASCII tag.  Fails via Logger on mismatch.
+ /// @return true if all markers match.
+ void check_section_markers() {
+-    if (_m_text_start != 0x545254535F545854ULL) {
++    if (_m_text_start != kMagicTextStart) {
+         panic("INTEGRITY: .text start marker corrupted");
+     }
+-    if (_m_text_end != 0x5F444E455F545854ULL) {
++    if (_m_text_end != kMagicTextEnd) {
+         panic("INTEGRITY: .text end marker corrupted");
+     }
+-    if (_m_rodata_start != 0x545254535F544452ULL) {
++    if (_m_rodata_start != kMagicRodataStart) {
+         panic("INTEGRITY: .rodata start marker corrupted");
+     }
+-    if (_m_rodata_end != 0x5F444E455F544452ULL) {
++    if (_m_rodata_end != kMagicRodataEnd) {
+         panic("INTEGRITY: .rodata end marker corrupted");
+     }
+-    if (_m_data_start != 0x545254535F415444ULL) {
++    if (_m_data_start != kMagicDataStart) {
+         panic("INTEGRITY: .data start marker corrupted");
+     }
+-    if (_m_data_end != 0x5F444E455F415444ULL) {
++    if (_m_data_end != kMagicDataEnd) {
+         panic("INTEGRITY: .data end marker corrupted");
+     }
+-    if (_m_bss_start != 0x545254535F535342ULL) {
++    if (_m_bss_start != kMagicBssStart) {
+         panic("INTEGRITY: .bss start marker corrupted");
+     }
+-    if (_m_bss_end != 0x5F444E455F535342ULL) {
++    if (_m_bss_end != kMagicBssEnd) {
+         panic("INTEGRITY: .bss end marker corrupted");
+     }
+-    if (_m_stack_before != 0x5F5246425F4B5453ULL) {
++    if (_m_stack_before != kMagicStackBefore) {
+         panic("INTEGRITY: stack before marker corrupted");
+     }
+-    if (_m_stack_after != 0x5F5446415F4B5453ULL) {
++    if (_m_stack_after != kMagicStackAfter) {
+         panic("INTEGRITY: stack after marker corrupted");
+     }
+ }
+diff --git a/src/kernel/memory/integrity.hpp b/src/kernel/memory/integrity.hpp
+index c218cb7ae..2e0c127d8 100644
+--- a/src/kernel/memory/integrity.hpp
++++ b/src/kernel/memory/integrity.hpp
+@@ -18,8 +18,6 @@
+  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  */
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ namespace kernel {
+diff --git a/src/kernel/memory/mempool.cpp b/src/kernel/memory/mempool.cpp
+index 4c5d39044..c3ec8bf26 100644
+--- a/src/kernel/memory/mempool.cpp
++++ b/src/kernel/memory/mempool.cpp
+@@ -29,6 +29,11 @@ namespace kernel {
+ 
+ static sync::SpinLock mempool_lock_{};
+ 
++// Issue #254 H5: pool-index validity predicate (cheap compare first).
++static bool has_pool(size_t idx) {
++    return idx < MemPool::POOL_COUNT;
++}
++
+ MemPool::Pool MemPool::pools_[POOL_COUNT] = {};
+ constinit bool MemPool::ready_ = false;
+ 
+@@ -93,22 +98,14 @@ void MemPool::init() {
+ void *MemPool::alloc(size_t size) {
+     sync::IrqSpinLockGuard lock(mempool_lock_);
+     size_t idx = find_pool(size);
+-    if (idx >= POOL_COUNT)
++    if (!has_pool(idx))
+         return nullptr;
+ 
+     auto &pool = pools_[idx];
+     if (pool.free_count == 0)
+         return nullptr;
+ 
+-    size_t block = pool.first_free;
+-    ENSURE(block < pool.block_count);
+-    ENSURE(pool.is_block_freed(block) &&
+-           "free-list corruption: alloc of already-allocated block");
+-    size_t *next =
+-        reinterpret_cast<size_t *>(pool.data + block * pool.block_size);
+-    pool.first_free = *next;
+-    --pool.free_count;
+-    pool.clear_block_freed(block);
++    size_t block = pop_block_locked(idx);
+ 
+     kernel::test::ResourceTracker::instance().track_mempool_alloc(idx);
+     return pool.data + block * pool.block_size;
+@@ -122,64 +119,39 @@ void MemPool::free(void *block) {
+ 
+     sync::IrqSpinLockGuard lock(mempool_lock_);
+ 
+-    for (size_t i = 0; i < POOL_COUNT; ++i) {
+-        auto &pool = pools_[i];
+-        if (!pool.initialized)
+-            continue;
+-
+-        uint8_t *start = pool.data;
+-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
+-        uint8_t *p = static_cast<uint8_t *>(block);
+-
+-        if (p >= start && p < end) {
+-            size_t offset = static_cast<size_t>(p - start);
+-            size_t block_idx = offset / pool.block_size;
+-            ENSURE(offset % pool.block_size == 0);
+-            ENSURE(block_idx < pool.block_count);
+-            // Pinned blocks are reserved (e.g. baseline TCBs referenced by the
+-            // test-isolation snapshot).  Never return them to the free list;
+-            // keep them allocated so they cannot be recycled onto test tasks.
+-            if (pool.is_block_pinned(block_idx)) {
+-                Logger::warn("MemPool::free: pinned block %zu in pool %zu",
+-                             block_idx, i);
+-                // Issue #234: pinned-free refusal enters the ring.
+-                kernel::log::dmesg_push_sev(
+-                    kernel::log::ErrorSubsystem::MEMPOOL,
+-                    kernel::log::kDmesgBase_MPOOL + 3,
+-                    kernel::log::LogSeverity::WARN, "pinned block kept",
+-                    block_idx);
+-                return;
+-            }
+-            ENSURE(!pool.is_block_freed(block_idx) && "double-free detected");
+-#ifdef CONFIG_DEBUG
+-            __builtin_memset(p, 0xDD, pool.block_size);
+-#endif
+-            pool.set_block_freed(block_idx);
+-            size_t *next = reinterpret_cast<size_t *>(p);
+-            *next = pool.first_free;
+-            pool.first_free = block_idx;
+-            ++pool.free_count;
+-            kernel::test::ResourceTracker::instance().track_mempool_free(i);
+-            return;
+-        }
++    size_t i = 0;
++    size_t offset = 0;
++    size_t block_idx = 0;
++    if (!find_owner_pool(block, i, offset, block_idx))
++        return;
++    auto &pool = pools_[i];
++    ENSURE(offset % pool.block_size == 0);
++    ENSURE(block_idx < pool.block_count);
++    // Pinned blocks are reserved (e.g. baseline TCBs referenced by the
++    // test-isolation snapshot).  Never return them to the free list;
++    // keep them allocated so they cannot be recycled onto test tasks.
++    if (pool.is_block_pinned(block_idx)) {
++        Logger::warn("MemPool::free: pinned block %zu in pool %zu",
++                     block_idx, i);
++        // Issue #234: pinned-free refusal enters the ring.
++        kernel::log::dmesg_push_sev(
++            kernel::log::ErrorSubsystem::MEMPOOL,
++            kernel::log::kDmesgBase_MPOOL + 3,
++            kernel::log::LogSeverity::WARN, "pinned block kept",
++            block_idx);
++        return;
+     }
++    push_block_locked(i, static_cast<uint8_t *>(block), block_idx);
+ }
+ /// @param ptr Pointer to test.
+ /// @return true if the pointer is owned by any initialised pool.
+ bool MemPool::contains(void *ptr) {
+     if (!ptr)
+         return false;
+-    uint8_t *p = static_cast<uint8_t *>(ptr);
+-    for (size_t i = 0; i < POOL_COUNT; ++i) {
+-        auto &pool = pools_[i];
+-        if (!pool.initialized)
+-            continue;
+-        uint8_t *start = pool.data;
+-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
+-        if (p >= start && p < end)
+-            return true;
+-    }
+-    return false;
++    size_t i = 0;
++    size_t offset = 0;
++    size_t block_idx = 0;
++    return find_owner_pool(ptr, i, offset, block_idx);
+ }
+ 
+ /// @brief Find the smallest initialised pool class whose block_size >= size.
+@@ -191,7 +163,58 @@ size_t MemPool::find_pool(size_t size) {
+             return i;
+         }
+     }
+-    return static_cast<size_t>(-1);
++    return kNoPool;
++}
++
++size_t MemPool::pop_block_locked(size_t idx) {
++    // WCET: O(1) flat pop (single-call depth from alloc/alloc_err).
++    auto &pool = pools_[idx];
++    size_t block = pool.first_free;
++    ENSURE(block < pool.block_count);
++    ENSURE(pool.is_block_freed(block) &&
++           "free-list corruption: alloc of already-allocated block");
++    size_t *next =
++        reinterpret_cast<size_t *>(pool.data + block * pool.block_size);
++    pool.first_free = *next;
++    --pool.free_count;
++    pool.clear_block_freed(block);
++    return block;
++}
++
++void MemPool::push_block_locked(size_t idx, uint8_t *block_ptr,
++                                size_t block_idx) {
++    // WCET: O(1) flat push (single-call depth from free/free_err).
++    auto &pool = pools_[idx];
++    ENSURE(!pool.is_block_freed(block_idx) && "double-free detected");
++#ifdef CONFIG_DEBUG
++    __builtin_memset(block_ptr, 0xDD, pool.block_size);
++#endif
++    pool.set_block_freed(block_idx);
++    size_t *next = reinterpret_cast<size_t *>(block_ptr);
++    *next = pool.first_free;
++    pool.first_free = block_idx;
++    ++pool.free_count;
++    kernel::test::ResourceTracker::instance().track_mempool_free(idx);
++}
++
++bool MemPool::find_owner_pool(void *block, size_t &pool_idx_out,
++                              size_t &offset_out, size_t &block_idx_out) {
++    uint8_t *p = static_cast<uint8_t *>(block);
++    for (size_t i = 0; i < POOL_COUNT; ++i) {
++        auto &pool = pools_[i];
++        if (!pool.initialized)
++            continue;
++        uint8_t *start = pool.data;
++        uint8_t *end = pool.data + pool.block_size * pool.block_count;
++        if (p >= start && p < end) {
++            size_t offset = static_cast<size_t>(p - start);
++            offset_out = offset;
++            block_idx_out = offset / pool.block_size;
++            pool_idx_out = i;
++            return true;
 +        }
 +    }
-+
-+    uint64_t saved_elr = 0;
-+    asm volatile("mrs %0, elr_el1" : "=r"(saved_elr));
-+    kernel::gs::user_access_recover_ip() = 0xA11CEULL;
-+    const uint64_t ret = aarch64_el1_unexpected_fault(0x2000000ULL,
-+                                                     0x400000ULL,
-+                                                     saved_elr);
-+    JARVIS_ASSERT_FMT(ret == 0, "recovery path returned %lx, want 0", ret);
-+    JARVIS_ASSERT_FMT(kernel::gs::user_access_recover_ip() == 0,
-+                      "recovery left armed: 0x%lx",
-+                      kernel::gs::user_access_recover_ip());
-+    uint64_t elr_now = 0;
-+    asm volatile("mrs %0, elr_el1" : "=r"(elr_now));
-+    JARVIS_ASSERT_FMT(elr_now == 0xA11CEULL,
-+                      "ELR_EL1 is 0x%lx, want recovery sentinel", elr_now);
-+    asm volatile("msr elr_el1, %0" ::"r"(saved_elr));
-+    asm volatile("isb");
-+    JARVIS_TEST_PASS();
-+}
-+
- void register_aarch64_tests() {
-     Logger::info("Registering aarch64 architecture tests");
- 
-@@ -1273,6 +1339,7 @@ void register_aarch64_tests() {
-     JARVIS_REGISTER_TEST(aarch64_el0_fault_wakes_waitpid_parent);  // #217
-     JARVIS_REGISTER_TEST(aarch64_el0_fault_frame_in_debug_slot);  // #236
-     JARVIS_REGISTER_TEST(aarch64_pl011_poll_idle_false);  // issue #245
-+    JARVIS_REGISTER_TEST(aarch64_el1_sync_unexpected_failstop_routing);
++    return false;
  }
  
- #endif
-\ No newline at end of file
-diff --git a/src/kernel/test/test_checked_ptr_api.cpp b/src/kernel/test/test_checked_ptr_api.cpp
-index 6b56504ea..c7a8ccafb 100644
---- a/src/kernel/test/test_checked_ptr_api.cpp
-+++ b/src/kernel/test/test_checked_ptr_api.cpp
-@@ -40,13 +40,18 @@
+ // ---------------------------------------------------------------------------
+@@ -305,61 +328,40 @@ size_t MemPool::pool_data_bytes() {
  
- #include <test.hpp>
- #include <logger.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/core/global_state.hpp>
-+#include <kernel/kernel.hpp>
- #include <kernel/memory/checked_ptr.hpp>
- #include <kernel/ipc/death_notify.hpp>
- #include <kernel/ipc/pager_registry.hpp>
-+#include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/vfs/vfs.hpp>
- #include <signal.hpp>
- #include <string.hpp>
-+#include "test_sched_helpers.hpp"
- 
- using namespace kernel;
- 
-@@ -123,6 +128,26 @@ void expect_rejected(const SweepResult &result) {
-     JARVIS_ASSERT(!result.write);
- }
- 
-+#if defined(CONFIG_ARCH_X86_64)
-+/// @brief Dispatch a REAL kernel task (prio 11) and wait for termination,
-+///        mirroring the syscall bridge tests (issue #30 pattern).
-+TaskControlBlock *run_recovery_task(void (*entry)()) {
-+    auto *t = TaskControlBlock::create(entry, 11, 10);
-+    if (t == nullptr)
-+        return nullptr;
-+    Scheduler::add_task(*t);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
-+    return t;
-+}
-+
-+void release_recovery_task(TaskControlBlock *t) {
-+    if (t == nullptr)
+ void MemPool::pin_block(void *block) {
+     sync::IrqSpinLockGuard lock(mempool_lock_);
+-    uint8_t *p = static_cast<uint8_t *>(block);
+-    for (size_t i = 0; i < POOL_COUNT; ++i) {
+-        auto &pool = pools_[i];
+-        if (!pool.initialized)
+-            continue;
+-        uint8_t *start = pool.data;
+-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
+-        if (p >= start && p < end) {
+-            size_t offset = static_cast<size_t>(p - start);
+-            size_t block_idx = offset / pool.block_size;
+-            if (offset % pool.block_size == 0 && block_idx < pool.block_count) {
+-                ENSURE(!pool.is_block_freed(block_idx) &&
+-                       "pin_block: cannot pin a free-list block");
+-                pool.set_block_pinned(block_idx);
+-            }
+-            return;
+-        }
++    size_t i = 0;
++    size_t offset = 0;
++    size_t block_idx = 0;
++    if (!find_owner_pool(block, i, offset, block_idx))
 +        return;
-+    kernel::test::terminate_if_live(t);
-+}
-+#endif // defined(CONFIG_ARCH_X86_64)
-+
- } // namespace
- 
- // Runmode: kernel
-@@ -354,6 +379,48 @@ JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
-     JARVIS_TEST_PASS();
++    auto &pool = pools_[i];
++    if (offset % pool.block_size == 0 && block_idx < pool.block_count) {
++        ENSURE(!pool.is_block_freed(block_idx) &&
++               "pin_block: cannot pin a free-list block");
++        pool.set_block_pinned(block_idx);
+     }
  }
  
-+#if defined(CONFIG_ARCH_X86_64)
+ void MemPool::unpin_block(void *block) {
+     sync::IrqSpinLockGuard lock(mempool_lock_);
+-    uint8_t *p = static_cast<uint8_t *>(block);
+-    for (size_t i = 0; i < POOL_COUNT; ++i) {
+-        auto &pool = pools_[i];
+-        if (!pool.initialized)
+-            continue;
+-        uint8_t *start = pool.data;
+-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
+-        if (p >= start && p < end) {
+-            size_t offset = static_cast<size_t>(p - start);
+-            size_t block_idx = offset / pool.block_size;
+-            if (offset % pool.block_size == 0 && block_idx < pool.block_count)
+-                pool.clear_block_pinned(block_idx);
+-            return;
+-        }
+-    }
++    size_t i = 0;
++    size_t offset = 0;
++    size_t block_idx = 0;
++    if (!find_owner_pool(block, i, offset, block_idx))
++        return;
++    auto &pool = pools_[i];
++    if (offset % pool.block_size == 0 && block_idx < pool.block_count)
++        pool.clear_block_pinned(block_idx);
+ }
+ 
+ bool MemPool::is_block_pinned(void *block) {
+-    uint8_t *p = static_cast<uint8_t *>(block);
+-    for (size_t i = 0; i < POOL_COUNT; ++i) {
+-        auto &pool = pools_[i];
+-        if (!pool.initialized)
+-            continue;
+-        uint8_t *start = pool.data;
+-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
+-        if (p >= start && p < end) {
+-            size_t offset = static_cast<size_t>(p - start);
+-            size_t block_idx = offset / pool.block_size;
+-            if (offset % pool.block_size == 0 && block_idx < pool.block_count)
+-                return pool.is_block_pinned(block_idx);
+-            return false;
+-        }
+-    }
++    size_t i = 0;
++    size_t offset = 0;
++    size_t block_idx = 0;
++    if (!find_owner_pool(block, i, offset, block_idx))
++        return false;
++    auto &pool = pools_[i];
++    if (offset % pool.block_size == 0 && block_idx < pool.block_count)
++        return pool.is_block_pinned(block_idx);
+     return false;
+ }
+ 
+@@ -385,7 +387,7 @@ MemPoolError MemPool::alloc_err(size_t size, void *&out_ptr) {
+     sync::IrqSpinLockGuard lock(mempool_lock_);
+ 
+     size_t idx = find_pool(size);
+-    if (idx >= POOL_COUNT) {
++    if (!has_pool(idx)) {
+         return MEMPOOL_ERR_TOO_LARGE;
+     }
+ 
+@@ -394,15 +396,7 @@ MemPoolError MemPool::alloc_err(size_t size, void *&out_ptr) {
+         return MEMPOOL_ERR_OOM;
+     }
+ 
+-    size_t block = pool.first_free;
+-    ENSURE(block < pool.block_count);
+-    ENSURE(pool.is_block_freed(block) &&
+-           "free-list corruption: alloc of already-allocated block");
+-    size_t *next =
+-        reinterpret_cast<size_t *>(pool.data + block * pool.block_size);
+-    pool.first_free = *next;
+-    --pool.free_count;
+-    pool.clear_block_freed(block);
++    size_t block = pop_block_locked(idx);
+ 
+     kernel::test::ResourceTracker::instance().track_mempool_alloc(idx);
+     out_ptr = pool.data + block * pool.block_size;
+@@ -419,37 +413,20 @@ MemPoolError MemPool::free_err(void *block) {
+ 
+     sync::IrqSpinLockGuard lock(mempool_lock_);
+ 
+-    for (size_t i = 0; i < POOL_COUNT; ++i) {
+-        auto &pool = pools_[i];
+-        if (!pool.initialized)
+-            continue;
+-
+-        uint8_t *start = pool.data;
+-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
+-        uint8_t *p = static_cast<uint8_t *>(block);
+-
+-        if (p >= start && p < end) {
+-            size_t offset = static_cast<size_t>(p - start);
+-            size_t block_idx = offset / pool.block_size;
+-            ENSURE(offset % pool.block_size == 0);
+-            ENSURE(block_idx < pool.block_count);
+-            // Pinned blocks stay allocated (see MemPool::free).
+-            if (pool.is_block_pinned(block_idx))
+-                return MEMPOOL_ERR_OK;
+-            ENSURE(!pool.is_block_freed(block_idx) && "double-free detected");
+-#ifdef CONFIG_DEBUG
+-            __builtin_memset(p, 0xDD, pool.block_size);
+-#endif
+-            pool.set_block_freed(block_idx);
+-            size_t *next = reinterpret_cast<size_t *>(p);
+-            *next = pool.first_free;
+-            pool.first_free = block_idx;
+-            ++pool.free_count;
+-            kernel::test::ResourceTracker::instance().track_mempool_free(i);
+-            return MEMPOOL_ERR_OK;
+-        }
++    size_t i = 0;
++    size_t offset = 0;
++    size_t block_idx = 0;
++    if (!find_owner_pool(block, i, offset, block_idx)) {
++        return MEMPOOL_ERR_INVALID_PTR;
+     }
+-    return MEMPOOL_ERR_INVALID_PTR;
++    auto &pool = pools_[i];
++    ENSURE(offset % pool.block_size == 0);
++    ENSURE(block_idx < pool.block_count);
++    // Pinned blocks stay allocated (see MemPool::free).
++    if (pool.is_block_pinned(block_idx))
++        return MEMPOOL_ERR_OK;
++    push_block_locked(i, static_cast<uint8_t *>(block), block_idx);
++    return MEMPOOL_ERR_OK;
+ }
+ 
+ MemPoolError MemPool::reserve(size_t pool_idx, size_t count) {
+diff --git a/src/kernel/memory/mempool.hpp b/src/kernel/memory/mempool.hpp
+index 291423c80..b8c33e83d 100644
+--- a/src/kernel/memory/mempool.hpp
++++ b/src/kernel/memory/mempool.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Fixed-size block memory pool allocator (k malloc).  O(1) alloc/free
+ ///        via embedded free-list per pool class (9 classes, 16–4480 bytes).
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/memory/mempool_errors.hpp>
+ 
+@@ -232,12 +230,37 @@ class MemPool {
+     static Pool pools_[POOL_COUNT];
+     static constinit bool ready_;
+ 
++    /// @brief No-pool sentinel (issue #254 H5/H6: was a bare
++    ///        `static_cast<size_t>(-1)` at the find_pool return site).
++    ///        Value-identical to the old literal.
++    static constexpr size_t kNoPool = static_cast<size_t>(-1);
 +
-+// Runmode: kernel
-+// Testidea: A non-#PF vector must not consume armed safe_copy fault
-+//           recovery (issue #252): pre-fix, ANY vector took the ungated
-+//           recovery branch — clobbering the frame RIP and disarming
-+//           recovery (in production this skipped tail EOI and wedged the
-+//           APIC). Post-fix the branch is gated on vector 14.
-+// Input: Dispatched kernel task arms g_user_access_recover_ip, plants a
-+//        frame marker, and calls handle_interrupt_c(0xFF) synchronously.
-+//        0xFF (spurious) runs the full dispatch tail incl. EOI but no
-+//        scheduler tick: a 0xE0/tick or direct on_tick() variant wedges
-+//        the kernel when driven synchronously from a non-harness task
-+//        (filed kernel bug — task-context on_tick + termination race),
-+//        so the gate is pinned on the spurious vector instead. The
-+//        vector-14 consume side is pinned by the real-#PF test above.
-+// Expect: Recovery still armed, frame marker intact. Pre-fix both are
-+//         clobbered (clean FAIL, no wedge).
-+// Depends: handle_interrupt_c vector gate (kernel.cpp:2168).
-+JARVIS_TEST(checked_ptr_api_safe_copy_non_pf_vector_preserves_recovery,
-+            "PRE: vfsd, iocd | POST: none") {
-+    static uint64_t g_recover_after = 0;
-+    static uint64_t g_rip_after = 0;
-+    auto *t = run_recovery_task([]() {
-+        kernel::gs::user_access_recover_ip() = 0xA11CEULL;
-+        uint64_t regs[22] = {};
-+        regs[17] = 0xBEEFULL;
-+        handle_interrupt_c(0xFF, 0, 0x1000, regs, 0);
-+        g_recover_after = kernel::gs::user_access_recover_ip();
-+        g_rip_after = regs[17];
-+        kernel::gs::user_access_recover_ip() = 0;
-+    });
-+    JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT_EQ(0xA11CEULL, g_recover_after);
-+    JARVIS_ASSERT_EQ(0xBEEFULL, g_rip_after);
-+    release_recovery_task(t);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
+     /// @brief Finds the smallest pool class that satisfies a given size.
+     ///        Linear scan over POOL_COUNT (9) entries — O(1) with small
+     ///        constant.
+     /// @param size Requested allocation size.
+-    /// @return Pool index, or POOL_COUNT if too large.
++    /// @return Pool index, or kNoPool if too large.
+     static size_t find_pool(size_t size);
++
++    /// @brief Pop the head block of pool @p idx (issue #254 H8: shared by
++    ///        alloc/alloc_err — the pop + double-ENSURE sequence was
++    ///        duplicated).  Caller holds mempool_lock_.  WCET: O(1) flat.
++    /// @return Popped block index.
++    static size_t pop_block_locked(size_t idx);
++    /// @brief Push @p block_idx of pool @p idx back onto its free list
++    ///        (issue #254 H8: shared by free/free_err — the double-free
++    ///        ENSURE + poison + push + track sequence was duplicated).
++    ///        Caller holds mempool_lock_.  WCET: O(1) flat.
++    static void push_block_locked(size_t idx, uint8_t *block_ptr,
++                                  size_t block_idx);
++    /// @brief Locate the pool owning @p block (issue #254 H8: shared by
++    ///        free/free_err/contains/pin/unpin/is_block_pinned — the
++    ///        initialized-skip + range walk was duplicated six times).
++    ///        Lock-agnostic: callers hold mempool_lock_ except the
++    ///        lock-free contains() probe (unchanged from before).
++    /// @return true on hit with pool/offset/block indices filled.
++    static bool find_owner_pool(void *block, size_t &pool_idx_out,
++                                size_t &offset_out, size_t &block_idx_out);
+ };
+ 
+ } // namespace kernel
+diff --git a/src/kernel/memory/mempool_errors.hpp b/src/kernel/memory/mempool_errors.hpp
+index 596ac64cb..32c5d51c7 100644
+--- a/src/kernel/memory/mempool_errors.hpp
++++ b/src/kernel/memory/mempool_errors.hpp
+@@ -18,8 +18,6 @@
+  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  */
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <assert.hpp>
+ 
+diff --git a/src/kernel/memory/pmm.cpp b/src/kernel/memory/pmm.cpp
+index a650df79b..3ca57b552 100644
+--- a/src/kernel/memory/pmm.cpp
++++ b/src/kernel/memory/pmm.cpp
+@@ -191,23 +191,30 @@ void PMM::rebuild_free_list() noexcept {
+     }
+ }
+ 
+-/// @brief O(1) free-list KERNEL alloc for single pages, bitmap scan for
++/// @brief O(1) free-list alloc for single pages, bitmap scan for
+ ///        multi-page contiguous requests (list rebuilt afterward).
++///        Shared kernel/user core (issue #254 H8): ownership is a
++///        compile-time bit, so both wrappers stay branch-identical to
++///        the old duplicated bodies.
+ /// @param count Number of contiguous pages.
+ /// @return Physical address or 0.
+-uint64_t PMM::try_alloc_kernel(size_t count) {
++template <bool kUserOwned>
++uint64_t PMM::alloc_from_window_locked(size_t count) {
+     if (count == 0) {
+         return 0;
+     }
+     if (count == 1) {
+         // O(1) fast path: pop from free list (pages within the allocatable
+         // window).
+-        if (free_head_ >= window_base_page_ &&
+-            free_head_ < window_end_page_) {
++        if (is_free_head_valid(free_head_)) {
+             uint64_t idx = free_head_;
+             free_head_ = reinterpret_cast<uint64_t *>(free_list_)[idx];
+             bitmap_set(idx);
+-            owner_set_kernel(idx);
++            if constexpr (kUserOwned) {
++                owner_set_user(idx);
++            } else {
++                owner_set_kernel(idx);
++            }
+             --free_pages_;
+             return idx * PAGE_SIZE;
+         }
+@@ -217,7 +224,11 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
+              ++idx) {
+             if (!bitmap_test(idx)) {
+                 bitmap_set(idx);
+-                owner_set_kernel(idx);
++                if constexpr (kUserOwned) {
++                    owner_set_user(idx);
++                } else {
++                    owner_set_kernel(idx);
++                }
+                 --free_pages_;
+                 return idx * PAGE_SIZE;
+             }
+@@ -236,7 +247,11 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
+         if (ok) {
+             for (size_t j = 0; j < count; ++j) {
+                 bitmap_set(idx + j);
+-                owner_set_kernel(idx + j);
++                if constexpr (kUserOwned) {
++                    owner_set_user(idx + j);
++                } else {
++                    owner_set_kernel(idx + j);
++                }
+                 --free_pages_;
+             }
+             rebuild_free_list();
+@@ -246,55 +261,20 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
+     return 0;
+ }
+ 
++/// @brief O(1) free-list KERNEL alloc for single pages, bitmap scan for
++///        multi-page contiguous requests (list rebuilt afterward).
++/// @param count Number of contiguous pages.
++/// @return Physical address or 0.
++uint64_t PMM::try_alloc_kernel(size_t count) {
++    return alloc_from_window_locked<false>(count);
 +}
 +
-+#endif // defined(CONFIG_ARCH_X86_64)
+ /// @brief O(1) free-list USER alloc for single pages, bitmap scan for
+ ///        multi-page contiguous requests (list rebuilt afterward).
+ /// @param count Number of contiguous pages.
+ /// @return Physical address or 0.
+ uint64_t PMM::try_alloc_user(size_t count) {
+-    if (count == 0) {
+-        return 0;
+-    }
+-    if (count == 1) {
+-        if (free_head_ >= window_base_page_ &&
+-            free_head_ < window_end_page_) {
+-            uint64_t idx = free_head_;
+-            free_head_ = reinterpret_cast<uint64_t *>(free_list_)[idx];
+-            bitmap_set(idx);
+-            owner_set_user(idx);
+-            --free_pages_;
+-            return idx * PAGE_SIZE;
+-        }
+-        for (uint64_t idx = window_base_page_; idx < window_end_page_;
+-             ++idx) {
+-            if (!bitmap_test(idx)) {
+-                bitmap_set(idx);
+-                owner_set_user(idx);
+-                --free_pages_;
+-                return idx * PAGE_SIZE;
+-            }
+-        }
+-        return 0;
+-    }
+-    for (uint64_t idx = window_base_page_;
+-         idx + count <= window_end_page_; ++idx) {
+-        bool ok = true;
+-        for (size_t j = 0; j < count; ++j) {
+-            if (bitmap_test(idx + j)) {
+-                ok = false;
+-                break;
+-            }
+-        }
+-        if (ok) {
+-            for (size_t j = 0; j < count; ++j) {
+-                bitmap_set(idx + j);
+-                owner_set_user(idx + j);
+-                --free_pages_;
+-            }
+-            rebuild_free_list();
+-            return idx * PAGE_SIZE;
+-        }
+-    }
+-    return 0;
++    return alloc_from_window_locked<true>(count);
+ }
+ 
+ /// @brief First window index at/after @p from with page-index color
+@@ -308,12 +288,14 @@ static uint64_t first_congruent_from(uint64_t from, uint64_t color) {
+     return start;
+ }
+ 
+-/// @brief Allocate one page of @p color with KERNEL ownership
+-///        (issue #62).  Color-strided bitmap scan from the per-color
+-///        cursor (wraps once); bitmap/owner/counter accounting mirrors
+-///        try_alloc_kernel, then rebuild_free_list() re-syncs the free
+-///        list the scan bypassed.  Caller holds pmm_lock_.
+-uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
++/// @brief Allocate one page of @p color (issue #62).  Shared
++///        kernel/user core (issue #254 H8): ownership is a compile-time
++///        bit.  Color-strided bitmap scan from the per-color cursor
++///        (wraps once); bitmap/owner/counter accounting mirrors
++///        alloc_from_window_locked, then rebuild_free_list() re-syncs the
++///        free list the scan bypassed.  Caller holds pmm_lock_.
++template <bool kUserOwned>
++uint64_t PMM::alloc_colored_locked(uint64_t color) {
+     constexpr uint64_t k_num = cache::NUM_COLORS;
+     if (color >= k_num)
+         return 0;
+@@ -329,7 +311,11 @@ uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
+         for (uint64_t idx = start; idx < limit; idx += k_num) {
+             if (!bitmap_test(idx)) {
+                 bitmap_set(idx);
+-                owner_set_kernel(idx);
++                if constexpr (kUserOwned) {
++                    owner_set_user(idx);
++                } else {
++                    owner_set_kernel(idx);
++                }
+                 --free_pages_;
+                 color_cursor_[color] = idx + k_num;
+                 rebuild_free_list();
+@@ -341,34 +327,72 @@ uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
+     return 0;
+ }
+ 
++/// @brief Allocate one page of @p color with KERNEL ownership
++///        (issue #62).  Color-strided bitmap scan from the per-color
++///        cursor (wraps once); bitmap/owner/counter accounting mirrors
++///        try_alloc_kernel, then rebuild_free_list() re-syncs the free
++///        list the scan bypassed.  Caller holds pmm_lock_.
++uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
++    return alloc_colored_locked<false>(color);
++}
 +
- // Runmode: kernel
- // Testidea: The IPC record types that cross the user boundary on death
- //           notification drain (DeathRecord) and pager fault drain
-@@ -422,5 +489,9 @@ void register_checked_ptr_api_tests() {
-     JARVIS_REGISTER_TEST(checked_ptr_api_zero_count_is_noop);
-     JARVIS_REGISTER_TEST(checked_ptr_api_safe_copy_templates_fail_closed);
-     JARVIS_REGISTER_TEST(checked_ptr_api_safe_copy_fault_recovery);
-+#if defined(CONFIG_ARCH_X86_64)
-+    JARVIS_REGISTER_TEST(
-+        checked_ptr_api_safe_copy_non_pf_vector_preserves_recovery);
+ /// @brief Allocate one page of @p color with USER ownership
+ ///        (issue #62).  Same scan as the KERNEL variant above.
+ uint64_t PMM::try_alloc_colored_user(uint64_t color) {
+-    constexpr uint64_t k_num = cache::NUM_COLORS;
+-    if (color >= k_num)
+-        return 0;
+-    uint64_t cur = color_cursor_[color];
+-    if (cur < window_base_page_ || cur >= window_end_page_)
+-        cur = window_base_page_;
+-    uint64_t start0 = first_congruent_from(cur, color);
+-    for (int pass = 0; pass < 2; ++pass) {
+-        uint64_t start =
+-            (pass == 0) ? start0
+-                        : first_congruent_from(window_base_page_, color);
+-        uint64_t limit = (pass == 0) ? window_end_page_ : start0;
+-        for (uint64_t idx = start; idx < limit; idx += k_num) {
+-            if (!bitmap_test(idx)) {
+-                bitmap_set(idx);
+-                owner_set_user(idx);
+-                --free_pages_;
+-                color_cursor_[color] = idx + k_num;
+-                rebuild_free_list();
+-                return idx * PAGE_SIZE;
+-            }
+-        }
+-        cur = window_base_page_;
++    return alloc_colored_locked<true>(color);
++}
++
++PMM::OomOutcome PMM::run_oom_handler_locked(sync::IrqSpinLockGuard &lock) {
++    if (!oom_handler_) {
++        return {false, false};
+     }
+-    return 0;
++    lock.unlock();
++    bool retry = oom_handler_();
++    lock.lock();
++    return {true, retry};
++}
++
++void PMM::attribute_alloc_to_current(TaskControlBlock *cur, size_t count) {
++    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
++#if CONFIG_MEMORY_BUDGET
++        cur->memory_used_pages_ += count;
 +#endif
-     JARVIS_REGISTER_TEST(checked_ptr_api_task_times_and_const_views);
++        if (cur->mem_alloc_ops_ < UINT64_MAX)
++            ++cur->mem_alloc_ops_;
++    }
++}
++
++bool PMM::is_over_budget(TaskControlBlock *cur, size_t count) {
++#if CONFIG_MEMORY_BUDGET
++    // Issue #20: per-task budget 0 == unlimited (no task sets a budget by
++    // default).  Without the > 0 guard every task (used=0, budget=0) would
++    // fail every alloc once the global default flipped ON.
++    if (!cur || cur->magic != TaskControlBlock::TCB_MAGIC ||
++        cur->memory_budget_pages_ == 0) {
++        return false;
++    }
++    if (count <= 1) {
++        return cur->memory_used_pages_ >= cur->memory_budget_pages_;
++    }
++    return cur->memory_used_pages_ + count > cur->memory_budget_pages_;
++#else
++    (void)cur;
++    (void)count;
++    return false;
++#endif
++}
++
++bool PMM::is_free_head_valid(uint64_t head) {
++    return head >= window_base_page_ && head < window_end_page_;
++}
++
++bool PMM::is_table_pool_configured() {
++    return is_table_pool_range_configured(page_table_pool_start_,
++                                          page_table_pool_end_);
++}
++
++bool PMM::is_table_pool_range_configured(uint64_t start, uint64_t end) {
++    return start != 0 && end != 0;
  }
-diff --git a/src/kernel/test/test_dmesg.cpp b/src/kernel/test/test_dmesg.cpp
-index 5b58fbdb3..4312ca0e5 100644
---- a/src/kernel/test/test_dmesg.cpp
-+++ b/src/kernel/test/test_dmesg.cpp
-@@ -777,6 +777,9 @@ JARVIS_TEST(dmesg_render_format, "PRE: none | POST: none") {
- // Testidea: Full #234 taxonomy resolves: every wired table serves text
- // for code 0 and its max code, canonical numbers strip to the same text,
- // the panic code decodes, and unknown pairs stay UNKNOWN/ERROR.
-+// Catalog records take precedence over stripping (dmesg.hpp): the strip
-+// probe must use a code with no catalog record — PMM base+1 is owned by
-+// the #284 leak-suspect record, so the probe uses base+2 (raw USER_OOM).
- // Input: code 0 / max / canonical / huge codes across all 19 subsystems
- // Expect: real texts for defined codes, UNKNOWN only for undefined
- // Depends: error_string, strip_canonical, lookup_severity, base codes
-@@ -788,9 +791,9 @@ JARVIS_TEST(dmesg_full_taxonomy, "PRE: none | POST: none") {
-             == 0,
-         "PMM OOM text");
-     JARVIS_ASSERT_FMT(
--        __builtin_strcmp("Out of memory — no free physical pages",
-+        __builtin_strcmp("Out of memory — no free user physical pages",
-                          log::error_string(log::ErrorSubsystem::PMM,
--                                           log::kDmesgBase_PMM + 1))
-+                                           log::kDmesgBase_PMM + 2))
-             == 0,
-         "PMM canonical strip");
-     JARVIS_ASSERT_FMT(
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 2ff1bf396..3a1a71271 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -58,7 +58,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"scheduler_hrt",         4,    0,       0      },  // hard-RT time assertions on real dispatch (issue #102): rdtsc canary + IPC/semaphore wake latency + release jitter
  
-     // task
--    {"task_core",             6,    0,       0      },  // TCB cleanup/page tables/clone
-+    {"task_core",             7,    0,       0      },  // TCB cleanup/page tables/clone + recent-ring claim (#264)
-     {"task_lifecycle",        9,    0,       0      },  // exit/zombie/reparent
-     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
-     {"task_init",             5,    0,       0      },  // init task exists/reparents + reaper notify/IPC wake (issue #155)
-@@ -66,7 +66,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
+ void PMM::reset_color_cursor() noexcept {
+@@ -392,35 +416,22 @@ uint64_t PMM::alloc_page() {
+     // unattributed by design — see spec §2.3.
+     auto *cur = Scheduler::current_task();
+ #if CONFIG_MEMORY_BUDGET
+-    // Issue #20: per-task budget 0 == unlimited (no task sets a budget by
+-    // default).  Without the > 0 guard every task (used=0, budget=0) would
+-    // fail every alloc once the global default flipped ON.
+-    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
+-        cur->memory_budget_pages_ > 0 &&
+-        cur->memory_used_pages_ >= cur->memory_budget_pages_) {
++    if (is_over_budget(cur, 1)) {
+         return 0;
+     }
+ #endif
+     uint64_t result = try_alloc_kernel(1);
+     if (result) {
+-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
+-#if CONFIG_MEMORY_BUDGET
+-            cur->memory_used_pages_ += 1;
+-#endif
+-            if (cur->mem_alloc_ops_ < UINT64_MAX)
+-                ++cur->mem_alloc_ops_;
+-        }
++        attribute_alloc_to_current(cur, 1);
+         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+         return result;
+     }
+     // OOM handler: release lock, call handler, re-acquire for retry.
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
++    OomOutcome oom = run_oom_handler_locked(lock);
++    if (oom.handler_ran) {
+         cur = Scheduler::current_task();
+     }
++    bool oom_retry = oom.retry;
+     if (oom_retry) {
+         result = try_alloc_kernel(1);
+     }
+@@ -428,13 +439,7 @@ uint64_t PMM::alloc_page() {
+         ASSERT(errors::PmmError::PMM_ERR_OOM);
+     }
+     if (result) {
+-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
+-#if CONFIG_MEMORY_BUDGET
+-            cur->memory_used_pages_ += 1;
+-#endif
+-            if (cur->mem_alloc_ops_ < UINT64_MAX)
+-                ++cur->mem_alloc_ops_;
+-        }
++        attribute_alloc_to_current(cur, 1);
+         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+     }
+     return result;
+@@ -461,33 +466,22 @@ uint64_t PMM::alloc_contiguous(size_t count) {
+     sync::IrqSpinLockGuard lock(pmm_lock_);
+     auto *cur = Scheduler::current_task(); // issue #284: always-on read
+ #if CONFIG_MEMORY_BUDGET
+-    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
+-    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
+-        cur->memory_budget_pages_ > 0 &&
+-        cur->memory_used_pages_ + count > cur->memory_budget_pages_) {
++    if (is_over_budget(cur, count)) {
+         return 0;
+     }
+ #endif
+     uint64_t result = try_alloc_kernel(count);
+     if (result) {
+-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
+-#if CONFIG_MEMORY_BUDGET
+-            cur->memory_used_pages_ += count;
+-#endif
+-            if (cur->mem_alloc_ops_ < UINT64_MAX)
+-                ++cur->mem_alloc_ops_;
+-        }
++        attribute_alloc_to_current(cur, count);
+         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
+         return result;
+     }
+     // OOM handler: release lock, call handler, re-acquire for retry.
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
++    OomOutcome oom = run_oom_handler_locked(lock);
++    if (oom.handler_ran) {
+         cur = Scheduler::current_task();
+     }
++    bool oom_retry = oom.retry;
+     if (oom_retry) {
+         result = try_alloc_kernel(count);
+     }
+@@ -495,13 +489,7 @@ uint64_t PMM::alloc_contiguous(size_t count) {
+         ASSERT(errors::PmmError::PMM_ERR_OOM);
+     }
+     if (result) {
+-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
+-#if CONFIG_MEMORY_BUDGET
+-            cur->memory_used_pages_ += count;
+-#endif
+-            if (cur->mem_alloc_ops_ < UINT64_MAX)
+-                ++cur->mem_alloc_ops_;
+-        }
++        attribute_alloc_to_current(cur, count);
+         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
+     }
+     return result;
+@@ -516,12 +504,7 @@ uint64_t PMM::alloc_user_page() {
+         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+         return result;
+     }
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
+-    }
++    bool oom_retry = run_oom_handler_locked(lock).retry;
+     if (oom_retry) {
+         result = try_alloc_user(1);
+     }
+@@ -548,32 +531,22 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
+     sync::IrqSpinLockGuard lock(pmm_lock_);
+     auto *cur = Scheduler::current_task(); // issue #284: always-on read
+ #if CONFIG_MEMORY_BUDGET
+-    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
+-    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
+-        cur->memory_budget_pages_ > 0 &&
+-        cur->memory_used_pages_ >= cur->memory_budget_pages_) {
++    if (is_over_budget(cur, 1)) {
+         return 0;
+     }
+ #endif
+     uint64_t result = try_alloc_colored_kernel(color);
+     if (result) {
+-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
+-#if CONFIG_MEMORY_BUDGET
+-            cur->memory_used_pages_ += 1;
+-#endif
+-            if (cur->mem_alloc_ops_ < UINT64_MAX)
+-                ++cur->mem_alloc_ops_;
+-        }
++        attribute_alloc_to_current(cur, 1);
+         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+         return result;
+     }
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
++    // OOM handler: release lock, call handler, re-acquire for retry.
++    OomOutcome oom = run_oom_handler_locked(lock);
++    if (oom.handler_ran) {
+         cur = Scheduler::current_task();
+     }
++    bool oom_retry = oom.retry;
+     if (oom_retry) {
+         result = try_alloc_colored_kernel(color);
+     }
+@@ -581,13 +554,7 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
+         ASSERT(errors::PmmError::PMM_ERR_OOM);
+     }
+     if (result) {
+-        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
+-#if CONFIG_MEMORY_BUDGET
+-            cur->memory_used_pages_ += 1;
+-#endif
+-            if (cur->mem_alloc_ops_ < UINT64_MAX)
+-                ++cur->mem_alloc_ops_;
+-        }
++        attribute_alloc_to_current(cur, 1);
+         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+     }
+     return result;
+@@ -603,12 +570,7 @@ errors::PmmError PMM::alloc_page_colored_err(uint64_t color,
+         out_phys_addr = result;
+         return errors::PMM_ERR_OK;
+     }
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
+-    }
++    bool oom_retry = run_oom_handler_locked(lock).retry;
+     if (oom_retry) {
+         result = try_alloc_colored_kernel(color);
+     }
+@@ -630,12 +592,7 @@ uint64_t PMM::alloc_user_page_colored(uint64_t color) {
+         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+         return result;
+     }
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
+-    }
++    bool oom_retry = run_oom_handler_locked(lock).retry;
+     if (oom_retry) {
+         result = try_alloc_colored_user(color);
+     }
+@@ -657,12 +614,7 @@ errors::PmmError PMM::alloc_user_page_colored_err(uint64_t color,
+         out_phys_addr = result;
+         return errors::PMM_ERR_OK;
+     }
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
+-    }
++    bool oom_retry = run_oom_handler_locked(lock).retry;
+     if (oom_retry) {
+         result = try_alloc_colored_user(color);
+     }
+@@ -686,12 +638,7 @@ uint64_t PMM::alloc_user_contiguous(size_t count) {
+         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
+         return result;
+     }
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
+-    }
++    bool oom_retry = run_oom_handler_locked(lock).retry;
+     if (oom_retry) {
+         result = try_alloc_user(count);
+     }
+@@ -707,7 +654,7 @@ uint64_t PMM::alloc_user_contiguous(size_t count) {
+ ///        Falls back to alloc_page() when the pool is exhausted.
+ /// @return Physical address, or 0 (asserts on OOM).
+ uint64_t PMM::alloc_page_table() {
+-    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0) {
++    if (!is_table_pool_configured()) {
+         return alloc_page();
+     }
+     {
+@@ -757,7 +704,7 @@ void PMM::free_page(uint64_t phys_addr) {
+         // free_page calls before pool is set up).
+         uint64_t pool_start = page_table_pool_start_;
+         uint64_t pool_end = page_table_pool_end_;
+-        if (pool_start != 0 && pool_end != 0) {
++        if (is_table_pool_range_configured(pool_start, pool_end)) {
+             uint64_t ps = pool_start / PAGE_SIZE;
+             uint64_t pe = pool_end / PAGE_SIZE;
+             if (index >= ps && index < pe) {
+@@ -969,12 +916,7 @@ errors::PmmError PMM::alloc_page_err(uint64_t &out_phys_addr) {
+         out_phys_addr = result;
+         return errors::PMM_ERR_OK;
+     }
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
+-    }
++    bool oom_retry = run_oom_handler_locked(lock).retry;
+     if (oom_retry) {
+         result = try_alloc_kernel(1);
+     }
+@@ -1002,12 +944,7 @@ errors::PmmError PMM::alloc_contiguous_err(size_t count,
+         out_phys_addr = result;
+         return errors::PMM_ERR_OK;
+     }
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
+-    }
++    bool oom_retry = run_oom_handler_locked(lock).retry;
+     if (oom_retry) {
+         result = try_alloc_kernel(count);
+     }
+@@ -1030,12 +967,7 @@ errors::PmmError PMM::alloc_user_page_err(uint64_t &out_phys_addr) {
+         out_phys_addr = result;
+         return errors::PMM_ERR_OK;
+     }
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
+-    }
++    bool oom_retry = run_oom_handler_locked(lock).retry;
+     if (oom_retry) {
+         result = try_alloc_user(1);
+     }
+@@ -1063,12 +995,7 @@ errors::PmmError PMM::alloc_user_contiguous_err(size_t count,
+         out_phys_addr = result;
+         return errors::PMM_ERR_OK;
+     }
+-    bool oom_retry = false;
+-    if (oom_handler_) {
+-        lock.unlock();
+-        oom_retry = oom_handler_();
+-        lock.lock();
+-    }
++    bool oom_retry = run_oom_handler_locked(lock).retry;
+     if (oom_retry) {
+         result = try_alloc_user(count);
+     }
+@@ -1085,7 +1012,7 @@ errors::PmmError PMM::alloc_user_contiguous_err(size_t count,
+ /// @param[out] out_phys_addr Physical address on success.
+ /// @return PmmError code.
+ errors::PmmError PMM::alloc_page_table_err(uint64_t &out_phys_addr) {
+-    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0) {
++    if (!is_table_pool_configured()) {
+         return alloc_page_err(out_phys_addr);
+     }
+     uint64_t pool_start_page = page_table_pool_start_ / PAGE_SIZE;
+@@ -1198,7 +1125,7 @@ void PMM::post_snapshot_overlay_clear() noexcept {
  
-     // syscall
--    {"syscall_core",         32,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30)
-+    {"syscall_core",         33,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70)
-     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
-     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
-     {"debug_syscall",         24,   24,      24     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295); arch-neutral, x86_64 measured via TCOUNT
-@@ -166,7 +166,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"memory_determinism",    4,    0,       0      },  // PMM exhaustion + no-dynamic-alloc neutral cycles (v0.3.8)
-     {"memory_checked_ptr",    4,    0,       0      },  // Checked pointer + signal frame tests
-     {"memory_resource_exhaustion", 5, 0,      0      },  // FdTable, TaskLimit, MaxBuffers, MempoolFrag, PmmExhaustion
--    {"memory_stack_alloc",   11,    0,       0      },  // stack allocation, guard pages, overflow hook (8 + 3 MP-6)
-+    {"memory_stack_alloc",   12,    0,       0      },  // stack allocation, guard pages, overflow hook (8 + 3 MP-6) + null-slot round-trip (#263)
-     {"memory_stack_profiler", 6,    0,       0      },  // kernel stack depth profiling
- #if CONFIG_STATIC_POOLS_ONLY
-     {"memory_static_pools",   6,    0,       0      },  // CONFIG_STATIC_POOLS_ONLY, MemPool::reserve
-@@ -228,7 +228,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
-     {"kernel_top",            22, 0,       0      },  // Top-level kernel (#131): histogram + random + IrqThread (#144, unknown-vec/sync-ack/guard) + datetime + global_state accessors (#136)
-     {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
--    {"memory_checked_ptr_api", 9,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views
-+    {"memory_checked_ptr_api", 10,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views + non-#PF vector gate (#252)
-     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
-     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
-     {"shell_commands",       34,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77) + --debug flag pin (#231) + --debug spawn success (#295, replaces refusal pin) + --debug no-image refusal (#295 audit)
-@@ -251,7 +251,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     // arch
-     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
+ void PMM::post_snapshot_overlay_apply() noexcept {
+     sync::IrqSpinLockGuard lock(pmm_lock_);
+-    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
++    if (!is_table_pool_configured())
+         return;
+     auto *bits = reinterpret_cast<uint8_t *>(bitmap_);
+     uint64_t start_bit = page_table_pool_start_ / PAGE_SIZE;
+@@ -1220,7 +1147,7 @@ void PMM::post_snapshot_overlay_apply() noexcept {
+ }
+ 
+ uint64_t PMM::pool_used_pages() noexcept {
+-    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
++    if (!is_table_pool_configured())
+         return 0;
+     uint64_t start = page_table_pool_start_ / PAGE_SIZE;
+     uint64_t end   = page_table_pool_end_   / PAGE_SIZE;
+@@ -1233,7 +1160,7 @@ uint64_t PMM::pool_used_pages() noexcept {
+ }
+ 
+ uint64_t PMM::pool_total_pages() noexcept {
+-    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
++    if (!is_table_pool_configured())
+         return 0;
+     return (page_table_pool_end_ - page_table_pool_start_) / PAGE_SIZE;
+ }
+diff --git a/src/kernel/memory/pmm.hpp b/src/kernel/memory/pmm.hpp
+index a475bdff0..9cbc80fd5 100644
+--- a/src/kernel/memory/pmm.hpp
++++ b/src/kernel/memory/pmm.hpp
+@@ -22,12 +22,12 @@
+ /// @brief Physical Memory Manager — bitmap-based page allocator with owner
+ /// tracking.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <constants.hpp>
+ #include <kernel/memory/pmm_errors.hpp>
+ #include <kernel/memory/cache_color.hpp>
++#include <kernel/task/task_fwd.hpp>
++#include <kernel/sync/irq_spinlock_guard.hpp>
+ 
+ namespace kernel::test {
+ struct PtPoolSnapshot;
+@@ -403,6 +403,53 @@ class PMM {
+     /// @param color Color in [0, cache::NUM_COLORS).
+     /// @return Physical address of first page, or 0 on failure.
+     static uint64_t try_alloc_colored_user(uint64_t color);
++
++    /// @brief Shared single/contiguous window allocator (issue #254 H8:
++    ///        try_alloc_kernel/try_alloc_user differed only in the owner
++    ///        bit).  Caller holds pmm_lock_.  WCET: intentional flat scan,
++    ///        branch-free ownership via template (zero-cost if constexpr).
++    /// @param count Number of contiguous pages.
++    /// @return Physical address of first page, or 0 on failure.
++    template <bool kUserOwned>
++    static uint64_t alloc_from_window_locked(size_t count);
++    /// @brief Shared single-page colored allocator (issue #254 H8: the
++    ///        KERNEL/USER variants differed only in the owner bit).
++    ///        Caller holds pmm_lock_.  Creation/test-time path (not
++    ///        RT-budgeted).
++    /// @param color Color in [0, cache::NUM_COLORS).
++    /// @return Physical address of first page, or 0 on failure.
++    template <bool kUserOwned>
++    static uint64_t alloc_colored_locked(uint64_t color);
++    /// @brief OOM-handler outcome (issue #254 H8: the 12× unlock/call/
++    ///        relock epilogues shared one shape).  handler_ran records
++    ///        that a handler was installed — callers re-read the current
++    ///        task exactly then; retry is the handler verdict.
++    struct OomOutcome {
++        bool handler_ran;
++        bool retry;
++    };
++    /// @brief Run the installed OOM handler with @p lock released and
++    ///        re-acquire for retry (issue #254 H8).  Preserves the exact
++    ///        unlock → handler → relock order; never blocks (handler runs
++    ///        unlocked, same as before).
++    static OomOutcome run_oom_handler_locked(sync::IrqSpinLockGuard &lock);
++    /// @brief Attribute an allocation to the current task (issue #254 H8:
++    ///        the magic-check + budget/accounting stanza was duplicated 6×).
++    ///        No-op for null/foreign TCBs.
++    static void attribute_alloc_to_current(TaskControlBlock *cur,
++                                           size_t count);
++    /// @brief Per-task budget check (issue #254 H5: the over-budget
++    ///        conjunction was triplicated).  Cheap-pointer-first order
++    ///        preserved; count<=1 keeps the legacy >= comparison exactly.
++    static bool is_over_budget(TaskControlBlock *cur, size_t count);
++    /// @brief Free-list head validity (issue #254 H5: the window-range
++    ///        conjunction was triplicated across both free lists).
++    static bool is_free_head_valid(uint64_t head);
++    /// @brief Page-table pool configured (static range; issue #254 H5).
++    static bool is_table_pool_configured();
++    /// @brief Page-table pool range configured (issue #254 H5: De Morgan
++    ///        dual of the early-out form above, for local copies).
++    static bool is_table_pool_range_configured(uint64_t start, uint64_t end);
+ };
+ 
+ } // namespace kernel
+diff --git a/src/kernel/memory/pmm_errors.hpp b/src/kernel/memory/pmm_errors.hpp
+index d90c8dae2..e6fdb073f 100644
+--- a/src/kernel/memory/pmm_errors.hpp
++++ b/src/kernel/memory/pmm_errors.hpp
+@@ -21,8 +21,6 @@
+ /// @file pmm_errors.hpp
+ /// @brief Physical Memory Manager error codes and string lookup.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <assert.hpp>
+ 
+diff --git a/src/kernel/memory/tlb_shootdown.cpp b/src/kernel/memory/tlb_shootdown.cpp
+index babe027f4..f78edc08b 100644
+--- a/src/kernel/memory/tlb_shootdown.cpp
++++ b/src/kernel/memory/tlb_shootdown.cpp
+@@ -56,6 +56,7 @@ TlbShootdown::Error TlbShootdown::request(uint64_t va, uint16_t pcid) noexcept {
+ void TlbShootdown::coalesce_and_apply() noexcept {
+     // Snapshot under lock; apply without holding it (INVLPG/purge take
+     // no locks; keeps the critical section short).
++    // WCET: bounded by MAX_PENDING (see header); no allocation.
+     Request batch[MAX_PENDING];
+     uint64_t count = 0;
+     {
+@@ -127,6 +128,7 @@ void TlbShootdown::on_tick(uint64_t now) noexcept {
+     // ISR-safe: IF is already clear on the tick path; try_lock skips on
+     // contention instead of spinning on a task-held lock (single-CPU
+     // deadlock otherwise).  Bounded: at most MAX_PER_TICK releases.
++    // WCET: bounded scan + bounded releases; no allocation, never blocks.
+     arch::IrqGuard irq_guard{};
+     if (!shootdown_lock_.try_lock())
+         return;
+@@ -163,11 +165,14 @@ uint64_t TlbShootdown::quarantine_count() noexcept {
+ }
+ 
+ void TlbShootdown::set_timeout_ticks_for_test(uint64_t ticks) noexcept {
++    // Test-isolation hook: production paths never call this (the timeout
++    // stays a live field — no test-mode branch in quarantine timing).
+     sync::IrqSpinLockGuard guard(shootdown_lock_);
+     timeout_ticks_ = ticks;
+ }
+ 
+ void TlbShootdown::reset() noexcept {
++    // Test-isolation hook (see set_timeout_ticks_for_test above).
+     sync::IrqSpinLockGuard guard(shootdown_lock_);
+     pending_count_ = 0;
+     quarantine_count_ = 0;
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 3b643c5fa..97cd9401e 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -137,6 +137,9 @@ void VMM::init() {
+ /// @param user_alloc If true, allocate USER-owned pages for the new table.
+ /// @return Pointer to the next-level table, or nullptr if not present and
+ /// !create.
++/// WCET: intentional flat walk/split (bounded depth, at most one table
++/// alloc per call); a failed alloc returns nullptr and the caller drops
++/// the mapping through note_silent_drop_once (never retries in a loop).
+ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+                          bool user_alloc) {
+     if (table[index] & PAGE_PRESENT) {
+@@ -250,6 +253,110 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+     return new_table;
+ }
+ 
++// Test-time kernel-VA touch notifiers (issue #254 H2: eleven
++// is_test_active() control-flow branches hoisted here, bit-identical).
++// WHY the flags exist: test tasks legitimately map/unmap kernel-half VAs;
++// the snapshot mechanism must know which half was touched so restore rewinds
++// exactly that half (HHDM PD / identity PD / Sv39 L1).  Release stores pair
++// with the acquire take in snapshot_restore (issues #60/#152).  WHY the
++// warns stay: silent kernel-half mutation hides test pollution; each message
++// names the operation + index domain so the polluting test is identifiable.
++enum class TestTouchWarn {
++    kMapL1,
++    kMapPd,
++    kUnmapL0,
++    kUnmapPml4,
++    kAccessPml4,
++};
++
++static void warn_test_kernel_touch(bool gate, TestTouchWarn warn,
++                                   uint64_t va, size_t idx) {
++    if (!gate || !Scheduler::is_test_active()) {
++        return;
++    }
++    switch (warn) {
++        case TestTouchWarn::kMapL1:
++            Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
++                         "(l0_idx=%zu) — L1 restore will clean up",
++                         va, idx);
++            break;
++        case TestTouchWarn::kMapPd:
++            Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
++                         "(pml4_idx=%zu) — PD restore will clean up",
++                         va, idx);
++            break;
++        case TestTouchWarn::kUnmapL0:
++            Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
++                         "(l0_idx=%zu)",
++                         va, idx);
++            break;
++        case TestTouchWarn::kUnmapPml4:
++            Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
++                         "(pml4_idx=%zu)",
++                         va, idx);
++            break;
++        case TestTouchWarn::kAccessPml4:
++            Logger::warn("virt_to_phys: test accessing kernel-space VA 0x%lx "
++                         "(pml4_idx=%zu)",
++                         va, idx);
++            break;
++    }
++}
++
++static void arm_test_touch_flags(bool arm_hhdm, bool arm_identity) {
++    if (!Scheduler::is_test_active()) {
++        return;
++    }
++    // Issue #60/#152: release stores pair with the acquire take in
++    // snapshot_restore (a concurrent take can never lose a set).
++    if (arm_hhdm) {
++        __atomic_store_n(&VMM::hhdm_modified_, true, __ATOMIC_RELEASE);
++    }
++    if (arm_identity) {
++        __atomic_store_n(&VMM::identity_modified_, true, __ATOMIC_RELEASE);
++    }
++}
++
++// Cap for bounded throttled diagnostics (issue #254 H5: was a raw 24).
++static constexpr uint64_t kFupSkipLogCap = 24;
++
++// Hex-value half of the throttled diagnostics below (issue #254 H8: shared
++// by note_silent_drop_once and the free_user_pages skip log — the 0x-print
++// loop was duplicated).  Debugcon port IO only (lock-free, ISR-safe;
++// no-op off x86_64).
++static void write_hex_debugcon(uint64_t val) {
++    char buf[24];
++    int p = 0;
++    buf[p++] = '0';
++    buf[p++] = 'x';
++    bool started = false;
++    for (int sh = 60; sh >= 0; sh -= 4) {
++        unsigned nib = static_cast<unsigned>((val >> sh) & 0xF);
++        if (nib || started || sh == 0) {
++            buf[p++] = "0123456789abcdef"[nib];
++            started = true;
++        }
++    }
++    buf[p++] = '\n';
++    arch::QemuDebugcon::write(buf, static_cast<size_t>(p));
++}
++
++// Bounded one-shot diagnostic for silently-dropped mappings (issue #254 H7).
++// WHY silent drops exist: a missing table or a failed split-alloc means "no
++// such mapping" to the caller, so these paths return without an error code.
++// The throttled note keeps them observable without flooding the log.
++// Lock-free (atomics + debugcon port IO only): safe from any context,
++// including tick/ISR paths.  Never touches Logger/serial/shell.
++static void note_silent_drop_once(const char *tag, uint64_t val) {
++    static uint64_t count = 0;
++    if (__atomic_load_n(&count, __ATOMIC_RELAXED) >= kFupSkipLogCap) {
++        return;
++    }
++    __atomic_fetch_add(&count, 1UL, __ATOMIC_RELAXED);
++    arch::QemuDebugcon::write(tag);
++    write_hex_debugcon(val);
++}
++
+ // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+ /// @brief Map a 4 KiB page in the kernel page table.
+ /// @param virt_addr Page-aligned virtual address.
+@@ -265,33 +372,30 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
+ 
+-    // Issue #152: mirror the x86_64 modified-flags (is_test_active-gated
+-    // release stores pairing with the acquire take in snapshot_restore).
+-    // Exact-match gating (see kHhdmL0Idx below): the armed flag has an
+-    // Sv39 restore covering it.  NOTE: no identity flag on riscv64 — the
+-    // boot identity map (L0[2], boot.S) is dead at runtime (L0[2] reads
+-    // zero; the kernel runs via HHDM), so there is no live low map to
+-    // protect.  Low-half maps arm nothing.
++    // Issue #152: snapshot pairing for Sv39 (see arm_test_touch_flags).
++    // No identity flag on riscv64: the boot identity map is dead at
++    // runtime, so low-half maps arm nothing.
+     // Allow kernel-space VAs when tests are active: the Sv39 L1
+     // save/restore in the snapshot mechanism undoes any 2MB-block splits.
+-    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
+-        Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
+-                     "(l0_idx=%zu) — L1 restore will clean up",
+-                     virt_addr, l0_idx);
+-        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
+-    }
++    warn_test_kernel_touch(l0_idx == kHhdmL0Idx, TestTouchWarn::kMapL1,
++                           virt_addr, l0_idx);
++    arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
+ 
+     auto *l1 = get_table(l0, l0_idx, true);
+-    if (!l1)
++    if (!l1) {
++        note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
+         return;
++    }
+ 
+     // If L1 entry is a 2MB block, split it into 512 4KB entries.
+     // Issue #206: Sv39 PTE codec (raw & ~0x1FFFFF is x86-domain).
+     if ((l1[l1_idx] & PAGE_PRESENT) &&
+         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+         uint64_t new_l2_phys = PMM::alloc_page_table();
+-        if (!new_l2_phys)
++        if (!new_l2_phys) {
++            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
+             return;
++        }
+         auto *new_l2 =
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_l2_phys);
+         uint64_t block_base =
+@@ -307,8 +411,10 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+     }
+ 
+     auto *l2 = get_table(l1, l1_idx, true);
+-    if (!l2)
++    if (!l2) {
++        note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
+         return;
++    }
+ 
+     if (user && phys_addr < PMM::total_memory())
+         ENSURE(PMM::is_user_page(phys_addr) &&
+@@ -331,33 +437,28 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+     // Allow kernel-space VAs when tests are active: PD save/restore in the
+     // snapshot mechanism undoes any huge-page splits.  Boot-time calls (APIC
+     // MMIO mapping, etc.) are still permitted as they run before snapshot.
+-    if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
+-        Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
+-                     "(pml4_idx=%zu) — PD restore will clean up",
+-                     virt_addr, pml4_idx);
+-        // Issue #60: release store — pairs with the acquire take in
+-        // snapshot_restore (a concurrent set can never be lost).
+-        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
+-    }
++    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
++                           TestTouchWarn::kMapPd, virt_addr, pml4_idx);
++    arm_test_touch_flags(pml4_idx >= arch::PML4_USER_COUNT, false);
+     // Low identity-map VAs (pml4_idx 0, PD_IDENTITY phys 0x3000): a map_page
+     // here splits a boot 2 MiB identity huge entry into a PT page.  Flag it so
+-    // snapshot_restore restores PD_IDENTITY (the HHDM-PD gate only covers
+-    // pml4_idx >= PML4_USER_COUNT).
+-    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
+-        // Issue #60: release store (see hhdm site above).
+-        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
+-    }
++    // snapshot_restore restores PD_IDENTITY (see arm_test_touch_flags).
++    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
+ 
+     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
+     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
+     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
+ 
+     auto *pdpt = get_table(pml4, pml4_idx, true);
+-    if (!pdpt)
++    if (!pdpt) {
++        note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
+         return;
++    }
+     auto *pd = get_table(pdpt, pdpt_idx, true);
+-    if (!pd)
++    if (!pd) {
++        note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
+         return;
++    }
+ 
+     // If the PD entry is a 2MB huge page, split it into 512 4KB entries
+     // so we can map an individual 4KB page within it.
+@@ -368,8 +469,10 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+ #endif
+     {
+         uint64_t new_pt_phys = PMM::alloc_page_table();
+-        if (!new_pt_phys)
++        if (!new_pt_phys) {
++            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
+             return;
++        }
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         auto *new_pt =
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
+@@ -404,8 +507,10 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+     }
+ 
+     auto *pt = get_table(pd, pd_idx, true);
+-    if (!pt)
++    if (!pt) {
++        note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
+         return;
++    }
+ 
+     if (user && phys_addr < PMM::total_memory())
+         ENSURE(PMM::is_user_page(phys_addr) &&
+@@ -443,21 +548,21 @@ void VMM::unmap_page(uint64_t virt_addr) {
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
+ 
+-    // Issue #152: mirror map_page (x86_64 unmap_page sets the identity
+-    // flag only, plus a warn for kernel-space VAs). No identity flag on
+-    // riscv64 (dead boot map — see map_page note above).
+-    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
+-        Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
+-                     "(l0_idx=%zu)",
+-                     virt_addr, l0_idx);
+-    }
++    // Issue #152: mirror map_page (x86_64 unmap_page arms the identity
++    // flag only, plus a warn for kernel-space VAs; see the notifiers above).
++    warn_test_kernel_touch(l0_idx == kHhdmL0Idx, TestTouchWarn::kUnmapL0,
++                           virt_addr, l0_idx);
+ 
+     auto *l1 = get_table(l0, l0_idx, false);
+-    if (!l1)
++    if (!l1) {
++        note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
+         return;
++    }
+     auto *l2 = get_table(l1, l1_idx, false);
+-    if (!l2)
++    if (!l2) {
++        note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
+         return;
++    }
+ 
+     l2[l2_idx] = 0;
+     arch::ArchPageTable::tlb_flush(virt_addr);
+@@ -467,30 +572,30 @@ void VMM::unmap_page(uint64_t virt_addr) {
+                                               (kernel_pml4_ & ~0xFFFULL));
+ 
+     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
+-    if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
+-        Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
+-                     "(pml4_idx=%zu)",
+-                     virt_addr, pml4_idx);
+-    }
++    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
++                           TestTouchWarn::kUnmapPml4, virt_addr, pml4_idx);
+     // Low identity-map VAs: flag for PD_IDENTITY restore (see map_page).
+-    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
+-        // Issue #60: release store (see map_page sites above).
+-        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
+-    }
++    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
+ 
+     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
+     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
+     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
+ 
+     auto *pdpt = get_table(pml4, pml4_idx, false);
+-    if (!pdpt)
++    if (!pdpt) {
++        note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
+         return;
++    }
+     auto *pd = get_table(pdpt, pdpt_idx, false);
+-    if (!pd)
++    if (!pd) {
++        note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
+         return;
++    }
+     auto *pt = get_table(pd, pd_idx, false);
+-    if (!pt)
++    if (!pt) {
++        note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
+         return;
++    }
+ 
+     pt[pt_idx] = 0;
+     arch::ArchPageTable::tlb_flush(virt_addr);
+@@ -532,11 +637,8 @@ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
+                                               (kernel_pml4_ & ~0xFFFULL));
+ 
+     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
+-    if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
+-        Logger::warn("virt_to_phys: test accessing kernel-space VA 0x%lx "
+-                     "(pml4_idx=%zu)",
+-                     virt_addr, pml4_idx);
+-    }
++    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
++                           TestTouchWarn::kAccessPml4, virt_addr, pml4_idx);
+ 
+     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
+     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
+@@ -602,16 +704,18 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+     // rewind.  Without this, splits never trigger it and persist across
+     // boundaries.  HHDM only (no live identity map on riscv64 — see
+     // map_page note above).
+-    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
+-        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
+-    }
++    arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
+ 
+     auto *l1 = get_table(l0, l0_idx, true, true);
+-    if (!l1)
++    if (!l1) {
++        note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
+         return;
++    }
+     auto *l2 = get_table(l1, l1_idx, true, true);
+-    if (!l2)
++    if (!l2) {
++        note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
+         return;
++    }
+ 
+     if (user && phys_addr < PMM::total_memory())
+         ENSURE(PMM::is_user_page(phys_addr) &&
+@@ -641,20 +745,19 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+     // kernel table or share PD pages with it, so flag unconditionally).
+     // Without this, splits (e.g. test mb2 identity re-mapping) never
+     // trigger the snapshot PD rewind and persist across boundaries.
+-    if (Scheduler::is_test_active() &&
+-        pml4_idx >= arch::PML4_USER_COUNT) {
+-        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
+-    }
+-    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
+-        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
+-    }
++    arm_test_touch_flags(pml4_idx >= arch::PML4_USER_COUNT,
++                         pml4_idx < arch::PML4_USER_COUNT);
+ 
+     auto *pdpt = get_table(pml4, pml4_idx, true, true);
+-    if (!pdpt)
++    if (!pdpt) {
++        note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
+         return;
++    }
+     auto *pd = get_table(pdpt, pdpt_idx, true, true);
+-    if (!pd)
++    if (!pd) {
++        note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
+         return;
++    }
+ 
  #if defined(CONFIG_ARCH_AARCH64)
--    {"arch_aarch64",          0,   32,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245)
-+    {"arch_aarch64",          0,   33,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245) + 1 EL1 fail-stop routing (#214)
+     if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
+@@ -663,8 +766,10 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
  #endif
- #if defined(CONFIG_ARCH_RISCV64)
-     {"arch_riscv64",          0,    0,      30      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall) + 2 UART poll tests (issue #247) — row was stale at 24 while 28 registered, corrected to 30
-@@ -276,7 +276,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {
+         uint64_t new_pt_phys = PMM::alloc_user_page();
+-        if (!new_pt_phys)
++        if (!new_pt_phys) {
++            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
+             return;
++        }
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         auto *new_pt =
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
+@@ -691,8 +796,10 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+     }
  
-     // Structural/semantic aggregates (issue #173).  Values are filled
-     // from measured `dump-counts` output; 0 disables validation.
--    {"core",                470,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294)
-+    {"core",                474,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294)
-     {"ipc",                 81,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208)
-     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
-     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
-diff --git a/src/kernel/test/test_stack_alloc.cpp b/src/kernel/test/test_stack_alloc.cpp
-index 860cc3c32..cb5c4b403 100644
---- a/src/kernel/test/test_stack_alloc.cpp
-+++ b/src/kernel/test/test_stack_alloc.cpp
-@@ -280,6 +280,57 @@ JARVIS_TEST(kstack_slot_snapshot_restore_safe, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
+     auto *pt = get_table(pd, pd_idx, true, true);
+-    if (!pt)
++    if (!pt) {
++        note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
+         return;
++    }
  
-+// Runmode: kernel
-+// Testidea: v0.5.x issue #263 — kslot_snapshot_restore must advance the
-+// buffer offset unconditionally, mirroring capture (which writes a dense
-+// layout: zeros for null PT slots, always advances). Skipping the advance
-+// on null slots shifts every later page read plus the trailing
-+// bump/list/pool reads — silent wrong-state restore.
-+// Input: Capture live state L; craft C = L with the second page slot
-+// zeroed (null-slot shape) and the trailing bookkeeping region filled
-+// with a sentinel; restore(C); capture(O); restore(L).
-+// Expect: O byte-equals C over the full kslot_snapshot_bytes() length;
-+// live state fully reinstalled; zero PMM delta. Contract-pinning: all 8
-+// window PT pages are boot-allocated in the test env, so no live null
-+// slot exists that would fail pre-fix — but the byte-contract guards
-+// the exact lines #263 changed.
-+// Depends: kslot snapshot helpers (task.cpp).
-+JARVIS_TEST(kstack_snapshot_null_page_slot_roundtrip,
-+            "PRE: none | POST: none") {
-+    uint64_t free_before = PMM::free_pages_ref();
-+    static constexpr size_t KSLOT_SNAP_SIZE = 8 * arch::PAGE_SIZE + 4096;
-+    static uint8_t s_live_buf[KSLOT_SNAP_SIZE];
-+    static uint8_t s_craft_buf[KSLOT_SNAP_SIZE];
-+    static uint8_t s_out_buf[KSLOT_SNAP_SIZE];
-+    const size_t snap_bytes = kernel::kslot_snapshot_bytes();
-+    JARVIS_ASSERT(snap_bytes <= KSLOT_SNAP_SIZE);
-+
-+    kernel::kslot_snapshot_capture(s_live_buf);
-+    for (size_t idx = 0; idx < snap_bytes; ++idx) {
-+        s_craft_buf[idx] = s_live_buf[idx];
-+    }
-+    for (size_t idx = 0; idx < arch::PAGE_SIZE; ++idx) {
-+        s_craft_buf[arch::PAGE_SIZE + idx] = 0;
-+    }
-+    for (size_t idx = 8 * arch::PAGE_SIZE; idx < snap_bytes; ++idx) {
-+        s_craft_buf[idx] = 0xA5;
-+    }
-+
-+    kernel::kslot_snapshot_restore(s_craft_buf);
-+    kernel::kslot_snapshot_capture(s_out_buf);
-+    for (size_t idx = 0; idx < snap_bytes; ++idx) {
-+        JARVIS_ASSERT_FMT(s_out_buf[idx] == s_craft_buf[idx],
-+                          "kslot round-trip mismatch at byte %lx",
-+                          static_cast<uint64_t>(idx));
-+    }
-+
-+    kernel::kslot_snapshot_restore(s_live_buf);
-+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
-+                      "PMM delta %ld pages after kslot round-trip",
-+                      (long)(PMM::free_pages_ref() - free_before));
-+    JARVIS_TEST_PASS();
-+}
-+
- JARVIS_TEST(stack_alloc_user_stack_phys_freed_on_cleanup,
-             "PRE: none | POST: none") {
-     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
-@@ -312,5 +363,6 @@ void register_stack_alloc_tests() {
-     // v0.4.0 MP-6 tests (kstack_overflow_invokes_hook registered LAST).
-     JARVIS_REGISTER_TEST(kstack_guard_base_unmapped);
-     JARVIS_REGISTER_TEST(kstack_slot_snapshot_restore_safe);
-+    JARVIS_REGISTER_TEST(kstack_snapshot_null_page_slot_roundtrip);
-     JARVIS_REGISTER_TEST(kstack_overflow_invokes_hook);
- }
-diff --git a/src/kernel/test/test_syscall.cpp b/src/kernel/test/test_syscall.cpp
-index 4f7f41c88..d08b71e6d 100644
---- a/src/kernel/test/test_syscall.cpp
-+++ b/src/kernel/test/test_syscall.cpp
-@@ -1011,6 +1011,49 @@ JARVIS_TEST(syscall_error_string_maps, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Runmode: kernel
-+// Testidea: Pin the frozen 0-79 syscall number mirror (issues #69/#70):
-+//           src/libc/syscall.h numbers must equal the kernel
-+//           SyscallNumber values, and the ABI_VERSION query (84) must
-+//           return (NEXIOS_ABI_MAJOR << 16) | MINOR via the real handler.
-+// Input: Static enum asserts for the band boundaries (literals cite
-+//        syscall.h lines); dispatched task calls Syscall::handle(84).
-+// Expect: All mirror pairs equal; version == 0x10000; MAX_SYSCALL > 79
-+//         (table grew past the frozen band — SYS_MAX drift is issue
-+//         material, not pinned here).
-+// Depends: SyscallNumber, Syscall::sys_abi_version.
-+JARVIS_TEST(syscall_abi_surface_mirror_and_version, "PRE: none | POST: none") {
-+    static uint64_t g_ver = 0;
-+    JARVIS_ASSERT_EQ(0ULL, static_cast<uint64_t>(SyscallNumber::YIELD));
-+    JARVIS_ASSERT_EQ(48ULL, static_cast<uint64_t>(SyscallNumber::KLOG));
-+    JARVIS_ASSERT_EQ(49ULL, static_cast<uint64_t>(SyscallNumber::REBOOT));
-+    JARVIS_ASSERT_EQ(50ULL, static_cast<uint64_t>(SyscallNumber::HALT));
-+    JARVIS_ASSERT_EQ(51ULL, static_cast<uint64_t>(SyscallNumber::CAP_GRANT));
-+    JARVIS_ASSERT_EQ(57ULL,
-+                     static_cast<uint64_t>(SyscallNumber::IRQ_REGISTER));
-+    JARVIS_ASSERT_EQ(63ULL,
-+                     static_cast<uint64_t>(SyscallNumber::FRAME_CREATE));
-+    JARVIS_ASSERT_EQ(69ULL,
-+                     static_cast<uint64_t>(SyscallNumber::PAGER_REGISTER));
-+    JARVIS_ASSERT_EQ(74ULL, static_cast<uint64_t>(SyscallNumber::SEND_FAST));
-+    JARVIS_ASSERT_EQ(77ULL,
-+                     static_cast<uint64_t>(SyscallNumber::SET_AFFINITY));
-+    JARVIS_ASSERT_EQ(79ULL, static_cast<uint64_t>(SyscallNumber::TIMES));
-+    JARVIS_ASSERT_EQ(84ULL, static_cast<uint64_t>(SyscallNumber::ABI_VERSION));
-+    JARVIS_ASSERT(static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL) > 79ULL);
-+    auto *t = run_syscall_task([]() {
-+        g_ver = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::ABI_VERSION), 0, 0, 0, 0,
-+            nullptr);
-+    });
-+    JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT_FMT(g_ver == 0x10000ULL,
-+                      "ABI_VERSION returned %lx, want 0x10000", g_ver);
-+    release_task(t);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
- #if defined(CONFIG_ARCH_X86_64)
- 
- // Runmode: kernel
-@@ -1139,6 +1182,7 @@ void register_syscall_tests() {
-     JARVIS_REGISTER_TEST(syscall_user_exec_valid_argv);
-     JARVIS_REGISTER_TEST(syscall_user_exec_hostile_argv);
-     JARVIS_REGISTER_TEST(syscall_error_string_maps);
-+    JARVIS_REGISTER_TEST(syscall_abi_surface_mirror_and_version);
- 
- #if defined(CONFIG_ARCH_X86_64)
-     JARVIS_REGISTER_TEST(syscall_abi_x86_bridge_conform);
-diff --git a/src/kernel/test/test_task.cpp b/src/kernel/test/test_task.cpp
-index e12f9f6a9..1a2d94e37 100644
---- a/src/kernel/test/test_task.cpp
-+++ b/src/kernel/test/test_task.cpp
-@@ -245,6 +245,57 @@ JARVIS_TEST(task_clone_no_page_table_leak, "PRE: none | POST: none") {
- // Input: None
- // Expect: All task_* tests are registered via JARVIS_REGISTER_TEST
- // Depends: kernel test framework
-+namespace kernel {
-+namespace debug {
-+// Issue #264: per-slot single-writer contract (task.cpp). The ring is
-+// write-only diagnostics with no header declaration, so the test declares
-+// the two entry points locally (definitions in task.cpp).
-+void record_task_entry(uint64_t entry, uint64_t tcb);
-+uint64_t find_entry_owner(uint64_t value);
-+} // namespace debug
-+} // namespace kernel
-+
-+// Runmode: kernel
-+// Testidea: v0.5.x issue #264 — record_task_entry claims each slot with
-+// an atomic fetch-add, so sequential writers land in distinct slots: no
-+// mixed entry-from-A/tcb-from-B records, no lost updates.
-+// Input: Record 10 distinct (entry, tcb) marker pairs with sentinel high
-+// bits, then 64 more to force a full 64-slot wrap; resolve each via
-+// find_entry_owner. Markers are pre-checked absent first, so a real task
-+// entry recorded at boot can never alias them into a false pass/fail.
-+// Expect: Every marker resolves to exactly its own tcb (pre-wrap batch
-+// and post-wrap last-64 alike); no stale record survives. Pure sequential
-+// calls — no tasks, no IRQs, TCG-deterministic. (True concurrent-writer
-+// coverage is not deterministic under QEMU timing; the atomic claim
-+// itself is reviewed, not raced here.)
-+// Depends: kernel::debug::record_task_entry/find_entry_owner (task.cpp).
-+JARVIS_TEST(task_recent_ring_claim_distinct_slots, "PRE: none | POST: none") {
-+    for (uint64_t idx = 0; idx < 10; ++idx) {
-+        const uint64_t marker = 0x5A5A0000ULL + idx;
-+        JARVIS_ASSERT_FMT(kernel::debug::find_entry_owner(marker) == 0,
-+                          "marker %lx already owned before insert", marker);
-+    }
-+    for (uint64_t idx = 0; idx < 10; ++idx) {
-+        kernel::debug::record_task_entry(0x5A5A0000ULL + idx, 0x7000ULL + idx);
-+    }
-+    for (uint64_t idx = 0; idx < 10; ++idx) {
-+        const uint64_t marker = 0x5A5A0000ULL + idx;
-+        const uint64_t want = 0x7000ULL + idx;
-+        JARVIS_ASSERT_FMT(kernel::debug::find_entry_owner(marker) == want,
-+                          "marker %lx owner mismatch", marker);
-+    }
-+    for (uint64_t idx = 10; idx < 74; ++idx) {
-+        kernel::debug::record_task_entry(0x5A5A0000ULL + idx, 0x7000ULL + idx);
-+    }
-+    for (uint64_t idx = 10; idx < 74; ++idx) {
-+        const uint64_t marker = 0x5A5A0000ULL + idx;
-+        const uint64_t want = 0x7000ULL + idx;
-+        JARVIS_ASSERT_FMT(kernel::debug::find_entry_owner(marker) == want,
-+                          "post-wrap marker %lx owner mismatch", marker);
-+    }
-+    JARVIS_TEST_PASS();
-+}
-+
- void register_task_tests() {
-     Logger::info("Registering task tests");
-     JARVIS_REGISTER_TEST(task_cleanup_frees_resources);
-@@ -253,5 +304,6 @@ void register_task_tests() {
-     JARVIS_REGISTER_TEST(task_elf_load_inits_ipc_objects);
-     JARVIS_REGISTER_TEST(task_fork_child_cleanup_preserves_parent_pages);
-     JARVIS_REGISTER_TEST(task_clone_no_page_table_leak);
-+    JARVIS_REGISTER_TEST(task_recent_ring_claim_distinct_slots);
- }
+     if (user && phys_addr < PMM::total_memory())
+         ENSURE(PMM::is_user_page(phys_addr) &&
+@@ -744,6 +851,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+     }
+     auto *l1 = get_table(top, l0_idx, false);
+     if (!l1) {
++        note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
+         return;
+     }
+     if (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
+@@ -751,6 +859,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+     }
+     auto *l2 = get_table(l1, l1_idx, false);
+     if (!l2) {
++        note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
+         return;
+     }
+     l2[l2_idx] = 0;
+@@ -761,15 +870,15 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
+     // Issue #197: mirror unmap_page — flag low-VA surgery for the
+     // PD_IDENTITY restore (see map_page_in_pml4 note above).
+-    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
+-        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
+-    }
++    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
+     auto *pdpt = get_table(top, pml4_idx, false);
+     if (!pdpt) {
++        note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
+         return;
+     }
+     auto *pd = get_table(pdpt, pdpt_idx, false);
+     if (!pd) {
++        note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
+         return;
+     }
+ #if defined(CONFIG_ARCH_AARCH64)
+@@ -783,6 +892,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
  #endif
-diff --git a/test-history.txt b/test-history.txt
-index 2d187433f..6c213b6ec 100644
---- a/test-history.txt
-+++ b/test-history.txt
-@@ -2489,3 +2489,39 @@
- 2026-10-06 12:45:00 ipc_robustness PASSED: 11 FAILED: 0 TIME: 554ms
- 2026-10-06 12:46:00 core PASSED: 530 FAILED: 0 TIME: 30000ms
- 2026-10-06 12:50:00 selftest PASSED: 139 FAILED: 0 TIME: 8203ms
-+2026-10-06 20:55:42 syscall_core PASSED: 33 FAILED: 0 TIME: 959ms
-+2026-10-06 21:37:37 memory_checked_ptr_api PASSED: 10 FAILED: 0 TIME: 249ms
-+2026-10-06 21:42:39 memory_stack_alloc PASSED: 12 FAILED: 0 TIME: 337ms
-+2026-10-06 21:47:43 task_core PASSED: 7 FAILED: 0 TIME: 252ms
-+2026-10-06 22:02:32 memory_checked_ptr_api PASSED: 10 FAILED: 0 TIME: 245ms
-+2026-10-06 22:11:59 core PASSED: 534 FAILED: 0 TIME: 29152ms
-+2026-10-06 22:20:33 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 309ms
-+2026-10-06 22:26:00 core PASSED: 534 FAILED: 0 TIME: 29527ms
-+2026-10-06 22:30:51 core PASSED: 534 FAILED: 0 TIME: 30207ms
-+2026-10-06 22:31:07 ipc PASSED: 85 FAILED: 0 TIME: 3518ms
-+2026-10-06 22:33:20 capability PASSED: 0 FAILED: 0 TIME: 132865ms STATUS: TIMEOUT
-+2026-10-06 22:35:33 proc_elf PASSED: 0 FAILED: 0 TIME: 132997ms STATUS: TIMEOUT
-+2026-10-06 22:35:49 storage PASSED: 147 FAILED: 0 TIME: 3396ms
-+2026-10-06 22:36:05 servers PASSED: 62 FAILED: 0 TIME: 1642ms
-+2026-10-06 22:36:44 drivers PASSED: 107 FAILED: 0 TIME: 11799ms
-+2026-10-06 22:37:01 hal PASSED: 122 FAILED: 0 TIME: 0ms
-+2026-10-06 22:39:13 smp PASSED: 0 FAILED: 0 TIME: 132286ms STATUS: TIMEOUT
-+2026-10-06 22:39:28 smp_multicpu PASSED: 18 FAILED: 0 TIME: 515ms
-+2026-10-06 22:39:59 deadline PASSED: 139 FAILED: 0 TIME: 47003ms
-+2026-10-06 22:40:16 ui PASSED: 73 FAILED: 0 TIME: 5994ms
-+2026-10-06 22:40:31 logging_debug PASSED: 35 FAILED: 1 TIME: 757ms
-+2026-10-06 22:40:46 random PASSED: 17 FAILED: 0 TIME: 405ms
-+2026-10-06 22:41:01 bench PASSED: 22 FAILED: 0 TIME: 700ms
-+2026-10-06 22:43:14 task_tcb_log PASSED: 0 FAILED: 0 TIME: 132172ms STATUS: TIMEOUT
-+2026-10-06 22:43:29 task_fpu PASSED: 0 FAILED: 0 TIME: 14909ms STATUS: NO_TESTS_REGISTERED
-+2026-10-06 22:43:45 ahci_live PASSED: 5 FAILED: 0 TIME: 5991ms
-+2026-10-06 22:43:58 iommu_live PASSED: 6 FAILED: 0 TIME: 163ms
-+2026-10-06 22:46:10 testrunner PASSED: 0 FAILED: 0 TIME: 132022ms STATUS: TIMEOUT
-+
-+SUMMARY: total=20 ok=14 fail=6
-+2026-10-06 22:54:28 logging_debug PASSED: 36 FAILED: 0 TIME: 800ms
-+2026-10-06 22:55:04 capability PASSED: 148 FAILED: 0 TIME: 5492ms
-+2026-10-06 22:55:27 proc_elf PASSED: 91 FAILED: 0 TIME: 4947ms
-+2026-10-06 22:55:49 smp PASSED: 81 FAILED: 0 TIME: 3096ms
-+2026-10-06 23:01:06 task_tcb_log PASSED: 1 FAILED: 0 TIME: 55ms
-+2026-10-06 23:03:35 testrunner PASSED: 16 FAILED: 0 TIME: 120s
+     auto *pt = get_table(pd, pd_idx, false);
+     if (!pt) {
++        note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
+         return;
+     }
+     pt[pt_idx] = 0;
+@@ -1166,24 +1276,12 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+     // owner bit is KERNEL (free_user_pages only frees USER-owned table pages).
+     static uint64_t s_fup_skip_log = 0;
+     auto log_skip = [](const char *lvl, uint64_t phys) {
+-        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >= 24)
++        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >=
++            kFupSkipLogCap)
+             return;
+         __atomic_fetch_add(&s_fup_skip_log, 1UL, __ATOMIC_RELAXED);
+         arch::QemuDebugcon::write(lvl);
+-        char buf[24];
+-        int p = 0;
+-        buf[p++] = '0';
+-        buf[p++] = 'x';
+-        bool started = false;
+-        for (int sh = 60; sh >= 0; sh -= 4) {
+-            unsigned nib = static_cast<unsigned>((phys >> sh) & 0xF);
+-            if (nib || started || sh == 0) {
+-                buf[p++] = "0123456789abcdef"[nib];
+-                started = true;
+-            }
+-        }
+-        buf[p++] = '\n';
+-        arch::QemuDebugcon::write(buf, static_cast<size_t>(p));
++        write_hex_debugcon(phys);
+     };
+     for (int pml4_idx = 0; pml4_idx < static_cast<int>(arch::PML4_USER_COUNT);
+          ++pml4_idx) {
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index 7d2352c59..f816f6096 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -23,8 +23,6 @@
+ ///        bounded page-walk depth (4-level x86_64/aarch64, 3-level riscv64
+ ///        Sv39).
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <constants.hpp>
+ #include <kernel/memory/vmm_errors.hpp>
+diff --git a/src/kernel/memory/vmm_errors.hpp b/src/kernel/memory/vmm_errors.hpp
+index fedc3497d..e536cc56f 100644
+--- a/src/kernel/memory/vmm_errors.hpp
++++ b/src/kernel/memory/vmm_errors.hpp
+@@ -21,8 +21,6 @@
+ /// @file vmm_errors.hpp
+ /// @brief Virtual Memory Manager error codes and string lookup.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <assert.hpp>
+ 

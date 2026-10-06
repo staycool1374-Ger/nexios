@@ -21,8 +21,6 @@
 /// @file vmm_errors.hpp
 /// @brief Virtual Memory Manager error codes and string lookup.
 
-#pragma once
-
 #include <types.hpp>
 #include <assert.hpp>
 

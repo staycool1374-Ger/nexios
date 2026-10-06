@@ -56,6 +56,7 @@ TlbShootdown::Error TlbShootdown::request(uint64_t va, uint16_t pcid) noexcept {
 void TlbShootdown::coalesce_and_apply() noexcept {
     // Snapshot under lock; apply without holding it (INVLPG/purge take
     // no locks; keeps the critical section short).
+    // WCET: bounded by MAX_PENDING (see header); no allocation.
     Request batch[MAX_PENDING];
     uint64_t count = 0;
     {
@@ -127,6 +128,7 @@ void TlbShootdown::on_tick(uint64_t now) noexcept {
     // ISR-safe: IF is already clear on the tick path; try_lock skips on
     // contention instead of spinning on a task-held lock (single-CPU
     // deadlock otherwise).  Bounded: at most MAX_PER_TICK releases.
+    // WCET: bounded scan + bounded releases; no allocation, never blocks.
     arch::IrqGuard irq_guard{};
     if (!shootdown_lock_.try_lock())
         return;
@@ -163,11 +165,14 @@ uint64_t TlbShootdown::quarantine_count() noexcept {
 }
 
 void TlbShootdown::set_timeout_ticks_for_test(uint64_t ticks) noexcept {
+    // Test-isolation hook: production paths never call this (the timeout
+    // stays a live field — no test-mode branch in quarantine timing).
     sync::IrqSpinLockGuard guard(shootdown_lock_);
     timeout_ticks_ = ticks;
 }
 
 void TlbShootdown::reset() noexcept {
+    // Test-isolation hook (see set_timeout_ticks_for_test above).
     sync::IrqSpinLockGuard guard(shootdown_lock_);
     pending_count_ = 0;
     quarantine_count_ = 0;

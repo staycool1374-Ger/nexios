@@ -21,8 +21,6 @@
 /// @file pmm_errors.hpp
 /// @brief Physical Memory Manager error codes and string lookup.
 
-#pragma once
-
 #include <types.hpp>
 #include <assert.hpp>
 

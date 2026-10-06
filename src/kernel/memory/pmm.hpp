@@ -22,12 +22,12 @@
 /// @brief Physical Memory Manager — bitmap-based page allocator with owner
 /// tracking.
 
-#pragma once
-
 #include <types.hpp>
 #include <constants.hpp>
 #include <kernel/memory/pmm_errors.hpp>
 #include <kernel/memory/cache_color.hpp>
+#include <kernel/task/task_fwd.hpp>
+#include <kernel/sync/irq_spinlock_guard.hpp>
 
 namespace kernel::test {
 struct PtPoolSnapshot;
@@ -403,6 +403,53 @@ class PMM {
     /// @param color Color in [0, cache::NUM_COLORS).
     /// @return Physical address of first page, or 0 on failure.
     static uint64_t try_alloc_colored_user(uint64_t color);
+
+    /// @brief Shared single/contiguous window allocator (issue #254 H8:
+    ///        try_alloc_kernel/try_alloc_user differed only in the owner
+    ///        bit).  Caller holds pmm_lock_.  WCET: intentional flat scan,
+    ///        branch-free ownership via template (zero-cost if constexpr).
+    /// @param count Number of contiguous pages.
+    /// @return Physical address of first page, or 0 on failure.
+    template <bool kUserOwned>
+    static uint64_t alloc_from_window_locked(size_t count);
+    /// @brief Shared single-page colored allocator (issue #254 H8: the
+    ///        KERNEL/USER variants differed only in the owner bit).
+    ///        Caller holds pmm_lock_.  Creation/test-time path (not
+    ///        RT-budgeted).
+    /// @param color Color in [0, cache::NUM_COLORS).
+    /// @return Physical address of first page, or 0 on failure.
+    template <bool kUserOwned>
+    static uint64_t alloc_colored_locked(uint64_t color);
+    /// @brief OOM-handler outcome (issue #254 H8: the 12× unlock/call/
+    ///        relock epilogues shared one shape).  handler_ran records
+    ///        that a handler was installed — callers re-read the current
+    ///        task exactly then; retry is the handler verdict.
+    struct OomOutcome {
+        bool handler_ran;
+        bool retry;
+    };
+    /// @brief Run the installed OOM handler with @p lock released and
+    ///        re-acquire for retry (issue #254 H8).  Preserves the exact
+    ///        unlock → handler → relock order; never blocks (handler runs
+    ///        unlocked, same as before).
+    static OomOutcome run_oom_handler_locked(sync::IrqSpinLockGuard &lock);
+    /// @brief Attribute an allocation to the current task (issue #254 H8:
+    ///        the magic-check + budget/accounting stanza was duplicated 6×).
+    ///        No-op for null/foreign TCBs.
+    static void attribute_alloc_to_current(TaskControlBlock *cur,
+                                           size_t count);
+    /// @brief Per-task budget check (issue #254 H5: the over-budget
+    ///        conjunction was triplicated).  Cheap-pointer-first order
+    ///        preserved; count<=1 keeps the legacy >= comparison exactly.
+    static bool is_over_budget(TaskControlBlock *cur, size_t count);
+    /// @brief Free-list head validity (issue #254 H5: the window-range
+    ///        conjunction was triplicated across both free lists).
+    static bool is_free_head_valid(uint64_t head);
+    /// @brief Page-table pool configured (static range; issue #254 H5).
+    static bool is_table_pool_configured();
+    /// @brief Page-table pool range configured (issue #254 H5: De Morgan
+    ///        dual of the early-out form above, for local copies).
+    static bool is_table_pool_range_configured(uint64_t start, uint64_t end);
 };
 
 } // namespace kernel

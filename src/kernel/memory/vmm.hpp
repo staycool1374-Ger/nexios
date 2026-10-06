@@ -23,8 +23,6 @@
 ///        bounded page-walk depth (4-level x86_64/aarch64, 3-level riscv64
 ///        Sv39).
 
-#pragma once
-
 #include <types.hpp>
 #include <constants.hpp>
 #include <kernel/memory/vmm_errors.hpp>

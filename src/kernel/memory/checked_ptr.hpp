@@ -18,8 +18,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
-
 #include <types.hpp>
 #include <string.hpp>
 #include <concepts.hpp>

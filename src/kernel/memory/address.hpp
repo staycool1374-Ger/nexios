@@ -22,8 +22,6 @@
 /// @brief Type-safe physical and virtual address wrappers (MISRA C++ 2023
 /// compliant).
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {

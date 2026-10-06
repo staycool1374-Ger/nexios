@@ -2525,3 +2525,19 @@ SUMMARY: total=20 ok=14 fail=6
 2026-10-06 22:55:49 smp PASSED: 81 FAILED: 0 TIME: 3096ms
 2026-10-06 23:01:06 task_tcb_log PASSED: 1 FAILED: 0 TIME: 55ms
 2026-10-06 23:03:35 testrunner PASSED: 16 FAILED: 0 TIME: 120s
+2026-10-06 23:43:13 memory_pmm PASSED: 9 FAILED: 0 TIME: 162ms
+2026-10-06 23:43:34 memory_mempool PASSED: 5 FAILED: 0 TIME: 126ms
+2026-10-06 23:46:33 memory_vmm PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (zero S: lines, DMD starvation spam; rerun green, flake)
+2026-10-06 23:46:33 memory_vmm PASSED: 13 FAILED: 0 TIME: 303ms
+2026-10-06 23:54:39 memory_isolation PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (run1, zero S: lines)
+2026-10-06 23:54:39 memory_isolation PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (run2, zero S: lines)
+2026-10-06 23:54:39 memory_isolation PASSED: 3 FAILED: 0 TIME: 157ms
+2026-10-06 23:54:56 memory_safety PASSED: 11 FAILED: 0 TIME: 318ms
+2026-10-06 23:55:14 memory_kernel_isolation PASSED: 6 FAILED: 0 TIME: 200ms
+2026-10-06 23:55:31 memory_page_tables PASSED: 9 FAILED: 0 TIME: 236ms
+2026-10-06 23:58:10 memory_checked_ptr_api PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (zero S: lines; rerun green, flake)
+2026-10-06 23:58:10 memory_checked_ptr_api PASSED: 10 FAILED: 0 TIME: 262ms
+2026-10-06 23:58:27 memory_integrity PASSED: 2 FAILED: 0 TIME: 77ms
+2026-10-06 23:58:48 safe PASSED: 139 FAILED: 0 TIME: 7846ms
+2026-10-07 00:01:31 selftest PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (known #280-class intermittent pre-test stall; rerun green)
+2026-10-07 00:01:31 selftest PASSED: 139 FAILED: 0 TIME: 7519ms

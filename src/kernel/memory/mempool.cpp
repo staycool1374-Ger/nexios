@@ -29,6 +29,11 @@ namespace kernel {
 
 static sync::SpinLock mempool_lock_{};
 
+// Issue #254 H5: pool-index validity predicate (cheap compare first).
+static bool has_pool(size_t idx) {
+    return idx < MemPool::POOL_COUNT;
+}
+
 MemPool::Pool MemPool::pools_[POOL_COUNT] = {};
 constinit bool MemPool::ready_ = false;
 
@@ -93,22 +98,14 @@ void MemPool::init() {
 void *MemPool::alloc(size_t size) {
     sync::IrqSpinLockGuard lock(mempool_lock_);
     size_t idx = find_pool(size);
-    if (idx >= POOL_COUNT)
+    if (!has_pool(idx))
         return nullptr;
 
     auto &pool = pools_[idx];
     if (pool.free_count == 0)
         return nullptr;
 
-    size_t block = pool.first_free;
-    ENSURE(block < pool.block_count);
-    ENSURE(pool.is_block_freed(block) &&
-           "free-list corruption: alloc of already-allocated block");
-    size_t *next =
-        reinterpret_cast<size_t *>(pool.data + block * pool.block_size);
-    pool.first_free = *next;
-    --pool.free_count;
-    pool.clear_block_freed(block);
+    size_t block = pop_block_locked(idx);
 
     kernel::test::ResourceTracker::instance().track_mempool_alloc(idx);
     return pool.data + block * pool.block_size;
@@ -122,64 +119,39 @@ void MemPool::free(void *block) {
 
     sync::IrqSpinLockGuard lock(mempool_lock_);
 
-    for (size_t i = 0; i < POOL_COUNT; ++i) {
-        auto &pool = pools_[i];
-        if (!pool.initialized)
-            continue;
-
-        uint8_t *start = pool.data;
-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
-        uint8_t *p = static_cast<uint8_t *>(block);
-
-        if (p >= start && p < end) {
-            size_t offset = static_cast<size_t>(p - start);
-            size_t block_idx = offset / pool.block_size;
-            ENSURE(offset % pool.block_size == 0);
-            ENSURE(block_idx < pool.block_count);
-            // Pinned blocks are reserved (e.g. baseline TCBs referenced by the
-            // test-isolation snapshot).  Never return them to the free list;
-            // keep them allocated so they cannot be recycled onto test tasks.
-            if (pool.is_block_pinned(block_idx)) {
-                Logger::warn("MemPool::free: pinned block %zu in pool %zu",
-                             block_idx, i);
-                // Issue #234: pinned-free refusal enters the ring.
-                kernel::log::dmesg_push_sev(
-                    kernel::log::ErrorSubsystem::MEMPOOL,
-                    kernel::log::kDmesgBase_MPOOL + 3,
-                    kernel::log::LogSeverity::WARN, "pinned block kept",
-                    block_idx);
-                return;
-            }
-            ENSURE(!pool.is_block_freed(block_idx) && "double-free detected");
-#ifdef CONFIG_DEBUG
-            __builtin_memset(p, 0xDD, pool.block_size);
-#endif
-            pool.set_block_freed(block_idx);
-            size_t *next = reinterpret_cast<size_t *>(p);
-            *next = pool.first_free;
-            pool.first_free = block_idx;
-            ++pool.free_count;
-            kernel::test::ResourceTracker::instance().track_mempool_free(i);
-            return;
-        }
+    size_t i = 0;
+    size_t offset = 0;
+    size_t block_idx = 0;
+    if (!find_owner_pool(block, i, offset, block_idx))
+        return;
+    auto &pool = pools_[i];
+    ENSURE(offset % pool.block_size == 0);
+    ENSURE(block_idx < pool.block_count);
+    // Pinned blocks are reserved (e.g. baseline TCBs referenced by the
+    // test-isolation snapshot).  Never return them to the free list;
+    // keep them allocated so they cannot be recycled onto test tasks.
+    if (pool.is_block_pinned(block_idx)) {
+        Logger::warn("MemPool::free: pinned block %zu in pool %zu",
+                     block_idx, i);
+        // Issue #234: pinned-free refusal enters the ring.
+        kernel::log::dmesg_push_sev(
+            kernel::log::ErrorSubsystem::MEMPOOL,
+            kernel::log::kDmesgBase_MPOOL + 3,
+            kernel::log::LogSeverity::WARN, "pinned block kept",
+            block_idx);
+        return;
     }
+    push_block_locked(i, static_cast<uint8_t *>(block), block_idx);
 }
 /// @param ptr Pointer to test.
 /// @return true if the pointer is owned by any initialised pool.
 bool MemPool::contains(void *ptr) {
     if (!ptr)
         return false;
-    uint8_t *p = static_cast<uint8_t *>(ptr);
-    for (size_t i = 0; i < POOL_COUNT; ++i) {
-        auto &pool = pools_[i];
-        if (!pool.initialized)
-            continue;
-        uint8_t *start = pool.data;
-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
-        if (p >= start && p < end)
-            return true;
-    }
-    return false;
+    size_t i = 0;
+    size_t offset = 0;
+    size_t block_idx = 0;
+    return find_owner_pool(ptr, i, offset, block_idx);
 }
 
 /// @brief Find the smallest initialised pool class whose block_size >= size.
@@ -191,7 +163,58 @@ size_t MemPool::find_pool(size_t size) {
             return i;
         }
     }
-    return static_cast<size_t>(-1);
+    return kNoPool;
+}
+
+size_t MemPool::pop_block_locked(size_t idx) {
+    // WCET: O(1) flat pop (single-call depth from alloc/alloc_err).
+    auto &pool = pools_[idx];
+    size_t block = pool.first_free;
+    ENSURE(block < pool.block_count);
+    ENSURE(pool.is_block_freed(block) &&
+           "free-list corruption: alloc of already-allocated block");
+    size_t *next =
+        reinterpret_cast<size_t *>(pool.data + block * pool.block_size);
+    pool.first_free = *next;
+    --pool.free_count;
+    pool.clear_block_freed(block);
+    return block;
+}
+
+void MemPool::push_block_locked(size_t idx, uint8_t *block_ptr,
+                                size_t block_idx) {
+    // WCET: O(1) flat push (single-call depth from free/free_err).
+    auto &pool = pools_[idx];
+    ENSURE(!pool.is_block_freed(block_idx) && "double-free detected");
+#ifdef CONFIG_DEBUG
+    __builtin_memset(block_ptr, 0xDD, pool.block_size);
+#endif
+    pool.set_block_freed(block_idx);
+    size_t *next = reinterpret_cast<size_t *>(block_ptr);
+    *next = pool.first_free;
+    pool.first_free = block_idx;
+    ++pool.free_count;
+    kernel::test::ResourceTracker::instance().track_mempool_free(idx);
+}
+
+bool MemPool::find_owner_pool(void *block, size_t &pool_idx_out,
+                              size_t &offset_out, size_t &block_idx_out) {
+    uint8_t *p = static_cast<uint8_t *>(block);
+    for (size_t i = 0; i < POOL_COUNT; ++i) {
+        auto &pool = pools_[i];
+        if (!pool.initialized)
+            continue;
+        uint8_t *start = pool.data;
+        uint8_t *end = pool.data + pool.block_size * pool.block_count;
+        if (p >= start && p < end) {
+            size_t offset = static_cast<size_t>(p - start);
+            offset_out = offset;
+            block_idx_out = offset / pool.block_size;
+            pool_idx_out = i;
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -305,61 +328,40 @@ size_t MemPool::pool_data_bytes() {
 
 void MemPool::pin_block(void *block) {
     sync::IrqSpinLockGuard lock(mempool_lock_);
-    uint8_t *p = static_cast<uint8_t *>(block);
-    for (size_t i = 0; i < POOL_COUNT; ++i) {
-        auto &pool = pools_[i];
-        if (!pool.initialized)
-            continue;
-        uint8_t *start = pool.data;
-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
-        if (p >= start && p < end) {
-            size_t offset = static_cast<size_t>(p - start);
-            size_t block_idx = offset / pool.block_size;
-            if (offset % pool.block_size == 0 && block_idx < pool.block_count) {
-                ENSURE(!pool.is_block_freed(block_idx) &&
-                       "pin_block: cannot pin a free-list block");
-                pool.set_block_pinned(block_idx);
-            }
-            return;
-        }
+    size_t i = 0;
+    size_t offset = 0;
+    size_t block_idx = 0;
+    if (!find_owner_pool(block, i, offset, block_idx))
+        return;
+    auto &pool = pools_[i];
+    if (offset % pool.block_size == 0 && block_idx < pool.block_count) {
+        ENSURE(!pool.is_block_freed(block_idx) &&
+               "pin_block: cannot pin a free-list block");
+        pool.set_block_pinned(block_idx);
     }
 }
 
 void MemPool::unpin_block(void *block) {
     sync::IrqSpinLockGuard lock(mempool_lock_);
-    uint8_t *p = static_cast<uint8_t *>(block);
-    for (size_t i = 0; i < POOL_COUNT; ++i) {
-        auto &pool = pools_[i];
-        if (!pool.initialized)
-            continue;
-        uint8_t *start = pool.data;
-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
-        if (p >= start && p < end) {
-            size_t offset = static_cast<size_t>(p - start);
-            size_t block_idx = offset / pool.block_size;
-            if (offset % pool.block_size == 0 && block_idx < pool.block_count)
-                pool.clear_block_pinned(block_idx);
-            return;
-        }
-    }
+    size_t i = 0;
+    size_t offset = 0;
+    size_t block_idx = 0;
+    if (!find_owner_pool(block, i, offset, block_idx))
+        return;
+    auto &pool = pools_[i];
+    if (offset % pool.block_size == 0 && block_idx < pool.block_count)
+        pool.clear_block_pinned(block_idx);
 }
 
 bool MemPool::is_block_pinned(void *block) {
-    uint8_t *p = static_cast<uint8_t *>(block);
-    for (size_t i = 0; i < POOL_COUNT; ++i) {
-        auto &pool = pools_[i];
-        if (!pool.initialized)
-            continue;
-        uint8_t *start = pool.data;
-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
-        if (p >= start && p < end) {
-            size_t offset = static_cast<size_t>(p - start);
-            size_t block_idx = offset / pool.block_size;
-            if (offset % pool.block_size == 0 && block_idx < pool.block_count)
-                return pool.is_block_pinned(block_idx);
-            return false;
-        }
-    }
+    size_t i = 0;
+    size_t offset = 0;
+    size_t block_idx = 0;
+    if (!find_owner_pool(block, i, offset, block_idx))
+        return false;
+    auto &pool = pools_[i];
+    if (offset % pool.block_size == 0 && block_idx < pool.block_count)
+        return pool.is_block_pinned(block_idx);
     return false;
 }
 
@@ -385,7 +387,7 @@ MemPoolError MemPool::alloc_err(size_t size, void *&out_ptr) {
     sync::IrqSpinLockGuard lock(mempool_lock_);
 
     size_t idx = find_pool(size);
-    if (idx >= POOL_COUNT) {
+    if (!has_pool(idx)) {
         return MEMPOOL_ERR_TOO_LARGE;
     }
 
@@ -394,15 +396,7 @@ MemPoolError MemPool::alloc_err(size_t size, void *&out_ptr) {
         return MEMPOOL_ERR_OOM;
     }
 
-    size_t block = pool.first_free;
-    ENSURE(block < pool.block_count);
-    ENSURE(pool.is_block_freed(block) &&
-           "free-list corruption: alloc of already-allocated block");
-    size_t *next =
-        reinterpret_cast<size_t *>(pool.data + block * pool.block_size);
-    pool.first_free = *next;
-    --pool.free_count;
-    pool.clear_block_freed(block);
+    size_t block = pop_block_locked(idx);
 
     kernel::test::ResourceTracker::instance().track_mempool_alloc(idx);
     out_ptr = pool.data + block * pool.block_size;
@@ -419,37 +413,20 @@ MemPoolError MemPool::free_err(void *block) {
 
     sync::IrqSpinLockGuard lock(mempool_lock_);
 
-    for (size_t i = 0; i < POOL_COUNT; ++i) {
-        auto &pool = pools_[i];
-        if (!pool.initialized)
-            continue;
-
-        uint8_t *start = pool.data;
-        uint8_t *end = pool.data + pool.block_size * pool.block_count;
-        uint8_t *p = static_cast<uint8_t *>(block);
-
-        if (p >= start && p < end) {
-            size_t offset = static_cast<size_t>(p - start);
-            size_t block_idx = offset / pool.block_size;
-            ENSURE(offset % pool.block_size == 0);
-            ENSURE(block_idx < pool.block_count);
-            // Pinned blocks stay allocated (see MemPool::free).
-            if (pool.is_block_pinned(block_idx))
-                return MEMPOOL_ERR_OK;
-            ENSURE(!pool.is_block_freed(block_idx) && "double-free detected");
-#ifdef CONFIG_DEBUG
-            __builtin_memset(p, 0xDD, pool.block_size);
-#endif
-            pool.set_block_freed(block_idx);
-            size_t *next = reinterpret_cast<size_t *>(p);
-            *next = pool.first_free;
-            pool.first_free = block_idx;
-            ++pool.free_count;
-            kernel::test::ResourceTracker::instance().track_mempool_free(i);
-            return MEMPOOL_ERR_OK;
-        }
+    size_t i = 0;
+    size_t offset = 0;
+    size_t block_idx = 0;
+    if (!find_owner_pool(block, i, offset, block_idx)) {
+        return MEMPOOL_ERR_INVALID_PTR;
     }
-    return MEMPOOL_ERR_INVALID_PTR;
+    auto &pool = pools_[i];
+    ENSURE(offset % pool.block_size == 0);
+    ENSURE(block_idx < pool.block_count);
+    // Pinned blocks stay allocated (see MemPool::free).
+    if (pool.is_block_pinned(block_idx))
+        return MEMPOOL_ERR_OK;
+    push_block_locked(i, static_cast<uint8_t *>(block), block_idx);
+    return MEMPOOL_ERR_OK;
 }
 
 MemPoolError MemPool::reserve(size_t pool_idx, size_t count) {

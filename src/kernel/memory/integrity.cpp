@@ -49,38 +49,52 @@ extern uint64_t _text_end[];
 extern uint64_t _expected_code_crc[];
 }
 
+// Issue #254 H5: named expected section-marker tags (were raw literals at
+// the comparison sites below).  Values are linker-script ASCII tags;
+// mechanical substitution only, values byte-identical.
+static constexpr uint64_t kMagicTextStart = 0x545254535F545854ULL;
+static constexpr uint64_t kMagicTextEnd = 0x5F444E455F545854ULL;
+static constexpr uint64_t kMagicRodataStart = 0x545254535F544452ULL;
+static constexpr uint64_t kMagicRodataEnd = 0x5F444E455F544452ULL;
+static constexpr uint64_t kMagicDataStart = 0x545254535F415444ULL;
+static constexpr uint64_t kMagicDataEnd = 0x5F444E455F415444ULL;
+static constexpr uint64_t kMagicBssStart = 0x545254535F535342ULL;
+static constexpr uint64_t kMagicBssEnd = 0x5F444E455F535342ULL;
+static constexpr uint64_t kMagicStackBefore = 0x5F5246425F4B5453ULL;
+static constexpr uint64_t kMagicStackAfter = 0x5F5446415F4B5453ULL;
+
 /// @brief Verify section markers — compares each linker-placed magic constant
 ///        against its expected ASCII tag.  Fails via Logger on mismatch.
 /// @return true if all markers match.
 void check_section_markers() {
-    if (_m_text_start != 0x545254535F545854ULL) {
+    if (_m_text_start != kMagicTextStart) {
         panic("INTEGRITY: .text start marker corrupted");
     }
-    if (_m_text_end != 0x5F444E455F545854ULL) {
+    if (_m_text_end != kMagicTextEnd) {
         panic("INTEGRITY: .text end marker corrupted");
     }
-    if (_m_rodata_start != 0x545254535F544452ULL) {
+    if (_m_rodata_start != kMagicRodataStart) {
         panic("INTEGRITY: .rodata start marker corrupted");
     }
-    if (_m_rodata_end != 0x5F444E455F544452ULL) {
+    if (_m_rodata_end != kMagicRodataEnd) {
         panic("INTEGRITY: .rodata end marker corrupted");
     }
-    if (_m_data_start != 0x545254535F415444ULL) {
+    if (_m_data_start != kMagicDataStart) {
         panic("INTEGRITY: .data start marker corrupted");
     }
-    if (_m_data_end != 0x5F444E455F415444ULL) {
+    if (_m_data_end != kMagicDataEnd) {
         panic("INTEGRITY: .data end marker corrupted");
     }
-    if (_m_bss_start != 0x545254535F535342ULL) {
+    if (_m_bss_start != kMagicBssStart) {
         panic("INTEGRITY: .bss start marker corrupted");
     }
-    if (_m_bss_end != 0x5F444E455F535342ULL) {
+    if (_m_bss_end != kMagicBssEnd) {
         panic("INTEGRITY: .bss end marker corrupted");
     }
-    if (_m_stack_before != 0x5F5246425F4B5453ULL) {
+    if (_m_stack_before != kMagicStackBefore) {
         panic("INTEGRITY: stack before marker corrupted");
     }
-    if (_m_stack_after != 0x5F5446415F4B5453ULL) {
+    if (_m_stack_after != kMagicStackAfter) {
         panic("INTEGRITY: stack after marker corrupted");
     }
 }

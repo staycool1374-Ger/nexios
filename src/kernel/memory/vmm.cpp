@@ -137,6 +137,9 @@ void VMM::init() {
 /// @param user_alloc If true, allocate USER-owned pages for the new table.
 /// @return Pointer to the next-level table, or nullptr if not present and
 /// !create.
+/// WCET: intentional flat walk/split (bounded depth, at most one table
+/// alloc per call); a failed alloc returns nullptr and the caller drops
+/// the mapping through note_silent_drop_once (never retries in a loop).
 uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
                          bool user_alloc) {
     if (table[index] & PAGE_PRESENT) {
@@ -250,6 +253,110 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
     return new_table;
 }
 
+// Test-time kernel-VA touch notifiers (issue #254 H2: eleven
+// is_test_active() control-flow branches hoisted here, bit-identical).
+// WHY the flags exist: test tasks legitimately map/unmap kernel-half VAs;
+// the snapshot mechanism must know which half was touched so restore rewinds
+// exactly that half (HHDM PD / identity PD / Sv39 L1).  Release stores pair
+// with the acquire take in snapshot_restore (issues #60/#152).  WHY the
+// warns stay: silent kernel-half mutation hides test pollution; each message
+// names the operation + index domain so the polluting test is identifiable.
+enum class TestTouchWarn {
+    kMapL1,
+    kMapPd,
+    kUnmapL0,
+    kUnmapPml4,
+    kAccessPml4,
+};
+
+static void warn_test_kernel_touch(bool gate, TestTouchWarn warn,
+                                   uint64_t va, size_t idx) {
+    if (!gate || !Scheduler::is_test_active()) {
+        return;
+    }
+    switch (warn) {
+        case TestTouchWarn::kMapL1:
+            Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
+                         "(l0_idx=%zu) — L1 restore will clean up",
+                         va, idx);
+            break;
+        case TestTouchWarn::kMapPd:
+            Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
+                         "(pml4_idx=%zu) — PD restore will clean up",
+                         va, idx);
+            break;
+        case TestTouchWarn::kUnmapL0:
+            Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
+                         "(l0_idx=%zu)",
+                         va, idx);
+            break;
+        case TestTouchWarn::kUnmapPml4:
+            Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
+                         "(pml4_idx=%zu)",
+                         va, idx);
+            break;
+        case TestTouchWarn::kAccessPml4:
+            Logger::warn("virt_to_phys: test accessing kernel-space VA 0x%lx "
+                         "(pml4_idx=%zu)",
+                         va, idx);
+            break;
+    }
+}
+
+static void arm_test_touch_flags(bool arm_hhdm, bool arm_identity) {
+    if (!Scheduler::is_test_active()) {
+        return;
+    }
+    // Issue #60/#152: release stores pair with the acquire take in
+    // snapshot_restore (a concurrent take can never lose a set).
+    if (arm_hhdm) {
+        __atomic_store_n(&VMM::hhdm_modified_, true, __ATOMIC_RELEASE);
+    }
+    if (arm_identity) {
+        __atomic_store_n(&VMM::identity_modified_, true, __ATOMIC_RELEASE);
+    }
+}
+
+// Cap for bounded throttled diagnostics (issue #254 H5: was a raw 24).
+static constexpr uint64_t kFupSkipLogCap = 24;
+
+// Hex-value half of the throttled diagnostics below (issue #254 H8: shared
+// by note_silent_drop_once and the free_user_pages skip log — the 0x-print
+// loop was duplicated).  Debugcon port IO only (lock-free, ISR-safe;
+// no-op off x86_64).
+static void write_hex_debugcon(uint64_t val) {
+    char buf[24];
+    int p = 0;
+    buf[p++] = '0';
+    buf[p++] = 'x';
+    bool started = false;
+    for (int sh = 60; sh >= 0; sh -= 4) {
+        unsigned nib = static_cast<unsigned>((val >> sh) & 0xF);
+        if (nib || started || sh == 0) {
+            buf[p++] = "0123456789abcdef"[nib];
+            started = true;
+        }
+    }
+    buf[p++] = '\n';
+    arch::QemuDebugcon::write(buf, static_cast<size_t>(p));
+}
+
+// Bounded one-shot diagnostic for silently-dropped mappings (issue #254 H7).
+// WHY silent drops exist: a missing table or a failed split-alloc means "no
+// such mapping" to the caller, so these paths return without an error code.
+// The throttled note keeps them observable without flooding the log.
+// Lock-free (atomics + debugcon port IO only): safe from any context,
+// including tick/ISR paths.  Never touches Logger/serial/shell.
+static void note_silent_drop_once(const char *tag, uint64_t val) {
+    static uint64_t count = 0;
+    if (__atomic_load_n(&count, __ATOMIC_RELAXED) >= kFupSkipLogCap) {
+        return;
+    }
+    __atomic_fetch_add(&count, 1UL, __ATOMIC_RELAXED);
+    arch::QemuDebugcon::write(tag);
+    write_hex_debugcon(val);
+}
+
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 /// @brief Map a 4 KiB page in the kernel page table.
 /// @param virt_addr Page-aligned virtual address.
@@ -265,33 +372,30 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
-    // Issue #152: mirror the x86_64 modified-flags (is_test_active-gated
-    // release stores pairing with the acquire take in snapshot_restore).
-    // Exact-match gating (see kHhdmL0Idx below): the armed flag has an
-    // Sv39 restore covering it.  NOTE: no identity flag on riscv64 — the
-    // boot identity map (L0[2], boot.S) is dead at runtime (L0[2] reads
-    // zero; the kernel runs via HHDM), so there is no live low map to
-    // protect.  Low-half maps arm nothing.
+    // Issue #152: snapshot pairing for Sv39 (see arm_test_touch_flags).
+    // No identity flag on riscv64: the boot identity map is dead at
+    // runtime, so low-half maps arm nothing.
     // Allow kernel-space VAs when tests are active: the Sv39 L1
     // save/restore in the snapshot mechanism undoes any 2MB-block splits.
-    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
-        Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
-                     "(l0_idx=%zu) — L1 restore will clean up",
-                     virt_addr, l0_idx);
-        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
-    }
+    warn_test_kernel_touch(l0_idx == kHhdmL0Idx, TestTouchWarn::kMapL1,
+                           virt_addr, l0_idx);
+    arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
 
     auto *l1 = get_table(l0, l0_idx, true);
-    if (!l1)
+    if (!l1) {
+        note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
         return;
+    }
 
     // If L1 entry is a 2MB block, split it into 512 4KB entries.
     // Issue #206: Sv39 PTE codec (raw & ~0x1FFFFF is x86-domain).
     if ((l1[l1_idx] & PAGE_PRESENT) &&
         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
         uint64_t new_l2_phys = PMM::alloc_page_table();
-        if (!new_l2_phys)
+        if (!new_l2_phys) {
+            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
             return;
+        }
         auto *new_l2 =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_l2_phys);
         uint64_t block_base =
@@ -307,8 +411,10 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     }
 
     auto *l2 = get_table(l1, l1_idx, true);
-    if (!l2)
+    if (!l2) {
+        note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
         return;
+    }
 
     if (user && phys_addr < PMM::total_memory())
         ENSURE(PMM::is_user_page(phys_addr) &&
@@ -331,33 +437,28 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     // Allow kernel-space VAs when tests are active: PD save/restore in the
     // snapshot mechanism undoes any huge-page splits.  Boot-time calls (APIC
     // MMIO mapping, etc.) are still permitted as they run before snapshot.
-    if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
-        Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
-                     "(pml4_idx=%zu) — PD restore will clean up",
-                     virt_addr, pml4_idx);
-        // Issue #60: release store — pairs with the acquire take in
-        // snapshot_restore (a concurrent set can never be lost).
-        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
-    }
+    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
+                           TestTouchWarn::kMapPd, virt_addr, pml4_idx);
+    arm_test_touch_flags(pml4_idx >= arch::PML4_USER_COUNT, false);
     // Low identity-map VAs (pml4_idx 0, PD_IDENTITY phys 0x3000): a map_page
     // here splits a boot 2 MiB identity huge entry into a PT page.  Flag it so
-    // snapshot_restore restores PD_IDENTITY (the HHDM-PD gate only covers
-    // pml4_idx >= PML4_USER_COUNT).
-    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
-        // Issue #60: release store (see hhdm site above).
-        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
-    }
+    // snapshot_restore restores PD_IDENTITY (see arm_test_touch_flags).
+    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
 
     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
 
     auto *pdpt = get_table(pml4, pml4_idx, true);
-    if (!pdpt)
+    if (!pdpt) {
+        note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
         return;
+    }
     auto *pd = get_table(pdpt, pdpt_idx, true);
-    if (!pd)
+    if (!pd) {
+        note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
         return;
+    }
 
     // If the PD entry is a 2MB huge page, split it into 512 4KB entries
     // so we can map an individual 4KB page within it.
@@ -368,8 +469,10 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
 #endif
     {
         uint64_t new_pt_phys = PMM::alloc_page_table();
-        if (!new_pt_phys)
+        if (!new_pt_phys) {
+            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
             return;
+        }
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto *new_pt =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
@@ -404,8 +507,10 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     }
 
     auto *pt = get_table(pd, pd_idx, true);
-    if (!pt)
+    if (!pt) {
+        note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
         return;
+    }
 
     if (user && phys_addr < PMM::total_memory())
         ENSURE(PMM::is_user_page(phys_addr) &&
@@ -443,21 +548,21 @@ void VMM::unmap_page(uint64_t virt_addr) {
     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
-    // Issue #152: mirror map_page (x86_64 unmap_page sets the identity
-    // flag only, plus a warn for kernel-space VAs). No identity flag on
-    // riscv64 (dead boot map — see map_page note above).
-    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
-        Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
-                     "(l0_idx=%zu)",
-                     virt_addr, l0_idx);
-    }
+    // Issue #152: mirror map_page (x86_64 unmap_page arms the identity
+    // flag only, plus a warn for kernel-space VAs; see the notifiers above).
+    warn_test_kernel_touch(l0_idx == kHhdmL0Idx, TestTouchWarn::kUnmapL0,
+                           virt_addr, l0_idx);
 
     auto *l1 = get_table(l0, l0_idx, false);
-    if (!l1)
+    if (!l1) {
+        note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
         return;
+    }
     auto *l2 = get_table(l1, l1_idx, false);
-    if (!l2)
+    if (!l2) {
+        note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
         return;
+    }
 
     l2[l2_idx] = 0;
     arch::ArchPageTable::tlb_flush(virt_addr);
@@ -467,30 +572,30 @@ void VMM::unmap_page(uint64_t virt_addr) {
                                               (kernel_pml4_ & ~0xFFFULL));
 
     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-    if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
-        Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
-                     "(pml4_idx=%zu)",
-                     virt_addr, pml4_idx);
-    }
+    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
+                           TestTouchWarn::kUnmapPml4, virt_addr, pml4_idx);
     // Low identity-map VAs: flag for PD_IDENTITY restore (see map_page).
-    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
-        // Issue #60: release store (see map_page sites above).
-        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
-    }
+    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
 
     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
 
     auto *pdpt = get_table(pml4, pml4_idx, false);
-    if (!pdpt)
+    if (!pdpt) {
+        note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
         return;
+    }
     auto *pd = get_table(pdpt, pdpt_idx, false);
-    if (!pd)
+    if (!pd) {
+        note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
         return;
+    }
     auto *pt = get_table(pd, pd_idx, false);
-    if (!pt)
+    if (!pt) {
+        note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
         return;
+    }
 
     pt[pt_idx] = 0;
     arch::ArchPageTable::tlb_flush(virt_addr);
@@ -532,11 +637,8 @@ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
                                               (kernel_pml4_ & ~0xFFFULL));
 
     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-    if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
-        Logger::warn("virt_to_phys: test accessing kernel-space VA 0x%lx "
-                     "(pml4_idx=%zu)",
-                     virt_addr, pml4_idx);
-    }
+    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
+                           TestTouchWarn::kAccessPml4, virt_addr, pml4_idx);
 
     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
@@ -602,16 +704,18 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     // rewind.  Without this, splits never trigger it and persist across
     // boundaries.  HHDM only (no live identity map on riscv64 — see
     // map_page note above).
-    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
-        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
-    }
+    arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
 
     auto *l1 = get_table(l0, l0_idx, true, true);
-    if (!l1)
+    if (!l1) {
+        note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
         return;
+    }
     auto *l2 = get_table(l1, l1_idx, true, true);
-    if (!l2)
+    if (!l2) {
+        note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
         return;
+    }
 
     if (user && phys_addr < PMM::total_memory())
         ENSURE(PMM::is_user_page(phys_addr) &&
@@ -641,20 +745,19 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     // kernel table or share PD pages with it, so flag unconditionally).
     // Without this, splits (e.g. test mb2 identity re-mapping) never
     // trigger the snapshot PD rewind and persist across boundaries.
-    if (Scheduler::is_test_active() &&
-        pml4_idx >= arch::PML4_USER_COUNT) {
-        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
-    }
-    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
-        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
-    }
+    arm_test_touch_flags(pml4_idx >= arch::PML4_USER_COUNT,
+                         pml4_idx < arch::PML4_USER_COUNT);
 
     auto *pdpt = get_table(pml4, pml4_idx, true, true);
-    if (!pdpt)
+    if (!pdpt) {
+        note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
         return;
+    }
     auto *pd = get_table(pdpt, pdpt_idx, true, true);
-    if (!pd)
+    if (!pd) {
+        note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
         return;
+    }
 
 #if defined(CONFIG_ARCH_AARCH64)
     if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
@@ -663,8 +766,10 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
 #endif
     {
         uint64_t new_pt_phys = PMM::alloc_user_page();
-        if (!new_pt_phys)
+        if (!new_pt_phys) {
+            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
             return;
+        }
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto *new_pt =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
@@ -691,8 +796,10 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     }
 
     auto *pt = get_table(pd, pd_idx, true, true);
-    if (!pt)
+    if (!pt) {
+        note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
         return;
+    }
 
     if (user && phys_addr < PMM::total_memory())
         ENSURE(PMM::is_user_page(phys_addr) &&
@@ -744,6 +851,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     }
     auto *l1 = get_table(top, l0_idx, false);
     if (!l1) {
+        note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
         return;
     }
     if (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
@@ -751,6 +859,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     }
     auto *l2 = get_table(l1, l1_idx, false);
     if (!l2) {
+        note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
         return;
     }
     l2[l2_idx] = 0;
@@ -761,15 +870,15 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
     // Issue #197: mirror unmap_page — flag low-VA surgery for the
     // PD_IDENTITY restore (see map_page_in_pml4 note above).
-    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
-        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
-    }
+    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
     auto *pdpt = get_table(top, pml4_idx, false);
     if (!pdpt) {
+        note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
         return;
     }
     auto *pd = get_table(pdpt, pdpt_idx, false);
     if (!pd) {
+        note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
         return;
     }
 #if defined(CONFIG_ARCH_AARCH64)
@@ -783,6 +892,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
 #endif
     auto *pt = get_table(pd, pd_idx, false);
     if (!pt) {
+        note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
         return;
     }
     pt[pt_idx] = 0;
@@ -1166,24 +1276,12 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
     // owner bit is KERNEL (free_user_pages only frees USER-owned table pages).
     static uint64_t s_fup_skip_log = 0;
     auto log_skip = [](const char *lvl, uint64_t phys) {
-        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >= 24)
+        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >=
+            kFupSkipLogCap)
             return;
         __atomic_fetch_add(&s_fup_skip_log, 1UL, __ATOMIC_RELAXED);
         arch::QemuDebugcon::write(lvl);
-        char buf[24];
-        int p = 0;
-        buf[p++] = '0';
-        buf[p++] = 'x';
-        bool started = false;
-        for (int sh = 60; sh >= 0; sh -= 4) {
-            unsigned nib = static_cast<unsigned>((phys >> sh) & 0xF);
-            if (nib || started || sh == 0) {
-                buf[p++] = "0123456789abcdef"[nib];
-                started = true;
-            }
-        }
-        buf[p++] = '\n';
-        arch::QemuDebugcon::write(buf, static_cast<size_t>(p));
+        write_hex_debugcon(phys);
     };
     for (int pml4_idx = 0; pml4_idx < static_cast<int>(arch::PML4_USER_COUNT);
          ++pml4_idx) {
