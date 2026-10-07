@@ -44,6 +44,11 @@
 
 <!-- Newest first. Bodies carry durable guidance only. -->
 
+### #227 — debugd Phase 6 bare-metal audit (verification-only cycle)
+- **Learned:** (1) Audit tasks can complete with zero src changes — filings ARE the deliverable; POST-audit then reviews an (almost) empty patch, which is legitimate. (2) `git diff -- .` swallows audits/pending_patch.diff itself — always exclude it (`':!audits/pending_patch.diff'`) or the patch self-references (900+ garbage lines). (3) Verify the "missing" row before assuming loss: test-history appends from parallel runs interleave; `tail` lies, `rg` tells.
+- **Adapted:** 6 GAP follow-ups #304–#309 as sub-issues of #227; zero-change POST-227 APPROVED; hal_serial_logic + exc_table evidence rows.
+- **Style re-surface:** no code = no style surface; §5 parity verified by reading (dumps must work in release), not by running release.
+
 ### #253 — cleanup batch #254/#255/#256 (memory/scheduler/sync pure refactor)
 - **Learned:** (1) Zero-S-line TIMEOUTs are TCG virtual-time stalls until proven otherwise: identical-binary rerun green (incl. 148/148 under GDB surveillance) disproves regression more cheaply than a stash rebuild; check host load first (load 7+ during the batch explained a 9-class TIMEOUT cluster). (2) Never pipe make/test output through `head -N` — SIGPIPE kills the build/test mid-run; consume full streams (tail/rg). (3) Debug-green never implies release-green: release-only -Werror (exit_record strncpy, latent since #294) needs an explicit release build before any full gate. (4) Auditor findings can be factually wrong (POST-255 S3 claimed a deleted NOTE standing verbatim at scheduler.cpp:5595-5598) — verify every finding against the file before accepting it. (5) `ps aux | rg PAT` matches the searching shell itself — read PIDs before concluding strays exist.
 - **Adapted:** pure-refactor helpers (alloc templates, waiter predicates, reap tail) + shared waiter_tag.hpp; exit_record memset+memcpy fix (d921a8539); evidence comments on #254/#255/#256; full debug+release gates green.
