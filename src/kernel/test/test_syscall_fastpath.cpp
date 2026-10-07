@@ -156,7 +156,7 @@ JARVIS_TEST(fast_call_correctness, "PRE: none | POST: none") {
 // Expect: canary_trip().count > 0; task terminates without kernel panic.
 // Depends: canary relocation hooks (syscall FULL path + scheduler), gs::*
 JARVIS_TEST(full_path_still_validates, "PRE: none | POST: none") {
-    auto *t = load_probe("user-app.c.elf");
+    auto *t = load_probe("bin/user-app.c.elf");
     if (!t) {
         JARVIS_TEST_PASS();
         return;
@@ -201,7 +201,7 @@ JARVIS_TEST(full_path_still_validates, "PRE: none | POST: none") {
 //         sample; the probe never faults on its FAST syscalls.
 // Depends: FAST dispatch, canary relocation scheduler hooks
 JARVIS_TEST(fast_path_skips_canary, "PRE: none | POST: none") {
-    auto *t = load_probe("yield-probe.c.elf");
+    auto *t = load_probe("bin/yield-probe.c.elf");
     if (!t) {
         JARVIS_TEST_PASS();
         return;

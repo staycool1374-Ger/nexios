@@ -78,7 +78,7 @@ static constexpr uint64_t k_expected_err_mask =
     (1ULL << 14) | (1ULL << 17) | (1ULL << 21) | (1ULL << 28) | (1ULL << 30);
 
 /// @brief Loads a userspace probe ELF and runs it to termination.
-/// @param name Probe ELF basename (e.g. "ud-probe.c.elf").
+/// @param name Probe ELF initrd path (e.g. "bin/ud-probe.c.elf").
 /// @return true when the probe executed and the task TERMINATED.
 bool run_fault_probe(const char *name) {
     initrd::InitrdFile f = initrd::find(name);
@@ -114,11 +114,11 @@ JARVIS_TEST(err_macro_consistency, "PRE: none | POST: none") {
     JARVIS_ASSERT(!(__isr_vectors_err_mask & (1ULL << 6)));  // #UD NOERR
     JARVIS_ASSERT(!(__isr_vectors_err_mask & (1ULL << 0)));  // #DE NOERR
 
-    if (run_fault_probe("ud-probe.c.elf"))
+    if (run_fault_probe("bin/ud-probe.c.elf"))
         JARVIS_ASSERT(true);
     else
         JARVIS_TEST_PASS(); // probe ELF absent — mask gate already ran
-    if (run_fault_probe("de-probe.c.elf"))
+    if (run_fault_probe("bin/de-probe.c.elf"))
         JARVIS_ASSERT(true);
     else
         JARVIS_TEST_PASS();

@@ -2682,3 +2682,22 @@ SUMMARY: total=20 ok=11 fail=9
 2026-10-07 15:22:53 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
 
 SUMMARY: total=18 ok=18 fail=0
+2026-10-07 16:05:10 storage PASSED: 148 FAILED: 0 TIME: 3569ms
+2026-10-07 16:06:40 storage PASSED: 148 FAILED: 0 TIME: 3554ms
+2026-10-07 16:08:10 proc_elf PASSED: 91 FAILED: 0 TIME: 5437ms
+2026-10-07 16:08:40 capability PASSED: 148 FAILED: 0 TIME: 6384ms
+2026-10-07 16:09:15 ipc PASSED: 85 FAILED: 0 TIME: 3404ms
+2026-10-07 16:10:05 core PASSED: 536 FAILED: 0 TIME: 29647ms
+2026-10-07 16:13:00 hal PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (zero S: lines, DMD spam only; pre-existing hal flake pattern in history)
+2026-10-07 16:15:30 hal PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun; exonerated below)
+2026-10-07 16:16:45 hal_core PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (exonerated: identical binary 14/14 under GDB + 14/14 execute-test rerun)
+2026-10-07 16:18:50 hal_core PASSED: 14 FAILED: 0 TIME: 313ms
+2026-10-07 16:20:50 hal PASSED: 122 FAILED: 0 TIME: 0ms
+2026-10-07 16:23:30 ui PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (zero S: lines; no ui test files edited by #274)
+2026-10-07 16:35:00 shell_commands PASSED: 34 FAILED: 0 TIME: 1177ms
+2026-10-07 16:26:00 ui PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun; runner stall pre-test-1, content exonerated via shell_commands 34/34)
+2026-10-07 16:37:00 ui PASSED: 73 FAILED: 0 TIME: 5864ms
+2026-10-07 16:40:00 servers PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall signature, cf. hal/ui exonerated)
+2026-10-07 16:44:00 servers PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun)
+2026-10-07 16:47:00 servers_daemon_restart PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall; aggregate green below)
+2026-10-07 16:55:00 servers PASSED: 62 FAILED: 0 TIME: 1629ms

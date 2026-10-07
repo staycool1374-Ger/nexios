@@ -38,7 +38,7 @@ using namespace kernel;
 
 namespace {
 
-/// @brief Load a userspace probe ELF by name ("stack-probe.c.elf").
+/// @brief Load a userspace probe ELF by initrd path ("bin/stack-probe.c.elf").
 TaskControlBlock *load_probe(const char *name) {
     initrd::InitrdFile f = initrd::find(name);
     if (!f.data)
@@ -135,7 +135,7 @@ JARVIS_TEST(memory_safety_pmm_free_beyond_total, "PRE: none | POST: none") {
 // Expect: task state == TERMINATED; harness responsive (timer still ticks).
 // Depends: elf loader, scheduler signal path
 JARVIS_TEST(user_red_zone_stack_overflow_pf, "PRE: none | POST: none") {
-    auto *t = load_probe("stack-probe.c.elf");
+    auto *t = load_probe("bin/stack-probe.c.elf");
     if (!t) {
         JARVIS_TEST_PASS(); // probe ELF not built — skip
         return;
@@ -161,7 +161,7 @@ JARVIS_TEST(user_red_zone_stack_overflow_pf, "PRE: none | POST: none") {
 // Expect: task state == TERMINATED; harness responsive.
 // Depends: elf loader, sys_brk, scheduler signal path
 JARVIS_TEST(user_red_zone_heap_overflow_pf, "PRE: none | POST: none") {
-    auto *t = load_probe("heap-probe.c.elf");
+    auto *t = load_probe("bin/heap-probe.c.elf");
     if (!t) {
         JARVIS_TEST_PASS();
         return;
@@ -216,13 +216,13 @@ JARVIS_TEST(kernel_red_zone_between_stack_data, "PRE: none | POST: none") {
 // freshly loaded user ELF: TEXT (first R E PT_LOAD), HEAP and STACK slots
 // are armed, and the canary bytes at the STACK before/after VAs hold the
 // derived expected value.
-// Input: elf::load user-app.c.elf; inspect canary fields + live bytes.
+// Input: elf::load bin/user-app.c.elf; inspect canary fields + live bytes.
 // Expect: canary_installed has TEXT|HEAP|STACK bits; canary_before[STACK] ==
 // STACK_VADDR+PAGE_SIZE; live canary bytes match CANARY_MAGIC ^ (seg+1).
 // Depends: elf loader, canary install (MP-3)
 JARVIS_TEST(canary_installed_at_segment_boundaries,
             "PRE: none | POST: none") {
-    auto *t = load_probe("user-app.c.elf");
+    auto *t = load_probe("bin/user-app.c.elf");
     if (!t) {
         JARVIS_TEST_PASS();
         return;
@@ -274,7 +274,7 @@ JARVIS_TEST(canary_installed_at_segment_boundaries,
 // task reaches TERMINATED.
 // Depends: Syscall::handle canary verify (MP-3)
 JARVIS_TEST(canary_tamper_detected_on_syscall, "PRE: none | POST: none") {
-    auto *t = load_probe("user-app.c.elf");
+    auto *t = load_probe("bin/user-app.c.elf");
     if (!t) {
         JARVIS_TEST_PASS();
         return;
@@ -314,7 +314,7 @@ JARVIS_TEST(canary_tamper_detected_on_syscall, "PRE: none | POST: none") {
 // Expect: g_canary_trip.count == 0 after termination; task TERMINATED.
 // Depends: Syscall::handle canary verify (MP-3)
 JARVIS_TEST(canary_intact_after_normal_dispatch, "PRE: none | POST: none") {
-    auto *t = load_probe("user-app.c.elf");
+    auto *t = load_probe("bin/user-app.c.elf");
     if (!t) {
         JARVIS_TEST_PASS();
         return;

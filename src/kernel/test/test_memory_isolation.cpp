@@ -36,7 +36,7 @@ using namespace kernel;
 
 namespace {
 
-/// @brief Load a userspace probe ELF by name ("fault-probe.c.elf").
+/// @brief Load a userspace probe ELF by initrd path ("bin/fault-probe.c.elf").
 ///        Returns nullptr when the ELF is missing or invalid.
 TaskControlBlock *load_probe(const char *name) {
     initrd::InitrdFile f = initrd::find(name);
@@ -66,12 +66,12 @@ TaskControlBlock *load_probe(const char *name) {
 JARVIS_TEST(cross_task_page_fault_isolated, "PRE: none | POST: none") {
     constexpr uint64_t PROBE_VA = 0x10000000UL;
 
-    auto *a = load_probe("fault-probe.c.elf");
+    auto *a = load_probe("bin/fault-probe.c.elf");
     if (!a) {
         JARVIS_TEST_PASS(); // probe ELF not built — skip
         return;
     }
-    auto *b = load_probe("fault-probe.c.elf");
+    auto *b = load_probe("bin/fault-probe.c.elf");
     if (!b) {
         a->cleanup();
         delete a;
@@ -128,7 +128,7 @@ JARVIS_TEST(cross_task_page_fault_isolated, "PRE: none | POST: none") {
 JARVIS_TEST(hhdm_kernel_reads_user_page, "PRE: none | POST: none") {
     constexpr uint64_t PROBE_VA = 0x10000000UL;
 
-    auto *a = load_probe("fault-probe.c.elf");
+    auto *a = load_probe("bin/fault-probe.c.elf");
     if (!a) {
         JARVIS_TEST_PASS();
         return;
@@ -162,7 +162,7 @@ JARVIS_TEST(hhdm_kernel_reads_user_page, "PRE: none | POST: none") {
 // operation (timer read) still works.
 // Depends: elf loader, scheduler signal path
 JARVIS_TEST(guard_page_fault_not_kernel_fatal, "PRE: none | POST: none") {
-    auto *t = load_probe("stack-probe.c.elf");
+    auto *t = load_probe("bin/stack-probe.c.elf");
     if (!t) {
         JARVIS_TEST_PASS();
         return;

@@ -67,20 +67,20 @@ constexpr TaskDef g_task_defs[] = {
     {"init/reaper", TaskType::KERNEL, true, init_task_main, nullptr, 0, 100,
      1, 0, 0, 0, nullptr, nullptr, nullptr, 1, 0, false},
     // vfsd: sporadic server, fast IPC response, 2% worst-case CPU
-    {"vfsd", TaskType::SPORADIC_SERVER, true, nullptr, "vfsd.c.elf", 20, 10, 0,
+    {"vfsd", TaskType::SPORADIC_SERVER, true, nullptr, "bin/vfsd.c.elf", 20, 10, 0,
      2, 10, 0, "vfsd", vfsd::set_vfsd_pid, vfsd::get_vfsd_pid, 1, 0, false},
     // iocd: sporadic server for I/O, same prio as vfsd
-    {"iocd", TaskType::SPORADIC_SERVER, true, nullptr, "iocd.c.elf", 20, 10, 0,
+    {"iocd", TaskType::SPORADIC_SERVER, true, nullptr, "bin/iocd.c.elf", 20, 10, 0,
      3, 10, 0, "iocd", iocd::set_iocd_pid, iocd::get_iocd_pid, 1, 0, false},
     // watchdogd: supervises vfsd/iocd watchdogs (issue #277). Sporadic
     // server, cheapest share SS(1,10,0): vfsd 2/10 + iocd 3/10 + 1/10 =
     // 0.6 < 0.78 (n=3 Liu-Leyland). Same prio band as its supervisees.
     {"watchdogd", TaskType::SPORADIC_SERVER, true, nullptr,
-     "watchdogd.c.elf", 20, 10, 0, 1, 10, 0, "watchdogd",
+     "bin/watchdogd.c.elf", 20, 10, 0, 1, 10, 0, "watchdogd",
      watchdogd::set_watchdogd_pid, watchdogd::get_watchdogd_pid, 1, 0,
      false},
     // user-app: generic userspace ELF placeholder — aperiodic (period 0)
-    {"user-app", TaskType::USER_ELF, true, nullptr, "user-app.c.elf", 2, 0, 0,
+    {"user-app", TaskType::USER_ELF, true, nullptr, "bin/user-app.c.elf", 2, 0, 0,
      0, 0, 0, nullptr, nullptr, nullptr, 1, 0, false},
     // shell: interactive kernel debug shell.  Disabled in the table — the
     // real shell is created aperiodic by init_task_main at prio 2; values
@@ -92,7 +92,7 @@ constexpr TaskDef g_task_defs[] = {
     // gate (kernel.cpp DaemonWatch stays vfsd/iocd/watchdogd only);
     // values kept here for documentation/validation parity. Lowest
     // debuggable priority under a bounded sporadic-server budget.
-    {"debugd", TaskType::SPORADIC_SERVER, false, nullptr, "debugd.c.elf",
+    {"debugd", TaskType::SPORADIC_SERVER, false, nullptr, "bin/debugd.c.elf",
      2, 10, 0, 1, 10, 0, "debugd", set_debugd_pid_cell,
      get_debugd_pid_cell, 1, 0, false},
     // dmesg: background logger with very long period

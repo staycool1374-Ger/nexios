@@ -70,7 +70,7 @@ expect {
     timeout { puts "VERIFY: TIMEOUT waiting usage line"; exit 1 }
     eof { puts "VERIFY: EOF waiting usage line"; exit 1 }
 }
-send "loadelf burn.c.elf\r"
+send "loadelf /bin/burn.c.elf\r"
 puts "VERIFY: load requested, settling for the background load..."
 sleep 10
 send "runelf\r"

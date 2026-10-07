@@ -2615,7 +2615,7 @@ static DebugdEnsure debug_ensure_debugd(uint64_t &pid_out) {
         pid_out = pid;
         return DebugdEnsure::OK;
     }
-    auto f = initrd::find("debugd.c.elf");
+    auto f = initrd::find("bin/debugd.c.elf");
     if (f.data == nullptr)
         return DebugdEnsure::NO_ELF;
     auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);

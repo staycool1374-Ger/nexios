@@ -133,9 +133,9 @@ JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
 // Expect: All three IPC objects are non-null after ELF load.
 JARVIS_TEST(task_elf_load_inits_ipc_objects, "PRE: none | POST: none") {
     // Find a test ELF in initrd
-    initrd::InitrdFile f = initrd::find("./user-app.c.elf");
+    initrd::InitrdFile f = initrd::find("./bin/user-app.c.elf");
     if (!f.data)
-        f = initrd::find("user-app.c.elf");
+        f = initrd::find("bin/user-app.c.elf");
     if (!f.data) {
         // No test ELF available, skip with pass
         JARVIS_TEST_PASS();

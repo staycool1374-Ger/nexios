@@ -225,7 +225,7 @@ def main():
         body = read_packet()
         check(body == b"OK", "detach OK, got %r" % (body,))
         # Live burner: silent long-running user load for real stats.
-        os.write(_fd(), b"loadelf burn.c.elf\r")
+        os.write(_fd(), b"loadelf /bin/burn.c.elf\r")
         out = recv_until(b"completed successfully", timeout_s=120)
         check(b"completed successfully" in out, "burn.c.elf loaded")
         os.write(_fd(), b"runelf\r")

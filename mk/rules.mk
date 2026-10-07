@@ -119,6 +119,11 @@ LIBC_A         := build/libc/libc.a
 
 USERSPACE_SRC  := $(filter-out userspace/picolibc/%,$(shell find userspace -name '*.S' -o -name '*.c' 2>/dev/null))
 USERSPACE_ELF  := $(USERSPACE_SRC:%=%.elf)
+# Issue #274: demo programs stay at the initrd root; every other command
+# ELF lives under /bin. The three names below must match the root copy
+# in the $(INITRD_CPIO) rule exactly.
+INITRD_ROOT_ELF := $(filter userspace/hey.c.elf userspace/nullderef.c.elf userspace/prime.c.elf,$(USERSPACE_ELF))
+INITRD_BIN_ELF := $(filter-out userspace/hey.c.elf userspace/nullderef.c.elf userspace/prime.c.elf,$(USERSPACE_ELF))
 
 # picolibc-based user programs (issue #73): separate directory-anchored
 # pattern so the generic userspace/%.c.elf rule above can never hijack
@@ -261,11 +266,12 @@ initrd/tests/test-config.txt:
 	@printf 'none\n' > $@
 $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c userspace/nullderef.c userspace/prime.c
 	@printf '  %-7s %s\n' 'CPIO' 'initrd.cpio'
-	@mkdir -p initrd_root/etc initrd_root/tmp initrd_root/tests
+	@mkdir -p initrd_root/bin initrd_root/etc initrd_root/tmp initrd_root/tests
 	@printf 'tmpfs /tmp\n' > initrd_root/etc/fstab
 	@printf '#!/bin/sh\n' > initrd_root/etc/rc
 	@printf '# Init script\n' >> initrd_root/etc/rc
-	@if [ ! -z "$(USERSPACE_ELF)" ]; then cp $(USERSPACE_ELF) initrd_root/; fi
+	@if [ ! -z "$(INITRD_ROOT_ELF)" ]; then cp $(INITRD_ROOT_ELF) initrd_root/; fi
+	@if [ ! -z "$(INITRD_BIN_ELF)" ]; then cp $(INITRD_BIN_ELF) initrd_root/bin/; fi
 	@if [ -f userspace/picolibc/libc_verify.c.elf ]; then cp userspace/picolibc/libc_verify.c.elf initrd_root/; fi
 	@cp userspace/hey.c userspace/nullderef.c userspace/prime.c initrd_root/
 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt

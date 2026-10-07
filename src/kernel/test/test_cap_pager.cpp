@@ -89,7 +89,7 @@ uint64_t frame_handle(TaskControlBlock *t, int slot) {
 /// @brief Loads the pager-probe ELF into a fresh user task (returns it added
 ///        to the scheduler).  PID 1 (the harness) is the designated pager.
 TaskControlBlock *load_pager_probe() {
-    initrd::InitrdFile f = initrd::find("pager-probe.c.elf");
+    initrd::InitrdFile f = initrd::find("bin/pager-probe.c.elf");
     if (!f.data)
         return nullptr;
     auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
@@ -285,7 +285,7 @@ JARVIS_TEST(pager_recover_ip_not_delegated, "PRE: none | POST: none") {
 // registered pager (the harness); the pager maps a FrameCap via SYS_PAGER_MAP;
 // the client resumes and the faulting write succeeds.  This is the definitive
 // block-in-#PF-ISR resume test.
-// Input: Load pager-probe.c.elf (registers PID 1 as pager, faults at
+// Input: Load bin/pager-probe.c.elf (registers PID 1 as pager, faults at
 //        0x10000000); harness recvs + maps + SYS_PAGER_MAP.
 // Expect: the probe writes 0xCAFE and _exit(0); record consumed; no pending.
 // Depends: block-in-ISR, PagerRegistry, SYS_PAGER_MAP, elf loader

@@ -132,7 +132,9 @@ IDLE --request_cancel (shell)--> "not loading" (no state change)
 
 ## 7. Shell Command Contract
 
-- `loadelf <path.elf>`:
+- `loadelf <path.elf>` (explicit path; no `PATH` search — see #310):
+  - Command ELFs live under `/bin` (issue #274): `loadelf /bin/cat.c.elf`,
+    then `runelf`. Demo ELFs stay at the root: `loadelf /hey.c.elf`.
   - `argc < 2` → `Usage: loadelf <path.elf>`
   - success → `loading <path.elf> <size> started` to terminal + dmesg 0xDB01,
     return immediately (no waiting).

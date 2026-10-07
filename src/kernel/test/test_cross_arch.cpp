@@ -624,9 +624,9 @@ uint64_t elf_find_symbol_va(const uint8_t *data, const char *name) {
 // Expect: task state == TERMINATED (no kernel panic, no hang).
 // Depends: elf loader, SMEP enablement, signal path
 JARVIS_TEST(smep_user_exec_kernel_va_pf, "PRE: none | POST: none") {
-    initrd::InitrdFile f = initrd::find("./kva-probe.c.elf");
+    initrd::InitrdFile f = initrd::find("./bin/kva-probe.c.elf");
     if (!f.data)
-        f = initrd::find("kva-probe.c.elf");
+        f = initrd::find("bin/kva-probe.c.elf");
     if (!f.data) {
         JARVIS_TEST_PASS(); // probe ELF not built — skip
         return;

@@ -145,7 +145,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
 
     // vfs
-    {"vfs_core",             20,    0,       0      },  // fdtable/resolve/mount/mkdir/unlink
+    {"vfs_core",             25,    0,       0      },  // fdtable/resolve/mount/mkdir/unlink + #268 vnode-borrow guards (4) + #274 /bin resolve (1)
     {"vfs_tmpfs",            10,    0,       0      },  // tmpfs(6) + invalid_mount(2) + mount_unmount_failure(2)
     {"vfs_fstab",             5,    0,       0      },  // fstab parsing
     {"vfs_fat32",            40,    0,       0      },  // FAT32 fs unit tests
@@ -281,14 +281,14 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
-    {"storage",             147,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268)
+    {"storage",             148,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274)
     {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
-    {"hal",                 121,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199)
+    {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
     {"deadline",            139,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277)
-    {"ui",                  72,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); was stale at 69 vs 70 actual, reconciled to measured 72
+    {"ui",                  73,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
     {"random",              17,   0,       0      },  // random_* (issue #173)
     {"bench",               22,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173)

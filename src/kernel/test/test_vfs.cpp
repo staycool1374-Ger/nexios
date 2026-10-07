@@ -438,6 +438,40 @@ JARVIS_TEST(vfs_initrd_lookup_release_flat, "PRE: vfsd, iocd | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: initrd /bin hierarchy resolves (issue #274): a command ELF
+// under /bin resolves S_IFREG, /bin itself resolves S_IFDIR, a missing
+// /bin child returns null, and the /hey.c.elf root canary still works.
+// Input: resolve("/bin/cat.c.elf"), resolve("/bin"),
+// resolve("/bin/nope-274"), resolve("/hey.c.elf") with vnode counters
+// captured around the cycle.
+// Expect: bin ELF non-null S_IFREG; /bin non-null S_IFDIR; missing child
+// null; root canary non-null; vnode counters flat; every owned vnode
+// released exactly once.
+// Depends: vfs::resolve OWNED convention + initrd dir-vnode lookup.
+JARVIS_TEST(vfs_initrd_bin_resolve, "PRE: vfsd, iocd | POST: none") {
+    auto &rt = kernel::test::ResourceTracker::instance();
+    kernel::test::ResourceCounters before{};
+    rt.capture(before);
+    auto *bin_elf = vfs::resolve("/bin/cat.c.elf");
+    JARVIS_ASSERT(bin_elf != nullptr);
+    JARVIS_ASSERT(bin_elf->mode & vfs::S_IFREG);
+    auto *bin_dir = vfs::resolve("/bin");
+    JARVIS_ASSERT(bin_dir != nullptr);
+    JARVIS_ASSERT(bin_dir->mode & vfs::S_IFDIR);
+    auto *missing = vfs::resolve("/bin/nope-274");
+    JARVIS_ASSERT(missing == nullptr);
+    auto *root_canary = vfs::resolve("/hey.c.elf");
+    JARVIS_ASSERT(root_canary != nullptr);
+    vfs::release(bin_elf);
+    vfs::release(bin_dir);
+    vfs::release(root_canary);
+    kernel::test::ResourceCounters after{};
+    rt.capture(after);
+    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: issue #268 regression guard — tmpfs cached vnodes are
 // borrowed (refcount 0), so resolve+release cycles must neither leak nor
 // double-free the cache entries (release is a no-op on them).
@@ -554,6 +588,7 @@ void register_vfs_tests() {
     JARVIS_REGISTER_TEST(vfs_write_fstat);
     JARVIS_REGISTER_TEST(vfs_pipe_read_write);
     JARVIS_REGISTER_TEST(vfs_initrd_lookup_release_flat); // #268
+    JARVIS_REGISTER_TEST(vfs_initrd_bin_resolve); // #274
     JARVIS_REGISTER_TEST(vfs_tmpfs_nested_resolve_balanced); // #268
     JARVIS_REGISTER_TEST(vfs_ls_lookup_loop_no_leak); // #268
     JARVIS_REGISTER_TEST(vfs_fd_open_close_balanced); // #268

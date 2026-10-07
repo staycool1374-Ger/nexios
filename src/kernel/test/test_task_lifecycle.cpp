@@ -327,9 +327,9 @@ JARVIS_TEST(scheduler_reap_respects_parent_wait, "PRE: none | POST: none") {
 // (init_task_common was called).
 JARVIS_TEST(elf_load_init_task_common_called, "PRE: none | POST: none") {
     // Find a test ELF in initrd
-    initrd::InitrdFile f = initrd::find("./user-app.c.elf");
+    initrd::InitrdFile f = initrd::find("./bin/user-app.c.elf");
     if (!f.data)
-        f = initrd::find("user-app.c.elf");
+        f = initrd::find("bin/user-app.c.elf");
     if (!f.data) {
         // No test ELF available, skip with pass
         JARVIS_TEST_PASS();
