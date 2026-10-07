@@ -275,6 +275,7 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c us
 	@if [ -f userspace/picolibc/libc_verify.c.elf ]; then cp userspace/picolibc/libc_verify.c.elf initrd_root/; fi
 	@cp userspace/hey.c userspace/nullderef.c userspace/prime.c initrd_root/
 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
+	@printf 'loadelf /bin/sh.c.elf\nsleep 3\nrunelf\nsleep 300\n' > initrd_root/tests/sh310.txt
 	cd initrd_root && find . -print0 | cpio -o -H newc -0 --quiet > ../$@
 	@rm -rf initrd_root
 

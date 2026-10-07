@@ -1,760 +1,293 @@
-diff --git a/docs/specs/elf-loader.md b/docs/specs/elf-loader.md
-index 07aae07a9..d2533f5a3 100644
---- a/docs/specs/elf-loader.md
-+++ b/docs/specs/elf-loader.md
-@@ -132,7 +132,9 @@ IDLE --request_cancel (shell)--> "not loading" (no state change)
- 
- ## 7. Shell Command Contract
- 
--- `loadelf <path.elf>`:
-+- `loadelf <path.elf>` (explicit path; no `PATH` search — see #310):
-+  - Command ELFs live under `/bin` (issue #274): `loadelf /bin/cat.c.elf`,
-+    then `runelf`. Demo ELFs stay at the root: `loadelf /hey.c.elf`.
-   - `argc < 2` → `Usage: loadelf <path.elf>`
-   - success → `loading <path.elf> <size> started` to terminal + dmesg 0xDB01,
-     return immediately (no waiting).
 diff --git a/mk/rules.mk b/mk/rules.mk
-index 5362d9523..684bf0fda 100644
+index 684bf0fda..9ad7bd6b7 100644
 --- a/mk/rules.mk
 +++ b/mk/rules.mk
-@@ -119,6 +119,11 @@ LIBC_A         := build/libc/libc.a
- 
- USERSPACE_SRC  := $(filter-out userspace/picolibc/%,$(shell find userspace -name '*.S' -o -name '*.c' 2>/dev/null))
- USERSPACE_ELF  := $(USERSPACE_SRC:%=%.elf)
-+# Issue #274: demo programs stay at the initrd root; every other command
-+# ELF lives under /bin. The three names below must match the root copy
-+# in the $(INITRD_CPIO) rule exactly.
-+INITRD_ROOT_ELF := $(filter userspace/hey.c.elf userspace/nullderef.c.elf userspace/prime.c.elf,$(USERSPACE_ELF))
-+INITRD_BIN_ELF := $(filter-out userspace/hey.c.elf userspace/nullderef.c.elf userspace/prime.c.elf,$(USERSPACE_ELF))
- 
- # picolibc-based user programs (issue #73): separate directory-anchored
- # pattern so the generic userspace/%.c.elf rule above can never hijack
-@@ -261,11 +266,12 @@ initrd/tests/test-config.txt:
- 	@printf 'none\n' > $@
- $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c userspace/nullderef.c userspace/prime.c
- 	@printf '  %-7s %s\n' 'CPIO' 'initrd.cpio'
--	@mkdir -p initrd_root/etc initrd_root/tmp initrd_root/tests
-+	@mkdir -p initrd_root/bin initrd_root/etc initrd_root/tmp initrd_root/tests
- 	@printf 'tmpfs /tmp\n' > initrd_root/etc/fstab
- 	@printf '#!/bin/sh\n' > initrd_root/etc/rc
- 	@printf '# Init script\n' >> initrd_root/etc/rc
--	@if [ ! -z "$(USERSPACE_ELF)" ]; then cp $(USERSPACE_ELF) initrd_root/; fi
-+	@if [ ! -z "$(INITRD_ROOT_ELF)" ]; then cp $(INITRD_ROOT_ELF) initrd_root/; fi
-+	@if [ ! -z "$(INITRD_BIN_ELF)" ]; then cp $(INITRD_BIN_ELF) initrd_root/bin/; fi
+@@ -275,6 +275,7 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c us
  	@if [ -f userspace/picolibc/libc_verify.c.elf ]; then cp userspace/picolibc/libc_verify.c.elf initrd_root/; fi
  	@cp userspace/hey.c userspace/nullderef.c userspace/prime.c initrd_root/
  	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
-diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
-index 8f09e603b..274d74582 100644
---- a/src/kernel/task/taskdefs.cpp
-+++ b/src/kernel/task/taskdefs.cpp
-@@ -67,20 +67,20 @@ constexpr TaskDef g_task_defs[] = {
-     {"init/reaper", TaskType::KERNEL, true, init_task_main, nullptr, 0, 100,
-      1, 0, 0, 0, nullptr, nullptr, nullptr, 1, 0, false},
-     // vfsd: sporadic server, fast IPC response, 2% worst-case CPU
--    {"vfsd", TaskType::SPORADIC_SERVER, true, nullptr, "vfsd.c.elf", 20, 10, 0,
-+    {"vfsd", TaskType::SPORADIC_SERVER, true, nullptr, "bin/vfsd.c.elf", 20, 10, 0,
-      2, 10, 0, "vfsd", vfsd::set_vfsd_pid, vfsd::get_vfsd_pid, 1, 0, false},
-     // iocd: sporadic server for I/O, same prio as vfsd
--    {"iocd", TaskType::SPORADIC_SERVER, true, nullptr, "iocd.c.elf", 20, 10, 0,
-+    {"iocd", TaskType::SPORADIC_SERVER, true, nullptr, "bin/iocd.c.elf", 20, 10, 0,
-      3, 10, 0, "iocd", iocd::set_iocd_pid, iocd::get_iocd_pid, 1, 0, false},
-     // watchdogd: supervises vfsd/iocd watchdogs (issue #277). Sporadic
-     // server, cheapest share SS(1,10,0): vfsd 2/10 + iocd 3/10 + 1/10 =
-     // 0.6 < 0.78 (n=3 Liu-Leyland). Same prio band as its supervisees.
-     {"watchdogd", TaskType::SPORADIC_SERVER, true, nullptr,
--     "watchdogd.c.elf", 20, 10, 0, 1, 10, 0, "watchdogd",
-+     "bin/watchdogd.c.elf", 20, 10, 0, 1, 10, 0, "watchdogd",
-      watchdogd::set_watchdogd_pid, watchdogd::get_watchdogd_pid, 1, 0,
-      false},
-     // user-app: generic userspace ELF placeholder — aperiodic (period 0)
--    {"user-app", TaskType::USER_ELF, true, nullptr, "user-app.c.elf", 2, 0, 0,
-+    {"user-app", TaskType::USER_ELF, true, nullptr, "bin/user-app.c.elf", 2, 0, 0,
-      0, 0, 0, nullptr, nullptr, nullptr, 1, 0, false},
-     // shell: interactive kernel debug shell.  Disabled in the table — the
-     // real shell is created aperiodic by init_task_main at prio 2; values
-@@ -92,7 +92,7 @@ constexpr TaskDef g_task_defs[] = {
-     // gate (kernel.cpp DaemonWatch stays vfsd/iocd/watchdogd only);
-     // values kept here for documentation/validation parity. Lowest
-     // debuggable priority under a bounded sporadic-server budget.
--    {"debugd", TaskType::SPORADIC_SERVER, false, nullptr, "debugd.c.elf",
-+    {"debugd", TaskType::SPORADIC_SERVER, false, nullptr, "bin/debugd.c.elf",
-      2, 10, 0, 1, 10, 0, "debugd", set_debugd_pid_cell,
-      get_debugd_pid_cell, 1, 0, false},
-     // dmesg: background logger with very long period
-diff --git a/src/kernel/test/test_cap_pager.cpp b/src/kernel/test/test_cap_pager.cpp
-index 2c1c3bbcf..45f60d9e6 100644
---- a/src/kernel/test/test_cap_pager.cpp
-+++ b/src/kernel/test/test_cap_pager.cpp
-@@ -89,7 +89,7 @@ uint64_t frame_handle(TaskControlBlock *t, int slot) {
- /// @brief Loads the pager-probe ELF into a fresh user task (returns it added
- ///        to the scheduler).  PID 1 (the harness) is the designated pager.
- TaskControlBlock *load_pager_probe() {
--    initrd::InitrdFile f = initrd::find("pager-probe.c.elf");
-+    initrd::InitrdFile f = initrd::find("bin/pager-probe.c.elf");
-     if (!f.data)
-         return nullptr;
-     auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
-@@ -285,7 +285,7 @@ JARVIS_TEST(pager_recover_ip_not_delegated, "PRE: none | POST: none") {
- // registered pager (the harness); the pager maps a FrameCap via SYS_PAGER_MAP;
- // the client resumes and the faulting write succeeds.  This is the definitive
- // block-in-#PF-ISR resume test.
--// Input: Load pager-probe.c.elf (registers PID 1 as pager, faults at
-+// Input: Load bin/pager-probe.c.elf (registers PID 1 as pager, faults at
- //        0x10000000); harness recvs + maps + SYS_PAGER_MAP.
- // Expect: the probe writes 0xCAFE and _exit(0); record consumed; no pending.
- // Depends: block-in-ISR, PagerRegistry, SYS_PAGER_MAP, elf loader
-diff --git a/src/kernel/test/test_cross_arch.cpp b/src/kernel/test/test_cross_arch.cpp
-index 631899902..d4a992c1a 100644
---- a/src/kernel/test/test_cross_arch.cpp
-+++ b/src/kernel/test/test_cross_arch.cpp
-@@ -624,9 +624,9 @@ uint64_t elf_find_symbol_va(const uint8_t *data, const char *name) {
- // Expect: task state == TERMINATED (no kernel panic, no hang).
- // Depends: elf loader, SMEP enablement, signal path
- JARVIS_TEST(smep_user_exec_kernel_va_pf, "PRE: none | POST: none") {
--    initrd::InitrdFile f = initrd::find("./kva-probe.c.elf");
-+    initrd::InitrdFile f = initrd::find("./bin/kva-probe.c.elf");
-     if (!f.data)
--        f = initrd::find("kva-probe.c.elf");
-+        f = initrd::find("bin/kva-probe.c.elf");
-     if (!f.data) {
-         JARVIS_TEST_PASS(); // probe ELF not built — skip
-         return;
-diff --git a/src/kernel/test/test_exc_table.cpp b/src/kernel/test/test_exc_table.cpp
-index 1a8eef8c4..5f44490b1 100644
---- a/src/kernel/test/test_exc_table.cpp
-+++ b/src/kernel/test/test_exc_table.cpp
-@@ -78,7 +78,7 @@ static constexpr uint64_t k_expected_err_mask =
-     (1ULL << 14) | (1ULL << 17) | (1ULL << 21) | (1ULL << 28) | (1ULL << 30);
++	@printf 'loadelf /bin/sh.c.elf\nsleep 3\nrunelf\nsleep 300\n' > initrd_root/tests/sh310.txt
+ 	cd initrd_root && find . -print0 | cpio -o -H newc -0 --quiet > ../$@
+ 	@rm -rf initrd_root
  
- /// @brief Loads a userspace probe ELF and runs it to termination.
--/// @param name Probe ELF basename (e.g. "ud-probe.c.elf").
-+/// @param name Probe ELF initrd path (e.g. "bin/ud-probe.c.elf").
- /// @return true when the probe executed and the task TERMINATED.
- bool run_fault_probe(const char *name) {
-     initrd::InitrdFile f = initrd::find(name);
-@@ -114,11 +114,11 @@ JARVIS_TEST(err_macro_consistency, "PRE: none | POST: none") {
-     JARVIS_ASSERT(!(__isr_vectors_err_mask & (1ULL << 6)));  // #UD NOERR
-     JARVIS_ASSERT(!(__isr_vectors_err_mask & (1ULL << 0)));  // #DE NOERR
- 
--    if (run_fault_probe("ud-probe.c.elf"))
-+    if (run_fault_probe("bin/ud-probe.c.elf"))
-         JARVIS_ASSERT(true);
-     else
-         JARVIS_TEST_PASS(); // probe ELF absent — mask gate already ran
--    if (run_fault_probe("de-probe.c.elf"))
-+    if (run_fault_probe("bin/de-probe.c.elf"))
-         JARVIS_ASSERT(true);
-     else
-         JARVIS_TEST_PASS();
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 06c4d43ba..7158f3eaa 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -145,7 +145,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
- 
-     // vfs
--    {"vfs_core",             20,    0,       0      },  // fdtable/resolve/mount/mkdir/unlink
-+    {"vfs_core",             25,    0,       0      },  // fdtable/resolve/mount/mkdir/unlink + #268 vnode-borrow guards (4) + #274 /bin resolve (1)
-     {"vfs_tmpfs",            10,    0,       0      },  // tmpfs(6) + invalid_mount(2) + mount_unmount_failure(2)
-     {"vfs_fstab",             5,    0,       0      },  // fstab parsing
-     {"vfs_fat32",            40,    0,       0      },  // FAT32 fs unit tests
-@@ -281,14 +281,14 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
-     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
-     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
--    {"storage",             147,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268)
-+    {"storage",             148,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274)
-     {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
-     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
--    {"hal",                 121,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199)
-+    {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
-     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
-     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
-     {"deadline",            139,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277)
--    {"ui",                  72,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); was stale at 69 vs 70 actual, reconciled to measured 72
-+    {"ui",                  73,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
-     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
-     {"random",              17,   0,       0      },  // random_* (issue #173)
-     {"bench",               22,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173)
-diff --git a/src/kernel/test/test_memory_isolation.cpp b/src/kernel/test/test_memory_isolation.cpp
-index 0ef6bd4b2..aea921df4 100644
---- a/src/kernel/test/test_memory_isolation.cpp
-+++ b/src/kernel/test/test_memory_isolation.cpp
-@@ -36,7 +36,7 @@ using namespace kernel;
- 
- namespace {
- 
--/// @brief Load a userspace probe ELF by name ("fault-probe.c.elf").
-+/// @brief Load a userspace probe ELF by initrd path ("bin/fault-probe.c.elf").
- ///        Returns nullptr when the ELF is missing or invalid.
- TaskControlBlock *load_probe(const char *name) {
-     initrd::InitrdFile f = initrd::find(name);
-@@ -66,12 +66,12 @@ TaskControlBlock *load_probe(const char *name) {
- JARVIS_TEST(cross_task_page_fault_isolated, "PRE: none | POST: none") {
-     constexpr uint64_t PROBE_VA = 0x10000000UL;
- 
--    auto *a = load_probe("fault-probe.c.elf");
-+    auto *a = load_probe("bin/fault-probe.c.elf");
-     if (!a) {
-         JARVIS_TEST_PASS(); // probe ELF not built — skip
-         return;
-     }
--    auto *b = load_probe("fault-probe.c.elf");
-+    auto *b = load_probe("bin/fault-probe.c.elf");
-     if (!b) {
-         a->cleanup();
-         delete a;
-@@ -128,7 +128,7 @@ JARVIS_TEST(cross_task_page_fault_isolated, "PRE: none | POST: none") {
- JARVIS_TEST(hhdm_kernel_reads_user_page, "PRE: none | POST: none") {
-     constexpr uint64_t PROBE_VA = 0x10000000UL;
- 
--    auto *a = load_probe("fault-probe.c.elf");
-+    auto *a = load_probe("bin/fault-probe.c.elf");
-     if (!a) {
-         JARVIS_TEST_PASS();
-         return;
-@@ -162,7 +162,7 @@ JARVIS_TEST(hhdm_kernel_reads_user_page, "PRE: none | POST: none") {
- // operation (timer read) still works.
- // Depends: elf loader, scheduler signal path
- JARVIS_TEST(guard_page_fault_not_kernel_fatal, "PRE: none | POST: none") {
--    auto *t = load_probe("stack-probe.c.elf");
-+    auto *t = load_probe("bin/stack-probe.c.elf");
-     if (!t) {
-         JARVIS_TEST_PASS();
-         return;
-diff --git a/src/kernel/test/test_memory_safety.cpp b/src/kernel/test/test_memory_safety.cpp
-index d21378224..0989479c4 100644
---- a/src/kernel/test/test_memory_safety.cpp
-+++ b/src/kernel/test/test_memory_safety.cpp
-@@ -38,7 +38,7 @@ using namespace kernel;
- 
- namespace {
- 
--/// @brief Load a userspace probe ELF by name ("stack-probe.c.elf").
-+/// @brief Load a userspace probe ELF by initrd path ("bin/stack-probe.c.elf").
- TaskControlBlock *load_probe(const char *name) {
-     initrd::InitrdFile f = initrd::find(name);
-     if (!f.data)
-@@ -135,7 +135,7 @@ JARVIS_TEST(memory_safety_pmm_free_beyond_total, "PRE: none | POST: none") {
- // Expect: task state == TERMINATED; harness responsive (timer still ticks).
- // Depends: elf loader, scheduler signal path
- JARVIS_TEST(user_red_zone_stack_overflow_pf, "PRE: none | POST: none") {
--    auto *t = load_probe("stack-probe.c.elf");
-+    auto *t = load_probe("bin/stack-probe.c.elf");
-     if (!t) {
-         JARVIS_TEST_PASS(); // probe ELF not built — skip
-         return;
-@@ -161,7 +161,7 @@ JARVIS_TEST(user_red_zone_stack_overflow_pf, "PRE: none | POST: none") {
- // Expect: task state == TERMINATED; harness responsive.
- // Depends: elf loader, sys_brk, scheduler signal path
- JARVIS_TEST(user_red_zone_heap_overflow_pf, "PRE: none | POST: none") {
--    auto *t = load_probe("heap-probe.c.elf");
-+    auto *t = load_probe("bin/heap-probe.c.elf");
-     if (!t) {
-         JARVIS_TEST_PASS();
-         return;
-@@ -216,13 +216,13 @@ JARVIS_TEST(kernel_red_zone_between_stack_data, "PRE: none | POST: none") {
- // freshly loaded user ELF: TEXT (first R E PT_LOAD), HEAP and STACK slots
- // are armed, and the canary bytes at the STACK before/after VAs hold the
- // derived expected value.
--// Input: elf::load user-app.c.elf; inspect canary fields + live bytes.
-+// Input: elf::load bin/user-app.c.elf; inspect canary fields + live bytes.
- // Expect: canary_installed has TEXT|HEAP|STACK bits; canary_before[STACK] ==
- // STACK_VADDR+PAGE_SIZE; live canary bytes match CANARY_MAGIC ^ (seg+1).
- // Depends: elf loader, canary install (MP-3)
- JARVIS_TEST(canary_installed_at_segment_boundaries,
-             "PRE: none | POST: none") {
--    auto *t = load_probe("user-app.c.elf");
-+    auto *t = load_probe("bin/user-app.c.elf");
-     if (!t) {
-         JARVIS_TEST_PASS();
-         return;
-@@ -274,7 +274,7 @@ JARVIS_TEST(canary_installed_at_segment_boundaries,
- // task reaches TERMINATED.
- // Depends: Syscall::handle canary verify (MP-3)
- JARVIS_TEST(canary_tamper_detected_on_syscall, "PRE: none | POST: none") {
--    auto *t = load_probe("user-app.c.elf");
-+    auto *t = load_probe("bin/user-app.c.elf");
-     if (!t) {
-         JARVIS_TEST_PASS();
-         return;
-@@ -314,7 +314,7 @@ JARVIS_TEST(canary_tamper_detected_on_syscall, "PRE: none | POST: none") {
- // Expect: g_canary_trip.count == 0 after termination; task TERMINATED.
- // Depends: Syscall::handle canary verify (MP-3)
- JARVIS_TEST(canary_intact_after_normal_dispatch, "PRE: none | POST: none") {
--    auto *t = load_probe("user-app.c.elf");
-+    auto *t = load_probe("bin/user-app.c.elf");
-     if (!t) {
-         JARVIS_TEST_PASS();
-         return;
-diff --git a/src/kernel/test/test_syscall_fastpath.cpp b/src/kernel/test/test_syscall_fastpath.cpp
-index 47b394854..4f86a95fc 100644
---- a/src/kernel/test/test_syscall_fastpath.cpp
-+++ b/src/kernel/test/test_syscall_fastpath.cpp
-@@ -156,7 +156,7 @@ JARVIS_TEST(fast_call_correctness, "PRE: none | POST: none") {
- // Expect: canary_trip().count > 0; task terminates without kernel panic.
- // Depends: canary relocation hooks (syscall FULL path + scheduler), gs::*
- JARVIS_TEST(full_path_still_validates, "PRE: none | POST: none") {
--    auto *t = load_probe("user-app.c.elf");
-+    auto *t = load_probe("bin/user-app.c.elf");
-     if (!t) {
-         JARVIS_TEST_PASS();
-         return;
-@@ -201,7 +201,7 @@ JARVIS_TEST(full_path_still_validates, "PRE: none | POST: none") {
- //         sample; the probe never faults on its FAST syscalls.
- // Depends: FAST dispatch, canary relocation scheduler hooks
- JARVIS_TEST(fast_path_skips_canary, "PRE: none | POST: none") {
--    auto *t = load_probe("yield-probe.c.elf");
-+    auto *t = load_probe("bin/yield-probe.c.elf");
-     if (!t) {
-         JARVIS_TEST_PASS();
-         return;
-diff --git a/src/kernel/test/test_task.cpp b/src/kernel/test/test_task.cpp
-index 1a2d94e37..6291540cd 100644
---- a/src/kernel/test/test_task.cpp
-+++ b/src/kernel/test/test_task.cpp
-@@ -133,9 +133,9 @@ JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
- // Expect: All three IPC objects are non-null after ELF load.
- JARVIS_TEST(task_elf_load_inits_ipc_objects, "PRE: none | POST: none") {
-     // Find a test ELF in initrd
--    initrd::InitrdFile f = initrd::find("./user-app.c.elf");
-+    initrd::InitrdFile f = initrd::find("./bin/user-app.c.elf");
-     if (!f.data)
--        f = initrd::find("user-app.c.elf");
-+        f = initrd::find("bin/user-app.c.elf");
-     if (!f.data) {
-         // No test ELF available, skip with pass
-         JARVIS_TEST_PASS();
-diff --git a/src/kernel/test/test_task_lifecycle.cpp b/src/kernel/test/test_task_lifecycle.cpp
-index 5cc1a68b8..eac9af1ac 100644
---- a/src/kernel/test/test_task_lifecycle.cpp
-+++ b/src/kernel/test/test_task_lifecycle.cpp
-@@ -327,9 +327,9 @@ JARVIS_TEST(scheduler_reap_respects_parent_wait, "PRE: none | POST: none") {
- // (init_task_common was called).
- JARVIS_TEST(elf_load_init_task_common_called, "PRE: none | POST: none") {
-     // Find a test ELF in initrd
--    initrd::InitrdFile f = initrd::find("./user-app.c.elf");
-+    initrd::InitrdFile f = initrd::find("./bin/user-app.c.elf");
-     if (!f.data)
--        f = initrd::find("user-app.c.elf");
-+        f = initrd::find("bin/user-app.c.elf");
-     if (!f.data) {
-         // No test ELF available, skip with pass
-         JARVIS_TEST_PASS();
-diff --git a/src/kernel/test/test_vfs.cpp b/src/kernel/test/test_vfs.cpp
-index ee0cb722b..33b1222a4 100644
---- a/src/kernel/test/test_vfs.cpp
-+++ b/src/kernel/test/test_vfs.cpp
-@@ -437,6 +437,40 @@ JARVIS_TEST(vfs_initrd_lookup_release_flat, "PRE: vfsd, iocd | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Runmode: kernel
-+// Testidea: initrd /bin hierarchy resolves (issue #274): a command ELF
-+// under /bin resolves S_IFREG, /bin itself resolves S_IFDIR, a missing
-+// /bin child returns null, and the /hey.c.elf root canary still works.
-+// Input: resolve("/bin/cat.c.elf"), resolve("/bin"),
-+// resolve("/bin/nope-274"), resolve("/hey.c.elf") with vnode counters
-+// captured around the cycle.
-+// Expect: bin ELF non-null S_IFREG; /bin non-null S_IFDIR; missing child
-+// null; root canary non-null; vnode counters flat; every owned vnode
-+// released exactly once.
-+// Depends: vfs::resolve OWNED convention + initrd dir-vnode lookup.
-+JARVIS_TEST(vfs_initrd_bin_resolve, "PRE: vfsd, iocd | POST: none") {
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+    auto *bin_elf = vfs::resolve("/bin/cat.c.elf");
-+    JARVIS_ASSERT(bin_elf != nullptr);
-+    JARVIS_ASSERT(bin_elf->mode & vfs::S_IFREG);
-+    auto *bin_dir = vfs::resolve("/bin");
-+    JARVIS_ASSERT(bin_dir != nullptr);
-+    JARVIS_ASSERT(bin_dir->mode & vfs::S_IFDIR);
-+    auto *missing = vfs::resolve("/bin/nope-274");
-+    JARVIS_ASSERT(missing == nullptr);
-+    auto *root_canary = vfs::resolve("/hey.c.elf");
-+    JARVIS_ASSERT(root_canary != nullptr);
-+    vfs::release(bin_elf);
-+    vfs::release(bin_dir);
-+    vfs::release(root_canary);
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.vnodes, after.vnodes);
-+    JARVIS_TEST_PASS();
-+}
-+
- // Runmode: kernel
- // Testidea: issue #268 regression guard — tmpfs cached vnodes are
- // borrowed (refcount 0), so resolve+release cycles must neither leak nor
-@@ -554,6 +588,7 @@ void register_vfs_tests() {
-     JARVIS_REGISTER_TEST(vfs_write_fstat);
-     JARVIS_REGISTER_TEST(vfs_pipe_read_write);
-     JARVIS_REGISTER_TEST(vfs_initrd_lookup_release_flat); // #268
-+    JARVIS_REGISTER_TEST(vfs_initrd_bin_resolve); // #274
-     JARVIS_REGISTER_TEST(vfs_tmpfs_nested_resolve_balanced); // #268
-     JARVIS_REGISTER_TEST(vfs_ls_lookup_loop_no_leak); // #268
-     JARVIS_REGISTER_TEST(vfs_fd_open_close_balanced); // #268
-diff --git a/src/kernel/vfs/initrd_fs.cpp b/src/kernel/vfs/initrd_fs.cpp
-index adaa83a81..65f759e19 100644
---- a/src/kernel/vfs/initrd_fs.cpp
-+++ b/src/kernel/vfs/initrd_fs.cpp
-@@ -142,6 +142,244 @@ static const VnodeOps initrd_file_ops = {
-     nullptr, // create
- };
- 
-+// ── subdirectory support (issue #274) ──
-+
-+/// @brief Bound for cpio entry scans when probing for a subdirectory.
-+static constexpr uint64_t INITRD_MAX_SCAN = 1024;
-+/// @brief Capacity of the cpio-relative subdir path in InitrdDirNode.
-+static constexpr size_t INITRD_MAX_SUBDIR = 128;
-+/// @brief Capacity of the joined "<subdir>/<name>" lookup buffer.
-+static constexpr size_t INITRD_MAX_JOINED = 256;
-+
-+/// @brief Per-vnode private data for initrd subdirectory vnodes.
-+struct InitrdDirNode {
-+    char subdir[INITRD_MAX_SUBDIR]; ///< Cpio-relative subdir, e.g. "bin".
-+};
-+
-+/// @brief Build a file vnode for an initrd image range.
-+/// Shared by the root and subdirectory lookups; the caller owns the
-+/// returned vnode (track_vnode_add) and releases it exactly once.
-+/// @return Owned file vnode, or nullptr on allocation failure.
-+static Vnode *initrd_make_file_vnode(const initrd::InitrdFile &file) {
-+    auto *finfo = static_cast<InitrdFileNode *>(
-+        kernel::MemPool::alloc(sizeof(InitrdFileNode)));
-+    if (!finfo)
-+        return nullptr;
-+    finfo->data = file.data;
-+    finfo->size = file.size;
-+    finfo->parent = initrd_root;
-+
-+    auto *vnode = static_cast<Vnode *>(kernel::MemPool::alloc(sizeof(Vnode)));
-+    if (!vnode) {
-+        kernel::MemPool::free(finfo);
-+        return nullptr;
-+    }
-+    vnode->parent = &initrd_root;
-+    kernel::test::ResourceTracker::instance().track_vnode_add();
-+    vnode->ops = &initrd_file_ops;
-+    vnode->ino = 1;
-+    vnode->size = file.size;
-+    vnode->mode = S_IFREG;
-+    vnode->private_data = finfo;
-+    vnode->refcount = 1;
-+    return vnode;
-+}
-+
-+/// @brief Strip a leading "./" cpio prefix in place (view only).
-+static const char *initrd_strip_dot(const char *name) {
-+    if (name[0] == '.' && name[1] == '/')
-+        return name + 2;
-+    return name;
-+}
-+
-+/// @brief Probe the archive for subdirectory evidence under `name`.
-+/// A bounded readdir walk classifies `name` as an explicit directory
-+/// entry ("./<name>" with is_dir) or as an implied parent ("./<name>/..."
-+/// children exist). Either one makes `name` a subdirectory.
-+/// @param[out] is_dir True when `name` is an explicit directory entry.
-+static bool initrd_probe_subdir(const char *name, bool &is_dir) {
-+    is_dir = false;
-+    bool has_child = false;
-+    uint64_t pos = 0;
-+    initrd::InitrdEntry entry = {};
-+    for (uint64_t scanned = 0; scanned < INITRD_MAX_SCAN; ++scanned) {
-+        if (!initrd::readdir(&pos, &entry))
-+            break;
-+        const char *stripped = initrd_strip_dot(entry.name);
-+        size_t i = 0;
-+        while (name[i] && name[i] == stripped[i])
-+            ++i;
-+        if (name[i] != '\0')
-+            continue;
-+        if (stripped[i] == '\0') {
-+            if (entry.is_dir)
-+                is_dir = true;
-+            continue;
-+        }
-+        if (stripped[i] == '/')
-+            has_child = true;
-+    }
-+    return is_dir || has_child;
-+}
-+
-+/// @brief Read from an initrd subdirectory (not supported).
-+static int64_t initrd_dir_read(Vnode &, uint8_t *, uint64_t, uint64_t) {
-+    return VFS_INVALID;
-+}
-+
-+/// @brief Write to an initrd subdirectory (not supported, read-only).
-+static int64_t initrd_dir_write(Vnode &, const uint8_t *, uint64_t,
-+                                uint64_t) {
-+    return VFS_INVALID;
-+}
-+
-+/// @brief Open an initrd subdirectory vnode.
-+static int initrd_dir_open(Vnode &, uint64_t) {
-+    return 0;
-+}
-+
-+/// @brief Close an initrd subdirectory vnode, freeing private data.
-+/// Lifecycle mirrors initrd_file_close exactly: free the private node if
-+/// present, drop the tracker count, then free the vnode itself.
-+static void initrd_dir_close(Vnode &self) {
-+    if (self.private_data) {
-+        kernel::MemPool::free(self.private_data);
-+        self.private_data = nullptr;
-+    }
-+    kernel::test::ResourceTracker::instance().track_vnode_remove();
-+    kernel::MemPool::free(&self);
-+}
-+
-+/// @brief Seek within an initrd subdirectory (not supported).
-+static int64_t initrd_dir_lseek(Vnode &, int64_t, int,
-+                                uint64_t *) {
-+    return VFS_INVALID;
-+}
-+
-+/// @brief Get initrd subdirectory status.
-+static int initrd_dir_fstat(Vnode &, VfsStat &vfs_stat) {
-+    vfs_stat.st_size = 0;
-+    vfs_stat.st_mode = S_IFDIR;
-+    return 0;
-+}
-+
-+/// @brief I/O control on initrd subdirectory (not supported).
-+static int initrd_dir_ioctl(Vnode &, uint64_t, kernel::CheckedPtr<uint8_t>) {
-+    return VFS_INVALID;
-+}
-+
-+/// @brief Read a directory entry from an initrd subdirectory.
-+/// Lists immediate children ("./<subdir>/<child>" with no further '/').
-+static int initrd_dir_readdir(Vnode &self, uint64_t &pos, Dirent &dent) {
-+    auto *dinfo = static_cast<InitrdDirNode *>(self.private_data);
-+    if (!dinfo || dinfo->subdir[0] == '\0')
-+        return VFS_INVALID;
-+    size_t sublen = 0;
-+    while (sublen < INITRD_MAX_SUBDIR && dinfo->subdir[sublen])
-+        ++sublen;
-+    initrd::InitrdEntry entry = {};
-+    for (uint64_t scanned = 0; scanned < INITRD_MAX_SCAN; ++scanned) {
-+        if (!initrd::readdir(&pos, &entry))
-+            break;
-+        const char *stripped = initrd_strip_dot(entry.name);
-+        size_t i = 0;
-+        while (i < sublen && dinfo->subdir[i] == stripped[i])
-+            ++i;
-+        if (i != sublen || stripped[i] != '/')
-+            continue;
-+        const char *child = stripped + i + 1;
-+        if (child[0] == '\0')
-+            continue;
-+        size_t j = 0;
-+        while (child[j] && child[j] != '/')
-+            ++j;
-+        if (child[j] != '\0')
-+            continue;
-+        size_t k = 0;
-+        while (k < j && k < 63) {
-+            dent.d_name[k] = child[k];
-+            ++k;
-+        }
-+        dent.d_name[k] = '\0';
-+        dent.d_ino = 2;
-+        return 0;
-+    }
-+    return VFS_INVALID;
-+}
-+
-+/// @brief Look up a file by name in an initrd subdirectory.
-+/// Joins "<subdir>/<name>" fail-closed (overlong input yields nullptr)
-+/// and delegates to the flat archive matcher.
-+static Vnode *initrd_dir_lookup(Vnode &self, const char *name) {
-+    auto *dinfo = static_cast<InitrdDirNode *>(self.private_data);
-+    if (!dinfo || !name)
-+        return nullptr;
-+    size_t sublen = 0;
-+    while (sublen < INITRD_MAX_SUBDIR && dinfo->subdir[sublen])
-+        ++sublen;
-+    size_t namelen = 0;
-+    while (name[namelen])
-+        ++namelen;
-+    if (sublen == 0 || sublen + 1 + namelen + 1 > INITRD_MAX_JOINED)
-+        return nullptr;
-+    char joined[INITRD_MAX_JOINED];
-+    for (size_t i = 0; i < sublen; ++i)
-+        joined[i] = dinfo->subdir[i];
-+    joined[sublen] = '/';
-+    for (size_t i = 0; i <= namelen; ++i)
-+        joined[sublen + 1 + i] = name[i];
-+    initrd::InitrdFile file = initrd::find(joined);
-+    if (!file.data)
-+        return nullptr;
-+    return initrd_make_file_vnode(file);
-+}
-+
-+static const VnodeOps initrd_dir_ops = {
-+    initrd_dir_read,
-+    initrd_dir_write,
-+    initrd_dir_open,
-+    initrd_dir_close,
-+    initrd_dir_lseek,
-+    initrd_dir_fstat,
-+    initrd_dir_ioctl,
-+    initrd_dir_readdir,
-+    initrd_dir_lookup,
-+    nullptr,
-+    nullptr,
-+    nullptr, // create
-+};
-+
-+/// @brief Build a subdirectory vnode for the cpio-relative `subdir`.
-+/// The parent link points at the static initrd_root (borrowed, never
-+/// freed) — transient dir vnodes are never stored as another vnode's
-+/// parent, so traversal release cannot dangle it.
-+/// @return Owned dir vnode, or nullptr on allocation failure.
-+static Vnode *initrd_make_dir_vnode(const char *subdir, size_t sublen) {
-+    if (!subdir || sublen == 0 || sublen >= INITRD_MAX_SUBDIR)
-+        return nullptr;
-+    auto *dinfo = static_cast<InitrdDirNode *>(
-+        kernel::MemPool::alloc(sizeof(InitrdDirNode)));
-+    if (!dinfo)
-+        return nullptr;
-+    for (size_t i = 0; i <= sublen; ++i)
-+        dinfo->subdir[i] = subdir[i];
-+
-+    auto *vnode = static_cast<Vnode *>(kernel::MemPool::alloc(sizeof(Vnode)));
-+    if (!vnode) {
-+        kernel::MemPool::free(dinfo);
-+        return nullptr;
-+    }
-+    vnode->parent = &initrd_root;
-+    kernel::test::ResourceTracker::instance().track_vnode_add();
-+    vnode->ops = &initrd_dir_ops;
-+    vnode->ino = 2;
-+    vnode->size = 0;
-+    vnode->mode = S_IFDIR;
-+    vnode->private_data = dinfo;
-+    vnode->refcount = 1;
-+    return vnode;
-+}
-+
- // ── root directory ──
- 
- /// @brief Read from initrd root (not supported).
-@@ -194,33 +432,22 @@ static int initrd_root_readdir(Vnode &, uint64_t &pos, Dirent &dent) {
- }
- 
- /// @brief Look up a file by name in the initrd root directory.
-+/// Flat entries resolve exactly as before; on a miss the archive is
-+/// probed for subdirectory evidence, so multi-level paths ("/bin/...").
- static Vnode *initrd_root_lookup(Vnode &, const char *name) {
--    initrd::InitrdFile file = initrd::find(name);
--    if (!file.data)
--        return nullptr;
--
--    auto *finfo = static_cast<InitrdFileNode *>(
--        kernel::MemPool::alloc(sizeof(InitrdFileNode)));
--    if (!finfo)
--        return nullptr;
--    finfo->data = file.data;
--    finfo->size = file.size;
--    finfo->parent = initrd_root;
--
--    auto *vnode = static_cast<Vnode *>(kernel::MemPool::alloc(sizeof(Vnode)));
--    if (!vnode) {
--        kernel::MemPool::free(finfo);
-+    if (!name)
-         return nullptr;
-+    bool is_dir = false;
-+    if (!initrd_probe_subdir(name, is_dir)) {
-+        initrd::InitrdFile file = initrd::find(name);
-+        if (!file.data)
-+            return nullptr;
-+        return initrd_make_file_vnode(file);
-     }
--    vnode->parent = &initrd_root;
--    kernel::test::ResourceTracker::instance().track_vnode_add();
--    vnode->ops = &initrd_file_ops;
--    vnode->ino = 1;
--    vnode->size = file.size;
--    vnode->mode = S_IFREG;
--    vnode->private_data = finfo;
--    vnode->refcount = 1;
--    return vnode;
-+    size_t sublen = 0;
-+    while (name[sublen])
-+        ++sublen;
-+    return initrd_make_dir_vnode(name, sublen);
- }
- 
- static const VnodeOps initrd_root_ops = {
-diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index a4fafa634..9f093ca6a 100644
---- a/src/services/shell.cpp
-+++ b/src/services/shell.cpp
-@@ -2615,7 +2615,7 @@ static DebugdEnsure debug_ensure_debugd(uint64_t &pid_out) {
-         pid_out = pid;
-         return DebugdEnsure::OK;
-     }
--    auto f = initrd::find("debugd.c.elf");
-+    auto f = initrd::find("bin/debugd.c.elf");
-     if (f.data == nullptr)
-         return DebugdEnsure::NO_ELF;
-     auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
 diff --git a/test-history.txt b/test-history.txt
-index d2ed81e24..ad833b3a0 100644
+index ad833b3a0..3bbe1ea69 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -2682,3 +2682,22 @@ SUMMARY: total=20 ok=11 fail=9
- 2026-10-07 15:22:53 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
+@@ -2701,3 +2701,5 @@ SUMMARY: total=18 ok=18 fail=0
+ 2026-10-07 16:44:00 servers PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun)
+ 2026-10-07 16:47:00 servers_daemon_restart PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall; aggregate green below)
+ 2026-10-07 16:55:00 servers PASSED: 62 FAILED: 0 TIME: 1629ms
++2026-10-07 19:35:00 syscall_core-release PASSED: 0 FAILED: 0 TIME: 0ms (vacuous: no TF_RELEASE tests in class)
++2026-10-07 19:36:00 selftest PASSED: 139 FAILED: 0 TIME: 7494ms
+diff --git a/userspace/sh.c b/userspace/sh.c
+index d315750a3..9d9c77d7a 100644
+--- a/userspace/sh.c
++++ b/userspace/sh.c
+@@ -8,9 +8,104 @@
+ #define MAX_CMDS 8
+ #define LINE_BUF 256
  
- SUMMARY: total=18 ok=18 fail=0
-+2026-10-07 16:05:10 storage PASSED: 148 FAILED: 0 TIME: 3569ms
-+2026-10-07 16:06:40 storage PASSED: 148 FAILED: 0 TIME: 3554ms
-+2026-10-07 16:08:10 proc_elf PASSED: 91 FAILED: 0 TIME: 5437ms
-+2026-10-07 16:08:40 capability PASSED: 148 FAILED: 0 TIME: 6384ms
-+2026-10-07 16:09:15 ipc PASSED: 85 FAILED: 0 TIME: 3404ms
-+2026-10-07 16:10:05 core PASSED: 536 FAILED: 0 TIME: 29647ms
-+2026-10-07 16:13:00 hal PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (zero S: lines, DMD spam only; pre-existing hal flake pattern in history)
-+2026-10-07 16:15:30 hal PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun; exonerated below)
-+2026-10-07 16:16:45 hal_core PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (exonerated: identical binary 14/14 under GDB + 14/14 execute-test rerun)
-+2026-10-07 16:18:50 hal_core PASSED: 14 FAILED: 0 TIME: 313ms
-+2026-10-07 16:20:50 hal PASSED: 122 FAILED: 0 TIME: 0ms
-+2026-10-07 16:23:30 ui PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (zero S: lines; no ui test files edited by #274)
-+2026-10-07 16:35:00 shell_commands PASSED: 34 FAILED: 0 TIME: 1177ms
-+2026-10-07 16:26:00 ui PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun; runner stall pre-test-1, content exonerated via shell_commands 34/34)
-+2026-10-07 16:37:00 ui PASSED: 73 FAILED: 0 TIME: 5864ms
-+2026-10-07 16:40:00 servers PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall signature, cf. hal/ui exonerated)
-+2026-10-07 16:44:00 servers PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun)
-+2026-10-07 16:47:00 servers_daemon_restart PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall; aggregate green below)
-+2026-10-07 16:55:00 servers PASSED: 62 FAILED: 0 TIME: 1629ms
-diff --git a/tools/verify-288.exp b/tools/verify-288.exp
-index c1ce2ffea..07d5905ff 100644
---- a/tools/verify-288.exp
-+++ b/tools/verify-288.exp
-@@ -70,7 +70,7 @@ expect {
-     timeout { puts "VERIFY: TIMEOUT waiting usage line"; exit 1 }
-     eof { puts "VERIFY: EOF waiting usage line"; exit 1 }
++/// @brief Environment store bounds (issue #310): every entry sits far
++/// inside the kernel exec window (64 args x 256 B, MAX_EXEC_ARGS /
++/// MAX_EXEC_ARG_LEN) — overlong exports are rejected at set time.
++#define MAX_ENV 16
++#define ENV_VAL_LEN 128
++/// @brief Resolver bounds: max PATH dirs scanned, max chars per segment,
++/// and the exec-path buffer (matches LINE_BUF so any typed line fits).
++#define MAX_PATH_DIRS 16
++#define MAX_DIR_SEG 64
++#define EXEC_PATH_LEN 256
++
+ static char line[LINE_BUF];
+ static int last_status = 0;
+ 
++static char env_buf[MAX_ENV][ENV_VAL_LEN];
++static char *env_ptrs[MAX_ENV + 1];
++char **environ;
++
++static char exec_path[EXEC_PATH_LEN];
++
++/// @brief Length of a NUL-terminated string (freestanding, no strlen).
++static int sh_strlen(const char *s) {
++    int n = 0;
++    while (s[n])
++        ++n;
++    return n;
++}
++
++/// @brief True when `s` starts with `prefix` and the next char is '='.
++static int sh_name_matches(const char *s, const char *prefix) {
++    int i = 0;
++    while (prefix[i]) {
++        if (s[i] != prefix[i])
++            return 0;
++        ++i;
++    }
++    return s[i] == '=';
++}
++
++/// @brief Look up a variable in the static store (NULL when absent).
++static const char *sh_getenv(const char *name) {
++    if (!name || !name[0])
++        return 0;
++    for (int i = 0; env_ptrs[i]; ++i) {
++        if (sh_name_matches(env_ptrs[i], name))
++            return env_ptrs[i] + sh_strlen(name) + 1;
++    }
++    return 0;
++}
++
++/// @brief Set a variable (update in place or append). Fail-closed: -1
++/// when the entry does not fit or the store is full; the store is
++/// never left half-written.
++static int sh_setenv(const char *name, const char *value) {
++    if (!name || !name[0] || !value)
++        return -1;
++    int namelen = sh_strlen(name);
++    int vallen = sh_strlen(value);
++    if (namelen + 1 + vallen + 1 > ENV_VAL_LEN)
++        return -1;
++    for (int i = 0; env_ptrs[i]; ++i) {
++        if (sh_name_matches(env_ptrs[i], name)) {
++            int k = 0;
++            for (int j = 0; j < namelen; ++j)
++                env_buf[i][k++] = name[j];
++            env_buf[i][k++] = '=';
++            for (int j = 0; j <= vallen; ++j)
++                env_buf[i][k++] = value[j];
++            return 0;
++        }
++    }
++    int n = 0;
++    while (env_ptrs[n])
++        ++n;
++    if (n >= MAX_ENV)
++        return -1;
++    int k = 0;
++    for (int j = 0; j < namelen; ++j)
++        env_buf[n][k++] = name[j];
++    env_buf[n][k++] = '=';
++    for (int j = 0; j <= vallen; ++j)
++        env_buf[n][k++] = value[j];
++    env_ptrs[n] = env_buf[n];
++    env_ptrs[n + 1] = 0;
++    return 0;
++}
++
++/// @brief Install the default environment (PATH=/bin:/).
++/// NOTE (issue #310): sh never imports a passed envp. The runelf load
++/// path builds an empty env, and deriving envp from rsp in crt0 faults
++/// there (verified: 3-arg main + import = instant #GP; 2-arg = clean
++/// boot). Children of sh still receive this store via the exec arg2.
++static void sh_env_init(void) {
++    env_ptrs[0] = 0;
++    environ = env_ptrs;
++    sh_setenv("PATH", "/bin:/");
++}
++
+ static void print_prompt(void) {
+     printf("sh$ ");
  }
--send "loadelf burn.c.elf\r"
-+send "loadelf /bin/burn.c.elf\r"
- puts "VERIFY: load requested, settling for the background load..."
- sleep 10
- send "runelf\r"
-diff --git a/tools/verify-295.py b/tools/verify-295.py
-index 65a2205b7..300b32ec2 100644
---- a/tools/verify-295.py
-+++ b/tools/verify-295.py
-@@ -225,7 +225,7 @@ def main():
-         body = read_packet()
-         check(body == b"OK", "detach OK, got %r" % (body,))
-         # Live burner: silent long-running user load for real stats.
--        os.write(_fd(), b"loadelf burn.c.elf\r")
-+        os.write(_fd(), b"loadelf /bin/burn.c.elf\r")
-         out = recv_until(b"completed successfully", timeout_s=120)
-         check(b"completed successfully" in out, "burn.c.elf loaded")
-         os.write(_fd(), b"runelf\r")
+@@ -41,8 +136,7 @@ struct Command {
+     const char* redirect_out;
+ };
+ 
+-static int parse_line(struct Command cmds[], int* ncmds) {
+-    int i = 0;
++static int parse_line(struct Command cmds[], int* ncmds) {    int i = 0;
+     while (line[i] == ' ') ++i;
+     if (line[i] == '\0') return -1;
+ 
+@@ -94,6 +188,68 @@ static int parse_line(struct Command cmds[], int* ncmds) {
+     return np;
+ }
+ 
++/// @brief Resolve a command name via PATH into `out` (issue #310).
++/// Names containing '/' are copied verbatim (bounded); bare names try
++/// each colon-separated PATH dir (`dir + "/" + name`, empty dir means
++/// root), probing with open()+close. Fail-closed: -1 when nothing fits
++/// or resolves — the caller prints `not found` and exits 127.
++static int resolve_path(const char *cmd, char *out, int out_len) {
++    if (!cmd || !cmd[0] || !out || out_len <= 0)
++        return -1;
++    int cmdlen = sh_strlen(cmd);
++    int hasslash = 0;
++    for (int i = 0; i < cmdlen; ++i) {
++        if (cmd[i] == '/') {
++            hasslash = 1;
++            break;
++        }
++    }
++    if (hasslash) {
++        if (cmdlen + 1 > out_len)
++            return -1;
++        for (int i = 0; i <= cmdlen; ++i)
++            out[i] = cmd[i];
++        return 0;
++    }
++    const char *path = sh_getenv("PATH");
++    if (!path || !path[0])
++        path = "/bin:/";
++    int pos = 0;
++    for (int dir = 0; dir < MAX_PATH_DIRS; ++dir) {
++        int segstart = pos;
++        while (path[pos] && path[pos] != ':')
++            ++pos;
++        int seglen = pos - segstart;
++        int last = (path[pos] == '\0');
++        if (path[pos] == ':')
++            ++pos;
++        if (seglen > MAX_DIR_SEG) {
++            if (last)
++                break;
++            continue;
++        }
++        if (seglen + 1 + cmdlen + 1 > out_len) {
++            if (last)
++                break;
++            continue;
++        }
++        int k = 0;
++        for (int i = 0; i < seglen; ++i)
++            out[k++] = path[segstart + i];
++        out[k++] = '/';
++        for (int i = 0; i <= cmdlen; ++i)
++            out[k++] = cmd[i];
++        int fd = open(out, 0);
++        if (fd >= 0) {
++            close(fd);
++            return 0;
++        }
++        if (last)
++            break;
++    }
++    return -1;
++}
++
+ static int run_command(struct Command* cmd, int input_fd, int output_fd) {
+     pid_t pid = fork();
+     if (pid < 0) return -1;
+@@ -125,7 +281,16 @@ static int run_command(struct Command* cmd, int input_fd, int output_fd) {
+     }
+ 
+     if (strcmp(cmd->argv[0], "export") == 0) {
+-        if (cmd->argv[1]) printf("export %s\n", cmd->argv[1]);
++        // Print-only fallback for pipelines: real mutation happens in
++        // the parent builtin (state set in a forked child would die
++        // with it).
++        if (cmd->argv[1]) {
++            const char *v = sh_getenv(cmd->argv[1]);
++            if (v)
++                printf("export %s=%s\n", cmd->argv[1], v);
++            else
++                printf("export %s\n", cmd->argv[1]);
++        }
+         _exit(0);
+     }
+ 
+@@ -133,7 +298,12 @@ static int run_command(struct Command* cmd, int input_fd, int output_fd) {
+         _exit(0);
+     }
+ 
+-    __syscall5(20, (long)cmd->argv[0], (long)cmd->argv, 0, 0);
++    if (resolve_path(cmd->argv[0], exec_path, EXEC_PATH_LEN) < 0) {
++        printf("sh: %s: not found\n", cmd->argv[0]);
++        _exit(127);
++        return -1;
++    }
++    __syscall5(20, (long)exec_path, (long)cmd->argv, (long)environ, 0);
+     printf("sh: %s: not found\n", cmd->argv[0]);
+     _exit(127);
+     return -1;
+@@ -174,6 +344,8 @@ int main(int argc, char** argv) {
+     (void)argc;
+     (void)argv;
+ 
++    sh_env_init();
++
+     printf("Jarvis RTOS Userspace Shell\n");
+ 
+     while (1) {
+@@ -193,6 +365,41 @@ int main(int argc, char** argv) {
+             continue;
+         }
+ 
++        if (strcmp(cmds[0].argv[0], "export") == 0 && ncmds == 1) {
++            // Parent-side builtin: mutation must happen here, not in a
++            // forked child (child state dies with it — the old stub bug).
++            const char *arg = cmds[0].argv[1];
++            if (!arg) {
++                for (int i = 0; env_ptrs[i]; ++i)
++                    printf("export %s\n", env_ptrs[i]);
++            } else if (cmds[0].argv[2]) {
++                printf("export: usage: export [NAME[=VALUE]]\n");
++            } else {
++                int k = 0;
++                while (arg[k] && arg[k] != '=')
++                    ++k;
++                if (k == 0) {
++                    printf("export: usage: export [NAME[=VALUE]]\n");
++                } else if (!arg[k]) {
++                    const char *v = sh_getenv(arg);
++                    if (v)
++                        printf("export %s=%s\n", arg, v);
++                } else {
++                    char name[ENV_VAL_LEN];
++                    if (k >= ENV_VAL_LEN) {
++                        printf("export: name too long\n");
++                    } else {
++                        for (int j = 0; j < k; ++j)
++                            name[j] = arg[j];
++                        name[k] = '\0';
++                        if (sh_setenv(name, arg + k + 1) < 0)
++                            printf("export: failed\n");
++                    }
++                }
++            }
++            continue;
++        }
++
+         if (strcmp(cmds[0].argv[0], "exit") == 0) break;
+ 
+         last_status = execute_pipeline(cmds, ncmds);
