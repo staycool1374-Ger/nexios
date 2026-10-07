@@ -20,6 +20,7 @@
 /// @brief Mutex implementation — lock, unlock, try_lock, priority inheritance.
 
 #include <kernel/sync/mutex.hpp>
+#include <kernel/sync/waiter_tag.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <assert.hpp>
 
@@ -47,8 +48,8 @@ void Mutex::init(uint64_t ceiling) {
     lock_count_ = 0;
     wait_count_ = 0;
     priority_ceiling_ = ceiling;
-    // M-9 (audit-task-sync-v0.4.2): set the flag so a later init_err() sees
-    // this object as initialized (was never set by the void overload).
+    // Set the flag so a later init_err() sees this object as initialized
+    // (was never set by the void overload).
     initialized_ = true;
 }
 
@@ -84,7 +85,7 @@ errors::SyncError Mutex::init_err(uint64_t ceiling) {
 /// @return false if the array is full.
 bool Mutex::add_waiter(TaskControlBlock &task) {
     for (size_t i = 0; i < wait_count_; ++i) {
-        if (waiters_[i] == &task && waiter_gens_[i] == task.generation)
+        if (same_waiter(waiters_[i], waiter_gens_[i], task))
             return true;
     }
     if (wait_count_ >= MAX_WAITERS)
@@ -103,7 +104,7 @@ bool Mutex::add_waiter(TaskControlBlock &task) {
 bool Mutex::remove_waiter(TaskControlBlock &task) {
     SpinLockGuard<SpinLock> guard(lock_);
     for (size_t i = 0; i < wait_count_;) {
-        if (waiters_[i] == &task && waiter_gens_[i] == task.generation) {
+        if (same_waiter(waiters_[i], waiter_gens_[i], task)) {
             waiters_[i] = waiters_[--wait_count_];
             waiter_gens_[i] = waiter_gens_[wait_count_];
             task.waiting_on_mutex = nullptr;
@@ -114,21 +115,21 @@ bool Mutex::remove_waiter(TaskControlBlock &task) {
     return false;
 }
 
-/// @brief Wake the highest-priority waiter.
-void Mutex::wake_one() {
+size_t Mutex::select_best_waiter() const {
     size_t best = wait_count_;
     for (size_t i = 0; i < wait_count_; ++i) {
-        if (waiters_[i]->generation != waiter_gens_[i])
-            continue; // stale — TCB was recycled
-        // Harden: a cleaned-up task is REAPED, not TERMINATED.  Never feed a
-        // freed TCB to set_task_ready (ready-queue corruption / UAF).
-        if (waiters_[i]->state == TaskState::TERMINATED ||
-            waiters_[i]->state == TaskState::REAPED)
-            continue;
+        if (!waiter_awakeable(waiters_[i], waiter_gens_[i]))
+            continue; // stale or dead — TCB recycled or cleaned up
         if (best == wait_count_ ||
             waiters_[i]->priority > waiters_[best]->priority)
             best = i;
     }
+    return best;
+}
+
+/// @brief Wake the highest-priority waiter.
+void Mutex::wake_one() {
+    size_t best = select_best_waiter();
     if (best >= wait_count_)
         return;
 
@@ -240,7 +241,7 @@ void Mutex::lock() {
 #if CONFIG_PRIORITY_CEILING_PROTOCOL
         if (priority_ceiling_ > 0 && task->system_ceiling_ > 0 &&
             task->priority <= task->system_ceiling_) {
-            // H-4: never ENSURE on waiter-table-full (reachable exhaustion).
+            // Never ENSURE on waiter-table-full (reachable exhaustion).
             if (!add_waiter(*task)) {
                 lock_.unlock();
                 Scheduler::reschedule();
@@ -282,9 +283,9 @@ void Mutex::lock() {
 
         inherit_priority(*task);
 
-        // H-4 (audit-task-sync-v0.4.2): a void blocking API must NOT ENSURE on
-        // waiter-table-full - reachable resource exhaustion under contention
-        // saturation.  Yield and retry (the table drains as waiters wake).
+        // A void blocking API must NOT ENSURE on waiter-table-full —
+        // reachable resource exhaustion under contention saturation.
+        // Yield and retry (the table drains as waiters wake).
         if (!add_waiter(*task)) {
             lock_.unlock();
             Scheduler::reschedule();
@@ -310,10 +311,8 @@ void Mutex::lock() {
     }
 
     lock_.unlock();
-    // VULN-SYNC-01 safety net: architecturally impossible with direct
-    // ownership transfer — the waiter always acquires on first wake-up.
-    // If reached, the test pattern (IrqGuard + set_current with disabled
-    // interrupts) causes a false positive; tests must use lock_err().
+    // Safety net: architecturally impossible with direct ownership
+    // transfer — the waiter always acquires on first wake-up.
     panic("Mutex::lock() exhausted PCP retry budget");
 }
 
@@ -521,20 +520,7 @@ void Mutex::unlock() {
         // the original wake_one()+restore_priority ordering (pre-#022)
         // where the woken waiter's priority is not counted in the
         // remaining-boost calculation.
-        size_t best = wait_count_;
-        for (size_t i = 0; i < wait_count_; ++i) {
-            if (waiters_[i]->generation != waiter_gens_[i])
-                continue;
-            // Harden: never transfer ownership to a dead waiter (a cleaned-up
-            // task is REAPED, not TERMINATED) — set_task_ready on a freed TCB
-            // is ready-queue corruption / UAF.
-            if (waiters_[i]->state == TaskState::TERMINATED ||
-                waiters_[i]->state == TaskState::REAPED)
-                continue;
-            if (best == wait_count_ ||
-                waiters_[i]->priority > waiters_[best]->priority)
-                best = i;
-        }
+        size_t best = select_best_waiter();
         if (best < wait_count_) {
             auto *next = waiters_[best];
             next->waiting_on_mutex = nullptr;
@@ -589,18 +575,7 @@ errors::SyncError Mutex::unlock_err() {
     // Remove the waiter first, then restore priority based on remaining
     // waiters (not the one being woken).
     if (wait_count_ > 0) {
-        size_t best = wait_count_;
-        for (size_t i = 0; i < wait_count_; ++i) {
-            if (waiters_[i]->generation != waiter_gens_[i])
-                continue;
-            // Harden: never transfer ownership to a dead waiter (REAPED task).
-            if (waiters_[i]->state == TaskState::TERMINATED ||
-                waiters_[i]->state == TaskState::REAPED)
-                continue;
-            if (best == wait_count_ ||
-                waiters_[i]->priority > waiters_[best]->priority)
-                best = i;
-        }
+        size_t best = select_best_waiter();
         if (best < wait_count_) {
             auto *next = waiters_[best];
             next->waiting_on_mutex = nullptr;

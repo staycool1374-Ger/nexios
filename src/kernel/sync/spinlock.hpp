@@ -27,8 +27,6 @@
 /// Task-context paths may block; ISR paths must use try_lock()
 /// (non-blocking skip-and-retry).
 
-#pragma once
-
 #include <kernel/arch/io.hpp>
 #include <lib/atomic.hpp>
 

@@ -21,8 +21,6 @@
 /// @file mutex.hpp
 /// @brief Mutex with priority inheritance and blocking waiters.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/sync/spinlock.hpp>
@@ -108,6 +106,11 @@ class Mutex {
 
     /// @brief Add a task to the waiter array.
     bool add_waiter(TaskControlBlock &task);
+    /// @brief Select the best waiter index (issue #256 H8: shared by
+    ///        wake_one/unlock/unlock_err — the best-waiter scan was
+    ///        triplicated).  Caller holds lock_.  Returns wait_count_
+    ///        when no waiter is awakeable.  Pure scan: no unlink, no wake.
+    size_t select_best_waiter() const;
     /// @brief Wake the highest-priority waiter.
     void wake_one();
     /// @brief Boost owner priority if waiter is higher priority.

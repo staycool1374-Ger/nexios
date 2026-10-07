@@ -22,8 +22,6 @@
 /// @brief One-shot notification (signalling) primitive — single waiter, value
 /// delivery.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/sync_errors.hpp>
@@ -89,7 +87,7 @@ class Notify {
     uint64_t notify_value_;  ///< Value delivered to the waiter.
     TaskControlBlock *waiter_; ///< Currently waiting task (nullptr = none).
     uint64_t waiter_gen_;    ///< TCB generation captured at wait registration
-                             ///< (H-2: defeats ABA if the TCB is recycled).
+                             ///< (defeats ABA if the TCB is recycled).
     bool initialized_;       ///< Whether init() has been called.
 };
 

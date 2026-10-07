@@ -20,6 +20,7 @@
 /// @brief One-shot notification implementation — notify, wait, try_wait.
 
 #include <kernel/sync/notify.hpp>
+#include <kernel/sync/waiter_tag.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/arch/io.hpp>
@@ -31,13 +32,10 @@ namespace sync {
 Notify::~Notify() {
     SpinLockGuard<SpinLock> guard(lock_);
     if (waiter_) {
-        // H-2: a cleaned-up task is REAPED, not TERMINATED.  Never feed a
-        // freed TCB to set_task_ready (ready-queue corruption / UAF).  Also
-        // require the generation captured at wait time — a recycled TCB that
-        // now occupies the slot must not be woken.
-        if (waiter_->state != TaskState::TERMINATED &&
-            waiter_->state != TaskState::REAPED &&
-            waiter_->generation == waiter_gen_) {
+        // Wake only a live waiter with a matching generation: a cleaned-up
+        // task is REAPED, not TERMINATED, and a recycled TCB now occupying
+        // the slot must not be woken (ready-queue corruption / UAF).
+        if (waiter_awakeable(waiter_, waiter_gen_)) {
             Scheduler::set_task_ready(*waiter_);
         }
         waiter_ = nullptr;
@@ -72,9 +70,7 @@ void Notify::notify(uint64_t value) {
     SpinLockGuard<SpinLock> guard(lock_);
     notify_value_ = value;
     if (waiter_) {
-        if (waiter_->state != TaskState::TERMINATED &&
-            waiter_->state != TaskState::REAPED &&
-            waiter_->generation == waiter_gen_) {
+        if (waiter_awakeable(waiter_, waiter_gen_)) {
             Scheduler::set_task_ready(*waiter_);
         }
         waiter_ = nullptr;
@@ -87,9 +83,7 @@ errors::SyncError Notify::notify_err(uint64_t value) {
     SpinLockGuard<SpinLock> guard(lock_);
     notify_value_ = value;
     if (waiter_) {
-        if (waiter_->state != TaskState::TERMINATED &&
-            waiter_->state != TaskState::REAPED &&
-            waiter_->generation == waiter_gen_) {
+        if (waiter_awakeable(waiter_, waiter_gen_)) {
             Scheduler::set_task_ready(*waiter_);
         }
         waiter_ = nullptr;
@@ -101,20 +95,15 @@ errors::SyncError Notify::notify_err(uint64_t value) {
 
 /// @brief Block until notified. Returns the notifier's value.
 ///
-/// Semaphore::wait() discipline (CODING_STYLE §11.1–§11.3, INV-2): the
-/// waiter is registered and marked BLOCKED under the lock, the lock is
-/// released before any scheduler call, the task is dequeued from the
-/// ready queue, reschedule() arms the deferred switch, and the task
-/// spins scheduler-mediated until the notifier wakes it.  A value that
-/// arrived before the first wait is consumed without blocking, so an
-/// ISR notify can never be lost when the handler has not dispatched
-/// yet (issue #148: the old immediate-return path let
-/// IrqThread::task_entry busy-spin wait→handler→wait at raised priority
-/// and wedge the guest silently).
+/// Waiter registered + BLOCKED under the lock, lock released before any
+/// scheduler call, dequeued + reschedule outside it, then
+/// scheduler-mediated spin until the notifier wakes it.  A value that
+/// arrived before the first wait is consumed without blocking, so an ISR
+/// notify is never lost; a foreign waiter retries instead of stealing it.
 uint64_t Notify::wait() {
     auto *task = Scheduler::current_task();
     if (!task)
-        return 0;
+        return NOTIFY_INVALID;
 
     for (;;) {
         {
@@ -138,12 +127,11 @@ uint64_t Notify::wait() {
         arch::pause();
     }
 
-    // Block OUTSIDE the lock (C-1): never hold a spinlock across the
-    // deferred switch — the ISR-side notify() would spin forever on it.
-    // Dequeue so a BLOCKED task is never physically queued (INV-2
-    // desync — release-build live-lock if the switch applies late).
-    // Level-triggered backstop for the inverse wedge (READY but queued
-    // nowhere, issue #249): the on_tick stranded-READY sweep re-queues.
+    // Block OUTSIDE the lock: never hold a spinlock across the deferred
+    // switch — the ISR-side notify() would spin forever on it.
+    // Dequeue so a BLOCKED task is never physically queued (a late switch
+    // would otherwise live-lock release builds).  The on_tick
+    // stranded-READY sweep re-queues if the wake lands while READY.
     Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
 
@@ -162,14 +150,14 @@ uint64_t Notify::wait() {
     }
     {
         SpinLockGuard<SpinLock> guard(lock_);
-        if (waiter_ == task && waiter_gen_ == task->generation) {
+        if (same_waiter(waiter_, waiter_gen_, *task)) {
             waiter_ = nullptr;
             waiter_gen_ = 0;
         }
     }
     task->state = TaskState::RUNNING;
     Scheduler::enqueue_ready(*task);
-    return 0;
+    return NOTIFY_INVALID;
 }
 
 /// @brief Block until notified (error-returning overload).
@@ -201,7 +189,7 @@ errors::SyncError Notify::wait_err(uint64_t *out_value) {
         task->state = TaskState::BLOCKED;
     } // lock released BEFORE reschedule (see wait())
 
-    // Same lock-scope / dequeue discipline as wait() (C-1/C-2).
+    // Same lock-scope / dequeue discipline as wait().
     Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
 
@@ -217,7 +205,7 @@ errors::SyncError Notify::wait_err(uint64_t *out_value) {
     }
     {
         SpinLockGuard<SpinLock> guard(lock_);
-        if (waiter_ == task && waiter_gen_ == task->generation) {
+        if (same_waiter(waiter_, waiter_gen_, *task)) {
             waiter_ = nullptr;
             waiter_gen_ = 0;
         }

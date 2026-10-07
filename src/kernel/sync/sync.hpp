@@ -21,8 +21,6 @@
 /// @file sync.hpp
 /// @brief Synchronisation primitives umbrella header — includes all sync types.
 
-#pragma once
-
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/sync/semaphore.hpp>

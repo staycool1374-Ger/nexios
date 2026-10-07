@@ -22,8 +22,6 @@
 /// @brief Event group (bitmask) — wait on any/set/clear with per-waiter
 /// clear-on-exit.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -83,28 +81,28 @@ class EventGroup {
     bool remove_waiter(TaskControlBlock &task);
 
     /// @brief Block until any of the requested bits are set.
-    /// @param bits Bitmask of bits to wait for.
+    /// @param wanted Bitmask of bits to wait for.
     /// @param clear_on_exit If true, clear matched bits before returning.
     /// @return The bits that were set when the wait completed.
-    uint64_t wait_bits(uint64_t bits, bool clear_on_exit = false);
+    uint64_t wait_bits(uint64_t wanted, bool clear_on_exit = false);
     /// @brief Block until any of the requested bits are set (error-returning
     /// overload).
-    /// @param bits Bitmask of bits to wait for.
+    /// @param wanted Bitmask of bits to wait for.
     /// @param clear_on_exit If true, clear matched bits before returning.
     /// @param[out] out_bits The bits that were set when the wait completed.
     /// @return SYNC_ERR_OK on success, SYNC_ERR_NO_TASK if no current task,
     /// SYNC_ERR_MAX_WAITERS if waiter limit reached.
-    errors::SyncError wait_bits_err(uint64_t bits, bool clear_on_exit,
+    errors::SyncError wait_bits_err(uint64_t wanted, bool clear_on_exit,
                                     uint64_t *out_bits);
 
     /// @brief Check if bits are set without blocking.
     /// @return true if any of the requested bits are currently set.
-    bool try_wait_bits(uint64_t bits);
+    bool try_wait_bits(uint64_t wanted);
     /// @brief Check if bits are set without blocking (error-returning
     /// overload).
     /// @param[out] out_result true if bits were set, false otherwise.
     /// @return SYNC_ERR_OK on success.
-    errors::SyncError try_wait_bits_err(uint64_t bits, bool *out_result);
+    errors::SyncError try_wait_bits_err(uint64_t wanted, bool *out_result);
 
   private:
     SpinLock lock_; ///< Protects all event-group state.

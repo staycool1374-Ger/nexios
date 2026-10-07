@@ -22,8 +22,6 @@
 /// @brief Fixed-size message queue with blocking send/receive and
 /// priority-sorted waiters.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/sync/spinlock.hpp>
@@ -172,8 +170,10 @@ class Queue {
 
     TaskControlBlock *last_sender_;    ///< Last task to enter send() (for PIP).
     TaskControlBlock *last_receiver_;  ///< Last task to enter receive() (for PIP).
-    uint64_t last_sender_gen_;   ///< Generation of last_sender_ at capture (H-3).
-    uint64_t last_receiver_gen_; ///< Generation of last_receiver_ at capture (H-3).
+    uint64_t last_sender_gen_;   ///< Generation of last_sender_ at capture
+                                 ///< (defeats ABA if the TCB is recycled).
+    uint64_t last_receiver_gen_; ///< Generation of last_receiver_ at capture
+                                 ///< (defeats ABA if the TCB is recycled).
     uint64_t send_holder_prio_;        ///< Saved priority of last_sender_ for PIP restore.
     uint64_t recv_holder_prio_;        ///< Saved priority of last_receiver_ for PIP restore.
 };

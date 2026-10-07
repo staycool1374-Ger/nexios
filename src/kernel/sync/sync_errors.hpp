@@ -22,8 +22,6 @@
 /// @brief Synchronisation error codes (X-macro table with human-readable
 /// strings).
 
-#pragma once
-
 #include <types.hpp>
 #include <assert.hpp>
 

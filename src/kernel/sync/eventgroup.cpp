@@ -20,6 +20,7 @@
 /// @brief EventGroup implementation — set/clear bits, wait bits, try-wait.
 
 #include <kernel/sync/eventgroup.hpp>
+#include <kernel/sync/waiter_tag.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/arch/io.hpp>
@@ -110,8 +111,7 @@ bool EventGroup::add_waiter(TaskControlBlock &task, uint64_t wanted,
 bool EventGroup::remove_waiter(TaskControlBlock &task) {
     SpinLockGuard<SpinLock> guard(lock_);
     for (size_t i = 0; i < wait_count_;) {
-        if (waiters_[i].task == &task &&
-            waiters_[i].generation == task.generation) {
+        if (same_waiter(waiters_[i].task, waiters_[i].generation, task)) {
             waiters_[i] = waiters_[--wait_count_];
             task.waiting_on_eventgroup = nullptr;
             return true;
@@ -133,12 +133,12 @@ void EventGroup::wake_matching() {
             if (waiters_[i].clear_on_exit) {
                 bits_ &= ~waiters_[i].wanted_bits;
             }
-            // Harden: a cleaned-up task is REAPED, not TERMINATED.  Never
-            // feed a freed TCB to set_task_ready (ready-queue corruption /
-            // UAF).  Note this drops the entry even for dead waiters (the
+            // Harden: wake only a live waiter (a cleaned-up task is REAPED,
+            // not TERMINATED — never feed a freed TCB to set_task_ready).
+            // Note this drops the entry even for dead waiters (the
             // swap-remove below), keeping the array consistent.
-            if (waiters_[i].task->state != TaskState::TERMINATED &&
-                waiters_[i].task->state != TaskState::REAPED) {
+            if (waiter_awakeable(waiters_[i].task,
+                                 waiters_[i].generation)) {
                 waiters_[i].task->waiting_on_eventgroup = nullptr;
                 Scheduler::set_task_ready(*waiters_[i].task);
             }
@@ -151,11 +151,10 @@ void EventGroup::wake_matching() {
 
 /// @brief Block until any of the requested bits are set.
 ///
-/// H-1 fix (audit-task-sync-v0.4.2): the spinlock must NOT be held across
-/// Scheduler::reschedule() — identical C-1 deadlock exposure as the semaphore.
-/// The waiter-table-full path must never ENSURE(added): reachable resource
-/// exhaustion is a retry condition, not an invariant violation.
-uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
+/// Never holds the spinlock across Scheduler::reschedule() (same deadlock
+/// exposure as the semaphore).  Waiter-table-full is reachable exhaustion:
+/// a retry condition, never ENSURE.
+uint64_t EventGroup::wait_bits(uint64_t wanted, bool clear_on_exit) {
     auto *task = Scheduler::current_task();
     if (!task)
         return bits_;
@@ -164,12 +163,12 @@ uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
         bool added = false;
         {
             SpinLockGuard<SpinLock> guard(lock_);
-            if ((bits_ & bits) == bits) {
+            if ((bits_ & wanted) == wanted) {
                 if (clear_on_exit)
-                    bits_ &= ~bits;
+                    bits_ &= ~wanted;
                 return bits_;
             }
-            added = add_waiter(*task, bits, clear_on_exit);
+            added = add_waiter(*task, wanted, clear_on_exit);
             if (added)
                 task->state = TaskState::BLOCKED;
         }
@@ -200,8 +199,8 @@ uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
 
 /// @brief Block until any of the requested bits are set (error-returning
 /// overload).
-errors::SyncError EventGroup::wait_bits_err(uint64_t bits, bool clear_on_exit,
-                                            uint64_t *out_bits) {
+errors::SyncError EventGroup::wait_bits_err(uint64_t wanted, bool clear_on_exit,
+                                             uint64_t *out_bits) {
     auto *task = Scheduler::current_task();
     if (!task)
         return errors::SYNC_ERR_NO_TASK;
@@ -209,9 +208,9 @@ errors::SyncError EventGroup::wait_bits_err(uint64_t bits, bool clear_on_exit,
     bool added = false;
     {
         SpinLockGuard<SpinLock> guard(lock_);
-        if ((bits_ & bits) == bits) {
+        if ((bits_ & wanted) == wanted) {
             if (clear_on_exit)
-                bits_ &= ~bits;
+                bits_ &= ~wanted;
             if (out_bits)
                 *out_bits = bits_;
             return errors::SYNC_ERR_OK;
@@ -221,7 +220,7 @@ errors::SyncError EventGroup::wait_bits_err(uint64_t bits, bool clear_on_exit,
             return errors::SYNC_ERR_MAX_WAITERS;
         }
 
-        added = add_waiter(*task, bits, clear_on_exit);
+        added = add_waiter(*task, wanted, clear_on_exit);
         if (added)
             task->state = TaskState::BLOCKED;
     }
@@ -251,18 +250,18 @@ errors::SyncError EventGroup::wait_bits_err(uint64_t bits, bool clear_on_exit,
 
 /// @brief Check if bits are set without blocking.
 ///
-/// M-6 serialization (audit-task-sync MEDIUM): read bits_ under the spinlock so
-/// a concurrent set/clear can't return a stale answer.
-bool EventGroup::try_wait_bits(uint64_t bits) {
+/// Read bits_ under the spinlock so a concurrent set/clear can't return a
+/// stale answer.
+bool EventGroup::try_wait_bits(uint64_t wanted) {
     SpinLockGuard<SpinLock> guard(lock_);
-    return (bits_ & bits) == bits;
+    return (bits_ & wanted) == wanted;
 }
 
 /// @brief Check if bits are set without blocking (error-returning overload).
-errors::SyncError EventGroup::try_wait_bits_err(uint64_t bits,
-                                                bool *out_result) {
+errors::SyncError EventGroup::try_wait_bits_err(uint64_t wanted,
+                                                 bool *out_result) {
     SpinLockGuard<SpinLock> guard(lock_);
-    bool result = (bits_ & bits) == bits;
+    bool result = (bits_ & wanted) == wanted;
     if (out_result)
         *out_result = result;
     return errors::SYNC_ERR_OK;

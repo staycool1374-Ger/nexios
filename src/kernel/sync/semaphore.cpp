@@ -20,6 +20,7 @@
 /// @brief Counting semaphore implementation — init, wait, post, try_wait.
 
 #include <kernel/sync/semaphore.hpp>
+#include <kernel/sync/waiter_tag.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/arch/io.hpp>
@@ -73,7 +74,7 @@ bool Semaphore::add_waiter(TaskControlBlock &task) {
 bool Semaphore::remove_waiter(TaskControlBlock &task) {
     SpinLockGuard<SpinLock> guard(lock_);
     for (size_t i = 0; i < waiter_count_;) {
-        if (waiters_[i] == &task && waiter_gens_[i] == task.generation) {
+        if (same_waiter(waiters_[i], waiter_gens_[i], task)) {
             waiters_[i] = waiters_[--waiter_count_];
             waiter_gens_[i] = waiter_gens_[waiter_count_];
             task.waiting_on_semaphore = nullptr;
@@ -107,18 +108,16 @@ void Semaphore::wake_one() {
             if (waiters_[i]->priority > waiters_[best]->priority)
                 best = i;
         }
-        // Harden: a cleaned-up task is REAPED, not TERMINATED.  Never feed a
-        // freed TCB to set_task_ready (ready-queue corruption / UAF).
-        if (waiters_[best]->state != TaskState::TERMINATED &&
-            waiters_[best]->state != TaskState::REAPED) {
+        // Harden: wake only a live waiter (a cleaned-up task is REAPED,
+        // not TERMINATED — never feed a freed TCB to set_task_ready).
+        if (waiter_awakeable(waiters_[best], waiter_gens_[best])) {
             waiters_[best]->waiting_on_semaphore = nullptr;
             Scheduler::set_task_ready(*waiters_[best]);
         }
         waiters_[best] = waiters_[--waiter_count_];
         waiter_gens_[best] = waiter_gens_[waiter_count_];
     } else {
-        if (waiters_[0]->state != TaskState::TERMINATED &&
-            waiters_[0]->state != TaskState::REAPED) {
+        if (waiter_awakeable(waiters_[0], waiter_gens_[0])) {
             waiters_[0]->waiting_on_semaphore = nullptr;
             Scheduler::set_task_ready(*waiters_[0]);
         }
@@ -167,13 +166,11 @@ void Semaphore::restore_priority() {
 
 /// @brief Decrement the count, blocking if zero.
 ///
-/// C-1/C-2 fix (audit-task-sync-v0.4.2): the spinlock must NOT be held across
-/// Scheduler::reschedule() — reschedule() arms a deferred switch (INV-4) and
-/// re-enables IRQs; a timer tick before this frame unwinds would save the task
-/// holding lock_, and the ISR-side post() would spin forever on it (the
-/// threaded-IRQ keyboard deadlock class documented by Notify::wait()).  The
-/// waiter-table-full path must also never ENSURE(added): reachable resource
-/// exhaustion is an error/retry condition, not an invariant violation.
+/// Never holds the spinlock across Scheduler::reschedule(): reschedule()
+/// arms a deferred switch and re-enables IRQs, so a timer tick before this
+/// frame unwinds would save the task holding lock_ and the ISR-side post()
+/// would spin on it forever.  Waiter-table-full is reachable exhaustion:
+/// yield and retry, never ENSURE.
 void Semaphore::wait() {
     auto *task = Scheduler::current_task();
     if (!task)
@@ -261,7 +258,7 @@ errors::SyncError Semaphore::wait_err() {
         return errors::SYNC_ERR_MAX_WAITERS;
     }
 
-    // Same lock-scope / dequeue discipline as wait() (C-1/C-2).
+    // Same lock-scope / dequeue discipline as wait().
     Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
 

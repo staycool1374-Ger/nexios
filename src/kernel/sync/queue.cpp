@@ -21,6 +21,7 @@
 /// with blocking waiters.
 
 #include <kernel/sync/queue.hpp>
+#include <kernel/sync/waiter_tag.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/arch/io.hpp>
@@ -108,10 +109,9 @@ void Queue::wake_send_one() {
         if (send_waiters_[i]->priority > send_waiters_[best]->priority)
             best = i;
     }
-    // Harden: a cleaned-up task is REAPED, not TERMINATED.  Never feed a
-    // freed TCB to set_task_ready (ready-queue corruption / UAF).
-    if (send_waiters_[best]->state != TaskState::TERMINATED &&
-        send_waiters_[best]->state != TaskState::REAPED) {
+    // Harden: wake only a live waiter (a cleaned-up task is REAPED,
+    // not TERMINATED — never feed a freed TCB to set_task_ready).
+    if (waiter_awakeable(send_waiters_[best], send_waiter_gens_[best])) {
         send_waiters_[best]->waiting_on_queue = nullptr;
         Scheduler::set_task_ready(*send_waiters_[best]);
     }
@@ -141,10 +141,9 @@ void Queue::wake_recv_one() {
         if (recv_waiters_[i]->priority > recv_waiters_[best]->priority)
             best = i;
     }
-    // Harden: a cleaned-up task is REAPED, not TERMINATED.  Never feed a
-    // freed TCB to set_task_ready (ready-queue corruption / UAF).
-    if (recv_waiters_[best]->state != TaskState::TERMINATED &&
-        recv_waiters_[best]->state != TaskState::REAPED) {
+    // Harden: wake only a live waiter (a cleaned-up task is REAPED,
+    // not TERMINATED — never feed a freed TCB to set_task_ready).
+    if (waiter_awakeable(recv_waiters_[best], recv_waiter_gens_[best])) {
         recv_waiters_[best]->waiting_on_queue = nullptr;
         Scheduler::set_task_ready(*recv_waiters_[best]);
     }
@@ -157,8 +156,7 @@ void Queue::wake_recv_one() {
 ///        disabled and the deferred switch can never apply.
 void Queue::remove_send_waiter(TaskControlBlock &task) {
     for (size_t i = 0; i < send_waiters_count_;) {
-        if (send_waiters_[i] == &task &&
-            send_waiter_gens_[i] == task.generation) {
+        if (same_waiter(send_waiters_[i], send_waiter_gens_[i], task)) {
             send_waiters_[i] = send_waiters_[--send_waiters_count_];
             send_waiter_gens_[i] = send_waiter_gens_[send_waiters_count_];
             task.waiting_on_queue = nullptr;
@@ -173,8 +171,7 @@ void Queue::remove_send_waiter(TaskControlBlock &task) {
 ///        disabled and the deferred switch can never apply.
 void Queue::remove_recv_waiter(TaskControlBlock &task) {
     for (size_t i = 0; i < recv_waiters_count_;) {
-        if (recv_waiters_[i] == &task &&
-            recv_waiter_gens_[i] == task.generation) {
+        if (same_waiter(recv_waiters_[i], recv_waiter_gens_[i], task)) {
             recv_waiters_[i] = recv_waiters_[--recv_waiters_count_];
             recv_waiter_gens_[i] = recv_waiter_gens_[recv_waiters_count_];
             task.waiting_on_queue = nullptr;
@@ -279,6 +276,9 @@ errors::SyncError Queue::send_err(const uint8_t *data, size_t size,
             if (send_waiters_count_ >= MAX_WAITERS)
                 return errors::SYNC_ERR_MAX_WAITERS;
             boost_receiver(*task);
+            // Infallible under the same lock after the count check above;
+            // the return is intentionally unchecked (mirrors the mutex
+            // pre-ENSURE guard, kept without ENSURE for debug/release parity).
             add_send_waiter(*task);
             // H-7: BLOCKED transition inside the lock (see send()).
             task->state = TaskState::BLOCKED;
@@ -432,6 +432,8 @@ errors::SyncError Queue::receive_err(uint8_t *buf, size_t *size,
             if (recv_waiters_count_ >= MAX_WAITERS)
                 return errors::SYNC_ERR_MAX_WAITERS;
             boost_sender(*task);
+            // Infallible under the same lock after the count check above;
+            // the return is intentionally unchecked (see send_err).
             add_recv_waiter(*task);
             // H-7: BLOCKED transition inside the lock (see send()).
             task->state = TaskState::BLOCKED;
@@ -515,19 +517,18 @@ errors::SyncError Queue::try_receive_err(uint8_t *buf, size_t *size,
 /// @brief Boost the last receiver when a high-prio sender blocks on a full
 /// queue.
 ///
-/// H-3 (audit-task-sync-v0.4.2): (a) never dereference a freed/recycled TCB —
-/// validate against REAPED state and the generation captured when
-/// last_receiver_ was set (a TERMINATED zombie is still allocated and safe to
-/// boost; a REAPED or recycled block is not); (b) route the priority mutation
-/// through the scheduler's re-bucketing pattern (mirrors ipc.cpp:block_sender
-/// / Scheduler::set_priority) so a boosted task sitting in the ready queue
+/// Never dereference a freed/recycled TCB — validate against REAPED state
+/// and the generation captured when last_receiver_ was set (a TERMINATED
+/// zombie is still allocated and safe to boost; a REAPED or recycled block
+/// is not).  Route the priority mutation through the scheduler's
+/// re-bucketing pattern (mirrors ipc.cpp:block_sender /
+/// Scheduler::set_priority) so a boosted task sitting in the ready queue
 /// moves to its new priority bucket.
 void Queue::boost_receiver(TaskControlBlock &blocked_sender) {
 #if CONFIG_QUEUE_PIP
     if (!last_receiver_)
         return;
-    if (last_receiver_->state == TaskState::REAPED ||
-        last_receiver_->generation != last_receiver_gen_) {
+    if (peer_stale(last_receiver_, last_receiver_gen_)) {
         last_receiver_ = nullptr;
         recv_holder_prio_ = 0;
         return;
@@ -556,14 +557,12 @@ void Queue::boost_receiver(TaskControlBlock &blocked_sender) {
 /// @brief Boost the last sender when a high-prio receiver blocks on an empty
 /// queue.
 ///
-/// H-3: same freed-state validation + re-bucketing discipline as
-/// boost_receiver.
+/// Same freed-state validation + re-bucketing discipline as boost_receiver.
 void Queue::boost_sender(TaskControlBlock &blocked_receiver) {
 #if CONFIG_QUEUE_PIP
     if (!last_sender_)
         return;
-    if (last_sender_->state == TaskState::REAPED ||
-        last_sender_->generation != last_sender_gen_) {
+    if (peer_stale(last_sender_, last_sender_gen_)) {
         last_sender_ = nullptr;
         send_holder_prio_ = 0;
         return;
@@ -585,13 +584,12 @@ void Queue::boost_sender(TaskControlBlock &blocked_receiver) {
 }
 
 /// @brief Restore the last receiver's priority after a message is enqueued.
-/// H-3: freed-state validation + re-bucketing on the way back down.
+/// Freed-state validation + re-bucketing on the way back down.
 void Queue::restore_receiver() {
 #if CONFIG_QUEUE_PIP
     if (!last_receiver_ || recv_holder_prio_ == 0)
         return;
-    if (last_receiver_->state == TaskState::REAPED ||
-        last_receiver_->generation != last_receiver_gen_) {
+    if (peer_stale(last_receiver_, last_receiver_gen_)) {
         last_receiver_ = nullptr;
         recv_holder_prio_ = 0;
         return;
@@ -610,13 +608,12 @@ void Queue::restore_receiver() {
 }
 
 /// @brief Restore the last sender's priority after a message is dequeued.
-/// H-3: freed-state validation + re-bucketing on the way back down.
+/// Freed-state validation + re-bucketing on the way back down.
 void Queue::restore_sender() {
 #if CONFIG_QUEUE_PIP
     if (!last_sender_ || send_holder_prio_ == 0)
         return;
-    if (last_sender_->state == TaskState::REAPED ||
-        last_sender_->generation != last_sender_gen_) {
+    if (peer_stale(last_sender_, last_sender_gen_)) {
         last_sender_ = nullptr;
         send_holder_prio_ = 0;
         return;

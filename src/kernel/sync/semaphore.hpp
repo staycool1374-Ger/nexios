@@ -22,8 +22,6 @@
 /// @brief Counting semaphore with blocking wait/post and priority-sorted
 /// waiters.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/sync/spinlock.hpp>

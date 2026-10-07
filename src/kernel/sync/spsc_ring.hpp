@@ -19,10 +19,7 @@
  */
 
 /// @file spsc_ring.hpp
-/// @file spsc_ring.hpp
 /// @brief Lock-free single-producer single-consumer ring buffer template.
-
-#pragma once
 
 #include <types.hpp>
 #include <lib/atomic.hpp>
@@ -67,9 +64,9 @@ template <typename T, size_t N> class SPSCRing {
                kernel::atomic_load(&tail_, __ATOMIC_ACQUIRE);
     }
 
-    /// @brief Reset to empty state.  M-5 (audit-task-sync-v0.4.2): QUIESCENT-
-    ///        ONLY — must not be called while either side is active (the
-    ///        head/tail pair is not published atomically together).
+    /// @brief Reset to empty state.  QUIESCENT-ONLY — must not be called
+    ///        while either side is active (the head/tail pair is not
+    ///        published atomically together).
     void reset() {
         kernel::atomic_store(&head_, size_t{0}, __ATOMIC_RELEASE);
         kernel::atomic_store(&tail_, size_t{0}, __ATOMIC_RELAXED);
