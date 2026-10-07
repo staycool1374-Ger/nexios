@@ -18,5 +18,6 @@ var dir_86f15235f1dbace123bd765dedac1e4b =
     [ "syscall_handlers_shm.cpp", "syscall__handlers__shm_8cpp.html", null ],
     [ "syscall_handlers_sync.cpp", "syscall__handlers__sync_8cpp.html", null ],
     [ "syscall_handlers_tls.cpp", "syscall__handlers__tls_8cpp.html", null ],
+    [ "syscall_handlers_watchdog.cpp", "syscall__handlers__watchdog_8cpp.html", "syscall__handlers__watchdog_8cpp" ],
     [ "syscall_helpers.hpp", "syscall__helpers_8hpp.html", null ]
 ];

@@ -1,6 +1,11 @@
 var annotated_dup =
 [
     [ "arch", "namespacearch.html", [
+      [ "kernel", "namespacearch_1_1kernel.html", [
+        [ "PhysicalAddress", "classarch_1_1kernel_1_1_physical_address.html", "classarch_1_1kernel_1_1_physical_address" ],
+        [ "VirtualAddress", "classarch_1_1kernel_1_1_virtual_address.html", "classarch_1_1kernel_1_1_virtual_address" ],
+        [ "PageAddress", "classarch_1_1kernel_1_1_page_address.html", "classarch_1_1kernel_1_1_page_address" ]
+      ] ],
       [ "APIC", "classarch_1_1_a_p_i_c.html", "classarch_1_1_a_p_i_c" ],
       [ "Caps", "structarch_1_1_caps.html", "structarch_1_1_caps" ],
       [ "QemuDebugcon", "classarch_1_1_qemu_debugcon.html", null ],
@@ -30,7 +35,9 @@ var annotated_dup =
         [ "MmioCap", "classkernel_1_1cap_1_1_mmio_cap.html", "classkernel_1_1cap_1_1_mmio_cap" ],
         [ "MmioUserMap", "classkernel_1_1cap_1_1_mmio_user_map.html", null ],
         [ "MsixCap", "classkernel_1_1cap_1_1_msix_cap.html", "classkernel_1_1cap_1_1_msix_cap" ],
-        [ "UntypedMem", "classkernel_1_1cap_1_1_untyped_mem.html", "classkernel_1_1cap_1_1_untyped_mem" ]
+        [ "UntypedMem", "classkernel_1_1cap_1_1_untyped_mem.html", "classkernel_1_1cap_1_1_untyped_mem" ],
+        [ "WdogCap", "classkernel_1_1cap_1_1_wdog_cap.html", "classkernel_1_1cap_1_1_wdog_cap" ],
+        [ "WdogClaim", "structkernel_1_1cap_1_1_wdog_claim.html", "structkernel_1_1cap_1_1_wdog_claim" ]
       ] ],
       [ "debug", "namespacekernel_1_1debug.html", [
         [ "StopEvent", "structkernel_1_1debug_1_1_stop_event.html", "structkernel_1_1debug_1_1_stop_event" ]
@@ -52,7 +59,8 @@ var annotated_dup =
         ] ],
         [ "IoMmuDomain", "structkernel_1_1iommu_1_1_io_mmu_domain.html", "structkernel_1_1iommu_1_1_io_mmu_domain" ],
         [ "IoMmuManager", "classkernel_1_1iommu_1_1_io_mmu_manager.html", null ],
-        [ "IoMmuMapping", "structkernel_1_1iommu_1_1_io_mmu_mapping.html", "structkernel_1_1iommu_1_1_io_mmu_mapping" ]
+        [ "IoMmuMapping", "structkernel_1_1iommu_1_1_io_mmu_mapping.html", "structkernel_1_1iommu_1_1_io_mmu_mapping" ],
+        [ "SpinLock", "classkernel_1_1iommu_1_1_spin_lock.html", "classkernel_1_1iommu_1_1_spin_lock" ]
       ] ],
       [ "ipc", "namespacekernel_1_1ipc.html", [
         [ "DeathNotify", "classkernel_1_1ipc_1_1_death_notify.html", null ],
@@ -62,6 +70,9 @@ var annotated_dup =
         [ "PagerRegistry", "classkernel_1_1ipc_1_1_pager_registry.html", null ]
       ] ],
       [ "log", "namespacekernel_1_1log.html", [
+        [ "catalog", "namespacekernel_1_1log_1_1catalog.html", [
+          [ "DmesgRecord", "structkernel_1_1log_1_1catalog_1_1_dmesg_record.html", "structkernel_1_1log_1_1catalog_1_1_dmesg_record" ]
+        ] ],
         [ "LogEntry", "structkernel_1_1log_1_1_log_entry.html", "structkernel_1_1log_1_1_log_entry" ],
         [ "DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", "classkernel_1_1log_1_1_dmesg_service" ]
       ] ],
@@ -72,8 +83,19 @@ var annotated_dup =
         [ "SharedRingHeader", "structkernel_1_1shm_1_1_shared_ring_header.html", "structkernel_1_1shm_1_1_shared_ring_header" ]
       ] ],
       [ "sync", "namespacekernel_1_1sync.html", [
+        [ "EventGroup", "classkernel_1_1sync_1_1_event_group.html", "classkernel_1_1sync_1_1_event_group" ],
         [ "IrqSpinLockGuard", "classkernel_1_1sync_1_1_irq_spin_lock_guard.html", "classkernel_1_1sync_1_1_irq_spin_lock_guard" ],
-        [ "RwLock", "classkernel_1_1sync_1_1_rw_lock.html", "classkernel_1_1sync_1_1_rw_lock" ]
+        [ "Mutex", "classkernel_1_1sync_1_1_mutex.html", "classkernel_1_1sync_1_1_mutex" ],
+        [ "Notify", "classkernel_1_1sync_1_1_notify.html", "classkernel_1_1sync_1_1_notify" ],
+        [ "Queue", "classkernel_1_1sync_1_1_queue.html", "classkernel_1_1sync_1_1_queue" ],
+        [ "QueueMessage", "structkernel_1_1sync_1_1_queue_message.html", "structkernel_1_1sync_1_1_queue_message" ],
+        [ "RwLock", "classkernel_1_1sync_1_1_rw_lock.html", "classkernel_1_1sync_1_1_rw_lock" ],
+        [ "Semaphore", "classkernel_1_1sync_1_1_semaphore.html", "classkernel_1_1sync_1_1_semaphore" ],
+        [ "SpinLock", "classkernel_1_1sync_1_1_spin_lock.html", "classkernel_1_1sync_1_1_spin_lock" ]
+      ] ],
+      [ "task", "namespacekernel_1_1task.html", [
+        [ "SporadicServer", "classkernel_1_1task_1_1_sporadic_server.html", "classkernel_1_1task_1_1_sporadic_server" ],
+        [ "TaskDef", "structkernel_1_1task_1_1_task_def.html", "structkernel_1_1task_1_1_task_def" ]
       ] ],
       [ "test", "namespacekernel_1_1test.html", [
         [ "ClassSection", "structkernel_1_1test_1_1_class_section.html", "structkernel_1_1test_1_1_class_section" ],
@@ -101,10 +123,12 @@ var annotated_dup =
         [ "PciVnode", "structkernel_1_1vfs_1_1_pci_vnode.html", "structkernel_1_1vfs_1_1_pci_vnode" ],
         [ "PidDirVnode", "structkernel_1_1vfs_1_1_pid_dir_vnode.html", "structkernel_1_1vfs_1_1_pid_dir_vnode" ],
         [ "PidStatVnode", "structkernel_1_1vfs_1_1_pid_stat_vnode.html", "structkernel_1_1vfs_1_1_pid_stat_vnode" ],
+        [ "PidWatchdogVnode", "structkernel_1_1vfs_1_1_pid_watchdog_vnode.html", "structkernel_1_1vfs_1_1_pid_watchdog_vnode" ],
         [ "PipeBuffer", "structkernel_1_1vfs_1_1_pipe_buffer.html", "structkernel_1_1vfs_1_1_pipe_buffer" ],
         [ "TmpfsEntry", "structkernel_1_1vfs_1_1_tmpfs_entry.html", "structkernel_1_1vfs_1_1_tmpfs_entry" ]
       ] ],
       [ "AllTasksRegistry", "classkernel_1_1_all_tasks_registry.html", "classkernel_1_1_all_tasks_registry" ],
+      [ "CheckedPtr", "classkernel_1_1_checked_ptr.html", "classkernel_1_1_checked_ptr" ],
       [ "CpuContext", "structkernel_1_1_cpu_context.html", "structkernel_1_1_cpu_context" ],
       [ "CRC32", "classkernel_1_1_c_r_c32.html", null ],
       [ "DeadlineList", "classkernel_1_1_deadline_list.html", "classkernel_1_1_deadline_list" ],
@@ -112,10 +136,18 @@ var annotated_dup =
       [ "ErrorOr", "structkernel_1_1_error_or.html", "structkernel_1_1_error_or" ],
       [ "ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", "structkernel_1_1_error_or_3_01void_01_4" ],
       [ "ExceptionSignalMap", "structkernel_1_1_exception_signal_map.html", "structkernel_1_1_exception_signal_map" ],
+      [ "IdleScanCursor", "structkernel_1_1_idle_scan_cursor.html", "structkernel_1_1_idle_scan_cursor" ],
+      [ "IdleScanProgress", "structkernel_1_1_idle_scan_progress.html", "structkernel_1_1_idle_scan_progress" ],
       [ "IrqDelivery", "classkernel_1_1_irq_delivery.html", null ],
       [ "IrqRegistration", "structkernel_1_1_irq_registration.html", "structkernel_1_1_irq_registration" ],
       [ "KernelObject", "classkernel_1_1_kernel_object.html", "classkernel_1_1_kernel_object" ],
       [ "Logger", "classkernel_1_1_logger.html", null ],
+      [ "MemPool", "classkernel_1_1_mem_pool.html", "classkernel_1_1_mem_pool" ],
+      [ "Message", "structkernel_1_1_message.html", "structkernel_1_1_message" ],
+      [ "MessageQueue", "structkernel_1_1_message_queue.html", "structkernel_1_1_message_queue" ],
+      [ "PageAddress", "classkernel_1_1_page_address.html", "classkernel_1_1_page_address" ],
+      [ "PhysicalAddress", "classkernel_1_1_physical_address.html", "classkernel_1_1_physical_address" ],
+      [ "PMM", "classkernel_1_1_p_m_m.html", "classkernel_1_1_p_m_m" ],
       [ "PriorityMap", "classkernel_1_1_priority_map.html", "classkernel_1_1_priority_map" ],
       [ "ReadyQueueManager", "classkernel_1_1_ready_queue_manager.html", "classkernel_1_1_ready_queue_manager" ],
       [ "ReadyQueuePOD", "structkernel_1_1_ready_queue_p_o_d.html", "structkernel_1_1_ready_queue_p_o_d" ],
@@ -125,12 +157,17 @@ var annotated_dup =
       [ "SchedulerConfig", "structkernel_1_1_scheduler_config.html", "structkernel_1_1_scheduler_config" ],
       [ "ScopedRef", "classkernel_1_1_scoped_ref.html", "classkernel_1_1_scoped_ref" ],
       [ "SignalFrame", "structkernel_1_1_signal_frame.html", "structkernel_1_1_signal_frame" ],
+      [ "TaskControlBlock", "structkernel_1_1_task_control_block.html", "structkernel_1_1_task_control_block" ],
+      [ "TaskExitRecord", "structkernel_1_1_task_exit_record.html", "structkernel_1_1_task_exit_record" ],
       [ "TaskQueue", "classkernel_1_1_task_queue.html", "classkernel_1_1_task_queue" ],
+      [ "TaskTimes", "structkernel_1_1_task_times.html", "structkernel_1_1_task_times" ],
       [ "TestContext", "structkernel_1_1_test_context.html", "structkernel_1_1_test_context" ],
       [ "Timeval", "structkernel_1_1_timeval.html", "structkernel_1_1_timeval" ],
       [ "TlbShootdown", "classkernel_1_1_tlb_shootdown.html", "classkernel_1_1_tlb_shootdown" ],
       [ "Utsname", "structkernel_1_1_utsname.html", "structkernel_1_1_utsname" ],
-      [ "Version", "structkernel_1_1_version.html", null ]
+      [ "Version", "structkernel_1_1_version.html", null ],
+      [ "VirtualAddress", "classkernel_1_1_virtual_address.html", "classkernel_1_1_virtual_address" ],
+      [ "VMM", "classkernel_1_1_v_m_m.html", null ]
     ] ],
     [ "service", "namespaceservice.html", [
       [ "Framebuffer", "classservice_1_1_framebuffer.html", null ],
@@ -164,6 +201,7 @@ var annotated_dup =
     [ "ScopeGuard", "class_scope_guard.html", "class_scope_guard" ],
     [ "SimpleTaskDeleter", "struct_simple_task_deleter.html", "struct_simple_task_deleter" ],
     [ "SpinLockGuard", "class_spin_lock_guard.html", "class_spin_lock_guard" ],
+    [ "SPSCRing", "class_s_p_s_c_ring.html", "class_s_p_s_c_ring" ],
     [ "stat", "structstat.html", "structstat" ],
     [ "TaskDeleter", "struct_task_deleter.html", "struct_task_deleter" ],
     [ "TestMeta", "struct_test_meta.html", "struct_test_meta" ],

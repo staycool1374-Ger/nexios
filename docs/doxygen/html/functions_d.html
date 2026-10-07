@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -120,22 +120,33 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_d.ht
 
 
 <h3 class="doxsection"><a id="index_d" name="index_d"></a>- d -</h3><ul>
-<li>data&#160;:&#160;<a class="el" href="structfdt__property.html#abb52f21622f86ed9b268f49b76f23aef">fdt_property</a>, <a class="el" href="structinitrd_1_1_initrd_file.html#a284f0fa77e17e6f90b6675a0bc0025e6">initrd::InitrdFile</a>, <a class="el" href="structkernel_1_1vfs_1_1_initrd_file_node.html#aff08f2f6724c68cc25bae710c0be7de4">kernel::vfs::InitrdFileNode</a>, <a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html#a569469f533b16d8998b1ec508841fad3">kernel::vfs::PipeBuffer</a></li>
+<li>daemon_name&#160;:&#160;<a class="el" href="structkernel_1_1task_1_1_task_def.html#a59a969daa4009832938359c5163c33d6">kernel::task::TaskDef</a></li>
+<li>data&#160;:&#160;<a class="el" href="structfdt__property.html#abb52f21622f86ed9b268f49b76f23aef">fdt_property</a>, <a class="el" href="structinitrd_1_1_initrd_file.html#a284f0fa77e17e6f90b6675a0bc0025e6">initrd::InitrdFile</a>, <a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html#a544b588267663fce05897a8c7956da80">kernel::MemPool::Pool</a>, <a class="el" href="structkernel_1_1_mem_pool_1_1_pool_meta.html#a9a2cd0bace834f35f8fb9135907b8eef">kernel::MemPool::PoolMeta</a>, <a class="el" href="structkernel_1_1_message.html#a302fd48c5b58e42bfe6ce0e7be7781b9">kernel::Message</a>, <a class="el" href="structkernel_1_1sync_1_1_queue_message.html#a98cd7fb408d8fcd59a4bb04a22f20411">kernel::sync::QueueMessage</a>, <a class="el" href="structkernel_1_1vfs_1_1_initrd_file_node.html#aff08f2f6724c68cc25bae710c0be7de4">kernel::vfs::InitrdFileNode</a>, <a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html#a569469f533b16d8998b1ec508841fad3">kernel::vfs::PipeBuffer</a></li>
 <li>data_avail&#160;:&#160;<a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html#a7c9e4fbf324f1564b6e1fa021acbf0b2">kernel::vfs::PipeBuffer</a></li>
+<li>data_size&#160;:&#160;<a class="el" href="structkernel_1_1_message.html#a46414effb01bcad96de63f86bd24a2af">kernel::Message</a></li>
+<li>data_size_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a51ae656be745e8a10013ef83a84b5c96">kernel::TaskControlBlock</a></li>
 <li>dead_id&#160;:&#160;<a class="el" href="structkernel_1_1ipc_1_1_death_record.html#a399626a3ed6847cb45a72e4cec2f692a">kernel::ipc::DeathRecord</a></li>
-<li>deadline_miss_count&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a40d4650306ca6e046b2191e7e6b00bf8">kernel::Scheduler::TaskFields</a></li>
-<li>deadline_missed&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#aa9502cbe1536e5fdfb0304fccd2229e6">kernel::Scheduler::TaskFields</a></li>
+<li>deadline_meets&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a73ee9440e8b7a6bc0b541f569e19ca0e">kernel::TaskControlBlock</a>, <a class="el" href="structkernel_1_1_task_exit_record.html#aaf0cab7f21e2777280536429b293ca33">kernel::TaskExitRecord</a></li>
+<li>deadline_miss_count&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a40d4650306ca6e046b2191e7e6b00bf8">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#a4b8f8d1b97aed59786448bba008aba9d">kernel::TaskControlBlock</a>, <a class="el" href="structkernel_1_1_task_exit_record.html#aa707f7aa62960adb3dbcad82f4cb7d7f">kernel::TaskExitRecord</a></li>
+<li>deadline_missed&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#aa9502cbe1536e5fdfb0304fccd2229e6">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#a1d92940b1e5d2138a34741318f9cb05e">kernel::TaskControlBlock</a></li>
 <li>deadline_monitor_pid&#160;:&#160;<a class="el" href="structkernel_1_1_test_context.html#a42c00c04818407f47f5fc9882cbf0101">kernel::TestContext</a></li>
 <li>deadline_tick&#160;:&#160;<a class="el" href="structkernel_1_1ipc_1_1_pager_fault.html#a6ae5007c169347e2fbca9f9302c5c94e">kernel::ipc::PagerFault</a></li>
-<li>deadline_ticks&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#af342e08b29409d1cca26c72b5ecba7bb">kernel::Scheduler::TaskFields</a></li>
+<li>deadline_ticks&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#af342e08b29409d1cca26c72b5ecba7bb">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#a4c1c70d5bc1f1ba548e11a02d27532cd">kernel::TaskControlBlock</a></li>
 <li>DeadlineList()&#160;:&#160;<a class="el" href="classkernel_1_1_deadline_list.html#a7613dee0cd5bbb9fbc9d934dbb898f20">kernel::DeadlineList</a></li>
 <li>death_watches&#160;:&#160;<a class="el" href="structkernel_1_1test_1_1_resource_counters.html#ab16619620ce6f17bf0bbd502a6d1ab0a">kernel::test::ResourceCounters</a></li>
 <li>debug()&#160;:&#160;<a class="el" href="classkernel_1_1_logger.html#a6c48fe8728d1e1eedc95e87117568702">kernel::Logger</a></li>
 <li>debug_id_table_references()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a1f0522a97f2382ccf8347162cefe2104">kernel::Scheduler</a></li>
 <li>debug_park_stop()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#afa22f6c3f158e6928707f43135c49594">kernel::Scheduler</a></li>
+<li>debug_parked&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a1297d6534c1b012aed9ab114fc516b2d">kernel::TaskControlBlock</a></li>
+<li>debug_rearm_va&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#aeee4ede738ec2086cf8a86e5ffa15be2">kernel::TaskControlBlock</a></li>
+<li>debug_stop_kind&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a72286fa6366cdc2250ca98131e114ca6">kernel::TaskControlBlock</a></li>
+<li>debug_stop_requested&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#af77a6871f655f61b87cd70e1d8c0a9a6">kernel::TaskControlBlock</a></li>
+<li>debug_stop_va&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a5aba05610b30061238dcccce09806af6">kernel::TaskControlBlock</a></li>
 <li>DEBUGCON_PORT&#160;:&#160;<a class="el" href="classarch_1_1_qemu_debugcon.html#a1686cd25cd7d66283b3ce6a9403d58a7">arch::QemuDebugcon</a></li>
+<li>debugger_id&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#aaa4115efed9bade5924b758735b3735d">kernel::TaskControlBlock</a></li>
 <li>debugger_resume()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a991d774321a7f6b48c1747a616bbf1ae">kernel::Scheduler</a></li>
 <li>dec_sporadic_count()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a3b8de3815e34ac1f72bc2645849662e4">kernel::Scheduler</a></li>
+<li>deep_copy_user_pages()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a14814ba2ea03a0fef26664c62410c8de">kernel::VMM</a></li>
 <li>DEFAULT_TIMEOUT_TICKS&#160;:&#160;<a class="el" href="classkernel_1_1_tlb_shootdown.html#aed5bead6eb87e3897e63ccc7baa9776d">kernel::TlbShootdown</a></li>
 <li>defer_kill()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#af386d3e6be031ea8e376b068d97b0e19">kernel::Scheduler</a></li>
 <li>delegate_fault()&#160;:&#160;<a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html#a3647d2bc22b54dbeeca34d3e384dbb9c">kernel::ipc::PagerRegistry</a></li>
@@ -143,13 +154,19 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_d.ht
 <li>depth()&#160;:&#160;<a class="el" href="classkernel_1_1_ready_queue_manager.html#a9c5cbd053fe797e89ba2384b32c9aca2">kernel::ReadyQueueManager</a></li>
 <li>depth_&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#af2ecfc149319a9354cc67219c9a83ee1">kernel::cap::CNode</a></li>
 <li>dequeue_highest()&#160;:&#160;<a class="el" href="classkernel_1_1_ready_queue_manager.html#a9dd771a9a5d1f655959f32debbf62e91">kernel::ReadyQueueManager</a></li>
+<li>dequeue_level()&#160;:&#160;<a class="el" href="classkernel_1_1_ready_queue_manager.html#a46dad20fbcbcad0a977ca094ffa8d63d">kernel::ReadyQueueManager</a></li>
 <li>dequeue_ready()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#afe8481a5993e14cbd94b81c4f64bd7d0">kernel::Scheduler</a></li>
 <li>description&#160;:&#160;<a class="el" href="structservice_1_1_program_registry_1_1_program.html#ac7834b42b8d0ff72eaba58259fe6a9d4">service::ProgramRegistry::Program</a></li>
+<li>destroy()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#ab52ff8402135c9d2a8ac6df1c5346f5e">kernel::TaskControlBlock</a></li>
 <li>destroy_completed_tcb()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a4c2fef2ceece51afc3092a2a8ac33495">kernel::elf::ElfLoader</a></li>
+<li>detach_all_objects()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a2253e45004a974042ea8badc8f83c835">kernel::TaskControlBlock</a></li>
+<li>detach_object()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#ace1c87fa76b4e7545a78703fc32f598d">kernel::TaskControlBlock</a></li>
 <li>device&#160;:&#160;<a class="el" href="struct_fat32_test_fixture.html#a69d0ad1972ff77a8b13de29693ea0a28">Fat32TestFixture</a></li>
 <li>dismiss()&#160;:&#160;<a class="el" href="class_scope_guard.html#a447e707e447974723ef0350d89fdcef7">ScopeGuard&lt; Fn &gt;</a></li>
-<li>dispose()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#a6f2392bbc0514c4623dc53a5ac1e54be">kernel::cap::CNode</a>, <a class="el" href="classkernel_1_1cap_1_1_endpoint.html#af3270ad2831af92c117bb3d26ee727b7">kernel::cap::Endpoint</a>, <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#a61c0c510877e83a8061a248ac229f9c9">kernel::cap::FrameCap</a>, <a class="el" href="classkernel_1_1cap_1_1_io_mmu_dma_cap.html#ac41fb8b3ef6b11d9eb512793ca3b2138">kernel::cap::IoMmuDmaCap</a>, <a class="el" href="classkernel_1_1cap_1_1_irq_cap.html#ae1e46a81fb6e4f8bfdd593b68ecaa0ae">kernel::cap::IrqCap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html#a1f04618a572ab877022a7ebf94058403">kernel::cap::MmioCap</a>, <a class="el" href="classkernel_1_1cap_1_1_msix_cap.html#a130d8dce5b140cd3ade3943dcac248bb">kernel::cap::MsixCap</a>, <a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#ab40992abd8455774a8e1891d46298420">kernel::cap::UntypedMem</a>, <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328">kernel::KernelObject</a>, <a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html#adf97351ae9fcff3736bec0a0ac708c8f">kernel::vfs::PipeBuffer</a></li>
+<li>dispose()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#a6f2392bbc0514c4623dc53a5ac1e54be">kernel::cap::CNode</a>, <a class="el" href="classkernel_1_1cap_1_1_endpoint.html#af3270ad2831af92c117bb3d26ee727b7">kernel::cap::Endpoint</a>, <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#a61c0c510877e83a8061a248ac229f9c9">kernel::cap::FrameCap</a>, <a class="el" href="classkernel_1_1cap_1_1_io_mmu_dma_cap.html#ac41fb8b3ef6b11d9eb512793ca3b2138">kernel::cap::IoMmuDmaCap</a>, <a class="el" href="classkernel_1_1cap_1_1_irq_cap.html#ae1e46a81fb6e4f8bfdd593b68ecaa0ae">kernel::cap::IrqCap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html#a1f04618a572ab877022a7ebf94058403">kernel::cap::MmioCap</a>, <a class="el" href="classkernel_1_1cap_1_1_msix_cap.html#a130d8dce5b140cd3ade3943dcac248bb">kernel::cap::MsixCap</a>, <a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#ab40992abd8455774a8e1891d46298420">kernel::cap::UntypedMem</a>, <a class="el" href="classkernel_1_1cap_1_1_wdog_cap.html#aa83eb6a6f48064717dbff2b015f828df">kernel::cap::WdogCap</a>, <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328">kernel::KernelObject</a>, <a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#ac76c3a047fa39de90f1909390ae415c0">kernel::task::SporadicServer</a>, <a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html#adf97351ae9fcff3736bec0a0ac708c8f">kernel::vfs::PipeBuffer</a></li>
 <li>disposed_&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_endpoint.html#a73d17e58cd94a5ee63a426f06d9dc76e">kernel::cap::Endpoint</a></li>
+<li>dl_next_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a436c4f7b62ce37c19a0202a339356194">kernel::TaskControlBlock</a></li>
+<li>dl_prev_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a348d493dad04ded6d533f899f3ae47ea">kernel::TaskControlBlock</a></li>
 <li>DmesgService()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#af94f8804b7d3c813689a7abae111335d">kernel::log::DmesgService</a></li>
 <li>domain_create()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#ac32d5c250155d8303576386e8fc8d892">kernel::iommu::IoMmuManager</a></li>
 <li>domain_destroy()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a87c7c8ea16f81ca63e2d862940e0d917">kernel::iommu::IoMmuManager</a></li>

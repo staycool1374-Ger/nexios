@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -148,40 +148,40 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__blk_8h
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="preprocessor">#include &lt;<a class="code" href="spinlock_8hpp.html">kernel/sync/spinlock.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="keyword">struct </span><a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a>;</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="keyword">struct </span><a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>;</div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>} <span class="comment">// namespace kernel</span></div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span> </div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1block.html">kernel::block</a> {</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span></div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keyword">enum</span> VirtioBlkReqType : <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> {</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keyword">enum</span> VirtioBlkReqType : <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> {</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>    VIRTIO_BLK_T_IN = 0,</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    VIRTIO_BLK_T_OUT = 1,</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    VIRTIO_BLK_T_FLUSH = 4,</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>};</div>
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span></div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span><span class="keyword">struct </span>VirtioBlkReqHdr {</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> type;</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> reserved;</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sector;</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> type;</div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> reserved;</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sector;</div>
 <div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>} __attribute__((packed));</div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span></div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><span class="keyword">enum</span> VirtioBlkStatus : <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> {</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><span class="keyword">enum</span> VirtioBlkStatus : <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> {</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    VIRTIO_BLK_S_OK = 0,</div>
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    VIRTIO_BLK_S_IOERR = 1,</div>
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    VIRTIO_BLK_S_UNSUP = 2,</div>
 <div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>};</div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span></div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> VIRTIO_BLK_WAIT_TIMEOUT_US = 100000;</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> VIRTIO_BLK_WAIT_TIMEOUT_US = 100000;</div>
 <div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span></div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> VIRTIO_NO_VECTOR = 0xFFFF;</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> VIRTIO_NO_VECTOR = 0xFFFF;</div>
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span></div>
 <div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span><span class="keyword">struct </span>VirtioBlkComplRecord {</div>
 <div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>    <span class="keywordtype">bool</span> done = <span class="keyword">false</span>;                  </div>
-<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> <a class="code hl_variable" href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a> = 0xFF;              </div>
+<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> <a class="code hl_variable" href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a> = 0xFF;              </div>
 <div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *waiter = <span class="keyword">nullptr</span>; </div>
-<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> waiter_gen = 0;            </div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> arm_used = 0;              </div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> head_idx = 0;              </div>
+<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> waiter_gen = 0;            </div>
+<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arm_used = 0;              </div>
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> head_idx = 0;              </div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>};</div>
 <div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span></div>
 <div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span><span class="keyword">class </span>VirtioBlkDriver final : <span class="keyword">public</span> BlockDevice {</div>
@@ -190,12 +190,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__blk_8h
 <div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    ~VirtioBlkDriver();</div>
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span> </div>
 <div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>();</div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    <span class="keywordtype">bool</span> read_sector(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> lba, <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer) <span class="keyword">override</span>;</div>
-<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    <span class="keywordtype">bool</span> write_sector(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> lba, <span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer) <span class="keyword">override</span>;</div>
-<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sector_count()<span class="keyword"> const override </span>{</div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    <span class="keywordtype">bool</span> read_sector(uint64_t lba, uint8_t *buffer) <span class="keyword">override</span>;</div>
+<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    <span class="keywordtype">bool</span> write_sector(uint64_t lba, <span class="keyword">const</span> uint8_t *buffer) <span class="keyword">override</span>;</div>
+<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sector_count()<span class="keyword"> const override </span>{</div>
 <div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>        <span class="keywordflow">return</span> sector_count_;</div>
 <div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>    }</div>
-<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sector_size()<span class="keyword"> const override </span>{</div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sector_size()<span class="keyword"> const override </span>{</div>
 <div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>        <span class="keywordflow">return</span> BLOCK_SIZE;</div>
 <div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>    }</div>
 <div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keywordtype">bool</span> is_read_only()<span class="keyword"> const override </span>{</div>
@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__blk_8h
 <div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>        <span class="keywordflow">return</span> irq_vector_ != 0;</div>
 <div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>    }</div>
 <div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span></div>
-<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> isr_completions()<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> isr_completions()<span class="keyword"> const </span>{</div>
 <div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>        <span class="keywordflow">return</span> isr_completions_;</div>
 <div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>    }</div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span></div>
@@ -222,8 +222,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__blk_8h
 <div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>        irq_vector_ = 0xFE;</div>
 <div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>    }</div>
 <div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span></div>
-<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> match_completion(<a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> used_before, <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> used_now,</div>
-<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>                                 <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> used_id, <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> head_idx,</div>
+<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> match_completion(uint16_t used_before, uint16_t used_now,</div>
+<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>                                 uint32_t used_id, uint16_t head_idx,</div>
 <div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>                                 <span class="keywordtype">bool</span> *out_done);</div>
 <div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span> </div>
 <div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span>    <span class="comment">// MSI-X/MSI wiring (#65, x86_64).  Returns false fail-closed (polling</span></div>
@@ -234,39 +234,39 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__blk_8h
 <div class="line"><a id="l00142" name="l00142"></a><span class="lineno">  142</span>    <span class="keywordtype">void</span> disable_irq();</div>
 <div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span> </div>
 <div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span>  <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <span class="keywordtype">bool</span> submit_request(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> type, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sector, <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data,</div>
+<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <span class="keywordtype">bool</span> submit_request(uint32_t type, uint64_t sector, uint8_t *data,</div>
 <div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span>                        <span class="keywordtype">bool</span> is_read);</div>
 <div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>    <span class="comment">// Bounded polling completion wait (fallback when no IRQ is armed, no</span></div>
 <div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>    <span class="comment">// task context exists, or the wheel arm fails).</span></div>
-<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>    <span class="keywordtype">bool</span> wait_request_poll(<a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> used_snapshot);</div>
+<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>    <span class="keywordtype">bool</span> wait_request_poll(uint16_t used_snapshot);</div>
 <div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>    <span class="comment">// Scheduler-blocked bounded completion wait (#65).</span></div>
-<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>    <span class="keywordtype">bool</span> wait_request(<a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> used_snapshot, <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> head_idx);</div>
+<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>    <span class="keywordtype">bool</span> wait_request(uint16_t used_snapshot, uint16_t head_idx);</div>
 <div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    <span class="comment">// Shared response tail: validates the status byte, copies data back</span></div>
 <div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="comment">// for reads.  Same error semantics on both wait paths.</span></div>
-<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    <span class="keywordtype">bool</span> finish_request(<span class="keywordtype">bool</span> is_read, <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data);</div>
+<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    <span class="keywordtype">bool</span> finish_request(<span class="keywordtype">bool</span> is_read, uint8_t *data);</div>
 <div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span> </div>
-<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> isr_entry(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a>, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a>);</div>
+<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> isr_entry(uint64_t vector, uint64_t <a class="code hl_variable" href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a>, uint64_t <a class="code hl_variable" href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a>);</div>
 <div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>    <span class="comment">// ISR status byte read-and-ack (null-guarded for unmapped windows).</span></div>
-<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> read_isr_status() <span class="keyword">const</span>;</div>
+<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> read_isr_status() <span class="keyword">const</span>;</div>
 <div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span> </div>
 <div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    arch::VirtioTransport transport_;</div>
-<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sector_count_ = 0;</div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sector_count_ = 0;</div>
 <div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span> </div>
 <div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>    <span class="comment">// Queue memory (physically contiguous)</span></div>
-<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> desc_phys_ = 0;</div>
-<div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> avail_phys_ = 0;</div>
-<div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> used_phys_ = 0;</div>
+<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> desc_phys_ = 0;</div>
+<div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> avail_phys_ = 0;</div>
+<div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> used_phys_ = 0;</div>
 <div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span> </div>
 <div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span>    <span class="comment">// Virtual addresses for queue memory</span></div>
 <div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span>    arch::VirtqDesc *desc_ = <span class="keyword">nullptr</span>;</div>
 <div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>    arch::VirtqAvail *avail_ = <span class="keyword">nullptr</span>;</div>
 <div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span>    arch::VirtqUsed *used_ = <span class="keyword">nullptr</span>;</div>
-<div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> queue_size_ = 0;</div>
-<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> avail_idx_ = 0;</div>
+<div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> queue_size_ = 0;</div>
+<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> avail_idx_ = 0;</div>
 <div class="line"><a id="l00174" name="l00174"></a><span class="lineno">  174</span> </div>
 <div class="line"><a id="l00175" name="l00175"></a><span class="lineno">  175</span>    <span class="comment">// DMA buffer physical address</span></div>
-<div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> dma_buf_phys_ = 0;</div>
-<div class="line"><a id="l00177" name="l00177"></a><span class="lineno">  177</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *dma_buf_ = <span class="keyword">nullptr</span>;</div>
+<div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> dma_buf_phys_ = 0;</div>
+<div class="line"><a id="l00177" name="l00177"></a><span class="lineno">  177</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *dma_buf_ = <span class="keyword">nullptr</span>;</div>
 <div class="line"><a id="l00178" name="l00178"></a><span class="lineno">  178</span> </div>
 <div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>    <span class="comment">// H-3 (audit-drivers-vfs-net-v0.4.2): serializes the whole</span></div>
 <div class="line"><a id="l00180" name="l00180"></a><span class="lineno">  180</span>    <span class="comment">// descriptor-fill → avail-push → notify → poll critical section.  The</span></div>
@@ -281,31 +281,32 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__blk_8h
 <div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>    VirtioBlkComplRecord compl_{};</div>
 <div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>    sync::SpinLock compl_lock_{};</div>
 <div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>    <span class="comment">// Last consumed used-ring index (monotonic compare, wrap-safe via !=).</span></div>
-<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> last_seen_used_ = 0;</div>
+<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> last_seen_used_ = 0;</div>
 <div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span>    <span class="comment">// Armed IRQ vector, 0 = none (polling).  irq_allocated_ tracks real</span></div>
 <div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span>    <span class="comment">// PCI/IDT ownership (test-simulated arming sets the vector only).</span></div>
-<div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> irq_vector_ = 0;</div>
+<div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq_vector_ = 0;</div>
 <div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>    <span class="keywordtype">bool</span> irq_allocated_ = <span class="keyword">false</span>;</div>
-<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> isr_completions_ = 0;</div>
+<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> isr_completions_ = 0;</div>
 <div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span>};</div>
 <div class="line"><a id="l00199" name="l00199"></a><span class="lineno">  199</span> </div>
 <div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span>} <span class="comment">// namespace kernel::block</span></div>
 <div class="ttc" id="ablock__device_8hpp_html"><div class="ttname"><a href="block__device_8hpp.html">block_device.hpp</a></div><div class="ttdoc">Abstract block device interface and mock device.</div></div>
-<div class="ttc" id="akernel_8cpp_html_a1fa277715dbc259c4bd045c128015845"><div class="ttname"><a href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a></div><div class="ttdeci">uint64_t uint64_t rip</div><div class="ttdef"><b>Definition</b> kernel.cpp:1323</div></div>
-<div class="ttc" id="akernel_8cpp_html_a62fb24a5114b3a2c8227926f8f0adaa2"><div class="ttname"><a href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a></div><div class="ttdeci">uint64_t error_code</div><div class="ttdef"><b>Definition</b> kernel.cpp:1322</div></div>
+<div class="ttc" id="akernel_8cpp_html_a1fa277715dbc259c4bd045c128015845"><div class="ttname"><a href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a></div><div class="ttdeci">uint64_t uint64_t rip</div><div class="ttdef"><b>Definition</b> kernel.cpp:1693</div></div>
+<div class="ttc" id="akernel_8cpp_html_a62fb24a5114b3a2c8227926f8f0adaa2"><div class="ttname"><a href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a></div><div class="ttdeci">uint64_t error_code</div><div class="ttdef"><b>Definition</b> kernel.cpp:1692</div></div>
 <div class="ttc" id="amutex_8hpp_html"><div class="ttname"><a href="mutex_8hpp.html">mutex.hpp</a></div><div class="ttdoc">Mutex with priority inheritance and blocking waiters.</div></div>
 <div class="ttc" id="anamespacearch_1_1hpet_html_a2b9f8f09d7cd4d5ead750b5c322b50d3"><div class="ttname"><a href="namespacearch_1_1hpet.html#a2b9f8f09d7cd4d5ead750b5c322b50d3">arch::hpet::probe</a></div><div class="ttdeci">bool probe()</div><div class="ttdoc">Probe for an HPET (idempotent, fail-closed). Returns false until ACPI-table discovery plus a VMM mapp...</div><div class="ttdef"><b>Definition</b> hpet.cpp:35</div></div>
+<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
+<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
+<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_1_1block_html"><div class="ttname"><a href="namespacekernel_1_1block.html">kernel::block</a></div><div class="ttdef"><b>Definition</b> ata_pio.cpp:29</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_af219b4b081470c65fb5140fbabdd424c"><div class="ttname"><a href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">kernel::test::TaskControlBlock</a></div><div class="ttdeci">kernel::TaskControlBlock TaskControlBlock</div><div class="ttdef"><b>Definition</b> test.hpp:35</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="aspinlock_8hpp_html"><div class="ttname"><a href="spinlock_8hpp.html">spinlock.hpp</a></div><div class="ttdoc">Busy-wait spinlock using atomic exchange.</div></div>
+<div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:227</div></div>
 <div class="ttc" id="atest__virtio__blk__req_8cpp_html_ade818037fd6c985038ff29656089758d"><div class="ttname"><a href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a></div><div class="ttdeci">uint8_t status</div><div class="ttdef"><b>Definition</b> test_virtio_blk_req.cpp:6</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
-<div class="ttc" id="atypes_8hpp_html_a64be82add362de7c99ce6671d7f4f0a6"><div class="ttname"><a href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> types.hpp:25</div></div>
 <div class="ttc" id="avirtio_8hpp_html"><div class="ttname"><a href="virtio_8hpp.html">virtio.hpp</a></div><div class="ttdoc">Virtio PCI transport — modern (1.0) interface via PCI capabilities.</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

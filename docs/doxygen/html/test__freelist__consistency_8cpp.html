@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__freelist
 </div><!--header-->
 <div class="contents">
 
-<p>Verifies that PMM freelist heads are consistent with the bitmap after free/alloc cycles — snapshot_restore does NOT capture free_head_/pool_free_head_, so they must be rebuilt from the bitmap. Without rebuild, alloc_page()/alloc_page_table() return pages already marked as allocated → double-alloc → corruption.  
+<p>Verifies that <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> freelist heads are consistent with the bitmap after free/alloc cycles — snapshot_restore does NOT capture free_head_/pool_free_head_, so they must be rebuilt from the bitmap. Without rebuild, alloc_page()/alloc_page_table() return pages already marked as allocated → double-alloc → corruption.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
@@ -141,7 +141,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a38cf6ea4c764224f982841b76981686e" id="r_a38cf6ea4c764224f982841b76981686e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a38cf6ea4c764224f982841b76981686e">register_freelist_consistency_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Verifies that PMM freelist heads are consistent with the bitmap after free/alloc cycles — snapshot_restore does NOT capture free_head_/pool_free_head_, so they must be rebuilt from the bitmap. Without rebuild, alloc_page()/alloc_page_table() return pages already marked as allocated → double-alloc → corruption. </p>
+<div class="textblock"><p>Verifies that <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> freelist heads are consistent with the bitmap after free/alloc cycles — snapshot_restore does NOT capture free_head_/pool_free_head_, so they must be rebuilt from the bitmap. Without rebuild, alloc_page()/alloc_page_table() return pages already marked as allocated → double-alloc → corruption. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a207e665692d186c0a32a4fc13f31d129" name="a207e665692d186c0a32a4fc13f31d129"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a207e665692d186c0a32a4fc13f31d129">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/3]</span></h2>
@@ -161,6 +161,12 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__freelist__consistency_8cpp_a207e665692d186c0a32a4fc13f31d129_cgraph.png" border="0" usemap="#atest__freelist__consistency_8cpp_a207e665692d186c0a32a4fc13f31d129_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -182,6 +188,12 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__freelist__consistency_8cpp_a0f79375c8df95f2d177748458d572a07_cgraph.png" border="0" usemap="#atest__freelist__consistency_8cpp_a0f79375c8df95f2d177748458d572a07_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -207,7 +219,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__freelist__consistency_8cpp_a319152f015a5e709d4f9c3ef4cffb810_cgraph.png" border="0" usemap="#atest__freelist__consistency_8cpp_a319152f015a5e709d4f9c3ef4cffb810_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -230,7 +242,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__freelist__consistency_8cpp_a38cf6ea4c764224f982841b76981686e_cgraph.png" border="0" usemap="#atest__freelist__consistency_8cpp_a38cf6ea4c764224f982841b76981686e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 4 -->
 </div>
 
 </div>

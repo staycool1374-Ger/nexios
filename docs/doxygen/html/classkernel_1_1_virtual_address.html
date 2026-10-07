@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -132,21 +132,28 @@ Collaboration diagram for kernel::VirtualAddress:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:aca6aa068f02bb85761ecc0b4c20d30b9" id="r_aca6aa068f02bb85761ecc0b4c20d30b9"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> () noexcept</td></tr>
-<tr class="memitem:a80dce632a813aa23eccd8590cfe0742d" id="r_a80dce632a813aa23eccd8590cfe0742d"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="#a80dce632a813aa23eccd8590cfe0742d">VirtualAddress</a> (uint64_t addr) noexcept</td></tr>
-<tr class="memitem:a9c091488fd91e2f18caa3c210b37f5c0" id="r_a9c091488fd91e2f18caa3c210b37f5c0"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9c091488fd91e2f18caa3c210b37f5c0">value</a> () const noexcept</td></tr>
-<tr class="memitem:a044b078a886573a63a130faf919033b9" id="r_a044b078a886573a63a130faf919033b9"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a044b078a886573a63a130faf919033b9">is_null</a> () const noexcept</td></tr>
-<tr class="memitem:a179fd875be280503a6de12ebef48cefe" id="r_a179fd875be280503a6de12ebef48cefe"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a179fd875be280503a6de12ebef48cefe">is_canonical</a> () const noexcept</td></tr>
-<tr class="memitem:a2e4a83c798aa58e2954a6412693ff9f8" id="r_a2e4a83c798aa58e2954a6412693ff9f8"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a2e4a83c798aa58e2954a6412693ff9f8">is_kernel</a> () const noexcept</td></tr>
-<tr class="memitem:afe41d044855e2d98ae3561ebac80b9c4" id="r_afe41d044855e2d98ae3561ebac80b9c4"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#afe41d044855e2d98ae3561ebac80b9c4">is_user</a> () const noexcept</td></tr>
-<tr class="memitem:aa57546d86faddec16b16f75789eefddc" id="r_aa57546d86faddec16b16f75789eefddc"><td class="memItemLeft">constexpr <a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#aa57546d86faddec16b16f75789eefddc">operator=</a> (uint64_t addr) noexcept</td></tr>
-<tr class="memitem:abd395c6f1212a0fe77ffe29d51ab8fd6" id="r_abd395c6f1212a0fe77ffe29d51ab8fd6"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#abd395c6f1212a0fe77ffe29d51ab8fd6">operator==</a> (<a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> other) const noexcept</td></tr>
-<tr class="memitem:aa8058f019920ed1638006f283a0f6d0f" id="r_aa8058f019920ed1638006f283a0f6d0f"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#aa8058f019920ed1638006f283a0f6d0f">operator!=</a> (<a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> other) const noexcept</td></tr>
-<tr class="memitem:abc4ecf4937e37e9f8678c6e561b978c7" id="r_abc4ecf4937e37e9f8678c6e561b978c7"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#abc4ecf4937e37e9f8678c6e561b978c7">operator&lt;</a> (<a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> other) const noexcept</td></tr>
-<tr class="memitem:a3f3de2dd032fac31289d04004937c151" id="r_a3f3de2dd032fac31289d04004937c151"><td class="memItemLeft">constexpr <a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3f3de2dd032fac31289d04004937c151">operator+</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset) const noexcept</td></tr>
-<tr class="memitem:a55b4e061b8c9a652a19c988b7eef6984" id="r_a55b4e061b8c9a652a19c988b7eef6984"><td class="memItemLeft">constexpr <a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="#a55b4e061b8c9a652a19c988b7eef6984">operator-</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset) const noexcept</td></tr>
-<tr class="memitem:aa5c0090d5ee3c41dcd69c80fbc02f797" id="r_aa5c0090d5ee3c41dcd69c80fbc02f797"><td class="memItemLeft">constexpr <a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#aa5c0090d5ee3c41dcd69c80fbc02f797">operator+=</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset) noexcept</td></tr>
-<tr class="memitem:a766b17ddd752fee89f28d3b0a1ff13f3" id="r_a766b17ddd752fee89f28d3b0a1ff13f3"><td class="memItemLeft">constexpr <a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a766b17ddd752fee89f28d3b0a1ff13f3">operator-=</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset) noexcept</td></tr>
+<tr class="memitem:aca6aa068f02bb85761ecc0b4c20d30b9" id="r_aca6aa068f02bb85761ecc0b4c20d30b9"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:aca6aa068f02bb85761ecc0b4c20d30b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default constructor — initialises to null address 0.  <br /></td></tr>
+<tr class="memitem:a80dce632a813aa23eccd8590cfe0742d" id="r_a80dce632a813aa23eccd8590cfe0742d"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="#a80dce632a813aa23eccd8590cfe0742d">VirtualAddress</a> (uint64_t addr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a80dce632a813aa23eccd8590cfe0742d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Construct from a raw virtual address.  <br /></td></tr>
+<tr class="memitem:a9c091488fd91e2f18caa3c210b37f5c0" id="r_a9c091488fd91e2f18caa3c210b37f5c0"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9c091488fd91e2f18caa3c210b37f5c0">value</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a9c091488fd91e2f18caa3c210b37f5c0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the raw virtual address value.  <br /></td></tr>
+<tr class="memitem:a044b078a886573a63a130faf919033b9" id="r_a044b078a886573a63a130faf919033b9"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a044b078a886573a63a130faf919033b9">is_null</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a044b078a886573a63a130faf919033b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the address is null (zero).  <br /></td></tr>
+<tr class="memitem:a179fd875be280503a6de12ebef48cefe" id="r_a179fd875be280503a6de12ebef48cefe"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a179fd875be280503a6de12ebef48cefe">is_canonical</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a179fd875be280503a6de12ebef48cefe"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if the address is canonical (x86_64: bits 63-47 are sign extension of bit 47).  <br /></td></tr>
+<tr class="memitem:a2e4a83c798aa58e2954a6412693ff9f8" id="r_a2e4a83c798aa58e2954a6412693ff9f8"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a2e4a83c798aa58e2954a6412693ff9f8">is_kernel</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a2e4a83c798aa58e2954a6412693ff9f8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the address lies in kernel-space (higher half).  <br /></td></tr>
+<tr class="memitem:afe41d044855e2d98ae3561ebac80b9c4" id="r_afe41d044855e2d98ae3561ebac80b9c4"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#afe41d044855e2d98ae3561ebac80b9c4">is_user</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:afe41d044855e2d98ae3561ebac80b9c4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the address lies in user-space (lower half).  <br /></td></tr>
+<tr class="memitem:aa57546d86faddec16b16f75789eefddc" id="r_aa57546d86faddec16b16f75789eefddc"><td class="memItemLeft">constexpr <a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#aa57546d86faddec16b16f75789eefddc">operator=</a> (uint64_t addr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:abd395c6f1212a0fe77ffe29d51ab8fd6" id="r_abd395c6f1212a0fe77ffe29d51ab8fd6"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#abd395c6f1212a0fe77ffe29d51ab8fd6">operator==</a> (<a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> other) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:aa8058f019920ed1638006f283a0f6d0f" id="r_aa8058f019920ed1638006f283a0f6d0f"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#aa8058f019920ed1638006f283a0f6d0f">operator!=</a> (<a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> other) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:abc4ecf4937e37e9f8678c6e561b978c7" id="r_abc4ecf4937e37e9f8678c6e561b978c7"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#abc4ecf4937e37e9f8678c6e561b978c7">operator&lt;</a> (<a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> other) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a3f3de2dd032fac31289d04004937c151" id="r_a3f3de2dd032fac31289d04004937c151"><td class="memItemLeft">constexpr <a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3f3de2dd032fac31289d04004937c151">operator+</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a55b4e061b8c9a652a19c988b7eef6984" id="r_a55b4e061b8c9a652a19c988b7eef6984"><td class="memItemLeft">constexpr <a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="#a55b4e061b8c9a652a19c988b7eef6984">operator-</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:aa5c0090d5ee3c41dcd69c80fbc02f797" id="r_aa5c0090d5ee3c41dcd69c80fbc02f797"><td class="memItemLeft">constexpr <a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#aa5c0090d5ee3c41dcd69c80fbc02f797">operator+=</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a766b17ddd752fee89f28d3b0a1ff13f3" id="r_a766b17ddd752fee89f28d3b0a1ff13f3"><td class="memItemLeft">constexpr <a class="el" href="#aca6aa068f02bb85761ecc0b4c20d30b9">VirtualAddress</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a766b17ddd752fee89f28d3b0a1ff13f3">operator-=</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Virtual address wrapper — eliminates raw reinterpret_cast for virtual memory. </p>
@@ -175,6 +182,8 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Default constructor — initialises to null address 0. </p>
+
 </div>
 </div>
 <a id="a80dce632a813aa23eccd8590cfe0742d" name="a80dce632a813aa23eccd8590cfe0742d"></a>
@@ -199,6 +208,14 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Construct from a raw virtual address. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">addr</td><td>Virtual memory address. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -226,6 +243,8 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Check if the address is canonical (x86_64: bits 63-47 are sign extension of bit 47). </p>
+
 </div>
 </div>
 <a id="a2e4a83c798aa58e2954a6412693ff9f8" name="a2e4a83c798aa58e2954a6412693ff9f8"></a>
@@ -250,6 +269,8 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Check whether the address lies in kernel-space (higher half). </p>
 
 </div>
 </div>
@@ -276,6 +297,8 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Check whether the address is null (zero). </p>
+
 </div>
 </div>
 <a id="afe41d044855e2d98ae3561ebac80b9c4" name="afe41d044855e2d98ae3561ebac80b9c4"></a>
@@ -300,6 +323,8 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Check whether the address lies in user-space (lower half). </p>
 
 </div>
 </div>
@@ -573,6 +598,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Return the raw virtual address value. </p>
 
 </div>
 </div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,15 +119,112 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 </div><!--header-->
 <div class="contents">
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:SporadicServer" id="r_SporadicServer"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1task_1_1_sporadic_server.html">SporadicServer</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-instance Sporadic Server controller.  <a href="classkernel_1_1task_1_1_sporadic_server.html#details">More...</a><br /></td></tr>
+<tr class="memitem:TaskDef" id="r_TaskDef"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1task_1_1_task_def.html">TaskDef</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Single entry in the boot-time task-definition table. Entries are validated at compile time against <a class="el" href="nexios__config_8h.html" title="Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...">nexios_config.h</a> bounds and at boot time for ELF-file existence. Set enabled = false to skip.  <a href="structkernel_1_1task_1_1_task_def.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a82f17867b0ea9b01e4ff6c5073fc582c" id="r_a82f17867b0ea9b01e4ff6c5073fc582c"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a82f17867b0ea9b01e4ff6c5073fc582c">ServerMode</a> : uint8_t { <a class="el" href="#a82f17867b0ea9b01e4ff6c5073fc582ca6fb4e82c2fe41d799e90640dd8465a89">SPORADIC</a> = 0
+, <a class="el" href="#a82f17867b0ea9b01e4ff6c5073fc582caf915458fb87f4302892687c05d3d438f">DEFERRABLE</a> = 1
+, <a class="el" href="#a82f17867b0ea9b01e4ff6c5073fc582ca87ed58ce5596142e11cb65deb049bb4b">BACKGROUND</a> = 2
+ }</td></tr>
+<tr class="memdesc:a82f17867b0ea9b01e4ff6c5073fc582c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Budget-replenishment discipline for <a class="el" href="classkernel_1_1task_1_1_sporadic_server.html" title="Per-instance Sporadic Server controller.">SporadicServer</a> (issue #22). Namespace scope so TaskDef/task APIs can name it without the class.  <a href="#a82f17867b0ea9b01e4ff6c5073fc582c">More...</a><br /></td></tr>
+<tr class="memitem:afe20b357887445ef77f145177213ee11" id="r_afe20b357887445ef77f145177213ee11"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#afe20b357887445ef77f145177213ee11">TaskType</a> : uint8_t { <a class="el" href="#afe20b357887445ef77f145177213ee11a35c10219c45ccfb5b07444fd7e17214c">KERNEL</a>
+, <a class="el" href="#afe20b357887445ef77f145177213ee11acd249b6e7fadaba2533c7e79e653ce90">USER_ELF</a>
+, <a class="el" href="#afe20b357887445ef77f145177213ee11a7049d1e1209d2fe5152258560aadcb16">SPORADIC_SERVER</a>
+ }</td></tr>
+<tr class="memdesc:afe20b357887445ef77f145177213ee11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Classifies how a task is created from a <a class="el" href="structkernel_1_1task_1_1_task_def.html" title="Single entry in the boot-time task-definition table. Entries are validated at compile time against ne...">TaskDef</a> entry.  <a href="#afe20b357887445ef77f145177213ee11">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:ae7fc9a59f78d98d18c2d3c5a25ec2193" id="r_ae7fc9a59f78d98d18c2d3c5a25ec2193"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae7fc9a59f78d98d18c2d3c5a25ec2193">dmesg_task_main</a> ()</td></tr>
-<tr class="memitem:adc36214616607d88fa61adf5386788e4" id="r_adc36214616607d88fa61adf5386788e4"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adc36214616607d88fa61adf5386788e4">taskdefs_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memitem:a6c2e4859b68a0571d2f50dda0efba2a8" id="r_a6c2e4859b68a0571d2f50dda0efba2a8"><td class="memItemLeft">const TaskDef *&#160;</td><td class="memItemRight"><a class="el" href="#a6c2e4859b68a0571d2f50dda0efba2a8">taskdefs_at</a> (<a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> i) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memitem:a134c6b74e9d9bc36270fd82a843ea357" id="r_a134c6b74e9d9bc36270fd82a843ea357"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a134c6b74e9d9bc36270fd82a843ea357">taskdefs_server_params_valid</a> (const TaskDef &amp;d) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memitem:acecadff66d32071ad6d02265945cc76a" id="r_acecadff66d32071ad6d02265945cc76a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#acecadff66d32071ad6d02265945cc76a">taskdefs_valid</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memitem:a7f227dc40c3e02534d8c4640812236c7" id="r_a7f227dc40c3e02534d8c4640812236c7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7f227dc40c3e02534d8c4640812236c7">reboot_from_table</a> ()</td></tr>
+<tr class="memitem:a5133e0ef90772b93d6a07eee13cd474e" id="r_a5133e0ef90772b93d6a07eee13cd474e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5133e0ef90772b93d6a07eee13cd474e">set_debugd_pid_cell</a> (uint64_t pid) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a5133e0ef90772b93d6a07eee13cd474e"><td class="mdescLeft">&#160;</td><td class="mdescRight">debugd PID cell accessors (issue #231): the taskdefs row owns the cell (TU-local in <a class="el" href="taskdefs_8cpp.html" title="Task definition table and reboot-from-table implementation.">taskdefs.cpp</a>); the shell reads it for on-demand debugd startup. A cell naming a dead generation counts as unset (caller validates via find_task).  <br /></td></tr>
+<tr class="memitem:a72a600e65033643940fd57c8900bc9a3" id="r_a72a600e65033643940fd57c8900bc9a3"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a72a600e65033643940fd57c8900bc9a3">get_debugd_pid_cell</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:adc36214616607d88fa61adf5386788e4" id="r_adc36214616607d88fa61adf5386788e4"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adc36214616607d88fa61adf5386788e4">taskdefs_count</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:adc36214616607d88fa61adf5386788e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read-only task-table accessors (issue #24): the verify class inspects budgets/modes without spawning. No mutation, no alloc.  <br /></td></tr>
+<tr class="memitem:a6c2e4859b68a0571d2f50dda0efba2a8" id="r_a6c2e4859b68a0571d2f50dda0efba2a8"><td class="memItemLeft">const <a class="el" href="structkernel_1_1task_1_1_task_def.html">TaskDef</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a6c2e4859b68a0571d2f50dda0efba2a8">taskdefs_at</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> i) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a134c6b74e9d9bc36270fd82a843ea357" id="r_a134c6b74e9d9bc36270fd82a843ea357"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a134c6b74e9d9bc36270fd82a843ea357">taskdefs_server_params_valid</a> (const <a class="el" href="structkernel_1_1task_1_1_task_def.html">TaskDef</a> &amp;d) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a134c6b74e9d9bc36270fd82a843ea357"><td class="mdescLeft">&#160;</td><td class="mdescRight">Single-entry server-params rule (issue #24): the same predicate the compile-time table check enforces, callable at runtime for negative tests (e.g. BACKGROUND with non-idle bg priority).  <br /></td></tr>
+<tr class="memitem:acecadff66d32071ad6d02265945cc76a" id="r_acecadff66d32071ad6d02265945cc76a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#acecadff66d32071ad6d02265945cc76a">taskdefs_valid</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:acecadff66d32071ad6d02265945cc76a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whole-table validation at runtime (mirrors the static_assert).  <br /></td></tr>
+<tr class="memitem:a23341a25427d54ae2f91ec33bb133c24" id="r_a23341a25427d54ae2f91ec33bb133c24"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a23341a25427d54ae2f91ec33bb133c24">reboot_from_table</a> () <a class="el" href="namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a>((noreturn))</td></tr>
+<tr class="memdesc:a23341a25427d54ae2f91ec33bb133c24"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kills all tasks (except idle), spawns the system from g_task_defs[], then enters the idle loop. Never returns.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a9195e1b7af9b4a49441377375ec07ae9" id="r_a9195e1b7af9b4a49441377375ec07ae9"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9195e1b7af9b4a49441377375ec07ae9">kUserYieldStubVa</a> = 0x40000000ULL</td></tr>
+<tr class="memdesc:a9195e1b7af9b4a49441377375ec07ae9"><td class="mdescLeft">&#160;</td><td class="mdescRight">VA of the user-mode yield stub mapped into every create_user() task (issue #226: tests plant faults at a VA the task is guaranteed to execute — aarch64/riscv64 rewrite low-VA entries to this stub, so per-test mapped VAs never run there).  <br /></td></tr>
 </table>
+<a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
+<a id="a82f17867b0ea9b01e4ff6c5073fc582c" name="a82f17867b0ea9b01e4ff6c5073fc582c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a82f17867b0ea9b01e4ff6c5073fc582c">&#9670;&#160;</a></span>ServerMode</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a82f17867b0ea9b01e4ff6c5073fc582c">kernel::task::ServerMode</a> : uint8_t</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Budget-replenishment discipline for <a class="el" href="classkernel_1_1task_1_1_sporadic_server.html" title="Per-instance Sporadic Server controller.">SporadicServer</a> (issue #22). Namespace scope so TaskDef/task APIs can name it without the class. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a82f17867b0ea9b01e4ff6c5073fc582ca6fb4e82c2fe41d799e90640dd8465a89" name="a82f17867b0ea9b01e4ff6c5073fc582ca6fb4e82c2fe41d799e90640dd8465a89"></a>SPORADIC&#160;</td><td class="fielddoc"><p>POSIX.1b per-activation replenishment (default). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a82f17867b0ea9b01e4ff6c5073fc582caf915458fb87f4302892687c05d3d438f" name="a82f17867b0ea9b01e4ff6c5073fc582caf915458fb87f4302892687c05d3d438f"></a>DEFERRABLE&#160;</td><td class="fielddoc"><p>Budget preserved across idle; periodic full top-up. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a82f17867b0ea9b01e4ff6c5073fc582ca87ed58ce5596142e11cb65deb049bb4b" name="a82f17867b0ea9b01e4ff6c5073fc582ca87ed58ce5596142e11cb65deb049bb4b"></a>BACKGROUND&#160;</td><td class="fielddoc"><p>Never above bg_priority_ (idle-time only). </p>
+</td></tr>
+</table>
+
+</div>
+</div>
+<a id="afe20b357887445ef77f145177213ee11" name="afe20b357887445ef77f145177213ee11"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afe20b357887445ef77f145177213ee11">&#9670;&#160;</a></span>TaskType</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#afe20b357887445ef77f145177213ee11">kernel::task::TaskType</a> : uint8_t</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Classifies how a task is created from a <a class="el" href="structkernel_1_1task_1_1_task_def.html" title="Single entry in the boot-time task-definition table. Entries are validated at compile time against ne...">TaskDef</a> entry. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="afe20b357887445ef77f145177213ee11a35c10219c45ccfb5b07444fd7e17214c" name="afe20b357887445ef77f145177213ee11a35c10219c45ccfb5b07444fd7e17214c"></a>KERNEL&#160;</td><td class="fielddoc"><p>kernel-space function, <a class="el" href="structkernel_1_1_task_control_block.html#a82a06cb63bdaa30a038a40e5632fbe9d" title="Creates a new kernel task with the given entry and scheduling parameters.">TaskControlBlock::create()</a> </p>
+</td></tr>
+<tr><td class="fieldname"><a id="afe20b357887445ef77f145177213ee11acd249b6e7fadaba2533c7e79e653ce90" name="afe20b357887445ef77f145177213ee11acd249b6e7fadaba2533c7e79e653ce90"></a>USER_ELF&#160;</td><td class="fielddoc"><p>user-space ELF from initrd, <a class="el" href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">elf::load()</a> </p>
+</td></tr>
+<tr><td class="fieldname"><a id="afe20b357887445ef77f145177213ee11a7049d1e1209d2fe5152258560aadcb16" name="afe20b357887445ef77f145177213ee11a7049d1e1209d2fe5152258560aadcb16"></a>SPORADIC_SERVER&#160;</td><td class="fielddoc"><p>user-space ELF + <a class="el" href="classkernel_1_1task_1_1_sporadic_server.html" title="Per-instance Sporadic Server controller.">SporadicServer</a> + daemon registration </p>
+</td></tr>
+</table>
+
+</div>
+</div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="ae7fc9a59f78d98d18c2d3c5a25ec2193" name="ae7fc9a59f78d98d18c2d3c5a25ec2193"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ae7fc9a59f78d98d18c2d3c5a25ec2193">&#9670;&#160;</a></span>dmesg_task_main()</h2>
@@ -152,8 +249,33 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a7f227dc40c3e02534d8c4640812236c7" name="a7f227dc40c3e02534d8c4640812236c7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7f227dc40c3e02534d8c4640812236c7">&#9670;&#160;</a></span>reboot_from_table()</h2>
+<a id="a72a600e65033643940fd57c8900bc9a3" name="a72a600e65033643940fd57c8900bc9a3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a72a600e65033643940fd57c8900bc9a3">&#9670;&#160;</a></span>get_debugd_pid_cell()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::task::get_debugd_pid_cell </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a23341a25427d54ae2f91ec33bb133c24" name="a23341a25427d54ae2f91ec33bb133c24"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a23341a25427d54ae2f91ec33bb133c24">&#9670;&#160;</a></span>reboot_from_table()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -166,12 +288,41 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Kills all tasks (except idle), spawns the system from g_task_defs[], then enters the idle loop. Never returns. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="namespacekernel_1_1task_a7f227dc40c3e02534d8c4640812236c7_cgraph.png" border="0" usemap="#anamespacekernel_1_1task_a7f227dc40c3e02534d8c4640812236c7_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="namespacekernel_1_1task_a23341a25427d54ae2f91ec33bb133c24_cgraph.png" border="0" usemap="#anamespacekernel_1_1task_a23341a25427d54ae2f91ec33bb133c24_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 1 -->
 </div>
+
+</div>
+</div>
+<a id="a5133e0ef90772b93d6a07eee13cd474e" name="a5133e0ef90772b93d6a07eee13cd474e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5133e0ef90772b93d6a07eee13cd474e">&#9670;&#160;</a></span>set_debugd_pid_cell()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::task::set_debugd_pid_cell </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pid</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>debugd PID cell accessors (issue #231): the taskdefs row owns the cell (TU-local in <a class="el" href="taskdefs_8cpp.html" title="Task definition table and reboot-from-table implementation.">taskdefs.cpp</a>); the shell reads it for on-demand debugd startup. A cell naming a dead generation counts as unset (caller validates via find_task). </p>
 
 </div>
 </div>
@@ -185,9 +336,9 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">const TaskDef * kernel::task::taskdefs_at </td>
+          <td class="memname">const <a class="el" href="structkernel_1_1task_1_1_task_def.html">TaskDef</a> * kernel::task::taskdefs_at </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>i</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>i</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -216,7 +367,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::task::taskdefs_count </td>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::task::taskdefs_count </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -228,6 +379,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Read-only task-table accessors (issue #24): the verify class inspects budgets/modes without spawning. No mutation, no alloc. </p>
 
 </div>
 </div>
@@ -243,7 +396,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::task::taskdefs_server_params_valid </td>
           <td>(</td>
-          <td class="paramtype">const TaskDef &amp;</td>          <td class="paramname"><span class="paramname"><em>d</em></span></td><td>)</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1task_1_1_task_def.html">TaskDef</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>d</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -253,6 +406,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Single-entry server-params rule (issue #24): the same predicate the compile-time table check enforces, callable at runtime for negative tests (e.g. BACKGROUND with non-idle bg priority). </p>
 
 </div>
 </div>
@@ -278,6 +433,33 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Whole-table validation at runtime (mirrors the static_assert). </p>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a9195e1b7af9b4a49441377375ec07ae9" name="a9195e1b7af9b4a49441377375ec07ae9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9195e1b7af9b4a49441377375ec07ae9">&#9670;&#160;</a></span>kUserYieldStubVa</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::task::kUserYieldStubVa = 0x40000000ULL</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>VA of the user-mode yield stub mapped into every create_user() task (issue #226: tests plant faults at a VA the task is guaranteed to execute — aarch64/riscv64 rewrite low-VA entries to this stub, so per-test mapped VAs never run there). </p>
 
 </div>
 </div>

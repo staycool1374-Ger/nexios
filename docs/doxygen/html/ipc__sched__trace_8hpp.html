@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -153,7 +153,7 @@ Macros</h2></td></tr>
 Functions</h2></td></tr>
 <tr class="memitem:ad4e746d8bc125cec09030517a74f8180" id="r_ad4e746d8bc125cec09030517a74f8180"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#ad4e746d8bc125cec09030517a74f8180">kernel::debug::trace</a> (const char *msg)</td></tr>
 <tr class="memdesc:ad4e746d8bc125cec09030517a74f8180"><td class="mdescLeft">&#160;</td><td class="mdescRight">Emit a raw trace line to the debug console. On x86_64 the QEMU debugcon (0xE9) is used — lock-free, no UART baud pacing — so the per-tick/per-switch traces do not perturb timing. UART elsewhere.  <br /></td></tr>
-<tr class="memitem:abfe4175e0b1de7e6d86961cee076ef9d" id="r_abfe4175e0b1de7e6d86961cee076ef9d"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#abfe4175e0b1de7e6d86961cee076ef9d">kernel::debug::fmt_u64</a> (char *buf, int pos, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> v)</td></tr>
+<tr class="memitem:abfe4175e0b1de7e6d86961cee076ef9d" id="r_abfe4175e0b1de7e6d86961cee076ef9d"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#abfe4175e0b1de7e6d86961cee076ef9d">kernel::debug::fmt_u64</a> (char *buf, int pos, uint64_t v)</td></tr>
 <tr class="memdesc:abfe4175e0b1de7e6d86961cee076ef9d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print an integer (decimal, unsigned) appended at buf[pos].  <br /></td></tr>
 <tr class="memitem:adc744b33c8c6fcc879f99b6094f3a8ae" id="r_adc744b33c8c6fcc879f99b6094f3a8ae"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#adc744b33c8c6fcc879f99b6094f3a8ae">kernel::debug::fmt_str</a> (char *buf, int &amp;pos, const char *s)</td></tr>
 </table>

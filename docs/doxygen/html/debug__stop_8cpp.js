@@ -7,6 +7,7 @@ var debug__stop_8cpp =
     [ "kernel::debug::debug_continue", "namespacekernel_1_1debug.html#a3f194ceaed043f78d0d53780463b7a95", null ],
     [ "kernel::debug::debug_drop_target", "namespacekernel_1_1debug.html#abc4ac3085cdd74f5bd69a449260bd1fe", null ],
     [ "kernel::debug::debug_dropped_count", "namespacekernel_1_1debug.html#a415173839a69c2f083a85d815bdf1f86", null ],
+    [ "kernel::debug::debug_note_requested_park", "namespacekernel_1_1debug.html#a092e3ee03ce6dcd93a134ad760f3a5e3", null ],
     [ "kernel::debug::debug_poll_event", "namespacekernel_1_1debug.html#a0c4ddb96910b6104cec7c2fc209c782b", null ],
     [ "kernel::debug::debug_publish_death", "namespacekernel_1_1debug.html#ae06768db20c0174541f81596c57c0b3d", null ],
     [ "kernel::debug::debug_route_fault", "namespacekernel_1_1debug.html#a2c8f28a30ede46d24969f5d4817076b8", null ],

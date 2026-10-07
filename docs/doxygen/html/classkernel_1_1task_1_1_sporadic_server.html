@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -124,10 +124,16 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classkernel_1_
 
 <p><code>#include &lt;<a class="el" href="sporadic__server_8hpp_source.html">sporadic_server.hpp</a>&gt;</code></p>
 <div class="dynheader">
+Inheritance diagram for kernel::task::SporadicServer:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1task_1_1_sporadic_server__inherit__graph.png" border="0" usemap="#akernel_1_1task_1_1_sporadic_server_inherit__map" loading="lazy" alt="Inheritance graph"/></div>
+<!-- MAP 0 -->
+</div>
+<div class="dynheader">
 Collaboration diagram for kernel::task::SporadicServer:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1task_1_1_sporadic_server__coll__graph.png" border="0" usemap="#akernel_1_1task_1_1_sporadic_server_coll__map" loading="lazy" alt="Collaboration graph"/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
@@ -145,33 +151,67 @@ Public Types</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a80cbe9a6353a1e291566615739ca8f0a" id="r_a80cbe9a6353a1e291566615739ca8f0a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a80cbe9a6353a1e291566615739ca8f0a">init</a> (uint64_t budget_c, uint64_t period_t, uint64_t bg_prio, uint64_t budget_granularity=<a class="el" href="aarch64_2serial_8cpp.html#a31b2fca43fed672f65115a92304475a2">CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</a>) noexcept</td></tr>
-<tr class="memdesc:a80cbe9a6353a1e291566615739ca8f0a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialises the server parameters.  <br /></td></tr>
-<tr class="memitem:ade5beec00850620602d7058453774810" id="r_ade5beec00850620602d7058453774810"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ade5beec00850620602d7058453774810">on_activation</a> (uint64_t now) noexcept</td></tr>
+<tr class="memitem:a09df36c50bc0250fcab5baf9f4a8977d" id="r_a09df36c50bc0250fcab5baf9f4a8977d"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a09df36c50bc0250fcab5baf9f4a8977d">SporadicServer</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>=default</td></tr>
+<tr class="memdesc:a09df36c50bc0250fcab5baf9f4a8977d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default constructor (placement-new protocol: the TCB factory memsets the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block first, then placement-news to install the vptr, then <a class="el" href="#a713902a59cb4cc75d1dfe66840bbf848" title="Initialises the server parameters.">init()</a> sets the derived members).  <br /></td></tr>
+<tr class="memitem:ac76c3a047fa39de90f1909390ae415c0" id="r_ac76c3a047fa39de90f1909390ae415c0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac76c3a047fa39de90f1909390ae415c0">dispose</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> override</td></tr>
+<tr class="memdesc:ac76c3a047fa39de90f1909390ae415c0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Final teardown on the last release. Decrements the scheduler's sporadic-task count (moved from the TCB teardown hook so a future shared SS fires the accounting on the correct last- release event) and returns the block to the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>. Stack- allocated test instances are never pool-backed and are not freed.  <br /></td></tr>
+<tr class="memitem:a713902a59cb4cc75d1dfe66840bbf848" id="r_a713902a59cb4cc75d1dfe66840bbf848"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a713902a59cb4cc75d1dfe66840bbf848">init</a> (uint64_t budget_c, uint64_t period_t, uint64_t bg_prio, uint64_t budget_granularity=<a class="el" href="aarch64_2serial_8cpp.html#a31b2fca43fed672f65115a92304475a2">CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</a>, <a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582c">ServerMode</a> mode=<a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582ca6fb4e82c2fe41d799e90640dd8465a89">ServerMode::SPORADIC</a>) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a713902a59cb4cc75d1dfe66840bbf848"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialises the server parameters.  <br /></td></tr>
+<tr class="memitem:ade5beec00850620602d7058453774810" id="r_ade5beec00850620602d7058453774810"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ade5beec00850620602d7058453774810">on_activation</a> (uint64_t now) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ade5beec00850620602d7058453774810"><td class="mdescLeft">&#160;</td><td class="mdescRight">Signals that a new aperiodic job has arrived.  <br /></td></tr>
-<tr class="memitem:a65b0a775fc44d7053298bf50bbd8f6f6" id="r_a65b0a775fc44d7053298bf50bbd8f6f6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a65b0a775fc44d7053298bf50bbd8f6f6">on_completion</a> (uint64_t now) noexcept</td></tr>
+<tr class="memitem:a65b0a775fc44d7053298bf50bbd8f6f6" id="r_a65b0a775fc44d7053298bf50bbd8f6f6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a65b0a775fc44d7053298bf50bbd8f6f6">on_completion</a> (uint64_t now) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a65b0a775fc44d7053298bf50bbd8f6f6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Signals that the server goes idle (all aperiodic work done).  <br /></td></tr>
-<tr class="memitem:a9403aae1570e64968dbd6ccca43570bd" id="r_a9403aae1570e64968dbd6ccca43570bd"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a9403aae1570e64968dbd6ccca43570bd">consume</a> (uint64_t now) noexcept</td></tr>
+<tr class="memitem:a9403aae1570e64968dbd6ccca43570bd" id="r_a9403aae1570e64968dbd6ccca43570bd"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a9403aae1570e64968dbd6ccca43570bd">consume</a> (uint64_t now) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a9403aae1570e64968dbd6ccca43570bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consumes one tick of execution budget.  <br /></td></tr>
-<tr class="memitem:af84fdf5fd66413625cbb631f48dd4d77" id="r_af84fdf5fd66413625cbb631f48dd4d77"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af84fdf5fd66413625cbb631f48dd4d77">process_replenishments</a> (uint64_t now) noexcept</td></tr>
+<tr class="memitem:af84fdf5fd66413625cbb631f48dd4d77" id="r_af84fdf5fd66413625cbb631f48dd4d77"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af84fdf5fd66413625cbb631f48dd4d77">process_replenishments</a> (uint64_t now) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:af84fdf5fd66413625cbb631f48dd4d77"><td class="mdescLeft">&#160;</td><td class="mdescRight">Processes all due replenishments at the given tick.  <br /></td></tr>
-<tr class="memitem:a07701533186561d0e746f8f7729f6ac6" id="r_a07701533186561d0e746f8f7729f6ac6"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a07701533186561d0e746f8f7729f6ac6">has_budget</a> () const noexcept</td></tr>
-<tr class="memitem:a563468b3df274365d89b1e9455e84a60" id="r_a563468b3df274365d89b1e9455e84a60"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a563468b3df274365d89b1e9455e84a60">current_priority</a> () const noexcept</td></tr>
-<tr class="memitem:af5c851c868dac141d32a6020fbc4ca6f" id="r_af5c851c868dac141d32a6020fbc4ca6f"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#af5c851c868dac141d32a6020fbc4ca6f">remaining_budget</a> () const noexcept</td></tr>
-<tr class="memitem:a613b766f64760d57b7018e525a66f290" id="r_a613b766f64760d57b7018e525a66f290"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a613b766f64760d57b7018e525a66f290">max_budget</a> () const noexcept</td></tr>
-<tr class="memitem:ab5bd8cf9b74ab74440b935ff87f297d7" id="r_ab5bd8cf9b74ab74440b935ff87f297d7"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab5bd8cf9b74ab74440b935ff87f297d7">period</a> () const noexcept</td></tr>
-<tr class="memitem:aec67df65c12d086e6ca4d9b624c161cb" id="r_aec67df65c12d086e6ca4d9b624c161cb"><td class="memItemLeft"><a class="el" href="#ac40cdbf3660bfe8f3824ad285eabf096">State</a>&#160;</td><td class="memItemRight"><a class="el" href="#aec67df65c12d086e6ca4d9b624c161cb">state</a> () const noexcept</td></tr>
-<tr class="memitem:aaed6a50641d24a25fcd2319cfb04f843" id="r_aaed6a50641d24a25fcd2319cfb04f843"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aaed6a50641d24a25fcd2319cfb04f843">is_active</a> () const noexcept</td></tr>
-<tr class="memitem:a5772a501b3eb0df8688705394b5c5e5b" id="r_a5772a501b3eb0df8688705394b5c5e5b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5772a501b3eb0df8688705394b5c5e5b">pending_count</a> () const noexcept</td></tr>
-<tr class="memitem:a18ea63756803965143e8462cddcd4430" id="r_a18ea63756803965143e8462cddcd4430"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a18ea63756803965143e8462cddcd4430">set_base_priority</a> (uint64_t prio) noexcept</td></tr>
-<tr class="memdesc:a18ea63756803965143e8462cddcd4430"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sets the normal scheduling priority for this server. Call this after <a class="el" href="#a80cbe9a6353a1e291566615739ca8f0a" title="Initialises the server parameters.">init()</a> to assign the server's base priority level.  <br /></td></tr>
-<tr class="memitem:a30fa508b06ba48b5635cd8967000f65a" id="r_a30fa508b06ba48b5635cd8967000f65a"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a30fa508b06ba48b5635cd8967000f65a">bg_priority</a> () const noexcept</td></tr>
+<tr class="memitem:a07701533186561d0e746f8f7729f6ac6" id="r_a07701533186561d0e746f8f7729f6ac6"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a07701533186561d0e746f8f7729f6ac6">has_budget</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a563468b3df274365d89b1e9455e84a60" id="r_a563468b3df274365d89b1e9455e84a60"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a563468b3df274365d89b1e9455e84a60">current_priority</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:af5c851c868dac141d32a6020fbc4ca6f" id="r_af5c851c868dac141d32a6020fbc4ca6f"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#af5c851c868dac141d32a6020fbc4ca6f">remaining_budget</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:aa9d4d0252ad8a735e0f000270e9b9870" id="r_aa9d4d0252ad8a735e0f000270e9b9870"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582c">ServerMode</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa9d4d0252ad8a735e0f000270e9b9870">mode</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a4a0ebd801d6c25d0adf51b4bfaf11c36" id="r_a4a0ebd801d6c25d0adf51b4bfaf11c36"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4a0ebd801d6c25d0adf51b4bfaf11c36">is_deferrable</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:aa60593c69efe4dcf6e26e556fa6fede3" id="r_aa60593c69efe4dcf6e26e556fa6fede3"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa60593c69efe4dcf6e26e556fa6fede3">is_background</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a613b766f64760d57b7018e525a66f290" id="r_a613b766f64760d57b7018e525a66f290"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a613b766f64760d57b7018e525a66f290">max_budget</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:ab5bd8cf9b74ab74440b935ff87f297d7" id="r_ab5bd8cf9b74ab74440b935ff87f297d7"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab5bd8cf9b74ab74440b935ff87f297d7">period</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:aec67df65c12d086e6ca4d9b624c161cb" id="r_aec67df65c12d086e6ca4d9b624c161cb"><td class="memItemLeft"><a class="el" href="#ac40cdbf3660bfe8f3824ad285eabf096">State</a>&#160;</td><td class="memItemRight"><a class="el" href="#aec67df65c12d086e6ca4d9b624c161cb">state</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:aaed6a50641d24a25fcd2319cfb04f843" id="r_aaed6a50641d24a25fcd2319cfb04f843"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aaed6a50641d24a25fcd2319cfb04f843">is_active</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a5772a501b3eb0df8688705394b5c5e5b" id="r_a5772a501b3eb0df8688705394b5c5e5b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5772a501b3eb0df8688705394b5c5e5b">pending_count</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:aebdf8b73efaf1497ea883fc22e5eae3f" id="r_aebdf8b73efaf1497ea883fc22e5eae3f"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aebdf8b73efaf1497ea883fc22e5eae3f">coalesce_count</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a18ea63756803965143e8462cddcd4430" id="r_a18ea63756803965143e8462cddcd4430"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a18ea63756803965143e8462cddcd4430">set_base_priority</a> (uint64_t prio) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a18ea63756803965143e8462cddcd4430"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sets the normal scheduling priority for this server. Call this after <a class="el" href="#a713902a59cb4cc75d1dfe66840bbf848" title="Initialises the server parameters.">init()</a> to assign the server's base priority level.  <br /></td></tr>
+<tr class="memitem:a30fa508b06ba48b5635cd8967000f65a" id="r_a30fa508b06ba48b5635cd8967000f65a"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a30fa508b06ba48b5635cd8967000f65a">bg_priority</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a30fa508b06ba48b5635cd8967000f65a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the configured background priority.  <br /></td></tr>
+<tr class="inherit_header pub_methods_classkernel_1_1_kernel_object"><td colspan="2">Public Member Functions inherited from <a class="el" href="classkernel_1_1_kernel_object.html">kernel::KernelObject</a></td></tr>
+<tr class="memitem:a0e3bd02dbe3ab0e1a9ae52ffa5485751 pub_methods_classkernel_1_1_kernel_object" id="r_a0e3bd02dbe3ab0e1a9ae52ffa5485751"><td class="memItemLeft">virtual void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751">revoke</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a0e3bd02dbe3ab0e1a9ae52ffa5485751 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op. A derived object overrides this to mark itself revoked; after <a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751" title="Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op....">revoke()</a>, <a class="el" href="classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464" title="Takes a new reference. Relaxed ordering is sufficient for the reference count (a lifetime guard,...">acquire()</a> refuses and the object's capability references are invalidated. Called under the object's own serialization.  <br /></td></tr>
+<tr class="memitem:a9b05ebf7eeb2acebab467626da5ef464 pub_methods_classkernel_1_1_kernel_object" id="r_a9b05ebf7eeb2acebab467626da5ef464"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464">acquire</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a9b05ebf7eeb2acebab467626da5ef464 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Takes a new reference. Relaxed ordering is sufficient for the reference count (a lifetime guard, not a payload ordering barrier). Acquire ordering on the revoked check makes the <a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751" title="Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op....">revoke()</a> publication visible on SMP (ROADMAP 0.4.x).  <br /></td></tr>
+<tr class="memitem:a606920ca39bdbf2e49ddb42b76cc3370 pub_methods_classkernel_1_1_kernel_object" id="r_a606920ca39bdbf2e49ddb42b76cc3370"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a606920ca39bdbf2e49ddb42b76cc3370">release</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a606920ca39bdbf2e49ddb42b76cc3370 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Drops one reference. The last releaser (the one that observes the 1→0 transition) invokes <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328" title="Final teardown, invoked exactly once on the last release. Each derived object implements its own disp...">dispose()</a>.  <br /></td></tr>
+<tr class="memitem:ae82a40fc7bdcb9ba1abbb18b0ea6e6d9 pub_methods_classkernel_1_1_kernel_object" id="r_ae82a40fc7bdcb9ba1abbb18b0ea6e6d9"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#ae82a40fc7bdcb9ba1abbb18b0ea6e6d9">refcount</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ae82a40fc7bdcb9ba1abbb18b0ea6e6d9 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the current reference count (debug invariant check).  <br /></td></tr>
+<tr class="memitem:af9584fa567b4308e86096a788fe562c4 pub_methods_classkernel_1_1_kernel_object" id="r_af9584fa567b4308e86096a788fe562c4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#af9584fa567b4308e86096a788fe562c4">revoked</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:af9584fa567b4308e86096a788fe562c4 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">True after <a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751" title="Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op....">revoke()</a> was called (capability revocation).  <br /></td></tr>
+<tr class="memitem:ae799dc1281a302b5baeca90a159e386a pub_methods_classkernel_1_1_kernel_object" id="r_ae799dc1281a302b5baeca90a159e386a"><td class="memItemLeft">virtual bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#ae799dc1281a302b5baeca90a159e386a">is_shared</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ae799dc1281a302b5baeca90a159e386a pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">True for objects referenced by more than one holder (shared ownership class). The TCB teardown only asserts refcount==1 for non-shared nodes; shared nodes may hold references beyond the TCB's and survive its release.  <br /></td></tr>
+<tr class="memitem:afbcf31356498702aeda5288e2c598068 pub_methods_classkernel_1_1_kernel_object" id="r_afbcf31356498702aeda5288e2c598068"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#afbcf31356498702aeda5288e2c598068">mark_pool_backed</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:afbcf31356498702aeda5288e2c598068 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Marks the object as pool-backed (factory protocol). Stack- allocated test instances stay unmarked and are never freed by <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328" title="Final teardown, invoked exactly once on the last release. Each derived object implements its own disp...">dispose()</a>.  <br /></td></tr>
+<tr class="memitem:a510dcbc8492ee1adf161f749985ba1e5 pub_methods_classkernel_1_1_kernel_object" id="r_a510dcbc8492ee1adf161f749985ba1e5"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a510dcbc8492ee1adf161f749985ba1e5">is_pool_backed</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
 <tr class="memitem:a9ed027f650f166b9e31ad25ae062dd1f" id="r_a9ed027f650f166b9e31ad25ae062dd1f"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9ed027f650f166b9e31ad25ae062dd1f">MAX_REPLENISHMENTS</a> = 8</td></tr>
 <tr class="memdesc:a9ed027f650f166b9e31ad25ae062dd1f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum number of simultaneously pending replenishments. Sufficient for all practical cases: at most one replenishment per period, and the queue drains in T ticks.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-inherited" class="groupheader"><a id="inherited" name="inherited"></a>
+Additional Inherited Members</h2></td></tr>
+<tr class="inherit_header pub_attribs_classkernel_1_1_kernel_object"><td colspan="2">Data Fields inherited from <a class="el" href="classkernel_1_1_kernel_object.html">kernel::KernelObject</a></td></tr>
+<tr class="memitem:ae1b6efc57e4770d3a325c69db75ffcab pub_attribs_classkernel_1_1_kernel_object" id="r_ae1b6efc57e4770d3a325c69db75ffcab"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#ae1b6efc57e4770d3a325c69db75ffcab">task_obj_next_</a> = nullptr</td></tr>
+<tr class="memdesc:ae1b6efc57e4770d3a325c69db75ffcab pub_attribs_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive per-task object-list links. The list is owned by the <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a> and is only ever mutated outside IRQ context.  <br /></td></tr>
+<tr class="memitem:a18affd7a7315bac0d48df5136ceed782 pub_attribs_classkernel_1_1_kernel_object" id="r_a18affd7a7315bac0d48df5136ceed782"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a18affd7a7315bac0d48df5136ceed782">task_obj_prev_</a> = nullptr</td></tr>
+<tr class="inherit_header pro_methods_classkernel_1_1_kernel_object"><td colspan="2">Protected Member Functions inherited from <a class="el" href="classkernel_1_1_kernel_object.html">kernel::KernelObject</a></td></tr>
+<tr class="memitem:a8879b9a6fc77e39157e3458252aab0d8 pro_methods_classkernel_1_1_kernel_object" id="r_a8879b9a6fc77e39157e3458252aab0d8"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>=default</td></tr>
+<tr class="memitem:a16ae40c2f1dad94b47ffb0b6868f0fc1 pro_methods_classkernel_1_1_kernel_object" id="r_a16ae40c2f1dad94b47ffb0b6868f0fc1"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a16ae40c2f1dad94b47ffb0b6868f0fc1">~KernelObject</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>=default</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Per-instance Sporadic Server controller. </p>
@@ -180,6 +220,11 @@ Static Public Attributes</h2></td></tr>
 <li><a class="el" href="#a9403aae1570e64968dbd6ccca43570bd" title="Consumes one tick of execution budget.">consume()</a> on every timer tick the server executes,</li>
 <li><a class="el" href="#a65b0a775fc44d7053298bf50bbd8f6f6" title="Signals that the server goes idle (all aperiodic work done).">on_completion()</a> when the server goes idle before budget exhaustion,</li>
 <li><a class="el" href="#af84fdf5fd66413625cbb631f48dd4d77" title="Processes all due replenishments at the given tick.">process_replenishments()</a> once per timer tick.</li>
+</ul>
+<p>Server modes (issue #22) share the budget/replenish state machine:</p><ul>
+<li>SPORADIC: POSIX.1b — consumed budget is replenished exactly once per activation at activation+T (conservative; admitted RT sets stay schedulable underC/T analysis).</li>
+<li>DEFERRABLE: budget is preserved across idle and restored to full C at every period boundary (not per activation). Back-to-back bursts are possible, so admitted interference is HIGHER than the SS analysis — the admission gate still counts full C (conservative), but prefer SPORADIC for hard RT work.</li>
+<li>BACKGROUND: the server never runs above bg_priority_ (best-effort, idle-time only). Starvation-free for the RT set by construction (BG consumes only time no RT task wants); BG itself may starve under ~100% RT load — that is the documented contract.</li>
 </ul>
 <p>All times are in integer ticks. No libc, no FP, no dynamic allocation. </p>
 </div><a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Member Enumeration Documentation</h2>
@@ -204,6 +249,40 @@ Static Public Attributes</h2></td></tr>
 <tr><td class="fieldname"><a id="ac40cdbf3660bfe8f3824ad285eabf096afec13d1204c26dd5c350c880a8ed7d49" name="ac40cdbf3660bfe8f3824ad285eabf096afec13d1204c26dd5c350c880a8ed7d49"></a>EXHAUSTED&#160;</td><td class="fielddoc"><p>Budget hit zero; server runs at background priority. </p>
 </td></tr>
 </table>
+
+</div>
+</div>
+<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a09df36c50bc0250fcab5baf9f4a8977d" name="a09df36c50bc0250fcab5baf9f4a8977d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a09df36c50bc0250fcab5baf9f4a8977d">&#9670;&#160;</a></span>SporadicServer()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">kernel::task::SporadicServer::SporadicServer </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel default">default</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Default constructor (placement-new protocol: the TCB factory memsets the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block first, then placement-news to install the vptr, then <a class="el" href="#a713902a59cb4cc75d1dfe66840bbf848" title="Initialises the server parameters.">init()</a> sets the derived members). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1task_1_1_sporadic_server_a09df36c50bc0250fcab5baf9f4a8977d_cgraph.png" border="0" usemap="#aclasskernel_1_1task_1_1_sporadic_server_a09df36c50bc0250fcab5baf9f4a8977d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -232,6 +311,32 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Returns the configured background priority. </p>
+
+</div>
+</div>
+<a id="aebdf8b73efaf1497ea883fc22e5eae3f" name="aebdf8b73efaf1497ea883fc22e5eae3f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aebdf8b73efaf1497ea883fc22e5eae3f">&#9670;&#160;</a></span>coalesce_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::task::SporadicServer::coalesce_count </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<dl class="section return"><dt>Returns</dt><dd>Number of replenishments merged into an existing entry because the ring was full (C-3 coalescing). Non-zero only when the ring saturated — a diagnostic that budget was restored late. </dd></dl>
 
 </div>
 </div>
@@ -291,7 +396,43 @@ Static Public Attributes</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<dl class="section return"><dt>Returns</dt><dd>Current effective priority (background if exhausted, normal otherwise). </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Current effective priority. SPORADIC/DEFERRABLE run at base priority with budget and demote to background when exhausted; BACKGROUND always returns bg_priority_ (never promoted — idle-time only by construction). <a class="el" href="#a07701533186561d0e746f8f7729f6ac6">has_budget()</a> remains the execution gate. </dd></dl>
+
+</div>
+</div>
+<a id="ac76c3a047fa39de90f1909390ae415c0" name="ac76c3a047fa39de90f1909390ae415c0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac76c3a047fa39de90f1909390ae415c0">&#9670;&#160;</a></span>dispose()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::task::SporadicServer::dispose </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel override">override</span><span class="mlabel virtual">virtual</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Final teardown on the last release. Decrements the scheduler's sporadic-task count (moved from the TCB teardown hook so a future shared SS fires the accounting on the correct last- release event) and returns the block to the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>. Stack- allocated test instances are never pool-backed and are not freed. </p>
+<p>Final teardown on the last release (<a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328" title="Final teardown, invoked exactly once on the last release. Each derived object implements its own disp...">KernelObject::dispose</a>). Moves the sporadic-task-count decrement here from the TCB teardown hook so a future shared <a class="el" href="classkernel_1_1task_1_1_sporadic_server.html" title="Per-instance Sporadic Server controller.">SporadicServer</a> fires the accounting on the correct last-release event. Stack-allocated test instances are not pool-backed and are never freed. </p>
+
+<p>Implements <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328">kernel::KernelObject</a>.</p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1task_1_1_sporadic_server_ac76c3a047fa39de90f1909390ae415c0_cgraph.png" border="0" usemap="#aclasskernel_1_1task_1_1_sporadic_server_ac76c3a047fa39de90f1909390ae415c0_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
 
 </div>
 </div>
@@ -321,8 +462,8 @@ Static Public Attributes</h2></td></tr>
 
 </div>
 </div>
-<a id="a80cbe9a6353a1e291566615739ca8f0a" name="a80cbe9a6353a1e291566615739ca8f0a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a80cbe9a6353a1e291566615739ca8f0a">&#9670;&#160;</a></span>init()</h2>
+<a id="a713902a59cb4cc75d1dfe66840bbf848" name="a713902a59cb4cc75d1dfe66840bbf848"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a713902a59cb4cc75d1dfe66840bbf848">&#9670;&#160;</a></span>init()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -348,7 +489,12 @@ Static Public Attributes</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>budget_granularity</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="aarch64_2serial_8cpp.html#a31b2fca43fed672f65115a92304475a2">CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</a></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>budget_granularity</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="aarch64_2serial_8cpp.html#a31b2fca43fed672f65115a92304475a2">CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</a></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582c">ServerMode</a></td>          <td class="paramname"><span class="paramname"><em>mode</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582ca6fb4e82c2fe41d799e90640dd8465a89">ServerMode::SPORADIC</a></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -365,9 +511,16 @@ Static Public Attributes</h2></td></tr>
     <tr><td class="paramname">period_t</td><td><a class="el" href="structkernel_1_1task_1_1_sporadic_server_1_1_replenishment.html" title="A single scheduled replenishment event.">Replenishment</a> period T (in ticks, must be &gt; 0). </td></tr>
     <tr><td class="paramname">bg_prio</td><td>Priority level when budget is exhausted (lower = less urgent). </td></tr>
     <tr><td class="paramname">budget_granularity</td><td>Ticks per budget unit (default: CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY). </td></tr>
+    <tr><td class="paramname">mode</td><td><a class="el" href="structkernel_1_1task_1_1_sporadic_server_1_1_replenishment.html" title="A single scheduled replenishment event.">Replenishment</a> discipline (default SPORADIC; existing callers unchanged). </td></tr>
   </table>
   </dd>
 </dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1task_1_1_sporadic_server_a713902a59cb4cc75d1dfe66840bbf848_cgraph.png" border="0" usemap="#aclasskernel_1_1task_1_1_sporadic_server_a713902a59cb4cc75d1dfe66840bbf848_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
 
 </div>
 </div>
@@ -397,6 +550,58 @@ Static Public Attributes</h2></td></tr>
 
 </div>
 </div>
+<a id="aa60593c69efe4dcf6e26e556fa6fede3" name="aa60593c69efe4dcf6e26e556fa6fede3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa60593c69efe4dcf6e26e556fa6fede3">&#9670;&#160;</a></span>is_background()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::task::SporadicServer::is_background </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<dl class="section return"><dt>Returns</dt><dd>true when mode is BACKGROUND. </dd></dl>
+
+</div>
+</div>
+<a id="a4a0ebd801d6c25d0adf51b4bfaf11c36" name="a4a0ebd801d6c25d0adf51b4bfaf11c36"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4a0ebd801d6c25d0adf51b4bfaf11c36">&#9670;&#160;</a></span>is_deferrable()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::task::SporadicServer::is_deferrable </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<dl class="section return"><dt>Returns</dt><dd>true when mode is DEFERRABLE. </dd></dl>
+
+</div>
+</div>
 <a id="a613b766f64760d57b7018e525a66f290" name="a613b766f64760d57b7018e525a66f290"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a613b766f64760d57b7018e525a66f290">&#9670;&#160;</a></span>max_budget()</h2>
 
@@ -420,6 +625,32 @@ Static Public Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 <dl class="section return"><dt>Returns</dt><dd>C (maximum budget per period). </dd></dl>
+
+</div>
+</div>
+<a id="aa9d4d0252ad8a735e0f000270e9b9870" name="aa9d4d0252ad8a735e0f000270e9b9870"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa9d4d0252ad8a735e0f000270e9b9870">&#9670;&#160;</a></span>mode()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582c">ServerMode</a> kernel::task::SporadicServer::mode </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<dl class="section return"><dt>Returns</dt><dd>The configured replenishment discipline (issue #22). </dd></dl>
 
 </div>
 </div>
@@ -623,7 +854,7 @@ Static Public Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Sets the normal scheduling priority for this server. Call this after <a class="el" href="#a80cbe9a6353a1e291566615739ca8f0a" title="Initialises the server parameters.">init()</a> to assign the server's base priority level. </p>
+<p>Sets the normal scheduling priority for this server. Call this after <a class="el" href="#a713902a59cb4cc75d1dfe66840bbf848" title="Initialises the server parameters.">init()</a> to assign the server's base priority level. </p>
 
 </div>
 </div>

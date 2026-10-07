@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__sync__er
 </div><!--header-->
 <div class="contents">
 
-<p>Synchronisation error-code API tests (milestone v0.4.10 issue #132). The whole kernel/sync gap is the <span class="tt">*_err</span> family — the error-returning twin of every blocking operation — plus the primitives' constructors and destructors. Each <span class="tt">*_err</span> variant must report a <em>specific</em> SyncError instead of a generic failure, so callers can distinguish "would block" from "invalid argument" from "resource exhausted".  
+<p>Synchronisation error-code API tests (milestone v0.4.10 issue #132). The whole kernel/sync gap is the <span class="tt">*_err</span> family — the error-returning twin of every blocking operation — plus the primitives' constructors and destructors. Each <span class="tt">*_err</span> variant must report a <em>specific</em> <a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c" title="Synchronisation subsystem error codes.">SyncError</a> instead of a generic failure, so callers can distinguish "would block" from "invalid argument" from "resource exhausted".  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
@@ -155,7 +155,7 @@ Functions</h2></td></tr>
 <tr class="memitem:ae00cf80fcea7ee043cba32202d01acda" id="r_ae00cf80fcea7ee043cba32202d01acda"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae00cf80fcea7ee043cba32202d01acda">register_sync_err_api_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Synchronisation error-code API tests (milestone v0.4.10 issue #132). The whole kernel/sync gap is the <span class="tt">*_err</span> family — the error-returning twin of every blocking operation — plus the primitives' constructors and destructors. Each <span class="tt">*_err</span> variant must report a <em>specific</em> SyncError instead of a generic failure, so callers can distinguish "would block" from "invalid argument" from "resource exhausted". </p>
+<div class="textblock"><p>Synchronisation error-code API tests (milestone v0.4.10 issue #132). The whole kernel/sync gap is the <span class="tt">*_err</span> family — the error-returning twin of every blocking operation — plus the primitives' constructors and destructors. Each <span class="tt">*_err</span> variant must report a <em>specific</em> <a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c" title="Synchronisation subsystem error codes.">SyncError</a> instead of a generic failure, so callers can distinguish "would block" from "invalid argument" from "resource exhausted". </p>
 <dl class="section note"><dt>Note</dt><dd>Blocking discipline: every <span class="tt">*_err</span> call here is made with its non-blocking precondition satisfied (Notify value already posted, EventGroup bits already set, Queue slot/message available, Semaphore count &gt; 0). <span class="tt">Notify::wait_err()</span> is the one exception — it registers a waiter and reschedules <em>unconditionally</em>, even when a value is pending — so it is deliberately NOT driven here; it needs a disposable waiter task. </dd>
 <dd>
 <span class="tt">Mutex::wake_one()</span> is private and only reachable from <span class="tt">unlock()</span> with a waiter registered; that also needs a contending task and is left to the existing priority-inheritance classes. </dd></dl>
@@ -183,6 +183,12 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__sync__err__api_8cpp_aea671527d56d0c1af192b29a6d98c055_cgraph.png" border="0" usemap="#atest__sync__err__api_8cpp_aea671527d56d0c1af192b29a6d98c055_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -213,7 +219,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sync__err__api_8cpp_a3f6e45f1bc6470dc9d8fe02c1ac6cff2_cgraph.png" border="0" usemap="#atest__sync__err__api_8cpp_a3f6e45f1bc6470dc9d8fe02c1ac6cff2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -245,7 +251,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sync__err__api_8cpp_a983d64ba88eb3c996eaea6786ea57dd3_cgraph.png" border="0" usemap="#atest__sync__err__api_8cpp_a983d64ba88eb3c996eaea6786ea57dd3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -273,6 +279,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__sync__err__api_8cpp_ae55e5acd886f5b26e198eef3ac5d6487_cgraph.png" border="0" usemap="#atest__sync__err__api_8cpp_ae55e5acd886f5b26e198eef3ac5d6487_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
 
 </div>
 </div>
@@ -299,6 +311,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__sync__err__api_8cpp_a31032a7a09f4063dfc6bdf01ea149a6a_cgraph.png" border="0" usemap="#atest__sync__err__api_8cpp_a31032a7a09f4063dfc6bdf01ea149a6a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
 
 </div>
 </div>
@@ -329,7 +347,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sync__err__api_8cpp_a741d2c86a498fa7e9ed1966e94fa7715_cgraph.png" border="0" usemap="#atest__sync__err__api_8cpp_a741d2c86a498fa7e9ed1966e94fa7715_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -357,6 +375,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__sync__err__api_8cpp_a951480786d9b712029afa336024e2dad_cgraph.png" border="0" usemap="#atest__sync__err__api_8cpp_a951480786d9b712029afa336024e2dad_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
 
 </div>
 </div>
@@ -378,7 +402,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sync__err__api_8cpp_ae00cf80fcea7ee043cba32202d01acda_cgraph.png" border="0" usemap="#atest__sync__err__api_8cpp_ae00cf80fcea7ee043cba32202d01acda_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 8 -->
 </div>
 
 </div>

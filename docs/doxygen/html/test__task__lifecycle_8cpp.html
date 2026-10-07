@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -159,7 +159,7 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Task creation/termination lifecycle tests. </p>
-<p>v0.3.10 rework (SIMULATED → DRIVEN): every lifecycle transition is reached through REAL dispatch and the REAL terminate/reap/cleanup paths — the test never sets <span class="tt">task-&gt;state</span> directly, and blocked senders are woken by the real IPC cleanup (MessageQueue destructor), not by direct field writes. </p>
+<p>v0.3.10 rework (SIMULATED → DRIVEN): every lifecycle transition is reached through REAL dispatch and the REAL terminate/reap/cleanup paths — the test never sets <span class="tt">task-&gt;state</span> directly, and blocked senders are woken by the real IPC cleanup (<a class="el" href="structkernel_1_1_message_queue.html" title="Priority-ordered circular message queue embedded in each TCB.">MessageQueue</a> destructor), not by direct field writes. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="aea25bf2ba2862ea0d85cbd020494a801" name="aea25bf2ba2862ea0d85cbd020494a801"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aea25bf2ba2862ea0d85cbd020494a801">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/9]</span></h2>
@@ -314,6 +314,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__task__lifecycle_8cpp_af25347fe3f7dfac1494cbac29bb5dc91_cgraph.png" border="0" usemap="#atest__task__lifecycle_8cpp_af25347fe3f7dfac1494cbac29bb5dc91_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
 
 </div>
 </div>
@@ -339,7 +345,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__task__lifecycle_8cpp_a4e59ddd9a0bbfffc318d93d3886a44d7_cgraph.png" border="0" usemap="#atest__task__lifecycle_8cpp_a4e59ddd9a0bbfffc318d93d3886a44d7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -366,7 +372,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__task__lifecycle_8cpp_a3aa4aa1d82f9db4bbc32f195452dedc5_cgraph.png" border="0" usemap="#atest__task__lifecycle_8cpp_a3aa4aa1d82f9db4bbc32f195452dedc5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -393,7 +399,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__task__lifecycle_8cpp_ae11bc5fed8f17b21b90ef5353983c367_cgraph.png" border="0" usemap="#atest__task__lifecycle_8cpp_ae11bc5fed8f17b21b90ef5353983c367_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -416,7 +422,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__task__lifecycle_8cpp_a760b1bb1ad01243987c780aef0197bc2_cgraph.png" border="0" usemap="#atest__task__lifecycle_8cpp_a760b1bb1ad01243987c780aef0197bc2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>

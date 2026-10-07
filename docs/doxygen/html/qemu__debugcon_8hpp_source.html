@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -146,14 +146,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('qemu__debugcon
 <div class="foldopen" id="foldopen00048" data-start="{" data-end="};">
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno"><a class="line" href="classarch_1_1_qemu_debugcon.html">   48</a></span><span class="keyword">class </span><a class="code hl_class" href="classarch_1_1_qemu_debugcon.html">QemuDebugcon</a> {</div>
 <div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keyword">public</span>:</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno"><a class="line" href="classarch_1_1_qemu_debugcon.html#a1686cd25cd7d66283b3ce6a9403d58a7">   51</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> <a class="code hl_variable" href="classarch_1_1_qemu_debugcon.html#a1686cd25cd7d66283b3ce6a9403d58a7">DEBUGCON_PORT</a> = 0xE9;</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno"><a class="line" href="classarch_1_1_qemu_debugcon.html#a1686cd25cd7d66283b3ce6a9403d58a7">   51</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> <a class="code hl_variable" href="classarch_1_1_qemu_debugcon.html#a1686cd25cd7d66283b3ce6a9403d58a7">DEBUGCON_PORT</a> = 0xE9;</div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span></div>
 <div class="foldopen" id="foldopen00055" data-start="{" data-end="}">
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno"><a class="line" href="classarch_1_1_qemu_debugcon.html#a49f6a51be9c63d005b4fcdeafb4c21cb">   55</a></span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> <a class="code hl_function" href="classarch_1_1_qemu_debugcon.html#a49f6a51be9c63d005b4fcdeafb4c21cb">putc</a>(<span class="keywordtype">char</span> c) <span class="keyword">noexcept</span> {</div>
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
 <div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>        <span class="keyword">asm</span> <span class="keyword">volatile</span>(<span class="stringliteral">&quot;outb %0, %1&quot;</span></div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>                     :</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>                     : <span class="stringliteral">&quot;a&quot;</span>(<span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a><span class="keyword">&gt;</span>(c)), <span class="stringliteral">&quot;Nd&quot;</span>(<a class="code hl_variable" href="classarch_1_1_qemu_debugcon.html#a1686cd25cd7d66283b3ce6a9403d58a7">DEBUGCON_PORT</a>));</div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>                     : <span class="stringliteral">&quot;a&quot;</span>(<span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a><span class="keyword">&gt;</span>(c)), <span class="stringliteral">&quot;Nd&quot;</span>(<a class="code hl_variable" href="classarch_1_1_qemu_debugcon.html#a1686cd25cd7d66283b3ce6a9403d58a7">DEBUGCON_PORT</a>));</div>
 <div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span><span class="preprocessor">#else</span></div>
 <div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>        (void)c;</div>
 <div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span><span class="preprocessor">#endif</span></div>
@@ -187,9 +187,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('qemu__debugcon
 <div class="ttc" id="aclassarch_1_1_qemu_debugcon_html_a49f6a51be9c63d005b4fcdeafb4c21cb"><div class="ttname"><a href="classarch_1_1_qemu_debugcon.html#a49f6a51be9c63d005b4fcdeafb4c21cb">arch::QemuDebugcon::putc</a></div><div class="ttdeci">static void putc(char c) noexcept</div><div class="ttdoc">Write a single character directly to the QEMU hypervisor. Lock-free, no interrupt interaction,...</div><div class="ttdef"><b>Definition</b> qemu_debugcon.hpp:55</div></div>
 <div class="ttc" id="aclassarch_1_1_qemu_debugcon_html_aa59637719c89f3ed60a4e01eb13b2503"><div class="ttname"><a href="classarch_1_1_qemu_debugcon.html#aa59637719c89f3ed60a4e01eb13b2503">arch::QemuDebugcon::write</a></div><div class="ttdeci">static void write(const char *str) noexcept</div><div class="ttdoc">Write a NUL-terminated string to the host debug log.</div><div class="ttdef"><b>Definition</b> qemu_debugcon.hpp:66</div></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:35</div></div>
+<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
+<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a64be82add362de7c99ce6671d7f4f0a6"><div class="ttname"><a href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> types.hpp:25</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -123,17 +123,17 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 Functions</h2></td></tr>
 <tr class="memitem:a50951b19127b15afab09ae971163ff13" id="r_a50951b19127b15afab09ae971163ff13"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a50951b19127b15afab09ae971163ff13">trampoline_block_usable</a> ()</td></tr>
 <tr class="memdesc:a50951b19127b15afab09ae971163ff13"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when [TRAMPOLINE_ADDR, +4KiB) is firmware-usable RAM (multiboot2 memory map type 1) — the occupancy contract the fixed-address copy depends on. This checks the firmware map only: overlap with the LIVE multiboot info range is handled by the stomper (bring_up relocates the info first, issue #153).  <br /></td></tr>
-<tr class="memitem:ab58969d3c15f3181c4317a6491b56b12" id="r_ab58969d3c15f3181c4317a6491b56b12"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab58969d3c15f3181c4317a6491b56b12">ap_count</a> ()</td></tr>
+<tr class="memitem:ab58969d3c15f3181c4317a6491b56b12" id="r_ab58969d3c15f3181c4317a6491b56b12"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ab58969d3c15f3181c4317a6491b56b12">ap_count</a> ()</td></tr>
 <tr class="memdesc:ab58969d3c15f3181c4317a6491b56b12"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of APs woken AND parked (0 on single-CPU runs).  <br /></td></tr>
 <tr class="memitem:ae4fc4bdd31c0c6cd357ec5d46f55289a" id="r_ae4fc4bdd31c0c6cd357ec5d46f55289a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae4fc4bdd31c0c6cd357ec5d46f55289a">publish_scheduler_ready</a> ()</td></tr>
 <tr class="memdesc:ae4fc4bdd31c0c6cd357ec5d46f55289a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Publish the scheduler start-gate (called once by the BSP after reboot_from_table() finishes spawning, before its idle loop).  <br /></td></tr>
 <tr class="memitem:adf4c7c3638cf5ca19596e47b8335f84d" id="r_adf4c7c3638cf5ca19596e47b8335f84d"><td class="memItemLeft">const <a class="el" href="structkernel_1_1acpi_1_1_madt_info.html">kernel::acpi::MadtInfo</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#adf4c7c3638cf5ca19596e47b8335f84d">boot_madt</a> ()</td></tr>
-<tr class="memdesc:adf4c7c3638cf5ca19596e47b8335f84d"><td class="mdescLeft">&#160;</td><td class="mdescRight">The MADT snapshot <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> consumed at boot (cached — firmware tables are static). Tests read this instead of re-walking the tables (re-walks map kernel-half pages that test isolation reports as PMM leaks).  <br /></td></tr>
+<tr class="memdesc:adf4c7c3638cf5ca19596e47b8335f84d"><td class="mdescLeft">&#160;</td><td class="mdescRight">The MADT snapshot <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> consumed at boot (cached — firmware tables are static). Tests read this instead of re-walking the tables (re-walks map kernel-half pages that test isolation reports as <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> leaks).  <br /></td></tr>
 <tr class="memitem:aa1df9605095d501cda9d27baa52ad1e1" id="r_aa1df9605095d501cda9d27baa52ad1e1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa1df9605095d501cda9d27baa52ad1e1">reserve_block_early</a> ()</td></tr>
-<tr class="memdesc:aa1df9605095d501cda9d27baa52ad1e1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Claim the trampoline block from PMM. Must run right after PMM::init(), before any allocation (low pages go first-come). <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> refuses to copy when this never ran (init-order fail-closed: never write a block PMM may own).  <br /></td></tr>
+<tr class="memdesc:aa1df9605095d501cda9d27baa52ad1e1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Claim the trampoline block from <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>. Must run right after <a class="el" href="classkernel_1_1_p_m_m.html#a36e93eea368c86e6699b74cc39091bc5" title="Initialize the physical memory manager with a bitmap.">PMM::init()</a>, before any allocation (low pages go first-come). <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> refuses to copy when this never ran (init-order fail-closed: never write a block <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> may own).  <br /></td></tr>
 <tr class="memitem:abf26a6a85fe60bbad0a6fb41b45bd276" id="r_abf26a6a85fe60bbad0a6fb41b45bd276"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276">bring_up</a> ()</td></tr>
 <tr class="memdesc:abf26a6a85fe60bbad0a6fb41b45bd276"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bring up application processors (called once at boot, after Timer::init, under interrupt guard). Fail-closed: any malformed state (no MADT, unusable block, AP start timeout) parks with zero APs or panics naming the LAPIC ID — never half-woken.  <br /></td></tr>
-<tr class="memitem:a56bcb36fec3264043b7ee22403f91ca0" id="r_a56bcb36fec3264043b7ee22403f91ca0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a56bcb36fec3264043b7ee22403f91ca0">ap_main</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> logical_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> lapic_id)</td></tr>
+<tr class="memitem:a56bcb36fec3264043b7ee22403f91ca0" id="r_a56bcb36fec3264043b7ee22403f91ca0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a56bcb36fec3264043b7ee22403f91ca0">ap_main</a> (uint64_t logical_id, uint32_t lapic_id)</td></tr>
 <tr class="memdesc:a56bcb36fec3264043b7ee22403f91ca0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Application-processor entry (called from the trampoline's 64-bit stage with logical ID + LAPIC ID). Never returns.  <br /></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
@@ -144,7 +144,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::smp::ap_count </td>
+          <td class="memname">uint8_t kernel::smp::ap_count </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -165,12 +165,12 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">void kernel::smp::ap_main </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>logical_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>logical_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>lapic_id</em></span>&#160;)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>lapic_id</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -207,7 +207,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>The MADT snapshot <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> consumed at boot (cached — firmware tables are static). Tests read this instead of re-walking the tables (re-walks map kernel-half pages that test isolation reports as PMM leaks). </p>
+<p>The MADT snapshot <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> consumed at boot (cached — firmware tables are static). Tests read this instead of re-walking the tables (re-walks map kernel-half pages that test isolation reports as <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> leaks). </p>
 
 </div>
 </div>
@@ -271,7 +271,13 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Claim the trampoline block from PMM. Must run right after PMM::init(), before any allocation (low pages go first-come). <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> refuses to copy when this never ran (init-order fail-closed: never write a block PMM may own). </p>
+<p>Claim the trampoline block from <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>. Must run right after <a class="el" href="classkernel_1_1_p_m_m.html#a36e93eea368c86e6699b74cc39091bc5" title="Initialize the physical memory manager with a bitmap.">PMM::init()</a>, before any allocation (low pages go first-come). <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> refuses to copy when this never ran (init-order fail-closed: never write a block <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> may own). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1smp_aa1df9605095d501cda9d27baa52ad1e1_cgraph.png" border="0" usemap="#anamespacekernel_1_1smp_aa1df9605095d501cda9d27baa52ad1e1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -295,7 +301,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1smp_a50951b19127b15afab09ae971163ff13_cgraph.png" border="0" usemap="#anamespacekernel_1_1smp_a50951b19127b15afab09ae971163ff13_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>

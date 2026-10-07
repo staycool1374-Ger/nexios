@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -132,7 +132,7 @@ Collaboration diagram for kernel::IrqRegistration:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:a66a7b11e6369f0a2421678670ddd682e" id="r_a66a7b11e6369f0a2421678670ddd682e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a66a7b11e6369f0a2421678670ddd682e">vector</a> = 0</td></tr>
+<tr class="memitem:a66a7b11e6369f0a2421678670ddd682e" id="r_a66a7b11e6369f0a2421678670ddd682e"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a66a7b11e6369f0a2421678670ddd682e">vector</a> = 0</td></tr>
 <tr class="memdesc:a66a7b11e6369f0a2421678670ddd682e"><td class="mdescLeft">&#160;</td><td class="mdescRight">hardware vector (PIC 33–47 or MSI-X 48–255)  <br /></td></tr>
 <tr class="memitem:ab27aecc80d0acc7c1f0b262683cb814d" id="r_ab27aecc80d0acc7c1f0b262683cb814d"><td class="memItemLeft"><a class="el" href="namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3">IrqSlotKind</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab27aecc80d0acc7c1f0b262683cb814d">kind</a> = <a class="el" href="namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3acd85be631dff7b97697be7dc0a2f07f2">IrqSlotKind::PIC</a></td></tr>
 <tr class="memdesc:ab27aecc80d0acc7c1f0b262683cb814d"><td class="mdescLeft">&#160;</td><td class="mdescRight">PIC vs MSI-X (kind-gated masks).  <br /></td></tr>
@@ -146,17 +146,17 @@ Data Fields</h2></td></tr>
 <tr class="memdesc:a6fe752ac575a218b1388dbbc6910f0c8"><td class="mdescLeft">&#160;</td><td class="mdescRight">arm-time mode  <br /></td></tr>
 <tr class="memitem:a3d46ee8fc4dacddccbc7e344632e82a0" id="r_a3d46ee8fc4dacddccbc7e344632e82a0"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a3d46ee8fc4dacddccbc7e344632e82a0">owner</a> = nullptr</td></tr>
 <tr class="memdesc:a3d46ee8fc4dacddccbc7e344632e82a0"><td class="mdescLeft">&#160;</td><td class="mdescRight">the cap that claimed this slot  <br /></td></tr>
-<tr class="memitem:af04577d8d4710c3d3c71de4a055e9c19" id="r_af04577d8d4710c3d3c71de4a055e9c19"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#af04577d8d4710c3d3c71de4a055e9c19">recipient</a> = nullptr</td></tr>
+<tr class="memitem:af04577d8d4710c3d3c71de4a055e9c19" id="r_af04577d8d4710c3d3c71de4a055e9c19"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#af04577d8d4710c3d3c71de4a055e9c19">recipient</a> = nullptr</td></tr>
 <tr class="memdesc:af04577d8d4710c3d3c71de4a055e9c19"><td class="mdescLeft">&#160;</td><td class="mdescRight">task armed to receive  <br /></td></tr>
-<tr class="memitem:aa04b3dd41b5f7fc767ac1ed9e0d42086" id="r_aa04b3dd41b5f7fc767ac1ed9e0d42086"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa04b3dd41b5f7fc767ac1ed9e0d42086">recipient_gen</a> = 0</td></tr>
+<tr class="memitem:aa04b3dd41b5f7fc767ac1ed9e0d42086" id="r_aa04b3dd41b5f7fc767ac1ed9e0d42086"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa04b3dd41b5f7fc767ac1ed9e0d42086">recipient_gen</a> = 0</td></tr>
 <tr class="memdesc:aa04b3dd41b5f7fc767ac1ed9e0d42086"><td class="mdescLeft">&#160;</td><td class="mdescRight">TCB generation at arm time.  <br /></td></tr>
-<tr class="memitem:a2b6ae90db1677d426744bea064d9ce43" id="r_a2b6ae90db1677d426744bea064d9ce43"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2b6ae90db1677d426744bea064d9ce43">pending</a> = 0</td></tr>
+<tr class="memitem:a2b6ae90db1677d426744bea064d9ce43" id="r_a2b6ae90db1677d426744bea064d9ce43"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a2b6ae90db1677d426744bea064d9ce43">pending</a> = 0</td></tr>
 <tr class="memdesc:a2b6ae90db1677d426744bea064d9ce43"><td class="mdescLeft">&#160;</td><td class="mdescRight">undelivered IRQ count (never lost)  <br /></td></tr>
-<tr class="memitem:a326a2cfa225cb7b45421ae9ea982c4a1" id="r_a326a2cfa225cb7b45421ae9ea982c4a1"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a326a2cfa225cb7b45421ae9ea982c4a1">waiter</a> = nullptr</td></tr>
+<tr class="memitem:a326a2cfa225cb7b45421ae9ea982c4a1" id="r_a326a2cfa225cb7b45421ae9ea982c4a1"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a326a2cfa225cb7b45421ae9ea982c4a1">waiter</a> = nullptr</td></tr>
 <tr class="memdesc:a326a2cfa225cb7b45421ae9ea982c4a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">task blocked in sys_irq_wait  <br /></td></tr>
-<tr class="memitem:aa02fe295ac8b79af2b814f2c506f83f7" id="r_aa02fe295ac8b79af2b814f2c506f83f7"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa02fe295ac8b79af2b814f2c506f83f7">waiter_gen</a> = 0</td></tr>
+<tr class="memitem:aa02fe295ac8b79af2b814f2c506f83f7" id="r_aa02fe295ac8b79af2b814f2c506f83f7"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa02fe295ac8b79af2b814f2c506f83f7">waiter_gen</a> = 0</td></tr>
 <tr class="memdesc:aa02fe295ac8b79af2b814f2c506f83f7"><td class="mdescLeft">&#160;</td><td class="mdescRight">TCB generation at wait time.  <br /></td></tr>
-<tr class="memitem:ae2a8afb1e907f26a2ad720bb8cbbe47a" id="r_ae2a8afb1e907f26a2ad720bb8cbbe47a"><td class="memItemLeft">sync::SpinLock&#160;</td><td class="memItemRight"><a class="el" href="#ae2a8afb1e907f26a2ad720bb8cbbe47a">lock_</a></td></tr>
+<tr class="memitem:ae2a8afb1e907f26a2ad720bb8cbbe47a" id="r_ae2a8afb1e907f26a2ad720bb8cbbe47a"><td class="memItemLeft"><a class="el" href="classkernel_1_1sync_1_1_spin_lock.html">sync::SpinLock</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae2a8afb1e907f26a2ad720bb8cbbe47a">lock_</a></td></tr>
 <tr class="memdesc:ae2a8afb1e907f26a2ad720bb8cbbe47a"><td class="mdescLeft">&#160;</td><td class="mdescRight">serializes ISR vs syscall/teardown paths  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -233,7 +233,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">sync::SpinLock kernel::IrqRegistration::lock_</td>
+          <td class="memname"><a class="el" href="classkernel_1_1sync_1_1_spin_lock.html">sync::SpinLock</a> kernel::IrqRegistration::lock_</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -281,7 +281,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::IrqRegistration::pending = 0</td>
+          <td class="memname">uint32_t kernel::IrqRegistration::pending = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -297,7 +297,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock* kernel::IrqRegistration::recipient = nullptr</td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>* kernel::IrqRegistration::recipient = nullptr</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -313,7 +313,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::IrqRegistration::recipient_gen = 0</td>
+          <td class="memname">uint64_t kernel::IrqRegistration::recipient_gen = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -329,7 +329,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::IrqRegistration::vector = 0</td>
+          <td class="memname">uint8_t kernel::IrqRegistration::vector = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -345,7 +345,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock* kernel::IrqRegistration::waiter = nullptr</td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>* kernel::IrqRegistration::waiter = nullptr</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -361,7 +361,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::IrqRegistration::waiter_gen = 0</td>
+          <td class="memname">uint64_t kernel::IrqRegistration::waiter_gen = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">

@@ -7,10 +7,12 @@ var classkernel_1_1sync_1_1_event_group =
     [ "get_bits", "classkernel_1_1sync_1_1_event_group.html#afd634f174190c204c6fb8be4d26b0560", null ],
     [ "init", "classkernel_1_1sync_1_1_event_group.html#a45672fb17cacc00d7544da1a3736707a", null ],
     [ "init_err", "classkernel_1_1sync_1_1_event_group.html#a54914e59cade9418ecad2e8bc1ba0a29", null ],
+    [ "remove_waiter", "classkernel_1_1sync_1_1_event_group.html#a571bb280fc68e907380f79c544a2de86", null ],
     [ "set_bits", "classkernel_1_1sync_1_1_event_group.html#ab712cb3c095eef9d9df777c573d7d4ab", null ],
     [ "set_bits_err", "classkernel_1_1sync_1_1_event_group.html#a177d90d09bf3cd699c572f13deef0ca1", null ],
-    [ "try_wait_bits", "classkernel_1_1sync_1_1_event_group.html#aab32781e6d0879be5947049ef1a39d0a", null ],
-    [ "try_wait_bits_err", "classkernel_1_1sync_1_1_event_group.html#aef016961c249c6feefcd0f449e7bb0f1", null ],
-    [ "wait_bits", "classkernel_1_1sync_1_1_event_group.html#add62c2c0758d7247b4103a948bc33bc5", null ],
-    [ "wait_bits_err", "classkernel_1_1sync_1_1_event_group.html#a4c00794ef6fa784690c6e36f1c3af1ec", null ]
+    [ "try_wait_bits", "classkernel_1_1sync_1_1_event_group.html#a1fb1136e2ba1805acc7f68e32443a56d", null ],
+    [ "try_wait_bits_err", "classkernel_1_1sync_1_1_event_group.html#a86f7ee0aca03fd2e324c509f9084cdaf", null ],
+    [ "wait_bits", "classkernel_1_1sync_1_1_event_group.html#a508d0bf2238e3f6cee873c46f3afae20", null ],
+    [ "wait_bits_err", "classkernel_1_1sync_1_1_event_group.html#ac171fa72f15577e737781d52858c43db", null ],
+    [ "waiter_count", "classkernel_1_1sync_1_1_event_group.html#aeea6345a8aaf13300e421dfe1104cb48", null ]
 ];

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -147,8 +147,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('madt_8hpp_sour
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span></div>
 <div class="foldopen" id="foldopen00037" data-start="{" data-end="};">
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="structkernel_1_1acpi_1_1_madt_info.html">   37</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structkernel_1_1acpi_1_1_madt_info.html">MadtInfo</a> {</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno"><a class="line" href="structkernel_1_1acpi_1_1_madt_info.html#afcea2a31af5ffc015128dc4eef2a91d3">   39</a></span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> <a class="code hl_variable" href="structkernel_1_1acpi_1_1_madt_info.html#afcea2a31af5ffc015128dc4eef2a91d3">lapic_ids</a>[<a class="code hl_define" href="madt_8hpp.html#a69976ac879c8e8fca164b29acf54b675">MADT_MAX_CPUS</a>] = {};</div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="structkernel_1_1acpi_1_1_madt_info.html#a94a2b1d0e608a7b4823164c7ee640112">   41</a></span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> <a class="code hl_variable" href="structkernel_1_1acpi_1_1_madt_info.html#a94a2b1d0e608a7b4823164c7ee640112">ncpus</a> = 0;</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno"><a class="line" href="structkernel_1_1acpi_1_1_madt_info.html#afcea2a31af5ffc015128dc4eef2a91d3">   39</a></span>    uint32_t <a class="code hl_variable" href="structkernel_1_1acpi_1_1_madt_info.html#afcea2a31af5ffc015128dc4eef2a91d3">lapic_ids</a>[<a class="code hl_define" href="madt_8hpp.html#a69976ac879c8e8fca164b29acf54b675">MADT_MAX_CPUS</a>] = {};</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="structkernel_1_1acpi_1_1_madt_info.html#a94a2b1d0e608a7b4823164c7ee640112">   41</a></span>    uint8_t <a class="code hl_variable" href="structkernel_1_1acpi_1_1_madt_info.html#a94a2b1d0e608a7b4823164c7ee640112">ncpus</a> = 0;</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno"><a class="line" href="structkernel_1_1acpi_1_1_madt_info.html#a4478a71f43c8b5e2b109aa80c5f70f58">   43</a></span>    <span class="keywordtype">bool</span> <a class="code hl_variable" href="structkernel_1_1acpi_1_1_madt_info.html#a4478a71f43c8b5e2b109aa80c5f70f58">found</a> = <span class="keyword">false</span>;</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno"><a class="line" href="structkernel_1_1acpi_1_1_madt_info.html#ac9ec6c60e57cefc62d8eba18a56b7429">   46</a></span>    <span class="keywordtype">bool</span> <a class="code hl_variable" href="structkernel_1_1acpi_1_1_madt_info.html#ac9ec6c60e57cefc62d8eba18a56b7429">malformed</a> = <span class="keyword">false</span>;</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>};</div>
@@ -166,8 +166,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('madt_8hpp_sour
 <div class="ttc" id="astructkernel_1_1acpi_1_1_madt_info_html_ac9ec6c60e57cefc62d8eba18a56b7429"><div class="ttname"><a href="structkernel_1_1acpi_1_1_madt_info.html#ac9ec6c60e57cefc62d8eba18a56b7429">kernel::acpi::MadtInfo::malformed</a></div><div class="ttdeci">bool malformed</div><div class="ttdoc">True when the MADT is present but malformed (fail-closed bring-up: never wake APs from a corrupt tabl...</div><div class="ttdef"><b>Definition</b> madt.hpp:46</div></div>
 <div class="ttc" id="astructkernel_1_1acpi_1_1_madt_info_html_afcea2a31af5ffc015128dc4eef2a91d3"><div class="ttname"><a href="structkernel_1_1acpi_1_1_madt_info.html#afcea2a31af5ffc015128dc4eef2a91d3">kernel::acpi::MadtInfo::lapic_ids</a></div><div class="ttdeci">uint32_t lapic_ids[MADT_MAX_CPUS]</div><div class="ttdoc">Enabled LAPIC/x2APIC IDs (entry order, BSP included).</div><div class="ttdef"><b>Definition</b> madt.hpp:39</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

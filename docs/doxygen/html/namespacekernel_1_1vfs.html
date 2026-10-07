@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -135,6 +135,8 @@ Data Structures</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Vnode representing a per-process directory in /proc.  <a href="structkernel_1_1vfs_1_1_pid_dir_vnode.html#details">More...</a><br /></td></tr>
 <tr class="memitem:PidStatVnode" id="r_PidStatVnode"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_pid_stat_vnode.html">PidStatVnode</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Vnode representing a process's stat file.  <a href="structkernel_1_1vfs_1_1_pid_stat_vnode.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PidWatchdogVnode" id="r_PidWatchdogVnode"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_pid_watchdog_vnode.html">PidWatchdogVnode</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Vnode representing a process's watchdog file.  <a href="structkernel_1_1vfs_1_1_pid_watchdog_vnode.html#details">More...</a><br /></td></tr>
 <tr class="memitem:PipeBuffer" id="r_PipeBuffer"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html">PipeBuffer</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ring buffer shared between the read and write ends of a pipe.  <a href="structkernel_1_1vfs_1_1_pipe_buffer.html#details">More...</a><br /></td></tr>
 <tr class="memitem:TmpfsEntry" id="r_TmpfsEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_tmpfs_entry.html">TmpfsEntry</a></td></tr>
@@ -166,11 +168,11 @@ Functions</h2></td></tr>
 <tr class="memdesc:a9d792be7e3f099e025d10c0a6ce0680d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find a mounted filesystem by name.  <br /></td></tr>
 <tr class="memitem:aab245675b2cdacc0a60a0576dcb4e267" id="r_aab245675b2cdacc0a60a0576dcb4e267"><td class="memItemLeft">Vnode *&#160;</td><td class="memItemRight"><a class="el" href="#aab245675b2cdacc0a60a0576dcb4e267">resolve_parent</a> (const char *path, const char *&amp;out_name)</td></tr>
 <tr class="memdesc:aab245675b2cdacc0a60a0576dcb4e267"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve the parent vnode and leaf name from a path. Handles both absolute ("/foo/bar") and relative ("bar") paths by delegating sub-path resolution to <a class="el" href="#a11645e6a37081ee178777f682740736d" title="Resolve an absolute or relative path to a vnode.">resolve()</a>, which already handles CWD, mount points, .., . etc.  <br /></td></tr>
-<tr class="memitem:a0411923a55f520a77d6497349fd7acf6" id="r_a0411923a55f520a77d6497349fd7acf6"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a0411923a55f520a77d6497349fd7acf6">mkdir</a> (const char *path, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> mode)</td></tr>
+<tr class="memitem:a0411923a55f520a77d6497349fd7acf6" id="r_a0411923a55f520a77d6497349fd7acf6"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a0411923a55f520a77d6497349fd7acf6">mkdir</a> (const char *path, uint16_t mode)</td></tr>
 <tr class="memdesc:a0411923a55f520a77d6497349fd7acf6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a subdirectory at the given path.  <br /></td></tr>
 <tr class="memitem:ab8191b68620f64ca864fad18239e5bce" id="r_ab8191b68620f64ca864fad18239e5bce"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#ab8191b68620f64ca864fad18239e5bce">unlink</a> (const char *path)</td></tr>
 <tr class="memdesc:ab8191b68620f64ca864fad18239e5bce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove a file or empty directory at the given path.  <br /></td></tr>
-<tr class="memitem:a94bddce0efe1b0b6a3dade264883f7ce" id="r_a94bddce0efe1b0b6a3dade264883f7ce"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a94bddce0efe1b0b6a3dade264883f7ce">create</a> (const char *path, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> mode)</td></tr>
+<tr class="memitem:a94bddce0efe1b0b6a3dade264883f7ce" id="r_a94bddce0efe1b0b6a3dade264883f7ce"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a94bddce0efe1b0b6a3dade264883f7ce">create</a> (const char *path, uint16_t mode)</td></tr>
 <tr class="memdesc:a94bddce0efe1b0b6a3dade264883f7ce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a regular file at the given path.  <br /></td></tr>
 <tr class="memitem:ad4618eec85ebd8a3d27bfc4d974d7591" id="r_ad4618eec85ebd8a3d27bfc4d974d7591"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="#ad4618eec85ebd8a3d27bfc4d974d7591">mount_err</a> (Filesystem &amp;filesystem, const char *mount_point)</td></tr>
 <tr class="memdesc:ad4618eec85ebd8a3d27bfc4d974d7591"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mount a filesystem with error handling.  <br /></td></tr>
@@ -182,9 +184,9 @@ Functions</h2></td></tr>
 <tr class="memdesc:abf5c58a8fb7ecb09a275d19b1029b125"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the global root vnode with error code return.  <br /></td></tr>
 <tr class="memitem:ad31548f035d75326ab34f5fd3fce896a" id="r_ad31548f035d75326ab34f5fd3fce896a"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="#ad31548f035d75326ab34f5fd3fce896a">resolve_err</a> (const char *path, Vnode *&amp;out_vnode)</td></tr>
 <tr class="memdesc:ad31548f035d75326ab34f5fd3fce896a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve an absolute path to a vnode with error code return.  <br /></td></tr>
-<tr class="memitem:a4e062ba9d7ffaca41f17dce1644388a8" id="r_a4e062ba9d7ffaca41f17dce1644388a8"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="#a4e062ba9d7ffaca41f17dce1644388a8">mkdir_err</a> (const char *path, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> mode)</td></tr>
+<tr class="memitem:a4e062ba9d7ffaca41f17dce1644388a8" id="r_a4e062ba9d7ffaca41f17dce1644388a8"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="#a4e062ba9d7ffaca41f17dce1644388a8">mkdir_err</a> (const char *path, uint16_t mode)</td></tr>
 <tr class="memdesc:a4e062ba9d7ffaca41f17dce1644388a8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a subdirectory with error code return.  <br /></td></tr>
-<tr class="memitem:a19093f8bf45bac4a87dc6818084e3843" id="r_a19093f8bf45bac4a87dc6818084e3843"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="#a19093f8bf45bac4a87dc6818084e3843">create_err</a> (const char *path, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> mode)</td></tr>
+<tr class="memitem:a19093f8bf45bac4a87dc6818084e3843" id="r_a19093f8bf45bac4a87dc6818084e3843"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="#a19093f8bf45bac4a87dc6818084e3843">create_err</a> (const char *path, uint16_t mode)</td></tr>
 <tr class="memdesc:a19093f8bf45bac4a87dc6818084e3843"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a regular file with error code return.  <br /></td></tr>
 <tr class="memitem:af555f6cb1ba4c592ec31fcf5902e367f" id="r_af555f6cb1ba4c592ec31fcf5902e367f"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="#af555f6cb1ba4c592ec31fcf5902e367f">unlink_err</a> (const char *path)</td></tr>
 <tr class="memdesc:af555f6cb1ba4c592ec31fcf5902e367f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove a file or empty directory with error code return.  <br /></td></tr>
@@ -212,7 +214,7 @@ Variables</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>mode</em></span>&#160;)</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>mode</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -242,7 +244,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>mode</em></span>&#160;)</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>mode</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -288,13 +290,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_a63004773b8b1cae833b25ae477c4b956_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_a63004773b8b1cae833b25ae477c4b956_cgraph" loading="lazy" alt=""/></div>
-<map name="anamespacekernel_1_1vfs_a63004773b8b1cae833b25ae477c4b956_cgraph" id="anamespacekernel_1_1vfs_a63004773b8b1cae833b25ae477c4b956_cgraph">
-<area shape="rect" title=" " alt="" coords="5,47,163,73"/>
-<area shape="rect" href="classkernel_1_1Scheduler.html#ac094d7e0ec9c48c58637e36fce587be2" title="Returns the currently running task." alt="" coords="229,5,359,48"/>
-<area shape="poly" title=" " alt="" coords="162,45,216,38,211,40,164,50"/>
-<area shape="rect" href="classkernel_1_1sync_1_1Semaphore.html#a40efc024fad57141f0c9d9c7c69d0b63" title=" " alt="" coords="211,72,377,115"/>
-<area shape="poly" title=" " alt="" coords="163,70,198,77,192,78,163,75"/>
-</map>
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -373,7 +369,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_a32714102a524a6f980eac4fd048b3604_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_a32714102a524a6f980eac4fd048b3604_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -450,7 +446,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>mode</em></span>&#160;)</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>mode</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -461,7 +457,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_a0411923a55f520a77d6497349fd7acf6_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_a0411923a55f520a77d6497349fd7acf6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -480,7 +476,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>mode</em></span>&#160;)</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>mode</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -491,7 +487,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_a4e062ba9d7ffaca41f17dce1644388a8_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_a4e062ba9d7ffaca41f17dce1644388a8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -521,7 +517,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_aebf94bc8bbd1d4da9adf682e10e082de_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_aebf94bc8bbd1d4da9adf682e10e082de_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -571,7 +567,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_a739270d15fe1ac6f5a0e21d0c2e20123_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_a739270d15fe1ac6f5a0e21d0c2e20123_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -596,7 +592,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_aaf0cf262c173f6848095480880c1cbc9_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_aaf0cf262c173f6848095480880c1cbc9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -660,7 +656,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_ad31548f035d75326ab34f5fd3fce896a_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_ad31548f035d75326ab34f5fd3fce896a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -697,7 +693,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_aab245675b2cdacc0a60a0576dcb4e267_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_aab245675b2cdacc0a60a0576dcb4e267_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -781,7 +777,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_ab8191b68620f64ca864fad18239e5bce_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_ab8191b68620f64ca864fad18239e5bce_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -807,7 +803,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_af555f6cb1ba4c592ec31fcf5902e367f_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_af555f6cb1ba4c592ec31fcf5902e367f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 12 -->
 </div>
 
 </div>

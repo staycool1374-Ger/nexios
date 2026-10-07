@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler_8cpp
 <p>Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch, context switching, and test isolation.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="idle__monitor_8hpp_source.html">kernel/task/idle_monitor.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="elf_8hpp_source.html">kernel/elf/elf.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="crc32_8hpp_source.html">crc32.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="terminal_8hpp_source.html">services/terminal/terminal.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="tlb__shootdown_8hpp_source.html">kernel/memory/tlb_shootdown.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="timer__wheel_8hpp_source.html">kernel/time/timer_wheel.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="posix__time_8hpp_source.html">kernel/time/posix_time.hpp</a>&gt;</code><br />
@@ -137,6 +142,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler_8cpp
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="mempool_8hpp_source.html">kernel/memory/mempool.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="dump_8hpp_source.html">kernel/debug/dump.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="debug__stop_8hpp_source.html">kernel/debug/debug_stop.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="ipc__sched__trace_8hpp_source.html">kernel/debug/ipc_sched_trace.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="integrity_8hpp_source.html">kernel/memory/integrity.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
@@ -155,31 +161,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler_8cpp
 Include dependency graph for scheduler.cpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="scheduler_8cpp__incl.png" border="0" usemap="#asrc_2kernel_2task_2scheduler_8cpp" loading="lazy" alt=""/></div>
-<map name="asrc_2kernel_2task_2scheduler_8cpp" id="asrc_2kernel_2task_2scheduler_8cpp">
-<area shape="rect" title=" " alt="" coords="206,5,397,32"/>
-<area shape="rect" href="scheduler_8hpp.html" title="Rate&#45;monotonic scheduler for task management and dispatching." alt="" coords="6,80,175,107"/>
-<area shape="poly" title=" " alt="" coords="263,35,144,77,141,72,266,30"/>
-<area shape="rect" href="gdt_8hpp.html" title="Global Descriptor Table and Task State Segment definitions." alt="" coords="185,155,317,181"/>
-<area shape="poly" title=" " alt="" coords="299,31,262,141,258,139,295,34"/>
-<area shape="rect" href="vmm_8hpp.html" title="Virtual Memory Manager — x86&#45;64 page table management." alt="" coords="341,155,507,181"/>
-<area shape="poly" title=" " alt="" coords="313,30,407,142,401,143,311,35"/>
-<area shape="rect" href="assert_8hpp.html" title="Debug assertion macros and the panic handler declaration." alt="" coords="476,80,559,107"/>
-<area shape="poly" title=" " alt="" coords="339,30,468,74,463,76,339,35"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="222,304,301,331"/>
-<area shape="poly" title=" " alt="" coords="61,110,35,129,22,141,12,156,8,170,10,185,23,217,50,254,87,277,128,294,169,304,209,313,204,313,168,309,126,299,84,282,46,258,18,220,5,187,3,169,7,154,18,138,31,124,64,105"/>
-<area shape="rect" href="task_8hpp.html" title="Task control block and state definitions for the kernel scheduler." alt="" coords="21,155,160,181"/>
-<area shape="poly" title=" " alt="" coords="91,105,93,139,88,139,90,110"/>
-<area shape="poly" title=" " alt="" coords="79,184,61,218,57,237,62,255,92,282,129,299,169,309,209,316,204,317,168,315,127,304,89,286,58,257,51,237,56,216,81,179"/>
-<area shape="rect" href="vfs_8hpp.html" title=" " alt="" coords="72,229,197,256"/>
-<area shape="poly" title=" " alt="" coords="99,179,122,216,117,216,98,184"/>
-<area shape="rect" href="signal_8hpp.html" title="Signal definitions used by the kernel for user exception delivery." alt="" coords="221,229,302,256"/>
-<area shape="poly" title=" " alt="" coords="121,179,220,221,215,224,120,185"/>
-<area shape="poly" title=" " alt="" coords="158,254,229,295,224,297,156,259"/>
-<area shape="poly" title=" " alt="" coords="263,255,264,290,259,287,260,258"/>
-<area shape="poly" title=" " alt="" coords="271,179,296,200,316,228,319,247,314,265,291,296,288,291,309,262,314,246,311,230,293,204,270,184"/>
-<area shape="poly" title=" " alt="" coords="414,181,335,258,290,296,287,292,332,254,409,183"/>
-<area shape="poly" title=" " alt="" coords="523,105,530,142,528,163,521,183,502,209,479,231,425,267,368,292,317,308,315,302,367,287,423,262,476,227,498,205,516,180,523,162,525,142,520,109"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
@@ -195,19 +177,21 @@ Namespaces</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a80e920b60042b6c2750fd88974610e99" id="r_a80e920b60042b6c2750fd88974610e99"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a80e920b60042b6c2750fd88974610e99">debug_write</a> (const char *s)</td></tr>
-<tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
-<tr class="memitem:ac9b08212c79ab5465098caa93a4188bd" id="r_ac9b08212c79ab5465098caa93a4188bd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac9b08212c79ab5465098caa93a4188bd">debug_write_dec</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
+<tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (uint64_t value)</td></tr>
+<tr class="memitem:ac9b08212c79ab5465098caa93a4188bd" id="r_ac9b08212c79ab5465098caa93a4188bd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac9b08212c79ab5465098caa93a4188bd">debug_write_dec</a> (uint64_t value)</td></tr>
+<tr class="memitem:aadf277954fd86eeba0a08c68e1f25c06" id="r_aadf277954fd86eeba0a08c68e1f25c06"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aadf277954fd86eeba0a08c68e1f25c06">kernel::__attribute__</a> ((weak)) void watchdog_expiry_handler(<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;<a class="el" href="namespacekernel_1_1task.html">task</a></td></tr>
+<tr class="memdesc:aadf277954fd86eeba0a08c68e1f25c06"><td class="mdescLeft">&#160;</td><td class="mdescRight">Weak callback invoked when a task's watchdog expires. Called from ISR context (on_tick) under scheduler_lock_ — must not block; KILL action defers via defer_kill() (deadline ACTION==3 precedent). Always enters the ring (TIMING+6 ERROR, fail-closed).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
 <tr class="memitem:a6563155e2fea5b3d4feb0ca6027ce7d1" id="r_a6563155e2fea5b3d4feb0ca6027ce7d1"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a6563155e2fea5b3d4feb0ca6027ce7d1">_stack_start</a> []</td></tr>
 <tr class="memitem:aa4c3a4a82848848b44540d9841a3dccc" id="r_aa4c3a4a82848848b44540d9841a3dccc"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#aa4c3a4a82848848b44540d9841a3dccc">_stack_end</a> []</td></tr>
-<tr class="memitem:a6d73afdfa1f338f65d85c38585f1e1f2" id="r_a6d73afdfa1f338f65d85c38585f1e1f2"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a6d73afdfa1f338f65d85c38585f1e1f2">kernel::H2_EV_ARM</a> = 1</td></tr>
-<tr class="memitem:a810111e89e31e78c3e32f99355db7234" id="r_a810111e89e31e78c3e32f99355db7234"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a810111e89e31e78c3e32f99355db7234">kernel::H2_EV_APPLY</a> = 2</td></tr>
-<tr class="memitem:afb3fbd193a09fbd36b7f12f104aec2e7" id="r_afb3fbd193a09fbd36b7f12f104aec2e7"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#afb3fbd193a09fbd36b7f12f104aec2e7">kernel::H2_EV_CLR_RMS</a> = 4</td></tr>
-<tr class="memitem:aed0b1c34672fd84a78533c4247ea343f" id="r_aed0b1c34672fd84a78533c4247ea343f"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aed0b1c34672fd84a78533c4247ea343f">kernel::H2_EV_CLR_SET</a> = 5</td></tr>
-<tr class="memitem:a574a90ebc327d46aa6aab426a829176b" id="r_a574a90ebc327d46aa6aab426a829176b"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a574a90ebc327d46aa6aab426a829176b">kernel::H2_EV_CLR_MISC</a> = 6</td></tr>
-<tr class="memitem:ae4d880161f4292f9476f0da08c2493c7" id="r_ae4d880161f4292f9476f0da08c2493c7"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ae4d880161f4292f9476f0da08c2493c7">kernel::H2_EV_IDLE_ARM</a> = 7</td></tr>
+<tr class="memitem:a6d73afdfa1f338f65d85c38585f1e1f2" id="r_a6d73afdfa1f338f65d85c38585f1e1f2"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a6d73afdfa1f338f65d85c38585f1e1f2">kernel::H2_EV_ARM</a> = 1</td></tr>
+<tr class="memitem:a810111e89e31e78c3e32f99355db7234" id="r_a810111e89e31e78c3e32f99355db7234"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a810111e89e31e78c3e32f99355db7234">kernel::H2_EV_APPLY</a> = 2</td></tr>
+<tr class="memitem:afb3fbd193a09fbd36b7f12f104aec2e7" id="r_afb3fbd193a09fbd36b7f12f104aec2e7"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#afb3fbd193a09fbd36b7f12f104aec2e7">kernel::H2_EV_CLR_RMS</a> = 4</td></tr>
+<tr class="memitem:aed0b1c34672fd84a78533c4247ea343f" id="r_aed0b1c34672fd84a78533c4247ea343f"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aed0b1c34672fd84a78533c4247ea343f">kernel::H2_EV_CLR_SET</a> = 5</td></tr>
+<tr class="memitem:a574a90ebc327d46aa6aab426a829176b" id="r_a574a90ebc327d46aa6aab426a829176b"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a574a90ebc327d46aa6aab426a829176b">kernel::H2_EV_CLR_MISC</a> = 6</td></tr>
+<tr class="memitem:ae4d880161f4292f9476f0da08c2493c7" id="r_ae4d880161f4292f9476f0da08c2493c7"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ae4d880161f4292f9476f0da08c2493c7">kernel::H2_EV_IDLE_ARM</a> = 7</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch, context switching, and test isolation. </p>
@@ -238,17 +222,11 @@ Variables</h2></td></tr>
         <tr>
           <td class="memname">void debug_write_dec </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="scheduler_8cpp_ac9b08212c79ab5465098caa93a4188bd_cgraph.png" border="0" usemap="#ascheduler_8cpp_ac9b08212c79ab5465098caa93a4188bd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
-</div>
 
 </div>
 </div>
@@ -261,7 +239,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void debug_write_hex </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>

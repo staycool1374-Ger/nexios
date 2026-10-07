@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.5.1 | **Last Release:** v0.5.1 | **Completed milestones:** v0.2.x — v0.5.1 (see `ROADMAP_done.md`)
+**Build:** v0.5.2 | **Last Release:** v0.5.2 | **Completed milestones:** v0.2.x — v0.5.2 (see `ROADMAP_done.md`)
 
 > **NOTE (2026-09-17):** the user explicitly overrode the "pointers only, no
 > work items" rule for this file and requested a full sorted listing
@@ -48,6 +48,9 @@
 
 ## v0.5.1 — Bring-up Multi-Arch Boot (RELEASED, see ROADMAP_done.md)
 - All milestone issues closed except #243 (release Docker image, deferred by owner order): multi-arch boot, ABI conformance, debugd phases, scheduler race fixes.
+
+## v0.5.2 — User-ELF Bring-up to Run (RELEASED 2026-10-07, see ROADMAP_done.md)
+- Milestone v0.5.2 (milestone 14): 0 open issues (stragglers moved: #169 → v0.9.0, #280 → v0.5.3). NOTE: §v0.5.2–§v0.6.0 below carry stale pre-release numbering (generated 2026-09-17) — pending owner regeneration.
 
 ## v0.5.2 — Userspace Subsystems (NEW, OPEN)- #162 [open] Demand paging / CoW subsystem — fault classifier, per-VMA policy, CoW refcounts, pager integration.
 - #163 [open] Stack unwinding in user-space — frame-pointer walk, crash/profiler integration.

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
-<p>Single entry in the boot-time task-definition table. Entries are validated at compile time against <a class="el" href="jarvis__config_8h.html" title="Central compile-time configuration for Jarvis RTOS. All tunables currently scattered as constexpr in ...">jarvis_config.h</a> bounds and at boot time for ELF-file existence. Set enabled = false to skip.  
+<p>Single entry in the boot-time task-definition table. Entries are validated at compile time against <a class="el" href="nexios__config_8h.html" title="Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...">nexios_config.h</a> bounds and at boot time for ELF-file existence. Set enabled = false to skip.  
  <a href="#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="taskdefs_8hpp_source.html">taskdefs.hpp</a>&gt;</code></p>
@@ -140,6 +140,7 @@ Data Fields</h2></td></tr>
 <tr class="memitem:af4683560a7780d91cb95edc0ac127790" id="r_af4683560a7780d91cb95edc0ac127790"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#af4683560a7780d91cb95edc0ac127790">elf_path</a></td></tr>
 <tr class="memitem:a81735b169c391d54d58d62ca42e28634" id="r_a81735b169c391d54d58d62ca42e28634"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a81735b169c391d54d58d62ca42e28634">priority</a></td></tr>
 <tr class="memitem:a9296cce00b181b13c0365e85db44a2f3" id="r_a9296cce00b181b13c0365e85db44a2f3"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9296cce00b181b13c0365e85db44a2f3">period_ticks</a></td></tr>
+<tr class="memitem:aed5ed00b8a127569b9d26410e40e486e" id="r_aed5ed00b8a127569b9d26410e40e486e"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aed5ed00b8a127569b9d26410e40e486e">wcet_ticks</a></td></tr>
 <tr class="memitem:a776283f6c46fdea9a624d7a226aaa1f7" id="r_a776283f6c46fdea9a624d7a226aaa1f7"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a776283f6c46fdea9a624d7a226aaa1f7">ss_budget</a></td></tr>
 <tr class="memitem:a689ebddb822faf5cdaac58095be26a14" id="r_a689ebddb822faf5cdaac58095be26a14"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a689ebddb822faf5cdaac58095be26a14">ss_period</a></td></tr>
 <tr class="memitem:a321ed3db831c432f007858645bd56aab" id="r_a321ed3db831c432f007858645bd56aab"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a321ed3db831c432f007858645bd56aab">ss_bg_prio</a></td></tr>
@@ -147,14 +148,14 @@ Data Fields</h2></td></tr>
 <tr class="memitem:acae36674107c8d2c8302eb6c3bac5458" id="r_acae36674107c8d2c8302eb6c3bac5458"><td class="memItemLeft">void(*&#160;</td><td class="memItemRight"><a class="el" href="#acae36674107c8d2c8302eb6c3bac5458">set_pid_fn</a> )(uint64_t)</td></tr>
 <tr class="memitem:a56d487bae40239b4859e6a801c93ef91" id="r_a56d487bae40239b4859e6a801c93ef91"><td class="memItemLeft">uint64_t(*&#160;</td><td class="memItemRight"><a class="el" href="#a56d487bae40239b4859e6a801c93ef91">get_pid_fn</a> )()</td></tr>
 <tr class="memitem:a7eef95c0ef537af6c5d224770f769df7" id="r_a7eef95c0ef537af6c5d224770f769df7"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a7eef95c0ef537af6c5d224770f769df7">ss_budget_granularity</a></td></tr>
-<tr class="memdesc:a7eef95c0ef537af6c5d224770f769df7"><td class="mdescLeft">&#160;</td><td class="mdescRight">for SPORADIC_SERVER (ticks per budget unit, default 1)  <br /></td></tr>
 <tr class="memitem:ada5b7ac2f9388739e7ed1959a47980d8" id="r_ada5b7ac2f9388739e7ed1959a47980d8"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ada5b7ac2f9388739e7ed1959a47980d8">user_stack_size</a></td></tr>
 <tr class="memdesc:ada5b7ac2f9388739e7ed1959a47980d8"><td class="mdescLeft">&#160;</td><td class="mdescRight">for USER_ELF (0 = default 32_KiB)  <br /></td></tr>
 <tr class="memitem:aa31320ed4b4a6dc141208a89f4124dbb" id="r_aa31320ed4b4a6dc141208a89f4124dbb"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa31320ed4b4a6dc141208a89f4124dbb">is_shell</a></td></tr>
-<tr class="memdesc:aa31320ed4b4a6dc141208a89f4124dbb"><td class="mdescLeft">&#160;</td><td class="mdescRight">call <a class="el" href="classkernel_1_1_scheduler.html#a940a027ee35b641fd1c7fc73f9235c65" title="Stores a pointer to the shell task so cleanup_zombies can identify it.">Scheduler::set_shell_task</a> after creation  <br /></td></tr>
+<tr class="memdesc:aa31320ed4b4a6dc141208a89f4124dbb"><td class="mdescLeft">&#160;</td><td class="mdescRight">call <a class="el" href="classkernel_1_1_scheduler.html#a940a027ee35b641fd1c7fc73f9235c65" title="Stores a pointer to the shell task.">Scheduler::set_shell_task</a> after creation  <br /></td></tr>
+<tr class="memitem:af8a6678e8046a413df0c0d952c98a0b0" id="r_af8a6678e8046a413df0c0d952c98a0b0"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582c">ServerMode</a>&#160;</td><td class="memItemRight"><a class="el" href="#af8a6678e8046a413df0c0d952c98a0b0">ss_mode</a> = <a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582ca6fb4e82c2fe41d799e90640dd8465a89">ServerMode::SPORADIC</a></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Single entry in the boot-time task-definition table. Entries are validated at compile time against <a class="el" href="jarvis__config_8h.html" title="Central compile-time configuration for Jarvis RTOS. All tunables currently scattered as constexpr in ...">jarvis_config.h</a> bounds and at boot time for ELF-file existence. Set enabled = false to skip. </p>
+<div class="textblock"><p>Single entry in the boot-time task-definition table. Entries are validated at compile time against <a class="el" href="nexios__config_8h.html" title="Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...">nexios_config.h</a> bounds and at boot time for ELF-file existence. Set enabled = false to skip. </p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a59a969daa4009832938359c5163c33d6" name="a59a969daa4009832938359c5163c33d6"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a59a969daa4009832938359c5163c33d6">&#9670;&#160;</a></span>daemon_name</h2>
@@ -224,7 +225,7 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>call <a class="el" href="classkernel_1_1_scheduler.html#a940a027ee35b641fd1c7fc73f9235c65" title="Stores a pointer to the shell task so cleanup_zombies can identify it.">Scheduler::set_shell_task</a> after creation </p>
+<p>call <a class="el" href="classkernel_1_1_scheduler.html#a940a027ee35b641fd1c7fc73f9235c65" title="Stores a pointer to the shell task.">Scheduler::set_shell_task</a> after creation </p>
 
 </div>
 </div>
@@ -339,8 +340,22 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-
 <p>for SPORADIC_SERVER (ticks per budget unit, default 1) </p>
+
+</div>
+</div>
+<a id="af8a6678e8046a413df0c0d952c98a0b0" name="af8a6678e8046a413df0c0d952c98a0b0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af8a6678e8046a413df0c0d952c98a0b0">&#9670;&#160;</a></span>ss_mode</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582c">ServerMode</a> kernel::task::TaskDef::ss_mode = <a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582ca6fb4e82c2fe41d799e90640dd8465a89">ServerMode::SPORADIC</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>server discipline (issue #22; trailing so existing rows keep binding; default = SPORADIC) </p>
 
 </div>
 </div>
@@ -385,6 +400,21 @@ Data Fields</h2></td></tr>
 </div><div class="memdoc">
 
 <p>for USER_ELF (0 = default 32_KiB) </p>
+
+</div>
+</div>
+<a id="aed5ed00b8a127569b9d26410e40e486e" name="aed5ed00b8a127569b9d26410e40e486e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aed5ed00b8a127569b9d26410e40e486e">&#9670;&#160;</a></span>wcet_ticks</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::task::TaskDef::wcet_ticks</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>0 = implicit 100% load (pessimistic), &gt;0 = real estimate </p>
 
 </div>
 </div>

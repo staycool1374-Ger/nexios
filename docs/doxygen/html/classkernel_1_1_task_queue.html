@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classkernel_1_
 </div><!--header-->
 <div class="contents">
 
-<p>Intrusive doubly-linked list queue for TaskControlBlock. Operations are O(1), no dynamic allocation. TCBs embed next/prev pointers.  
+<p>Intrusive doubly-linked list queue for <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a>. Operations are O(1), no dynamic allocation. TCBs embed next/prev pointers.  
  <a href="#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="task__queue_8hpp_source.html">task_queue.hpp</a>&gt;</code></p>
@@ -133,29 +133,29 @@ Collaboration diagram for kernel::TaskQueue:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a8804ebfccb0b109f71875d5ea72e7999" id="r_a8804ebfccb0b109f71875d5ea72e7999"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a8804ebfccb0b109f71875d5ea72e7999">TaskQueue</a> ()</td></tr>
-<tr class="memitem:a921f7a683bc08d9016cf18fa58b59f99" id="r_a921f7a683bc08d9016cf18fa58b59f99"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a921f7a683bc08d9016cf18fa58b59f99">push_back</a> (TaskControlBlock &amp;tcb) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a921f7a683bc08d9016cf18fa58b59f99" id="r_a921f7a683bc08d9016cf18fa58b59f99"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a921f7a683bc08d9016cf18fa58b59f99">push_back</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;tcb) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a921f7a683bc08d9016cf18fa58b59f99"><td class="mdescLeft">&#160;</td><td class="mdescRight">Appends a TCB to the tail of the queue (idempotent if already queued).  <br /></td></tr>
-<tr class="memitem:ab3a49cc31ec76ab3df013b2ce6997662" id="r_ab3a49cc31ec76ab3df013b2ce6997662"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#ab3a49cc31ec76ab3df013b2ce6997662">pop_front</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ab3a49cc31ec76ab3df013b2ce6997662" id="r_ab3a49cc31ec76ab3df013b2ce6997662"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ab3a49cc31ec76ab3df013b2ce6997662">pop_front</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ab3a49cc31ec76ab3df013b2ce6997662"><td class="mdescLeft">&#160;</td><td class="mdescRight">Removes and returns the head of the queue, or nullptr if empty.  <br /></td></tr>
-<tr class="memitem:ad622d703040e5089beed1eda860bf57b" id="r_ad622d703040e5089beed1eda860bf57b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad622d703040e5089beed1eda860bf57b">remove</a> (TaskControlBlock &amp;tcb) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ad622d703040e5089beed1eda860bf57b" id="r_ad622d703040e5089beed1eda860bf57b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad622d703040e5089beed1eda860bf57b">remove</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;tcb) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ad622d703040e5089beed1eda860bf57b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Removes a specific TCB from anywhere in the queue.  <br /></td></tr>
-<tr class="memitem:a3905fd071681a0e864923ccad27d682d" id="r_a3905fd071681a0e864923ccad27d682d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a3905fd071681a0e864923ccad27d682d">empty</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a3905fd071681a0e864923ccad27d682d" id="r_a3905fd071681a0e864923ccad27d682d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a3905fd071681a0e864923ccad27d682d">empty</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a3905fd071681a0e864923ccad27d682d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true if the queue contains no entries.  <br /></td></tr>
-<tr class="memitem:a11497a31721fe4d5c95973e534261b5b" id="r_a11497a31721fe4d5c95973e534261b5b"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a11497a31721fe4d5c95973e534261b5b">count</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a11497a31721fe4d5c95973e534261b5b" id="r_a11497a31721fe4d5c95973e534261b5b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a11497a31721fe4d5c95973e534261b5b">count</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a11497a31721fe4d5c95973e534261b5b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the number of entries in the queue.  <br /></td></tr>
-<tr class="memitem:ac679ad082b6979eb92d7605573caa40b" id="r_ac679ad082b6979eb92d7605573caa40b"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#ac679ad082b6979eb92d7605573caa40b">head</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ac679ad082b6979eb92d7605573caa40b" id="r_ac679ad082b6979eb92d7605573caa40b"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ac679ad082b6979eb92d7605573caa40b">head</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ac679ad082b6979eb92d7605573caa40b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the head of the queue (for iteration), or nullptr.  <br /></td></tr>
-<tr class="memitem:ae58560e9bcb13b6d7518ce0064f89a6b" id="r_ae58560e9bcb13b6d7518ce0064f89a6b"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae58560e9bcb13b6d7518ce0064f89a6b">contains</a> (const TaskControlBlock &amp;tcb) const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ae58560e9bcb13b6d7518ce0064f89a6b" id="r_ae58560e9bcb13b6d7518ce0064f89a6b"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae58560e9bcb13b6d7518ce0064f89a6b">contains</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;tcb) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ae58560e9bcb13b6d7518ce0064f89a6b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true if the given TCB is physically linked in this queue (walks the intrusive list). Used by diagnostics to detect in_ready_queue_ flag vs physical-link desync.  <br /></td></tr>
-<tr class="memitem:a1a7a6c176f1150ed49f8203d65b2a15d" id="r_a1a7a6c176f1150ed49f8203d65b2a15d"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a1a7a6c176f1150ed49f8203d65b2a15d">tail</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a1a7a6c176f1150ed49f8203d65b2a15d" id="r_a1a7a6c176f1150ed49f8203d65b2a15d"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a1a7a6c176f1150ed49f8203d65b2a15d">tail</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a1a7a6c176f1150ed49f8203d65b2a15d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the tail of the queue (for append), or nullptr.  <br /></td></tr>
-<tr class="memitem:afebb07f021c6dfe6f89820d2805b72be" id="r_afebb07f021c6dfe6f89820d2805b72be"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afebb07f021c6dfe6f89820d2805b72be">reset</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:afebb07f021c6dfe6f89820d2805b72be" id="r_afebb07f021c6dfe6f89820d2805b72be"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afebb07f021c6dfe6f89820d2805b72be">reset</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:afebb07f021c6dfe6f89820d2805b72be"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resets queue to empty state without following pointers. Safe to call even when pointers may be dangling.  <br /></td></tr>
-<tr class="memitem:aa5a4c0397d73f35c198c22b40e9e4d9e" id="r_aa5a4c0397d73f35c198c22b40e9e4d9e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa5a4c0397d73f35c198c22b40e9e4d9e">set_raw</a> (TaskControlBlock *h, TaskControlBlock *t, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> c) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:aa5a4c0397d73f35c198c22b40e9e4d9e" id="r_aa5a4c0397d73f35c198c22b40e9e4d9e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa5a4c0397d73f35c198c22b40e9e4d9e">set_raw</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *h, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t, uint64_t c) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:aa5a4c0397d73f35c198c22b40e9e4d9e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Raw restore from POD data. TCB pointers must be valid (TCBs restored in-place across snapshot cycles).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Intrusive doubly-linked list queue for TaskControlBlock. Operations are O(1), no dynamic allocation. TCBs embed next/prev pointers. </p>
+<div class="textblock"><p>Intrusive doubly-linked list queue for <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a>. Operations are O(1), no dynamic allocation. TCBs embed next/prev pointers. </p>
 </div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a8804ebfccb0b109f71875d5ea72e7999" name="a8804ebfccb0b109f71875d5ea72e7999"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a8804ebfccb0b109f71875d5ea72e7999">&#9670;&#160;</a></span>TaskQueue()</h2>
@@ -195,7 +195,7 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">bool kernel::TaskQueue::contains </td>
           <td>(</td>
-          <td class="paramtype">const TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
           <td> const</td>
         </tr>
       </table>
@@ -207,6 +207,12 @@ Public Member Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Returns true if the given TCB is physically linked in this queue (walks the intrusive list). Used by diagnostics to detect in_ready_queue_ flag vs physical-link desync. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_task_queue_ae58560e9bcb13b6d7518ce0064f89a6b_cgraph.png" border="0" usemap="#aclasskernel_1_1_task_queue_ae58560e9bcb13b6d7518ce0064f89a6b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -220,7 +226,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::TaskQueue::count </td>
+          <td class="memname">uint64_t kernel::TaskQueue::count </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td> const</td>
@@ -265,7 +271,7 @@ Public Member Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_task_queue_a3905fd071681a0e864923ccad27d682d_cgraph.png" border="0" usemap="#aclasskernel_1_1_task_queue_a3905fd071681a0e864923ccad27d682d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -280,7 +286,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::TaskQueue::head </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::TaskQueue::head </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td> const</td>
@@ -307,7 +313,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::TaskQueue::pop_front </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::TaskQueue::pop_front </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -321,6 +327,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Removes and returns the head of the queue, or nullptr if empty. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_task_queue_ab3a49cc31ec76ab3df013b2ce6997662_cgraph.png" border="0" usemap="#aclasskernel_1_1_task_queue_ab3a49cc31ec76ab3df013b2ce6997662_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
 
 </div>
 </div>
@@ -336,7 +348,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::TaskQueue::push_back </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -348,6 +360,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Appends a TCB to the tail of the queue (idempotent if already queued). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_task_queue_a921f7a683bc08d9016cf18fa58b59f99_cgraph.png" border="0" usemap="#aclasskernel_1_1_task_queue_a921f7a683bc08d9016cf18fa58b59f99_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
 
 </div>
 </div>
@@ -363,7 +381,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::TaskQueue::remove </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -375,6 +393,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Removes a specific TCB from anywhere in the queue. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_task_queue_ad622d703040e5089beed1eda860bf57b_cgraph.png" border="0" usemap="#aclasskernel_1_1_task_queue_ad622d703040e5089beed1eda860bf57b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
 
 </div>
 </div>
@@ -417,17 +441,17 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::TaskQueue::set_raw </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>h</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>h</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>t</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>c</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>c</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -451,7 +475,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::TaskQueue::tail </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::TaskQueue::tail </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td> const</td>

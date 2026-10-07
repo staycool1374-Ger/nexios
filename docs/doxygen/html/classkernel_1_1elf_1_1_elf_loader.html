@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -142,8 +142,10 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a23b6e4584cedc7d2f5acbf5e5a8d946f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current loader state (tests / shell status).  <br /></td></tr>
 <tr class="memitem:ab2b19b522ee9bb6e2c02173f2b3d552d" id="r_ab2b19b522ee9bb6e2c02173f2b3d552d"><td class="memItemLeft">static const char *&#160;</td><td class="memItemRight"><a class="el" href="#ab2b19b522ee9bb6e2c02173f2b3d552d">current_path</a> ()</td></tr>
 <tr class="memdesc:ab2b19b522ee9bb6e2c02173f2b3d552d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Path of the current (or last) load.  <br /></td></tr>
-<tr class="memitem:abfcf00a2150245962b363988c47550f4" id="r_abfcf00a2150245962b363988c47550f4"><td class="memItemLeft">static TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#abfcf00a2150245962b363988c47550f4">take_completed</a> ()</td></tr>
-<tr class="memdesc:abfcf00a2150245962b363988c47550f4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Completed TCB from the last successful load (future runelf / tests). Ownership transfers to the caller.  <br /></td></tr>
+<tr class="memitem:abfcf00a2150245962b363988c47550f4" id="r_abfcf00a2150245962b363988c47550f4"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#abfcf00a2150245962b363988c47550f4">take_completed</a> ()</td></tr>
+<tr class="memdesc:abfcf00a2150245962b363988c47550f4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Completed TCB from the last successful load (future runelf / tests). Ownership transfers to the caller, which sets the settled priority/base_priority/period/deadline BEFORE add_task (never add_task then mutate) and admits via add_task_err.  <br /></td></tr>
+<tr class="memitem:aa4ba931eead59458577987f88123df1f" id="r_aa4ba931eead59458577987f88123df1f"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa4ba931eead59458577987f88123df1f">completed_entry</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:aa4ba931eead59458577987f88123df1f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Entry VA latched with the retained completion (issue #231): read hdr_.entry at publish time so a later load cannot move it under the retained TCB. 0 when no completion is retained. Cleared wherever completed_tcb_ is cleared.  <br /></td></tr>
 <tr class="memitem:a2004c846d94d4d05e7bb58ea3e9fd8a1" id="r_a2004c846d94d4d05e7bb58ea3e9fd8a1"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2004c846d94d4d05e7bb58ea3e9fd8a1">release_completed</a> ()</td></tr>
 <tr class="memdesc:a2004c846d94d4d05e7bb58ea3e9fd8a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release (cleanup + delete) the completed TCB. Used by tests / future runelf failure paths.  <br /></td></tr>
 <tr class="memitem:a0b136e926533436c58605666ec2ffc38" id="r_a0b136e926533436c58605666ec2ffc38"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0b136e926533436c58605666ec2ffc38">reset</a> ()</td></tr>
@@ -152,18 +154,18 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:ab8245317359afbf1038319328b3e5523"><td class="mdescLeft">&#160;</td><td class="mdescRight">Spin until the loader returns to IDLE (safe on UP: the loader is more urgent than the harness, so it runs on the next tick after each reschedule).  <br /></td></tr>
 <tr class="memitem:a34f023f52654f67830d355c1a6d5ffb7" id="r_a34f023f52654f67830d355c1a6d5ffb7"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a34f023f52654f67830d355c1a6d5ffb7">task_main</a> ()</td></tr>
 <tr class="memdesc:a34f023f52654f67830d355c1a6d5ffb7"><td class="mdescLeft">&#160;</td><td class="mdescRight">The loader task's main loop (scheduler entry via the free elf_loader_task_main bridge). Blocks on the wake semaphore, runs one load per accepted request.  <br /></td></tr>
-<tr class="memitem:a4c2fef2ceece51afc3092a2a8ac33495" id="r_a4c2fef2ceece51afc3092a2a8ac33495"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4c2fef2ceece51afc3092a2a8ac33495">destroy_completed_tcb</a> (TaskControlBlock *tcb)</td></tr>
+<tr class="memitem:a4c2fef2ceece51afc3092a2a8ac33495" id="r_a4c2fef2ceece51afc3092a2a8ac33495"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4c2fef2ceece51afc3092a2a8ac33495">destroy_completed_tcb</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *tcb)</td></tr>
 <tr class="memdesc:a4c2fef2ceece51afc3092a2a8ac33495"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tear down a completed-but-never-scheduled TCB (built by finalize_loaded_task). Skips all scheduler interactions.  <br /></td></tr>
-<tr class="memitem:a825e445a84f991d8223d85d59be220f3" id="r_a825e445a84f991d8223d85d59be220f3"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a825e445a84f991d8223d85d59be220f3">cancel_pending</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> generation)</td></tr>
+<tr class="memitem:a825e445a84f991d8223d85d59be220f3" id="r_a825e445a84f991d8223d85d59be220f3"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a825e445a84f991d8223d85d59be220f3">cancel_pending</a> (uint64_t generation)</td></tr>
 <tr class="memdesc:a825e445a84f991d8223d85d59be220f3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-validation-step cancel check (issue #95: shared by the dep-resolve backend in <a class="el" href="elf__shared_8cpp.html" title="Shared-object / dynamic linking implementation (issue #95). DT_NEEDED resolution, GOT/PLT fixups,...">elf_shared.cpp</a>).  <br /></td></tr>
-<tr class="memitem:a829f0d3ed8bed38faa92180dafc1ed36" id="r_a829f0d3ed8bed38faa92180dafc1ed36"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a829f0d3ed8bed38faa92180dafc1ed36">generation</a> ()</td></tr>
+<tr class="memitem:a829f0d3ed8bed38faa92180dafc1ed36" id="r_a829f0d3ed8bed38faa92180dafc1ed36"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a829f0d3ed8bed38faa92180dafc1ed36">generation</a> ()</td></tr>
 <tr class="memdesc:a829f0d3ed8bed38faa92180dafc1ed36"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current load generation for DepResolveContext setup.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
-<tr class="memitem:a74afb2615a04ec2c9506b6ec794692a8" id="r_a74afb2615a04ec2c9506b6ec794692a8"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a74afb2615a04ec2c9506b6ec794692a8">kChunkSize</a> = 4096</td></tr>
-<tr class="memitem:a32312834be9f290fc4ade35c7cf390b9" id="r_a32312834be9f290fc4ade35c7cf390b9"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a32312834be9f290fc4ade35c7cf390b9">kLoaderPriority</a> = 15</td></tr>
-<tr class="memitem:ad1de548c4dfecbe2cc0acd9b79d62176" id="r_ad1de548c4dfecbe2cc0acd9b79d62176"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad1de548c4dfecbe2cc0acd9b79d62176">kMaxPath</a> = 128</td></tr>
+<tr class="memitem:a74afb2615a04ec2c9506b6ec794692a8" id="r_a74afb2615a04ec2c9506b6ec794692a8"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a74afb2615a04ec2c9506b6ec794692a8">kChunkSize</a> = 4096</td></tr>
+<tr class="memitem:a32312834be9f290fc4ade35c7cf390b9" id="r_a32312834be9f290fc4ade35c7cf390b9"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a32312834be9f290fc4ade35c7cf390b9">kLoaderPriority</a> = 15</td></tr>
+<tr class="memitem:ad1de548c4dfecbe2cc0acd9b79d62176" id="r_ad1de548c4dfecbe2cc0acd9b79d62176"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad1de548c4dfecbe2cc0acd9b79d62176">kMaxPath</a> = 128</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Background ELF loader singleton. </p>
@@ -181,7 +183,7 @@ Static Public Attributes</h2></td></tr>
         <tr>
           <td class="memname">bool kernel::elf::ElfLoader::cancel_pending </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>generation</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>generation</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -199,6 +201,33 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a825e445a84f991d8223d85d59be220f3_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a825e445a84f991d8223d85d59be220f3_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 1 -->
 </div>
+
+</div>
+</div>
+<a id="aa4ba931eead59458577987f88123df1f" name="aa4ba931eead59458577987f88123df1f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa4ba931eead59458577987f88123df1f">&#9670;&#160;</a></span>completed_entry()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::elf::ElfLoader::completed_entry </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Entry VA latched with the retained completion (issue #231): read hdr_.entry at publish time so a later load cannot move it under the retained TCB. 0 when no completion is retained. Cleared wherever completed_tcb_ is cleared. </p>
 
 </div>
 </div>
@@ -241,7 +270,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::elf::ElfLoader::destroy_completed_tcb </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -253,7 +282,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Tear down a completed-but-never-scheduled TCB (built by finalize_loaded_task). Skips all scheduler interactions. </p>
-<p>Tear down a completed-but-never-scheduled TCB. It was built by finalize_loaded_task and never add_task'd, so cleanup()'s <a class="el" href="classkernel_1_1_scheduler.html#a8ff081fb1988f881f037ef8ed51901a9" title="Best-effort unregister of a TCB from the scheduler&#39;s live tables. Used by TaskControlBlock::cleanup()...">Scheduler::unregister_task</a> / parent / daemon logic must NOT run. Frees the same resources: PML4 user pages + page, user stack, kernel stack, IPC objects, fd table, then the MemPool block. </p>
+<p>Tear down a completed-but-never-scheduled TCB. It was built by finalize_loaded_task and never add_task'd, so cleanup()'s <a class="el" href="classkernel_1_1_scheduler.html#a8ff081fb1988f881f037ef8ed51901a9" title="Best-effort unregister of a TCB from the scheduler&#39;s live tables. Used by TaskControlBlock::cleanup()...">Scheduler::unregister_task</a> / parent / daemon logic must NOT run. Frees the same resources: PML4 user pages + page, user stack, kernel stack, IPC objects, fd table, then the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -306,7 +335,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::elf::ElfLoader::generation </td>
+          <td class="memname">uint64_t kernel::elf::ElfLoader::generation </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -320,6 +349,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Current load generation for DepResolveContext setup. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a829f0d3ed8bed38faa92180dafc1ed36_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a829f0d3ed8bed38faa92180dafc1ed36_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
 
 </div>
 </div>
@@ -351,7 +386,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a2004c846d94d4d05e7bb58ea3e9fd8a1_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a2004c846d94d4d05e7bb58ea3e9fd8a1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -411,7 +446,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_ad4b037529a02716f60ffd23d522db9ba_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_ad4b037529a02716f60ffd23d522db9ba_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -444,7 +479,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a0b136e926533436c58605666ec2ffc38_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a0b136e926533436c58605666ec2ffc38_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -486,7 +521,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::elf::ElfLoader::take_completed </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::elf::ElfLoader::take_completed </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -499,7 +534,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Completed TCB from the last successful load (future runelf / tests). Ownership transfers to the caller. </p>
+<p>Completed TCB from the last successful load (future runelf / tests). Ownership transfers to the caller, which sets the settled priority/base_priority/period/deadline BEFORE add_task (never add_task then mutate) and admits via add_task_err. </p>
 
 </div>
 </div>
@@ -531,7 +566,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a34f023f52654f67830d355c1a6d5ffb7_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a34f023f52654f67830d355c1a6d5ffb7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -564,7 +599,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_ab8245317359afbf1038319328b3e5523_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_ab8245317359afbf1038319328b3e5523_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -580,7 +615,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::elf::ElfLoader::kChunkSize = 4096</td>
+          <td class="memname">uint64_t kernel::elf::ElfLoader::kChunkSize = 4096</td>
         </tr>
       </table>
   </td>
@@ -602,7 +637,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::elf::ElfLoader::kLoaderPriority = 15</td>
+          <td class="memname">uint64_t kernel::elf::ElfLoader::kLoaderPriority = 15</td>
         </tr>
       </table>
   </td>
@@ -624,7 +659,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::elf::ElfLoader::kMaxPath = 128</td>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::elf::ElfLoader::kMaxPath = 128</td>
         </tr>
       </table>
   </td>

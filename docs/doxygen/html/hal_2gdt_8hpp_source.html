@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -149,41 +149,41 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2gdt_8hpp_
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span></div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="keyword">struct </span>GDTDescriptor {</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> limit; </div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> base;  </div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> limit; </div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> base;  </div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>} __attribute__((packed));</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span></div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span><span class="keyword">struct </span>GDTEntry {</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> limit_low;  </div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> base_low;   </div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> base_mid;    </div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> access;      </div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> granularity; </div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> base_high;   </div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> limit_low;  </div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> base_low;   </div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> base_mid;    </div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> access;      </div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> granularity; </div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> base_high;   </div>
 <div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>} __attribute__((packed));</div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span></div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><span class="keyword">struct </span>TSS {</div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> reserved0;   </div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rsp0;        </div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rsp1;        </div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rsp2;        </div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> reserved1;   </div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ist1;        </div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ist2;        </div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ist3;        </div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ist4;        </div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ist5;        </div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ist6;        </div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ist7;        </div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> reserved2;   </div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> reserved3;   </div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> iopb_offset; </div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> reserved0;   </div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> rsp0;        </div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> rsp1;        </div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> rsp2;        </div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> reserved1;   </div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ist1;        </div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ist2;        </div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ist3;        </div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ist4;        </div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ist5;        </div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ist6;        </div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ist7;        </div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> reserved2;   </div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> reserved3;   </div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> iopb_offset; </div>
 <div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>} __attribute__((packed));</div>
 <div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span></div>
 <div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="keyword">struct </span>TSSBlock {</div>
 <div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    TSS tss;</div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> iopb[8192];         </div>
-<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> iopb_terminator;    </div>
+<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> iopb[8192];         </div>
+<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> iopb_terminator;    </div>
 <div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>};</div>
 <div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span></div>
 <div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span><span class="keyword">class </span>GDT {</div>
@@ -192,13 +192,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2gdt_8hpp_
 <div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>();</div>
 <div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">load</a>();</div>
 <div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> load_ap();</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> set_tss_rsp0(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rsp);</div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> iopb_load(<span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *bitmap);</div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> set_tss_rsp0(uint64_t rsp);</div>
+<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> iopb_load(<span class="keyword">const</span> uint8_t *bitmap);</div>
 <div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> iopb_mask_all();</div>
-<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *iopb_bitmap();</div>
-<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> tss_iopb_offset();</div>
-<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> tss_descriptor_limit();</div>
-<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> iopb_terminator();</div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *iopb_bitmap();</div>
+<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> tss_iopb_offset();</div>
+<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> tss_descriptor_limit();</div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> iopb_terminator();</div>
 <div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span> </div>
 <div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>  <span class="keyword">private</span>:</div>
 <div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> NUM_ENTRIES = 7;</div>
@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2gdt_8hpp_
 <div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>    <span class="keyword">static</span> GDTDescriptor desc_;</div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>};</div>
 <div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span></div>
-<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>enum : <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> {</div>
+<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>enum : <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> {</div>
 <div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>    GDT_NULL = 0x00,      </div>
 <div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    GDT_CODE = 0x08,      </div>
 <div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>    GDT_DATA = 0x10,      </div>
@@ -229,22 +229,22 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2gdt_8hpp_
 <div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>    }</div>
 <div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> load_ap() {</div>
 <div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    }</div>
-<div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> set_tss_rsp0(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>) {</div>
+<div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> set_tss_rsp0(uint64_t) {</div>
 <div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>    }</div>
-<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> iopb_load(<span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *) {</div>
+<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> iopb_load(<span class="keyword">const</span> uint8_t *) {</div>
 <div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>    }</div>
 <div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> iopb_mask_all() {</div>
 <div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>    }</div>
-<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *iopb_bitmap() {</div>
+<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *iopb_bitmap() {</div>
 <div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>        <span class="keywordflow">return</span> <span class="keyword">nullptr</span>;</div>
 <div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    }</div>
-<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> tss_iopb_offset() {</div>
+<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> tss_iopb_offset() {</div>
 <div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>        <span class="keywordflow">return</span> 0;</div>
 <div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>    }</div>
-<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> tss_descriptor_limit() {</div>
+<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> tss_descriptor_limit() {</div>
 <div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>        <span class="keywordflow">return</span> 0;</div>
 <div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    }</div>
-<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> iopb_terminator() {</div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> iopb_terminator() {</div>
 <div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>        <span class="keywordflow">return</span> 0;</div>
 <div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>    }</div>
 <div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>};</div>
@@ -255,14 +255,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2gdt_8hpp_
 <div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span> </div>
 <div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span>} <span class="comment">// namespace arch</span></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:35</div></div>
+<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
+<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
+<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
-<div class="ttc" id="anamespacekernel_1_1elf_html_ae81746671637a90991ec1b98cef60dc4"><div class="ttname"><a href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">kernel::elf::load</a></div><div class="ttdeci">TaskControlBlock * load(const ELF64Header *hdr, const uint8_t *file_data, uint64_t file_size)</div><div class="ttdef"><b>Definition</b> elf.cpp:475</div></div>
+<div class="ttc" id="anamespacekernel_1_1elf_html_ae81746671637a90991ec1b98cef60dc4"><div class="ttname"><a href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">kernel::elf::load</a></div><div class="ttdeci">TaskControlBlock * load(const ELF64Header *hdr, const uint8_t *file_data, uint64_t file_size)</div><div class="ttdef"><b>Definition</b> elf.cpp:494</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
-<div class="ttc" id="atypes_8hpp_html_a64be82add362de7c99ce6671d7f4f0a6"><div class="ttname"><a href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> types.hpp:25</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

@@ -7,5 +7,9 @@ var test__ipc__robustness_8cpp =
     [ "TEST_CLASS", "test__ipc__robustness_8cpp.html#aae2805771385c24dc6e11f468b5601a1", null ],
     [ "TEST_CLASS", "test__ipc__robustness_8cpp.html#afc4dc39ac62cfba110864842245cc9dd", null ],
     [ "TEST_CLASS", "test__ipc__robustness_8cpp.html#a3575fd480c3351d4723011446624e152", null ],
-    [ "TEST_CLASS", "test__ipc__robustness_8cpp.html#a8099edc40784f26046b41d3489e07a8e", null ]
+    [ "TEST_CLASS", "test__ipc__robustness_8cpp.html#a8099edc40784f26046b41d3489e07a8e", null ],
+    [ "TEST_CLASS", "test__ipc__robustness_8cpp.html#a8b4494286d682f956df6095526a51d6e", null ],
+    [ "TEST_CLASS", "test__ipc__robustness_8cpp.html#a56f6539969ed4fd4ef20820c6dd70677", null ],
+    [ "TEST_CLASS", "test__ipc__robustness_8cpp.html#a25a99d31130928df54e2c082439d77d0", null ],
+    [ "TEST_CLASS", "test__ipc__robustness_8cpp.html#aefb746ea9eb651518dd642476b98776d", null ]
 ];

@@ -21,6 +21,7 @@ var dir_cbd7f246bdf7dc0a50281a272327e6ed =
     [ "test", "dir_6198906391a1b3439aea9d345bf1b4f0.html", "dir_6198906391a1b3439aea9d345bf1b4f0" ],
     [ "time", "dir_fc5cfe600d892ad1b812a54c244fb6ca.html", "dir_fc5cfe600d892ad1b812a54c244fb6ca" ],
     [ "vfs", "dir_a74448e09a2c209561f74c876dd35689.html", "dir_a74448e09a2c209561f74c876dd35689" ],
+    [ "watchdog", "dir_11d263a09009195e2049303cc94860e8.html", "dir_11d263a09009195e2049303cc94860e8" ],
     [ "bootparams.cpp", "bootparams_8cpp.html", null ],
     [ "bootparams.hpp", "bootparams_8hpp.html", null ],
     [ "irq_delivery.cpp", "irq__delivery_8cpp.html", "irq__delivery_8cpp" ],

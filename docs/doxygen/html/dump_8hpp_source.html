@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -150,25 +150,25 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dump_8hpp_sour
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span></div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="keywordtype">void</span> dump_cpu_regs();</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span></div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1debug.html#ade0bc324da03fcc112cdb93eb35f220b">dump_task_info</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> task_id);</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1debug.html#ade0bc324da03fcc112cdb93eb35f220b">dump_task_info</a>(uint64_t task_id);</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span></div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1debug.html#a70b0bd6c79eac81164d116b1c7b780d7">dump_all_tasks</a>();</div>
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span></div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1debug.html#ae301850b7dcbeb7beaeb3dc92d909ddf">record_task_entry</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> entry, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> tcb);</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1debug.html#ae301850b7dcbeb7beaeb3dc92d909ddf">record_task_entry</a>(uint64_t entry, uint64_t tcb);</div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span></div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_function" href="namespacekernel_1_1debug.html#a094fd17ebd41a3d23a3ac83dbab61387">find_entry_owner</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value);</div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="code hl_function" href="namespacekernel_1_1debug.html#a094fd17ebd41a3d23a3ac83dbab61387">find_entry_owner</a>(uint64_t value);</div>
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span> </div>
 <div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>} <span class="comment">// namespace debug</span></div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="anamespacekernel_1_1debug_html"><div class="ttname"><a href="namespacekernel_1_1debug.html">kernel::debug</a></div><div class="ttdef"><b>Definition</b> debug_bind.hpp:35</div></div>
-<div class="ttc" id="anamespacekernel_1_1debug_html_a094fd17ebd41a3d23a3ac83dbab61387"><div class="ttname"><a href="namespacekernel_1_1debug.html#a094fd17ebd41a3d23a3ac83dbab61387">kernel::debug::find_entry_owner</a></div><div class="ttdeci">uint64_t find_entry_owner(uint64_t value)</div><div class="ttdoc">If value equals the low 32 bits or full value of a recently created task&#39;s entry, return that task&#39;s ...</div><div class="ttdef"><b>Definition</b> task.cpp:88</div></div>
+<div class="ttc" id="anamespacekernel_1_1debug_html_a094fd17ebd41a3d23a3ac83dbab61387"><div class="ttname"><a href="namespacekernel_1_1debug.html#a094fd17ebd41a3d23a3ac83dbab61387">kernel::debug::find_entry_owner</a></div><div class="ttdeci">uint64_t find_entry_owner(uint64_t value)</div><div class="ttdoc">If value equals the low 32 bits or full value of a recently created task&#39;s entry, return that task&#39;s ...</div><div class="ttdef"><b>Definition</b> task.cpp:99</div></div>
 <div class="ttc" id="anamespacekernel_1_1debug_html_a70b0bd6c79eac81164d116b1c7b780d7"><div class="ttname"><a href="namespacekernel_1_1debug.html#a70b0bd6c79eac81164d116b1c7b780d7">kernel::debug::dump_all_tasks</a></div><div class="ttdeci">void dump_all_tasks()</div><div class="ttdoc">Dump all valid tasks in the scheduler array.</div><div class="ttdef"><b>Definition</b> dump.cpp:431</div></div>
 <div class="ttc" id="anamespacekernel_1_1debug_html_a9c80a5a9a3a6f52efef1fabf4192ab72"><div class="ttname"><a href="namespacekernel_1_1debug.html#a9c80a5a9a3a6f52efef1fabf4192ab72">kernel::debug::dump_scheduler_info</a></div><div class="ttdeci">void dump_scheduler_info()</div><div class="ttdoc">Print three hex key-value pairs.</div><div class="ttdef"><b>Definition</b> dump.cpp:125</div></div>
 <div class="ttc" id="anamespacekernel_1_1debug_html_ade0bc324da03fcc112cdb93eb35f220b"><div class="ttname"><a href="namespacekernel_1_1debug.html#ade0bc324da03fcc112cdb93eb35f220b">kernel::debug::dump_task_info</a></div><div class="ttdeci">void dump_task_info(uint64_t task_id)</div><div class="ttdoc">Dump all CPU GPRs + CR0/CR2/CR3/CR4 (x86_64); stub on other archs.</div><div class="ttdef"><b>Definition</b> dump.cpp:266</div></div>
-<div class="ttc" id="anamespacekernel_1_1debug_html_ae301850b7dcbeb7beaeb3dc92d909ddf"><div class="ttname"><a href="namespacekernel_1_1debug.html#ae301850b7dcbeb7beaeb3dc92d909ddf">kernel::debug::record_task_entry</a></div><div class="ttdeci">void record_task_entry(uint64_t entry, uint64_t tcb)</div><div class="ttdef"><b>Definition</b> task.cpp:79</div></div>
+<div class="ttc" id="anamespacekernel_1_1debug_html_ae301850b7dcbeb7beaeb3dc92d909ddf"><div class="ttname"><a href="namespacekernel_1_1debug.html#ae301850b7dcbeb7beaeb3dc92d909ddf">kernel::debug::record_task_entry</a></div><div class="ttdeci">void record_task_entry(uint64_t entry, uint64_t tcb)</div><div class="ttdef"><b>Definition</b> task.cpp:88</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

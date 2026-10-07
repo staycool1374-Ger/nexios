@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -132,66 +132,66 @@ Collaboration diagram for kernel::time::PosixTime:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:a92252f1c299adc0264d49832cb813678" id="r_a92252f1c299adc0264d49832cb813678"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a92252f1c299adc0264d49832cb813678">sat_add</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> left, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> right) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a92252f1c299adc0264d49832cb813678" id="r_a92252f1c299adc0264d49832cb813678"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a92252f1c299adc0264d49832cb813678">sat_add</a> (uint64_t left, uint64_t right) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a92252f1c299adc0264d49832cb813678"><td class="mdescLeft">&#160;</td><td class="mdescRight">Saturating 64-bit add (absurd values clamp, never wrap).  <br /></td></tr>
-<tr class="memitem:a8d682debab8885e5b995395a48125965" id="r_a8d682debab8885e5b995395a48125965"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a8d682debab8885e5b995395a48125965">timespec_to_ns</a> (const <a class="el" href="structkernel_1_1time_1_1_timespec_u.html">TimespecU</a> &amp;spec, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;out_ns) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a8d682debab8885e5b995395a48125965" id="r_a8d682debab8885e5b995395a48125965"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a8d682debab8885e5b995395a48125965">timespec_to_ns</a> (const <a class="el" href="structkernel_1_1time_1_1_timespec_u.html">TimespecU</a> &amp;spec, uint64_t &amp;out_ns) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a8d682debab8885e5b995395a48125965"><td class="mdescLeft">&#160;</td><td class="mdescRight">Timespec to ns with range check (tv_nsec in [0, 1e9)).  <br /></td></tr>
-<tr class="memitem:a20bec68fe8955ca5b07f79c26091e144" id="r_a20bec68fe8955ca5b07f79c26091e144"><td class="memItemLeft">static <a class="el" href="structkernel_1_1time_1_1_timespec_u.html">TimespecU</a>&#160;</td><td class="memItemRight"><a class="el" href="#a20bec68fe8955ca5b07f79c26091e144">ns_to_timespec</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> total_ns) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a20bec68fe8955ca5b07f79c26091e144" id="r_a20bec68fe8955ca5b07f79c26091e144"><td class="memItemLeft">static <a class="el" href="structkernel_1_1time_1_1_timespec_u.html">TimespecU</a>&#160;</td><td class="memItemRight"><a class="el" href="#a20bec68fe8955ca5b07f79c26091e144">ns_to_timespec</a> (uint64_t total_ns) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a20bec68fe8955ca5b07f79c26091e144"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ns to saturating timespec split.  <br /></td></tr>
-<tr class="memitem:a9b71b1ce88cdfa987c9e702e162d3dd3" id="r_a9b71b1ce88cdfa987c9e702e162d3dd3"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a9b71b1ce88cdfa987c9e702e162d3dd3">boot_latch</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> epoch_sec) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a9b71b1ce88cdfa987c9e702e162d3dd3" id="r_a9b71b1ce88cdfa987c9e702e162d3dd3"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a9b71b1ce88cdfa987c9e702e162d3dd3">boot_latch</a> (uint64_t epoch_sec) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a9b71b1ce88cdfa987c9e702e162d3dd3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Latch the REALTIME boot anchor (idempotent, first wins).  <br /></td></tr>
-<tr class="memitem:afd438c21d6d6abd77d8204d3ffb10656" id="r_afd438c21d6d6abd77d8204d3ffb10656"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afd438c21d6d6abd77d8204d3ffb10656">clock_monotonic_ns</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:afd438c21d6d6abd77d8204d3ffb10656" id="r_afd438c21d6d6abd77d8204d3ffb10656"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#afd438c21d6d6abd77d8204d3ffb10656">clock_monotonic_ns</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:afd438c21d6d6abd77d8204d3ffb10656"><td class="mdescLeft">&#160;</td><td class="mdescRight">MONOTONIC ns (HRT clock, never RTC-dependent after boot).  <br /></td></tr>
-<tr class="memitem:a4b5575217053a3b5169f93f49962efbe" id="r_a4b5575217053a3b5169f93f49962efbe"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4b5575217053a3b5169f93f49962efbe">clock_realtime_ns</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a4b5575217053a3b5169f93f49962efbe" id="r_a4b5575217053a3b5169f93f49962efbe"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4b5575217053a3b5169f93f49962efbe">clock_realtime_ns</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a4b5575217053a3b5169f93f49962efbe"><td class="mdescLeft">&#160;</td><td class="mdescRight">REALTIME ns (anchor + monotonic delta, saturating).  <br /></td></tr>
-<tr class="memitem:a62f364fcf0dd95995469981ee25c6236" id="r_a62f364fcf0dd95995469981ee25c6236"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a62f364fcf0dd95995469981ee25c6236">anchor_reset_for_test</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a62f364fcf0dd95995469981ee25c6236" id="r_a62f364fcf0dd95995469981ee25c6236"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a62f364fcf0dd95995469981ee25c6236">anchor_reset_for_test</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a62f364fcf0dd95995469981ee25c6236"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test hook: reset the anchor latch (test isolation only).  <br /></td></tr>
-<tr class="memitem:aa12fe303b11a8d20560e6769fdc65d46" id="r_aa12fe303b11a8d20560e6769fdc65d46"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa12fe303b11a8d20560e6769fdc65d46">timer_create</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> clock_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> owner_gen, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;out_id) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:aa12fe303b11a8d20560e6769fdc65d46" id="r_aa12fe303b11a8d20560e6769fdc65d46"><td class="memItemLeft">static int64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa12fe303b11a8d20560e6769fdc65d46">timer_create</a> (uint64_t clock_id, uint64_t owner_id, uint32_t owner_gen, uint64_t &amp;out_id) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:aa12fe303b11a8d20560e6769fdc65d46"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a timer slot owned by (owner_id, owner_gen).  <br /></td></tr>
-<tr class="memitem:a3771551deb8247bab9f6101f6c9c9572" id="r_a3771551deb8247bab9f6101f6c9c9572"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3771551deb8247bab9f6101f6c9c9572">timer_settime</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> timer_id, const <a class="el" href="structkernel_1_1time_1_1_itimerspec_u.html">ItimerspecU</a> &amp;spec, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> owner_gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a3771551deb8247bab9f6101f6c9c9572" id="r_a3771551deb8247bab9f6101f6c9c9572"><td class="memItemLeft">static int64_t&#160;</td><td class="memItemRight"><a class="el" href="#a3771551deb8247bab9f6101f6c9c9572">timer_settime</a> (uint64_t timer_id, const <a class="el" href="structkernel_1_1time_1_1_itimerspec_u.html">ItimerspecU</a> &amp;spec, uint64_t owner_id, uint32_t owner_gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a3771551deb8247bab9f6101f6c9c9572"><td class="mdescLeft">&#160;</td><td class="mdescRight">Arm/disarm/re-arm a timer (zero value = disarm).  <br /></td></tr>
-<tr class="memitem:a402af3d6e87cb69b0a9339b1002d4d62" id="r_a402af3d6e87cb69b0a9339b1002d4d62"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a402af3d6e87cb69b0a9339b1002d4d62">timer_gettime</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> timer_id, <a class="el" href="structkernel_1_1time_1_1_itimerspec_u.html">ItimerspecU</a> &amp;out_spec, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> owner_gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a402af3d6e87cb69b0a9339b1002d4d62" id="r_a402af3d6e87cb69b0a9339b1002d4d62"><td class="memItemLeft">static int64_t&#160;</td><td class="memItemRight"><a class="el" href="#a402af3d6e87cb69b0a9339b1002d4d62">timer_gettime</a> (uint64_t timer_id, <a class="el" href="structkernel_1_1time_1_1_itimerspec_u.html">ItimerspecU</a> &amp;out_spec, uint64_t owner_id, uint32_t owner_gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a402af3d6e87cb69b0a9339b1002d4d62"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read remaining + period of a timer.  <br /></td></tr>
-<tr class="memitem:a6659a41b52f75a85d925095258848f30" id="r_a6659a41b52f75a85d925095258848f30"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6659a41b52f75a85d925095258848f30">timer_delete</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> timer_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> owner_gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a6659a41b52f75a85d925095258848f30" id="r_a6659a41b52f75a85d925095258848f30"><td class="memItemLeft">static int64_t&#160;</td><td class="memItemRight"><a class="el" href="#a6659a41b52f75a85d925095258848f30">timer_delete</a> (uint64_t timer_id, uint64_t owner_id, uint32_t owner_gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a6659a41b52f75a85d925095258848f30"><td class="mdescLeft">&#160;</td><td class="mdescRight">Delete a timer (cancel arm, free slot, track_remove).  <br /></td></tr>
-<tr class="memitem:a5f94171ee37e5580e0300f617fb7fcca" id="r_a5f94171ee37e5580e0300f617fb7fcca"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5f94171ee37e5580e0300f617fb7fcca">timerfd_slot_alloc</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> clock_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> owner_gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a5f94171ee37e5580e0300f617fb7fcca" id="r_a5f94171ee37e5580e0300f617fb7fcca"><td class="memItemLeft">static int64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5f94171ee37e5580e0300f617fb7fcca">timerfd_slot_alloc</a> (uint64_t clock_id, uint64_t owner_id, uint32_t owner_gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a5f94171ee37e5580e0300f617fb7fcca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocate a timerfd slot owned by (owner_id, owner_gen).  <br /></td></tr>
-<tr class="memitem:a247fdc52168ddb78d82fcd97f5894db3" id="r_a247fdc52168ddb78d82fcd97f5894db3"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a247fdc52168ddb78d82fcd97f5894db3">timerfd_slot_gen_for_owner</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> index, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> owner_gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a247fdc52168ddb78d82fcd97f5894db3" id="r_a247fdc52168ddb78d82fcd97f5894db3"><td class="memItemLeft">static uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a247fdc52168ddb78d82fcd97f5894db3">timerfd_slot_gen_for_owner</a> (uint32_t index, uint64_t owner_id, uint32_t owner_gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a247fdc52168ddb78d82fcd97f5894db3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Owner-validated generation peek for vnode tagging.  <br /></td></tr>
-<tr class="memitem:ad2875ca87bfd070ec0079365dba97981" id="r_ad2875ca87bfd070ec0079365dba97981"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad2875ca87bfd070ec0079365dba97981">timerfd_settime</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> index, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> slot_gen, const <a class="el" href="structkernel_1_1time_1_1_itimerspec_u.html">ItimerspecU</a> &amp;spec, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> owner_gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ad2875ca87bfd070ec0079365dba97981" id="r_ad2875ca87bfd070ec0079365dba97981"><td class="memItemLeft">static int64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad2875ca87bfd070ec0079365dba97981">timerfd_settime</a> (uint32_t index, uint32_t slot_gen, const <a class="el" href="structkernel_1_1time_1_1_itimerspec_u.html">ItimerspecU</a> &amp;spec, uint64_t owner_id, uint32_t owner_gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ad2875ca87bfd070ec0079365dba97981"><td class="mdescLeft">&#160;</td><td class="mdescRight">Arm/disarm a timerfd slot (zero value = disarm).  <br /></td></tr>
-<tr class="memitem:ab1fad582265b5540a4c16eaf6997f107" id="r_ab1fad582265b5540a4c16eaf6997f107"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab1fad582265b5540a4c16eaf6997f107">timerfd_consume</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> index, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> slot_gen, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> owner_gen, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;out_count) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ab1fad582265b5540a4c16eaf6997f107" id="r_ab1fad582265b5540a4c16eaf6997f107"><td class="memItemLeft">static int64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab1fad582265b5540a4c16eaf6997f107">timerfd_consume</a> (uint32_t index, uint32_t slot_gen, uint64_t owner_id, uint32_t owner_gen, uint64_t &amp;out_count) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ab1fad582265b5540a4c16eaf6997f107"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read-and-clear the expiry counter.  <br /></td></tr>
-<tr class="memitem:a5a410e069ebda98e9ded8ba878e330b3" id="r_a5a410e069ebda98e9ded8ba878e330b3"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a5a410e069ebda98e9ded8ba878e330b3">timerfd_waiter_arm</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> index, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> slot_gen, TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a5a410e069ebda98e9ded8ba878e330b3" id="r_a5a410e069ebda98e9ded8ba878e330b3"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a5a410e069ebda98e9ded8ba878e330b3">timerfd_waiter_arm</a> (uint32_t index, uint32_t slot_gen, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a5a410e069ebda98e9ded8ba878e330b3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a BLOCKED waiter on a timerfd slot.  <br /></td></tr>
-<tr class="memitem:a28b788fee6a7c4edd5d7fe19f2bed425" id="r_a28b788fee6a7c4edd5d7fe19f2bed425"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a28b788fee6a7c4edd5d7fe19f2bed425">timerfd_waiter_clear</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> index, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> slot_gen, const TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a28b788fee6a7c4edd5d7fe19f2bed425" id="r_a28b788fee6a7c4edd5d7fe19f2bed425"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a28b788fee6a7c4edd5d7fe19f2bed425">timerfd_waiter_clear</a> (uint32_t index, uint32_t slot_gen, const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a28b788fee6a7c4edd5d7fe19f2bed425"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear the waiter registration (wake observed or cancelled).  <br /></td></tr>
-<tr class="memitem:a2f3f5bdb5961a3cf4c6586675f598503" id="r_a2f3f5bdb5961a3cf4c6586675f598503"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2f3f5bdb5961a3cf4c6586675f598503">timerfd_slot_free</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> index, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> slot_gen, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> owner_gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a2f3f5bdb5961a3cf4c6586675f598503" id="r_a2f3f5bdb5961a3cf4c6586675f598503"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2f3f5bdb5961a3cf4c6586675f598503">timerfd_slot_free</a> (uint32_t index, uint32_t slot_gen, uint64_t owner_id, uint32_t owner_gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a2f3f5bdb5961a3cf4c6586675f598503"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free a timerfd slot (close path; wakes any waiter with EBADF).  <br /></td></tr>
-<tr class="memitem:abc0a8f21b4ee01a37a68e76855f23d1d" id="r_abc0a8f21b4ee01a37a68e76855f23d1d"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#abc0a8f21b4ee01a37a68e76855f23d1d">sleep_arm</a> (TaskControlBlock &amp;task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> budget_ns) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:abc0a8f21b4ee01a37a68e76855f23d1d" id="r_abc0a8f21b4ee01a37a68e76855f23d1d"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#abc0a8f21b4ee01a37a68e76855f23d1d">sleep_arm</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task, uint64_t budget_ns) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:abc0a8f21b4ee01a37a68e76855f23d1d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Arm a bounded nanosleep on a TCB (caller holds no locks).  <br /></td></tr>
-<tr class="memitem:a0d37ef2e16195ce75f11f83cfb97f5ba" id="r_a0d37ef2e16195ce75f11f83cfb97f5ba"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0d37ef2e16195ce75f11f83cfb97f5ba">sleep_cancel</a> (TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a0d37ef2e16195ce75f11f83cfb97f5ba" id="r_a0d37ef2e16195ce75f11f83cfb97f5ba"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0d37ef2e16195ce75f11f83cfb97f5ba">sleep_cancel</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a0d37ef2e16195ce75f11f83cfb97f5ba"><td class="mdescLeft">&#160;</td><td class="mdescRight">Cancel a nanosleep arm (idempotent, fail-closed stale).  <br /></td></tr>
-<tr class="memitem:a0caf09fb16a5e35b1d90021e9e3c516b" id="r_a0caf09fb16a5e35b1d90021e9e3c516b"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0caf09fb16a5e35b1d90021e9e3c516b">drain_owner</a> (TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a0caf09fb16a5e35b1d90021e9e3c516b" id="r_a0caf09fb16a5e35b1d90021e9e3c516b"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0caf09fb16a5e35b1d90021e9e3c516b">drain_owner</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a0caf09fb16a5e35b1d90021e9e3c516b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Death-drain: disarm sleep + free owned timers/timerfds + clear waiter registrations of a dying task (cleanup path, §12.3).  <br /></td></tr>
-<tr class="memitem:abc2ee27b02069cb28dea1ed5535b6f4a" id="r_abc2ee27b02069cb28dea1ed5535b6f4a"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abc2ee27b02069cb28dea1ed5535b6f4a">reapply_wakes</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> sched_cpu) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:abc2ee27b02069cb28dea1ed5535b6f4a" id="r_abc2ee27b02069cb28dea1ed5535b6f4a"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abc2ee27b02069cb28dea1ed5535b6f4a">reapply_wakes</a> (uint32_t sched_cpu) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:abc2ee27b02069cb28dea1ed5535b6f4a"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classkernel_1_1_scheduler.html" title="Test-only override for the NOTIFY_MONITOR action target PID. When CONFIG_DEADLINE_MONITOR_PID == 0 (d...">Scheduler</a> re-apply: wake sleep-expired + timerfd-ready BLOCKED tasks (level-triggered; call under scheduler_lock_).  <br /></td></tr>
-<tr class="memitem:a63b2c2a95fb9fd51b08ff8f0632fbc1d" id="r_a63b2c2a95fb9fd51b08ff8f0632fbc1d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a63b2c2a95fb9fd51b08ff8f0632fbc1d">sleep_fire</a> (void *context) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a63b2c2a95fb9fd51b08ff8f0632fbc1d" id="r_a63b2c2a95fb9fd51b08ff8f0632fbc1d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a63b2c2a95fb9fd51b08ff8f0632fbc1d">sleep_fire</a> (void *context) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a63b2c2a95fb9fd51b08ff8f0632fbc1d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wheel callback: nanosleep expiry (flag-store only).  <br /></td></tr>
-<tr class="memitem:adc2575041ec83dbd7f16cb726a2f44bb" id="r_adc2575041ec83dbd7f16cb726a2f44bb"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#adc2575041ec83dbd7f16cb726a2f44bb">timer_fire</a> (void *context) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:adc2575041ec83dbd7f16cb726a2f44bb" id="r_adc2575041ec83dbd7f16cb726a2f44bb"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#adc2575041ec83dbd7f16cb726a2f44bb">timer_fire</a> (void *context) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:adc2575041ec83dbd7f16cb726a2f44bb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wheel callback: posix timer expiry (+ periodic re-arm).  <br /></td></tr>
-<tr class="memitem:a356b4caba07270eaf25636bd7f8826f8" id="r_a356b4caba07270eaf25636bd7f8826f8"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a356b4caba07270eaf25636bd7f8826f8">timerfd_fire</a> (void *context) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a356b4caba07270eaf25636bd7f8826f8" id="r_a356b4caba07270eaf25636bd7f8826f8"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a356b4caba07270eaf25636bd7f8826f8">timerfd_fire</a> (void *context) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a356b4caba07270eaf25636bd7f8826f8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wheel callback: timerfd expiry (count + waiter flag).  <br /></td></tr>
-<tr class="memitem:ab273de2cfc0da14cae7a44a71d30cb57" id="r_ab273de2cfc0da14cae7a44a71d30cb57"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab273de2cfc0da14cae7a44a71d30cb57">snapshot_reset</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ab273de2cfc0da14cae7a44a71d30cb57" id="r_ab273de2cfc0da14cae7a44a71d30cb57"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab273de2cfc0da14cae7a44a71d30cb57">snapshot_reset</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ab273de2cfc0da14cae7a44a71d30cb57"><td class="mdescLeft">&#160;</td><td class="mdescRight">Disarm everything, invalidate handles, zero counters (test isolation; bumps all generations fail-closed).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
-<tr class="memitem:aaf25e1887a09ad810b0a254e998b33f5" id="r_aaf25e1887a09ad810b0a254e998b33f5"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aaf25e1887a09ad810b0a254e998b33f5">kMaxPosixTimers</a> = 32</td></tr>
+<tr class="memitem:aaf25e1887a09ad810b0a254e998b33f5" id="r_aaf25e1887a09ad810b0a254e998b33f5"><td class="memItemLeft">static constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#aaf25e1887a09ad810b0a254e998b33f5">kMaxPosixTimers</a> = 32</td></tr>
 <tr class="memdesc:aaf25e1887a09ad810b0a254e998b33f5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static timer slots (bounded; table-full fails closed).  <br /></td></tr>
-<tr class="memitem:a31ddcd5999edf06f6af08ab70dbef09d" id="r_a31ddcd5999edf06f6af08ab70dbef09d"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a31ddcd5999edf06f6af08ab70dbef09d">kMaxTimerfds</a> = 32</td></tr>
+<tr class="memitem:a31ddcd5999edf06f6af08ab70dbef09d" id="r_a31ddcd5999edf06f6af08ab70dbef09d"><td class="memItemLeft">static constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a31ddcd5999edf06f6af08ab70dbef09d">kMaxTimerfds</a> = 32</td></tr>
 <tr class="memdesc:a31ddcd5999edf06f6af08ab70dbef09d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static timerfd slots (bounded; table-full fails closed).  <br /></td></tr>
-<tr class="memitem:a2ba86f1aeb35d8df0d7c86c18693dc45" id="r_a2ba86f1aeb35d8df0d7c86c18693dc45"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2ba86f1aeb35d8df0d7c86c18693dc45">kTimerIdIndexBits</a> = 8</td></tr>
+<tr class="memitem:a2ba86f1aeb35d8df0d7c86c18693dc45" id="r_a2ba86f1aeb35d8df0d7c86c18693dc45"><td class="memItemLeft">static constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a2ba86f1aeb35d8df0d7c86c18693dc45">kTimerIdIndexBits</a> = 8</td></tr>
 <tr class="memdesc:a2ba86f1aeb35d8df0d7c86c18693dc45"><td class="mdescLeft">&#160;</td><td class="mdescRight">Timer ID layout: (generation &lt;&lt; 8) | index.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -236,7 +236,7 @@ Static Public Attributes</h2></td></tr>
         <tr>
           <td class="memname">void kernel::time::PosixTime::boot_latch </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>epoch_sec</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>epoch_sec</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -267,7 +267,7 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::time::PosixTime::clock_monotonic_ns </td>
+          <td class="memname">uint64_t kernel::time::PosixTime::clock_monotonic_ns </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -294,7 +294,7 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::time::PosixTime::clock_realtime_ns </td>
+          <td class="memname">uint64_t kernel::time::PosixTime::clock_realtime_ns </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -329,7 +329,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::time::PosixTime::drain_owner </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -362,7 +362,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname"><a class="el" href="structkernel_1_1time_1_1_timespec_u.html">TimespecU</a> kernel::time::PosixTime::ns_to_timespec </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>total_ns</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>total_ns</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -389,7 +389,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::time::PosixTime::reapply_wakes </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>sched_cpu</em></span></td><td>)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>sched_cpu</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -426,14 +426,14 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::time::PosixTime::sat_add </td>
+          <td class="memname">uint64_t kernel::time::PosixTime::sat_add </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>left</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>left</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>right</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>right</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -459,12 +459,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::time::PosixTime::sleep_arm </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>budget_ns</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>budget_ns</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -497,7 +497,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::time::PosixTime::sleep_cancel </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -542,6 +542,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Wheel callback: nanosleep expiry (flag-store only). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1time_1_1_posix_time_a63b2c2a95fb9fd51b08ff8f0632fbc1d_cgraph.png" border="0" usemap="#aclasskernel_1_1time_1_1_posix_time_a63b2c2a95fb9fd51b08ff8f0632fbc1d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
 
 </div>
 </div>
@@ -573,7 +579,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1time_1_1_posix_time_ab273de2cfc0da14cae7a44a71d30cb57_cgraph.png" border="0" usemap="#aclasskernel_1_1time_1_1_posix_time_ab273de2cfc0da14cae7a44a71d30cb57_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -588,24 +594,24 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::PosixTime::timer_create </td>
+          <td class="memname">int64_t kernel::time::PosixTime::timer_create </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>clock_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>clock_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out_id</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_id</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -621,7 +627,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1time_1_1_posix_time_aa12fe303b11a8d20560e6769fdc65d46_cgraph.png" border="0" usemap="#aclasskernel_1_1time_1_1_posix_time_aa12fe303b11a8d20560e6769fdc65d46_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -636,19 +642,19 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::PosixTime::timer_delete </td>
+          <td class="memname">int64_t kernel::time::PosixTime::timer_delete </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>timer_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>timer_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -691,7 +697,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1time_1_1_posix_time_adc2575041ec83dbd7f16cb726a2f44bb_cgraph.png" border="0" usemap="#aclasskernel_1_1time_1_1_posix_time_adc2575041ec83dbd7f16cb726a2f44bb_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -706,9 +712,9 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::PosixTime::timer_gettime </td>
+          <td class="memname">int64_t kernel::time::PosixTime::timer_gettime </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>timer_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>timer_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -718,12 +724,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -739,7 +745,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1time_1_1_posix_time_a402af3d6e87cb69b0a9339b1002d4d62_cgraph.png" border="0" usemap="#aclasskernel_1_1time_1_1_posix_time_a402af3d6e87cb69b0a9339b1002d4d62_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -754,9 +760,9 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::PosixTime::timer_settime </td>
+          <td class="memname">int64_t kernel::time::PosixTime::timer_settime </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>timer_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>timer_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -766,12 +772,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -787,7 +793,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1time_1_1_posix_time_a3771551deb8247bab9f6101f6c9c9572_cgraph.png" border="0" usemap="#aclasskernel_1_1time_1_1_posix_time_a3771551deb8247bab9f6101f6c9c9572_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -802,29 +808,29 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::PosixTime::timerfd_consume </td>
+          <td class="memname">int64_t kernel::time::PosixTime::timerfd_consume </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>slot_gen</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>slot_gen</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out_count</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_count</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -867,7 +873,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1time_1_1_posix_time_a356b4caba07270eaf25636bd7f8826f8_cgraph.png" border="0" usemap="#aclasskernel_1_1time_1_1_posix_time_a356b4caba07270eaf25636bd7f8826f8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -882,14 +888,14 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::PosixTime::timerfd_settime </td>
+          <td class="memname">int64_t kernel::time::PosixTime::timerfd_settime </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>slot_gen</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>slot_gen</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -899,12 +905,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -920,7 +926,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1time_1_1_posix_time_ad2875ca87bfd070ec0079365dba97981_cgraph.png" border="0" usemap="#aclasskernel_1_1time_1_1_posix_time_ad2875ca87bfd070ec0079365dba97981_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -935,19 +941,19 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::PosixTime::timerfd_slot_alloc </td>
+          <td class="memname">int64_t kernel::time::PosixTime::timerfd_slot_alloc </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>clock_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>clock_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -963,7 +969,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1time_1_1_posix_time_a5f94171ee37e5580e0300f617fb7fcca_cgraph.png" border="0" usemap="#aclasskernel_1_1time_1_1_posix_time_a5f94171ee37e5580e0300f617fb7fcca_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -980,22 +986,22 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::time::PosixTime::timerfd_slot_free </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>slot_gen</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>slot_gen</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -1019,19 +1025,19 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::time::PosixTime::timerfd_slot_gen_for_owner </td>
+          <td class="memname">uint32_t kernel::time::PosixTime::timerfd_slot_gen_for_owner </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>owner_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>owner_gen</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -1058,17 +1064,17 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::time::PosixTime::timerfd_waiter_arm </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>slot_gen</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>slot_gen</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -1095,17 +1101,17 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::time::PosixTime::timerfd_waiter_clear </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>slot_gen</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>slot_gen</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>&#160;)</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -1136,7 +1142,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out_ns</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_ns</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -1162,7 +1168,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::time::PosixTime::kMaxPosixTimers = 32</td>
+          <td class="memname">uint32_t kernel::time::PosixTime::kMaxPosixTimers = 32</td>
         </tr>
       </table>
   </td>
@@ -1186,7 +1192,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::time::PosixTime::kMaxTimerfds = 32</td>
+          <td class="memname">uint32_t kernel::time::PosixTime::kMaxTimerfds = 32</td>
         </tr>
       </table>
   </td>
@@ -1210,7 +1216,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::time::PosixTime::kTimerIdIndexBits = 8</td>
+          <td class="memname">uint32_t kernel::time::PosixTime::kTimerIdIndexBits = 8</td>
         </tr>
       </table>
   </td>

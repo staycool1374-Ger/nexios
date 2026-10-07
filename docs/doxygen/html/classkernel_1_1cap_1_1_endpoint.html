@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -138,52 +138,52 @@ Collaboration diagram for kernel::cap::Endpoint:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:af3270ad2831af92c117bb3d26ee727b7" id="r_af3270ad2831af92c117bb3d26ee727b7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af3270ad2831af92c117bb3d26ee727b7">dispose</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> override</td></tr>
-<tr class="memdesc:af3270ad2831af92c117bb3d26ee727b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Final teardown: detaches the receiver binding and returns the block to the MemPool.  <br /></td></tr>
-<tr class="memitem:a7052d2b0234a94380ba1522ba38e5fae" id="r_a7052d2b0234a94380ba1522ba38e5fae"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a7052d2b0234a94380ba1522ba38e5fae">is_shared</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> override</td></tr>
+<tr class="memitem:af3270ad2831af92c117bb3d26ee727b7" id="r_af3270ad2831af92c117bb3d26ee727b7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af3270ad2831af92c117bb3d26ee727b7">dispose</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> override</td></tr>
+<tr class="memdesc:af3270ad2831af92c117bb3d26ee727b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Final teardown: detaches the receiver binding and returns the block to the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>.  <br /></td></tr>
+<tr class="memitem:a7052d2b0234a94380ba1522ba38e5fae" id="r_a7052d2b0234a94380ba1522ba38e5fae"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a7052d2b0234a94380ba1522ba38e5fae">is_shared</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> override</td></tr>
 <tr class="memdesc:a7052d2b0234a94380ba1522ba38e5fae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Genuinely shared (referenced by capability slots).  <br /></td></tr>
 <tr class="inherit_header pub_methods_classkernel_1_1_kernel_object"><td colspan="2">Public Member Functions inherited from <a class="el" href="classkernel_1_1_kernel_object.html">kernel::KernelObject</a></td></tr>
-<tr class="memitem:a0e3bd02dbe3ab0e1a9ae52ffa5485751 pub_methods_classkernel_1_1_kernel_object" id="r_a0e3bd02dbe3ab0e1a9ae52ffa5485751"><td class="memItemLeft">virtual void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751">revoke</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a0e3bd02dbe3ab0e1a9ae52ffa5485751 pub_methods_classkernel_1_1_kernel_object" id="r_a0e3bd02dbe3ab0e1a9ae52ffa5485751"><td class="memItemLeft">virtual void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751">revoke</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a0e3bd02dbe3ab0e1a9ae52ffa5485751 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op. A derived object overrides this to mark itself revoked; after <a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751" title="Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op....">revoke()</a>, <a class="el" href="classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464" title="Takes a new reference. Relaxed ordering is sufficient for the reference count (a lifetime guard,...">acquire()</a> refuses and the object's capability references are invalidated. Called under the object's own serialization.  <br /></td></tr>
-<tr class="memitem:a9b05ebf7eeb2acebab467626da5ef464 pub_methods_classkernel_1_1_kernel_object" id="r_a9b05ebf7eeb2acebab467626da5ef464"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464">acquire</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a9b05ebf7eeb2acebab467626da5ef464 pub_methods_classkernel_1_1_kernel_object" id="r_a9b05ebf7eeb2acebab467626da5ef464"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464">acquire</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a9b05ebf7eeb2acebab467626da5ef464 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Takes a new reference. Relaxed ordering is sufficient for the reference count (a lifetime guard, not a payload ordering barrier). Acquire ordering on the revoked check makes the <a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751" title="Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op....">revoke()</a> publication visible on SMP (ROADMAP 0.4.x).  <br /></td></tr>
-<tr class="memitem:a606920ca39bdbf2e49ddb42b76cc3370 pub_methods_classkernel_1_1_kernel_object" id="r_a606920ca39bdbf2e49ddb42b76cc3370"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a606920ca39bdbf2e49ddb42b76cc3370">release</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a606920ca39bdbf2e49ddb42b76cc3370 pub_methods_classkernel_1_1_kernel_object" id="r_a606920ca39bdbf2e49ddb42b76cc3370"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a606920ca39bdbf2e49ddb42b76cc3370">release</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a606920ca39bdbf2e49ddb42b76cc3370 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Drops one reference. The last releaser (the one that observes the 1→0 transition) invokes <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328" title="Final teardown, invoked exactly once on the last release. Each derived object implements its own disp...">dispose()</a>.  <br /></td></tr>
-<tr class="memitem:ae82a40fc7bdcb9ba1abbb18b0ea6e6d9 pub_methods_classkernel_1_1_kernel_object" id="r_ae82a40fc7bdcb9ba1abbb18b0ea6e6d9"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#ae82a40fc7bdcb9ba1abbb18b0ea6e6d9">refcount</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ae82a40fc7bdcb9ba1abbb18b0ea6e6d9 pub_methods_classkernel_1_1_kernel_object" id="r_ae82a40fc7bdcb9ba1abbb18b0ea6e6d9"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#ae82a40fc7bdcb9ba1abbb18b0ea6e6d9">refcount</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ae82a40fc7bdcb9ba1abbb18b0ea6e6d9 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the current reference count (debug invariant check).  <br /></td></tr>
-<tr class="memitem:af9584fa567b4308e86096a788fe562c4 pub_methods_classkernel_1_1_kernel_object" id="r_af9584fa567b4308e86096a788fe562c4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#af9584fa567b4308e86096a788fe562c4">revoked</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:af9584fa567b4308e86096a788fe562c4 pub_methods_classkernel_1_1_kernel_object" id="r_af9584fa567b4308e86096a788fe562c4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#af9584fa567b4308e86096a788fe562c4">revoked</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:af9584fa567b4308e86096a788fe562c4 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">True after <a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751" title="Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op....">revoke()</a> was called (capability revocation).  <br /></td></tr>
-<tr class="memitem:afbcf31356498702aeda5288e2c598068 pub_methods_classkernel_1_1_kernel_object" id="r_afbcf31356498702aeda5288e2c598068"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#afbcf31356498702aeda5288e2c598068">mark_pool_backed</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:afbcf31356498702aeda5288e2c598068 pub_methods_classkernel_1_1_kernel_object" id="r_afbcf31356498702aeda5288e2c598068"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#afbcf31356498702aeda5288e2c598068">mark_pool_backed</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:afbcf31356498702aeda5288e2c598068 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Marks the object as pool-backed (factory protocol). Stack- allocated test instances stay unmarked and are never freed by <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328" title="Final teardown, invoked exactly once on the last release. Each derived object implements its own disp...">dispose()</a>.  <br /></td></tr>
-<tr class="memitem:a510dcbc8492ee1adf161f749985ba1e5 pub_methods_classkernel_1_1_kernel_object" id="r_a510dcbc8492ee1adf161f749985ba1e5"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a510dcbc8492ee1adf161f749985ba1e5">is_pool_backed</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a510dcbc8492ee1adf161f749985ba1e5 pub_methods_classkernel_1_1_kernel_object" id="r_a510dcbc8492ee1adf161f749985ba1e5"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a510dcbc8492ee1adf161f749985ba1e5">is_pool_backed</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:a061ae002e50ad3089b84405e2d5d23c2" id="r_a061ae002e50ad3089b84405e2d5d23c2"><td class="memItemLeft">static <a class="el" href="classkernel_1_1cap_1_1_endpoint.html">Endpoint</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a061ae002e50ad3089b84405e2d5d23c2">create</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> badge)</td></tr>
-<tr class="memdesc:a061ae002e50ad3089b84405e2d5d23c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocates an <a class="el" href="classkernel_1_1cap_1_1_endpoint.html" title="A capability-gated IPC endpoint: a heap-resident message queue plus a receiver binding and badge....">Endpoint</a> from the MemPool, pool-marks it and initialises the embedded queue. Returns nullptr on failure.  <br /></td></tr>
+<tr class="memitem:a061ae002e50ad3089b84405e2d5d23c2" id="r_a061ae002e50ad3089b84405e2d5d23c2"><td class="memItemLeft">static <a class="el" href="classkernel_1_1cap_1_1_endpoint.html">Endpoint</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a061ae002e50ad3089b84405e2d5d23c2">create</a> (uint32_t badge)</td></tr>
+<tr class="memdesc:a061ae002e50ad3089b84405e2d5d23c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocates an <a class="el" href="classkernel_1_1cap_1_1_endpoint.html" title="A capability-gated IPC endpoint: a heap-resident message queue plus a receiver binding and badge....">Endpoint</a> from the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>, pool-marks it and initialises the embedded queue. Returns nullptr on failure.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:af877588b4c59c75748f39c2b208798b3" id="r_af877588b4c59c75748f39c2b208798b3"><td class="memItemLeft">MessageQueue&#160;</td><td class="memItemRight"><a class="el" href="#af877588b4c59c75748f39c2b208798b3">q</a></td></tr>
-<tr class="memitem:a5c46d988f5fd9e168db0a047f2486616" id="r_a5c46d988f5fd9e168db0a047f2486616"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a5c46d988f5fd9e168db0a047f2486616">bound_receiver</a> = nullptr</td></tr>
-<tr class="memitem:aa3592398db43865f1ff92c27e5956a47" id="r_aa3592398db43865f1ff92c27e5956a47"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa3592398db43865f1ff92c27e5956a47">badge</a> = 0</td></tr>
-<tr class="memitem:a40699f535c935245c038e8d33ae5189c" id="r_a40699f535c935245c038e8d33ae5189c"><td class="memItemLeft">sync::SpinLock&#160;</td><td class="memItemRight"><a class="el" href="#a40699f535c935245c038e8d33ae5189c">lock_</a></td></tr>
+<tr class="memitem:af877588b4c59c75748f39c2b208798b3" id="r_af877588b4c59c75748f39c2b208798b3"><td class="memItemLeft"><a class="el" href="structkernel_1_1_message_queue.html">MessageQueue</a>&#160;</td><td class="memItemRight"><a class="el" href="#af877588b4c59c75748f39c2b208798b3">q</a></td></tr>
+<tr class="memitem:a5c46d988f5fd9e168db0a047f2486616" id="r_a5c46d988f5fd9e168db0a047f2486616"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a5c46d988f5fd9e168db0a047f2486616">bound_receiver</a> = nullptr</td></tr>
+<tr class="memitem:aa3592398db43865f1ff92c27e5956a47" id="r_aa3592398db43865f1ff92c27e5956a47"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#aa3592398db43865f1ff92c27e5956a47">badge</a> = 0</td></tr>
+<tr class="memitem:a40699f535c935245c038e8d33ae5189c" id="r_a40699f535c935245c038e8d33ae5189c"><td class="memItemLeft"><a class="el" href="classkernel_1_1sync_1_1_spin_lock.html">sync::SpinLock</a>&#160;</td><td class="memItemRight"><a class="el" href="#a40699f535c935245c038e8d33ae5189c">lock_</a></td></tr>
 <tr class="memitem:a73d17e58cd94a5ee63a426f06d9dc76e" id="r_a73d17e58cd94a5ee63a426f06d9dc76e"><td class="memItemLeft">volatile bool&#160;</td><td class="memItemRight"><a class="el" href="#a73d17e58cd94a5ee63a426f06d9dc76e">disposed_</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memdesc:a73d17e58cd94a5ee63a426f06d9dc76e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set by <a class="el" href="#af3270ad2831af92c117bb3d26ee727b7" title="Final teardown: detaches the receiver binding and returns the block to the MemPool.">dispose()</a> before the block is freed; blocked senders re-check it after wake so they never touch freed memory (H-3).  <br /></td></tr>
 <tr class="inherit_header pub_attribs_classkernel_1_1_kernel_object"><td colspan="2">Data Fields inherited from <a class="el" href="classkernel_1_1_kernel_object.html">kernel::KernelObject</a></td></tr>
 <tr class="memitem:ae1b6efc57e4770d3a325c69db75ffcab pub_attribs_classkernel_1_1_kernel_object" id="r_ae1b6efc57e4770d3a325c69db75ffcab"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#ae1b6efc57e4770d3a325c69db75ffcab">task_obj_next_</a> = nullptr</td></tr>
-<tr class="memdesc:ae1b6efc57e4770d3a325c69db75ffcab pub_attribs_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive per-task object-list links. The list is owned by the TaskControlBlock and is only ever mutated outside IRQ context.  <br /></td></tr>
+<tr class="memdesc:ae1b6efc57e4770d3a325c69db75ffcab pub_attribs_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive per-task object-list links. The list is owned by the <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a> and is only ever mutated outside IRQ context.  <br /></td></tr>
 <tr class="memitem:a18affd7a7315bac0d48df5136ceed782 pub_attribs_classkernel_1_1_kernel_object" id="r_a18affd7a7315bac0d48df5136ceed782"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a18affd7a7315bac0d48df5136ceed782">task_obj_prev_</a> = nullptr</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-inherited" class="groupheader"><a id="inherited" name="inherited"></a>
 Additional Inherited Members</h2></td></tr>
 <tr class="inherit_header pro_methods_classkernel_1_1_kernel_object"><td colspan="2">Protected Member Functions inherited from <a class="el" href="classkernel_1_1_kernel_object.html">kernel::KernelObject</a></td></tr>
-<tr class="memitem:a8879b9a6fc77e39157e3458252aab0d8 pro_methods_classkernel_1_1_kernel_object" id="r_a8879b9a6fc77e39157e3458252aab0d8"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a>=default</td></tr>
-<tr class="memitem:a16ae40c2f1dad94b47ffb0b6868f0fc1 pro_methods_classkernel_1_1_kernel_object" id="r_a16ae40c2f1dad94b47ffb0b6868f0fc1"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a16ae40c2f1dad94b47ffb0b6868f0fc1">~KernelObject</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a>=default</td></tr>
+<tr class="memitem:a8879b9a6fc77e39157e3458252aab0d8 pro_methods_classkernel_1_1_kernel_object" id="r_a8879b9a6fc77e39157e3458252aab0d8"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>=default</td></tr>
+<tr class="memitem:a16ae40c2f1dad94b47ffb0b6868f0fc1 pro_methods_classkernel_1_1_kernel_object" id="r_a16ae40c2f1dad94b47ffb0b6868f0fc1"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a16ae40c2f1dad94b47ffb0b6868f0fc1">~KernelObject</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>=default</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>A capability-gated IPC endpoint: a heap-resident message queue plus a receiver binding and badge. Shared-heap class (PipeBuffer pattern): lifetime is pinned by capability slots; <a class="el" href="#af3270ad2831af92c117bb3d26ee727b7" title="Final teardown: detaches the receiver binding and returns the block to the MemPool.">dispose()</a> runs on the last reference. </p>
-<dl class="section note"><dt>Note</dt><dd>The embedded MessageQueue is heap-resident and explicitly init()'d (never deleted — <a class="el" href="classkernel_1_1cap_1_1_endpoint.html" title="A capability-gated IPC endpoint: a heap-resident message queue plus a receiver binding and badge....">Endpoint</a> is freed via MemPool::free in <a class="el" href="#af3270ad2831af92c117bb3d26ee727b7" title="Final teardown: detaches the receiver binding and returns the block to the MemPool.">dispose()</a>, so MessageQueue's destructor is not invoked; blocked senders must be drained before the last release). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>The embedded <a class="el" href="structkernel_1_1_message_queue.html" title="Priority-ordered circular message queue embedded in each TCB.">MessageQueue</a> is heap-resident and explicitly init()'d (never deleted — <a class="el" href="classkernel_1_1cap_1_1_endpoint.html" title="A capability-gated IPC endpoint: a heap-resident message queue plus a receiver binding and badge....">Endpoint</a> is freed via <a class="el" href="classkernel_1_1_mem_pool.html#a1f64a714659b3a9b32efc18eb09e0830" title="Frees a block previously returned by alloc().">MemPool::free</a> in <a class="el" href="#af3270ad2831af92c117bb3d26ee727b7" title="Final teardown: detaches the receiver binding and returns the block to the MemPool.">dispose()</a>, so <a class="el" href="structkernel_1_1_message_queue.html" title="Priority-ordered circular message queue embedded in each TCB.">MessageQueue</a>'s destructor is not invoked; blocked senders must be drained before the last release). </dd></dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="a061ae002e50ad3089b84405e2d5d23c2" name="a061ae002e50ad3089b84405e2d5d23c2"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a061ae002e50ad3089b84405e2d5d23c2">&#9670;&#160;</a></span>create()</h2>
@@ -197,7 +197,7 @@ Additional Inherited Members</h2></td></tr>
         <tr>
           <td class="memname"><a class="el" href="classkernel_1_1cap_1_1_endpoint.html">Endpoint</a> * kernel::cap::Endpoint::create </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>badge</em></span></td><td>)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>badge</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -208,7 +208,7 @@ Additional Inherited Members</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Allocates an <a class="el" href="classkernel_1_1cap_1_1_endpoint.html" title="A capability-gated IPC endpoint: a heap-resident message queue plus a receiver binding and badge....">Endpoint</a> from the MemPool, pool-marks it and initialises the embedded queue. Returns nullptr on failure. </p>
+<p>Allocates an <a class="el" href="classkernel_1_1cap_1_1_endpoint.html" title="A capability-gated IPC endpoint: a heap-resident message queue plus a receiver binding and badge....">Endpoint</a> from the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>, pool-marks it and initialises the embedded queue. Returns nullptr on failure. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -241,7 +241,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Final teardown: detaches the receiver binding and returns the block to the MemPool. </p>
+<p>Final teardown: detaches the receiver binding and returns the block to the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>. </p>
 
 <p>Implements <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328">kernel::KernelObject</a>.</p>
 <div class="dynheader">
@@ -296,7 +296,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::cap::Endpoint::badge = 0</td>
+          <td class="memname">uint32_t kernel::cap::Endpoint::badge = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -310,7 +310,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock* kernel::cap::Endpoint::bound_receiver = nullptr</td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>* kernel::cap::Endpoint::bound_receiver = nullptr</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -340,7 +340,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">sync::SpinLock kernel::cap::Endpoint::lock_</td>
+          <td class="memname"><a class="el" href="classkernel_1_1sync_1_1_spin_lock.html">sync::SpinLock</a> kernel::cap::Endpoint::lock_</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -354,7 +354,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">MessageQueue kernel::cap::Endpoint::q</td>
+          <td class="memname"><a class="el" href="structkernel_1_1_message_queue.html">MessageQueue</a> kernel::cap::Endpoint::q</td>
         </tr>
       </table>
 </div><div class="memdoc">

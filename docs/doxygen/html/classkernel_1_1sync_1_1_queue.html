@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -151,6 +151,10 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ac1d6b6e517641752502daaa5ce5fdb45" id="r_ac1d6b6e517641752502daaa5ce5fdb45"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac1d6b6e517641752502daaa5ce5fdb45">try_receive_err</a> (uint8_t *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> *size, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> *received_bytes)</td></tr>
 <tr class="memdesc:ac1d6b6e517641752502daaa5ce5fdb45"><td class="mdescLeft">&#160;</td><td class="mdescRight">Receive a message without blocking (error-returning overload).  <br /></td></tr>
 <tr class="memitem:a9b16fa6b927284308309f493ee5e35fa" id="r_a9b16fa6b927284308309f493ee5e35fa"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9b16fa6b927284308309f493ee5e35fa">available</a> () const</td></tr>
+<tr class="memitem:af722ad660530c9cb64400637e289cc21" id="r_af722ad660530c9cb64400637e289cc21"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af722ad660530c9cb64400637e289cc21">waiter_count</a> ()</td></tr>
+<tr class="memdesc:af722ad660530c9cb64400637e289cc21"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total number of tasks currently blocked on this queue (senders.  <br /></td></tr>
+<tr class="memitem:a9f701d3024faac8df58a9e13ae3da936" id="r_a9f701d3024faac8df58a9e13ae3da936"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a9f701d3024faac8df58a9e13ae3da936">remove_waiter</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task)</td></tr>
+<tr class="memdesc:a9f701d3024faac8df58a9e13ae3da936"><td class="mdescLeft">&#160;</td><td class="mdescRight">Detach a task from this queue's send- or recv-waiter list (lock-safe). Used by <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a> to unlink a reaped task before its TCB is freed. Verifies pointer AND generation match (guards against a recycled TCB occupying the slot).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
@@ -224,6 +228,7 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Initialize the message queue to empty. </p>
+<p>Initialise the message queue to empty. </p>
 
 </div>
 </div>
@@ -243,6 +248,7 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Initialize the message queue to empty (error-returning overload). </p>
+<p>Initialise the message queue (error-returning overload).</p>
 <dl class="section return"><dt>Returns</dt><dd>SYNC_ERR_OK on success, SYNC_ERR_ALREADY_INITIALIZED if already initialized. </dd></dl>
 
 </div>
@@ -309,6 +315,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Receive a message, blocking if the queue is empty (error-returning overload). </p>
+<p>Receive a message, blocking if empty (error-returning overload).</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[out]</td><td class="paramname">buf</td><td>Destination buffer. </td></tr>
@@ -324,6 +331,27 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="classkernel_1_1sync_1_1_queue_a1344f366c0611f3357b986b98b0bb962_cgraph.png" border="0" usemap="#aclasskernel_1_1sync_1_1_queue_a1344f366c0611f3357b986b98b0bb962_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 2 -->
 </div>
+
+</div>
+</div>
+<a id="a9f701d3024faac8df58a9e13ae3da936" name="a9f701d3024faac8df58a9e13ae3da936"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f701d3024faac8df58a9e13ae3da936">&#9670;&#160;</a></span>remove_waiter()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::sync::Queue::remove_waiter </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Detach a task from this queue's send- or recv-waiter list (lock-safe). Used by <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a> to unlink a reaped task before its TCB is freed. Verifies pointer AND generation match (guards against a recycled TCB occupying the slot). </p>
+<p>Detach a task from the send- or recv-waiter array (lock-safe). Verifies pointer AND generation match so a recycled TCB that now occupies the slot is never removed.</p>
+<dl class="section return"><dt>Returns</dt><dd>true if the task was found and removed. </dd></dl>
 
 </div>
 </div>
@@ -382,6 +410,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Send a message, blocking if the queue is full (error-returning overload). </p>
+<p>Send a message, blocking if full (error-returning overload).</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[out]</td><td class="paramname">sent_bytes</td><td>Number of bytes sent (if successful). </td></tr>
@@ -539,6 +568,36 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="classkernel_1_1sync_1_1_queue_a7dda801315d3bd250b0014a9f6c7130f_cgraph.png" border="0" usemap="#aclasskernel_1_1sync_1_1_queue_a7dda801315d3bd250b0014a9f6c7130f_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 8 -->
 </div>
+
+</div>
+</div>
+<a id="af722ad660530c9cb64400637e289cc21" name="af722ad660530c9cb64400637e289cc21"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af722ad660530c9cb64400637e289cc21">&#9670;&#160;</a></span>waiter_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::sync::Queue::waiter_count </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Total number of tasks currently blocked on this queue (senders. </p>
+<ul>
+<li>receivers). </li>
+</ul>
 
 </div>
 </div>

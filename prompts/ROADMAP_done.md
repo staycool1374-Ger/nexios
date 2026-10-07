@@ -1,5 +1,45 @@
 # Completed Roadmap Items
 
+## v0.5.2 — User-ELF Bring-up to Run (RELEASED 2026-10-07)
+
+**Purpose:** Run general ELFs as strictly periodic user tasks (runelf
+end-to-end), complete the runelf debug surface, and pay down kernel
+hygiene debt (H1–H8) with zero functional change. Milestone v0.5.2
+(milestone 14): 0 open issues at release (stragglers moved out: #169
+debugd epic → v0.9.0 with its open phases #227/#228/#233; #280 stall
+tracker → v0.5.3).
+
+- **runelf end-to-end** (#77: take_completed into runelf/sys_exec,
+  deadline registration, Liu-Leyland + budget admission, TLS,
+  /etc/rc; #46 ELF authenticity; #95 shared-libs design paper;
+  #206 riscv64 U-mode user tasks).
+- **H1–H8 kernel hygiene, zero functional change** (#253 epic:
+  #254 memory PMM/VMM/MemPool, #255 scheduler/task, #256 sync
+  primitives — planner → PRE-audit → implement → POST-audit per
+  part, SIL 3 APPROVED throughout; #266 cap-handle ABI; #263/#264
+  kslot/ring fixes; #234 dmesg taxonomy).
+- **Runelf debug surface** (#231 --debug integration, #232 debugd
+  main loop, #295 target runtime ELF, #186 Goal-2 snapshot budget
+  export; #227 bare-metal audit verification-only with follow-ups
+  #304–#309 filed).
+- **Idle-monitor + observability** (#41 watchdog foundation, #45
+  boot determinism, #282–#285 P1a/P2/P4/P5a monitors, #288 monstat,
+  #293/#294 exit records + post-mortem, #296/#297 send_sync
+  hardening, #277/#278 watchdog/signal fixes).
+- **Release-validation fallout, fixed in-tree** (exit_record
+  strncpy -Wstringop-truncation blocking the release build,
+  pre-existing since #294 — memset+memcpy, narrow-audit APPROVED).
+
+Gates at completion (2026-10-07): debug test-full **20/20
+(1696/1696)** (core 536, ipc 85, capability 148, proc_elf 91,
+storage 147, servers 62, drivers 107, hal 122, smp 81,
+smp_multicpu 18, deadline 139, ui 73, logging_debug 36, random 17,
+bench 22, task_tcb_log 1, ahci_live 5, iommu_live 6;
+task_fpu/testrunner specials), release test-full **18/18 (85/85)**,
+`make build` Errors 0. Batch TIMEOUT flakes (zero-S boot stalls
+under host load) cleared standalone per class; #254 convicted-then-
+exonerated by stash-control (load confound).
+
 ## v0.5.1 — Bring-up Multi-Arch Boot (RELEASED 2026-09-29)
 
 **Purpose:** Bring aarch64 and riscv64 to production boot with syscall ABI

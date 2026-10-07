@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__pci_8c
 <p>Virtio PCI transport implementation (modern 1.0 interface).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="virtio_8hpp_source.html">kernel/arch/virtio.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pci_8hpp_source.html">kernel/arch/pci.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="atomic_8hpp_source.html">lib/atomic.hpp</a>&gt;</code><br />
@@ -139,11 +140,11 @@ Namespaces</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a1888fb8a7b37d30dec1c191cacb1fbf2" id="r_a1888fb8a7b37d30dec1c191cacb1fbf2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a1888fb8a7b37d30dec1c191cacb1fbf2">arch::virtio_map_mmio</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> bar, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> offset, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> length, VirtioMmio &amp;mmio_out, PciBdf bdf)</td></tr>
-<tr class="memitem:a12155265301dd4e78b8ed8523ff7353f" id="r_a12155265301dd4e78b8ed8523ff7353f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a12155265301dd4e78b8ed8523ff7353f">arch::virtio_find_device</a> (<a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> device_id, VirtioTransport &amp;transport)</td></tr>
+<tr class="memitem:a1888fb8a7b37d30dec1c191cacb1fbf2" id="r_a1888fb8a7b37d30dec1c191cacb1fbf2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a1888fb8a7b37d30dec1c191cacb1fbf2">arch::virtio_map_mmio</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> bar, <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> offset, <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> length, VirtioMmio &amp;mmio_out, PciBdf bdf)</td></tr>
+<tr class="memitem:a12155265301dd4e78b8ed8523ff7353f" id="r_a12155265301dd4e78b8ed8523ff7353f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a12155265301dd4e78b8ed8523ff7353f">arch::virtio_find_device</a> (<a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> device_id, VirtioTransport &amp;transport)</td></tr>
 <tr class="memitem:a270fa39795ea158dfa9285d6eb472e3f" id="r_a270fa39795ea158dfa9285d6eb472e3f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a270fa39795ea158dfa9285d6eb472e3f">arch::virtio_init_transport</a> (VirtioTransport &amp;transport)</td></tr>
-<tr class="memitem:a61b1d4d8c642abd27d65bb1f64405e58" id="r_a61b1d4d8c642abd27d65bb1f64405e58"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a61b1d4d8c642abd27d65bb1f64405e58">arch::virtio_negotiate_features</a> (VirtioTransport &amp;t, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> driver_features)</td></tr>
-<tr class="memitem:a9feefbea1a3cdebff8c58cb8dec3d426" id="r_a9feefbea1a3cdebff8c58cb8dec3d426"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a9feefbea1a3cdebff8c58cb8dec3d426">arch::virtio_setup_queue</a> (VirtioTransport &amp;t, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> queue_idx, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> queue_size, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> desc_phys, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> avail_phys, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> used_phys)</td></tr>
+<tr class="memitem:a61b1d4d8c642abd27d65bb1f64405e58" id="r_a61b1d4d8c642abd27d65bb1f64405e58"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a61b1d4d8c642abd27d65bb1f64405e58">arch::virtio_negotiate_features</a> (VirtioTransport &amp;t, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> driver_features)</td></tr>
+<tr class="memitem:a9feefbea1a3cdebff8c58cb8dec3d426" id="r_a9feefbea1a3cdebff8c58cb8dec3d426"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a9feefbea1a3cdebff8c58cb8dec3d426">arch::virtio_setup_queue</a> (VirtioTransport &amp;t, <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> queue_idx, <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> queue_size, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> desc_phys, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> avail_phys, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> used_phys)</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Virtio PCI transport implementation (modern 1.0 interface). </p>

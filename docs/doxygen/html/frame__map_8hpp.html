@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -142,7 +142,7 @@ This graph shows which files directly or indirectly include this file:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:kernel_3A_3Acap_3A_3AFrameUserMap" id="r_kernel_3A_3Acap_3A_3AFrameUserMap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_frame_user_map.html">kernel::cap::FrameUserMap</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">User-space frame mapping registry (issue #106 Part B). A static bounded table keyed by task id (<a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html" title="User-space MMIO page-frame mapping registry (issue #8). A static bounded table keyed by task id (IrqD...">MmioUserMap</a> pattern) that maps a <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html" title="A capability-gated physical frame (or contiguous range). Owns the PMM pages it wraps: the last refere...">FrameCap</a>'s frames into a fixed user VA window for Ring 3 shared memory via the SYS_FRAME_MAP/SYS_FRAME_UNMAP syscall surface. Keyed by owner_task_id + a per-slot generation (recycled-slot stale-VA defense). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; frame map lock (never held across VMM map/unmap or reschedule).  <a href="classkernel_1_1cap_1_1_frame_user_map.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">User-space frame mapping registry (issue #106 Part B). A static bounded table keyed by task id (<a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html" title="User-space MMIO page-frame mapping registry (issue #8). A static bounded table keyed by task id (IrqD...">MmioUserMap</a> pattern) that maps a <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html" title="A capability-gated physical frame (or contiguous range). Owns the PMM pages it wraps: the last refere...">FrameCap</a>'s frames into a fixed user VA window for Ring 3 shared memory via the SYS_FRAME_MAP/SYS_FRAME_UNMAP syscall surface. Keyed by owner_task_id + a per-slot generation (recycled-slot stale-VA defense). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; frame map lock (never held across <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> map/unmap or reschedule).  <a href="classkernel_1_1cap_1_1_frame_user_map.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>

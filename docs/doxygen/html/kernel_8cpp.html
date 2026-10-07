@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -154,6 +154,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('kernel_8cpp.ht
 <code>#include &lt;<a class="el" href="elf__loader_8hpp_source.html">kernel/elf/elf_loader.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vfsd_8hpp_source.html">kernel/vfs/vfsd.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="watchdogd_8hpp_source.html">kernel/watchdog/watchdogd.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="iocd_8hpp_source.html">kernel/driver/iocd.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="ata__pio_8hpp_source.html">kernel/driver/ata_pio.hpp</a>&gt;</code><br />
@@ -187,33 +188,48 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('kernel_8cpp.ht
 <code>#include &lt;<a class="el" href="libfdt_8h_source.html">fdt/libfdt.h</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="libfdt__internal_8h_source.html">fdt/libfdt_internal.h</a>&gt;</code><br />
 </div><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a91eed298aba5017394df23330bb70092" id="r_a91eed298aba5017394df23330bb70092"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a91eed298aba5017394df23330bb70092">debug_write</a> (const char *msg)</td></tr>
 <tr class="memitem:a3893cb01e13bf4e36090daef580b7426" id="r_a3893cb01e13bf4e36090daef580b7426"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3893cb01e13bf4e36090daef580b7426">init_task_main</a> ()</td></tr>
-<tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
-<tr class="memitem:ac9b08212c79ab5465098caa93a4188bd" id="r_ac9b08212c79ab5465098caa93a4188bd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac9b08212c79ab5465098caa93a4188bd">debug_write_dec</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
-<tr class="memitem:a349d28bdc2232b6cde3b99f71e5d8672" id="r_a349d28bdc2232b6cde3b99f71e5d8672"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a349d28bdc2232b6cde3b99f71e5d8672">debug_task_switch</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> old_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> new_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cr3)</td></tr>
-<tr class="memitem:ae54e1bcf3fe5f14443fdc8ddadfbb615" id="r_ae54e1bcf3fe5f14443fdc8ddadfbb615"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae54e1bcf3fe5f14443fdc8ddadfbb615">higherhalf_entry</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> magic, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> mb_info)</td></tr>
+<tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> value)</td></tr>
+<tr class="memitem:ac9b08212c79ab5465098caa93a4188bd" id="r_ac9b08212c79ab5465098caa93a4188bd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac9b08212c79ab5465098caa93a4188bd">debug_write_dec</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> value)</td></tr>
+<tr class="memitem:a349d28bdc2232b6cde3b99f71e5d8672" id="r_a349d28bdc2232b6cde3b99f71e5d8672"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a349d28bdc2232b6cde3b99f71e5d8672">debug_task_switch</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> old_id, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> new_id, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cr3)</td></tr>
+<tr class="memitem:afe82421db302cf9007f1bfe16cff939d" id="r_afe82421db302cf9007f1bfe16cff939d"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#afe82421db302cf9007f1bfe16cff939d">kernel::boot_stage_mark</a> (BootStage s) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:ad2597cced737d422c403d4c25437f61e" id="r_ad2597cced737d422c403d4c25437f61e"><td class="memItemLeft">BootDelta&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ad2597cced737d422c403d4c25437f61e">kernel::boot_stage_delta</a> (BootStage s) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:ae369e3a5b4081280571e619d0877856d" id="r_ae369e3a5b4081280571e619d0877856d"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ae369e3a5b4081280571e619d0877856d">kernel::boot_entry_raw</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ae369e3a5b4081280571e619d0877856d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Raw entry stamp for the boot budget gate (issue #45).  <br /></td></tr>
+<tr class="memitem:ae54e1bcf3fe5f14443fdc8ddadfbb615" id="r_ae54e1bcf3fe5f14443fdc8ddadfbb615"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae54e1bcf3fe5f14443fdc8ddadfbb615">higherhalf_entry</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> magic, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> mb_info)</td></tr>
 <tr class="memitem:ae22655ba6f328217f1ebd6248ed82727" id="r_ae22655ba6f328217f1ebd6248ed82727"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae22655ba6f328217f1ebd6248ed82727">panic</a> (const char *msg)</td></tr>
 <tr class="memdesc:ae22655ba6f328217f1ebd6248ed82727"><td class="mdescLeft">&#160;</td><td class="mdescRight">Overridable assertion macro. Default calls panic on failure.  <br /></td></tr>
-<tr class="memitem:ae2bf43943abd1cc6ac00d36b17a973c3" id="r_ae2bf43943abd1cc6ac00d36b17a973c3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ae2bf43943abd1cc6ac00d36b17a973c3">__attribute__</a> ((weak)) void <a class="el" href="test__stack__alloc_8cpp.html#aebf9c76b4ca8fb2a8e32ca3fd1679fea">stack_overflow_hook</a>(<a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memitem:ae2bf43943abd1cc6ac00d36b17a973c3" id="r_ae2bf43943abd1cc6ac00d36b17a973c3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ae2bf43943abd1cc6ac00d36b17a973c3">__attribute__</a> ((weak)) void <a class="el" href="test__stack__alloc_8cpp.html#aebf9c76b4ca8fb2a8e32ca3fd1679fea">stack_overflow_hook</a>(<a class="el" href="namespacearch_1_1kernel.html">kernel</a></td></tr>
 <tr class="memitem:aabfdfb827135142a9a9873c411fb99d1" id="r_aabfdfb827135142a9a9873c411fb99d1"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aabfdfb827135142a9a9873c411fb99d1">panic</a> (&quot;reserved exception&quot;)</td></tr>
-<tr class="memitem:a05b6e6675cd9f2f3cb2fd0aa3bc812a3" id="r_a05b6e6675cd9f2f3cb2fd0aa3bc812a3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a05b6e6675cd9f2f3cb2fd0aa3bc812a3">syscall_handler</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> number, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg0, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg1, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg2, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg3, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs)</td></tr>
-<tr class="memitem:a61e633c8acb5cb45303ce5b45599b872" id="r_a61e633c8acb5cb45303ce5b45599b872"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a61e633c8acb5cb45303ce5b45599b872">handle_interrupt_c</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> entry_tsc)</td></tr>
-<tr class="memitem:a6758dbad75005fb55338b477c2e5204a" id="r_a6758dbad75005fb55338b477c2e5204a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6758dbad75005fb55338b477c2e5204a">format_datetime</a> (char *buf, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> size, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> wall_ns)</td></tr>
+<tr class="memitem:a05b6e6675cd9f2f3cb2fd0aa3bc812a3" id="r_a05b6e6675cd9f2f3cb2fd0aa3bc812a3"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a05b6e6675cd9f2f3cb2fd0aa3bc812a3">syscall_handler</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> number, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arg0, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arg1, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arg2, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arg3, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *regs)</td></tr>
+<tr class="memitem:aa410b473247c0c5b4d142e11613e0549" id="r_aa410b473247c0c5b4d142e11613e0549"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#aa410b473247c0c5b4d142e11613e0549">task_fault_cause</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> vector)</td></tr>
+<tr class="memdesc:aa410b473247c0c5b4d142e11613e0549"><td class="mdescLeft">&#160;</td><td class="mdescRight">One-line cause phrase for a CPU fault vector (x86 numbers; other arches pass vector 0 and get the generic wording).  <br /></td></tr>
+<tr class="memitem:a1b0a913cbbfa91a6fea452db23dc8cb8" id="r_a1b0a913cbbfa91a6fea452db23dc8cb8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1b0a913cbbfa91a6fea452db23dc8cb8">report_user_task_end</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, bool clean, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> code_or_sig, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> vector)</td></tr>
+<tr class="memitem:a61e633c8acb5cb45303ce5b45599b872" id="r_a61e633c8acb5cb45303ce5b45599b872"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a61e633c8acb5cb45303ce5b45599b872">handle_interrupt_c</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> vector, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> error_code, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> rip, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *regs, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> entry_tsc)</td></tr>
+<tr class="memitem:a6758dbad75005fb55338b477c2e5204a" id="r_a6758dbad75005fb55338b477c2e5204a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6758dbad75005fb55338b477c2e5204a">format_datetime</a> (char *buf, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> size, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> wall_ns)</td></tr>
 <tr class="memdesc:a6758dbad75005fb55338b477c2e5204a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert wall-clock nanoseconds since epoch to a human-readable date-time string: "YYYY-MM-DD hh:mm:ss:mmm".  <br /></td></tr>
-<tr class="memitem:a6773415358edda571fb1be7fb810a2c2" id="r_a6773415358edda571fb1be7fb810a2c2"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel_stack[16_KiB]&#160;</td><td class="memItemRight"><a class="el" href="#a6773415358edda571fb1be7fb810a2c2">__attribute__</a> ((section(&quot;.boot_stack&quot;)))</td></tr>
+<tr class="memitem:a6773415358edda571fb1be7fb810a2c2" id="r_a6773415358edda571fb1be7fb810a2c2"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> kernel_stack[16_KiB]&#160;</td><td class="memItemRight"><a class="el" href="#a6773415358edda571fb1be7fb810a2c2">__attribute__</a> ((section(&quot;.boot_stack&quot;)))</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
 <tr class="memitem:acf393da2fe85b8d9fa8cd83ff83a6a0c" id="r_acf393da2fe85b8d9fa8cd83ff83a6a0c"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#acf393da2fe85b8d9fa8cd83ff83a6a0c">kernel_virt_end</a> []</td></tr>
-<tr class="memitem:a53b789d98a238ce07c0629d6ba055cff" id="r_a53b789d98a238ce07c0629d6ba055cff"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a53b789d98a238ce07c0629d6ba055cff">_binary_initrd_cpio_start</a> []</td></tr>
-<tr class="memitem:a2c38eb4c3a51bab012a31eb7f42d54c0" id="r_a2c38eb4c3a51bab012a31eb7f42d54c0"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2c38eb4c3a51bab012a31eb7f42d54c0">_binary_initrd_cpio_end</a> []</td></tr>
-<tr class="memitem:a62fb24a5114b3a2c8227926f8f0adaa2" id="r_a62fb24a5114b3a2c8227926f8f0adaa2"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a></td></tr>
-<tr class="memitem:a1fa277715dbc259c4bd045c128015845" id="r_a1fa277715dbc259c4bd045c128015845"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1fa277715dbc259c4bd045c128015845">rip</a></td></tr>
-<tr class="memitem:acf673abd8f09c5656f8e1093ef6ef708" id="r_acf673abd8f09c5656f8e1093ef6ef708"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#acf673abd8f09c5656f8e1093ef6ef708">regs</a></td></tr>
+<tr class="memitem:a53b789d98a238ce07c0629d6ba055cff" id="r_a53b789d98a238ce07c0629d6ba055cff"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a53b789d98a238ce07c0629d6ba055cff">_binary_initrd_cpio_start</a> []</td></tr>
+<tr class="memitem:a2c38eb4c3a51bab012a31eb7f42d54c0" id="r_a2c38eb4c3a51bab012a31eb7f42d54c0"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2c38eb4c3a51bab012a31eb7f42d54c0">_binary_initrd_cpio_end</a> []</td></tr>
+<tr class="memitem:a62fb24a5114b3a2c8227926f8f0adaa2" id="r_a62fb24a5114b3a2c8227926f8f0adaa2"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a></td></tr>
+<tr class="memitem:a1fa277715dbc259c4bd045c128015845" id="r_a1fa277715dbc259c4bd045c128015845"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1fa277715dbc259c4bd045c128015845">rip</a></td></tr>
+<tr class="memitem:acf673abd8f09c5656f8e1093ef6ef708" id="r_acf673abd8f09c5656f8e1093ef6ef708"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#acf673abd8f09c5656f8e1093ef6ef708">regs</a></td></tr>
 <tr class="memitem:a5df37b7f02e5cdc7d9412b7f872b8e01" id="r_a5df37b7f02e5cdc7d9412b7f872b8e01"><td class="memItemLeft">return&#160;</td><td class="memItemRight"><a class="el" href="#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:a23910dbc483b0bbc8cc804e6f7258df2" id="r_a23910dbc483b0bbc8cc804e6f7258df2"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a23910dbc483b0bbc8cc804e6f7258df2">kTaskEndDmesgClean</a> = <a class="el" href="namespacekernel_1_1log.html#af6a8c5b7d8abeb8c0fd488982aecb75b">kernel::log::kDmesgBase_USER</a> + 1</td></tr>
+<tr class="memdesc:a23910dbc483b0bbc8cc804e6f7258df2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Delivers a signal to a user task by setting up a signal frame on the user stack. Modifies regs to return to the user's registered signal handler (or terminates the task if no handler is registered and the default action is to terminate).  <br /></td></tr>
+<tr class="memitem:a78b6052e5188c19ca39a2cf2d16e7acc" id="r_a78b6052e5188c19ca39a2cf2d16e7acc"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a78b6052e5188c19ca39a2cf2d16e7acc">kTaskEndDmesgFault</a> = <a class="el" href="namespacekernel_1_1log.html#af6a8c5b7d8abeb8c0fd488982aecb75b">kernel::log::kDmesgBase_USER</a> + 2</td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a6773415358edda571fb1be7fb810a2c2" name="a6773415358edda571fb1be7fb810a2c2"></a>
@@ -223,7 +239,7 @@ Variables</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel_stack[16_KiB] __attribute__ </td>
+          <td class="memname"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> kernel_stack[16_KiB] __attribute__ </td>
           <td>(</td>
           <td class="paramtype">(section(&quot;.boot_stack&quot;))</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -265,17 +281,17 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void debug_task_switch </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>old_id</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>old_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>new_id</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>new_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cr3</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cr3</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -321,7 +337,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void debug_write_dec </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -344,7 +360,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void debug_write_hex </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -372,12 +388,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>size</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a></td>          <td class="paramname"><span class="paramname"><em>size</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>wall_ns</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>wall_ns</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -403,27 +419,27 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void handle_interrupt_c </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>error_code</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>error_code</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rip</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rip</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>regs</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>regs</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>entry_tsc</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>entry_tsc</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -445,21 +461,15 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void higherhalf_entry </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>magic</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>magic</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>mb_info</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>mb_info</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="kernel_8cpp_ae54e1bcf3fe5f14443fdc8ddadfbb615_cgraph.png" border="0" usemap="#akernel_8cpp_ae54e1bcf3fe5f14443fdc8ddadfbb615_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
-</div>
 
 </div>
 </div>
@@ -481,7 +491,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="kernel_8cpp_a3893cb01e13bf4e36090daef580b7426_cgraph.png" border="0" usemap="#akernel_8cpp_a3893cb01e13bf4e36090daef580b7426_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -493,7 +503,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">panic </td>
+          <td class="memname"><a class="el" href="namespacearch.html#a1c35ec53665b5bbb1c2a397c7fc19ee6">panic</a> </td>
           <td>(</td>
           <td class="paramtype">&quot;reserved exception&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -510,7 +520,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void panic </td>
+          <td class="memname">void <a class="el" href="namespacearch.html#a1c35ec53665b5bbb1c2a397c7fc19ee6">panic</a> </td>
           <td>(</td>
           <td class="paramtype">const char *</td>          <td class="paramname"><span class="paramname"><em>msg</em></span></td><td>)</td>
           <td></td>
@@ -523,30 +533,44 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="kernel_8cpp_ae22655ba6f328217f1ebd6248ed82727_cgraph.png" border="0" usemap="#akernel_8cpp_ae22655ba6f328217f1ebd6248ed82727_cgraph" loading="lazy" alt=""/></div>
-<map name="akernel_8cpp_ae22655ba6f328217f1ebd6248ed82727_cgraph" id="akernel_8cpp_ae22655ba6f328217f1ebd6248ed82727_cgraph">
-<area shape="rect" title="Kernel panic handler (noreturn)." alt="" coords="5,115,58,141"/>
-<area shape="rect" href="namespacearch.html#a73ff844e6d887445b626a7d9160241c6" title="Clears the interrupt flag (disables interrupts)." alt="" coords="140,5,208,32"/>
-<area shape="poly" title=" " alt="" coords="39,113,66,78,104,42,127,31,124,35,107,46,70,81,44,115"/>
-<area shape="rect" href="classkernel_1_1Logger.html#a174337cfc9a31a6333b723019fe7c940" title=" " alt="" coords="106,56,242,83"/>
-<area shape="poly" title=" " alt="" coords="57,114,105,92,122,87,119,91,107,97,60,118"/>
-<area shape="rect" href="classservice_1_1Terminal.html#a218b0fead5d0e1ee9b29ae73d357d168" title="Returns the singleton terminal instance." alt="" coords="110,107,238,149"/>
-<area shape="poly" title=" " alt="" coords="57,126,96,126,92,130,59,130"/>
-<area shape="rect" href="classservice_1_1Terminal.html#a4712348be841488fabef531ac46c963a" title="Sets the foreground (text) color." alt="" coords="110,173,238,216"/>
-<area shape="poly" title=" " alt="" coords="58,137,115,165,111,168,58,143"/>
-<area shape="rect" href="classservice_1_1Terminal.html#af69ff19b8c2a30f67c02701775fdc285" title="Writes a null&#45;terminated string to the terminal." alt="" coords="110,240,238,283"/>
-<area shape="poly" title=" " alt="" coords="41,139,68,182,86,205,107,226,112,231,107,231,104,230,82,209,64,185,40,145"/>
-<area shape="rect" href="classkernel_1_1Logger.html#a12794441edd7245c8a81bfe5b9a6dd14" title=" " alt="" coords="290,56,433,83"/>
-<area shape="poly" title=" " alt="" coords="242,67,277,68,272,70,243,72"/>
-<area shape="rect" href="classkernel_1_1Logger.html#ad2aea07eb751fad2fb738fe4123c7e7b" title=" " alt="" coords="481,31,646,57"/>
-<area shape="poly" title=" " alt="" coords="433,58,468,55,463,57,435,63"/>
-<area shape="rect" href="classkernel_1_1Logger.html#ae7f9fd488685463ec9810c40d6f907c7" title=" " alt="" coords="481,81,646,108"/>
-<area shape="poly" title=" " alt="" coords="433,76,468,82,463,83,434,81"/>
-<area shape="rect" href="classservice_1_1Terminal.html#a2cdeef541005d6fe951835a03107ee48" title="Writes a single character to the terminal." alt="" coords="298,240,426,283"/>
-<area shape="poly" title=" " alt="" coords="238,259,285,261,280,261,238,264"/>
-<area shape="poly" title=" " alt="" coords="326,238,324,230,330,221,343,215,362,213,382,216,396,225,390,224,380,221,362,219,344,221,334,225,329,231,330,241"/>
-<area shape="rect" href="classservice_1_1Framebuffer.html#a2eb3d827aa6446d0f95621283041fcb7" title="Renders a character using the bitmap font." alt="" coords="493,240,634,283"/>
-<area shape="poly" title=" " alt="" coords="426,259,480,261,475,261,426,264"/>
-</map>
+<!-- MAP 5 -->
+</div>
+
+</div>
+</div>
+<a id="a1b0a913cbbfa91a6fea452db23dc8cb8" name="a1b0a913cbbfa91a6fea452db23dc8cb8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1b0a913cbbfa91a6fea452db23dc8cb8">&#9670;&#160;</a></span>report_user_task_end()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void report_user_task_end </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>clean</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>code_or_sig</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="kernel_8cpp_a1b0a913cbbfa91a6fea452db23dc8cb8_cgraph.png" border="0" usemap="#akernel_8cpp_a1b0a913cbbfa91a6fea452db23dc8cb8_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -558,44 +582,63 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> syscall_handler </td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> syscall_handler </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>number</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>number</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>arg0</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>arg0</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>arg1</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>arg1</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>arg2</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>arg2</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>arg3</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>arg3</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>regs</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>regs</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>§2 C bridge (issues #67/#68, ABI v1 frozen): arch entry stubs map user regs to (number, arg0..arg3, regs); return axiom per <a class="el" href="syscall_8h.html">syscall.h</a> (§2 error convention: <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> two's-complement -errno on failure). </p>
+<p>§2 C bridge (issues #67/#68, ABI v1 frozen): arch entry stubs map user regs to (number, arg0..arg3, regs); return axiom per <a class="el" href="syscall_8h.html">syscall.h</a> (§2 error convention: <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> two's-complement -errno on failure). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="kernel_8cpp_a05b6e6675cd9f2f3cb2fd0aa3bc812a3_cgraph.png" border="0" usemap="#akernel_8cpp_a05b6e6675cd9f2f3cb2fd0aa3bc812a3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
+
+</div>
+</div>
+<a id="aa410b473247c0c5b4d142e11613e0549" name="aa410b473247c0c5b4d142e11613e0549"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa410b473247c0c5b4d142e11613e0549">&#9670;&#160;</a></span>task_fault_cause()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char * task_fault_cause </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>One-line cause phrase for a CPU fault vector (x86 numbers; other arches pass vector 0 and get the generic wording). </p>
 
 </div>
 </div>
@@ -607,7 +650,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> _binary_initrd_cpio_end[]</td>
+          <td class="memname"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> _binary_initrd_cpio_end[]</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -621,7 +664,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> _binary_initrd_cpio_start[]</td>
+          <td class="memname"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> _binary_initrd_cpio_start[]</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -672,6 +715,54 @@ Here is the call graph for this function:</div>
   </td>
   <td class="mlabels-right">
 <span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a23910dbc483b0bbc8cc804e6f7258df2" name="a23910dbc483b0bbc8cc804e6f7258df2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a23910dbc483b0bbc8cc804e6f7258df2">&#9670;&#160;</a></span>kTaskEndDmesgClean</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> kTaskEndDmesgClean = <a class="el" href="namespacekernel_1_1log.html#af6a8c5b7d8abeb8c0fd488982aecb75b">kernel::log::kDmesgBase_USER</a> + 1</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Delivers a signal to a user task by setting up a signal frame on the user stack. Modifies regs to return to the user's registered signal handler (or terminates the task if no handler is registered and the default action is to terminate). </p>
+<dl class="section return"><dt>Returns</dt><dd>true if signal was delivered (handler will run), false if task was terminated.</dd></dl>
+<p>dmesg records for task-end reports (issue #234): clean exit vs fault/signal death, canonical USER subsystem (kDmesgBase_USER). Legacy 0xDC01/0xDC02 codes keep decoding via base_error_string. </p>
+
+</div>
+</div>
+<a id="a78b6052e5188c19ca39a2cf2d16e7acc" name="a78b6052e5188c19ca39a2cf2d16e7acc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a78b6052e5188c19ca39a2cf2d16e7acc">&#9670;&#160;</a></span>kTaskEndDmesgFault</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> kTaskEndDmesgFault = <a class="el" href="namespacekernel_1_1log.html#af6a8c5b7d8abeb8c0fd488982aecb75b">kernel::log::kDmesgBase_USER</a> + 2</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">

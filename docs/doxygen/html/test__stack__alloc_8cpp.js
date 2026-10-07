@@ -3,6 +3,7 @@ var test__stack__alloc_8cpp =
     [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#a5f6f8aac9529154596367ace6432c43e", null ],
     [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#ade624542ad80dbf8c870dc2774c68dd8", null ],
     [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#a240c242a6b03d6e999d8dd778f4a69e5", null ],
+    [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#a79cfb27c9ebcc8cb5f561276ec5b405e", null ],
     [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#af17a6ee8110c5f00e34d6896244a0db2", null ],
     [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#a335fa9a945a9c45b11facbf05a9a9c09", null ],
     [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#a1e45607a7acecd47342f058bebe54290", null ],

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -134,20 +134,20 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a01f159fa82d0d04ebd0cc0a0d80c73c0" id="r_a01f159fa82d0d04ebd0cc0a0d80c73c0"><td class="memItemLeft"><a class="el" href="#a6435525dd3f7ddd43f30e2fb7a1adff5">RwLock</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a01f159fa82d0d04ebd0cc0a0d80c73c0">operator=</a> (const <a class="el" href="#a6435525dd3f7ddd43f30e2fb7a1adff5">RwLock</a> &amp;)=delete</td></tr>
 <tr class="memitem:a72551929384a2372f2b744114f33ce3c" id="r_a72551929384a2372f2b744114f33ce3c"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a72551929384a2372f2b744114f33ce3c">RwLock</a> (RwLock &amp;&amp;)=delete</td></tr>
 <tr class="memitem:a156240f9b84ebe9d0e411858e81a56f9" id="r_a156240f9b84ebe9d0e411858e81a56f9"><td class="memItemLeft"><a class="el" href="#a6435525dd3f7ddd43f30e2fb7a1adff5">RwLock</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a156240f9b84ebe9d0e411858e81a56f9">operator=</a> (<a class="el" href="#a6435525dd3f7ddd43f30e2fb7a1adff5">RwLock</a> &amp;&amp;)=delete</td></tr>
-<tr class="memitem:ae5d44f04be091d09ffea698c884cf5f8" id="r_ae5d44f04be091d09ffea698c884cf5f8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae5d44f04be091d09ffea698c884cf5f8">read_lock</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ae5d44f04be091d09ffea698c884cf5f8" id="r_ae5d44f04be091d09ffea698c884cf5f8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae5d44f04be091d09ffea698c884cf5f8">read_lock</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ae5d44f04be091d09ffea698c884cf5f8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Acquire shared read access (blocks new readers only while a writer holds or waits — writer preference).  <br /></td></tr>
-<tr class="memitem:ad19e87fbdb1e6ed6048b02216796780d" id="r_ad19e87fbdb1e6ed6048b02216796780d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad19e87fbdb1e6ed6048b02216796780d">read_unlock</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ad19e87fbdb1e6ed6048b02216796780d" id="r_ad19e87fbdb1e6ed6048b02216796780d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad19e87fbdb1e6ed6048b02216796780d">read_unlock</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ad19e87fbdb1e6ed6048b02216796780d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release shared read access.  <br /></td></tr>
-<tr class="memitem:a2a84475bdb812b3e52fe81b890c77df5" id="r_a2a84475bdb812b3e52fe81b890c77df5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2a84475bdb812b3e52fe81b890c77df5">write_lock</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a2a84475bdb812b3e52fe81b890c77df5" id="r_a2a84475bdb812b3e52fe81b890c77df5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2a84475bdb812b3e52fe81b890c77df5">write_lock</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a2a84475bdb812b3e52fe81b890c77df5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Acquire exclusive write access (writer preference: sets the pending bit first so no new reader can overtake).  <br /></td></tr>
-<tr class="memitem:a5353b9303dc02ebea42a85e328d07c7e" id="r_a5353b9303dc02ebea42a85e328d07c7e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5353b9303dc02ebea42a85e328d07c7e">write_unlock</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a5353b9303dc02ebea42a85e328d07c7e" id="r_a5353b9303dc02ebea42a85e328d07c7e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5353b9303dc02ebea42a85e328d07c7e">write_unlock</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a5353b9303dc02ebea42a85e328d07c7e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release exclusive write access (clears writer + pending so a waiting writer or readers can proceed).  <br /></td></tr>
-<tr class="memitem:ae71b89ff6577591e42e2e0cbf29159f4" id="r_ae71b89ff6577591e42e2e0cbf29159f4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae71b89ff6577591e42e2e0cbf29159f4">try_read_lock</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ae71b89ff6577591e42e2e0cbf29159f4" id="r_ae71b89ff6577591e42e2e0cbf29159f4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae71b89ff6577591e42e2e0cbf29159f4">try_read_lock</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ae71b89ff6577591e42e2e0cbf29159f4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Attempt shared access without blocking.  <br /></td></tr>
-<tr class="memitem:aa92d27a1cc0dc4ff5316494cf9068b30" id="r_aa92d27a1cc0dc4ff5316494cf9068b30"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa92d27a1cc0dc4ff5316494cf9068b30">try_write_lock</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:aa92d27a1cc0dc4ff5316494cf9068b30" id="r_aa92d27a1cc0dc4ff5316494cf9068b30"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa92d27a1cc0dc4ff5316494cf9068b30">try_write_lock</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:aa92d27a1cc0dc4ff5316494cf9068b30"><td class="mdescLeft">&#160;</td><td class="mdescRight">Attempt exclusive access without blocking.  <br /></td></tr>
-<tr class="memitem:afa5d22c63f068ccf347a9545b72a8187" id="r_afa5d22c63f068ccf347a9545b72a8187"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afa5d22c63f068ccf347a9545b72a8187">reset</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memdesc:afa5d22c63f068ccf347a9545b72a8187"><td class="mdescLeft">&#160;</td><td class="mdescRight">Force-unlock (used to initialise a lock after MemPool allocation; mirrors SpinLock::reset).  <br /></td></tr>
+<tr class="memitem:afa5d22c63f068ccf347a9545b72a8187" id="r_afa5d22c63f068ccf347a9545b72a8187"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afa5d22c63f068ccf347a9545b72a8187">reset</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:afa5d22c63f068ccf347a9545b72a8187"><td class="mdescLeft">&#160;</td><td class="mdescRight">Force-unlock (used to initialise a lock after <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> allocation; mirrors <a class="el" href="classkernel_1_1sync_1_1_spin_lock.html#a41e703bd7a7c64500b8837a290aa0062" title="Force-unlock (used to initialise a lock after MemPool allocation).">SpinLock::reset</a>).  <br /></td></tr>
 </table>
 <a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a6435525dd3f7ddd43f30e2fb7a1adff5" name="a6435525dd3f7ddd43f30e2fb7a1adff5"></a>
@@ -389,7 +389,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Force-unlock (used to initialise a lock after MemPool allocation; mirrors SpinLock::reset). </p>
+<p>Force-unlock (used to initialise a lock after <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> allocation; mirrors <a class="el" href="classkernel_1_1sync_1_1_spin_lock.html#a41e703bd7a7c64500b8837a290aa0062" title="Force-unlock (used to initialise a lock after MemPool allocation).">SpinLock::reset</a>). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">

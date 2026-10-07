@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -139,64 +139,80 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('notify_8hpp_so
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#pragma once</span></div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span> </div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="preprocessor">#include &lt;<a class="code" href="spinlock_8hpp.html">kernel/sync/spinlock.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="preprocessor">#include &lt;<a class="code" href="sync__errors_8hpp.html">kernel/sync/sync_errors.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &lt;<a class="code" href="spinlock_8hpp.html">kernel/sync/spinlock.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#include &lt;<a class="code" href="sync__errors_8hpp.html">kernel/sync/sync_errors.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span> </div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span> </div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="comment">// Forward declaration — Notify only stores a pointer to TCB.</span></div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">struct </span><a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a>;</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="comment">// Forward declaration — Notify only stores a pointer to TCB.</span></div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">struct </span><a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>;</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span> </div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1sync.html">sync</a> {</div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span> </div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1sync.html">sync</a> {</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> NOTIFY_INVALID = 0;</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span> </div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> NOTIFY_INVALID = 0;</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span> </div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="keyword">class </span>Notify {</div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>  <span class="keyword">public</span>:</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    Notify()</div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>        : notify_value_(0), waiter_(nullptr), waiter_gen_(0),</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>          initialized_(<a class="code hl_variable" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>) {</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    }</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    ~Notify();</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>();</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>    errors::SyncError <a class="code hl_function" href="namespacekernel_1_1vfs.html#a6281f0779a982cc0f19a98b36495e7b3">init_err</a>();</div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span></div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <span class="keywordtype">void</span> notify(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value);</div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    errors::SyncError notify_err(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value);</div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span></div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> wait();</div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>    errors::SyncError wait_err(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *out_value);</div>
-<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span></div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <span class="keywordtype">bool</span> try_wait(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *value);</div>
-<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    errors::SyncError try_wait_err(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *value);</div>
-<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span> </div>
-<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value()<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>        <span class="keywordflow">return</span> notify_value_;</div>
-<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>    }</div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span> </div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>  <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    SpinLock lock_;          </div>
-<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> notify_value_;  </div>
-<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *waiter_; </div>
-<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> waiter_gen_;    </div>
-<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>    <span class="keywordtype">bool</span> initialized_;       </div>
-<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>};</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span> </div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>} <span class="comment">// namespace sync</span></div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>} <span class="comment">// namespace kernel</span></div>
-<div class="ttc" id="akernel_8cpp_html_a5df37b7f02e5cdc7d9412b7f872b8e01"><div class="ttname"><a href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></div><div class="ttdeci">return false</div><div class="ttdef"><b>Definition</b> kernel.cpp:1329</div></div>
-<div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
-<div class="ttc" id="anamespacekernel_1_1sync_html"><div class="ttname"><a href="namespacekernel_1_1sync.html">kernel::sync</a></div><div class="ttdef"><b>Definition</b> eventgroup.cpp:29</div></div>
-<div class="ttc" id="anamespacekernel_1_1test_html_af219b4b081470c65fb5140fbabdd424c"><div class="ttname"><a href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">kernel::test::TaskControlBlock</a></div><div class="ttdeci">kernel::TaskControlBlock TaskControlBlock</div><div class="ttdef"><b>Definition</b> test.hpp:35</div></div>
-<div class="ttc" id="anamespacekernel_1_1vfs_html_a6281f0779a982cc0f19a98b36495e7b3"><div class="ttname"><a href="namespacekernel_1_1vfs.html#a6281f0779a982cc0f19a98b36495e7b3">kernel::vfs::init_err</a></div><div class="ttdeci">VfsError init_err()</div><div class="ttdoc">Initialize the VFS subsystem with error code return.</div><div class="ttdef"><b>Definition</b> vfs.cpp:452</div></div>
+<div class="foldopen" id="foldopen00038" data-start="{" data-end="};">
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_notify.html">   38</a></span><span class="keyword">class </span><a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a05adaea041b37192b2d0ee678d73fd97">Notify</a> {</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>  <span class="keyword">public</span>:</div>
+<div class="foldopen" id="foldopen00040" data-start="{" data-end="}">
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_notify.html#a05adaea041b37192b2d0ee678d73fd97">   40</a></span>    <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a05adaea041b37192b2d0ee678d73fd97">Notify</a>()</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>        : notify_value_(0), waiter_(nullptr), waiter_gen_(0),</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>          initialized_(<a class="code hl_variable" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>) {</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    }</div>
+</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span></div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#affc31a0555946b13c528049abcd63377">~Notify</a>();</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#ab975d15b3fde443ac5e76bc779ef48ac">init</a>();</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <a class="code hl_enumeration" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a> <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a997a45c9282c04b80e8669e8599bbd75">init_err</a>();</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span></div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a7f78509dfc82409073a6a539bc5d7adb">notify</a>(uint64_t <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a19ab2ce9b81e5537feab345f5ab227f9">value</a>);</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <a class="code hl_enumeration" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a> <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a38a64ff48c7afcaf1e0d53545dcef60b">notify_err</a>(uint64_t <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a19ab2ce9b81e5537feab345f5ab227f9">value</a>);</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span></div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    uint64_t <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a288a4d84afc3d9c99728d7ec98683b16">wait</a>();</div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>    <a class="code hl_enumeration" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a> <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#ab2447020077510b35d6afa6cce36d485">wait_err</a>(uint64_t *out_value);</div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span></div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#adba405a64fbbe9fee6583e415cafc488">try_wait</a>(uint64_t *<a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a19ab2ce9b81e5537feab345f5ab227f9">value</a>);</div>
+<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    <a class="code hl_enumeration" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a> <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a9e19afa2f0a412aecd8045fa5088a2f1">try_wait_err</a>(uint64_t *<a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a19ab2ce9b81e5537feab345f5ab227f9">value</a>);</div>
+<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span> </div>
+<div class="foldopen" id="foldopen00081" data-start="{" data-end="}">
+<div class="line"><a id="l00081" name="l00081"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_notify.html#a19ab2ce9b81e5537feab345f5ab227f9">   81</a></span>    uint64_t <a class="code hl_function" href="classkernel_1_1sync_1_1_notify.html#a19ab2ce9b81e5537feab345f5ab227f9">value</a>()<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>        <span class="keywordflow">return</span> notify_value_;</div>
+<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>    }</div>
+</div>
+<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span> </div>
+<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>  <span class="keyword">private</span>:</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    <a class="code hl_class" href="classkernel_1_1sync_1_1_spin_lock.html">SpinLock</a> lock_;          </div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    uint64_t notify_value_;  </div>
+<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    <a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *waiter_; </div>
+<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    uint64_t waiter_gen_;    </div>
+<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>    <span class="keywordtype">bool</span> initialized_;       </div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>};</div>
+</div>
+<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span> </div>
+<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>} <span class="comment">// namespace sync</span></div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_a05adaea041b37192b2d0ee678d73fd97"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#a05adaea041b37192b2d0ee678d73fd97">kernel::sync::Notify::Notify</a></div><div class="ttdeci">Notify()</div><div class="ttdef"><b>Definition</b> notify.hpp:40</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_a19ab2ce9b81e5537feab345f5ab227f9"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#a19ab2ce9b81e5537feab345f5ab227f9">kernel::sync::Notify::value</a></div><div class="ttdeci">uint64_t value() const</div><div class="ttdef"><b>Definition</b> notify.hpp:81</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_a288a4d84afc3d9c99728d7ec98683b16"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#a288a4d84afc3d9c99728d7ec98683b16">kernel::sync::Notify::wait</a></div><div class="ttdeci">uint64_t wait()</div><div class="ttdoc">Block until notified.</div><div class="ttdef"><b>Definition</b> notify.cpp:103</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_a38a64ff48c7afcaf1e0d53545dcef60b"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#a38a64ff48c7afcaf1e0d53545dcef60b">kernel::sync::Notify::notify_err</a></div><div class="ttdeci">errors::SyncError notify_err(uint64_t value)</div><div class="ttdoc">Signal a waiter with a value, waking it (error-returning overload).</div><div class="ttdef"><b>Definition</b> notify.cpp:82</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_a7f78509dfc82409073a6a539bc5d7adb"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#a7f78509dfc82409073a6a539bc5d7adb">kernel::sync::Notify::notify</a></div><div class="ttdeci">void notify(uint64_t value)</div><div class="ttdoc">Signal a waiter with a value, waking it.</div><div class="ttdef"><b>Definition</b> notify.cpp:69</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_a997a45c9282c04b80e8669e8599bbd75"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#a997a45c9282c04b80e8669e8599bbd75">kernel::sync::Notify::init_err</a></div><div class="ttdeci">errors::SyncError init_err()</div><div class="ttdoc">Initialize the notification object (error-returning overload).</div><div class="ttdef"><b>Definition</b> notify.cpp:57</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_a9e19afa2f0a412aecd8045fa5088a2f1"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#a9e19afa2f0a412aecd8045fa5088a2f1">kernel::sync::Notify::try_wait_err</a></div><div class="ttdeci">errors::SyncError try_wait_err(uint64_t *value)</div><div class="ttdoc">Check if notified without blocking (error-returning overload).</div><div class="ttdef"><b>Definition</b> notify.cpp:230</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_ab2447020077510b35d6afa6cce36d485"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#ab2447020077510b35d6afa6cce36d485">kernel::sync::Notify::wait_err</a></div><div class="ttdeci">errors::SyncError wait_err(uint64_t *out_value)</div><div class="ttdoc">Block until notified (error-returning overload).</div><div class="ttdef"><b>Definition</b> notify.cpp:170</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_ab975d15b3fde443ac5e76bc779ef48ac"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#ab975d15b3fde443ac5e76bc779ef48ac">kernel::sync::Notify::init</a></div><div class="ttdeci">void init()</div><div class="ttdoc">Initialize the notification object.</div><div class="ttdef"><b>Definition</b> notify.cpp:48</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_adba405a64fbbe9fee6583e415cafc488"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#adba405a64fbbe9fee6583e415cafc488">kernel::sync::Notify::try_wait</a></div><div class="ttdeci">bool try_wait(uint64_t *value)</div><div class="ttdoc">Check if notified without blocking.</div><div class="ttdef"><b>Definition</b> notify.cpp:219</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_notify_html_affc31a0555946b13c528049abcd63377"><div class="ttname"><a href="classkernel_1_1sync_1_1_notify.html#affc31a0555946b13c528049abcd63377">kernel::sync::Notify::~Notify</a></div><div class="ttdeci">~Notify()</div><div class="ttdoc">Destructor — wakes any waiter before the object is freed.</div><div class="ttdef"><b>Definition</b> notify.cpp:32</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_spin_lock_html"><div class="ttname"><a href="classkernel_1_1sync_1_1_spin_lock.html">kernel::sync::SpinLock</a></div><div class="ttdoc">Simple busy-wait spinlock using atomic_test_and_set.</div><div class="ttdef"><b>Definition</b> spinlock.hpp:37</div></div>
+<div class="ttc" id="akernel_8cpp_html_a5df37b7f02e5cdc7d9412b7f872b8e01"><div class="ttname"><a href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></div><div class="ttdeci">return false</div><div class="ttdef"><b>Definition</b> kernel.cpp:1699</div></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
+<div class="ttc" id="anamespacekernel_1_1errors_html_abbe4a99ddc8a620a6497c8f2c388da9c"><div class="ttname"><a href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">kernel::errors::SyncError</a></div><div class="ttdeci">SyncError</div><div class="ttdoc">Synchronisation subsystem error codes.</div><div class="ttdef"><b>Definition</b> sync_errors.hpp:49</div></div>
+<div class="ttc" id="anamespacekernel_1_1sync_html"><div class="ttname"><a href="namespacekernel_1_1sync.html">kernel::sync</a></div><div class="ttdef"><b>Definition</b> eventgroup.cpp:30</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="aspinlock_8hpp_html"><div class="ttname"><a href="spinlock_8hpp.html">spinlock.hpp</a></div><div class="ttdoc">Busy-wait spinlock using atomic exchange.</div></div>
+<div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:227</div></div>
 <div class="ttc" id="async__errors_8hpp_html"><div class="ttname"><a href="sync__errors_8hpp.html">sync_errors.hpp</a></div><div class="ttdoc">Synchronisation error codes (X-macro table with human-readable strings).</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

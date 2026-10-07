@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -146,18 +146,19 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('page__flags_8h
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span></div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">struct </span>PageFlags {</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PRESENT = 1ULL &lt;&lt; 0;</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> WRITE = 1ULL &lt;&lt; 1;</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> USER = 1ULL &lt;&lt; 2;</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> NX = 1ULL &lt;&lt; 3;</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> CACHE_DISABLED = 1ULL &lt;&lt; 4;</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> HUGE = 1ULL &lt;&lt; 7;</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PRESENT = 1ULL &lt;&lt; 0;</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> WRITE = 1ULL &lt;&lt; 1;</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="code hl_enumvalue" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa2e40ad879e955201df4dedbf8d479a12">USER</a> = 1ULL &lt;&lt; 2;</div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> NX = 1ULL &lt;&lt; 3;</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> CACHE_DISABLED = 1ULL &lt;&lt; 4;</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> HUGE = 1ULL &lt;&lt; 7;</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>};</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span> </div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
+<div class="ttc" id="anamespacekernel_1_1log_html_a0a15565ea32d9d5ddb218c71e3f3c44aa2e40ad879e955201df4dedbf8d479a12"><div class="ttname"><a href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa2e40ad879e955201df4dedbf8d479a12">kernel::log::ErrorSubsystem::USER</a></div><div class="ttdeci">@ USER</div><div class="ttdoc">User task lifecycle reports (issue #234).</div><div class="ttdef"><b>Definition</b> dmesg.hpp:88</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

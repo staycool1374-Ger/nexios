@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -140,7 +140,7 @@ Namespaces</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a78513919ed4d338079bb56b6c548c84f" id="r_a78513919ed4d338079bb56b6c548c84f"><td class="memItemLeft"><a class="el" href="namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0">EarlyIrqResult</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a78513919ed4d338079bb56b6c548c84f">arch::early_irq_init</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> frequency_hz)</td></tr>
+<tr class="memitem:a78513919ed4d338079bb56b6c548c84f" id="r_a78513919ed4d338079bb56b6c548c84f"><td class="memItemLeft"><a class="el" href="namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0">EarlyIrqResult</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a78513919ed4d338079bb56b6c548c84f">arch::early_irq_init</a> (<a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> frequency_hz)</td></tr>
 <tr class="memdesc:a78513919ed4d338079bb56b6c548c84f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterruptController::init → Timer::init(frequency_hz) → Timer::calibrate. Idempotent (BOOT_ONLY): a second call repeats the sequence with no hardware side-effect delta and returns the same result.  <br /></td></tr>
 <tr class="memitem:ac82b85b800ec3060a62a5921a7d638d8" id="r_ac82b85b800ec3060a62a5921a7d638d8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ac82b85b800ec3060a62a5921a7d638d8">arch::early_irq_init_ap</a> ()</td></tr>
 <tr class="memdesc:ac82b85b800ec3060a62a5921a7d638d8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-AP early IRQ enable (x86_64 only): LAPIC init + IDT load. Touches per-CPU state only; the shared distributor/PIC setup from <a class="el" href="namespacearch.html#a78513919ed4d338079bb56b6c548c84f" title="Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterru...">early_irq_init()</a> is never repeated here. Defined in <a class="el" href="x86__64_2early__init_8cpp.html" title="x86_64 early IRQ bring-up (issue #198): IDT → legacy PIC → local/APIC (+ I/O APIC) → PIT/APIC timer →...">src/kernel/arch/x86_64/early_init.cpp</a>.  <br /></td></tr>

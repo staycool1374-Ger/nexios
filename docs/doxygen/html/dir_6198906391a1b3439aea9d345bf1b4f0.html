@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -153,6 +153,8 @@ Files</h2></td></tr>
 <tr class="memdesc:test__atomic__context__switch_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Atomic context switch tests. <br /></td></tr>
 <tr class="memitem:test_5Fblock_5Fdevice_2Ecpp" id="r_test_5Fblock_5Fdevice_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__block__device_8cpp.html">test_block_device.cpp</a></td></tr>
 <tr class="memdesc:test__block__device_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Block device driver tests. <br /></td></tr>
+<tr class="memitem:test_5Fboot_5Fdeterministic_2Ecpp" id="r_test_5Fboot_5Fdeterministic_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__boot__deterministic_8cpp.html">test_boot_deterministic.cpp</a></td></tr>
+<tr class="memdesc:test__boot__deterministic_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deterministic-boot stage tests (issue #45). Real assertions on the kernel::boot_stage_* API (main): validity + monotonicity + relative budget bounds. Sampling method: IrqGuard-frozen rdtsc measured-max + static loop-cap bounds, relative asserts with &gt;=3x headroom; QEMU-TSC numbers are relative/scaling-only (wcet_analysis.md method). Raw-counter deltas are host-load-independent (instruction-driven under TCG), so all asserts rest on relative/raw properties — never absolute ns. <br /></td></tr>
 <tr class="memitem:test_5Fbudget_2Ecpp" id="r_test_5Fbudget_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__budget_8cpp.html">test_budget.cpp</a></td></tr>
 <tr class="memitem:test_5Fbuffer_5Fpool_2Ecpp" id="r_test_5Fbuffer_5Fpool_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__buffer__pool_8cpp.html">test_buffer_pool.cpp</a></td></tr>
 <tr class="memdesc:test__buffer__pool_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Buffer pool allocation and lifecycle tests. <br /></td></tr>
@@ -273,6 +275,8 @@ Files</h2></td></tr>
 <tr class="memdesc:test__hr__clock_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">High-resolution monotonic clock tests (issue #16, v0.4.7). <br /></td></tr>
 <tr class="memitem:test_5Fidle_5Fcleanup_2Ecpp" id="r_test_5Fidle_5Fcleanup_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__idle__cleanup_8cpp.html">test_idle_cleanup.cpp</a></td></tr>
 <tr class="memdesc:test__idle__cleanup_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tests that idle-task zombie cleanup does not cause deadline misses. <br /></td></tr>
+<tr class="memitem:test_5Fidle_5Fmonitor_2Ecpp" id="r_test_5Fidle_5Fmonitor_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__idle__monitor_8cpp.html">test_idle_monitor.cpp</a></td></tr>
+<tr class="memdesc:test__idle__monitor_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle-task safety monitor foundation tests (issues #43/#282). Normative contract: docs/specs/idle_monitor.md §1 (M1-M6). <br /></td></tr>
 <tr class="memitem:test_5Fidle_5Ftask_2Ecpp" id="r_test_5Fidle_5Ftask_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__idle__task_8cpp.html">test_idle_task.cpp</a></td></tr>
 <tr class="memdesc:test__idle__task_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle task behaviour tests. <br /></td></tr>
 <tr class="memitem:test_5Fidt_2Ecpp" id="r_test_5Fidt_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__idt_8cpp.html">test_idt.cpp</a></td></tr>
@@ -509,6 +513,8 @@ Files</h2></td></tr>
 <tr class="memdesc:test__task__lifecycle_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task creation/termination lifecycle tests. <br /></td></tr>
 <tr class="memitem:test_5Ftask_5Fmetering_2Ecpp" id="r_test_5Ftask_5Fmetering_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__task__metering_8cpp.html">test_task_metering.cpp</a></td></tr>
 <tr class="memdesc:test__task__metering_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-task execution-time metering tests (issue #21, v0.4.8). <br /></td></tr>
+<tr class="memitem:test_5Ftask_5Fwatchdog_2Ecpp" id="r_test_5Ftask_5Fwatchdog_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__task__watchdog_8cpp.html">test_task_watchdog.cpp</a></td></tr>
+<tr class="memdesc:test__task__watchdog_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-task software watchdog tests (issues #41/#277): CREATE/KICK contract, expiry kill, /proc node, action matrix, stale-gen. DRIVEN where syscall_task() must resolve (affinity pattern); direct C++ where the helper/task state is asserted. Every armed task is disarmed or reaped by test end (snapshot-clean). <br /></td></tr>
 <tr class="memitem:test_5Ftcb_5Fwrite_5Flog_2Ecpp" id="r_test_5Ftcb_5Fwrite_5Flog_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__tcb__write__log_8cpp.html">test_tcb_write_log.cpp</a></td></tr>
 <tr class="memdesc:test__tcb__write__log_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Demonstration that the TCB write-log tracer (docs/investigation -cumulative-corruption.md Idea #4) fires when a stray write corrupts a TCB and the poison-detection path runs. <br /></td></tr>
 <tr class="memitem:test_5Ftestrunner_2Ecpp" id="r_test_5Ftestrunner_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__testrunner_8cpp.html">test_testrunner.cpp</a></td></tr>
@@ -557,6 +563,8 @@ Files</h2></td></tr>
 <tr class="memdesc:test__watchdog_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Watchdog timer implementation tests. <br /></td></tr>
 <tr class="memitem:test_5Fwatchdog_2Ehpp" id="r_test_5Fwatchdog_2Ehpp"><td class="memItemLeft"><a href="test__watchdog_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="test__watchdog_8hpp.html">test_watchdog.hpp</a></td></tr>
 <tr class="memdesc:test__watchdog_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Watchdog timer helpers for test timeout safety. <br /></td></tr>
+<tr class="memitem:test_5Fwatchdog_5Fdaemon_2Ecpp" id="r_test_5Fwatchdog_5Fdaemon_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__watchdog__daemon_8cpp.html">test_watchdog_daemon.cpp</a></td></tr>
+<tr class="memdesc:test__watchdog__daemon_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Watchdog daemon supervision tests (issue #277): WdogCap single-owner/revoke/dispose contract, cross-task arm/kick via handles, and the boot-spawned watchdogd presence. Every cap is disposed and every slot removed by test end (snapshot-clean). <br /></td></tr>
 <tr class="memitem:test_5Fwcet_5Fcleanup_2Ecpp" id="r_test_5Fwcet_5Fcleanup_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__wcet__cleanup_8cpp.html">test_wcet_cleanup.cpp</a></td></tr>
 <tr class="memdesc:test__wcet__cleanup_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">WCET benchmark for zombie cleanup_step(). <br /></td></tr>
 <tr class="memitem:test_5Fwcet_5Fmemory_2Ecpp" id="r_test_5Fwcet_5Fmemory_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__wcet__memory_8cpp.html">test_wcet_memory.cpp</a></td></tr>

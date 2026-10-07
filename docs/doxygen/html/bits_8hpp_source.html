@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -145,14 +145,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('bits_8hpp_sour
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span></div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">namespace </span>hal::bits {</div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span></div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> find_highest_bit(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> mask) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> find_highest_bit(uint64_t mask) <span class="keyword">noexcept</span> {</div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <span class="keywordflow">if</span> (mask == 0)</div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>        <span class="keywordflow">return</span> 0;</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) ||             \</span></div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="preprocessor">    defined(__GNUC__)</span></div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    <span class="keywordflow">return</span> 63ULL - <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a><span class="keyword">&gt;</span>(__builtin_clzll(mask));</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    <span class="keywordflow">return</span> 63ULL - <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a><span class="keyword">&gt;</span>(__builtin_clzll(mask));</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="preprocessor">#else</span></div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> n = 0;</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> n = 0;</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <span class="keywordflow">if</span> (mask &amp; 0xFFFFFFFF00000000ULL) {</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>        n |= 32;</div>
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>        mask &gt;&gt;= 32;</div>
@@ -180,14 +180,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('bits_8hpp_sour
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>}</div>
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span></div>
-<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span><span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> find_lowest_bit(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> mask) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span><span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> find_lowest_bit(uint64_t mask) <span class="keyword">noexcept</span> {</div>
 <div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <span class="keywordflow">if</span> (mask == 0)</div>
 <div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>        <span class="keywordflow">return</span> 0;</div>
 <div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) ||             \</span></div>
 <div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span><span class="preprocessor">    defined(__GNUC__)</span></div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    <span class="keywordflow">return</span> <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a><span class="keyword">&gt;</span>(__builtin_ctzll(mask));</div>
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    <span class="keywordflow">return</span> <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a><span class="keyword">&gt;</span>(__builtin_ctzll(mask));</div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span><span class="preprocessor">#else</span></div>
-<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> n = 0;</div>
+<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> n = 0;</div>
 <div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>    <span class="keywordflow">if</span> (!(mask &amp; 0xFFFFFFFF)) {</div>
 <div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>        n |= 32;</div>
 <div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>        mask &gt;&gt;= 32;</div>
@@ -216,8 +216,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('bits_8hpp_sour
 <div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>}</div>
 <div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span> </div>
 <div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>} <span class="comment">// namespace hal::bits</span></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

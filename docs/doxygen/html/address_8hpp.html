@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,43 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('address_8hpp.h
 
 <p>Type-safe physical and virtual address wrappers (MISRA C++ 2023 compliant).  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for address.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="address_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2memory_2address_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="address_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2memory_2address_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="address_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3APhysicalAddress" id="r_kernel_3A_3APhysicalAddress"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_physical_address.html">kernel::PhysicalAddress</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical address wrapper — eliminates raw reinterpret_cast for physical memory.  <a href="classkernel_1_1_physical_address.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3AVirtualAddress" id="r_kernel_3A_3AVirtualAddress"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_virtual_address.html">kernel::VirtualAddress</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual address wrapper — eliminates raw reinterpret_cast for virtual memory.  <a href="classkernel_1_1_virtual_address.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3APageAddress" id="r_kernel_3A_3APageAddress"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_page_address.html">kernel::PageAddress</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page-aligned physical address.  <a href="classkernel_1_1_page_address.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a39f9dcd4db2a052fd3f980499660a022" id="r_a39f9dcd4db2a052fd3f980499660a022"><td class="memItemLeft">constexpr <a class="el" href="classkernel_1_1_virtual_address.html">VirtualAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a39f9dcd4db2a052fd3f980499660a022">kernel::phys_to_virt</a> (<a class="el" href="classkernel_1_1_physical_address.html">PhysicalAddress</a> phys) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a39f9dcd4db2a052fd3f980499660a022"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert physical address to higher-half virtual address.  <br /></td></tr>
+<tr class="memitem:acb68f2e2a60586a7d3dd7453b668d2cd" id="r_acb68f2e2a60586a7d3dd7453b668d2cd"><td class="memItemLeft">constexpr <a class="el" href="classkernel_1_1_physical_address.html">PhysicalAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#acb68f2e2a60586a7d3dd7453b668d2cd">kernel::virt_to_phys</a> (<a class="el" href="classkernel_1_1_virtual_address.html">VirtualAddress</a> virt) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:acb68f2e2a60586a7d3dd7453b668d2cd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert higher-half virtual address to physical address.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Type-safe physical and virtual address wrappers (MISRA C++ 2023 compliant). </p>
 </div></div><!-- contents -->

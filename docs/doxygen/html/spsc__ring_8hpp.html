@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,28 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('spsc__ring_8hp
 
 <p>Lock-free single-producer single-consumer ring buffer template.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="atomic_8hpp_source.html">lib/atomic.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for spsc_ring.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="spsc__ring_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2sync_2spsc__ring_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="spsc__ring_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2sync_2spsc__ring_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="spsc__ring_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:SPSCRing_3C_20T_2C_20N_20_3E" id="r_SPSCRing_3C_20T_2C_20N_20_3E"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="class_s_p_s_c_ring.html">SPSCRing&lt; T, N &gt;</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lock-free single-producer single-consumer ring buffer.  <a href="class_s_p_s_c_ring.html#details">More...</a><br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Lock-free single-producer single-consumer ring buffer template. </p>
 </div></div><!-- contents -->

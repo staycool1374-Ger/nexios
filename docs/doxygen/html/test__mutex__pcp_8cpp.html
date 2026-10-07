@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__mutex__p
 </div><!--header-->
 <div class="contents">
 
-<p>Priority Ceiling Protocol tests for sync::Mutex.  
+<p>Priority Ceiling Protocol tests for <a class="el" href="classkernel_1_1sync_1_1_mutex.html">sync::Mutex</a>.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
@@ -143,7 +143,7 @@ Functions</h2></td></tr>
 <tr class="memitem:ade24476dd1e8a7d4134412386ff1523b" id="r_ade24476dd1e8a7d4134412386ff1523b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ade24476dd1e8a7d4134412386ff1523b">register_mutex_pcp_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Priority Ceiling Protocol tests for sync::Mutex. </p>
+<div class="textblock"><p>Priority Ceiling Protocol tests for <a class="el" href="classkernel_1_1sync_1_1_mutex.html">sync::Mutex</a>. </p>
 <pre class="fragment">   v0.3.10 rework (SIMULATED → DRIVEN): ceiling locking is performed by
    a REAL kernel task (prio ≥ 11) in its dispatched lambda.  The
    holder locks the ceiling mutexes and blocks on a real semaphore;

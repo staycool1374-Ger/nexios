@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
   <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
   <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
-  <img src="https://img.shields.io/badge/version-v0.5.1-blue?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-v0.5.2-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
@@ -33,7 +33,7 @@ Currently a hybrid kernel actively transitioning toward a capability-based micro
 
 * **Target:** x86_64, ARM64 & RISC-V
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.5.1 — Bring-up Multi-Arch Boot (1610 debug tests, 85 release tests: aarch64/riscv64 production boot, per-arch syscall ABI conformance, EL0 fork smoke, debugd phases 1–2)
+* **Status:** v0.5.2 — User-ELF Bring-up to Run (1696 debug tests, 85 release tests: runelf end-to-end user ELF execution, H1–H8 kernel hygiene, debugd runelf integration)
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
@@ -90,6 +90,12 @@ Done roadmap archived in `prompts/README_done.md`.
 
 ## Recent Release Highlights
 
+### **v0.5.2 — User-ELF Bring-up to Run**
+* **End-to-End User ELF Execution:** `runelf` loads and runs general ELFs as strictly periodic user tasks with deadline registration, Liu-Leyland + memory-budget admission, TLS setup, and `/etc/rc` integration.
+* **Kernel Hygiene H1–H8:** pure-refactor cleanup across memory (PMM/VMM/MemPool), scheduler/task lifecycle, and sync primitives — zero functional change, SIL 3 PRE+POST approved per part.
+* **Debugger Surface:** `runelf --debug` integration, stop-event snapshot budget export, and the bare-metal debug-discipline audit (gaps filed as follow-ups).
+* **Full Gates Green:** 1696/1696 debug, 85/85 release, `make build` Errors 0.
+
 ### **v0.5.1 — Bring-up Multi-Arch Boot**
 * **Three Architectures Boot to Production:** aarch64 and riscv64 join x86_64 with real production boot paths — page-table/HHDM bring-up, PCI discovery, per-arch syscall ABI conformance tests, an EL0 fork smoke test, and riscv64 U-mode user tasks.
 * **Kernel Debugger Foundations:** the debugd groundwork lands — kernel debug syscalls (read/write regs/mem, attach), stop-event routing with breakpoint shadows, per-arch stepping, and an RSP parser core with mock-transport tests.
@@ -110,8 +116,8 @@ Have questions about the architecture, CSpace capabilities, or real-time schedul
 #### Using Docker (recommended)
 
 ```bash
-docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.1
-docker run --rm -it ghcr.io/staycool1374-ger/nexios-env:v0.5.1
+docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.2
+docker run --rm -it ghcr.io/staycool1374-ger/nexios-env:v0.5.2
 # inside the container:
 make build
 make execute-test x86_64 debug debug_syscall
@@ -128,14 +134,14 @@ make execute-test x86_64 debug debug_syscall
 Run a gate directly without an interactive shell:
 
 ```bash
-docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.1 \
+docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.2 \
     make execute-test x86_64 debug debug_syscall
 ```
 
 Pin a different snapshot explicitly (default is the image's own tag):
 
 ```bash
-docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.1
+docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.2
 ```
 #### Running in QEMU Emulator
 

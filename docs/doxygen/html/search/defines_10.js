@@ -1,7 +1,12 @@
 var searchData=
 [
-  ['va_5farg_0',['va_arg',['../logger_8hpp.html#a81ebe6ea6253b0c6618e29de70fe10eb',1,'va_arg:&#160;logger.hpp'],['../stdarg_8h.html#a81ebe6ea6253b0c6618e29de70fe10eb',1,'va_arg:&#160;stdarg.h']]],
-  ['va_5fcopy_1',['va_copy',['../stdarg_8h.html#ad36243a66d6b30f74fd72dd0f78d7264',1,'stdarg.h']]],
-  ['va_5fend_2',['va_end',['../logger_8hpp.html#acd9b3b9085ec072324c5fdac2b40304e',1,'va_end:&#160;logger.hpp'],['../stdarg_8h.html#acd9b3b9085ec072324c5fdac2b40304e',1,'va_end:&#160;stdarg.h']]],
-  ['va_5fstart_3',['va_start',['../logger_8hpp.html#ade24ac546ea93fde2353ed2db8e89c66',1,'va_start:&#160;logger.hpp'],['../stdarg_8h.html#ade24ac546ea93fde2353ed2db8e89c66',1,'va_start:&#160;stdarg.h']]]
+  ['uart_5fbase_0',['UART_BASE',['../aarch64_2serial_8cpp.html#aa501d94aad5260161a3f0b89ec827e92',1,'serial.cpp']]],
+  ['uart_5fcr_1',['UART_CR',['../aarch64_2serial_8cpp.html#a36b08a2623a7c2c8862071efe1a3ca61',1,'serial.cpp']]],
+  ['uart_5fdr_2',['UART_DR',['../aarch64_2serial_8cpp.html#aeecfbcfb2237b106811fbaa70a0f16bb',1,'serial.cpp']]],
+  ['uart_5ffbrd_3',['UART_FBRD',['../aarch64_2serial_8cpp.html#aaa92767d6b8b55b91e24626a266cc87d',1,'serial.cpp']]],
+  ['uart_5ffr_4',['UART_FR',['../aarch64_2serial_8cpp.html#a6fb2c8bd5d9982f95334a59729c83cf1',1,'serial.cpp']]],
+  ['uart_5fibrd_5',['UART_IBRD',['../aarch64_2serial_8cpp.html#a761a8cff38b80353fdb359e7ad1d28e3',1,'serial.cpp']]],
+  ['uart_5ficr_6',['UART_ICR',['../aarch64_2serial_8cpp.html#a21f48dd7004f171875f228a39fcbce01',1,'serial.cpp']]],
+  ['uart_5fimsc_7',['UART_IMSC',['../aarch64_2serial_8cpp.html#a394165743592a6a268578d932a6a0493',1,'serial.cpp']]],
+  ['uart_5flcr_5fh_8',['UART_LCR_H',['../aarch64_2serial_8cpp.html#aa524a492597e13c4a63508a1e8cd8693',1,'serial.cpp']]]
 ];

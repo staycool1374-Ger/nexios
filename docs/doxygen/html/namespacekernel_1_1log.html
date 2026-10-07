@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 </div><!--header-->
 <div class="contents">
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:catalog" id="r_catalog"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log_1_1catalog.html">catalog</a></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:LogEntry" id="r_LogEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1log_1_1_log_entry.html">LogEntry</a></td></tr>
@@ -128,6 +132,16 @@ Data Structures</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
 Enumerations</h2></td></tr>
+<tr class="memitem:a3715d6ea36d8e40a6fb2320b3a4eacfc" id="r_a3715d6ea36d8e40a6fb2320b3a4eacfc"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfc">LogSeverity</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfcadc30ec20708ef7b0f641ef78b7880a15">DEBUG</a> = 0
+, <a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfca551b723eafd6a31d444fcb2f5920fbd3">INFO</a> = 1
+, <a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfca32bd8a1db2275458673903bdb84cb277">WARN</a> = 2
+, <a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfcabb1ca97ec761fc37101737ba0aa2e7c5">ERROR</a> = 3
+, <br />
+&#160;&#160;<a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfca19da7170bea36556dde582519795f3fc">FATAL</a> = 4
+<br />
+ }</td></tr>
+<tr class="memdesc:a3715d6ea36d8e40a6fb2320b3a4eacfc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Severity of a dmesg entry (issue #234). Stored per entry so the renderer never re-derives it from the code (misclassification would mask faults as INFO — SIL 3 S1 guard: severity travels with the record).  <a href="#a3715d6ea36d8e40a6fb2320b3a4eacfc">More...</a><br /></td></tr>
 <tr class="memitem:a0a15565ea32d9d5ddb218c71e3f3c44a" id="r_a0a15565ea32d9d5ddb218c71e3f3c44a"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> : uint8_t { <br />
 &#160;&#160;<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aae7b1a5c82772e0e055096008cb9883ef">BASE</a> = 0
 , <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aa274ccef15a21e829d03293a6fd1974f3">SYNC</a> = 1
@@ -137,29 +151,85 @@ Enumerations</h2></td></tr>
 &#160;&#160;<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aa4e6ea598d35449adb3c246bf97f5a71c">SCHED</a> = 4
 , <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aac8660c6d72e7323867ec800d6bb953df">IPC</a> = 5
 , <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b">SYSCALL</a> = 6
+, <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aa347aadfc505a4bc6b2f9d81363d2331c">NET</a> = 7
+, <br />
+&#160;&#160;<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aab61b2d6c6fa62903b882aaa53452c111">ELF</a> = 8
+, <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aa2e40ad879e955201df4dedbf8d479a12">USER</a> = 9
+, <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aa31a7eca4a60813c38871dc47c169cad7">DAEMON</a> = 10
+, <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aaacc2b1577b301d89ebeedc3987d9a4cb">PMM</a> = 11
+, <br />
+&#160;&#160;<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aaa7170792bc4a2bfbe1d1946911eb1d15">VMM</a> = 12
+, <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aa0ed9b001ca1cd2667302a9be876ede9d">TASK</a> = 13
+, <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aaf608cfa62aa4c05e9a46d964a3b47b04">BUFPOOL</a> = 14
+, <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aa0420dcd0a9b3fc40a86ae7e7b530bcbf">DRIVER</a> = 15
+, <br />
+&#160;&#160;<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aafaee4ca3c30ee18148ce3ada37466498">INIT</a> = 16
+, <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aa8f9e1889c89e42901ab7c0a033a3347c">TIMING</a> = 17
+, <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44aa033bd94b1168d7e4f0d644c3c95e35bf">TEST</a> = 18
 <br />
  }</td></tr>
 <tr class="memdesc:a0a15565ea32d9d5ddb218c71e3f3c44a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Subsystem identifier used in dmesg entries (maps to per-subsystem error_string).  <a href="#a0a15565ea32d9d5ddb218c71e3f3c44a">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a8c0fd69e4ea93d857e2b6176911b7e5e" id="r_a8c0fd69e4ea93d857e2b6176911b7e5e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a8c0fd69e4ea93d857e2b6176911b7e5e">dmesg_push</a> (<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> err, const char *msg, <a class="el" href="types_8hpp.html#a5b7cbd695e4ef11023a4088e5ebe9612">uintptr_t</a> ctx=0) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ac6086b9f241e6ab82dc53c140c90926b" id="r_ac6086b9f241e6ab82dc53c140c90926b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ac6086b9f241e6ab82dc53c140c90926b">current_wall_ms</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ac6086b9f241e6ab82dc53c140c90926b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wall-clock milliseconds since the Unix epoch for log entries. Defined in <a class="el" href="dmesg_8cpp.html" title="DmesgService singleton — the private DmesgBuffer ring is defined inline in dmesg.hpp (friend-tested,...">dmesg.cpp</a> (reads the boot epoch + tick count); returns 0 while no wall time is available (early boot) — the renderer then falls back to the boot-tick count per the issue-#234 time rule.  <br /></td></tr>
+<tr class="memitem:a65b3b1de43a3a9dfd5327df857001131" id="r_a65b3b1de43a3a9dfd5327df857001131"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a65b3b1de43a3a9dfd5327df857001131">format_dmesg_entry</a> (char *out_buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> out_cap, const <a class="el" href="structkernel_1_1log_1_1_log_entry.html">LogEntry</a> &amp;entry) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a65b3b1de43a3a9dfd5327df857001131"><td class="mdescLeft">&#160;</td><td class="mdescRight">Render one entry in the canonical issue-#234 line format: <span class="tt">[DMESG &lt;<a class="el" href="namespacekernel_1_1time.html">time</a>&gt;ms]: &lt;TYPE&gt; &lt;CODEBASE&gt; &lt;error-nr&gt; &lt;err-text&gt;: &lt;msg&gt;</span> <span class="tt">  [<a class="el" href="namespacekernel_1_1task.html">task</a>=&lt;id&gt; ctx=0x&lt;hex&gt;]</span> &lt;time&gt; is wall_ms when set, else the boot-tick timestamp. The output is always NUL-terminated and truncated to fit; bounded loops only.  <br /></td></tr>
+<tr class="memitem:a91b4e383ddf972d29b51dbbcde17dcd3" id="r_a91b4e383ddf972d29b51dbbcde17dcd3"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a91b4e383ddf972d29b51dbbcde17dcd3">subsystem_base</a> (<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a91b4e383ddf972d29b51dbbcde17dcd3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Canonical base for a subsystem (kDmesgBase_* above).  <br /></td></tr>
+<tr class="memitem:a46122cf7056e720d90260c743e53f590" id="r_a46122cf7056e720d90260c743e53f590"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a46122cf7056e720d90260c743e53f590">is_canonical_nbr</a> (<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys, uint64_t error_nr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a46122cf7056e720d90260c743e53f590"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when error_nr lies in the subsystem's canonical window [base, base + stride). Legacy BASE event codes (0xDAxx and friends) are NOT canonical — they decode through the compat shims.  <br /></td></tr>
+<tr class="memitem:af59b51fe4a71de7df6c8935fd32327bb" id="r_af59b51fe4a71de7df6c8935fd32327bb"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#af59b51fe4a71de7df6c8935fd32327bb">severity_name</a> (<a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfc">LogSeverity</a> sev)</td></tr>
+<tr class="memdesc:af59b51fe4a71de7df6c8935fd32327bb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Short name for a <a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfc" title="Severity of a dmesg entry (issue #234). Stored per entry so the renderer never re-derives it from the...">LogSeverity</a>.  <br /></td></tr>
+<tr class="memitem:a2357fa2b5c3432aba2853a3fd420b447" id="r_a2357fa2b5c3432aba2853a3fd420b447"><td class="memItemLeft"><a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfc">LogSeverity</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2357fa2b5c3432aba2853a3fd420b447">default_severity_for</a> (<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys, uint64_t code)</td></tr>
+<tr class="memdesc:a2357fa2b5c3432aba2853a3fd420b447"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default severity for legacy severity-less pushes: INFO for confirmational codes (BASE info ranges, code 0), ERROR fail-closed otherwise. New producers should pass an explicit severity (or the catalog severity) instead of relying on this fallback.  <br /></td></tr>
+<tr class="memitem:a8c0fd69e4ea93d857e2b6176911b7e5e" id="r_a8c0fd69e4ea93d857e2b6176911b7e5e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a8c0fd69e4ea93d857e2b6176911b7e5e">dmesg_push</a> (<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys, uint64_t err, const char *msg, <a class="el" href="types_8h.html#a83242de74310b4aec3fc506bc3644211">uintptr_t</a> ctx=0) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a8c0fd69e4ea93d857e2b6176911b7e5e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shorthand: push an entry to the kernel dmesg service.  <br /></td></tr>
-<tr class="memitem:a93f6fccfccf70fcdc90f93e630521488" id="r_a93f6fccfccf70fcdc90f93e630521488"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a93f6fccfccf70fcdc90f93e630521488">dmesg_push_base</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> err, const char *msg, <a class="el" href="types_8hpp.html#a5b7cbd695e4ef11023a4088e5ebe9612">uintptr_t</a> ctx=0) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a93f6fccfccf70fcdc90f93e630521488" id="r_a93f6fccfccf70fcdc90f93e630521488"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a93f6fccfccf70fcdc90f93e630521488">dmesg_push_base</a> (uint64_t err, const char *msg, <a class="el" href="types_8h.html#a83242de74310b4aec3fc506bc3644211">uintptr_t</a> ctx=0) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a93f6fccfccf70fcdc90f93e630521488"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shorthand: push a base-subsystem error to the kernel dmesg service.  <br /></td></tr>
-<tr class="memitem:a771448233b6c088624a937e135ed0016" id="r_a771448233b6c088624a937e135ed0016"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a771448233b6c088624a937e135ed0016">base_code_is_info</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> code)</td></tr>
-<tr class="memdesc:a771448233b6c088624a937e135ed0016"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when a base-subsystem code is an informational event rather than a fault: daemon lifecycle (0xDA00-0xDAFF) and background ELF loader (0xDB00-0xDBFF) ranges. Used by the dmesg renderers to print INFO= instead of ERR=.  <br /></td></tr>
-<tr class="memitem:a509eca06210bff9bda33ad707d235262" id="r_a509eca06210bff9bda33ad707d235262"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a509eca06210bff9bda33ad707d235262">base_error_string</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> code)</td></tr>
-<tr class="memdesc:a509eca06210bff9bda33ad707d235262"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a base-subsystem error code. The code space is split into <a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">kernel::Error</a> values (0–9) and a custom range for event codes: 0xDA00 – 0xDAFF daemon lifecycle events 0xDB00 – 0xDBFF background ELF loader events.  <br /></td></tr>
+<tr class="memitem:a771448233b6c088624a937e135ed0016" id="r_a771448233b6c088624a937e135ed0016"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a771448233b6c088624a937e135ed0016">base_code_is_info</a> (uint64_t code)</td></tr>
+<tr class="memdesc:a771448233b6c088624a937e135ed0016"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when a base-subsystem code is an informational event rather than a fault: daemon lifecycle (0xDA00-0xDAFF), background ELF loader (0xDB00-0xDBFF), and user task-end reports (0xDC00-0xDCFF) ranges, plus the canonical INFO records of issue #234 (daemon restarted/ensured/terminated/restarting/up, ELF started/completed/ canceled, user task exited). Used by legacy renderers and the severity fallback to print INFO instead of ERROR. A new INFO family MUST extend both this predicate and base_error_string below, or its lines render as ERR=&lt;stale enum&gt;.  <br /></td></tr>
+<tr class="memitem:a509eca06210bff9bda33ad707d235262" id="r_a509eca06210bff9bda33ad707d235262"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a509eca06210bff9bda33ad707d235262">base_error_string</a> (uint64_t code)</td></tr>
+<tr class="memdesc:a509eca06210bff9bda33ad707d235262"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a base-subsystem error code. The code space is split into <a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">kernel::Error</a> values (0–9) and a custom range for event codes: 0xDA00 – 0xDAFF daemon lifecycle events 0xDB00 – 0xDBFF background ELF loader events 0xDC00 – 0xDCFF user task-end reports (clean exit / fault).  <br /></td></tr>
 <tr class="memitem:ad82063e29ea0c8f5de69a0748c72621f" id="r_ad82063e29ea0c8f5de69a0748c72621f"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#ad82063e29ea0c8f5de69a0748c72621f">subsystem_name</a> (<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> s)</td></tr>
 <tr class="memdesc:ad82063e29ea0c8f5de69a0748c72621f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a short name for an <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a" title="Subsystem identifier used in dmesg entries (maps to per-subsystem error_string).">ErrorSubsystem</a>.  <br /></td></tr>
-<tr class="memitem:a3d54be80d65b536f19f6aabdb6878bd5" id="r_a3d54be80d65b536f19f6aabdb6878bd5"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a3d54be80d65b536f19f6aabdb6878bd5">error_string</a> (<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> code)</td></tr>
-<tr class="memdesc:a3d54be80d65b536f19f6aabdb6878bd5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch an error code to the correct subsystem's error_string.  <br /></td></tr>
+<tr class="memitem:a90130fac285865fd10b28150d5de3a6b" id="r_a90130fac285865fd10b28150d5de3a6b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a90130fac285865fd10b28150d5de3a6b">strip_canonical</a> (<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys, uint64_t code)</td></tr>
+<tr class="memdesc:a90130fac285865fd10b28150d5de3a6b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Strip a canonical number to its raw table code. Raw (legacy) codes pass through unchanged, so every pre-#234 push decodes exactly as before; canonical pushes (base + raw) resolve to the same text.  <br /></td></tr>
+<tr class="memitem:a3d54be80d65b536f19f6aabdb6878bd5" id="r_a3d54be80d65b536f19f6aabdb6878bd5"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a3d54be80d65b536f19f6aabdb6878bd5">error_string</a> (<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys, uint64_t code)</td></tr>
+<tr class="memdesc:a3d54be80d65b536f19f6aabdb6878bd5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch an error code to the correct subsystem's error_string. Catalog event records take precedence over the raw tables, so event numbers (e.g. TIMING deadline-missed) render their cause text while plain table codes render the table text — both fail closed.  <br /></td></tr>
+<tr class="memitem:a09aee43e4add1f63f3a78520799ddbe7" id="r_a09aee43e4add1f63f3a78520799ddbe7"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a09aee43e4add1f63f3a78520799ddbe7">dmesg_push_sev</a> (<a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys, uint64_t err, <a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfc">LogSeverity</a> sev, const char *msg, <a class="el" href="types_8h.html#a83242de74310b4aec3fc506bc3644211">uintptr_t</a> ctx=0) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a09aee43e4add1f63f3a78520799ddbe7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shorthand: push an entry with explicit severity (issue #234).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
-<tr class="memitem:a7873f3246fdc21af9b32fe43eb3e6435" id="r_a7873f3246fdc21af9b32fe43eb3e6435"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7873f3246fdc21af9b32fe43eb3e6435">DMESG_CAPACITY</a> = <a class="el" href="nexios__config_8h.html#a15f72011bdc6888b3a6aef544acc4604">CONFIG_DMESG_CAPACITY</a></td></tr>
+<tr class="memitem:ab91709d22f9e59c53f4f1cca2b3ee60b" id="r_ab91709d22f9e59c53f4f1cca2b3ee60b"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab91709d22f9e59c53f4f1cca2b3ee60b">kDmesgStride</a> = 1000</td></tr>
+<tr class="memdesc:ab91709d22f9e59c53f4f1cca2b3ee60b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Canonical error-nr stride: each subsystem owns [base, base+1000). New subsystems number from these decimal bases; legacy BASE event families (0xDAxx daemon, 0xDBxx ELF, 0xDCxx task-end) keep decoding through base_error_string — see docs/specs/dmesg.md §5 for old→new map.  <br /></td></tr>
+<tr class="memitem:ad6a6f158e5be882dc4615a8a04120dfe" id="r_ad6a6f158e5be882dc4615a8a04120dfe"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad6a6f158e5be882dc4615a8a04120dfe">kDmesgBase_BASE</a> = 0</td></tr>
+<tr class="memitem:aa69de234cc1f9021c92d587b19a5429a" id="r_aa69de234cc1f9021c92d587b19a5429a"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa69de234cc1f9021c92d587b19a5429a">kDmesgBase_SYNC</a> = 1000</td></tr>
+<tr class="memitem:abc4c1a9dc8d95e755ec88f073eacdcf0" id="r_abc4c1a9dc8d95e755ec88f073eacdcf0"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#abc4c1a9dc8d95e755ec88f073eacdcf0">kDmesgBase_VFS</a> = 2000</td></tr>
+<tr class="memitem:aabdda5e75656f7629b452936e523510b" id="r_aabdda5e75656f7629b452936e523510b"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aabdda5e75656f7629b452936e523510b">kDmesgBase_MPOOL</a> = 3000</td></tr>
+<tr class="memitem:aad97ce1545b88d8a0828d239b05d2b18" id="r_aad97ce1545b88d8a0828d239b05d2b18"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aad97ce1545b88d8a0828d239b05d2b18">kDmesgBase_SCHED</a> = 4000</td></tr>
+<tr class="memitem:a8b3fb5d3fb0617c0924c4880bcea20a8" id="r_a8b3fb5d3fb0617c0924c4880bcea20a8"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a8b3fb5d3fb0617c0924c4880bcea20a8">kDmesgBase_IPC</a> = 5000</td></tr>
+<tr class="memitem:aba7b5a5464643896981de19ee026cf2b" id="r_aba7b5a5464643896981de19ee026cf2b"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aba7b5a5464643896981de19ee026cf2b">kDmesgBase_SYSCALL</a> = 6000</td></tr>
+<tr class="memitem:a285f9000cff3667941cc253d1f9ea028" id="r_a285f9000cff3667941cc253d1f9ea028"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a285f9000cff3667941cc253d1f9ea028">kDmesgBase_NET</a> = 7000</td></tr>
+<tr class="memitem:aab483dbd77fdc6b8e20050b39e0f3862" id="r_aab483dbd77fdc6b8e20050b39e0f3862"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aab483dbd77fdc6b8e20050b39e0f3862">kDmesgBase_ELF</a> = 8000</td></tr>
+<tr class="memitem:af6a8c5b7d8abeb8c0fd488982aecb75b" id="r_af6a8c5b7d8abeb8c0fd488982aecb75b"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#af6a8c5b7d8abeb8c0fd488982aecb75b">kDmesgBase_USER</a> = 9000</td></tr>
+<tr class="memitem:a1f15987edc63946d1571cdd844df9e6f" id="r_a1f15987edc63946d1571cdd844df9e6f"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a1f15987edc63946d1571cdd844df9e6f">kDmesgBase_DAEMON</a> = 10000</td></tr>
+<tr class="memitem:a47e80dfa8a3f4e1a613cc58684279d35" id="r_a47e80dfa8a3f4e1a613cc58684279d35"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a47e80dfa8a3f4e1a613cc58684279d35">kDmesgBase_PMM</a> = 11000</td></tr>
+<tr class="memitem:a573687bdb1326695e6b8d01e947c2e31" id="r_a573687bdb1326695e6b8d01e947c2e31"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a573687bdb1326695e6b8d01e947c2e31">kDmesgBase_VMM</a> = 12000</td></tr>
+<tr class="memitem:a77b57b6755265df4f1446497b7c033c2" id="r_a77b57b6755265df4f1446497b7c033c2"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a77b57b6755265df4f1446497b7c033c2">kDmesgBase_TASK</a> = 13000</td></tr>
+<tr class="memitem:ab834a7c20fa9072ef6535704b1fad92d" id="r_ab834a7c20fa9072ef6535704b1fad92d"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab834a7c20fa9072ef6535704b1fad92d">kDmesgBase_BUFPOOL</a> = 14000</td></tr>
+<tr class="memitem:ad073d77cb5319a5718c6990297776294" id="r_ad073d77cb5319a5718c6990297776294"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad073d77cb5319a5718c6990297776294">kDmesgBase_DRIVER</a> = 15000</td></tr>
+<tr class="memitem:ad93bf08d94d7a96364701a3d321a6f99" id="r_ad93bf08d94d7a96364701a3d321a6f99"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad93bf08d94d7a96364701a3d321a6f99">kDmesgBase_INIT</a> = 16000</td></tr>
+<tr class="memitem:aabd2dba8aa601b676bcc99cf47dd4e30" id="r_aabd2dba8aa601b676bcc99cf47dd4e30"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aabd2dba8aa601b676bcc99cf47dd4e30">kDmesgBase_TIMING</a> = 17000</td></tr>
+<tr class="memitem:ab8cdaaccc10ae3ff4f389a9cdfed9c2b" id="r_ab8cdaaccc10ae3ff4f389a9cdfed9c2b"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab8cdaaccc10ae3ff4f389a9cdfed9c2b">kDmesgBase_TEST</a> = 18000</td></tr>
+<tr class="memitem:a8f70c4a6f09a668d9af7957564b4170b" id="r_a8f70c4a6f09a668d9af7957564b4170b"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a8f70c4a6f09a668d9af7957564b4170b">kDmesgPanicCode</a> = 0xFA57</td></tr>
+<tr class="memdesc:a8f70c4a6f09a668d9af7957564b4170b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Panic record: pushed by <a class="el" href="kernel_8cpp.html#ae22655ba6f328217f1ebd6248ed82727" title="Overridable assertion macro. Default calls panic on failure.">panic()</a> as BASE/FATAL (issue #234). Outside every canonical window — decodes through base_error_string.  <br /></td></tr>
+<tr class="memitem:a7873f3246fdc21af9b32fe43eb3e6435" id="r_a7873f3246fdc21af9b32fe43eb3e6435"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7873f3246fdc21af9b32fe43eb3e6435">DMESG_CAPACITY</a> = <a class="el" href="aarch64_2serial_8cpp.html#a15f72011bdc6888b3a6aef544acc4604">CONFIG_DMESG_CAPACITY</a></td></tr>
 <tr class="memdesc:a7873f3246fdc21af9b32fe43eb3e6435"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capacity of the kernel dmesg ring buffer (from Kconfig).  <br /></td></tr>
+<tr class="memitem:adb60ebe41a90cae7ed17abb5560fe466" id="r_adb60ebe41a90cae7ed17abb5560fe466"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adb60ebe41a90cae7ed17abb5560fe466">DMESG_RENDER_CAP</a> = 256</td></tr>
+<tr class="memdesc:adb60ebe41a90cae7ed17abb5560fe466"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stack buffer capacity for one rendered dmesg line (issue #234).  <br /></td></tr>
 </table>
 <a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
 <a id="a0a15565ea32d9d5ddb218c71e3f3c44a" name="a0a15565ea32d9d5ddb218c71e3f3c44a"></a>
@@ -172,7 +242,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">kernel::log::ErrorSubsystem</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum class <a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">kernel::log::ErrorSubsystem</a> : uint8_t</td>
         </tr>
       </table>
   </td>
@@ -188,7 +258,7 @@ Variables</h2></td></tr>
 </td></tr>
 <tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa274ccef15a21e829d03293a6fd1974f3" name="a0a15565ea32d9d5ddb218c71e3f3c44aa274ccef15a21e829d03293a6fd1974f3"></a>SYNC&#160;</td><td class="fielddoc"><p>Synchronisation primitives. </p>
 </td></tr>
-<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa296c58c4afa6e6c1d159f7d0d6cc864c" name="a0a15565ea32d9d5ddb218c71e3f3c44aa296c58c4afa6e6c1d159f7d0d6cc864c"></a>VFS&#160;</td><td class="fielddoc"><p>Virtual file system. </p>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa296c58c4afa6e6c1d159f7d0d6cc864c" name="a0a15565ea32d9d5ddb218c71e3f3c44aa296c58c4afa6e6c1d159f7d0d6cc864c"></a>VFS&#160;</td><td class="fielddoc"><p>Virtual file system (incl. vfsd daemon). </p>
 </td></tr>
 <tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa9bb9239ff286274c8363021f3d82b782" name="a0a15565ea32d9d5ddb218c71e3f3c44aa9bb9239ff286274c8363021f3d82b782"></a>MEMPOOL&#160;</td><td class="fielddoc"><p>Memory pool allocator. </p>
 </td></tr>
@@ -197,6 +267,66 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aac8660c6d72e7323867ec800d6bb953df" name="a0a15565ea32d9d5ddb218c71e3f3c44aac8660c6d72e7323867ec800d6bb953df"></a>IPC&#160;</td><td class="fielddoc"><p>Inter-process communication. </p>
 </td></tr>
 <tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b" name="a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b"></a>SYSCALL&#160;</td><td class="fielddoc"><p>System call interface. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa347aadfc505a4bc6b2f9d81363d2331c" name="a0a15565ea32d9d5ddb218c71e3f3c44aa347aadfc505a4bc6b2f9d81363d2331c"></a>NET&#160;</td><td class="fielddoc"><p>Network stack / NIC drivers (issue #234). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aab61b2d6c6fa62903b882aaa53452c111" name="a0a15565ea32d9d5ddb218c71e3f3c44aab61b2d6c6fa62903b882aaa53452c111"></a>ELF&#160;</td><td class="fielddoc"><p>ELF loader (issue #234). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa2e40ad879e955201df4dedbf8d479a12" name="a0a15565ea32d9d5ddb218c71e3f3c44aa2e40ad879e955201df4dedbf8d479a12"></a>USER&#160;</td><td class="fielddoc"><p>User task lifecycle reports (issue #234). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa31a7eca4a60813c38871dc47c169cad7" name="a0a15565ea32d9d5ddb218c71e3f3c44aa31a7eca4a60813c38871dc47c169cad7"></a>DAEMON&#160;</td><td class="fielddoc"><p>Daemon lifecycle events (issue #234). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aaacc2b1577b301d89ebeedc3987d9a4cb" name="a0a15565ea32d9d5ddb218c71e3f3c44aaacc2b1577b301d89ebeedc3987d9a4cb"></a>PMM&#160;</td><td class="fielddoc"><p>Physical memory manager (issue #234 full taxonomy). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aaa7170792bc4a2bfbe1d1946911eb1d15" name="a0a15565ea32d9d5ddb218c71e3f3c44aaa7170792bc4a2bfbe1d1946911eb1d15"></a>VMM&#160;</td><td class="fielddoc"><p>Virtual memory manager (issue #234 full taxonomy). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa0ed9b001ca1cd2667302a9be876ede9d" name="a0a15565ea32d9d5ddb218c71e3f3c44aa0ed9b001ca1cd2667302a9be876ede9d"></a>TASK&#160;</td><td class="fielddoc"><p>Task creation/lifecycle errors (issue #234). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aaf608cfa62aa4c05e9a46d964a3b47b04" name="a0a15565ea32d9d5ddb218c71e3f3c44aaf608cfa62aa4c05e9a46d964a3b47b04"></a>BUFPOOL&#160;</td><td class="fielddoc"><p>Zero-copy buffer pool (issue #234 full taxonomy). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa0420dcd0a9b3fc40a86ae7e7b530bcbf" name="a0a15565ea32d9d5ddb218c71e3f3c44aa0420dcd0a9b3fc40a86ae7e7b530bcbf"></a>DRIVER&#160;</td><td class="fielddoc"><p>Device drivers + PCI (issue #234 full taxonomy). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aafaee4ca3c30ee18148ce3ada37466498" name="a0a15565ea32d9d5ddb218c71e3f3c44aafaee4ca3c30ee18148ce3ada37466498"></a>INIT&#160;</td><td class="fielddoc"><p>Boot/init/init-rc events (issue #234 full taxonomy). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa8f9e1889c89e42901ab7c0a033a3347c" name="a0a15565ea32d9d5ddb218c71e3f3c44aa8f9e1889c89e42901ab7c0a033a3347c"></a>TIMING&#160;</td><td class="fielddoc"><p>Deadlines/budgets/admission/WCET (issue #234). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a0a15565ea32d9d5ddb218c71e3f3c44aa033bd94b1168d7e4f0d644c3c95e35bf" name="a0a15565ea32d9d5ddb218c71e3f3c44aa033bd94b1168d7e4f0d644c3c95e35bf"></a>TEST&#160;</td><td class="fielddoc"><p>Selftest infrastructure: leaks, count drift (#234). </p>
+</td></tr>
+</table>
+
+</div>
+</div>
+<a id="a3715d6ea36d8e40a6fb2320b3a4eacfc" name="a3715d6ea36d8e40a6fb2320b3a4eacfc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3715d6ea36d8e40a6fb2320b3a4eacfc">&#9670;&#160;</a></span>LogSeverity</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfc">kernel::log::LogSeverity</a> : uint8_t</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Severity of a dmesg entry (issue #234). Stored per entry so the renderer never re-derives it from the code (misclassification would mask faults as INFO — SIL 3 S1 guard: severity travels with the record). </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a3715d6ea36d8e40a6fb2320b3a4eacfcadc30ec20708ef7b0f641ef78b7880a15" name="a3715d6ea36d8e40a6fb2320b3a4eacfcadc30ec20708ef7b0f641ef78b7880a15"></a>DEBUG&#160;</td><td class="fielddoc"><p>Verbose/trace, debug targets only. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a3715d6ea36d8e40a6fb2320b3a4eacfca551b723eafd6a31d444fcb2f5920fbd3" name="a3715d6ea36d8e40a6fb2320b3a4eacfca551b723eafd6a31d444fcb2f5920fbd3"></a>INFO&#160;</td><td class="fielddoc"><p>Action succeeded, confirmational. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a3715d6ea36d8e40a6fb2320b3a4eacfca32bd8a1db2275458673903bdb84cb277" name="a3715d6ea36d8e40a6fb2320b3a4eacfca32bd8a1db2275458673903bdb84cb277"></a>WARN&#160;</td><td class="fielddoc"><p>Unusual, system stable, maybe user action needed. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a3715d6ea36d8e40a6fb2320b3a4eacfcabb1ca97ec761fc37101737ba0aa2e7c5" name="a3715d6ea36d8e40a6fb2320b3a4eacfcabb1ca97ec761fc37101737ba0aa2e7c5"></a>ERROR&#160;</td><td class="fielddoc"><p>Operation failed, system handled it via an action. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a3715d6ea36d8e40a6fb2320b3a4eacfca19da7170bea36556dde582519795f3fc" name="a3715d6ea36d8e40a6fb2320b3a4eacfca19da7170bea36556dde582519795f3fc"></a>FATAL&#160;</td><td class="fielddoc"><p>Unrecoverable, safe state + halt, restart required. </p>
 </td></tr>
 </table>
 
@@ -215,7 +345,7 @@ Variables</h2></td></tr>
         <tr>
           <td class="memname">bool kernel::log::base_code_is_info </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>code</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>code</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -226,7 +356,7 @@ Variables</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>True when a base-subsystem code is an informational event rather than a fault: daemon lifecycle (0xDA00-0xDAFF) and background ELF loader (0xDB00-0xDBFF) ranges. Used by the dmesg renderers to print INFO= instead of ERR=. </p>
+<p>True when a base-subsystem code is an informational event rather than a fault: daemon lifecycle (0xDA00-0xDAFF), background ELF loader (0xDB00-0xDBFF), and user task-end reports (0xDC00-0xDCFF) ranges, plus the canonical INFO records of issue #234 (daemon restarted/ensured/terminated/restarting/up, ELF started/completed/ canceled, user task exited). Used by legacy renderers and the severity fallback to print INFO instead of ERROR. A new INFO family MUST extend both this predicate and base_error_string below, or its lines render as ERR=&lt;stale enum&gt;. </p>
 
 </div>
 </div>
@@ -242,7 +372,7 @@ Variables</h2></td></tr>
         <tr>
           <td class="memname">const char * kernel::log::base_error_string </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>code</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>code</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -253,7 +383,78 @@ Variables</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Return a human-readable string for a base-subsystem error code. The code space is split into <a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">kernel::Error</a> values (0–9) and a custom range for event codes: 0xDA00 – 0xDAFF daemon lifecycle events 0xDB00 – 0xDBFF background ELF loader events. </p>
+<p>Return a human-readable string for a base-subsystem error code. The code space is split into <a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">kernel::Error</a> values (0–9) and a custom range for event codes: 0xDA00 – 0xDAFF daemon lifecycle events 0xDB00 – 0xDBFF background ELF loader events 0xDC00 – 0xDCFF user task-end reports (clean exit / fault). </p>
+
+</div>
+</div>
+<a id="ac6086b9f241e6ab82dc53c140c90926b" name="ac6086b9f241e6ab82dc53c140c90926b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac6086b9f241e6ab82dc53c140c90926b">&#9670;&#160;</a></span>current_wall_ms()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::current_wall_ms </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Wall-clock milliseconds since the Unix epoch for log entries. Defined in <a class="el" href="dmesg_8cpp.html" title="DmesgService singleton — the private DmesgBuffer ring is defined inline in dmesg.hpp (friend-tested,...">dmesg.cpp</a> (reads the boot epoch + tick count); returns 0 while no wall time is available (early boot) — the renderer then falls back to the boot-tick count per the issue-#234 time rule. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1log_ac6086b9f241e6ab82dc53c140c90926b_cgraph.png" border="0" usemap="#anamespacekernel_1_1log_ac6086b9f241e6ab82dc53c140c90926b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+
+</div>
+</div>
+<a id="a2357fa2b5c3432aba2853a3fd420b447" name="a2357fa2b5c3432aba2853a3fd420b447"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2357fa2b5c3432aba2853a3fd420b447">&#9670;&#160;</a></span>default_severity_for()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfc">LogSeverity</a> kernel::log::default_severity_for </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a></td>          <td class="paramname"><span class="paramname"><em>subsys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>code</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Default severity for legacy severity-less pushes: INFO for confirmational codes (BASE info ranges, code 0), ERROR fail-closed otherwise. New producers should pass an explicit severity (or the catalog severity) instead of relying on this fallback. </p>
+<p>Default severity for legacy severity-less pushes (issue #234). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1log_a2357fa2b5c3432aba2853a3fd420b447_cgraph.png" border="0" usemap="#anamespacekernel_1_1log_a2357fa2b5c3432aba2853a3fd420b447_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -274,7 +475,7 @@ Variables</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>err</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>err</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -284,7 +485,7 @@ Variables</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a5b7cbd695e4ef11023a4088e5ebe9612">uintptr_t</a></td>          <td class="paramname"><span class="paramname"><em>ctx</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#a83242de74310b4aec3fc506bc3644211">uintptr_t</a></td>          <td class="paramname"><span class="paramname"><em>ctx</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -299,7 +500,7 @@ Variables</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1log_a8c0fd69e4ea93d857e2b6176911b7e5e_cgraph.png" border="0" usemap="#anamespacekernel_1_1log_a8c0fd69e4ea93d857e2b6176911b7e5e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -316,7 +517,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::log::dmesg_push_base </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>err</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>err</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -326,7 +527,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a5b7cbd695e4ef11023a4088e5ebe9612">uintptr_t</a></td>          <td class="paramname"><span class="paramname"><em>ctx</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#a83242de74310b4aec3fc506bc3644211">uintptr_t</a></td>          <td class="paramname"><span class="paramname"><em>ctx</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -341,7 +542,59 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1log_a93f6fccfccf70fcdc90f93e630521488_cgraph.png" border="0" usemap="#anamespacekernel_1_1log_a93f6fccfccf70fcdc90f93e630521488_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="a09aee43e4add1f63f3a78520799ddbe7" name="a09aee43e4add1f63f3a78520799ddbe7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a09aee43e4add1f63f3a78520799ddbe7">&#9670;&#160;</a></span>dmesg_push_sev()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::log::dmesg_push_sev </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a></td>          <td class="paramname"><span class="paramname"><em>subsys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>err</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfc">LogSeverity</a></td>          <td class="paramname"><span class="paramname"><em>sev</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *</td>          <td class="paramname"><span class="paramname"><em>msg</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#a83242de74310b4aec3fc506bc3644211">uintptr_t</a></td>          <td class="paramname"><span class="paramname"><em>ctx</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Shorthand: push an entry with explicit severity (issue #234). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1log_a09aee43e4add1f63f3a78520799ddbe7_cgraph.png" border="0" usemap="#anamespacekernel_1_1log_a09aee43e4add1f63f3a78520799ddbe7_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -363,7 +616,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>code</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>code</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -373,13 +626,190 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Dispatch an error code to the correct subsystem's error_string. </p>
+<p>Dispatch an error code to the correct subsystem's error_string. Catalog event records take precedence over the raw tables, so event numbers (e.g. TIMING deadline-missed) render their cause text while plain table codes render the table text — both fail closed. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1log_a3d54be80d65b536f19f6aabdb6878bd5_cgraph.png" border="0" usemap="#anamespacekernel_1_1log_a3d54be80d65b536f19f6aabdb6878bd5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 5 -->
 </div>
+
+</div>
+</div>
+<a id="a65b3b1de43a3a9dfd5327df857001131" name="a65b3b1de43a3a9dfd5327df857001131"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a65b3b1de43a3a9dfd5327df857001131">&#9670;&#160;</a></span>format_dmesg_entry()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::log::format_dmesg_entry </td>
+          <td>(</td>
+          <td class="paramtype">char *</td>          <td class="paramname"><span class="paramname"><em>out_buf</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>out_cap</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1log_1_1_log_entry.html">LogEntry</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>entry</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Render one entry in the canonical issue-#234 line format: <span class="tt">[DMESG &lt;<a class="el" href="namespacekernel_1_1time.html">time</a>&gt;ms]: &lt;TYPE&gt; &lt;CODEBASE&gt; &lt;error-nr&gt; &lt;err-text&gt;: &lt;msg&gt;</span> <span class="tt">  [<a class="el" href="namespacekernel_1_1task.html">task</a>=&lt;id&gt; ctx=0x&lt;hex&gt;]</span> &lt;time&gt; is wall_ms when set, else the boot-tick timestamp. The output is always NUL-terminated and truncated to fit; bounded loops only. </p>
+<dl class="section return"><dt>Returns</dt><dd>Bytes written excluding the NUL (0 when out_cap == 0). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1log_a65b3b1de43a3a9dfd5327df857001131_cgraph.png" border="0" usemap="#anamespacekernel_1_1log_a65b3b1de43a3a9dfd5327df857001131_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
+
+</div>
+</div>
+<a id="a46122cf7056e720d90260c743e53f590" name="a46122cf7056e720d90260c743e53f590"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a46122cf7056e720d90260c743e53f590">&#9670;&#160;</a></span>is_canonical_nbr()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::log::is_canonical_nbr </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a></td>          <td class="paramname"><span class="paramname"><em>subsys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>error_nr</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True when error_nr lies in the subsystem's canonical window [base, base + stride). Legacy BASE event codes (0xDAxx and friends) are NOT canonical — they decode through the compat shims. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1log_a46122cf7056e720d90260c743e53f590_cgraph.png" border="0" usemap="#anamespacekernel_1_1log_a46122cf7056e720d90260c743e53f590_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a id="af59b51fe4a71de7df6c8935fd32327bb" name="af59b51fe4a71de7df6c8935fd32327bb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af59b51fe4a71de7df6c8935fd32327bb">&#9670;&#160;</a></span>severity_name()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char * kernel::log::severity_name </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfc">LogSeverity</a></td>          <td class="paramname"><span class="paramname"><em>sev</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Short name for a <a class="el" href="#a3715d6ea36d8e40a6fb2320b3a4eacfc" title="Severity of a dmesg entry (issue #234). Stored per entry so the renderer never re-derives it from the...">LogSeverity</a>. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1log_af59b51fe4a71de7df6c8935fd32327bb_cgraph.png" border="0" usemap="#anamespacekernel_1_1log_af59b51fe4a71de7df6c8935fd32327bb_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
+</div>
+
+</div>
+</div>
+<a id="a90130fac285865fd10b28150d5de3a6b" name="a90130fac285865fd10b28150d5de3a6b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a90130fac285865fd10b28150d5de3a6b">&#9670;&#160;</a></span>strip_canonical()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::strip_canonical </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a></td>          <td class="paramname"><span class="paramname"><em>subsys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>code</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Strip a canonical number to its raw table code. Raw (legacy) codes pass through unchanged, so every pre-#234 push decodes exactly as before; canonical pushes (base + raw) resolve to the same text. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1log_a90130fac285865fd10b28150d5de3a6b_cgraph.png" border="0" usemap="#anamespacekernel_1_1log_a90130fac285865fd10b28150d5de3a6b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
+</div>
+
+</div>
+</div>
+<a id="a91b4e383ddf972d29b51dbbcde17dcd3" name="a91b4e383ddf972d29b51dbbcde17dcd3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a91b4e383ddf972d29b51dbbcde17dcd3">&#9670;&#160;</a></span>subsystem_base()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::subsystem_base </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a></td>          <td class="paramname"><span class="paramname"><em>subsys</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Canonical base for a subsystem (kDmesgBase_* above). </p>
 
 </div>
 </div>
@@ -421,7 +851,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::log::DMESG_CAPACITY = <a class="el" href="nexios__config_8h.html#a15f72011bdc6888b3a6aef544acc4604">CONFIG_DMESG_CAPACITY</a></td>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::log::DMESG_CAPACITY = <a class="el" href="aarch64_2serial_8cpp.html#a15f72011bdc6888b3a6aef544acc4604">CONFIG_DMESG_CAPACITY</a></td>
         </tr>
       </table>
   </td>
@@ -432,6 +862,496 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Capacity of the kernel dmesg ring buffer (from Kconfig). </p>
+
+</div>
+</div>
+<a id="adb60ebe41a90cae7ed17abb5560fe466" name="adb60ebe41a90cae7ed17abb5560fe466"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adb60ebe41a90cae7ed17abb5560fe466">&#9670;&#160;</a></span>DMESG_RENDER_CAP</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::log::DMESG_RENDER_CAP = 256</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Stack buffer capacity for one rendered dmesg line (issue #234). </p>
+
+</div>
+</div>
+<a id="ad6a6f158e5be882dc4615a8a04120dfe" name="ad6a6f158e5be882dc4615a8a04120dfe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad6a6f158e5be882dc4615a8a04120dfe">&#9670;&#160;</a></span>kDmesgBase_BASE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_BASE = 0</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab834a7c20fa9072ef6535704b1fad92d" name="ab834a7c20fa9072ef6535704b1fad92d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab834a7c20fa9072ef6535704b1fad92d">&#9670;&#160;</a></span>kDmesgBase_BUFPOOL</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_BUFPOOL = 14000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1f15987edc63946d1571cdd844df9e6f" name="a1f15987edc63946d1571cdd844df9e6f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f15987edc63946d1571cdd844df9e6f">&#9670;&#160;</a></span>kDmesgBase_DAEMON</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_DAEMON = 10000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad073d77cb5319a5718c6990297776294" name="ad073d77cb5319a5718c6990297776294"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad073d77cb5319a5718c6990297776294">&#9670;&#160;</a></span>kDmesgBase_DRIVER</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_DRIVER = 15000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aab483dbd77fdc6b8e20050b39e0f3862" name="aab483dbd77fdc6b8e20050b39e0f3862"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aab483dbd77fdc6b8e20050b39e0f3862">&#9670;&#160;</a></span>kDmesgBase_ELF</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_ELF = 8000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad93bf08d94d7a96364701a3d321a6f99" name="ad93bf08d94d7a96364701a3d321a6f99"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad93bf08d94d7a96364701a3d321a6f99">&#9670;&#160;</a></span>kDmesgBase_INIT</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_INIT = 16000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8b3fb5d3fb0617c0924c4880bcea20a8" name="a8b3fb5d3fb0617c0924c4880bcea20a8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8b3fb5d3fb0617c0924c4880bcea20a8">&#9670;&#160;</a></span>kDmesgBase_IPC</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_IPC = 5000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aabdda5e75656f7629b452936e523510b" name="aabdda5e75656f7629b452936e523510b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aabdda5e75656f7629b452936e523510b">&#9670;&#160;</a></span>kDmesgBase_MPOOL</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_MPOOL = 3000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a285f9000cff3667941cc253d1f9ea028" name="a285f9000cff3667941cc253d1f9ea028"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a285f9000cff3667941cc253d1f9ea028">&#9670;&#160;</a></span>kDmesgBase_NET</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_NET = 7000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a47e80dfa8a3f4e1a613cc58684279d35" name="a47e80dfa8a3f4e1a613cc58684279d35"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a47e80dfa8a3f4e1a613cc58684279d35">&#9670;&#160;</a></span>kDmesgBase_PMM</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_PMM = 11000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aad97ce1545b88d8a0828d239b05d2b18" name="aad97ce1545b88d8a0828d239b05d2b18"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aad97ce1545b88d8a0828d239b05d2b18">&#9670;&#160;</a></span>kDmesgBase_SCHED</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_SCHED = 4000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa69de234cc1f9021c92d587b19a5429a" name="aa69de234cc1f9021c92d587b19a5429a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa69de234cc1f9021c92d587b19a5429a">&#9670;&#160;</a></span>kDmesgBase_SYNC</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_SYNC = 1000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aba7b5a5464643896981de19ee026cf2b" name="aba7b5a5464643896981de19ee026cf2b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aba7b5a5464643896981de19ee026cf2b">&#9670;&#160;</a></span>kDmesgBase_SYSCALL</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_SYSCALL = 6000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a77b57b6755265df4f1446497b7c033c2" name="a77b57b6755265df4f1446497b7c033c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a77b57b6755265df4f1446497b7c033c2">&#9670;&#160;</a></span>kDmesgBase_TASK</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_TASK = 13000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab8cdaaccc10ae3ff4f389a9cdfed9c2b" name="ab8cdaaccc10ae3ff4f389a9cdfed9c2b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab8cdaaccc10ae3ff4f389a9cdfed9c2b">&#9670;&#160;</a></span>kDmesgBase_TEST</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_TEST = 18000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aabd2dba8aa601b676bcc99cf47dd4e30" name="aabd2dba8aa601b676bcc99cf47dd4e30"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aabd2dba8aa601b676bcc99cf47dd4e30">&#9670;&#160;</a></span>kDmesgBase_TIMING</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_TIMING = 17000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af6a8c5b7d8abeb8c0fd488982aecb75b" name="af6a8c5b7d8abeb8c0fd488982aecb75b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af6a8c5b7d8abeb8c0fd488982aecb75b">&#9670;&#160;</a></span>kDmesgBase_USER</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_USER = 9000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abc4c1a9dc8d95e755ec88f073eacdcf0" name="abc4c1a9dc8d95e755ec88f073eacdcf0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abc4c1a9dc8d95e755ec88f073eacdcf0">&#9670;&#160;</a></span>kDmesgBase_VFS</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_VFS = 2000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a573687bdb1326695e6b8d01e947c2e31" name="a573687bdb1326695e6b8d01e947c2e31"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a573687bdb1326695e6b8d01e947c2e31">&#9670;&#160;</a></span>kDmesgBase_VMM</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgBase_VMM = 12000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8f70c4a6f09a668d9af7957564b4170b" name="a8f70c4a6f09a668d9af7957564b4170b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8f70c4a6f09a668d9af7957564b4170b">&#9670;&#160;</a></span>kDmesgPanicCode</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgPanicCode = 0xFA57</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Panic record: pushed by <a class="el" href="kernel_8cpp.html#ae22655ba6f328217f1ebd6248ed82727" title="Overridable assertion macro. Default calls panic on failure.">panic()</a> as BASE/FATAL (issue #234). Outside every canonical window — decodes through base_error_string. </p>
+
+</div>
+</div>
+<a id="ab91709d22f9e59c53f4f1cca2b3ee60b" name="ab91709d22f9e59c53f4f1cca2b3ee60b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab91709d22f9e59c53f4f1cca2b3ee60b">&#9670;&#160;</a></span>kDmesgStride</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::log::kDmesgStride = 1000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Canonical error-nr stride: each subsystem owns [base, base+1000). New subsystems number from these decimal bases; legacy BASE event families (0xDAxx daemon, 0xDBxx ELF, 0xDCxx task-end) keep decoding through base_error_string — see docs/specs/dmesg.md §5 for old→new map. </p>
 
 </div>
 </div>

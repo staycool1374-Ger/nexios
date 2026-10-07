@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,18 +121,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('nexios__config
 
 <p>Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in 20+ files get a single configuration home.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
-This graph shows which files directly or indirectly include this file:</div>
-<div class="dyncontent">
-<div class="center"><img src="nexios__config_8h__dep__incl.png" border="0" usemap="#asrc_2kernel_2nexios__config_8hdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
-</div>
-</div>
+
 <p><a href="nexios__config_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
 <tr class="memitem:a6cbad48473f7f79a39d324ee988c0d46" id="r_a6cbad48473f7f79a39d324ee988c0d46"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6cbad48473f7f79a39d324ee988c0d46">JARVIS_CONFIG_H</a></td></tr>
+<tr class="memdesc:a6cbad48473f7f79a39d324ee988c0d46"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header.  <br /></td></tr>
 <tr class="memitem:a33fbd7e91d033fa1e09b4ed4de899c02" id="r_a33fbd7e91d033fa1e09b4ed4de899c02"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a33fbd7e91d033fa1e09b4ed4de899c02">CONFIG_VERSION</a>&#160;&#160;&#160;&quot;0.3.10-dev&quot;</td></tr>
 <tr class="memitem:aa1a69b49aa134e3a3c303489bccca599" id="r_aa1a69b49aa134e3a3c303489bccca599"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memitem:acd02978616d37355da2ade116edf7bde" id="r_acd02978616d37355da2ade116edf7bde"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a>&#160;&#160;&#160;3</td></tr>
@@ -243,6 +238,8 @@ Macros</h2></td></tr>
 <tr class="memitem:a6828726f88801e27e69ad4cb06a9eb37" id="r_a6828726f88801e27e69ad4cb06a9eb37"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6828726f88801e27e69ad4cb06a9eb37">CONFIG_CAP_MAX_MMIO</a>&#160;&#160;&#160;16</td></tr>
 <tr class="memitem:a6778865aa865b535c1b34a9ace0e3e0d" id="r_a6778865aa865b535c1b34a9ace0e3e0d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6778865aa865b535c1b34a9ace0e3e0d">CONFIG_CAP_MAX_IRQ</a>&#160;&#160;&#160;16</td></tr>
 <tr class="memitem:a3cd7a7aadd0941856a01b3894cb8c5d6" id="r_a3cd7a7aadd0941856a01b3894cb8c5d6"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3cd7a7aadd0941856a01b3894cb8c5d6">CONFIG_CAP_MAX_MSIX</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a7fce892edccb98126d05ce0c305f1bff" id="r_a7fce892edccb98126d05ce0c305f1bff"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a7fce892edccb98126d05ce0c305f1bff">CONFIG_CAP_MAX_WDOG</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a3dd102ae8468ee9fcc97b63304c59228" id="r_a3dd102ae8468ee9fcc97b63304c59228"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3dd102ae8468ee9fcc97b63304c59228">CONFIG_WATCHDOG_GRACE_TICKS</a>&#160;&#160;&#160;500</td></tr>
 <tr class="memitem:abaf10c78be3b51994a5d90814c390631" id="r_abaf10c78be3b51994a5d90814c390631"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#abaf10c78be3b51994a5d90814c390631">CONFIG_IOPB_MAX_TASKS</a>&#160;&#160;&#160;4</td></tr>
 <tr class="memitem:a4fdd70ee80f077b4a19d2824aac2517f" id="r_a4fdd70ee80f077b4a19d2824aac2517f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a4fdd70ee80f077b4a19d2824aac2517f">CONFIG_IOPB_MAX_GRANTS</a>&#160;&#160;&#160;8</td></tr>
 <tr class="memitem:a1105a51187e5531d9b7090db548f48c2" id="r_a1105a51187e5531d9b7090db548f48c2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a1105a51187e5531d9b7090db548f48c2">CONFIG_CAP_MAX_MMIO_MAPS</a>&#160;&#160;&#160;8</td></tr>
@@ -311,9 +308,27 @@ Macros</h2></td></tr>
 <tr class="memitem:a43d9dab37b65e95fa2ac5777a4de4d95" id="r_a43d9dab37b65e95fa2ac5777a4de4d95"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a43d9dab37b65e95fa2ac5777a4de4d95">CONFIG_DM_PRIO_MAX</a>&#160;&#160;&#160;120</td></tr>
 <tr class="memitem:a9a7951d5ba3d567a2f0e372fd5540a44" id="r_a9a7951d5ba3d567a2f0e372fd5540a44"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9a7951d5ba3d567a2f0e372fd5540a44">CONFIG_DEADLINE_MONITOR_TASK</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a515a1e55a71216c50a7d94659c372998" id="r_a515a1e55a71216c50a7d94659c372998"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a515a1e55a71216c50a7d94659c372998">CONFIG_DEADLINE_ACTION</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a3163b31e3ebb9db40fdf2093b6edf7a5" id="r_a3163b31e3ebb9db40fdf2093b6edf7a5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3163b31e3ebb9db40fdf2093b6edf7a5">CONFIG_WATCHDOG_ACTION</a>&#160;&#160;&#160;3</td></tr>
 <tr class="memitem:a3d316041cb01da0e73130da4b0eab404" id="r_a3d316041cb01da0e73130da4b0eab404"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3d316041cb01da0e73130da4b0eab404">CONFIG_ADMISSION_SELFTEST</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:adbfd2982bfd8abcdb392578155755823" id="r_adbfd2982bfd8abcdb392578155755823"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adbfd2982bfd8abcdb392578155755823">CONFIG_DEADLINE_MONITOR_PID</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:ac774633c3e66e4033b61258ca2795155" id="r_ac774633c3e66e4033b61258ca2795155"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac774633c3e66e4033b61258ca2795155">CONFIG_BOOT_BUDGET_MS</a>&#160;&#160;&#160;30000</td></tr>
 <tr class="memitem:af7dbe515e22f94aa374530a637f8418c" id="r_af7dbe515e22f94aa374530a637f8418c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af7dbe515e22f94aa374530a637f8418c">CONFIG_ASSERT</a>(expr)</td></tr>
+<tr class="memitem:ab43611a2b8491153b305ae9408b050c9" id="r_ab43611a2b8491153b305ae9408b050c9"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab43611a2b8491153b305ae9408b050c9">CONFIG_IDLE_MONITOR_ENABLED</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:aa68a58c6e8b6408d8c994b31b10d38bf" id="r_aa68a58c6e8b6408d8c994b31b10d38bf"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa68a58c6e8b6408d8c994b31b10d38bf">CONFIG_IDLE_MONITOR_STACK_CHECK</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memdesc:aa68a58c6e8b6408d8c994b31b10d38bf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-metric kill-switches (0/1).  <br /></td></tr>
+<tr class="memitem:abbcac397ffaedef7a642670de9fb7d67" id="r_abbcac397ffaedef7a642670de9fb7d67"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#abbcac397ffaedef7a642670de9fb7d67">CONFIG_IDLE_MONITOR_UTIL</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a6b9f06979978d13d3c948aa5b07024a6" id="r_a6b9f06979978d13d3c948aa5b07024a6"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6b9f06979978d13d3c948aa5b07024a6">CONFIG_IDLE_MONITOR_STALL</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a80410ca48d3e8f2f8754609424372afb" id="r_a80410ca48d3e8f2f8754609424372afb"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a80410ca48d3e8f2f8754609424372afb">CONFIG_IDLE_MONITOR_CHUNK</a>&#160;&#160;&#160;4</td></tr>
+<tr class="memdesc:a80410ca48d3e8f2f8754609424372afb"><td class="mdescLeft">&#160;</td><td class="mdescRight">TCBs scanned per idle pass (M2 chunk budget, crc_process_chunk style).  <br /></td></tr>
+<tr class="memitem:a723655babaed8e0cdd6c180e09e167e0" id="r_a723655babaed8e0cdd6c180e09e167e0"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a723655babaed8e0cdd6c180e09e167e0">CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS</a>&#160;&#160;&#160;5000</td></tr>
+<tr class="memdesc:a723655babaed8e0cdd6c180e09e167e0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stall threshold in ticks (P6-thin #285 compares now - last_progress_tick).  <br /></td></tr>
+<tr class="memitem:a70c975ce9dd99a1a8523471d660e115b" id="r_a70c975ce9dd99a1a8523471d660e115b"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a70c975ce9dd99a1a8523471d660e115b">CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS</a>&#160;&#160;&#160;1000</td></tr>
+<tr class="memdesc:a70c975ce9dd99a1a8523471d660e115b"><td class="mdescLeft">&#160;</td><td class="mdescRight">March C- ALU test period in ms (P3-reserved, inert until P3 lands).  <br /></td></tr>
+<tr class="memitem:a0db72da672f2a6331a7b4f5c5df57e48" id="r_a0db72da672f2a6331a7b4f5c5df57e48"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0db72da672f2a6331a7b4f5c5df57e48">CONFIG_IDLE_MONITOR_MEM</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memdesc:a0db72da672f2a6331a7b4f5c5df57e48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-metric kill-switch for the P5a memory heuristic (issues #43/#284).  <br /></td></tr>
+<tr class="memitem:a761b3428b7e9e155f5fbf980446bac00" id="r_a761b3428b7e9e155f5fbf980446bac00"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a761b3428b7e9e155f5fbf980446bac00">CONFIG_IDLE_MONITOR_MEM_PASSES</a>&#160;&#160;&#160;3</td></tr>
+<tr class="memdesc:a761b3428b7e9e155f5fbf980446bac00"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consecutive suspicious passes before one leak report (issues #43/#284).  <br /></td></tr>
+<tr class="memitem:aa7520ddb3e054abd0e900890d047aa51" id="r_aa7520ddb3e054abd0e900890d047aa51"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa7520ddb3e054abd0e900890d047aa51">CONFIG_IDLE_MONITOR_MEM_MIN_OPS</a>&#160;&#160;&#160;1</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
@@ -359,6 +374,21 @@ Functions</h2></td></tr>
 <div class="line">    }                                                                      \</div>
 <div class="line">} <span class="keywordflow">while</span> (0)</div>
 </div><!-- fragment -->
+</div>
+</div>
+<a id="ac774633c3e66e4033b61258ca2795155" name="ac774633c3e66e4033b61258ca2795155"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac774633c3e66e4033b61258ca2795155">&#9670;&#160;</a></span>CONFIG_BOOT_BUDGET_MS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_BOOT_BUDGET_MS&#160;&#160;&#160;30000</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Deterministic boot budget (issue #45): wall-clock milliseconds from kernel entry to the first RT task activation gate in kernel_init (before reboot_from_table()). CONFIG-only by owner decision (no cmdline override). Default 30000 ms: measured QEMU-TCG boots land in the low seconds; 30 s keeps &gt;=3x headroom per the relative-timing rule. 0 disables the gate (diagnostic only, never deny-all). </p>
+
 </div>
 </div>
 <a id="a4bb3575fefad83e2c4c0679539f0e1b1" name="a4bb3575fefad83e2c4c0679539f0e1b1"></a>
@@ -554,6 +584,21 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <p>Maximum number of live Untyped memory objects (ROADMAP 0.4.1 item 3). Enforced by a TU-local live counter in <a class="el" href="untyped_8cpp.html" title="Untyped memory object implementation (ROADMAP 0.4.1 item 3).">untyped.cpp</a>. </p>
+
+</div>
+</div>
+<a id="a7fce892edccb98126d05ce0c305f1bff" name="a7fce892edccb98126d05ce0c305f1bff"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7fce892edccb98126d05ce0c305f1bff">&#9670;&#160;</a></span>CONFIG_CAP_MAX_WDOG</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_WDOG&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Maximum number of live WdogCap objects (issue #277). Enforced by a TU-local live counter plus a static single-owner claim registry in <a class="el" href="wdog_8cpp.html" title="WdogCap implementation (issue #277). Bound by CONFIG_CAP_MAX_WDOG via a TU-local live counter (mmio....">cap/wdog.cpp</a> (MsixCap entry-claim precedent). </p>
 
 </div>
 </div>
@@ -826,6 +871,160 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>If non-zero, declares weak symbol idle_hook() called each idle iteration. </p>
+
+</div>
+</div>
+<a id="a70c975ce9dd99a1a8523471d660e115b" name="a70c975ce9dd99a1a8523471d660e115b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a70c975ce9dd99a1a8523471d660e115b">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS&#160;&#160;&#160;1000</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>March C- ALU test period in ms (P3-reserved, inert until P3 lands). </p>
+
+</div>
+</div>
+<a id="a80410ca48d3e8f2f8754609424372afb" name="a80410ca48d3e8f2f8754609424372afb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a80410ca48d3e8f2f8754609424372afb">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_CHUNK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_CHUNK&#160;&#160;&#160;4</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>TCBs scanned per idle pass (M2 chunk budget, crc_process_chunk style). </p>
+
+</div>
+</div>
+<a id="ab43611a2b8491153b305ae9408b050c9" name="ab43611a2b8491153b305ae9408b050c9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab43611a2b8491153b305ae9408b050c9">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_ENABLED</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_ENABLED&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>ISSUE-270-USER-FAULT-VERBOSE: when defined, a faulting user task dumps registers/CR2/stack-trace on the console (<a class="el" href="kernel_8cpp.html">kernel.cpp</a> deliver path + EL0 pre-signal warn). Undefined (default): console shows only the one-line fault summary (report_user_task_end, dmesg 0xDC02); full detail stays reachable via the remote debug stub (StopEvent + read_regs/read_mem). Re-enable by defining; remove permanently by deleting the marked blocks in <a class="el" href="kernel_8cpp.html">kernel.cpp</a>. Master switch for the idle-monitor slice (spec docs/specs/idle_monitor.md M1-M6). 1 on DEBUG (qualified incrementally), 0 on release until the P1a+P2 sub-issue (#282) qualifies it. </p>
+
+</div>
+</div>
+<a id="a0db72da672f2a6331a7b4f5c5df57e48" name="a0db72da672f2a6331a7b4f5c5df57e48"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0db72da672f2a6331a7b4f5c5df57e48">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_MEM</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_MEM&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Per-metric kill-switch for the P5a memory heuristic (issues #43/#284). </p>
+
+</div>
+</div>
+<a id="aa7520ddb3e054abd0e900890d047aa51" name="aa7520ddb3e054abd0e900890d047aa51"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa7520ddb3e054abd0e900890d047aa51">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_MEM_MIN_OPS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_MEM_MIN_OPS&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Minimum outstanding-op growth over the previous pass to count as suspicious (issues #43/#284). </p>
+
+</div>
+</div>
+<a id="a761b3428b7e9e155f5fbf980446bac00" name="a761b3428b7e9e155f5fbf980446bac00"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a761b3428b7e9e155f5fbf980446bac00">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_MEM_PASSES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_MEM_PASSES&#160;&#160;&#160;3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Consecutive suspicious passes before one leak report (issues #43/#284). </p>
+
+</div>
+</div>
+<a id="aa68a58c6e8b6408d8c994b31b10d38bf" name="aa68a58c6e8b6408d8c994b31b10d38bf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa68a58c6e8b6408d8c994b31b10d38bf">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_STACK_CHECK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_STACK_CHECK&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Per-metric kill-switches (0/1). </p>
+
+</div>
+</div>
+<a id="a6b9f06979978d13d3c948aa5b07024a6" name="a6b9f06979978d13d3c948aa5b07024a6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6b9f06979978d13d3c948aa5b07024a6">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_STALL</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_STALL&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a723655babaed8e0cdd6c180e09e167e0" name="a723655babaed8e0cdd6c180e09e167e0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a723655babaed8e0cdd6c180e09e167e0">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS&#160;&#160;&#160;5000</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Stall threshold in ticks (P6-thin #285 compares now - last_progress_tick). </p>
+
+</div>
+</div>
+<a id="abbcac397ffaedef7a642670de9fb7d67" name="abbcac397ffaedef7a642670de9fb7d67"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abbcac397ffaedef7a642670de9fb7d67">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_UTIL</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_UTIL&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>
@@ -2083,7 +2282,7 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>Highest schedulable priority (0 = lowest). Valid range: 1–127. Default: 127. Limited to 128 levels for O(1) bitmap scheduler (2 × <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>). </p>
+<p>Highest schedulable priority (0 = lowest). Valid range: 1–127. Default: 127. Limited to 128 levels for O(1) bitmap scheduler (2 × uint64_t). </p>
 
 </div>
 </div>
@@ -2234,7 +2433,7 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>If non-zero, declares weak symbol stack_overflow_hook(TaskControlBlock*). v0.4.0 MP-6.2: enabled — the hook is invoked on a kernel-stack guard-page #PF before the fatal panic (belt-and-braces; tests override it strongly). </p>
+<p>If non-zero, declares weak symbol <a class="el" href="test__stack__alloc_8cpp.html#aebf9c76b4ca8fb2a8e32ca3fd1679fea">stack_overflow_hook(TaskControlBlock*)</a>. v0.4.0 MP-6.2: enabled — the hook is invoked on a kernel-stack guard-page #PF before the fatal panic (belt-and-braces; tests override it strongly). </p>
 
 </div>
 </div>
@@ -2310,59 +2509,59 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line">(<a class="code hl_define" href="#a92c54e3597ddb43ce61b8bcde9052bc1">CONFIG_INCLUDE_SYS_YIELD</a> + <a class="code hl_define" href="#aa2a526b69a2d49b9eaef83c60f27512e">CONFIG_INCLUDE_SYS_EXIT</a> +                      \</div>
-<div class="line"> <a class="code hl_define" href="#a68ed53fd6b95aac6db3e44695818bf0c">CONFIG_INCLUDE_SYS_FORK</a> + <a class="code hl_define" href="#a0b5fcae55cc325a4a22a0fbbaaa943c9">CONFIG_INCLUDE_SYS_CLONE</a> +                      \</div>
-<div class="line"> <a class="code hl_define" href="#a2f9f787a7a26264de01ef2fbe8d5246d">CONFIG_INCLUDE_SYS_EXECVE</a> + <a class="code hl_define" href="#a0eb00eae76043356257ebf25c7417e4e">CONFIG_INCLUDE_SYS_WAITPID</a> +                  \</div>
-<div class="line"> <a class="code hl_define" href="#a60e23f6d80990d3a8e2588f4822be026">CONFIG_INCLUDE_SYS_NANOSLEEP</a> + <a class="code hl_define" href="#aed16199ac0dbff8f53cc67ca95ce527a">CONFIG_INCLUDE_SYS_GETPID</a> +                \</div>
-<div class="line"> <a class="code hl_define" href="#ab9be880ba29de9c0c3a8cf33647da623">CONFIG_INCLUDE_SYS_GETPPID</a> + <a class="code hl_define" href="#ae2a0246e0087b7cb06ed0468c6d1b455">CONFIG_INCLUDE_SYS_SETPRIO</a> +                 \</div>
-<div class="line"> <a class="code hl_define" href="#a53596d900f72f47729b2ae89045f28da">CONFIG_INCLUDE_SYS_GETPRIO</a> + <a class="code hl_define" href="#ae7247a6d5878506991c3a20d12d530ca">CONFIG_INCLUDE_SYS_SENDSYNC</a> +                \</div>
-<div class="line"> <a class="code hl_define" href="#a837a901b5f4ca7bb74e83d20bac4ece1">CONFIG_INCLUDE_SYS_RECV</a> + <a class="code hl_define" href="#ab118f80a4ff475810c6710a4e748f16e">CONFIG_INCLUDE_SYS_REPLY</a> +                      \</div>
-<div class="line"> <a class="code hl_define" href="#a0c463c0a261b2aded2e61cc266e61b38">CONFIG_INCLUDE_SYS_NOTIFY</a> + <a class="code hl_define" href="#af5831aaa5e81ee84cb1eeeee5e1f3119">CONFIG_INCLUDE_SYS_NOTIFY_WAIT</a> +              \</div>
-<div class="line"> <a class="code hl_define" href="#a2f6ad6284aaa1ba091cf06fe6f67d088">CONFIG_INCLUDE_SYS_EVENT_POST</a> + <a class="code hl_define" href="#a2485c748a6ebc8b2a808f594ec4fba23">CONFIG_INCLUDE_SYS_EVENT_WAIT</a> +           \</div>
-<div class="line"> <a class="code hl_define" href="#a662466b5f5973ab8f89c3c80704457f5">CONFIG_INCLUDE_SYS_BRK</a> + <a class="code hl_define" href="#ae39d19d4345a0e8f6ce05001a00cc0a7">CONFIG_INCLUDE_SYS_MMAP</a> +                        \</div>
-<div class="line"> <a class="code hl_define" href="#a6349c45c64602c48c0c5087a6027ffc0">CONFIG_INCLUDE_SYS_MUNMAP</a> + <a class="code hl_define" href="#a6de0e5dcd80bc2cedef79821b7ac37e9">CONFIG_INCLUDE_SYS_OPEN</a> +                     \</div>
-<div class="line"> <a class="code hl_define" href="#acad977a4de3bb6eb2369ae703b44ff37">CONFIG_INCLUDE_SYS_CLOSE</a> + <a class="code hl_define" href="#a66781d74f2853fef8bc4b79908b24ac8">CONFIG_INCLUDE_SYS_READ</a> +                      \</div>
-<div class="line"> <a class="code hl_define" href="#acd15b74bb6f9487cc4bc12952d8d7257">CONFIG_INCLUDE_SYS_WRITE</a> + <a class="code hl_define" href="#adde30c382e97aef535a40630b631b80f">CONFIG_INCLUDE_SYS_SEEK</a> +                      \</div>
-<div class="line"> <a class="code hl_define" href="#aefa28fad9028e06240df57a535e36f5c">CONFIG_INCLUDE_SYS_IOCTL</a> + <a class="code hl_define" href="#acd0ca92afe87cb20eac4bb3ff71e4322">CONFIG_INCLUDE_SYS_STAT</a> +                      \</div>
-<div class="line"> <a class="code hl_define" href="#a27810d82f14dd0845d2c9f7d1c4c4544">CONFIG_INCLUDE_SYS_MKDIR</a> + <a class="code hl_define" href="#a57f3b2807b05bf6784f193a3c985c54e">CONFIG_INCLUDE_SYS_UNLINK</a> +                    \</div>
-<div class="line"> <a class="code hl_define" href="#a2d50579916fbc84e4db5af66cd299aaf">CONFIG_INCLUDE_SYS_RENAME</a> + <a class="code hl_define" href="#a8d542b79c6b35331ae95d0341e6d9ca6">CONFIG_INCLUDE_SYS_MOUNT</a> +                    \</div>
-<div class="line"> <a class="code hl_define" href="#ade6fddc937b474020a792b7cb2858bed">CONFIG_INCLUDE_SYS_UMOUNT</a> + <a class="code hl_define" href="#aa9a2c921cb959838f5255d107e8fb22d">CONFIG_INCLUDE_SYS_REBOOT</a> +                   \</div>
-<div class="line"> <a class="code hl_define" href="#ad5198f372947bd8e93d7fe73a1fd960d">CONFIG_INCLUDE_SYS_HALT</a>)</div>
-<div class="ttc" id="anexios__config_8h_html_a0b5fcae55cc325a4a22a0fbbaaa943c9"><div class="ttname"><a href="#a0b5fcae55cc325a4a22a0fbbaaa943c9">CONFIG_INCLUDE_SYS_CLONE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_CLONE</div><div class="ttdef"><b>Definition</b> nexios_config.h:321</div></div>
-<div class="ttc" id="anexios__config_8h_html_a0c463c0a261b2aded2e61cc266e61b38"><div class="ttname"><a href="#a0c463c0a261b2aded2e61cc266e61b38">CONFIG_INCLUDE_SYS_NOTIFY</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_NOTIFY</div><div class="ttdef"><b>Definition</b> nexios_config.h:354</div></div>
-<div class="ttc" id="anexios__config_8h_html_a0eb00eae76043356257ebf25c7417e4e"><div class="ttname"><a href="#a0eb00eae76043356257ebf25c7417e4e">CONFIG_INCLUDE_SYS_WAITPID</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_WAITPID</div><div class="ttdef"><b>Definition</b> nexios_config.h:327</div></div>
-<div class="ttc" id="anexios__config_8h_html_a2485c748a6ebc8b2a808f594ec4fba23"><div class="ttname"><a href="#a2485c748a6ebc8b2a808f594ec4fba23">CONFIG_INCLUDE_SYS_EVENT_WAIT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EVENT_WAIT</div><div class="ttdef"><b>Definition</b> nexios_config.h:363</div></div>
-<div class="ttc" id="anexios__config_8h_html_a27810d82f14dd0845d2c9f7d1c4c4544"><div class="ttname"><a href="#a27810d82f14dd0845d2c9f7d1c4c4544">CONFIG_INCLUDE_SYS_MKDIR</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MKDIR</div><div class="ttdef"><b>Definition</b> nexios_config.h:396</div></div>
-<div class="ttc" id="anexios__config_8h_html_a2d50579916fbc84e4db5af66cd299aaf"><div class="ttname"><a href="#a2d50579916fbc84e4db5af66cd299aaf">CONFIG_INCLUDE_SYS_RENAME</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_RENAME</div><div class="ttdef"><b>Definition</b> nexios_config.h:402</div></div>
-<div class="ttc" id="anexios__config_8h_html_a2f6ad6284aaa1ba091cf06fe6f67d088"><div class="ttname"><a href="#a2f6ad6284aaa1ba091cf06fe6f67d088">CONFIG_INCLUDE_SYS_EVENT_POST</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EVENT_POST</div><div class="ttdef"><b>Definition</b> nexios_config.h:360</div></div>
-<div class="ttc" id="anexios__config_8h_html_a2f9f787a7a26264de01ef2fbe8d5246d"><div class="ttname"><a href="#a2f9f787a7a26264de01ef2fbe8d5246d">CONFIG_INCLUDE_SYS_EXECVE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EXECVE</div><div class="ttdef"><b>Definition</b> nexios_config.h:324</div></div>
-<div class="ttc" id="anexios__config_8h_html_a53596d900f72f47729b2ae89045f28da"><div class="ttname"><a href="#a53596d900f72f47729b2ae89045f28da">CONFIG_INCLUDE_SYS_GETPRIO</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_GETPRIO</div><div class="ttdef"><b>Definition</b> nexios_config.h:342</div></div>
-<div class="ttc" id="anexios__config_8h_html_a57f3b2807b05bf6784f193a3c985c54e"><div class="ttname"><a href="#a57f3b2807b05bf6784f193a3c985c54e">CONFIG_INCLUDE_SYS_UNLINK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_UNLINK</div><div class="ttdef"><b>Definition</b> nexios_config.h:399</div></div>
-<div class="ttc" id="anexios__config_8h_html_a60e23f6d80990d3a8e2588f4822be026"><div class="ttname"><a href="#a60e23f6d80990d3a8e2588f4822be026">CONFIG_INCLUDE_SYS_NANOSLEEP</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_NANOSLEEP</div><div class="ttdef"><b>Definition</b> nexios_config.h:330</div></div>
-<div class="ttc" id="anexios__config_8h_html_a6349c45c64602c48c0c5087a6027ffc0"><div class="ttname"><a href="#a6349c45c64602c48c0c5087a6027ffc0">CONFIG_INCLUDE_SYS_MUNMAP</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MUNMAP</div><div class="ttdef"><b>Definition</b> nexios_config.h:372</div></div>
-<div class="ttc" id="anexios__config_8h_html_a662466b5f5973ab8f89c3c80704457f5"><div class="ttname"><a href="#a662466b5f5973ab8f89c3c80704457f5">CONFIG_INCLUDE_SYS_BRK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_BRK</div><div class="ttdef"><b>Definition</b> nexios_config.h:366</div></div>
-<div class="ttc" id="anexios__config_8h_html_a66781d74f2853fef8bc4b79908b24ac8"><div class="ttname"><a href="#a66781d74f2853fef8bc4b79908b24ac8">CONFIG_INCLUDE_SYS_READ</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_READ</div><div class="ttdef"><b>Definition</b> nexios_config.h:381</div></div>
-<div class="ttc" id="anexios__config_8h_html_a68ed53fd6b95aac6db3e44695818bf0c"><div class="ttname"><a href="#a68ed53fd6b95aac6db3e44695818bf0c">CONFIG_INCLUDE_SYS_FORK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_FORK</div><div class="ttdef"><b>Definition</b> nexios_config.h:318</div></div>
-<div class="ttc" id="anexios__config_8h_html_a6de0e5dcd80bc2cedef79821b7ac37e9"><div class="ttname"><a href="#a6de0e5dcd80bc2cedef79821b7ac37e9">CONFIG_INCLUDE_SYS_OPEN</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_OPEN</div><div class="ttdef"><b>Definition</b> nexios_config.h:375</div></div>
-<div class="ttc" id="anexios__config_8h_html_a837a901b5f4ca7bb74e83d20bac4ece1"><div class="ttname"><a href="#a837a901b5f4ca7bb74e83d20bac4ece1">CONFIG_INCLUDE_SYS_RECV</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_RECV</div><div class="ttdef"><b>Definition</b> nexios_config.h:348</div></div>
-<div class="ttc" id="anexios__config_8h_html_a8d542b79c6b35331ae95d0341e6d9ca6"><div class="ttname"><a href="#a8d542b79c6b35331ae95d0341e6d9ca6">CONFIG_INCLUDE_SYS_MOUNT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MOUNT</div><div class="ttdef"><b>Definition</b> nexios_config.h:405</div></div>
-<div class="ttc" id="anexios__config_8h_html_a92c54e3597ddb43ce61b8bcde9052bc1"><div class="ttname"><a href="#a92c54e3597ddb43ce61b8bcde9052bc1">CONFIG_INCLUDE_SYS_YIELD</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_YIELD</div><div class="ttdef"><b>Definition</b> nexios_config.h:312</div></div>
-<div class="ttc" id="anexios__config_8h_html_aa2a526b69a2d49b9eaef83c60f27512e"><div class="ttname"><a href="#aa2a526b69a2d49b9eaef83c60f27512e">CONFIG_INCLUDE_SYS_EXIT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EXIT</div><div class="ttdef"><b>Definition</b> nexios_config.h:315</div></div>
-<div class="ttc" id="anexios__config_8h_html_aa9a2c921cb959838f5255d107e8fb22d"><div class="ttname"><a href="#aa9a2c921cb959838f5255d107e8fb22d">CONFIG_INCLUDE_SYS_REBOOT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_REBOOT</div><div class="ttdef"><b>Definition</b> nexios_config.h:411</div></div>
-<div class="ttc" id="anexios__config_8h_html_ab118f80a4ff475810c6710a4e748f16e"><div class="ttname"><a href="#ab118f80a4ff475810c6710a4e748f16e">CONFIG_INCLUDE_SYS_REPLY</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_REPLY</div><div class="ttdef"><b>Definition</b> nexios_config.h:351</div></div>
-<div class="ttc" id="anexios__config_8h_html_ab9be880ba29de9c0c3a8cf33647da623"><div class="ttname"><a href="#ab9be880ba29de9c0c3a8cf33647da623">CONFIG_INCLUDE_SYS_GETPPID</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_GETPPID</div><div class="ttdef"><b>Definition</b> nexios_config.h:336</div></div>
-<div class="ttc" id="anexios__config_8h_html_acad977a4de3bb6eb2369ae703b44ff37"><div class="ttname"><a href="#acad977a4de3bb6eb2369ae703b44ff37">CONFIG_INCLUDE_SYS_CLOSE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_CLOSE</div><div class="ttdef"><b>Definition</b> nexios_config.h:378</div></div>
-<div class="ttc" id="anexios__config_8h_html_acd0ca92afe87cb20eac4bb3ff71e4322"><div class="ttname"><a href="#acd0ca92afe87cb20eac4bb3ff71e4322">CONFIG_INCLUDE_SYS_STAT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_STAT</div><div class="ttdef"><b>Definition</b> nexios_config.h:393</div></div>
-<div class="ttc" id="anexios__config_8h_html_acd15b74bb6f9487cc4bc12952d8d7257"><div class="ttname"><a href="#acd15b74bb6f9487cc4bc12952d8d7257">CONFIG_INCLUDE_SYS_WRITE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_WRITE</div><div class="ttdef"><b>Definition</b> nexios_config.h:384</div></div>
-<div class="ttc" id="anexios__config_8h_html_ad5198f372947bd8e93d7fe73a1fd960d"><div class="ttname"><a href="#ad5198f372947bd8e93d7fe73a1fd960d">CONFIG_INCLUDE_SYS_HALT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_HALT</div><div class="ttdef"><b>Definition</b> nexios_config.h:414</div></div>
-<div class="ttc" id="anexios__config_8h_html_adde30c382e97aef535a40630b631b80f"><div class="ttname"><a href="#adde30c382e97aef535a40630b631b80f">CONFIG_INCLUDE_SYS_SEEK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_SEEK</div><div class="ttdef"><b>Definition</b> nexios_config.h:387</div></div>
-<div class="ttc" id="anexios__config_8h_html_ade6fddc937b474020a792b7cb2858bed"><div class="ttname"><a href="#ade6fddc937b474020a792b7cb2858bed">CONFIG_INCLUDE_SYS_UMOUNT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_UMOUNT</div><div class="ttdef"><b>Definition</b> nexios_config.h:408</div></div>
-<div class="ttc" id="anexios__config_8h_html_ae2a0246e0087b7cb06ed0468c6d1b455"><div class="ttname"><a href="#ae2a0246e0087b7cb06ed0468c6d1b455">CONFIG_INCLUDE_SYS_SETPRIO</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_SETPRIO</div><div class="ttdef"><b>Definition</b> nexios_config.h:339</div></div>
-<div class="ttc" id="anexios__config_8h_html_ae39d19d4345a0e8f6ce05001a00cc0a7"><div class="ttname"><a href="#ae39d19d4345a0e8f6ce05001a00cc0a7">CONFIG_INCLUDE_SYS_MMAP</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MMAP</div><div class="ttdef"><b>Definition</b> nexios_config.h:369</div></div>
-<div class="ttc" id="anexios__config_8h_html_ae7247a6d5878506991c3a20d12d530ca"><div class="ttname"><a href="#ae7247a6d5878506991c3a20d12d530ca">CONFIG_INCLUDE_SYS_SENDSYNC</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_SENDSYNC</div><div class="ttdef"><b>Definition</b> nexios_config.h:345</div></div>
-<div class="ttc" id="anexios__config_8h_html_aed16199ac0dbff8f53cc67ca95ce527a"><div class="ttname"><a href="#aed16199ac0dbff8f53cc67ca95ce527a">CONFIG_INCLUDE_SYS_GETPID</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_GETPID</div><div class="ttdef"><b>Definition</b> nexios_config.h:333</div></div>
-<div class="ttc" id="anexios__config_8h_html_aefa28fad9028e06240df57a535e36f5c"><div class="ttname"><a href="#aefa28fad9028e06240df57a535e36f5c">CONFIG_INCLUDE_SYS_IOCTL</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_IOCTL</div><div class="ttdef"><b>Definition</b> nexios_config.h:390</div></div>
-<div class="ttc" id="anexios__config_8h_html_af5831aaa5e81ee84cb1eeeee5e1f3119"><div class="ttname"><a href="#af5831aaa5e81ee84cb1eeeee5e1f3119">CONFIG_INCLUDE_SYS_NOTIFY_WAIT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_NOTIFY_WAIT</div><div class="ttdef"><b>Definition</b> nexios_config.h:357</div></div>
+<b>Value:</b><div class="fragment"><div class="line">(<a class="code hl_define" href="aarch64_2serial_8cpp.html#a92c54e3597ddb43ce61b8bcde9052bc1">CONFIG_INCLUDE_SYS_YIELD</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#aa2a526b69a2d49b9eaef83c60f27512e">CONFIG_INCLUDE_SYS_EXIT</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a68ed53fd6b95aac6db3e44695818bf0c">CONFIG_INCLUDE_SYS_FORK</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#a0b5fcae55cc325a4a22a0fbbaaa943c9">CONFIG_INCLUDE_SYS_CLONE</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a2f9f787a7a26264de01ef2fbe8d5246d">CONFIG_INCLUDE_SYS_EXECVE</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#a0eb00eae76043356257ebf25c7417e4e">CONFIG_INCLUDE_SYS_WAITPID</a> +                  \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a60e23f6d80990d3a8e2588f4822be026">CONFIG_INCLUDE_SYS_NANOSLEEP</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#aed16199ac0dbff8f53cc67ca95ce527a">CONFIG_INCLUDE_SYS_GETPID</a> +                \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#ab9be880ba29de9c0c3a8cf33647da623">CONFIG_INCLUDE_SYS_GETPPID</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#ae2a0246e0087b7cb06ed0468c6d1b455">CONFIG_INCLUDE_SYS_SETPRIO</a> +                 \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a53596d900f72f47729b2ae89045f28da">CONFIG_INCLUDE_SYS_GETPRIO</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#ae7247a6d5878506991c3a20d12d530ca">CONFIG_INCLUDE_SYS_SENDSYNC</a> +                \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a837a901b5f4ca7bb74e83d20bac4ece1">CONFIG_INCLUDE_SYS_RECV</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#ab118f80a4ff475810c6710a4e748f16e">CONFIG_INCLUDE_SYS_REPLY</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a0c463c0a261b2aded2e61cc266e61b38">CONFIG_INCLUDE_SYS_NOTIFY</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#af5831aaa5e81ee84cb1eeeee5e1f3119">CONFIG_INCLUDE_SYS_NOTIFY_WAIT</a> +              \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a2f6ad6284aaa1ba091cf06fe6f67d088">CONFIG_INCLUDE_SYS_EVENT_POST</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#a2485c748a6ebc8b2a808f594ec4fba23">CONFIG_INCLUDE_SYS_EVENT_WAIT</a> +           \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a662466b5f5973ab8f89c3c80704457f5">CONFIG_INCLUDE_SYS_BRK</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#ae39d19d4345a0e8f6ce05001a00cc0a7">CONFIG_INCLUDE_SYS_MMAP</a> +                        \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a6349c45c64602c48c0c5087a6027ffc0">CONFIG_INCLUDE_SYS_MUNMAP</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#a6de0e5dcd80bc2cedef79821b7ac37e9">CONFIG_INCLUDE_SYS_OPEN</a> +                     \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#acad977a4de3bb6eb2369ae703b44ff37">CONFIG_INCLUDE_SYS_CLOSE</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#a66781d74f2853fef8bc4b79908b24ac8">CONFIG_INCLUDE_SYS_READ</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#acd15b74bb6f9487cc4bc12952d8d7257">CONFIG_INCLUDE_SYS_WRITE</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#adde30c382e97aef535a40630b631b80f">CONFIG_INCLUDE_SYS_SEEK</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#aefa28fad9028e06240df57a535e36f5c">CONFIG_INCLUDE_SYS_IOCTL</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#acd0ca92afe87cb20eac4bb3ff71e4322">CONFIG_INCLUDE_SYS_STAT</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a27810d82f14dd0845d2c9f7d1c4c4544">CONFIG_INCLUDE_SYS_MKDIR</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#a57f3b2807b05bf6784f193a3c985c54e">CONFIG_INCLUDE_SYS_UNLINK</a> +                    \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#a2d50579916fbc84e4db5af66cd299aaf">CONFIG_INCLUDE_SYS_RENAME</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#a8d542b79c6b35331ae95d0341e6d9ca6">CONFIG_INCLUDE_SYS_MOUNT</a> +                    \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#ade6fddc937b474020a792b7cb2858bed">CONFIG_INCLUDE_SYS_UMOUNT</a> + <a class="code hl_define" href="aarch64_2serial_8cpp.html#aa9a2c921cb959838f5255d107e8fb22d">CONFIG_INCLUDE_SYS_REBOOT</a> +                   \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#ad5198f372947bd8e93d7fe73a1fd960d">CONFIG_INCLUDE_SYS_HALT</a>)</div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a0b5fcae55cc325a4a22a0fbbaaa943c9"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a0b5fcae55cc325a4a22a0fbbaaa943c9">CONFIG_INCLUDE_SYS_CLONE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_CLONE</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a0c463c0a261b2aded2e61cc266e61b38"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a0c463c0a261b2aded2e61cc266e61b38">CONFIG_INCLUDE_SYS_NOTIFY</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_NOTIFY</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a0eb00eae76043356257ebf25c7417e4e"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a0eb00eae76043356257ebf25c7417e4e">CONFIG_INCLUDE_SYS_WAITPID</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_WAITPID</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a2485c748a6ebc8b2a808f594ec4fba23"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a2485c748a6ebc8b2a808f594ec4fba23">CONFIG_INCLUDE_SYS_EVENT_WAIT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EVENT_WAIT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a27810d82f14dd0845d2c9f7d1c4c4544"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a27810d82f14dd0845d2c9f7d1c4c4544">CONFIG_INCLUDE_SYS_MKDIR</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MKDIR</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a2d50579916fbc84e4db5af66cd299aaf"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a2d50579916fbc84e4db5af66cd299aaf">CONFIG_INCLUDE_SYS_RENAME</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_RENAME</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a2f6ad6284aaa1ba091cf06fe6f67d088"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a2f6ad6284aaa1ba091cf06fe6f67d088">CONFIG_INCLUDE_SYS_EVENT_POST</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EVENT_POST</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a2f9f787a7a26264de01ef2fbe8d5246d"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a2f9f787a7a26264de01ef2fbe8d5246d">CONFIG_INCLUDE_SYS_EXECVE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EXECVE</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a53596d900f72f47729b2ae89045f28da"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a53596d900f72f47729b2ae89045f28da">CONFIG_INCLUDE_SYS_GETPRIO</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_GETPRIO</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a57f3b2807b05bf6784f193a3c985c54e"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a57f3b2807b05bf6784f193a3c985c54e">CONFIG_INCLUDE_SYS_UNLINK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_UNLINK</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a60e23f6d80990d3a8e2588f4822be026"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a60e23f6d80990d3a8e2588f4822be026">CONFIG_INCLUDE_SYS_NANOSLEEP</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_NANOSLEEP</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a6349c45c64602c48c0c5087a6027ffc0"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a6349c45c64602c48c0c5087a6027ffc0">CONFIG_INCLUDE_SYS_MUNMAP</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MUNMAP</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a662466b5f5973ab8f89c3c80704457f5"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a662466b5f5973ab8f89c3c80704457f5">CONFIG_INCLUDE_SYS_BRK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_BRK</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a66781d74f2853fef8bc4b79908b24ac8"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a66781d74f2853fef8bc4b79908b24ac8">CONFIG_INCLUDE_SYS_READ</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_READ</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a68ed53fd6b95aac6db3e44695818bf0c"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a68ed53fd6b95aac6db3e44695818bf0c">CONFIG_INCLUDE_SYS_FORK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_FORK</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a6de0e5dcd80bc2cedef79821b7ac37e9"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a6de0e5dcd80bc2cedef79821b7ac37e9">CONFIG_INCLUDE_SYS_OPEN</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_OPEN</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a837a901b5f4ca7bb74e83d20bac4ece1"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a837a901b5f4ca7bb74e83d20bac4ece1">CONFIG_INCLUDE_SYS_RECV</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_RECV</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a8d542b79c6b35331ae95d0341e6d9ca6"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a8d542b79c6b35331ae95d0341e6d9ca6">CONFIG_INCLUDE_SYS_MOUNT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MOUNT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a92c54e3597ddb43ce61b8bcde9052bc1"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a92c54e3597ddb43ce61b8bcde9052bc1">CONFIG_INCLUDE_SYS_YIELD</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_YIELD</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_aa2a526b69a2d49b9eaef83c60f27512e"><div class="ttname"><a href="aarch64_2serial_8cpp.html#aa2a526b69a2d49b9eaef83c60f27512e">CONFIG_INCLUDE_SYS_EXIT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EXIT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_aa9a2c921cb959838f5255d107e8fb22d"><div class="ttname"><a href="aarch64_2serial_8cpp.html#aa9a2c921cb959838f5255d107e8fb22d">CONFIG_INCLUDE_SYS_REBOOT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_REBOOT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ab118f80a4ff475810c6710a4e748f16e"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ab118f80a4ff475810c6710a4e748f16e">CONFIG_INCLUDE_SYS_REPLY</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_REPLY</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ab9be880ba29de9c0c3a8cf33647da623"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ab9be880ba29de9c0c3a8cf33647da623">CONFIG_INCLUDE_SYS_GETPPID</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_GETPPID</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_acad977a4de3bb6eb2369ae703b44ff37"><div class="ttname"><a href="aarch64_2serial_8cpp.html#acad977a4de3bb6eb2369ae703b44ff37">CONFIG_INCLUDE_SYS_CLOSE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_CLOSE</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_acd0ca92afe87cb20eac4bb3ff71e4322"><div class="ttname"><a href="aarch64_2serial_8cpp.html#acd0ca92afe87cb20eac4bb3ff71e4322">CONFIG_INCLUDE_SYS_STAT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_STAT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_acd15b74bb6f9487cc4bc12952d8d7257"><div class="ttname"><a href="aarch64_2serial_8cpp.html#acd15b74bb6f9487cc4bc12952d8d7257">CONFIG_INCLUDE_SYS_WRITE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_WRITE</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ad5198f372947bd8e93d7fe73a1fd960d"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ad5198f372947bd8e93d7fe73a1fd960d">CONFIG_INCLUDE_SYS_HALT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_HALT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_adde30c382e97aef535a40630b631b80f"><div class="ttname"><a href="aarch64_2serial_8cpp.html#adde30c382e97aef535a40630b631b80f">CONFIG_INCLUDE_SYS_SEEK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_SEEK</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ade6fddc937b474020a792b7cb2858bed"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ade6fddc937b474020a792b7cb2858bed">CONFIG_INCLUDE_SYS_UMOUNT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_UMOUNT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ae2a0246e0087b7cb06ed0468c6d1b455"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ae2a0246e0087b7cb06ed0468c6d1b455">CONFIG_INCLUDE_SYS_SETPRIO</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_SETPRIO</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ae39d19d4345a0e8f6ce05001a00cc0a7"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ae39d19d4345a0e8f6ce05001a00cc0a7">CONFIG_INCLUDE_SYS_MMAP</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MMAP</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ae7247a6d5878506991c3a20d12d530ca"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ae7247a6d5878506991c3a20d12d530ca">CONFIG_INCLUDE_SYS_SENDSYNC</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_SENDSYNC</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_aed16199ac0dbff8f53cc67ca95ce527a"><div class="ttname"><a href="aarch64_2serial_8cpp.html#aed16199ac0dbff8f53cc67ca95ce527a">CONFIG_INCLUDE_SYS_GETPID</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_GETPID</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_aefa28fad9028e06240df57a535e36f5c"><div class="ttname"><a href="aarch64_2serial_8cpp.html#aefa28fad9028e06240df57a535e36f5c">CONFIG_INCLUDE_SYS_IOCTL</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_IOCTL</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_af5831aaa5e81ee84cb1eeeee5e1f3119"><div class="ttname"><a href="aarch64_2serial_8cpp.html#af5831aaa5e81ee84cb1eeeee5e1f3119">CONFIG_INCLUDE_SYS_NOTIFY_WAIT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_NOTIFY_WAIT</div></div>
 </div><!-- fragment -->
 <p>Computed count of enabled syscalls (used for dispatch table sizing). </p>
 
@@ -2574,11 +2773,11 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line">((<a class="code hl_define" href="#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a> &lt;&lt; 16) | (<a class="code hl_define" href="#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a> &lt;&lt; 8) |              \</div>
-<div class="line"> <a class="code hl_define" href="#ad5dc4c87864bde8898026a5c2e00cb59">CONFIG_VERSION_PATCH</a>)</div>
-<div class="ttc" id="anexios__config_8h_html_aa1a69b49aa134e3a3c303489bccca599"><div class="ttname"><a href="#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a></div><div class="ttdeci">#define CONFIG_VERSION_MAJOR</div><div class="ttdef"><b>Definition</b> nexios_config.h:19</div></div>
-<div class="ttc" id="anexios__config_8h_html_acd02978616d37355da2ade116edf7bde"><div class="ttname"><a href="#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a></div><div class="ttdeci">#define CONFIG_VERSION_MINOR</div><div class="ttdef"><b>Definition</b> nexios_config.h:20</div></div>
-<div class="ttc" id="anexios__config_8h_html_ad5dc4c87864bde8898026a5c2e00cb59"><div class="ttname"><a href="#ad5dc4c87864bde8898026a5c2e00cb59">CONFIG_VERSION_PATCH</a></div><div class="ttdeci">#define CONFIG_VERSION_PATCH</div><div class="ttdef"><b>Definition</b> nexios_config.h:21</div></div>
+<b>Value:</b><div class="fragment"><div class="line">((<a class="code hl_define" href="aarch64_2serial_8cpp.html#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a> &lt;&lt; 16) | (<a class="code hl_define" href="aarch64_2serial_8cpp.html#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a> &lt;&lt; 8) |              \</div>
+<div class="line"> <a class="code hl_define" href="aarch64_2serial_8cpp.html#ad5dc4c87864bde8898026a5c2e00cb59">CONFIG_VERSION_PATCH</a>)</div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_aa1a69b49aa134e3a3c303489bccca599"><div class="ttname"><a href="aarch64_2serial_8cpp.html#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a></div><div class="ttdeci">#define CONFIG_VERSION_MAJOR</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_acd02978616d37355da2ade116edf7bde"><div class="ttname"><a href="aarch64_2serial_8cpp.html#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a></div><div class="ttdeci">#define CONFIG_VERSION_MINOR</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ad5dc4c87864bde8898026a5c2e00cb59"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ad5dc4c87864bde8898026a5c2e00cb59">CONFIG_VERSION_PATCH</a></div><div class="ttdeci">#define CONFIG_VERSION_PATCH</div></div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -2609,6 +2808,36 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Maximum length of a VFS path string. </p>
+
+</div>
+</div>
+<a id="a3163b31e3ebb9db40fdf2093b6edf7a5" name="a3163b31e3ebb9db40fdf2093b6edf7a5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3163b31e3ebb9db40fdf2093b6edf7a5">&#9670;&#160;</a></span>CONFIG_WATCHDOG_ACTION</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_WATCHDOG_ACTION&#160;&#160;&#160;3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Default action on per-task watchdog expiry (issue #41): mirrors the CONFIG_DEADLINE_ACTION 0..4 contract (LOG_ONLY/PANIC/DEMOTE/KILL/ NOTIFY_MONITOR, KILL via defer_kill). Default 3 (KILL, fail-closed). </p>
+
+</div>
+</div>
+<a id="a3dd102ae8468ee9fcc97b63304c59228" name="a3dd102ae8468ee9fcc97b63304c59228"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3dd102ae8468ee9fcc97b63304c59228">&#9670;&#160;</a></span>CONFIG_WATCHDOG_GRACE_TICKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_WATCHDOG_GRACE_TICKS&#160;&#160;&#160;500</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Boot-grace ticks for the watchdog daemon handover (issue #277): the kernel-local boot budget enforcement stays authoritative until watchdogd reports READY (or this grace expires, then degraded mode). </p>
 
 </div>
 </div>
@@ -2653,6 +2882,8 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Pull in the central configuration header. </p>
 
 </div>
 </div>

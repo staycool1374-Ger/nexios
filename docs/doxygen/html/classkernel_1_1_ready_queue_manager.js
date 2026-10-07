@@ -5,6 +5,7 @@ var classkernel_1_1_ready_queue_manager =
     [ "clear_all", "classkernel_1_1_ready_queue_manager.html#ab7ff6b1fe966757c41f775c8781ef03c", null ],
     [ "depth", "classkernel_1_1_ready_queue_manager.html#a9c5cbd053fe797e89ba2384b32c9aca2", null ],
     [ "dequeue_highest", "classkernel_1_1_ready_queue_manager.html#a9dd771a9a5d1f655959f32debbf62e91", null ],
+    [ "dequeue_level", "classkernel_1_1_ready_queue_manager.html#a46dad20fbcbcad0a977ca094ffa8d63d", null ],
     [ "enqueue", "classkernel_1_1_ready_queue_manager.html#adf2703f42a211a644adc440ae6fab7a1", null ],
     [ "has_ready", "classkernel_1_1_ready_queue_manager.html#ad9860837c2ece684ae95b9de3727a584", null ],
     [ "highest_ready_priority", "classkernel_1_1_ready_queue_manager.html#a6b670132dd09b3a80e51653b3ad92172", null ],

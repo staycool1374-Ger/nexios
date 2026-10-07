@@ -1,6 +1,7 @@
 var searchData=
 [
-  ['x2apic_0',['x2apic',['../structarch_1_1_caps.html#a80e983e4f7a532fbc90e7990986113ad',1,'arch::Caps']]],
-  ['x86_5f64_1',['x86_64',['../structkernel_1_1test_1_1_expected_counts.html#ac2618242779b1db509804574eff962e2',1,'kernel::test::ExpectedCounts']]],
-  ['xor_5fout_2',['XOR_OUT',['../classkernel_1_1_c_r_c32.html#a2dc16100d0d9d2b71a8833ce3aa65a94',1,'kernel::CRC32']]]
+  ['x_0',['X',['../mempool__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165',1,'X:&#160;mempool_errors.hpp'],['../mempool__errors_8hpp.html#a47fb9cc75ae083f1d9af376bdbf18c9c',1,'X:&#160;mempool_errors.hpp'],['../pmm__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165',1,'X:&#160;pmm_errors.hpp'],['../pmm__errors_8hpp.html#a47fb9cc75ae083f1d9af376bdbf18c9c',1,'X:&#160;pmm_errors.hpp'],['../vmm__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165',1,'X:&#160;vmm_errors.hpp'],['../vmm__errors_8hpp.html#a47fb9cc75ae083f1d9af376bdbf18c9c',1,'X:&#160;vmm_errors.hpp'],['../sync__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165',1,'X:&#160;sync_errors.hpp'],['../sync__errors_8hpp.html#a47fb9cc75ae083f1d9af376bdbf18c9c',1,'X:&#160;sync_errors.hpp'],['../scheduler__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165',1,'X:&#160;scheduler_errors.hpp'],['../scheduler__errors_8hpp.html#a47fb9cc75ae083f1d9af376bdbf18c9c',1,'X:&#160;scheduler_errors.hpp'],['../task__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165',1,'X:&#160;task_errors.hpp'],['../task__errors_8hpp.html#a47fb9cc75ae083f1d9af376bdbf18c9c',1,'X:&#160;task_errors.hpp']]],
+  ['x2apic_1',['x2apic',['../structarch_1_1_caps.html#a80e983e4f7a532fbc90e7990986113ad',1,'arch::Caps']]],
+  ['x86_5f64_2',['x86_64',['../structkernel_1_1test_1_1_expected_counts.html#ac2618242779b1db509804574eff962e2',1,'kernel::test::ExpectedCounts']]],
+  ['xor_5fout_3',['XOR_OUT',['../classkernel_1_1_c_r_c32.html#a2dc16100d0d9d2b71a8833ce3aa65a94',1,'kernel::CRC32']]]
 ];

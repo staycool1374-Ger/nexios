@@ -7,6 +7,7 @@ var namespacekernel_1_1vfs =
     [ "PciVnode", "structkernel_1_1vfs_1_1_pci_vnode.html", "structkernel_1_1vfs_1_1_pci_vnode" ],
     [ "PidDirVnode", "structkernel_1_1vfs_1_1_pid_dir_vnode.html", "structkernel_1_1vfs_1_1_pid_dir_vnode" ],
     [ "PidStatVnode", "structkernel_1_1vfs_1_1_pid_stat_vnode.html", "structkernel_1_1vfs_1_1_pid_stat_vnode" ],
+    [ "PidWatchdogVnode", "structkernel_1_1vfs_1_1_pid_watchdog_vnode.html", "structkernel_1_1vfs_1_1_pid_watchdog_vnode" ],
     [ "PipeBuffer", "structkernel_1_1vfs_1_1_pipe_buffer.html", "structkernel_1_1vfs_1_1_pipe_buffer" ],
     [ "TmpfsEntry", "structkernel_1_1vfs_1_1_tmpfs_entry.html", "structkernel_1_1vfs_1_1_tmpfs_entry" ],
     [ "create", "namespacekernel_1_1vfs.html#a94bddce0efe1b0b6a3dade264883f7ce", null ],

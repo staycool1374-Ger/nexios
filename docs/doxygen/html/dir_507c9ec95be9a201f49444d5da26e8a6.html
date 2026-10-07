@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -139,6 +139,14 @@ Files</h2></td></tr>
 <tr class="memdesc:dmesg__task_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dmesg consumer task: drains ring-buffer log entries to UART. <br /></td></tr>
 <tr class="memitem:dmesg_5Ftask_2Ehpp" id="r_dmesg_5Ftask_2Ehpp"><td class="memItemLeft"><a href="dmesg__task_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="dmesg__task_8hpp.html">dmesg_task.hpp</a></td></tr>
 <tr class="memdesc:dmesg__task_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel log consumer task that drains the dmesg ring buffer to UART. <br /></td></tr>
+<tr class="memitem:exit_5Frecord_2Ecpp" id="r_exit_5Frecord_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="exit__record_8cpp.html">exit_record.cpp</a></td></tr>
+<tr class="memdesc:exit__record_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Post-mortem user-task exit records (issue #294). Static ring, atomic slot claim (record_task_entry precedent), no locks, no allocation. Daemon + kernel exits never enter. <br /></td></tr>
+<tr class="memitem:exit_5Frecord_2Ehpp" id="r_exit_5Frecord_2Ehpp"><td class="memItemLeft"><a href="exit__record_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="exit__record_8hpp.html">exit_record.hpp</a></td></tr>
+<tr class="memdesc:exit__record_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Post-mortem user-task exit records (issue #294). A reaped task takes its TCB to the grave; this ring keeps the numbers that <span class="tt">monstat user</span> shows after the task is gone. Static POD, no allocation, ResourceTracker-neutral. Daemon exits never enter (same PID rule as the monstat finder). <br /></td></tr>
+<tr class="memitem:idle_5Fmonitor_2Ecpp" id="r_idle_5Fmonitor_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="idle__monitor_8cpp.html">idle_monitor.cpp</a></td></tr>
+<tr class="memdesc:idle__monitor_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle-task safety monitors, foundation slice (issues #43/#282). M1-M6 contract (docs/specs/idle_monitor.md §1): BSP-idle only, chunk-budgeted, noexcept, no allocation, no new locks, skip invalid, test seams, never kills. <br /></td></tr>
+<tr class="memitem:idle_5Fmonitor_2Ehpp" id="r_idle_5Fmonitor_2Ehpp"><td class="memItemLeft"><a href="idle__monitor_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="idle__monitor_8hpp.html">idle_monitor.hpp</a></td></tr>
+<tr class="memdesc:idle__monitor_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle-task safety monitors, foundation slice (issues #43/#282). Normative contract: docs/specs/idle_monitor.md §1 (M1-M6). The monitor READS task state and SETS flags; it never kills, reaps, reprioritizes, or rebudgets (M6 — violation is an S1 audit finding). Escalation flows only through existing handler paths (spec §3 E1-E3). <br /></td></tr>
 <tr class="memitem:priority_5Fmap_2Ehpp" id="r_priority_5Fmap_2Ehpp"><td class="memItemLeft"><a href="priority__map_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="priority__map_8hpp.html">priority_map.hpp</a></td></tr>
 <tr class="memdesc:priority__map_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Two-level bitmap for O(1) highest-priority lookup. <br /></td></tr>
 <tr class="memitem:ready_5Fqueue_5Fmanager_2Ecpp" id="r_ready_5Fqueue_5Fmanager_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="ready__queue__manager_8cpp.html">ready_queue_manager.cpp</a></td></tr>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -152,11 +152,14 @@ Namespaces</h2></td></tr>
 <tr class="memitem:time" id="r_time"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1time.html">time</a></td></tr>
 <tr class="memitem:vfs" id="r_vfs"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html">vfs</a></td></tr>
 <tr class="memitem:vfsd" id="r_vfsd"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfsd.html">vfsd</a></td></tr>
+<tr class="memitem:watchdogd" id="r_watchdogd"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1watchdogd.html">watchdogd</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:AllTasksRegistry" id="r_AllTasksRegistry"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_all_tasks_registry.html">AllTasksRegistry</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitmap-backed, per-priority intrusive list of all registered tasks. Provides O(1) insert/remove and O(1) highest-priority query. Intended to replace the linear tasks_[] array in the scheduler.  <a href="classkernel_1_1_all_tasks_registry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:CheckedPtr" id="r_CheckedPtr"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_checked_ptr.html">CheckedPtr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Checked pointer for safe user-space memory access.  <a href="classkernel_1_1_checked_ptr.html#details">More...</a><br /></td></tr>
 <tr class="memitem:CpuContext" id="r_CpuContext"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU execution context.  <a href="structkernel_1_1_cpu_context.html#details">More...</a><br /></td></tr>
 <tr class="memitem:CRC32" id="r_CRC32"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_c_r_c32.html">CRC32</a></td></tr>
@@ -170,6 +173,10 @@ Data Structures</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Specialization of <a class="el" href="structkernel_1_1_error_or.html" title="Wraps a value or an error (similar to Rust&#39;s Result).">ErrorOr</a> for void (error-only result).  <a href="structkernel_1_1_error_or_3_01void_01_4.html#details">More...</a><br /></td></tr>
 <tr class="memitem:ExceptionSignalMap" id="r_ExceptionSignalMap"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_exception_signal_map.html">ExceptionSignalMap</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a CPU exception vector to a signal number and action.  <a href="structkernel_1_1_exception_signal_map.html#details">More...</a><br /></td></tr>
+<tr class="memitem:IdleScanCursor" id="r_IdleScanCursor"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resume cursor for chunked registry scans (M2).  <a href="structkernel_1_1_idle_scan_cursor.html#details">More...</a><br /></td></tr>
+<tr class="memitem:IdleScanProgress" id="r_IdleScanProgress"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_idle_scan_progress.html">IdleScanProgress</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-pass scan outcome (M5 test seam).  <a href="structkernel_1_1_idle_scan_progress.html#details">More...</a><br /></td></tr>
 <tr class="memitem:IrqDelivery" id="r_IrqDelivery"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_irq_delivery.html">IrqDelivery</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">User-space IRQ delivery engine (issue #2).  <a href="classkernel_1_1_irq_delivery.html#details">More...</a><br /></td></tr>
 <tr class="memitem:IrqRegistration" id="r_IrqRegistration"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a></td></tr>
@@ -177,6 +184,18 @@ Data Structures</h2></td></tr>
 <tr class="memitem:KernelObject" id="r_KernelObject"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive shared-reference-counted base for kernel objects.  <a href="classkernel_1_1_kernel_object.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Logger" id="r_Logger"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_logger.html">Logger</a></td></tr>
+<tr class="memitem:MemPool" id="r_MemPool"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_mem_pool.html">MemPool</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fixed-size block memory allocator with 9 pool classes.  <a href="classkernel_1_1_mem_pool.html#details">More...</a><br /></td></tr>
+<tr class="memitem:Message" id="r_Message"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_message.html">Message</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">The register budget must fit the message payload (design paper #11 §3.8).  <a href="structkernel_1_1_message.html#details">More...</a><br /></td></tr>
+<tr class="memitem:MessageQueue" id="r_MessageQueue"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_message_queue.html">MessageQueue</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Priority-ordered circular message queue embedded in each TCB.  <a href="structkernel_1_1_message_queue.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PageAddress" id="r_PageAddress"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_page_address.html">PageAddress</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page-aligned physical address.  <a href="classkernel_1_1_page_address.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PhysicalAddress" id="r_PhysicalAddress"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_physical_address.html">PhysicalAddress</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical address wrapper — eliminates raw reinterpret_cast for physical memory.  <a href="classkernel_1_1_physical_address.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PMM" id="r_PMM"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_p_m_m.html">PMM</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical memory manager using a bitmap to track free 4 KiB pages.  <a href="classkernel_1_1_p_m_m.html#details">More...</a><br /></td></tr>
 <tr class="memitem:PriorityMap" id="r_PriorityMap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_priority_map.html">PriorityMap</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Two-level bitmap supporting O(1) highest-priority find. Supports up to 128 priority levels (0–127) as two 64-bit words.  <a href="classkernel_1_1_priority_map.html#details">More...</a><br /></td></tr>
 <tr class="memitem:ReadyQueueManager" id="r_ReadyQueueManager"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_ready_queue_manager.html">ReadyQueueManager</a></td></tr>
@@ -194,8 +213,14 @@ Data Structures</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII scoped reference guard for <a class="el" href="classkernel_1_1_kernel_object.html" title="Intrusive shared-reference-counted base for kernel objects.">KernelObject</a> objects.  <a href="classkernel_1_1_scoped_ref.html#details">More...</a><br /></td></tr>
 <tr class="memitem:SignalFrame" id="r_SignalFrame"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_signal_frame.html">SignalFrame</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="#aab4cc62899bcb5fcce7228da55cd0e18" title="Standard POSIX-like signal numbers.">Signal</a> frame placed on the user stack when delivering a signal. The handler returns via SYS_SIGRETURN which restores this frame.  <a href="structkernel_1_1_signal_frame.html#details">More...</a><br /></td></tr>
+<tr class="memitem:TaskControlBlock" id="r_TaskControlBlock"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task control block — represents a single thread of execution.  <a href="structkernel_1_1_task_control_block.html#details">More...</a><br /></td></tr>
+<tr class="memitem:TaskExitRecord" id="r_TaskExitRecord"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_task_exit_record.html">TaskExitRecord</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot of a dead user task's outcome + totals (issue #294). Only fields meaningful post-mortem: live-only state (stack addresses, queue flags, watchdog, signals, debug) is dropped.  <a href="structkernel_1_1_task_exit_record.html#details">More...</a><br /></td></tr>
 <tr class="memitem:TaskQueue" id="r_TaskQueue"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_task_queue.html">TaskQueue</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive doubly-linked list queue for TaskControlBlock. Operations are O(1), no dynamic allocation. TCBs embed next/prev pointers.  <a href="classkernel_1_1_task_queue.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive doubly-linked list queue for <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a>. Operations are O(1), no dynamic allocation. TCBs embed next/prev pointers.  <a href="classkernel_1_1_task_queue.html#details">More...</a><br /></td></tr>
+<tr class="memitem:TaskTimes" id="r_TaskTimes"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_task_times.html">TaskTimes</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">CPU register save area for context switching.  <a href="structkernel_1_1_task_times.html#details">More...</a><br /></td></tr>
 <tr class="memitem:TestContext" id="r_TestContext"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_test_context.html">TestContext</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test-runner state that the scheduler's ISR-visible paths must read.  <a href="structkernel_1_1_test_context.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Timeval" id="r_Timeval"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_timeval.html">Timeval</a></td></tr>
@@ -203,6 +228,10 @@ Data Structures</h2></td></tr>
 <tr class="memitem:Utsname" id="r_Utsname"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_utsname.html">Utsname</a></td></tr>
 <tr class="memitem:Version" id="r_Version"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_version.html">Version</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel version constants and string formatting.  <a href="structkernel_1_1_version.html#details">More...</a><br /></td></tr>
+<tr class="memitem:VirtualAddress" id="r_VirtualAddress"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_virtual_address.html">VirtualAddress</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual address wrapper — eliminates raw reinterpret_cast for virtual memory.  <a href="classkernel_1_1_virtual_address.html#details">More...</a><br /></td></tr>
+<tr class="memitem:VMM" id="r_VMM"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_v_m_m.html">VMM</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual memory manager — maps virtual to physical pages.  <a href="classkernel_1_1_v_m_m.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-concepts" class="groupheader"><a id="concepts" name="concepts"></a>
 Concepts</h2></td></tr>
@@ -227,10 +256,35 @@ Enumerations</h2></td></tr>
 , <a class="el" href="#a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301">MSIX</a> = 1
  }</td></tr>
 <tr class="memdesc:a6ead49c66ec3252aefe08e87743e2bb3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Source kind of a claimed delivery slot (issue #10). The PIC (x86_64 IRQ lines 0–15 → vectors 33–47) has line-mask snapshot/restore state; MSI-X vectors (48–255) mask/unmask their table entry instead. All mask logic is gated on this kind — a MSI-X vector must never run the PIC <span class="tt">vector - 32</span> line arithmetic (would mask the wrong IRQ line).  <a href="#a6ead49c66ec3252aefe08e87743e2bb3">More...</a><br /></td></tr>
+<tr class="memitem:a3efc8e156bdfc3151ae0b713482b1b76" id="r_a3efc8e156bdfc3151ae0b713482b1b76"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a3efc8e156bdfc3151ae0b713482b1b76">TestTouchWarn</a> { <br />
+&#160;&#160;<a class="el" href="#a3efc8e156bdfc3151ae0b713482b1b76a7c08c5d7293555a01f96e45c5bda679a">kMapL1</a>
+, <a class="el" href="#a3efc8e156bdfc3151ae0b713482b1b76ac6ade7a2363248a06b0b4b867339edfc">kMapPd</a>
+, <a class="el" href="#a3efc8e156bdfc3151ae0b713482b1b76aeeaf371b06deba7b2cc1be7045e17f12">kUnmapL0</a>
+, <a class="el" href="#a3efc8e156bdfc3151ae0b713482b1b76a97a69bbd59f34061aaafe4ad56d2a659">kUnmapPml4</a>
+, <br />
+&#160;&#160;<a class="el" href="#a3efc8e156bdfc3151ae0b713482b1b76a0edbdcae5dc159be1ce3b046ec939f3d">kAccessPml4</a>
+<br />
+ }</td></tr>
 <tr class="memitem:a4c7abd4d7b6e60921e6661d7e6ac80af" id="r_a4c7abd4d7b6e60921e6661d7e6ac80af"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#a4c7abd4d7b6e60921e6661d7e6ac80af">RlimitResource</a> : uint8_t { <a class="el" href="#a4c7abd4d7b6e60921e6661d7e6ac80afa5cedad6358425b5bfd888f80f1d5d9c0">RLIMIT_DATA</a> = 0
 , <a class="el" href="#a4c7abd4d7b6e60921e6661d7e6ac80afafa92ee44ab9e8ffac445366271d021e3">RLIMIT_STACK</a> = 1
 , <a class="el" href="#a4c7abd4d7b6e60921e6661d7e6ac80afa3af036df3d1c74c3a8a9b127e668495f">RLIMIT_NOFILE</a> = 2
  }</td></tr>
+<tr class="memitem:aca8cb7bebc5bfc2d27dcb0c95fc18c3c" id="r_aca8cb7bebc5bfc2d27dcb0c95fc18c3c"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#aca8cb7bebc5bfc2d27dcb0c95fc18c3c">TaskState</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca2baa69eafc7204f3bd8648eba580c489">READY</a>
+, <a class="el" href="#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca43491564ebcfd38568918efbd6e840fd">RUNNING</a>
+, <a class="el" href="#aca8cb7bebc5bfc2d27dcb0c95fc18c3caeecba0068950a2df17c47e851e1eef14">BLOCKED</a>
+, <a class="el" href="#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca1869d56535e8b1449a6da54ff5e11f50">WAITING</a>
+, <br />
+&#160;&#160;<a class="el" href="#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca9d725163e44a2e9cf094059c0abfdef1">TERMINATED</a>
+, <a class="el" href="#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca9e266d90f8bb6c974d24e746a3301ed0">REAPED</a>
+<br />
+ }</td></tr>
+<tr class="memdesc:aca8cb7bebc5bfc2d27dcb0c95fc18c3c"><td class="mdescLeft">&#160;</td><td class="mdescRight">States a task can be in during its lifecycle.  <a href="#aca8cb7bebc5bfc2d27dcb0c95fc18c3c">More...</a><br /></td></tr>
+<tr class="memitem:aa769cdcb7178170dcbb2c169fd774fdd" id="r_aa769cdcb7178170dcbb2c169fd774fdd"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#aa769cdcb7178170dcbb2c169fd774fdd">SchedPolicy</a> { <a class="el" href="#aa769cdcb7178170dcbb2c169fd774fddae1f2d5134ed2543d38a0de9751cf75d9">AUTO</a> = 0
+, <a class="el" href="#aa769cdcb7178170dcbb2c169fd774fddac6e6dc18b53b4c2681394b9d8aefcec7">FIXED</a> = 1
+, <a class="el" href="#aa769cdcb7178170dcbb2c169fd774fdda4768fa850648c6c87699d78474b7022f">EDF</a> = 2
+ }</td></tr>
+<tr class="memdesc:aa769cdcb7178170dcbb2c169fd774fdd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch-policy selector (issue #19, global EDF with exemptions). AUTO (default): finite-deadline non-exempt tasks dispatch EDF, everything else FIXED. FIXED/EDF force the class explicitly.  <a href="#aa769cdcb7178170dcbb2c169fd774fdd">More...</a><br /></td></tr>
 <tr class="memitem:a1cb7b5e6d84a69536a1605c81098f106" id="r_a1cb7b5e6d84a69536a1605c81098f106"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a1cb7b5e6d84a69536a1605c81098f106">Error</a> : uint8_t { <br />
 &#160;&#160;<a class="el" href="#a1cb7b5e6d84a69536a1605c81098f106ae0aa021e21dddbd6d8cecec71e9cf564">OK</a> = 0
 , <a class="el" href="#a1cb7b5e6d84a69536a1605c81098f106a56a16d94e7f11cd4af1723c74c8d9291">OOM</a>
@@ -296,53 +350,97 @@ Enumerations</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a20a07952a9e22c0be3a6711567475133" id="r_a20a07952a9e22c0be3a6711567475133"><td class="memItemLeft"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a20a07952a9e22c0be3a6711567475133">cpu_ctx</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cpu)</td></tr>
+<tr class="memitem:a20a07952a9e22c0be3a6711567475133" id="r_a20a07952a9e22c0be3a6711567475133"><td class="memItemLeft"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a20a07952a9e22c0be3a6711567475133">cpu_ctx</a> (uint64_t cpu)</td></tr>
 <tr class="memdesc:a20a07952a9e22c0be3a6711567475133"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU execution context array (issue #25 C1). Namespace-scope (not function-static) so teardown/snapshot paths can scan all CPUs' <span class="tt">current</span> (spare-any-current, capture). First touch is on the BSP during boot (single-threaded; -fno-threadsafe-statics safe).  <br /></td></tr>
 <tr class="memitem:a777bca6dec383faa735ebe34c5bdf749" id="r_a777bca6dec383faa735ebe34c5bdf749"><td class="memItemLeft"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a777bca6dec383faa735ebe34c5bdf749">current_cpu</a> ()</td></tr>
 <tr class="memdesc:a777bca6dec383faa735ebe34c5bdf749"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the current CPU's execution context.  <br /></td></tr>
-<tr class="memitem:a0571e17de31b74de7a47a25459361c20" id="r_a0571e17de31b74de7a47a25459361c20"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a0571e17de31b74de7a47a25459361c20">isr_nesting_own</a> ()</td></tr>
+<tr class="memitem:a0571e17de31b74de7a47a25459361c20" id="r_a0571e17de31b74de7a47a25459361c20"><td class="memItemLeft">uint64_t &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a0571e17de31b74de7a47a25459361c20">isr_nesting_own</a> ()</td></tr>
 <tr class="memdesc:a0571e17de31b74de7a47a25459361c20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Own-CPU ISR nesting depth (single-core archs: the plain global).  <br /></td></tr>
-<tr class="memitem:a68d19d20b85d9992222d05be6deb3e54" id="r_a68d19d20b85d9992222d05be6deb3e54"><td class="memItemLeft">TaskControlBlock *&amp;&#160;</td><td class="memItemRight"><a class="el" href="#a68d19d20b85d9992222d05be6deb3e54">fpu_owner_own</a> ()</td></tr>
+<tr class="memitem:a68d19d20b85d9992222d05be6deb3e54" id="r_a68d19d20b85d9992222d05be6deb3e54"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&amp;&#160;</td><td class="memItemRight"><a class="el" href="#a68d19d20b85d9992222d05be6deb3e54">fpu_owner_own</a> ()</td></tr>
 <tr class="memdesc:a68d19d20b85d9992222d05be6deb3e54"><td class="mdescLeft">&#160;</td><td class="mdescRight">Own-CPU FPU register owner (single-core archs: the plain global).  <br /></td></tr>
+<tr class="memitem:afe82421db302cf9007f1bfe16cff939d" id="r_afe82421db302cf9007f1bfe16cff939d"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afe82421db302cf9007f1bfe16cff939d">boot_stage_mark</a> (BootStage s) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:ad2597cced737d422c403d4c25437f61e" id="r_ad2597cced737d422c403d4c25437f61e"><td class="memItemLeft">BootDelta&#160;</td><td class="memItemRight"><a class="el" href="#ad2597cced737d422c403d4c25437f61e">boot_stage_delta</a> (BootStage s) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:ae369e3a5b4081280571e619d0877856d" id="r_ae369e3a5b4081280571e619d0877856d"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae369e3a5b4081280571e619d0877856d">boot_entry_raw</a> () <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ae369e3a5b4081280571e619d0877856d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Raw entry stamp for the boot budget gate (issue #45).  <br /></td></tr>
+<tr class="memitem:a39f9dcd4db2a052fd3f980499660a022" id="r_a39f9dcd4db2a052fd3f980499660a022"><td class="memItemLeft">constexpr <a class="el" href="classkernel_1_1_virtual_address.html">VirtualAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="#a39f9dcd4db2a052fd3f980499660a022">phys_to_virt</a> (<a class="el" href="classkernel_1_1_physical_address.html">PhysicalAddress</a> phys) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a39f9dcd4db2a052fd3f980499660a022"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert physical address to higher-half virtual address.  <br /></td></tr>
+<tr class="memitem:acb68f2e2a60586a7d3dd7453b668d2cd" id="r_acb68f2e2a60586a7d3dd7453b668d2cd"><td class="memItemLeft">constexpr <a class="el" href="classkernel_1_1_physical_address.html">PhysicalAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="#acb68f2e2a60586a7d3dd7453b668d2cd">virt_to_phys</a> (<a class="el" href="classkernel_1_1_virtual_address.html">VirtualAddress</a> virt) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:acb68f2e2a60586a7d3dd7453b668d2cd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert higher-half virtual address to physical address.  <br /></td></tr>
 <tr class="memitem:a03570b332ae94bd1acee2152e83dadd8" id="r_a03570b332ae94bd1acee2152e83dadd8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a03570b332ae94bd1acee2152e83dadd8">random_init</a> ()</td></tr>
-<tr class="memitem:a3a9da091bb2229af08f856b08498fa51" id="r_a3a9da091bb2229af08f856b08498fa51"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3a9da091bb2229af08f856b08498fa51">random_fill</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> length)</td></tr>
-<tr class="memitem:aa7278439c20dc6234a77d3b08290701f" id="r_aa7278439c20dc6234a77d3b08290701f"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#aa7278439c20dc6234a77d3b08290701f">syscall_task</a> ()</td></tr>
+<tr class="memitem:a3a9da091bb2229af08f856b08498fa51" id="r_a3a9da091bb2229af08f856b08498fa51"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3a9da091bb2229af08f856b08498fa51">random_fill</a> (uint8_t *buffer, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> length)</td></tr>
+<tr class="memitem:aa7278439c20dc6234a77d3b08290701f" id="r_aa7278439c20dc6234a77d3b08290701f"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aa7278439c20dc6234a77d3b08290701f">syscall_task</a> ()</td></tr>
 <tr class="memdesc:aa7278439c20dc6234a77d3b08290701f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the currently running task from the scheduler.  <br /></td></tr>
-<tr class="memitem:a59203fb708dcb70f7046b645fb81052e" id="r_a59203fb708dcb70f7046b645fb81052e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a59203fb708dcb70f7046b645fb81052e">canary_check_on_full_path</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs)</td></tr>
+<tr class="memitem:a59203fb708dcb70f7046b645fb81052e" id="r_a59203fb708dcb70f7046b645fb81052e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a59203fb708dcb70f7046b645fb81052e">canary_check_on_full_path</a> (uint64_t *regs)</td></tr>
 <tr class="memdesc:a59203fb708dcb70f7046b645fb81052e"><td class="mdescLeft">&#160;</td><td class="mdescRight">MP-3 canary verification for the FULL syscall path (issue #92). Checks the current user task's segment canaries; a mismatch latches g_canary_trip in test mode (returns false → the caller returns -1) or panics in production. Runs ONLY on the FULL path — the FAST subset dereferences no user memory, so it is covered instead by the scheduler's context-switch / timer-tick canary sampling.  <br /></td></tr>
 <tr class="memitem:a9bbea2daa70fd81363d98ce7b9c9f943" id="r_a9bbea2daa70fd81363d98ce7b9c9f943"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a9bbea2daa70fd81363d98ce7b9c9f943">syscall_is_user_task</a> ()</td></tr>
 <tr class="memdesc:a9bbea2daa70fd81363d98ce7b9c9f943"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if the current task is a user-space task (is_user_ flag — MP-1: page_table_ != 0 no longer discriminates, every task owns a private kernel-half PML4).  <br /></td></tr>
-<tr class="memitem:afbcf504abb27c24da8a91380e1f73882" id="r_afbcf504abb27c24da8a91380e1f73882"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#afbcf504abb27c24da8a91380e1f73882">syscall_task_open</a> (vfs::Vnode *vn, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> flags)</td></tr>
+<tr class="memitem:afbcf504abb27c24da8a91380e1f73882" id="r_afbcf504abb27c24da8a91380e1f73882"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#afbcf504abb27c24da8a91380e1f73882">syscall_task_open</a> (vfs::Vnode *vn, uint64_t flags)</td></tr>
 <tr class="memdesc:afbcf504abb27c24da8a91380e1f73882"><td class="mdescLeft">&#160;</td><td class="mdescRight">Open a vnode as a file descriptor in the current task's fd table.  <br /></td></tr>
-<tr class="memitem:a9799f9b32ab65aeb956ce8717fe91bc4" id="r_a9799f9b32ab65aeb956ce8717fe91bc4"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a9799f9b32ab65aeb956ce8717fe91bc4">syscall_path_open</a> (const char *path, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> flags)</td></tr>
+<tr class="memitem:a9799f9b32ab65aeb956ce8717fe91bc4" id="r_a9799f9b32ab65aeb956ce8717fe91bc4"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a9799f9b32ab65aeb956ce8717fe91bc4">syscall_path_open</a> (const char *path, uint64_t flags)</td></tr>
 <tr class="memdesc:a9799f9b32ab65aeb956ce8717fe91bc4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve a path and open it as a file descriptor.  <br /></td></tr>
 <tr class="memitem:a0ecf34d3e30ff218069c96a3645cf261" id="r_a0ecf34d3e30ff218069c96a3645cf261"><td class="memItemLeft"><a class="el" href="classkernel_1_1cap_1_1_c_node.html">cap::CNode</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0ecf34d3e30ff218069c96a3645cf261">current_cspace</a> ()</td></tr>
-<tr class="memdesc:a0ecf34d3e30ff218069c96a3645cf261"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion).  <br /></td></tr>
-<tr class="memitem:a90086829567f6b5bf9c0730a8f3d7b08" id="r_a90086829567f6b5bf9c0730a8f3d7b08"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a90086829567f6b5bf9c0730a8f3d7b08">debug_data_begin</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> caller_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> handle, TaskControlBlock *&amp;tgt_out)</td></tr>
+<tr class="memdesc:a0ecf34d3e30ff218069c96a3645cf261"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (<a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> exhaustion).  <br /></td></tr>
+<tr class="memitem:a90086829567f6b5bf9c0730a8f3d7b08" id="r_a90086829567f6b5bf9c0730a8f3d7b08"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a90086829567f6b5bf9c0730a8f3d7b08">debug_data_begin</a> (uint64_t caller_id, uint64_t handle, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&amp;tgt_out)</td></tr>
 <tr class="memdesc:a90086829567f6b5bf9c0730a8f3d7b08"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shared prologue for the four data calls: resolve + gate + EAGAIN arming. Returns 0 with tgt set when the target's state may be read; otherwise a Linux errno.  <br /></td></tr>
 <tr class="memitem:a39fa71941abf971947793936af03c774" id="r_a39fa71941abf971947793936af03c774"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a39fa71941abf971947793936af03c774">is_timerfd_vnode</a> (const vfs::Vnode *node)</td></tr>
 <tr class="memdesc:a39fa71941abf971947793936af03c774"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when a vnode is a timerfd (ops-pointer identity — never parses private_data of foreign vnodes). External linkage for the sys_read branch; timerfd_ops itself stays TU-local.  <br /></td></tr>
-<tr class="memitem:aa583fe65545291d14aa9afd4b95f2576" id="r_aa583fe65545291d14aa9afd4b95f2576"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa583fe65545291d14aa9afd4b95f2576">timerfd_read_entry</a> (vfs::Vnode &amp;node, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> count, bool nonblock)</td></tr>
+<tr class="memitem:aa583fe65545291d14aa9afd4b95f2576" id="r_aa583fe65545291d14aa9afd4b95f2576"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa583fe65545291d14aa9afd4b95f2576">timerfd_read_entry</a> (vfs::Vnode &amp;node, uint8_t *buffer, uint64_t count, bool nonblock)</td></tr>
 <tr class="memdesc:aa583fe65545291d14aa9afd4b95f2576"><td class="mdescLeft">&#160;</td><td class="mdescRight">Blocking timerfd read helper (sys_read branch target).  <br /></td></tr>
-<tr class="memitem:a5f757c7023bc8616bb0fd21b7c6d8f9f" id="r_a5f757c7023bc8616bb0fd21b7c6d8f9f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5f757c7023bc8616bb0fd21b7c6d8f9f">admission_boot_selftest</a> () <a class="el" href="#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a5f757c7023bc8616bb0fd21b7c6d8f9f" id="r_a5f757c7023bc8616bb0fd21b7c6d8f9f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5f757c7023bc8616bb0fd21b7c6d8f9f">admission_boot_selftest</a> () <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a5f757c7023bc8616bb0fd21b7c6d8f9f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verifies the admission gate math + budget gate + miss-action configuration during kernel init (issue #24).  <br /></td></tr>
-<tr class="memitem:aef2c5f8888b21de09ec3a76f5b964885" id="r_aef2c5f8888b21de09ec3a76f5b964885"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a> ((noinline)) static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bucket_of(const TaskControlBlock *t</td></tr>
+<tr class="memitem:aef2c5f8888b21de09ec3a76f5b964885" id="r_aef2c5f8888b21de09ec3a76f5b964885"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a> ((noinline)) static uint64_t bucket_of(const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t</td></tr>
 <tr class="memdesc:aef2c5f8888b21de09ec3a76f5b964885"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find the priority bucket a node currently lives in. A task's stored t-&gt;priority may have been changed by priority inheritance WITHOUT the node being re-indexed, so we must NOT trust t-&gt;priority to locate the bucket. Instead climb pri_prev_ to the head of the node's chain and match it against heads_[].  <br /></td></tr>
 <tr class="memitem:a058eeb27b3f54e789e5f17935940c161" id="r_a058eeb27b3f54e789e5f17935940c161"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a058eeb27b3f54e789e5f17935940c161">while</a> (<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_ &amp;&amp;safe_tcb(<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_)) <a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a></td></tr>
-<tr class="memitem:a1dae18e023980d3a17ebc183f9986bd3" id="r_a1dae18e023980d3a17ebc183f9986bd3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1dae18e023980d3a17ebc183f9986bd3">for</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> p=0;p&lt; num_priorities;++p)</td></tr>
-<tr class="memitem:abb9b26c8d76b814b9ed2a3c78bad290e" id="r_abb9b26c8d76b814b9ed2a3c78bad290e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abb9b26c8d76b814b9ed2a3c78bad290e">init_task_common</a> (TaskControlBlock &amp;tcb)</td></tr>
-<tr class="memitem:a25626431fd5ef9ee4a6698a65b1f0895" id="r_a25626431fd5ef9ee4a6698a65b1f0895"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a25626431fd5ef9ee4a6698a65b1f0895">kslot_snapshot_bytes</a> ()</td></tr>
-<tr class="memitem:afa5566867274b1950bc3ed7acc375508" id="r_afa5566867274b1950bc3ed7acc375508"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afa5566867274b1950bc3ed7acc375508">kslot_snapshot_capture</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *dst)</td></tr>
-<tr class="memitem:a74d19182fedd131cc4450ebe5242359e" id="r_a74d19182fedd131cc4450ebe5242359e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a74d19182fedd131cc4450ebe5242359e">kslot_snapshot_restore</a> (const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *src)</td></tr>
-<tr class="memitem:a1d1f72f7161fa8a1f32d2692b7c90d8c" id="r_a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1d1f72f7161fa8a1f32d2692b7c90d8c">canary_write_at</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> va, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4)</td></tr>
+<tr class="memitem:a1dae18e023980d3a17ebc183f9986bd3" id="r_a1dae18e023980d3a17ebc183f9986bd3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1dae18e023980d3a17ebc183f9986bd3">for</a> (uint64_t p=0;p&lt; num_priorities;++p)</td></tr>
+<tr class="memitem:a81f47d51c706c42c9a88694b7b62c4e8" id="r_a81f47d51c706c42c9a88694b7b62c4e8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a81f47d51c706c42c9a88694b7b62c4e8">idle_record_task_exit</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t, uint64_t end_tick) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a81f47d51c706c42c9a88694b7b62c4e8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record a user task's exit (issues #294). Called from <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a> start — the universal death funnel. Skips non-user tasks and daemons (vfsd/iocd/watchdogd PIDs); pinned baseline blocks never reach here (early return above the call site). Scalar copy only, no allocation, no locks (atomic slot claim, record_task_entry precedent).  <br /></td></tr>
+<tr class="memitem:aa63c25ddb5169f04129d082f0840e7c2" id="r_aa63c25ddb5169f04129d082f0840e7c2"><td class="memItemLeft">const <a class="el" href="structkernel_1_1_task_exit_record.html">TaskExitRecord</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aa63c25ddb5169f04129d082f0840e7c2">idle_find_exit_record_for_user</a> () <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:aa63c25ddb5169f04129d082f0840e7c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Most-recent valid ring entry that is not a current daemon.  <br /></td></tr>
+<tr class="memitem:a927c7ddb31b40327f97d6f3b14f09963" id="r_a927c7ddb31b40327f97d6f3b14f09963"><td class="memItemLeft">const <a class="el" href="structkernel_1_1_task_exit_record.html">TaskExitRecord</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a927c7ddb31b40327f97d6f3b14f09963">idle_find_exit_record</a> (uint64_t id) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a927c7ddb31b40327f97d6f3b14f09963"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ring entry for a specific task id (post-mortem <span class="tt">monstat &lt;id&gt;</span>).  <br /></td></tr>
+<tr class="memitem:a7a3e0e56701df314c0bda1619f352aa5" id="r_a7a3e0e56701df314c0bda1619f352aa5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7a3e0e56701df314c0bda1619f352aa5">idle_clear_exit_records</a> () <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a7a3e0e56701df314c0bda1619f352aa5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test-only reset: invalidate all ring slots.  <br /></td></tr>
+<tr class="memitem:a6f5906a123859e1a431b15e664ddcbc1" id="r_a6f5906a123859e1a431b15e664ddcbc1"><td class="memItemLeft"><a class="el" href="structkernel_1_1_idle_scan_progress.html">IdleScanProgress</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6f5906a123859e1a431b15e664ddcbc1">idle_scan_stack</a> (<a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a> &amp;cursor, uint64_t budget) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a6f5906a123859e1a431b15e664ddcbc1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verify stack canaries of up to <code class="param">budget</code> TCBs from <code class="param">cursor</code>.  <br /></td></tr>
+<tr class="memitem:a94c5d1c256bee29196d539e12936237f" id="r_a94c5d1c256bee29196d539e12936237f"><td class="memItemLeft"><a class="el" href="structkernel_1_1_idle_scan_progress.html">IdleScanProgress</a>&#160;</td><td class="memItemRight"><a class="el" href="#a94c5d1c256bee29196d539e12936237f">idle_scan_stall</a> (<a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a> &amp;cursor, uint64_t budget, uint64_t now_tick) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a94c5d1c256bee29196d539e12936237f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Flag stall suspects among up to <code class="param">budget</code> TCBs from <code class="param">cursor</code>.  <br /></td></tr>
+<tr class="memitem:afcb17dd10fbc535bd63bb71f13f14272" id="r_afcb17dd10fbc535bd63bb71f13f14272"><td class="memItemLeft"><a class="el" href="structkernel_1_1_idle_scan_progress.html">IdleScanProgress</a>&#160;</td><td class="memItemRight"><a class="el" href="#afcb17dd10fbc535bd63bb71f13f14272">idle_aggregate_util</a> (<a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a> &amp;cursor, uint64_t budget) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:afcb17dd10fbc535bd63bb71f13f14272"><td class="mdescLeft">&#160;</td><td class="mdescRight">Aggregate per-mille utilization for up to <code class="param">budget</code> TCBs.  <br /></td></tr>
+<tr class="memitem:a6c56ed2f79f8dbd879ee519c1c791f24" id="r_a6c56ed2f79f8dbd879ee519c1c791f24"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a6c56ed2f79f8dbd879ee519c1c791f24">idle_util_for</a> (uint64_t exec_ns, uint64_t period_ticks) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a6c56ed2f79f8dbd879ee519c1c791f24"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pure per-mille utilization math (issues #43/#283, P4).  <br /></td></tr>
+<tr class="memitem:a557395ebdd63f7e893ea647d8a932949" id="r_a557395ebdd63f7e893ea647d8a932949"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a557395ebdd63f7e893ea647d8a932949">idle_note_period_reload</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a557395ebdd63f7e893ea647d8a932949"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record a clean period boundary for <code class="param">t</code> (issues #43/#283). Bumps deadline_meets (saturating) iff no miss is latched. Called from the scheduler period-reload site; unit-callable (M5).  <br /></td></tr>
+<tr class="memitem:ab716281fc620e28eba1868befe8eff05" id="r_ab716281fc620e28eba1868befe8eff05"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ab716281fc620e28eba1868befe8eff05">idle_note_exec_sample</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ab716281fc620e28eba1868befe8eff05"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fold an execution sample into the observed maximum (issues #43/#283). Max-only bump of wcet_observed_ns; on the first crossing of the design bound (wcet_ticks&gt;0) pushes one TIMING+5 WARN (transition-triggered: observed is monotonic, so exactly one crossing per bound). Never re-buckets, never touches admission (spec §2.5). Called from the scheduler charge site for the running task; unit-callable (M5).  <br /></td></tr>
+<tr class="memitem:a5b0a423c64722dbea816b61fcff3adcc" id="r_a5b0a423c64722dbea816b61fcff3adcc"><td class="memItemLeft"><a class="el" href="structkernel_1_1_idle_scan_progress.html">IdleScanProgress</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5b0a423c64722dbea816b61fcff3adcc">idle_scan_mem</a> (<a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a> &amp;cursor, uint64_t budget) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a5b0a423c64722dbea816b61fcff3adcc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Scan per-task memory counters for leak suspects (issues #43/#284, P5a). Per visited TCB per pass: outstanding ops = alloc_ops − free_ops (saturating); if outstanding grew by more than CONFIG_IDLE_MONITOR_MEM_MIN_OPS while used_pages stayed flat vs the previous pass, the streak grows, else it resets. At streak == CONFIG_IDLE_MONITOR_MEM_PASSES pushes one PMM+1 WARN (report only, M6) — fire-once per streak, auto re-armed when the streak breaks. <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> is out of scope (no owner tags, spec §2.3); <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> frees are globally unattributed (see header).  <br /></td></tr>
+<tr class="memitem:a7a3612e8fdeabbd0c9a5909f85764ae4" id="r_a7a3612e8fdeabbd0c9a5909f85764ae4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7a3612e8fdeabbd0c9a5909f85764ae4">idle_note_progress</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t, uint64_t now) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a7a3612e8fdeabbd0c9a5909f85764ae4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record forward progress for <code class="param">t</code> at tick <code class="param">now</code> (issues #43/#285, P6). Called from the wake + dispatch choke points; unit-callable (M5).  <br /></td></tr>
+<tr class="memitem:ad5b4191fcd81829821bf9a34fb3e6609" id="r_ad5b4191fcd81829821bf9a34fb3e6609"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad5b4191fcd81829821bf9a34fb3e6609">idle_escalate_stall</a> (<a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a> &amp;cursor, uint64_t budget, uint64_t now) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ad5b4191fcd81829821bf9a34fb3e6609"><td class="mdescLeft">&#160;</td><td class="mdescRight">Escalate flagged stalls through existing handler paths (issues #43/#285, P6-thin). Per visited TCB: unflagged → skip; flagged + armed + unexpired → silent (the live watchdog owns the episode); flagged + unarmed → one TIMING+7 WARN (report only); flagged + armed + expired → exact tick-scan replica (disarm-first under scheduler_lock_, pinned ring-only, same weak watchdog_expiry_handler — all CONFIG_WATCHDOG_ACTION dispositions preserved, no new action value, no new errno). Zero wdog_armed=true writes (hard rule, audit-greppable).  <br /></td></tr>
+<tr class="memitem:a747c14344ca50bb4943022f3b1835189" id="r_a747c14344ca50bb4943022f3b1835189"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a747c14344ca50bb4943022f3b1835189">idle_publish_stack_low_water</a> (uint64_t low_water_rsp, uint64_t stack_top, uint32_t &amp;dst) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a747c14344ca50bb4943022f3b1835189"><td class="mdescLeft">&#160;</td><td class="mdescRight">Publish the switch-path low-water sample as saturated bytes.  <br /></td></tr>
+<tr class="memitem:a39e8dac481c31dd6182cf722a37edf6d" id="r_a39e8dac481c31dd6182cf722a37edf6d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a39e8dac481c31dd6182cf722a37edf6d">idle_monitor_slice</a> () <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a39e8dac481c31dd6182cf722a37edf6d"><td class="mdescLeft">&#160;</td><td class="mdescRight">One bounded idle-monitor slice (M1-M3). Runs the enabled scanners for CONFIG_IDLE_MONITOR_CHUNK TCBs total, then returns. BSP-idle only; never blocks, allocates, or skips hlt.  <br /></td></tr>
+<tr class="memitem:aadf277954fd86eeba0a08c68e1f25c06" id="r_aadf277954fd86eeba0a08c68e1f25c06"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aadf277954fd86eeba0a08c68e1f25c06">__attribute__</a> ((weak)) void watchdog_expiry_handler(<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;<a class="el" href="namespacekernel_1_1task.html">task</a></td></tr>
+<tr class="memdesc:aadf277954fd86eeba0a08c68e1f25c06"><td class="mdescLeft">&#160;</td><td class="mdescRight">Weak callback invoked when a task's watchdog expires. Called from ISR context (on_tick) under scheduler_lock_ — must not block; KILL action defers via defer_kill() (deadline ACTION==3 precedent). Always enters the ring (TIMING+6 ERROR, fail-closed).  <br /></td></tr>
+<tr class="memitem:abb9b26c8d76b814b9ed2a3c78bad290e" id="r_abb9b26c8d76b814b9ed2a3c78bad290e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abb9b26c8d76b814b9ed2a3c78bad290e">init_task_common</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;tcb)</td></tr>
+<tr class="memdesc:abb9b26c8d76b814b9ed2a3c78bad290e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize common task fields after allocation.  <br /></td></tr>
+<tr class="memitem:a25626431fd5ef9ee4a6698a65b1f0895" id="r_a25626431fd5ef9ee4a6698a65b1f0895"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a25626431fd5ef9ee4a6698a65b1f0895">kslot_snapshot_bytes</a> ()</td></tr>
+<tr class="memdesc:a25626431fd5ef9ee4a6698a65b1f0895"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total snapshot bytes for the kernel-stack window state (v0.4.0 MP-6.3): 8 PT page contents + slot bookkeeping.  <br /></td></tr>
+<tr class="memitem:afa5566867274b1950bc3ed7acc375508" id="r_afa5566867274b1950bc3ed7acc375508"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afa5566867274b1950bc3ed7acc375508">kslot_snapshot_capture</a> (uint8_t *dst)</td></tr>
+<tr class="memdesc:afa5566867274b1950bc3ed7acc375508"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture the kstack-window PT contents and slot bookkeeping into <code class="param">dst</code> (must hold &gt;= <a class="el" href="#a25626431fd5ef9ee4a6698a65b1f0895" title="Total snapshot bytes for the kernel-stack window state (v0.4.0 MP-6.3): 8 PT page contents + slot boo...">kslot_snapshot_bytes()</a> bytes).  <br /></td></tr>
+<tr class="memitem:a74d19182fedd131cc4450ebe5242359e" id="r_a74d19182fedd131cc4450ebe5242359e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a74d19182fedd131cc4450ebe5242359e">kslot_snapshot_restore</a> (const uint8_t *src)</td></tr>
+<tr class="memdesc:a74d19182fedd131cc4450ebe5242359e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore the kstack-window PT contents and slot bookkeeping from <code class="param">src</code>, and flush the TLB for every window VA.  <br /></td></tr>
+<tr class="memitem:a1d1f72f7161fa8a1f32d2692b7c90d8c" id="r_a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1d1f72f7161fa8a1f32d2692b7c90d8c">canary_write_at</a> (uint64_t va, uint64_t value, uint64_t pml4)</td></tr>
 <tr class="memdesc:a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write an 8-byte canary value at <code class="param">va</code> through <code class="param">pml4</code> (resolving the frame via HHDM). No-op when the page is not present.  <br /></td></tr>
-<tr class="memitem:a772626334577fb34746dd85c3e6e3b9c" id="r_a772626334577fb34746dd85c3e6e3b9c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a772626334577fb34746dd85c3e6e3b9c">canary_install_user_segments</a> (TaskControlBlock *t)</td></tr>
+<tr class="memitem:a772626334577fb34746dd85c3e6e3b9c" id="r_a772626334577fb34746dd85c3e6e3b9c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a772626334577fb34746dd85c3e6e3b9c">canary_install_user_segments</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t)</td></tr>
 <tr class="memdesc:a772626334577fb34746dd85c3e6e3b9c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Install the user-stack and initial-heap canaries for <code class="param">t</code> (call after the user stack + heap are mapped and program_break set).  <br /></td></tr>
-<tr class="memitem:ac6fb6d864696d4527766d2ab81c2e3ce" id="r_ac6fb6d864696d4527766d2ab81c2e3ce"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac6fb6d864696d4527766d2ab81c2e3ce">canary_install_kernel_stack</a> (TaskControlBlock *t)</td></tr>
+<tr class="memitem:ac6fb6d864696d4527766d2ab81c2e3ce" id="r_ac6fb6d864696d4527766d2ab81c2e3ce"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac6fb6d864696d4527766d2ab81c2e3ce">canary_install_kernel_stack</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t)</td></tr>
 <tr class="memdesc:ac6fb6d864696d4527766d2ab81c2e3ce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Install the kernel-stack canary at kernel_stack[0..8).  <br /></td></tr>
-<tr class="memitem:a53fa9d70d7a01fd1f30b7746a449654d" id="r_a53fa9d70d7a01fd1f30b7746a449654d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a53fa9d70d7a01fd1f30b7746a449654d">canary_verify_user_segments</a> (const TaskControlBlock *t, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> &amp;bad_segment, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;bad_va)</td></tr>
+<tr class="memitem:a53fa9d70d7a01fd1f30b7746a449654d" id="r_a53fa9d70d7a01fd1f30b7746a449654d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a53fa9d70d7a01fd1f30b7746a449654d">canary_verify_user_segments</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t, uint8_t &amp;bad_segment, uint64_t &amp;bad_va)</td></tr>
 <tr class="memdesc:a53fa9d70d7a01fd1f30b7746a449654d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verify all installed user-segment canaries of <code class="param">t</code> (pure reads).  <br /></td></tr>
-<tr class="memitem:ad3793a2cf2cf423d61fe25cf2ecb8ba4" id="r_ad3793a2cf2cf423d61fe25cf2ecb8ba4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad3793a2cf2cf423d61fe25cf2ecb8ba4">canary_verify_kernel_stack</a> (const TaskControlBlock *t)</td></tr>
+<tr class="memitem:ad3793a2cf2cf423d61fe25cf2ecb8ba4" id="r_ad3793a2cf2cf423d61fe25cf2ecb8ba4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad3793a2cf2cf423d61fe25cf2ecb8ba4">canary_verify_kernel_stack</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t)</td></tr>
 <tr class="memdesc:ad3793a2cf2cf423d61fe25cf2ecb8ba4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verify the kernel-stack canary of <code class="param">t</code> (pure read).  <br /></td></tr>
 <tr class="memitem:a71095cad3c5bc16f145256f5659bc4f5" id="r_a71095cad3c5bc16f145256f5659bc4f5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a71095cad3c5bc16f145256f5659bc4f5">atomic_fence</a> ()</td></tr>
 <tr class="memitem:a0a3c6d96045314e760c63011e9568f9b" id="r_a0a3c6d96045314e760c63011e9568f9b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0a3c6d96045314e760c63011e9568f9b">atomic_acquire_fence</a> ()</td></tr>
@@ -370,57 +468,59 @@ Functions</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
-<tr class="memitem:a5fbbc3448d7b738e78241f86230e0f48" id="r_a5fbbc3448d7b738e78241f86230e0f48"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5fbbc3448d7b738e78241f86230e0f48">isr_nesting_depth</a></td></tr>
+<tr class="memitem:a5fbbc3448d7b738e78241f86230e0f48" id="r_a5fbbc3448d7b738e78241f86230e0f48"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5fbbc3448d7b738e78241f86230e0f48">isr_nesting_depth</a></td></tr>
 <tr class="memdesc:a5fbbc3448d7b738e78241f86230e0f48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current ISR nesting depth (single-core archs ONLY: the plain global in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">global_state.cpp</a>, read via <a class="el" href="#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>). On x86_64 the depth lives in per_cpu[cpu].isr_nesting_depth (gs:0x20, issue #27) with NO global definition — any bare use here fails to link by design (migration proof). Do not add readers of this symbol; use <a class="el" href="#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>.  <br /></td></tr>
-<tr class="memitem:a18ec7fa3e1cedad227d48e45f9633829" id="r_a18ec7fa3e1cedad227d48e45f9633829"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a18ec7fa3e1cedad227d48e45f9633829">fpu_owner</a></td></tr>
+<tr class="memitem:a18ec7fa3e1cedad227d48e45f9633829" id="r_a18ec7fa3e1cedad227d48e45f9633829"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a18ec7fa3e1cedad227d48e45f9633829">fpu_owner</a></td></tr>
 <tr class="memdesc:a18ec7fa3e1cedad227d48e45f9633829"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks which task's FPU state is currently in the registers. Single-core archs ONLY: the plain global in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">global_state.cpp</a>, read via <a class="el" href="#a68d19d20b85d9992222d05be6deb3e54" title="Own-CPU FPU register owner (single-core archs: the plain global).">fpu_owner_own()</a>. On x86_64 the owner lives in per_cpu[cpu].fpu_owner (gs:0x30, issue #151) with NO global definition — any bare use here fails to link by design (migration proof). Do not add readers of this symbol; use <a class="el" href="#a68d19d20b85d9992222d05be6deb3e54" title="Own-CPU FPU register owner (single-core archs: the plain global).">fpu_owner_own()</a>.  <br /></td></tr>
 <tr class="memitem:a82642ef1de738764f4ab5b0e505b50ac" id="r_a82642ef1de738764f4ab5b0e505b50ac"><td class="memItemLeft">BootInfo&#160;</td><td class="memItemRight"><a class="el" href="#a82642ef1de738764f4ab5b0e505b50ac">g_boot_info</a> {}</td></tr>
-<tr class="memitem:a602102cf72c2d245437f6dfb539c71eb" id="r_a602102cf72c2d245437f6dfb539c71eb"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a602102cf72c2d245437f6dfb539c71eb">g_boot_epoch</a> = 0</td></tr>
+<tr class="memitem:a602102cf72c2d245437f6dfb539c71eb" id="r_a602102cf72c2d245437f6dfb539c71eb"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a602102cf72c2d245437f6dfb539c71eb">g_boot_epoch</a> = 0</td></tr>
 <tr class="memitem:a9710cee4bf56525b356e96332529a5a7" id="r_a9710cee4bf56525b356e96332529a5a7"><td class="memItemLeft">CanaryTrip&#160;</td><td class="memItemRight"><a class="el" href="#a9710cee4bf56525b356e96332529a5a7">g_canary_trip</a> {}</td></tr>
-<tr class="memitem:ac685742eaa07e592bff0bab7216c0253" id="r_ac685742eaa07e592bff0bab7216c0253"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac685742eaa07e592bff0bab7216c0253">g_user_access_recover_ip</a> = 0</td></tr>
-<tr class="memdesc:ac685742eaa07e592bff0bab7216c0253"><td class="mdescLeft">&#160;</td><td class="mdescRight">Global recovery IP for safe user memory access. Non-zero means we are in a user memory access recovery zone. If a fault occurs and this is set, execution is redirected here.  <br /></td></tr>
-<tr class="memitem:ad6ca324811bf34cc24e412c7353d1c31" id="r_ad6ca324811bf34cc24e412c7353d1c31"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad6ca324811bf34cc24e412c7353d1c31">IRQ_VECTOR_MIN</a> = 33</td></tr>
+<tr class="memitem:ac685742eaa07e592bff0bab7216c0253" id="r_ac685742eaa07e592bff0bab7216c0253"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ac685742eaa07e592bff0bab7216c0253">g_user_access_recover_ip</a> = 0</td></tr>
+<tr class="memdesc:ac685742eaa07e592bff0bab7216c0253"><td class="mdescLeft">&#160;</td><td class="mdescRight">Recovery address for safe user memory access. Non-zero while we are inside a user memory copy attempt. Page fault handler checks this and redirects here on fault.  <br /></td></tr>
+<tr class="memitem:ad6ca324811bf34cc24e412c7353d1c31" id="r_ad6ca324811bf34cc24e412c7353d1c31"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ad6ca324811bf34cc24e412c7353d1c31">IRQ_VECTOR_MIN</a> = 33</td></tr>
 <tr class="memdesc:ad6ca324811bf34cc24e412c7353d1c31"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hardware IRQ window (x86_64 PIC cascade: IRQ0-15 → vectors 32-47). §1 freeze (ABI v1): vector 32 = TIMER = IRQ0, 33–47 = IRQ1–15 (<span class="tt">irq_line = vector - 32</span>); claim window starts at 33. The timer vector (32) is reserved for the scheduler and must never be handed to a user task — a user task claiming it would steal every scheduler tick through the delivery hook.  <br /></td></tr>
-<tr class="memitem:af20030e5e873fe85b3929d0ffb1bbeca" id="r_af20030e5e873fe85b3929d0ffb1bbeca"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af20030e5e873fe85b3929d0ffb1bbeca">IRQ_VECTOR_MAX</a> = 47</td></tr>
-<tr class="memitem:a92ff3aab226103aecc5cee29134cd925" id="r_a92ff3aab226103aecc5cee29134cd925"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a92ff3aab226103aecc5cee29134cd925">MSIX_VECTOR_MAX</a> = 255</td></tr>
+<tr class="memitem:af20030e5e873fe85b3929d0ffb1bbeca" id="r_af20030e5e873fe85b3929d0ffb1bbeca"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#af20030e5e873fe85b3929d0ffb1bbeca">IRQ_VECTOR_MAX</a> = 47</td></tr>
+<tr class="memitem:a92ff3aab226103aecc5cee29134cd925" id="r_a92ff3aab226103aecc5cee29134cd925"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a92ff3aab226103aecc5cee29134cd925">MSIX_VECTOR_MAX</a> = 255</td></tr>
 <tr class="memdesc:a92ff3aab226103aecc5cee29134cd925"><td class="mdescLeft">&#160;</td><td class="mdescRight">MSI-X vector window upper bound (x86_64: 0xFF is the highest vector). MSI-X vectors live in 48–255, excluding the syscall vector 0x80.  <br /></td></tr>
-<tr class="memitem:ab596ed6f93b40b1636ef3dfcf39ebd1e" id="r_ab596ed6f93b40b1636ef3dfcf39ebd1e"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab596ed6f93b40b1636ef3dfcf39ebd1e">kIrqNotifyRevoked</a> = 0</td></tr>
+<tr class="memitem:ab596ed6f93b40b1636ef3dfcf39ebd1e" id="r_ab596ed6f93b40b1636ef3dfcf39ebd1e"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab596ed6f93b40b1636ef3dfcf39ebd1e">kIrqNotifyRevoked</a> = 0</td></tr>
 <tr class="memdesc:ab596ed6f93b40b1636ef3dfcf39ebd1e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Value signalled to a NOTIFY-mode recipient's Notify when its slot is released (revoke/dispose/drain): the waker-owns-wakeup contract (CODING_STYLE §12.3). 0 is sync::NOTIFY_INVALID — outside the vector range (33–255) and distinguishable from a real delivery.  <br /></td></tr>
-<tr class="memitem:a4f515ca1539e4a4b052e43cedcc9a1aa" id="r_a4f515ca1539e4a4b052e43cedcc9a1aa"><td class="memItemLeft"><a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4f515ca1539e4a4b052e43cedcc9a1aa">g_irq_regs</a> [<a class="el" href="nexios__config_8h.html#a6778865aa865b535c1b34a9ace0e3e0d">CONFIG_CAP_MAX_IRQ</a>]</td></tr>
+<tr class="memitem:a4f515ca1539e4a4b052e43cedcc9a1aa" id="r_a4f515ca1539e4a4b052e43cedcc9a1aa"><td class="memItemLeft"><a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4f515ca1539e4a4b052e43cedcc9a1aa">g_irq_regs</a> [<a class="el" href="aarch64_2serial_8cpp.html#a6778865aa865b535c1b34a9ace0e3e0d">CONFIG_CAP_MAX_IRQ</a>]</td></tr>
 <tr class="memdesc:a4f515ca1539e4a4b052e43cedcc9a1aa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static delivery table (no dynamic allocation on RT paths).  <br /></td></tr>
-<tr class="memitem:a76ff31436540b24ae4d48244f05ce8ef" id="r_a76ff31436540b24ae4d48244f05ce8ef"><td class="memItemLeft">sync::SpinLock&#160;</td><td class="memItemRight"><a class="el" href="#a76ff31436540b24ae4d48244f05ce8ef">shootdown_lock_</a> {}</td></tr>
-<tr class="memitem:afdea84e7e6716009ab17af4b202b8271" id="r_afdea84e7e6716009ab17af4b202b8271"><td class="memItemLeft">const TaskControlBlock *const&#160;</td><td class="memItemRight"><a class="el" href="#afdea84e7e6716009ab17af4b202b8271">heads_</a> []</td></tr>
-<tr class="memitem:ac84f34d32e4683fb9c3f512c093068cf" id="r_ac84f34d32e4683fb9c3f512c093068cf"><td class="memItemLeft">const TaskControlBlock *const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> num_priorities&#160;</td><td class="memItemRight"><a class="el" href="#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memitem:aec37532c2fb1a123d928e41e13297533" id="r_aec37532c2fb1a123d928e41e13297533"><td class="memItemLeft">const TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a> = t</td></tr>
+<tr class="memitem:a76ff31436540b24ae4d48244f05ce8ef" id="r_a76ff31436540b24ae4d48244f05ce8ef"><td class="memItemLeft"><a class="el" href="classkernel_1_1sync_1_1_spin_lock.html">sync::SpinLock</a>&#160;</td><td class="memItemRight"><a class="el" href="#a76ff31436540b24ae4d48244f05ce8ef">shootdown_lock_</a> {}</td></tr>
+<tr class="memitem:afdea84e7e6716009ab17af4b202b8271" id="r_afdea84e7e6716009ab17af4b202b8271"><td class="memItemLeft">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *const&#160;</td><td class="memItemRight"><a class="el" href="#afdea84e7e6716009ab17af4b202b8271">heads_</a> []</td></tr>
+<tr class="memitem:ae4d161da19fc465fa4e81d74e0a5b4f8" id="r_ae4d161da19fc465fa4e81d74e0a5b4f8"><td class="memItemLeft">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *const uint64_t num_priorities&#160;</td><td class="memItemRight"><a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:aec37532c2fb1a123d928e41e13297533" id="r_aec37532c2fb1a123d928e41e13297533"><td class="memItemLeft">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a> = t</td></tr>
 <tr class="memitem:a3bc3a31c6af358bc14fd59ca1ec1d75e" id="r_a3bc3a31c6af358bc14fd59ca1ec1d75e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a3bc3a31c6af358bc14fd59ca1ec1d75e">return</a></td></tr>
-<tr class="memitem:a6d73afdfa1f338f65d85c38585f1e1f2" id="r_a6d73afdfa1f338f65d85c38585f1e1f2"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6d73afdfa1f338f65d85c38585f1e1f2">H2_EV_ARM</a> = 1</td></tr>
-<tr class="memitem:a810111e89e31e78c3e32f99355db7234" id="r_a810111e89e31e78c3e32f99355db7234"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a810111e89e31e78c3e32f99355db7234">H2_EV_APPLY</a> = 2</td></tr>
-<tr class="memitem:afb3fbd193a09fbd36b7f12f104aec2e7" id="r_afb3fbd193a09fbd36b7f12f104aec2e7"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afb3fbd193a09fbd36b7f12f104aec2e7">H2_EV_CLR_RMS</a> = 4</td></tr>
-<tr class="memitem:aed0b1c34672fd84a78533c4247ea343f" id="r_aed0b1c34672fd84a78533c4247ea343f"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aed0b1c34672fd84a78533c4247ea343f">H2_EV_CLR_SET</a> = 5</td></tr>
-<tr class="memitem:a574a90ebc327d46aa6aab426a829176b" id="r_a574a90ebc327d46aa6aab426a829176b"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a574a90ebc327d46aa6aab426a829176b">H2_EV_CLR_MISC</a> = 6</td></tr>
-<tr class="memitem:ae4d880161f4292f9476f0da08c2493c7" id="r_ae4d880161f4292f9476f0da08c2493c7"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae4d880161f4292f9476f0da08c2493c7">H2_EV_IDLE_ARM</a> = 7</td></tr>
-<tr class="memitem:a8817c181097f042b8820d9cee86cc4b7" id="r_a8817c181097f042b8820d9cee86cc4b7"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a8817c181097f042b8820d9cee86cc4b7">scheduler_save_rsp_to</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:aee5d1a5418bf1d00cf1dc061ff2832b8" id="r_aee5d1a5418bf1d00cf1dc061ff2832b8"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aee5d1a5418bf1d00cf1dc061ff2832b8">kTaskExitRingDepth</a> = 4</td></tr>
+<tr class="memdesc:aee5d1a5418bf1d00cf1dc061ff2832b8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ring depth: last 4 user exits, oldest overwritten.  <br /></td></tr>
+<tr class="memitem:a6d73afdfa1f338f65d85c38585f1e1f2" id="r_a6d73afdfa1f338f65d85c38585f1e1f2"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a6d73afdfa1f338f65d85c38585f1e1f2">H2_EV_ARM</a> = 1</td></tr>
+<tr class="memitem:a810111e89e31e78c3e32f99355db7234" id="r_a810111e89e31e78c3e32f99355db7234"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a810111e89e31e78c3e32f99355db7234">H2_EV_APPLY</a> = 2</td></tr>
+<tr class="memitem:afb3fbd193a09fbd36b7f12f104aec2e7" id="r_afb3fbd193a09fbd36b7f12f104aec2e7"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#afb3fbd193a09fbd36b7f12f104aec2e7">H2_EV_CLR_RMS</a> = 4</td></tr>
+<tr class="memitem:aed0b1c34672fd84a78533c4247ea343f" id="r_aed0b1c34672fd84a78533c4247ea343f"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aed0b1c34672fd84a78533c4247ea343f">H2_EV_CLR_SET</a> = 5</td></tr>
+<tr class="memitem:a574a90ebc327d46aa6aab426a829176b" id="r_a574a90ebc327d46aa6aab426a829176b"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a574a90ebc327d46aa6aab426a829176b">H2_EV_CLR_MISC</a> = 6</td></tr>
+<tr class="memitem:ae4d880161f4292f9476f0da08c2493c7" id="r_ae4d880161f4292f9476f0da08c2493c7"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ae4d880161f4292f9476f0da08c2493c7">H2_EV_IDLE_ARM</a> = 7</td></tr>
+<tr class="memitem:a8817c181097f042b8820d9cee86cc4b7" id="r_a8817c181097f042b8820d9cee86cc4b7"><td class="memItemLeft">uint64_t *&#160;</td><td class="memItemRight"><a class="el" href="#a8817c181097f042b8820d9cee86cc4b7">scheduler_save_rsp_to</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a8817c181097f042b8820d9cee86cc4b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU deferred-switch atoms (issue #25 C1). Each CPU's timer ISR publishes to its own slots; each CPU's ISR epilogue consumes its own. C++ indexes by <a class="el" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e" title="Current CPU index — single-core archs are always CPU 0.">arch::cpu_index()</a>; x86_64 asm indexes via gs:0x10 (INV-PC4 forbids BARE [rel scheduler_*]); riscv asm uses the array base (== [0], single-core there). scheduler_kernel_cr3 stays scalar (read-only after boot).  <br /></td></tr>
-<tr class="memitem:abc2636a4499534ec927314c4986490c9" id="r_abc2636a4499534ec927314c4986490c9"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#abc2636a4499534ec927314c4986490c9">scheduler_load_rsp_from</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:ab2ec048806a6cd223e72e927ab792e6b" id="r_ab2ec048806a6cd223e72e927ab792e6b"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab2ec048806a6cd223e72e927ab792e6b">scheduler_load_cr3_from</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:a5f0ed8f52ab6874d2938edb23d258ada" id="r_a5f0ed8f52ab6874d2938edb23d258ada"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5f0ed8f52ab6874d2938edb23d258ada">scheduler_load_tls_from</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:a34491a1a1dfdbb4bc359f8110d283e93" id="r_a34491a1a1dfdbb4bc359f8110d283e93"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a34491a1a1dfdbb4bc359f8110d283e93">scheduler_next_task_id</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:a37bdeed47659d598826673faf0480073" id="r_a37bdeed47659d598826673faf0480073"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a37bdeed47659d598826673faf0480073">scheduler_load_kstack_base</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:abc2636a4499534ec927314c4986490c9" id="r_abc2636a4499534ec927314c4986490c9"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#abc2636a4499534ec927314c4986490c9">scheduler_load_rsp_from</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:ab2ec048806a6cd223e72e927ab792e6b" id="r_ab2ec048806a6cd223e72e927ab792e6b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab2ec048806a6cd223e72e927ab792e6b">scheduler_load_cr3_from</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a5f0ed8f52ab6874d2938edb23d258ada" id="r_a5f0ed8f52ab6874d2938edb23d258ada"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5f0ed8f52ab6874d2938edb23d258ada">scheduler_load_tls_from</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a34491a1a1dfdbb4bc359f8110d283e93" id="r_a34491a1a1dfdbb4bc359f8110d283e93"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a34491a1a1dfdbb4bc359f8110d283e93">scheduler_next_task_id</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a37bdeed47659d598826673faf0480073" id="r_a37bdeed47659d598826673faf0480073"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a37bdeed47659d598826673faf0480073">scheduler_load_kstack_base</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a37bdeed47659d598826673faf0480073"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq.  <br /></td></tr>
-<tr class="memitem:a687798275dc6880000977475427d7f60" id="r_a687798275dc6880000977475427d7f60"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a687798275dc6880000977475427d7f60">scheduler_load_kstack_top</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:a7f4d2c64ad76e92277ca6d410d650da4" id="r_a7f4d2c64ad76e92277ca6d410d650da4"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7f4d2c64ad76e92277ca6d410d650da4">scheduler_switch_generation</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a687798275dc6880000977475427d7f60" id="r_a687798275dc6880000977475427d7f60"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a687798275dc6880000977475427d7f60">scheduler_load_kstack_top</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a7f4d2c64ad76e92277ca6d410d650da4" id="r_a7f4d2c64ad76e92277ca6d410d650da4"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a7f4d2c64ad76e92277ca6d410d650da4">scheduler_switch_generation</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a7f4d2c64ad76e92277ca6d410d650da4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU generation sequence counter for the deferred-switch pair (publish-then-bump-then-arm protocol; asm re-verifies before apply).  <br /></td></tr>
-<tr class="memitem:a45c7ed02104a8f2dc79052a0301a16c3" id="r_a45c7ed02104a8f2dc79052a0301a16c3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a45c7ed02104a8f2dc79052a0301a16c3">scheduler_kernel_cr3</a></td></tr>
+<tr class="memitem:a45c7ed02104a8f2dc79052a0301a16c3" id="r_a45c7ed02104a8f2dc79052a0301a16c3"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a45c7ed02104a8f2dc79052a0301a16c3">scheduler_kernel_cr3</a></td></tr>
 <tr class="memdesc:a45c7ed02104a8f2dc79052a0301a16c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static kernel PML4 (physical). isr_stubs.asm falls back to this when scheduler_load_cr3_from is null/outdated while returning to the kernel/harness context.  <br /></td></tr>
-<tr class="memitem:afb68be65bad6d813cd555b20b9500a4f" id="r_afb68be65bad6d813cd555b20b9500a4f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afb68be65bad6d813cd555b20b9500a4f">scheduler_need_resched</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:afb68be65bad6d813cd555b20b9500a4f" id="r_afb68be65bad6d813cd555b20b9500a4f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afb68be65bad6d813cd555b20b9500a4f">scheduler_need_resched</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:afb68be65bad6d813cd555b20b9500a4f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU reschedule request flag (task-context producers; each CPU's timer ISR is the sole publisher of its own switch buffer — the single-writer-per-tick discipline from the two-publisher fix).  <br /></td></tr>
-<tr class="memitem:a914ef87f8e792f89a48aafc7c67b3112" id="r_a914ef87f8e792f89a48aafc7c67b3112"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a914ef87f8e792f89a48aafc7c67b3112">scheduler_force_apply</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a914ef87f8e792f89a48aafc7c67b3112" id="r_a914ef87f8e792f89a48aafc7c67b3112"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a914ef87f8e792f89a48aafc7c67b3112">scheduler_force_apply</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a914ef87f8e792f89a48aafc7c67b3112"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU one-shot force-apply for terminate-driven arms (issue #221). Set by switch_away_from_terminating when it publishes (or keeps) a switch-away arm; the riscv64 trap epilogue applies the pending arm unconditionally while set, then clears it. Without this, a terminating task's epilogue can gate-skip the arm and sret back into the dead task (double-fault park, IRQs masked).  <br /></td></tr>
-<tr class="memitem:a48b013f336f1cc7c0546ff7a5aa9db11" id="r_a48b013f336f1cc7c0546ff7a5aa9db11"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a48b013f336f1cc7c0546ff7a5aa9db11">scheduler_corruption_count</a></td></tr>
+<tr class="memitem:a48b013f336f1cc7c0546ff7a5aa9db11" id="r_a48b013f336f1cc7c0546ff7a5aa9db11"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a48b013f336f1cc7c0546ff7a5aa9db11">scheduler_corruption_count</a></td></tr>
 <tr class="memdesc:a48b013f336f1cc7c0546ff7a5aa9db11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on every detected scheduler corruption (invalid TCB magic, RSP outside kernel-stack range, etc). Reset to zero in test_isolate restore; test framework fails any test where the counter advanced.  <br /></td></tr>
-<tr class="memitem:a9280448447d20124500fb1be0a0ed68f" id="r_a9280448447d20124500fb1be0a0ed68f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9280448447d20124500fb1be0a0ed68f">deadline_detection_integrity</a></td></tr>
+<tr class="memitem:a9280448447d20124500fb1be0a0ed68f" id="r_a9280448447d20124500fb1be0a0ed68f"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9280448447d20124500fb1be0a0ed68f">deadline_detection_integrity</a></td></tr>
 <tr class="memdesc:a9280448447d20124500fb1be0a0ed68f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on each successful deadline- detection scan in on_tick(). Used by tests to verify that the scan completes without aborting. If a test expects the scan to run (e.g. after setting up a deadline miss) but the counter did not advance, the try_lock was contended or a corruption panic aborted the scan.  <br /></td></tr>
-<tr class="memitem:a0635983d70bccde24c7125eba436d74e" id="r_a0635983d70bccde24c7125eba436d74e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0635983d70bccde24c7125eba436d74e">fpu_nm_depth_max</a></td></tr>
+<tr class="memitem:a0635983d70bccde24c7125eba436d74e" id="r_a0635983d70bccde24c7125eba436d74e"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a0635983d70bccde24c7125eba436d74e">fpu_nm_depth_max</a></td></tr>
 <tr class="memdesc:a0635983d70bccde24c7125eba436d74e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Highest isr_nesting_depth observed inside the #NM handler (issue #93, INV-FPU2 pin). Reset in test_isolate restore; a #NM storm must keep it &lt;= baseline + 1 (interrupt-gate #NM can never nest a timer ISR inside the owner-swap).  <br /></td></tr>
 <tr class="memitem:ab1281ac93f9d469e2fc0dd731d358f3b" id="r_ab1281ac93f9d469e2fc0dd731d358f3b"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#ab1281ac93f9d469e2fc0dd731d358f3b">_stack_start</a> []</td></tr>
 <tr class="memitem:a78863de6e15cebd20b4dd89ce98ea565" id="r_a78863de6e15cebd20b4dd89ce98ea565"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a78863de6e15cebd20b4dd89ce98ea565">_stack_end</a> []</td></tr>
@@ -487,7 +587,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#a1cb7b5e6d84a69536a1605c81098f106">kernel::Error</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum class <a class="el" href="#a1cb7b5e6d84a69536a1605c81098f106">kernel::Error</a> : uint8_t</td>
         </tr>
       </table>
   </td>
@@ -523,7 +623,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#a39a8b332edefebba052488078097a45b">kernel::IrqDeliveryMode</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum class <a class="el" href="#a39a8b332edefebba052488078097a45b">kernel::IrqDeliveryMode</a> : uint8_t</td>
         </tr>
       </table>
   </td>
@@ -553,7 +653,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#a6ead49c66ec3252aefe08e87743e2bb3">kernel::IrqSlotKind</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum class <a class="el" href="#a6ead49c66ec3252aefe08e87743e2bb3">kernel::IrqSlotKind</a> : uint8_t</td>
         </tr>
       </table>
   </td>
@@ -583,7 +683,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#a608b4a9ee1c4d240362c930be12ae9f2">kernel::LogLevel</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum class <a class="el" href="#a608b4a9ee1c4d240362c930be12ae9f2">kernel::LogLevel</a> : uint8_t</td>
         </tr>
       </table>
   </td>
@@ -609,7 +709,7 @@ Variables</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">enum <a class="el" href="#a4c7abd4d7b6e60921e6661d7e6ac80af">kernel::RlimitResource</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum <a class="el" href="#a4c7abd4d7b6e60921e6661d7e6ac80af">kernel::RlimitResource</a> : uint8_t</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -617,6 +717,35 @@ Variables</h2></td></tr>
 <tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a4c7abd4d7b6e60921e6661d7e6ac80afa5cedad6358425b5bfd888f80f1d5d9c0" name="a4c7abd4d7b6e60921e6661d7e6ac80afa5cedad6358425b5bfd888f80f1d5d9c0"></a>RLIMIT_DATA&#160;</td><td class="fielddoc"></td></tr>
 <tr><td class="fieldname"><a id="a4c7abd4d7b6e60921e6661d7e6ac80afafa92ee44ab9e8ffac445366271d021e3" name="a4c7abd4d7b6e60921e6661d7e6ac80afafa92ee44ab9e8ffac445366271d021e3"></a>RLIMIT_STACK&#160;</td><td class="fielddoc"></td></tr>
 <tr><td class="fieldname"><a id="a4c7abd4d7b6e60921e6661d7e6ac80afa3af036df3d1c74c3a8a9b127e668495f" name="a4c7abd4d7b6e60921e6661d7e6ac80afa3af036df3d1c74c3a8a9b127e668495f"></a>RLIMIT_NOFILE&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a id="aa769cdcb7178170dcbb2c169fd774fdd" name="aa769cdcb7178170dcbb2c169fd774fdd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa769cdcb7178170dcbb2c169fd774fdd">&#9670;&#160;</a></span>SchedPolicy</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#aa769cdcb7178170dcbb2c169fd774fdd">kernel::SchedPolicy</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Dispatch-policy selector (issue #19, global EDF with exemptions). AUTO (default): finite-deadline non-exempt tasks dispatch EDF, everything else FIXED. FIXED/EDF force the class explicitly. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="aa769cdcb7178170dcbb2c169fd774fddae1f2d5134ed2543d38a0de9751cf75d9" name="aa769cdcb7178170dcbb2c169fd774fddae1f2d5134ed2543d38a0de9751cf75d9"></a>AUTO&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="aa769cdcb7178170dcbb2c169fd774fddac6e6dc18b53b4c2681394b9d8aefcec7" name="aa769cdcb7178170dcbb2c169fd774fddac6e6dc18b53b4c2681394b9d8aefcec7"></a>FIXED&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="aa769cdcb7178170dcbb2c169fd774fdda4768fa850648c6c87699d78474b7022f" name="aa769cdcb7178170dcbb2c169fd774fdda4768fa850648c6c87699d78474b7022f"></a>EDF&#160;</td><td class="fielddoc"></td></tr>
 </table>
 
 </div>
@@ -631,7 +760,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#aab4cc62899bcb5fcce7228da55cd0e18">kernel::Signal</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum class <a class="el" href="#aab4cc62899bcb5fcce7228da55cd0e18">kernel::Signal</a> : uint8_t</td>
         </tr>
       </table>
   </td>
@@ -679,7 +808,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#a02b711df5b135d6792ce2fa4369c7749">kernel::SignalAction</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum class <a class="el" href="#a02b711df5b135d6792ce2fa4369c7749">kernel::SignalAction</a> : uint8_t</td>
         </tr>
       </table>
   </td>
@@ -699,9 +828,70 @@ Variables</h2></td></tr>
 
 </div>
 </div>
+<a id="aca8cb7bebc5bfc2d27dcb0c95fc18c3c" name="aca8cb7bebc5bfc2d27dcb0c95fc18c3c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aca8cb7bebc5bfc2d27dcb0c95fc18c3c">&#9670;&#160;</a></span>TaskState</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#aca8cb7bebc5bfc2d27dcb0c95fc18c3c">kernel::TaskState</a> : uint8_t</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>States a task can be in during its lifecycle. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="aca8cb7bebc5bfc2d27dcb0c95fc18c3ca2baa69eafc7204f3bd8648eba580c489" name="aca8cb7bebc5bfc2d27dcb0c95fc18c3ca2baa69eafc7204f3bd8648eba580c489"></a>READY&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="aca8cb7bebc5bfc2d27dcb0c95fc18c3ca43491564ebcfd38568918efbd6e840fd" name="aca8cb7bebc5bfc2d27dcb0c95fc18c3ca43491564ebcfd38568918efbd6e840fd"></a>RUNNING&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="aca8cb7bebc5bfc2d27dcb0c95fc18c3caeecba0068950a2df17c47e851e1eef14" name="aca8cb7bebc5bfc2d27dcb0c95fc18c3caeecba0068950a2df17c47e851e1eef14"></a>BLOCKED&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="aca8cb7bebc5bfc2d27dcb0c95fc18c3ca1869d56535e8b1449a6da54ff5e11f50" name="aca8cb7bebc5bfc2d27dcb0c95fc18c3ca1869d56535e8b1449a6da54ff5e11f50"></a>WAITING&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="aca8cb7bebc5bfc2d27dcb0c95fc18c3ca9d725163e44a2e9cf094059c0abfdef1" name="aca8cb7bebc5bfc2d27dcb0c95fc18c3ca9d725163e44a2e9cf094059c0abfdef1"></a>TERMINATED&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="aca8cb7bebc5bfc2d27dcb0c95fc18c3ca9e266d90f8bb6c974d24e746a3301ed0" name="aca8cb7bebc5bfc2d27dcb0c95fc18c3ca9e266d90f8bb6c974d24e746a3301ed0"></a>REAPED&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a id="a3efc8e156bdfc3151ae0b713482b1b76" name="a3efc8e156bdfc3151ae0b713482b1b76"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3efc8e156bdfc3151ae0b713482b1b76">&#9670;&#160;</a></span>TestTouchWarn</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a3efc8e156bdfc3151ae0b713482b1b76">kernel::TestTouchWarn</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a3efc8e156bdfc3151ae0b713482b1b76a7c08c5d7293555a01f96e45c5bda679a" name="a3efc8e156bdfc3151ae0b713482b1b76a7c08c5d7293555a01f96e45c5bda679a"></a>kMapL1&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a3efc8e156bdfc3151ae0b713482b1b76ac6ade7a2363248a06b0b4b867339edfc" name="a3efc8e156bdfc3151ae0b713482b1b76ac6ade7a2363248a06b0b4b867339edfc"></a>kMapPd&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a3efc8e156bdfc3151ae0b713482b1b76aeeaf371b06deba7b2cc1be7045e17f12" name="a3efc8e156bdfc3151ae0b713482b1b76aeeaf371b06deba7b2cc1be7045e17f12"></a>kUnmapL0&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a3efc8e156bdfc3151ae0b713482b1b76a97a69bbd59f34061aaafe4ad56d2a659" name="a3efc8e156bdfc3151ae0b713482b1b76a97a69bbd59f34061aaafe4ad56d2a659"></a>kUnmapPml4&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a3efc8e156bdfc3151ae0b713482b1b76a0edbdcae5dc159be1ce3b046ec939f3d" name="a3efc8e156bdfc3151ae0b713482b1b76a0edbdcae5dc159be1ce3b046ec939f3d"></a>kAccessPml4&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="aef2c5f8888b21de09ec3a76f5b964885" name="aef2c5f8888b21de09ec3a76f5b964885"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aef2c5f8888b21de09ec3a76f5b964885">&#9670;&#160;</a></span>__attribute__()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aef2c5f8888b21de09ec3a76f5b964885">&#9670;&#160;</a></span>__attribute__() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -716,6 +906,31 @@ Variables</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Find the priority bucket a node currently lives in. A task's stored t-&gt;priority may have been changed by priority inheritance WITHOUT the node being re-indexed, so we must NOT trust t-&gt;priority to locate the bucket. Instead climb pri_prev_ to the head of the node's chain and match it against heads_[]. </p>
+
+</div>
+</div>
+<a id="aadf277954fd86eeba0a08c68e1f25c06" name="aadf277954fd86eeba0a08c68e1f25c06"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aadf277954fd86eeba0a08c68e1f25c06">&#9670;&#160;</a></span>__attribute__() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">kernel::__attribute__ </td>
+          <td>(</td>
+          <td class="paramtype">(weak)</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> &amp;</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Weak callback invoked when a task's watchdog expires. Called from ISR context (on_tick) under scheduler_lock_ — must not block; KILL action defers via defer_kill() (deadline ACTION==3 precedent). Always enters the ring (TIMING+6 ERROR, fail-closed). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_aadf277954fd86eeba0a08c68e1f25c06_cgraph.png" border="0" usemap="#anamespacekernel_aadf277954fd86eeba0a08c68e1f25c06_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
 
 </div>
 </div>
@@ -748,7 +963,7 @@ Variables</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a5f757c7023bc8616bb0fd21b7c6d8f9f_cgraph.png" border="0" usemap="#anamespacekernel_a5f757c7023bc8616bb0fd21b7c6d8f9f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 
 </div>
@@ -1188,6 +1403,101 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
+<a id="ae369e3a5b4081280571e619d0877856d" name="ae369e3a5b4081280571e619d0877856d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae369e3a5b4081280571e619d0877856d">&#9670;&#160;</a></span>boot_entry_raw()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> kernel::boot_entry_raw </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Raw entry stamp for the boot budget gate (issue #45). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_ae369e3a5b4081280571e619d0877856d_cgraph.png" border="0" usemap="#anamespacekernel_ae369e3a5b4081280571e619d0877856d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="ad2597cced737d422c403d4c25437f61e" name="ad2597cced737d422c403d4c25437f61e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad2597cced737d422c403d4c25437f61e">&#9670;&#160;</a></span>boot_stage_delta()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">BootDelta kernel::boot_stage_delta </td>
+          <td>(</td>
+          <td class="paramtype">BootStage</td>          <td class="paramname"><span class="paramname"><em>s</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_ad2597cced737d422c403d4c25437f61e_cgraph.png" border="0" usemap="#anamespacekernel_ad2597cced737d422c403d4c25437f61e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="afe82421db302cf9007f1bfe16cff939d" name="afe82421db302cf9007f1bfe16cff939d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afe82421db302cf9007f1bfe16cff939d">&#9670;&#160;</a></span>boot_stage_mark()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> kernel::boot_stage_mark </td>
+          <td>(</td>
+          <td class="paramtype">BootStage</td>          <td class="paramname"><span class="paramname"><em>s</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_afe82421db302cf9007f1bfe16cff939d_cgraph.png" border="0" usemap="#anamespacekernel_afe82421db302cf9007f1bfe16cff939d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
 <a id="a59203fb708dcb70f7046b645fb81052e" name="a59203fb708dcb70f7046b645fb81052e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a59203fb708dcb70f7046b645fb81052e">&#9670;&#160;</a></span>canary_check_on_full_path()</h2>
 
@@ -1197,7 +1507,7 @@ template&lt;typename T&gt; </div>
         <tr>
           <td class="memname">bool kernel::canary_check_on_full_path </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>regs</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>regs</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1215,7 +1525,7 @@ template&lt;typename T&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph.png" border="0" usemap="#anamespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -1229,7 +1539,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::canary_install_kernel_stack </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1248,18 +1558,19 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::canary_install_user_segments </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 <p>Install the user-stack and initial-heap canaries for <code class="param">t</code> (call after the user stack + heap are mapped and program_break set). </p>
+<p>Install the user-stack and initial-heap canaries for <code class="param">t</code>. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph.png" border="0" usemap="#anamespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -1273,13 +1584,14 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::canary_verify_kernel_stack </td>
           <td>(</td>
-          <td class="paramtype">const TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 <p>Verify the kernel-stack canary of <code class="param">t</code> (pure read). </p>
+<p>Verify the kernel-stack canary (pure read). </p>
 
 </div>
 </div>
@@ -1292,23 +1604,30 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::canary_verify_user_segments </td>
           <td>(</td>
-          <td class="paramtype">const TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span>, </td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>t</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>bad_segment</em></span>, </td>
+          <td class="paramtype">uint8_t &amp;</td>          <td class="paramname"><span class="paramname"><em>bad_segment</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>bad_va</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>bad_va</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 <p>Verify all installed user-segment canaries of <code class="param">t</code> (pure reads). </p>
+<p>Verify all installed user-segment canaries (pure reads).</p>
 <dl class="section return"><dt>Returns</dt><dd>true when intact; on mismatch sets <code class="param">bad_segment</code> / <code class="param">bad_va</code>. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a53fa9d70d7a01fd1f30b7746a449654d_cgraph.png" border="0" usemap="#anamespacekernel_a53fa9d70d7a01fd1f30b7746a449654d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
 
 </div>
 </div>
@@ -1321,22 +1640,29 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::canary_write_at </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>value</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>value</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 <p>Write an 8-byte canary value at <code class="param">va</code> through <code class="param">pml4</code> (resolving the frame via HHDM). No-op when the page is not present. </p>
+<p>Write an 8-byte canary value at <code class="param">va</code> through <code class="param">pml4</code>. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a1d1f72f7161fa8a1f32d2692b7c90d8c_cgraph.png" border="0" usemap="#anamespacekernel_a1d1f72f7161fa8a1f32d2692b7c90d8c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
+</div>
 
 </div>
 </div>
@@ -1352,7 +1678,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp; kernel::cpu_ctx </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1395,7 +1721,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a777bca6dec383faa735ebe34c5bdf749_cgraph.png" border="0" usemap="#anamespacekernel_a777bca6dec383faa735ebe34c5bdf749_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -1415,12 +1741,12 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion). </p>
+<p>Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (<a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> exhaustion). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph.png" border="0" usemap="#anamespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -1432,19 +1758,19 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::debug_data_begin </td>
+          <td class="memname">uint64_t kernel::debug_data_begin </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>caller_id</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>caller_id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>handle</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>handle</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">TaskControlBlock *&amp;</td>          <td class="paramname"><span class="paramname"><em>tgt_out</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&amp;</td>          <td class="paramname"><span class="paramname"><em>tgt_out</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -1480,7 +1806,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock *&amp; kernel::fpu_owner_own </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&amp; kernel::fpu_owner_own </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -1497,6 +1823,553 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="afcb17dd10fbc535bd63bb71f13f14272" name="afcb17dd10fbc535bd63bb71f13f14272"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afcb17dd10fbc535bd63bb71f13f14272">&#9670;&#160;</a></span>idle_aggregate_util()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structkernel_1_1_idle_scan_progress.html">IdleScanProgress</a> kernel::idle_aggregate_util </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>cursor</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>budget</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Aggregate per-mille utilization for up to <code class="param">budget</code> TCBs. </p>
+<dl class="section return"><dt>Returns</dt><dd>Progress counts. Computes util_per_mille from the tick-charged exec_period_ns sample (per-period exec ÷ period_ns, integer-only, saturating, div-by-zero-proof; aperiodic tasks read 0 by definition). block_per_mille and preempt_per_mille stay 0: no blocked-time/preempt-count sinks exist in-tree (issues #43/#283 P4) — not measured, never fabricated (bootstat fail-closed precedent). deadline_meets is owned by the period-reload sites, read here never written. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_afcb17dd10fbc535bd63bb71f13f14272_cgraph.png" border="0" usemap="#anamespacekernel_afcb17dd10fbc535bd63bb71f13f14272_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="a7a3e0e56701df314c0bda1619f352aa5" name="a7a3e0e56701df314c0bda1619f352aa5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7a3e0e56701df314c0bda1619f352aa5">&#9670;&#160;</a></span>idle_clear_exit_records()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::idle_clear_exit_records </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Test-only reset: invalidate all ring slots. </p>
+
+</div>
+</div>
+<a id="ad5b4191fcd81829821bf9a34fb3e6609" name="ad5b4191fcd81829821bf9a34fb3e6609"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad5b4191fcd81829821bf9a34fb3e6609">&#9670;&#160;</a></span>idle_escalate_stall()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::idle_escalate_stall </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>cursor</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>budget</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>now</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Escalate flagged stalls through existing handler paths (issues #43/#285, P6-thin). Per visited TCB: unflagged → skip; flagged + armed + unexpired → silent (the live watchdog owns the episode); flagged + unarmed → one TIMING+7 WARN (report only); flagged + armed + expired → exact tick-scan replica (disarm-first under scheduler_lock_, pinned ring-only, same weak watchdog_expiry_handler — all CONFIG_WATCHDOG_ACTION dispositions preserved, no new action value, no new errno). Zero wdog_armed=true writes (hard rule, audit-greppable). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_ad5b4191fcd81829821bf9a34fb3e6609_cgraph.png" border="0" usemap="#anamespacekernel_ad5b4191fcd81829821bf9a34fb3e6609_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
+</div>
+
+</div>
+</div>
+<a id="a927c7ddb31b40327f97d6f3b14f09963" name="a927c7ddb31b40327f97d6f3b14f09963"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a927c7ddb31b40327f97d6f3b14f09963">&#9670;&#160;</a></span>idle_find_exit_record()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const <a class="el" href="structkernel_1_1_task_exit_record.html">TaskExitRecord</a> * kernel::idle_find_exit_record </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>id</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Ring entry for a specific task id (post-mortem <span class="tt">monstat &lt;id&gt;</span>). </p>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to static storage, or nullptr when absent. </dd></dl>
+
+</div>
+</div>
+<a id="aa63c25ddb5169f04129d082f0840e7c2" name="aa63c25ddb5169f04129d082f0840e7c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa63c25ddb5169f04129d082f0840e7c2">&#9670;&#160;</a></span>idle_find_exit_record_for_user()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const <a class="el" href="structkernel_1_1_task_exit_record.html">TaskExitRecord</a> * kernel::idle_find_exit_record_for_user </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Most-recent valid ring entry that is not a current daemon. </p>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to static storage, or nullptr when empty. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_aa63c25ddb5169f04129d082f0840e7c2_cgraph.png" border="0" usemap="#anamespacekernel_aa63c25ddb5169f04129d082f0840e7c2_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 13 -->
+</div>
+
+</div>
+</div>
+<a id="a39e8dac481c31dd6182cf722a37edf6d" name="a39e8dac481c31dd6182cf722a37edf6d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a39e8dac481c31dd6182cf722a37edf6d">&#9670;&#160;</a></span>idle_monitor_slice()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::idle_monitor_slice </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>One bounded idle-monitor slice (M1-M3). Runs the enabled scanners for CONFIG_IDLE_MONITOR_CHUNK TCBs total, then returns. BSP-idle only; never blocks, allocates, or skips hlt. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a39e8dac481c31dd6182cf722a37edf6d_cgraph.png" border="0" usemap="#anamespacekernel_a39e8dac481c31dd6182cf722a37edf6d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 14 -->
+</div>
+
+</div>
+</div>
+<a id="ab716281fc620e28eba1868befe8eff05" name="ab716281fc620e28eba1868befe8eff05"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab716281fc620e28eba1868befe8eff05">&#9670;&#160;</a></span>idle_note_exec_sample()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::idle_note_exec_sample </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Fold an execution sample into the observed maximum (issues #43/#283). Max-only bump of wcet_observed_ns; on the first crossing of the design bound (wcet_ticks&gt;0) pushes one TIMING+5 WARN (transition-triggered: observed is monotonic, so exactly one crossing per bound). Never re-buckets, never touches admission (spec §2.5). Called from the scheduler charge site for the running task; unit-callable (M5). </p>
+<dl class="section return"><dt>Returns</dt><dd>True iff an exceed entry was pushed. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_ab716281fc620e28eba1868befe8eff05_cgraph.png" border="0" usemap="#anamespacekernel_ab716281fc620e28eba1868befe8eff05_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 15 -->
+</div>
+
+</div>
+</div>
+<a id="a557395ebdd63f7e893ea647d8a932949" name="a557395ebdd63f7e893ea647d8a932949"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a557395ebdd63f7e893ea647d8a932949">&#9670;&#160;</a></span>idle_note_period_reload()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::idle_note_period_reload </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Record a clean period boundary for <code class="param">t</code> (issues #43/#283). Bumps deadline_meets (saturating) iff no miss is latched. Called from the scheduler period-reload site; unit-callable (M5). </p>
+
+</div>
+</div>
+<a id="a7a3612e8fdeabbd0c9a5909f85764ae4" name="a7a3612e8fdeabbd0c9a5909f85764ae4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7a3612e8fdeabbd0c9a5909f85764ae4">&#9670;&#160;</a></span>idle_note_progress()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::idle_note_progress </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>now</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Record forward progress for <code class="param">t</code> at tick <code class="param">now</code> (issues #43/#285, P6). Called from the wake + dispatch choke points; unit-callable (M5). </p>
+
+</div>
+</div>
+<a id="a747c14344ca50bb4943022f3b1835189" name="a747c14344ca50bb4943022f3b1835189"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a747c14344ca50bb4943022f3b1835189">&#9670;&#160;</a></span>idle_publish_stack_low_water()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::idle_publish_stack_low_water </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>low_water_rsp</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>stack_top</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint32_t &amp;</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Publish the switch-path low-water sample as saturated bytes. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">low_water_rsp</td><td>Lowest kernel-stack RSP observed (kstack_low_water_ semantics: 0 = never switched out). </td></tr>
+    <tr><td class="paramname">stack_top</td><td>Kernel-stack top for the byte computation. </td></tr>
+    <tr><td class="paramname">dst</td><td>Destination snapshot field (stack_low_water_bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a81f47d51c706c42c9a88694b7b62c4e8" name="a81f47d51c706c42c9a88694b7b62c4e8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a81f47d51c706c42c9a88694b7b62c4e8">&#9670;&#160;</a></span>idle_record_task_exit()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::idle_record_task_exit </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>end_tick</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Record a user task's exit (issues #294). Called from <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a> start — the universal death funnel. Skips non-user tasks and daemons (vfsd/iocd/watchdogd PIDs); pinned baseline blocks never reach here (early return above the call site). Scalar copy only, no allocation, no locks (atomic slot claim, record_task_entry precedent). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">t</td><td>Dying task (still fully populated). </td></tr>
+    <tr><td class="paramname">end_tick</td><td>Timer::ticks() at record (caller-provided, test-injectable). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a81f47d51c706c42c9a88694b7b62c4e8_cgraph.png" border="0" usemap="#anamespacekernel_a81f47d51c706c42c9a88694b7b62c4e8_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 16 -->
+</div>
+
+</div>
+</div>
+<a id="a5b0a423c64722dbea816b61fcff3adcc" name="a5b0a423c64722dbea816b61fcff3adcc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5b0a423c64722dbea816b61fcff3adcc">&#9670;&#160;</a></span>idle_scan_mem()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structkernel_1_1_idle_scan_progress.html">IdleScanProgress</a> kernel::idle_scan_mem </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>cursor</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>budget</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Scan per-task memory counters for leak suspects (issues #43/#284, P5a). Per visited TCB per pass: outstanding ops = alloc_ops − free_ops (saturating); if outstanding grew by more than CONFIG_IDLE_MONITOR_MEM_MIN_OPS while used_pages stayed flat vs the previous pass, the streak grows, else it resets. At streak == CONFIG_IDLE_MONITOR_MEM_PASSES pushes one PMM+1 WARN (report only, M6) — fire-once per streak, auto re-armed when the streak breaks. <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> is out of scope (no owner tags, spec §2.3); <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> frees are globally unattributed (see header). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a5b0a423c64722dbea816b61fcff3adcc_cgraph.png" border="0" usemap="#anamespacekernel_a5b0a423c64722dbea816b61fcff3adcc_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 17 -->
+</div>
+
+</div>
+</div>
+<a id="a6f5906a123859e1a431b15e664ddcbc1" name="a6f5906a123859e1a431b15e664ddcbc1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6f5906a123859e1a431b15e664ddcbc1">&#9670;&#160;</a></span>idle_scan_stack()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structkernel_1_1_idle_scan_progress.html">IdleScanProgress</a> kernel::idle_scan_stack </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>cursor</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>budget</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Verify stack canaries of up to <code class="param">budget</code> TCBs from <code class="param">cursor</code>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cursor</td><td>Resume position; advanced past the scanned chunk, wraps to the registry head at the end (wrapped=true). </td></tr>
+    <tr><td class="paramname">budget</td><td>Maximum TCBs to inspect this pass (M2 chunk budget). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Progress counts. Invalid/teardown/idle TCBs are skipped (M4), never dereferenced beyond the validity guards. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>On a canary mismatch calls the existing CONFIG_STACK_OVERFLOW_HOOK path (fail-stop in production, same as the guard-page #PF path) — the scanner itself performs no kill/reap/reprioritize (M6). Test suites override the weak hook with a latch instead. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a6f5906a123859e1a431b15e664ddcbc1_cgraph.png" border="0" usemap="#anamespacekernel_a6f5906a123859e1a431b15e664ddcbc1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 18 -->
+</div>
+
+</div>
+</div>
+<a id="a94c5d1c256bee29196d539e12936237f" name="a94c5d1c256bee29196d539e12936237f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a94c5d1c256bee29196d539e12936237f">&#9670;&#160;</a></span>idle_scan_stall()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structkernel_1_1_idle_scan_progress.html">IdleScanProgress</a> kernel::idle_scan_stall </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_idle_scan_cursor.html">IdleScanCursor</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>cursor</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>budget</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>now_tick</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Flag stall suspects among up to <code class="param">budget</code> TCBs from <code class="param">cursor</code>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">now_tick</td><td>Current tick for the threshold comparison. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Progress counts. Sets stuck_suspected only — never arms a watchdog the owning task did not itself arm (spec §5 P6 rule; cross-task fresh arms are #41 follow-up scope). </dd></dl>
+
+</div>
+</div>
+<a id="a6c56ed2f79f8dbd879ee519c1c791f24" name="a6c56ed2f79f8dbd879ee519c1c791f24"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c56ed2f79f8dbd879ee519c1c791f24">&#9670;&#160;</a></span>idle_util_for()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t kernel::idle_util_for </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>exec_ns</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>period_ticks</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Pure per-mille utilization math (issues #43/#283, P4). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">exec_ns</td><td>Current-period executed ns (tick-charged sample). </td></tr>
+    <tr><td class="paramname">period_ticks</td><td>Task period in ticks (1 tick = 1 ms). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>min(1000, exec_ns*1000/(period_ticks*1e6)); 0 for aperiodic (period 0/NO_PERIOD) or zero period_ns. Integer-only, saturating, div-by-zero-proof. </dd></dl>
+
+</div>
+</div>
 <a id="abb9b26c8d76b814b9ed2a3c78bad290e" name="abb9b26c8d76b814b9ed2a3c78bad290e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#abb9b26c8d76b814b9ed2a3c78bad290e">&#9670;&#160;</a></span>init_task_common()</h2>
 
@@ -1506,16 +2379,18 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::init_task_common </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Initialize common task fields after allocation. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph.png" border="0" usemap="#anamespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -1549,7 +2424,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp; kernel::isr_nesting_own </td>
+          <td class="memname">uint64_t &amp; kernel::isr_nesting_own </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -1573,13 +2448,16 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::kslot_snapshot_bytes </td>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::kslot_snapshot_bytes </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Total snapshot bytes for the kernel-stack window state (v0.4.0 MP-6.3): 8 PT page contents + slot bookkeeping. </p>
+<dl class="section return"><dt>Returns</dt><dd>Byte count consumed by kslot_snapshot_capture/restore. </dd></dl>
 
 </div>
 </div>
@@ -1592,11 +2470,13 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::kslot_snapshot_capture </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>dst</em></span></td><td>)</td>
+          <td class="paramtype">uint8_t *</td>          <td class="paramname"><span class="paramname"><em>dst</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Capture the kstack-window PT contents and slot bookkeeping into <code class="param">dst</code> (must hold &gt;= <a class="el" href="#a25626431fd5ef9ee4a6698a65b1f0895" title="Total snapshot bytes for the kernel-stack window state (v0.4.0 MP-6.3): 8 PT page contents + slot boo...">kslot_snapshot_bytes()</a> bytes). </p>
 
 </div>
 </div>
@@ -1609,11 +2489,40 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::kslot_snapshot_restore </td>
           <td>(</td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>src</em></span></td><td>)</td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>src</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Restore the kstack-window PT contents and slot bookkeeping from <code class="param">src</code>, and flush the TLB for every window VA. </p>
+
+</div>
+</div>
+<a id="a39f9dcd4db2a052fd3f980499660a022" name="a39f9dcd4db2a052fd3f980499660a022"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a39f9dcd4db2a052fd3f980499660a022">&#9670;&#160;</a></span>phys_to_virt()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="classkernel_1_1_virtual_address.html">VirtualAddress</a> kernel::phys_to_virt </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1_physical_address.html">PhysicalAddress</a></td>          <td class="paramname"><span class="paramname"><em>phys</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel nodiscard">nodiscard</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Convert physical address to higher-half virtual address. </p>
 
 </div>
 </div>
@@ -1626,12 +2535,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::random_fill </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>buffer</em></span>, </td>
+          <td class="paramtype">uint8_t *</td>          <td class="paramname"><span class="paramname"><em>buffer</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>length</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>length</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -1639,7 +2548,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph.png" border="0" usemap="#anamespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -1681,7 +2590,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph.png" border="0" usemap="#anamespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -1700,7 +2609,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>flags</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>flags</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -1710,7 +2619,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph.png" border="0" usemap="#anamespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -1722,7 +2631,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::syscall_task </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::syscall_task </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -1735,7 +2644,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph.png" border="0" usemap="#anamespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -1754,7 +2663,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>flags</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>flags</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -1764,7 +2673,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph.png" border="0" usemap="#anamespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -1776,19 +2685,19 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::timerfd_read_entry </td>
+          <td class="memname">uint64_t kernel::timerfd_read_entry </td>
           <td>(</td>
           <td class="paramtype">vfs::Vnode &amp;</td>          <td class="paramname"><span class="paramname"><em>node</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>buffer</em></span>, </td>
+          <td class="paramtype">uint8_t *</td>          <td class="paramname"><span class="paramname"><em>buffer</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>count</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>count</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1804,8 +2713,35 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa583fe65545291d14aa9afd4b95f2576_cgraph.png" border="0" usemap="#anamespacekernel_aa583fe65545291d14aa9afd4b95f2576_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 25 -->
 </div>
+
+</div>
+</div>
+<a id="acb68f2e2a60586a7d3dd7453b668d2cd" name="acb68f2e2a60586a7d3dd7453b668d2cd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acb68f2e2a60586a7d3dd7453b668d2cd">&#9670;&#160;</a></span>virt_to_phys()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="classkernel_1_1_physical_address.html">PhysicalAddress</a> kernel::virt_to_phys </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1_virtual_address.html">VirtualAddress</a></td>          <td class="paramname"><span class="paramname"><em>virt</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel nodiscard">nodiscard</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Convert higher-half virtual address to physical address. </p>
 
 </div>
 </div>
@@ -2265,7 +3201,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::deadline_detection_integrity</td>
+          <td class="memname">uint64_t kernel::deadline_detection_integrity</td>
         </tr>
       </table>
   </td>
@@ -2289,7 +3225,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::fpu_nm_depth_max</td>
+          <td class="memname">uint64_t kernel::fpu_nm_depth_max</td>
         </tr>
       </table>
   </td>
@@ -2310,7 +3246,7 @@ template&lt;typename T&gt; </div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::fpu_owner</td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::fpu_owner</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2326,7 +3262,7 @@ template&lt;typename T&gt; </div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::g_boot_epoch = 0</td>
+          <td class="memname">uint64_t kernel::g_boot_epoch = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2368,7 +3304,7 @@ template&lt;typename T&gt; </div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a> kernel::g_irq_regs[<a class="el" href="nexios__config_8h.html#a6778865aa865b535c1b34a9ace0e3e0d">CONFIG_CAP_MAX_IRQ</a>]</td>
+          <td class="memname"><a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a> kernel::g_irq_regs[<a class="el" href="aarch64_2serial_8cpp.html#a6778865aa865b535c1b34a9ace0e3e0d">CONFIG_CAP_MAX_IRQ</a>]</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2387,7 +3323,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::g_user_access_recover_ip = 0</td>
+          <td class="memname">uint64_t kernel::g_user_access_recover_ip = 0</td>
         </tr>
       </table>
   </td>
@@ -2397,6 +3333,7 @@ template&lt;typename T&gt; </div>
 </table>
 </div><div class="memdoc">
 
+<p>Recovery address for safe user memory access. Non-zero while we are inside a user memory copy attempt. Page fault handler checks this and redirects here on fault. </p>
 <p>Global recovery IP for safe user memory access. Non-zero means we are in a user memory access recovery zone. If a fault occurs and this is set, execution is redirected here. </p>
 
 </div>
@@ -2411,7 +3348,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::H2_EV_APPLY = 2</td>
+          <td class="memname">uint64_t kernel::H2_EV_APPLY = 2</td>
         </tr>
       </table>
   </td>
@@ -2433,7 +3370,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::H2_EV_ARM = 1</td>
+          <td class="memname">uint64_t kernel::H2_EV_ARM = 1</td>
         </tr>
       </table>
   </td>
@@ -2455,7 +3392,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::H2_EV_CLR_MISC = 6</td>
+          <td class="memname">uint64_t kernel::H2_EV_CLR_MISC = 6</td>
         </tr>
       </table>
   </td>
@@ -2477,7 +3414,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::H2_EV_CLR_RMS = 4</td>
+          <td class="memname">uint64_t kernel::H2_EV_CLR_RMS = 4</td>
         </tr>
       </table>
   </td>
@@ -2499,7 +3436,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::H2_EV_CLR_SET = 5</td>
+          <td class="memname">uint64_t kernel::H2_EV_CLR_SET = 5</td>
         </tr>
       </table>
   </td>
@@ -2521,7 +3458,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::H2_EV_IDLE_ARM = 7</td>
+          <td class="memname">uint64_t kernel::H2_EV_IDLE_ARM = 7</td>
         </tr>
       </table>
   </td>
@@ -2540,7 +3477,7 @@ template&lt;typename T&gt; </div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">const TaskControlBlock* kernel::head = t</td>
+          <td class="memname">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>* kernel::head = t</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2554,7 +3491,7 @@ template&lt;typename T&gt; </div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">const TaskControlBlock* const kernel::heads_[]</td>
+          <td class="memname">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>* const kernel::heads_[]</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2571,7 +3508,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::IRQ_VECTOR_MAX = 47</td>
+          <td class="memname">uint8_t kernel::IRQ_VECTOR_MAX = 47</td>
         </tr>
       </table>
   </td>
@@ -2593,7 +3530,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::IRQ_VECTOR_MIN = 33</td>
+          <td class="memname">uint8_t kernel::IRQ_VECTOR_MIN = 33</td>
         </tr>
       </table>
   </td>
@@ -2614,7 +3551,7 @@ template&lt;typename T&gt; </div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::isr_nesting_depth</td>
+          <td class="memname">uint64_t kernel::isr_nesting_depth</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2633,7 +3570,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::kIrqNotifyRevoked = 0</td>
+          <td class="memname">uint64_t kernel::kIrqNotifyRevoked = 0</td>
         </tr>
       </table>
   </td>
@@ -2647,6 +3584,30 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
+<a id="aee5d1a5418bf1d00cf1dc061ff2832b8" name="aee5d1a5418bf1d00cf1dc061ff2832b8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aee5d1a5418bf1d00cf1dc061ff2832b8">&#9670;&#160;</a></span>kTaskExitRingDepth</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::kTaskExitRingDepth = 4</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Ring depth: last 4 user exits, oldest overwritten. </p>
+
+</div>
+</div>
 <a id="a92ff3aab226103aecc5cee29134cd925" name="a92ff3aab226103aecc5cee29134cd925"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a92ff3aab226103aecc5cee29134cd925">&#9670;&#160;</a></span>MSIX_VECTOR_MAX</h2>
 
@@ -2657,7 +3618,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::MSIX_VECTOR_MAX = 255</td>
+          <td class="memname">uint8_t kernel::MSIX_VECTOR_MAX = 255</td>
         </tr>
       </table>
   </td>
@@ -2671,14 +3632,14 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="ac84f34d32e4683fb9c3f512c093068cf" name="ac84f34d32e4683fb9c3f512c093068cf"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac84f34d32e4683fb9c3f512c093068cf">&#9670;&#160;</a></span>noexcept</h2>
+<a id="ae4d161da19fc465fa4e81d74e0a5b4f8" name="ae4d161da19fc465fa4e81d74e0a5b4f8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae4d161da19fc465fa4e81d74e0a5b4f8">&#9670;&#160;</a></span>noexcept</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">const TaskControlBlock* const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> num_priorities kernel::noexcept</td>
+          <td class="memname">uint64_t overdue_by_ticks kernel::noexcept</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2712,7 +3673,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_corruption_count</td>
+          <td class="memname">uint64_t kernel::scheduler_corruption_count</td>
         </tr>
       </table>
   </td>
@@ -2736,7 +3697,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_force_apply</td>
+          <td class="memname">uint64_t kernel::scheduler_force_apply</td>
         </tr>
       </table>
   </td>
@@ -2760,7 +3721,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_kernel_cr3</td>
+          <td class="memname">uint64_t kernel::scheduler_kernel_cr3</td>
         </tr>
       </table>
   </td>
@@ -2784,7 +3745,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_cr3_from</td>
+          <td class="memname">uint64_t kernel::scheduler_load_cr3_from</td>
         </tr>
       </table>
   </td>
@@ -2806,7 +3767,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_kstack_base</td>
+          <td class="memname">uint64_t kernel::scheduler_load_kstack_base</td>
         </tr>
       </table>
   </td>
@@ -2831,7 +3792,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_kstack_top</td>
+          <td class="memname">uint64_t kernel::scheduler_load_kstack_top</td>
         </tr>
       </table>
   </td>
@@ -2853,7 +3814,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_rsp_from</td>
+          <td class="memname">uint64_t kernel::scheduler_load_rsp_from</td>
         </tr>
       </table>
   </td>
@@ -2875,7 +3836,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_tls_from</td>
+          <td class="memname">uint64_t kernel::scheduler_load_tls_from</td>
         </tr>
       </table>
   </td>
@@ -2921,7 +3882,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_next_task_id</td>
+          <td class="memname">uint64_t kernel::scheduler_next_task_id</td>
         </tr>
       </table>
   </td>
@@ -2943,7 +3904,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> * kernel::scheduler_save_rsp_to</td>
+          <td class="memname">uint64_t * kernel::scheduler_save_rsp_to</td>
         </tr>
       </table>
   </td>
@@ -2967,7 +3928,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_switch_generation</td>
+          <td class="memname">uint64_t kernel::scheduler_switch_generation</td>
         </tr>
       </table>
   </td>
@@ -2988,7 +3949,7 @@ template&lt;typename T&gt; </div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">sync::SpinLock kernel::shootdown_lock_ {}</td>
+          <td class="memname"><a class="el" href="classkernel_1_1sync_1_1_spin_lock.html">sync::SpinLock</a> kernel::shootdown_lock_ {}</td>
         </tr>
       </table>
 </div><div class="memdoc">

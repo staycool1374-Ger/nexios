@@ -1,6 +1,6 @@
 var searchData=
 [
-  ['earlyirqresult_0',['EarlyIrqResult',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0',1,'arch']]],
-  ['error_1',['Error',['../classkernel_1_1_tlb_shootdown.html#a64bcea6452f5f33c97ef7e0382ed173b',1,'kernel::TlbShootdown::Error'],['../constants_8hpp.html#ab55f54011a8f17279e6e814f97523a91',1,'Error:&#160;constants.hpp'],['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106',1,'kernel::Error']]],
-  ['errorsubsystem_2',['ErrorSubsystem',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a',1,'kernel::log']]]
+  ['canarysegment_0',['CanarySegment',['../structkernel_1_1_task_control_block.html#a3625e5ba8c9b4e01d06b4d7ac32056f4',1,'kernel::TaskControlBlock']]],
+  ['caprights_1',['CapRights',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5',1,'kernel::cap']]],
+  ['captype_2',['CapType',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99',1,'kernel::cap']]]
 ];

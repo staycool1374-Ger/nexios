@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -130,11 +130,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('priority__map_
 <div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span></div>
 <div class="foldopen" id="foldopen00014" data-start="{" data-end="};">
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html">   14</a></span><span class="keyword">class </span><a class="code hl_function" href="classkernel_1_1_priority_map.html#a2d3e3d8feecbcb4b31dfb67a8adee94d">PriorityMap</a> {</div>
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>    <span class="keyword">static_assert</span>(<a class="code hl_define" href="nexios__config_8h.html#a560bec767ff9229f8b02270422f9109f">CONFIG_PRIORITY_CEILING</a> &lt;= 128,</div>
+<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>    <span class="keyword">static_assert</span>(<a class="code hl_define" href="aarch64_2serial_8cpp.html#a560bec767ff9229f8b02270422f9109f">CONFIG_PRIORITY_CEILING</a> &lt;= 128,</div>
 <div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>                  <span class="stringliteral">&quot;O(1) scheduler supports at most 128 priority levels&quot;</span>);</div>
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span> </div>
-<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bitmap_hi_; </div>
-<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bitmap_lo_; </div>
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    uint64_t bitmap_hi_; </div>
+<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>    uint64_t bitmap_lo_; </div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span> </div>
 <div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>  <span class="keyword">public</span>:</div>
 <div class="foldopen" id="foldopen00023" data-start="{" data-end="}">
@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('priority__map_
 </div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span></div>
 <div class="foldopen" id="foldopen00027" data-start="{" data-end="}">
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#a698aa08d85c3fc99888ed1127aec69f8">   27</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#a698aa08d85c3fc99888ed1127aec69f8">set</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> prio) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#a698aa08d85c3fc99888ed1127aec69f8">   27</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#a698aa08d85c3fc99888ed1127aec69f8">set</a>(uint64_t prio) <span class="keyword">noexcept</span> {</div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>        <span class="keywordflow">if</span> (prio &gt;= 64) {</div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>            bitmap_hi_ |= (1ULL &lt;&lt; (prio - 64));</div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>        } <span class="keywordflow">else</span> {</div>
@@ -153,7 +153,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('priority__map_
 </div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span></div>
 <div class="foldopen" id="foldopen00036" data-start="{" data-end="}">
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#aa8093c607a3dea727abd84f6e2a6da10">   36</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#aa8093c607a3dea727abd84f6e2a6da10">clear</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> prio) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#aa8093c607a3dea727abd84f6e2a6da10">   36</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#aa8093c607a3dea727abd84f6e2a6da10">clear</a>(uint64_t prio) <span class="keyword">noexcept</span> {</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>        <span class="keywordflow">if</span> (prio &gt;= 64) {</div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>            bitmap_hi_ &amp;= ~(1ULL &lt;&lt; (prio - 64));</div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>        } <span class="keywordflow">else</span> {</div>
@@ -162,80 +162,106 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('priority__map_
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    }</div>
 </div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span></div>
-<div class="foldopen" id="foldopen00045" data-start="{" data-end="}">
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#af3fd4dd059962da83c80d7bfabf05831">   45</a></span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_function" href="classkernel_1_1_priority_map.html#af3fd4dd059962da83c80d7bfabf05831">get_highest_priority</a>() const <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>        <span class="keywordflow">if</span> (bitmap_hi_) {</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>            <span class="keywordflow">return</span> 64 + hal::bits::find_highest_bit(bitmap_hi_);</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>        }</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>        <span class="keywordflow">if</span> (bitmap_lo_) {</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>            <span class="keywordflow">return</span> hal::bits::find_highest_bit(bitmap_lo_);</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>        }</div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>        <span class="keywordflow">return</span> 0;</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>    }</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#a14cf54a44d8026b49ace52ea36258d4a">   47</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> uint64_t <a class="code hl_variable" href="classkernel_1_1_priority_map.html#a14cf54a44d8026b49ace52ea36258d4a">IDLE_BAND</a> = 0;</div>
+<div class="foldopen" id="foldopen00049" data-start="{" data-end="}">
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#af3fd4dd059962da83c80d7bfabf05831">   49</a></span>    uint64_t <a class="code hl_function" href="classkernel_1_1_priority_map.html#af3fd4dd059962da83c80d7bfabf05831">get_highest_priority</a>() const <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>        <span class="keywordflow">if</span> (bitmap_hi_) {</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>            <span class="keywordflow">return</span> 64 + hal::bits::find_highest_bit(bitmap_hi_);</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>        }</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>        <span class="keywordflow">if</span> (bitmap_lo_) {</div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>            <span class="keywordflow">return</span> hal::bits::find_highest_bit(bitmap_lo_);</div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>        }</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>        <span class="keywordflow">return</span> <a class="code hl_variable" href="classkernel_1_1_priority_map.html#a14cf54a44d8026b49ace52ea36258d4a">IDLE_BAND</a>;</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    }</div>
 </div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span></div>
-<div class="foldopen" id="foldopen00056" data-start="{" data-end="}">
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#aecb4bd54dfeb624d488efc1a28a3aa93">   56</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#aecb4bd54dfeb624d488efc1a28a3aa93">is_set</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> prio) <span class="keyword">const</span> <span class="keyword">noexcept</span> {</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>        <span class="keywordflow">if</span> (prio &gt;= 64) {</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>            <span class="keywordflow">return</span> (bitmap_hi_ &amp; (1ULL &lt;&lt; (prio - 64))) != 0;</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>        }</div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>        <span class="keywordflow">return</span> (bitmap_lo_ &amp; (1ULL &lt;&lt; prio)) != 0;</div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    }</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span></div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#a6ed8b048e3782059351e7a30a8752640">   65</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> uint64_t <a class="code hl_variable" href="classkernel_1_1_priority_map.html#a6ed8b048e3782059351e7a30a8752640">STARVABLE_NONE</a> = ~0ULL;</div>
+<div class="foldopen" id="foldopen00066" data-start="{" data-end="}">
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#ae8f61915b2055cd2bc88f5725b41e859">   66</a></span>    uint64_t <a class="code hl_function" href="classkernel_1_1_priority_map.html#ae8f61915b2055cd2bc88f5725b41e859">highest_starvable_below</a>(uint64_t prio) <span class="keyword">const</span> <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>        <span class="keywordflow">if</span> (prio &lt;= 1) {</div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>            <span class="keywordflow">return</span> <a class="code hl_variable" href="classkernel_1_1_priority_map.html#a6ed8b048e3782059351e7a30a8752640">STARVABLE_NONE</a>;</div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>        }</div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>        uint64_t lo_mask = (prio &gt;= 64)</div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>                               ? 0xFFFFFFFFFFFFFFFEULL</div>
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>                               : (((1ULL &lt;&lt; prio) - 1ULL) &amp; ~1ULL);</div>
+<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>        uint64_t hi_mask =</div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>            (prio &lt;= 64) ? 0ULL : ((1ULL &lt;&lt; (prio - 64)) - 1ULL);</div>
+<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>        uint64_t masked_hi = bitmap_hi_ &amp; hi_mask;</div>
+<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>        <span class="keywordflow">if</span> (masked_hi) {</div>
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>            <span class="keywordflow">return</span> 64 + hal::bits::find_highest_bit(masked_hi);</div>
+<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>        }</div>
+<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>        uint64_t masked_lo = bitmap_lo_ &amp; lo_mask;</div>
+<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>        <span class="keywordflow">if</span> (masked_lo) {</div>
+<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>            <span class="keywordflow">return</span> hal::bits::find_highest_bit(masked_lo);</div>
+<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>        }</div>
+<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>        <span class="keywordflow">return</span> <a class="code hl_variable" href="classkernel_1_1_priority_map.html#a6ed8b048e3782059351e7a30a8752640">STARVABLE_NONE</a>;</div>
+<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    }</div>
 </div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span></div>
-<div class="foldopen" id="foldopen00064" data-start="{" data-end="}">
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#aebd42bf2374ca56c89c799442d6c1dbe">   64</a></span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_function" href="classkernel_1_1_priority_map.html#aebd42bf2374ca56c89c799442d6c1dbe">raw_hi</a>() const <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>        <span class="keywordflow">return</span> bitmap_hi_;</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    }</div>
+<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span></div>
+<div class="foldopen" id="foldopen00087" data-start="{" data-end="}">
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#aecb4bd54dfeb624d488efc1a28a3aa93">   87</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#aecb4bd54dfeb624d488efc1a28a3aa93">is_set</a>(uint64_t prio) <span class="keyword">const</span> <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>        <span class="keywordflow">if</span> (prio &gt;= 64) {</div>
+<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>            <span class="keywordflow">return</span> (bitmap_hi_ &amp; (1ULL &lt;&lt; (prio - 64))) != 0;</div>
+<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>        }</div>
+<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>        <span class="keywordflow">return</span> (bitmap_lo_ &amp; (1ULL &lt;&lt; prio)) != 0;</div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    }</div>
 </div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span></div>
-<div class="foldopen" id="foldopen00068" data-start="{" data-end="}">
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#ad86ecb1055324490c670f32b9e038869">   68</a></span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_function" href="classkernel_1_1_priority_map.html#ad86ecb1055324490c670f32b9e038869">raw_lo</a>() const <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>        <span class="keywordflow">return</span> bitmap_lo_;</div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    }</div>
+<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span></div>
+<div class="foldopen" id="foldopen00095" data-start="{" data-end="}">
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#aebd42bf2374ca56c89c799442d6c1dbe">   95</a></span>    uint64_t <a class="code hl_function" href="classkernel_1_1_priority_map.html#aebd42bf2374ca56c89c799442d6c1dbe">raw_hi</a>() const <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
+<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>        <span class="keywordflow">return</span> bitmap_hi_;</div>
+<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>    }</div>
 </div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span></div>
-<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)</span></div>
-<div class="foldopen" id="foldopen00074" data-start="{" data-end="}">
-<div class="line"><a id="l00074" name="l00074"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#ae2c0e1d8c1477ffbc144b3b3a31792c8">   74</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#ae2c0e1d8c1477ffbc144b3b3a31792c8">set_raw</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> hi, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> lo) <span class="keyword">noexcept</span> {</div>
-<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>        bitmap_hi_ = hi;</div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>        bitmap_lo_ = lo;</div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    }</div>
+<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span></div>
+<div class="foldopen" id="foldopen00099" data-start="{" data-end="}">
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#ad86ecb1055324490c670f32b9e038869">   99</a></span>    uint64_t <a class="code hl_function" href="classkernel_1_1_priority_map.html#ad86ecb1055324490c670f32b9e038869">raw_lo</a>() const <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>        <span class="keywordflow">return</span> bitmap_lo_;</div>
+<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>    }</div>
 </div>
-<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span></div>
-<div class="foldopen" id="foldopen00080" data-start="{" data-end="}">
-<div class="line"><a id="l00080" name="l00080"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#ad63a11e65a2863604c11b83eca7f54de">   80</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#ad63a11e65a2863604c11b83eca7f54de">empty</a>() const <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
-<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>        <span class="keywordflow">return</span> bitmap_hi_ == 0 &amp;&amp; bitmap_lo_ == 0;</div>
-<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    }</div>
+<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span></div>
+<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)</span></div>
+<div class="foldopen" id="foldopen00105" data-start="{" data-end="}">
+<div class="line"><a id="l00105" name="l00105"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#ae2c0e1d8c1477ffbc144b3b3a31792c8">  105</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#ae2c0e1d8c1477ffbc144b3b3a31792c8">set_raw</a>(uint64_t hi, uint64_t lo) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>        bitmap_hi_ = hi;</div>
+<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>        bitmap_lo_ = lo;</div>
+<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>    }</div>
 </div>
-<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span></div>
-<div class="foldopen" id="foldopen00085" data-start="{" data-end="}">
-<div class="line"><a id="l00085" name="l00085"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#a47efd18d86037f561fb04359e24348c9">   85</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#a47efd18d86037f561fb04359e24348c9">clear_all</a>() <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>        bitmap_hi_ = 0;</div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>        bitmap_lo_ = 0;</div>
-<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    }</div>
+<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span></div>
+<div class="foldopen" id="foldopen00111" data-start="{" data-end="}">
+<div class="line"><a id="l00111" name="l00111"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#ad63a11e65a2863604c11b83eca7f54de">  111</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#ad63a11e65a2863604c11b83eca7f54de">empty</a>() const <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>        <span class="keywordflow">return</span> bitmap_hi_ == 0 &amp;&amp; bitmap_lo_ == 0;</div>
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    }</div>
 </div>
-<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>};</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span></div>
+<div class="foldopen" id="foldopen00116" data-start="{" data-end="}">
+<div class="line"><a id="l00116" name="l00116"></a><span class="lineno"><a class="line" href="classkernel_1_1_priority_map.html#a47efd18d86037f561fb04359e24348c9">  116</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_priority_map.html#a47efd18d86037f561fb04359e24348c9">clear_all</a>() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
+<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>        bitmap_hi_ = 0;</div>
+<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>        bitmap_lo_ = 0;</div>
+<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>    }</div>
 </div>
-<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span> </div>
-<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>};</div>
+</div>
+<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span> </div>
+<div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a560bec767ff9229f8b02270422f9109f"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a560bec767ff9229f8b02270422f9109f">CONFIG_PRIORITY_CEILING</a></div><div class="ttdeci">#define CONFIG_PRIORITY_CEILING</div></div>
 <div class="ttc" id="abits_8hpp_html"><div class="ttname"><a href="bits_8hpp.html">bits.hpp</a></div><div class="ttdoc">Bit manipulation utilities — find highest/lowest set bit.</div></div>
+<div class="ttc" id="aclasskernel_1_1_priority_map_html_a14cf54a44d8026b49ace52ea36258d4a"><div class="ttname"><a href="classkernel_1_1_priority_map.html#a14cf54a44d8026b49ace52ea36258d4a">kernel::PriorityMap::IDLE_BAND</a></div><div class="ttdeci">static constexpr uint64_t IDLE_BAND</div><div class="ttdoc">Lowest priority band: the idle band (issue #255 H6: was a bare return 0, indistinguishable from a val...</div><div class="ttdef"><b>Definition</b> priority_map.hpp:47</div></div>
 <div class="ttc" id="aclasskernel_1_1_priority_map_html_a2d3e3d8feecbcb4b31dfb67a8adee94d"><div class="ttname"><a href="classkernel_1_1_priority_map.html#a2d3e3d8feecbcb4b31dfb67a8adee94d">kernel::PriorityMap::PriorityMap</a></div><div class="ttdeci">PriorityMap()</div><div class="ttdoc">Constructs an empty PriorityMap.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:23</div></div>
-<div class="ttc" id="aclasskernel_1_1_priority_map_html_a47efd18d86037f561fb04359e24348c9"><div class="ttname"><a href="classkernel_1_1_priority_map.html#a47efd18d86037f561fb04359e24348c9">kernel::PriorityMap::clear_all</a></div><div class="ttdeci">void clear_all() noexcept</div><div class="ttdoc">Clears all priority levels.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:85</div></div>
+<div class="ttc" id="aclasskernel_1_1_priority_map_html_a47efd18d86037f561fb04359e24348c9"><div class="ttname"><a href="classkernel_1_1_priority_map.html#a47efd18d86037f561fb04359e24348c9">kernel::PriorityMap::clear_all</a></div><div class="ttdeci">void clear_all() noexcept</div><div class="ttdoc">Clears all priority levels.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:116</div></div>
 <div class="ttc" id="aclasskernel_1_1_priority_map_html_a698aa08d85c3fc99888ed1127aec69f8"><div class="ttname"><a href="classkernel_1_1_priority_map.html#a698aa08d85c3fc99888ed1127aec69f8">kernel::PriorityMap::set</a></div><div class="ttdeci">void set(uint64_t prio) noexcept</div><div class="ttdoc">Sets the bit for a given priority level.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:27</div></div>
+<div class="ttc" id="aclasskernel_1_1_priority_map_html_a6ed8b048e3782059351e7a30a8752640"><div class="ttname"><a href="classkernel_1_1_priority_map.html#a6ed8b048e3782059351e7a30a8752640">kernel::PriorityMap::STARVABLE_NONE</a></div><div class="ttdeci">static constexpr uint64_t STARVABLE_NONE</div><div class="ttdoc">Highest set level in [1, prio) — the starvation-breaker window (issue #242). Level 0 is the idle band...</div><div class="ttdef"><b>Definition</b> priority_map.hpp:65</div></div>
 <div class="ttc" id="aclasskernel_1_1_priority_map_html_aa8093c607a3dea727abd84f6e2a6da10"><div class="ttname"><a href="classkernel_1_1_priority_map.html#aa8093c607a3dea727abd84f6e2a6da10">kernel::PriorityMap::clear</a></div><div class="ttdeci">void clear(uint64_t prio) noexcept</div><div class="ttdoc">Clears the bit for a given priority level.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:36</div></div>
-<div class="ttc" id="aclasskernel_1_1_priority_map_html_ad63a11e65a2863604c11b83eca7f54de"><div class="ttname"><a href="classkernel_1_1_priority_map.html#ad63a11e65a2863604c11b83eca7f54de">kernel::PriorityMap::empty</a></div><div class="ttdeci">bool empty() const noexcept</div><div class="ttdoc">Returns true if no priority levels are set.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:80</div></div>
-<div class="ttc" id="aclasskernel_1_1_priority_map_html_ad86ecb1055324490c670f32b9e038869"><div class="ttname"><a href="classkernel_1_1_priority_map.html#ad86ecb1055324490c670f32b9e038869">kernel::PriorityMap::raw_lo</a></div><div class="ttdeci">uint64_t raw_lo() const noexcept</div><div class="ttdoc">Returns the raw lower 64-bit word.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:68</div></div>
-<div class="ttc" id="aclasskernel_1_1_priority_map_html_ae2c0e1d8c1477ffbc144b3b3a31792c8"><div class="ttname"><a href="classkernel_1_1_priority_map.html#ae2c0e1d8c1477ffbc144b3b3a31792c8">kernel::PriorityMap::set_raw</a></div><div class="ttdeci">void set_raw(uint64_t hi, uint64_t lo) noexcept</div><div class="ttdoc">Restores bitmap state from raw words (for snapshot restore).</div><div class="ttdef"><b>Definition</b> priority_map.hpp:74</div></div>
-<div class="ttc" id="aclasskernel_1_1_priority_map_html_aebd42bf2374ca56c89c799442d6c1dbe"><div class="ttname"><a href="classkernel_1_1_priority_map.html#aebd42bf2374ca56c89c799442d6c1dbe">kernel::PriorityMap::raw_hi</a></div><div class="ttdeci">uint64_t raw_hi() const noexcept</div><div class="ttdoc">Returns the raw upper 64-bit word.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:64</div></div>
-<div class="ttc" id="aclasskernel_1_1_priority_map_html_aecb4bd54dfeb624d488efc1a28a3aa93"><div class="ttname"><a href="classkernel_1_1_priority_map.html#aecb4bd54dfeb624d488efc1a28a3aa93">kernel::PriorityMap::is_set</a></div><div class="ttdeci">bool is_set(uint64_t prio) const noexcept</div><div class="ttdoc">Returns true if the given priority level is set.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:56</div></div>
-<div class="ttc" id="aclasskernel_1_1_priority_map_html_af3fd4dd059962da83c80d7bfabf05831"><div class="ttname"><a href="classkernel_1_1_priority_map.html#af3fd4dd059962da83c80d7bfabf05831">kernel::PriorityMap::get_highest_priority</a></div><div class="ttdeci">uint64_t get_highest_priority() const noexcept</div><div class="ttdoc">Returns the highest set priority level, or 0 if none.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:45</div></div>
+<div class="ttc" id="aclasskernel_1_1_priority_map_html_ad63a11e65a2863604c11b83eca7f54de"><div class="ttname"><a href="classkernel_1_1_priority_map.html#ad63a11e65a2863604c11b83eca7f54de">kernel::PriorityMap::empty</a></div><div class="ttdeci">bool empty() const noexcept</div><div class="ttdoc">Returns true if no priority levels are set.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:111</div></div>
+<div class="ttc" id="aclasskernel_1_1_priority_map_html_ad86ecb1055324490c670f32b9e038869"><div class="ttname"><a href="classkernel_1_1_priority_map.html#ad86ecb1055324490c670f32b9e038869">kernel::PriorityMap::raw_lo</a></div><div class="ttdeci">uint64_t raw_lo() const noexcept</div><div class="ttdoc">Returns the raw lower 64-bit word.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:99</div></div>
+<div class="ttc" id="aclasskernel_1_1_priority_map_html_ae2c0e1d8c1477ffbc144b3b3a31792c8"><div class="ttname"><a href="classkernel_1_1_priority_map.html#ae2c0e1d8c1477ffbc144b3b3a31792c8">kernel::PriorityMap::set_raw</a></div><div class="ttdeci">void set_raw(uint64_t hi, uint64_t lo) noexcept</div><div class="ttdoc">Restores bitmap state from raw words (for snapshot restore).</div><div class="ttdef"><b>Definition</b> priority_map.hpp:105</div></div>
+<div class="ttc" id="aclasskernel_1_1_priority_map_html_ae8f61915b2055cd2bc88f5725b41e859"><div class="ttname"><a href="classkernel_1_1_priority_map.html#ae8f61915b2055cd2bc88f5725b41e859">kernel::PriorityMap::highest_starvable_below</a></div><div class="ttdeci">uint64_t highest_starvable_below(uint64_t prio) const noexcept</div><div class="ttdef"><b>Definition</b> priority_map.hpp:66</div></div>
+<div class="ttc" id="aclasskernel_1_1_priority_map_html_aebd42bf2374ca56c89c799442d6c1dbe"><div class="ttname"><a href="classkernel_1_1_priority_map.html#aebd42bf2374ca56c89c799442d6c1dbe">kernel::PriorityMap::raw_hi</a></div><div class="ttdeci">uint64_t raw_hi() const noexcept</div><div class="ttdoc">Returns the raw upper 64-bit word.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:95</div></div>
+<div class="ttc" id="aclasskernel_1_1_priority_map_html_aecb4bd54dfeb624d488efc1a28a3aa93"><div class="ttname"><a href="classkernel_1_1_priority_map.html#aecb4bd54dfeb624d488efc1a28a3aa93">kernel::PriorityMap::is_set</a></div><div class="ttdeci">bool is_set(uint64_t prio) const noexcept</div><div class="ttdoc">Returns true if the given priority level is set.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:87</div></div>
+<div class="ttc" id="aclasskernel_1_1_priority_map_html_af3fd4dd059962da83c80d7bfabf05831"><div class="ttname"><a href="classkernel_1_1_priority_map.html#af3fd4dd059962da83c80d7bfabf05831">kernel::PriorityMap::get_highest_priority</a></div><div class="ttdeci">uint64_t get_highest_priority() const noexcept</div><div class="ttdoc">Returns the highest set priority level, or IDLE_BAND if none.</div><div class="ttdef"><b>Definition</b> priority_map.hpp:49</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
-<div class="ttc" id="anamespacekernel_html_ac84f34d32e4683fb9c3f512c093068cf"><div class="ttname"><a href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:133</div></div>
+<div class="ttc" id="anamespacekernel_html_ae4d161da19fc465fa4e81d74e0a5b4f8"><div class="ttname"><a href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:149</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
-<div class="ttc" id="anexios__config_8h_html_a560bec767ff9229f8b02270422f9109f"><div class="ttname"><a href="nexios__config_8h.html#a560bec767ff9229f8b02270422f9109f">CONFIG_PRIORITY_CEILING</a></div><div class="ttdeci">#define CONFIG_PRIORITY_CEILING</div><div class="ttdef"><b>Definition</b> nexios_config.h:78</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

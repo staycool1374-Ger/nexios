@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__debug__s
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
+<code>#include &quot;<a class="el" href="test__sched__helpers_8hpp_source.html">test_sched_helpers.hpp</a>&quot;</code><br />
 <code>#include &lt;<a class="el" href="syscall_8hpp_source.html">kernel/syscall/syscall.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
@@ -134,6 +135,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__debug__s
 <code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="page__table_8hpp_source.html">kernel/arch/page_table.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="debug__regs_8hpp_source.html">kernel/debug/debug_regs.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="debug__bind_8hpp_source.html">kernel/debug/debug_bind.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="debug__stop_8hpp_source.html">kernel/debug/debug_stop.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="elf__loader_8hpp_source.html">kernel/elf/elf_loader.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for test_debug_syscall.cpp:</div>
 <div class="dyncontent">
@@ -148,11 +152,11 @@ Functions</h2></td></tr>
 <tr class="memitem:aefe4226f45e600f1a4d546bf99985abf" id="r_aefe4226f45e600f1a4d546bf99985abf"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aefe4226f45e600f1a4d546bf99985abf">JARVIS_TEST</a> (debug_codec_synthetic, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:ab0b1274e3fd572d8a067dd84145a3e68" id="r_ab0b1274e3fd572d8a067dd84145a3e68"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ab0b1274e3fd572d8a067dd84145a3e68">JARVIS_TEST</a> (debug_park_read_write_detach, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a7af4028d13e4b36ad908eb38648ed3c5" id="r_a7af4028d13e4b36ad908eb38648ed3c5"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a7af4028d13e4b36ad908eb38648ed3c5">JARVIS_TEST</a> (debug_mem_partial, &quot;PRE: none | POST: none&quot;)</td></tr>
-<tr class="memitem:a1f170d5fa0b8871b078b8ac4186f1527" id="r_a1f170d5fa0b8871b078b8ac4186f1527"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1f170d5fa0b8871b078b8ac4186f1527">debug_wait_event</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> h, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;kind_out, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;addr_out)</td></tr>
-<tr class="memdesc:a1f170d5fa0b8871b078b8ac4186f1527"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bounded poll for one stop event: 100 x 2ms sleeps (the parked target is resumed/running meanwhile; the event lands in the queue + Notify pulse, no host involved).  <br /></td></tr>
-<tr class="memitem:a60ce75d311d754914ac20867bd450a24" id="r_a60ce75d311d754914ac20867bd450a24"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a60ce75d311d754914ac20867bd450a24">debug_park_and_get_pc</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> h)</td></tr>
+<tr class="memitem:af6886131620dae4a7408c077817a4d71" id="r_af6886131620dae4a7408c077817a4d71"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af6886131620dae4a7408c077817a4d71">debug_wait_event</a> (uint64_t h, uint64_t &amp;kind_out, uint64_t &amp;addr_out, uint64_t *id_out=nullptr, uint64_t *gen_out=nullptr, uint64_t *snap_state_out=nullptr, uint64_t *snap_prio_out=nullptr, uint64_t *snap_budget_out=nullptr)</td></tr>
+<tr class="memdesc:af6886131620dae4a7408c077817a4d71"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bounded poll for one stop event: 100 x 2ms sleeps (the parked target is resumed/running meanwhile; the event lands in the queue + Notify pulse, no host involved).  <br /></td></tr>
+<tr class="memitem:a60ce75d311d754914ac20867bd450a24" id="r_a60ce75d311d754914ac20867bd450a24"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a60ce75d311d754914ac20867bd450a24">debug_park_and_get_pc</a> (uint64_t h)</td></tr>
 <tr class="memdesc:a60ce75d311d754914ac20867bd450a24"><td class="mdescLeft">&#160;</td><td class="mdescRight">Park the target via the data-call EAGAIN discipline and read its current pc from the parked frame (arch pc slot). Works wherever the task actually executes (yield stub or custom page) — the caller never assumes an entry VA.  <br /></td></tr>
-<tr class="memitem:a82a4051b90968990fd27cd7969aa3969" id="r_a82a4051b90968990fd27cd7969aa3969"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a82a4051b90968990fd27cd7969aa3969">debug_write_target_bytes</a> (TaskControlBlock *t, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> va, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *bytes, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> len)</td></tr>
+<tr class="memitem:a82a4051b90968990fd27cd7969aa3969" id="r_a82a4051b90968990fd27cd7969aa3969"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a82a4051b90968990fd27cd7969aa3969">debug_write_target_bytes</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t, uint64_t va, const uint8_t *bytes, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> len)</td></tr>
 <tr class="memdesc:a82a4051b90968990fd27cd7969aa3969"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write raw bytes through a TARGET's tables from test context (direct HHDM store + per-arch I-cache coherence). Used where no debugger exists (disposition control) or to stage code pages.  <br /></td></tr>
 <tr class="memitem:afef96dbd2685cd3a0610bfcad80ba2f0" id="r_afef96dbd2685cd3a0610bfcad80ba2f0"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#afef96dbd2685cd3a0610bfcad80ba2f0">JARVIS_TEST</a> (debug_stop_break_insert_hit_clear, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a48177c5cdd8883dd2b2c5de055f91139" id="r_a48177c5cdd8883dd2b2c5de055f91139"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a48177c5cdd8883dd2b2c5de055f91139">JARVIS_TEST</a> (debug_stop_step_once, &quot;PRE: none | POST: none&quot;)</td></tr>
@@ -162,34 +166,44 @@ Functions</h2></td></tr>
 <tr class="memitem:a13b2ff43a31ede4d4a5db3a9a7034fc6" id="r_a13b2ff43a31ede4d4a5db3a9a7034fc6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a13b2ff43a31ede4d4a5db3a9a7034fc6">debug_dbg_entry</a> ()</td></tr>
 <tr class="memitem:a54eef5622751f22cc3e9dd89430fdce5" id="r_a54eef5622751f22cc3e9dd89430fdce5"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a54eef5622751f22cc3e9dd89430fdce5">JARVIS_TEST</a> (debug_stop_debugger_death, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a3db1719231a904efbbd098326f19e260" id="r_a3db1719231a904efbbd098326f19e260"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a3db1719231a904efbbd098326f19e260">JARVIS_TEST</a> (debug_stop_poll_empty, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a22203e13045ae9a8475f5cbb10644290" id="r_a22203e13045ae9a8475f5cbb10644290"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a22203e13045ae9a8475f5cbb10644290">JARVIS_TEST</a> (debug_stop_snapshot_budget_live, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a0c4fd1cdd6f5ee85f64bc4ccbe3311a1" id="r_a0c4fd1cdd6f5ee85f64bc4ccbe3311a1"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a0c4fd1cdd6f5ee85f64bc4ccbe3311a1">JARVIS_TEST</a> (debug_stop_snapshot_budget_zero_without_server, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a933e58515ec896bec7cbbeb1765e5f34" id="r_a933e58515ec896bec7cbbeb1765e5f34"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a933e58515ec896bec7cbbeb1765e5f34">JARVIS_TEST</a> (debug_grant_mint_use, &quot;PRE: none | POST: none&quot;)</td></tr>
-<tr class="memitem:a6c6dc2694c2a40fb1c0386d4188f3052" id="r_a6c6dc2694c2a40fb1c0386d4188f3052"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6c6dc2694c2a40fb1c0386d4188f3052">debug_find_blocked_daemon</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a6c6dc2694c2a40fb1c0386d4188f3052" id="r_a6c6dc2694c2a40fb1c0386d4188f3052"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a6c6dc2694c2a40fb1c0386d4188f3052">debug_find_blocked_daemon</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a6c6dc2694c2a40fb1c0386d4188f3052"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find a live, permanently-BLOCKED system task id for passive grantee use (issue #239/#242): daemons block on IPC forever, so they are ineligible to run and cost zero scheduling. Spawning a second spinner instead risks the 2-spinner wedge.  <br /></td></tr>
 <tr class="memitem:a2fd055159d9ac43f3b5c2cc88adeddb2" id="r_a2fd055159d9ac43f3b5c2cc88adeddb2"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a2fd055159d9ac43f3b5c2cc88adeddb2">JARVIS_TEST</a> (debug_grant_denial_matrix, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:aaf97fc114be1536f9a6891d1e49d082d" id="r_aaf97fc114be1536f9a6891d1e49d082d"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aaf97fc114be1536f9a6891d1e49d082d">JARVIS_TEST</a> (debug_grant_revoke_parked_disposition, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a268408ba01ffbb0794e4953575059c6b" id="r_a268408ba01ffbb0794e4953575059c6b"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a268408ba01ffbb0794e4953575059c6b">JARVIS_TEST</a> (debug_grant_grantee_death, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a907a32f89abf72bfd9221e06966dc37f" id="r_a907a32f89abf72bfd9221e06966dc37f"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a907a32f89abf72bfd9221e06966dc37f">JARVIS_TEST</a> (debug_grant_target_death, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a346ccf80e76c52f9be5a86541aa1ec81" id="r_a346ccf80e76c52f9be5a86541aa1ec81"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a346ccf80e76c52f9be5a86541aa1ec81">JARVIS_TEST</a> (debug_grant_grantor_death_disposition, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:af5a3c1cd571f11d69df786a3e5f13385" id="r_af5a3c1cd571f11d69df786a3e5f13385"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#af5a3c1cd571f11d69df786a3e5f13385">JARVIS_TEST</a> (debug_attach_sel9_stop_request, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a6b521a682e2cbe43fed1ff2da54f6aab" id="r_a6b521a682e2cbe43fed1ff2da54f6aab"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a6b521a682e2cbe43fed1ff2da54f6aab">JARVIS_TEST</a> (debug_session_active_predicate, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:aae0e278236db4287a99d90bc3fd3e718" id="r_aae0e278236db4287a99d90bc3fd3e718"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aae0e278236db4287a99d90bc3fd3e718">JARVIS_TEST</a> (debug_launch_handoff_denial_matrix, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a825faadfa792ac0f1407b59606185c04" id="r_a825faadfa792ac0f1407b59606185c04"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a825faadfa792ac0f1407b59606185c04">JARVIS_TEST</a> (debug_launch_handoff_success_teardown, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a6182533109bd2ce369de16cf9b4ba306" id="r_a6182533109bd2ce369de16cf9b4ba306"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a6182533109bd2ce369de16cf9b4ba306">JARVIS_TEST</a> (debug_launch_bp_failure_teardown, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:aa5a4c471c8cdd75b008bbe06e187b7bd" id="r_aa5a4c471c8cdd75b008bbe06e187b7bd"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aa5a4c471c8cdd75b008bbe06e187b7bd">JARVIS_TEST</a> (debug_launch_entry_trap_parks, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a64eb9b30d63acad2d77717de57c2ebf8" id="r_a64eb9b30d63acad2d77717de57c2ebf8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a64eb9b30d63acad2d77717de57c2ebf8">register_debug_syscall_tests</a> ()</td></tr>
 <tr class="memdesc:a64eb9b30d63acad2d77717de57c2ebf8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register all debugger-syscall tests.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
-<tr class="memitem:a91b46e120f5cb9fae7956bae624d0dfe" id="r_a91b46e120f5cb9fae7956bae624d0dfe"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a91b46e120f5cb9fae7956bae624d0dfe">kSelPoll</a> = 2</td></tr>
+<tr class="memitem:a91b46e120f5cb9fae7956bae624d0dfe" id="r_a91b46e120f5cb9fae7956bae624d0dfe"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a91b46e120f5cb9fae7956bae624d0dfe">kSelPoll</a> = 2</td></tr>
 <tr class="memdesc:a91b46e120f5cb9fae7956bae624d0dfe"><td class="mdescLeft">&#160;</td><td class="mdescRight">Attach control selectors (issue #226 — no new syscall numbers).  <br /></td></tr>
-<tr class="memitem:accc675c5db954d141e02d58259f477c1" id="r_accc675c5db954d141e02d58259f477c1"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#accc675c5db954d141e02d58259f477c1">kSelBpIns</a> = 3</td></tr>
-<tr class="memitem:a05eca14ca504c733152b2b56bb39c22e" id="r_a05eca14ca504c733152b2b56bb39c22e"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a05eca14ca504c733152b2b56bb39c22e">kSelBpClr</a> = 4</td></tr>
-<tr class="memitem:a15a3f418da3fbafd253585bf40f080f2" id="r_a15a3f418da3fbafd253585bf40f080f2"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a15a3f418da3fbafd253585bf40f080f2">kSelStep</a> = 5</td></tr>
-<tr class="memitem:a5c5c44e89da1610b180930d18cd1da81" id="r_a5c5c44e89da1610b180930d18cd1da81"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5c5c44e89da1610b180930d18cd1da81">kSelCont</a> = 6</td></tr>
-<tr class="memitem:a3cff1c5d2b80f3bd9d678aa6006418b0" id="r_a3cff1c5d2b80f3bd9d678aa6006418b0"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3cff1c5d2b80f3bd9d678aa6006418b0">kSelGrant</a> = 7</td></tr>
+<tr class="memitem:accc675c5db954d141e02d58259f477c1" id="r_accc675c5db954d141e02d58259f477c1"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#accc675c5db954d141e02d58259f477c1">kSelBpIns</a> = 3</td></tr>
+<tr class="memitem:a05eca14ca504c733152b2b56bb39c22e" id="r_a05eca14ca504c733152b2b56bb39c22e"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a05eca14ca504c733152b2b56bb39c22e">kSelBpClr</a> = 4</td></tr>
+<tr class="memitem:a15a3f418da3fbafd253585bf40f080f2" id="r_a15a3f418da3fbafd253585bf40f080f2"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a15a3f418da3fbafd253585bf40f080f2">kSelStep</a> = 5</td></tr>
+<tr class="memitem:a5c5c44e89da1610b180930d18cd1da81" id="r_a5c5c44e89da1610b180930d18cd1da81"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5c5c44e89da1610b180930d18cd1da81">kSelCont</a> = 6</td></tr>
+<tr class="memitem:a3cff1c5d2b80f3bd9d678aa6006418b0" id="r_a3cff1c5d2b80f3bd9d678aa6006418b0"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a3cff1c5d2b80f3bd9d678aa6006418b0">kSelGrant</a> = 7</td></tr>
 <tr class="memdesc:a3cff1c5d2b80f3bd9d678aa6006418b0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Grant selectors (issue #239, spec §14 — still no new syscall numbers, selectors on the attach call).  <br /></td></tr>
-<tr class="memitem:ab1926d8e4d52a0100ecb35c92f675cd5" id="r_ab1926d8e4d52a0100ecb35c92f675cd5"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab1926d8e4d52a0100ecb35c92f675cd5">kSelRevoke</a> = 8</td></tr>
-<tr class="memitem:aec34908085acac5bc0d143532e903d76" id="r_aec34908085acac5bc0d143532e903d76"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aec34908085acac5bc0d143532e903d76">kKindBp</a> = 1</td></tr>
+<tr class="memitem:a6345732ebcc9c389f3f1e056e429e3e7" id="r_a6345732ebcc9c389f3f1e056e429e3e7"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a6345732ebcc9c389f3f1e056e429e3e7">kSelStop</a> = 9</td></tr>
+<tr class="memitem:ab1926d8e4d52a0100ecb35c92f675cd5" id="r_ab1926d8e4d52a0100ecb35c92f675cd5"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab1926d8e4d52a0100ecb35c92f675cd5">kSelRevoke</a> = 8</td></tr>
+<tr class="memitem:aec34908085acac5bc0d143532e903d76" id="r_aec34908085acac5bc0d143532e903d76"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aec34908085acac5bc0d143532e903d76">kKindBp</a> = 1</td></tr>
 <tr class="memdesc:aec34908085acac5bc0d143532e903d76"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stop kinds (mirrors StopKind in <a class="el" href="debug__stop_8hpp.html" title="Debugger stop-event routing + kernel breakpoint shadows (issue #226, spec docs/specs/debugd....">debug_stop.hpp</a>).  <br /></td></tr>
-<tr class="memitem:ac7977630b129bc79575376a3a2d1696d" id="r_ac7977630b129bc79575376a3a2d1696d"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac7977630b129bc79575376a3a2d1696d">kKindStep</a> = 2</td></tr>
-<tr class="memitem:a3ed797b247ef408fe4cdf59f269f1f65" id="r_a3ed797b247ef408fe4cdf59f269f1f65"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3ed797b247ef408fe4cdf59f269f1f65">kKindFault</a> = 3</td></tr>
-<tr class="memitem:a4cd2ed4bac98e5e9cc9a8a4ed66558f8" id="r_a4cd2ed4bac98e5e9cc9a8a4ed66558f8"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4cd2ed4bac98e5e9cc9a8a4ed66558f8">kKindDeath</a> = 4</td></tr>
-<tr class="memitem:ad19341699e2ff38511c8232f12a0c56f" id="r_ad19341699e2ff38511c8232f12a0c56f"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad19341699e2ff38511c8232f12a0c56f">kFaultInsn</a> [] = {0x00, 0x00, 0x00, 0x00}</td></tr>
-<tr class="memitem:a753c3040f3ddc8d401f7d7ce628763c3" id="r_a753c3040f3ddc8d401f7d7ce628763c3"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a753c3040f3ddc8d401f7d7ce628763c3">g_dbg_victim</a> = nullptr</td></tr>
+<tr class="memitem:ac7977630b129bc79575376a3a2d1696d" id="r_ac7977630b129bc79575376a3a2d1696d"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ac7977630b129bc79575376a3a2d1696d">kKindStep</a> = 2</td></tr>
+<tr class="memitem:a3ed797b247ef408fe4cdf59f269f1f65" id="r_a3ed797b247ef408fe4cdf59f269f1f65"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a3ed797b247ef408fe4cdf59f269f1f65">kKindFault</a> = 3</td></tr>
+<tr class="memitem:a4cd2ed4bac98e5e9cc9a8a4ed66558f8" id="r_a4cd2ed4bac98e5e9cc9a8a4ed66558f8"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4cd2ed4bac98e5e9cc9a8a4ed66558f8">kKindDeath</a> = 4</td></tr>
+<tr class="memitem:ad19341699e2ff38511c8232f12a0c56f" id="r_ad19341699e2ff38511c8232f12a0c56f"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ad19341699e2ff38511c8232f12a0c56f">kFaultInsn</a> [] = {0x00, 0x00, 0x00, 0x00}</td></tr>
+<tr class="memitem:a753c3040f3ddc8d401f7d7ce628763c3" id="r_a753c3040f3ddc8d401f7d7ce628763c3"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a753c3040f3ddc8d401f7d7ce628763c3">g_dbg_victim</a> = nullptr</td></tr>
 <tr class="memdesc:a753c3040f3ddc8d401f7d7ce628763c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Debugger-death fixture: helper kernel task (D) attaches to the victim (V, parented to D for the launcher claim), parks it, then waits to be killed. The test task (T) kills D and asserts the fail-safe: V resumed, flags cleared, no parked orphan.  <br /></td></tr>
 <tr class="memitem:ab0d04b485e5068bca6951dd8376a9961" id="r_ab0d04b485e5068bca6951dd8376a9961"><td class="memItemLeft">volatile bool&#160;</td><td class="memItemRight"><a class="el" href="#ab0d04b485e5068bca6951dd8376a9961">g_dbg_parked_flag</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memitem:a7b150ce87c2fcfc653001eb0768f2163" id="r_a7b150ce87c2fcfc653001eb0768f2163"><td class="memItemLeft">volatile bool&#160;</td><td class="memItemRight"><a class="el" href="#a7b150ce87c2fcfc653001eb0768f2163">g_dbg_done_flag</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
@@ -230,7 +244,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> debug_find_blocked_daemon </td>
+          <td class="memname">uint64_t debug_find_blocked_daemon </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -260,9 +274,9 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> debug_park_and_get_pc </td>
+          <td class="memname">uint64_t debug_park_and_get_pc </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>h</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>h</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -279,8 +293,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a1f170d5fa0b8871b078b8ac4186f1527" name="a1f170d5fa0b8871b078b8ac4186f1527"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1f170d5fa0b8871b078b8ac4186f1527">&#9670;&#160;</a></span>debug_wait_event()</h2>
+<a id="af6886131620dae4a7408c077817a4d71" name="af6886131620dae4a7408c077817a4d71"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af6886131620dae4a7408c077817a4d71">&#9670;&#160;</a></span>debug_wait_event()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -288,17 +302,42 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool debug_wait_event </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>h</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>h</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>kind_out</em></span>, </td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>kind_out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>addr_out</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>addr_out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>id_out</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>gen_out</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>snap_state_out</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>snap_prio_out</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>snap_budget_out</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -307,7 +346,7 @@ Here is the call graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="test__debug__syscall_8cpp_a1f170d5fa0b8871b078b8ac4186f1527_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a1f170d5fa0b8871b078b8ac4186f1527_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="test__debug__syscall_8cpp_af6886131620dae4a7408c077817a4d71_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_af6886131620dae4a7408c077817a4d71_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 4 -->
 </div>
 
@@ -322,33 +361,39 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool debug_write_target_bytes </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>t</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>bytes</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>bytes</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>len</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>len</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 <p>Write raw bytes through a TARGET's tables from test context (direct HHDM store + per-arch I-cache coherence). Used where no debugger exists (disposition control) or to stage code pages. </p>
 <dl class="section return"><dt>Returns</dt><dd>false when unmapped/straddling. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_a82a4051b90968990fd27cd7969aa3969_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a82a4051b90968990fd27cd7969aa3969_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
 
 </div>
 </div>
 <a id="ad00c9874b28a4391c39e933aaf71ebba" name="ad00c9874b28a4391c39e933aaf71ebba"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad00c9874b28a4391c39e933aaf71ebba">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad00c9874b28a4391c39e933aaf71ebba">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -369,13 +414,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_ad00c9874b28a4391c39e933aaf71ebba_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_ad00c9874b28a4391c39e933aaf71ebba_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
 </div>
 <a id="a5914e31ae2a7cf5e325f02f768977c3d" name="a5914e31ae2a7cf5e325f02f768977c3d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5914e31ae2a7cf5e325f02f768977c3d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a5914e31ae2a7cf5e325f02f768977c3d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -396,13 +441,40 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_a5914e31ae2a7cf5e325f02f768977c3d_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a5914e31ae2a7cf5e325f02f768977c3d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a id="af5a3c1cd571f11d69df786a3e5f13385" name="af5a3c1cd571f11d69df786a3e5f13385"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af5a3c1cd571f11d69df786a3e5f13385">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/26]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">debug_attach_sel9_stop_request</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_af5a3c1cd571f11d69df786a3e5f13385_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_af5a3c1cd571f11d69df786a3e5f13385_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
 </div>
 
 </div>
 </div>
 <a id="aefe4226f45e600f1a4d546bf99985abf" name="aefe4226f45e600f1a4d546bf99985abf"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aefe4226f45e600f1a4d546bf99985abf">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aefe4226f45e600f1a4d546bf99985abf">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -423,13 +495,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_aefe4226f45e600f1a4d546bf99985abf_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_aefe4226f45e600f1a4d546bf99985abf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
 </div>
 <a id="a2fd055159d9ac43f3b5c2cc88adeddb2" name="a2fd055159d9ac43f3b5c2cc88adeddb2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2fd055159d9ac43f3b5c2cc88adeddb2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a2fd055159d9ac43f3b5c2cc88adeddb2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -450,13 +522,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_a2fd055159d9ac43f3b5c2cc88adeddb2_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a2fd055159d9ac43f3b5c2cc88adeddb2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
 </div>
 <a id="a268408ba01ffbb0794e4953575059c6b" name="a268408ba01ffbb0794e4953575059c6b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a268408ba01ffbb0794e4953575059c6b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a268408ba01ffbb0794e4953575059c6b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -477,13 +549,40 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_a268408ba01ffbb0794e4953575059c6b_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a268408ba01ffbb0794e4953575059c6b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="a346ccf80e76c52f9be5a86541aa1ec81" name="a346ccf80e76c52f9be5a86541aa1ec81"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a346ccf80e76c52f9be5a86541aa1ec81">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/26]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">debug_grant_grantor_death_disposition</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_a346ccf80e76c52f9be5a86541aa1ec81_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a346ccf80e76c52f9be5a86541aa1ec81_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
 </div>
 
 </div>
 </div>
 <a id="a933e58515ec896bec7cbbeb1765e5f34" name="a933e58515ec896bec7cbbeb1765e5f34"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a933e58515ec896bec7cbbeb1765e5f34">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a933e58515ec896bec7cbbeb1765e5f34">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -504,13 +603,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_a933e58515ec896bec7cbbeb1765e5f34_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a933e58515ec896bec7cbbeb1765e5f34_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
 </div>
 <a id="aaf97fc114be1536f9a6891d1e49d082d" name="aaf97fc114be1536f9a6891d1e49d082d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aaf97fc114be1536f9a6891d1e49d082d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aaf97fc114be1536f9a6891d1e49d082d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -531,13 +630,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_aaf97fc114be1536f9a6891d1e49d082d_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_aaf97fc114be1536f9a6891d1e49d082d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
 </div>
 <a id="a907a32f89abf72bfd9221e06966dc37f" name="a907a32f89abf72bfd9221e06966dc37f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a907a32f89abf72bfd9221e06966dc37f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a907a32f89abf72bfd9221e06966dc37f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -558,13 +657,126 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_a907a32f89abf72bfd9221e06966dc37f_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a907a32f89abf72bfd9221e06966dc37f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 15 -->
+</div>
+
+</div>
+</div>
+<a id="a6182533109bd2ce369de16cf9b4ba306" name="a6182533109bd2ce369de16cf9b4ba306"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6182533109bd2ce369de16cf9b4ba306">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[11/26]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">debug_launch_bp_failure_teardown</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_a6182533109bd2ce369de16cf9b4ba306_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a6182533109bd2ce369de16cf9b4ba306_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 16 -->
+</div>
+
+</div>
+</div>
+<a id="aa5a4c471c8cdd75b008bbe06e187b7bd" name="aa5a4c471c8cdd75b008bbe06e187b7bd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa5a4c471c8cdd75b008bbe06e187b7bd">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[12/26]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">debug_launch_entry_trap_parks</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_aa5a4c471c8cdd75b008bbe06e187b7bd_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_aa5a4c471c8cdd75b008bbe06e187b7bd_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 17 -->
+</div>
+
+</div>
+</div>
+<a id="aae0e278236db4287a99d90bc3fd3e718" name="aae0e278236db4287a99d90bc3fd3e718"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aae0e278236db4287a99d90bc3fd3e718">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[13/26]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">debug_launch_handoff_denial_matrix</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_aae0e278236db4287a99d90bc3fd3e718_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_aae0e278236db4287a99d90bc3fd3e718_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 18 -->
+</div>
+
+</div>
+</div>
+<a id="a825faadfa792ac0f1407b59606185c04" name="a825faadfa792ac0f1407b59606185c04"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a825faadfa792ac0f1407b59606185c04">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[14/26]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">debug_launch_handoff_success_teardown</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_a825faadfa792ac0f1407b59606185c04_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a825faadfa792ac0f1407b59606185c04_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 19 -->
 </div>
 
 </div>
 </div>
 <a id="a7af4028d13e4b36ad908eb38648ed3c5" name="a7af4028d13e4b36ad908eb38648ed3c5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7af4028d13e4b36ad908eb38648ed3c5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a7af4028d13e4b36ad908eb38648ed3c5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[15/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -581,11 +793,17 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_a7af4028d13e4b36ad908eb38648ed3c5_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a7af4028d13e4b36ad908eb38648ed3c5_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 20 -->
+</div>
 
 </div>
 </div>
 <a id="ab0b1274e3fd572d8a067dd84145a3e68" name="ab0b1274e3fd572d8a067dd84145a3e68"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab0b1274e3fd572d8a067dd84145a3e68">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ab0b1274e3fd572d8a067dd84145a3e68">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[16/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -606,13 +824,40 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_ab0b1274e3fd572d8a067dd84145a3e68_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_ab0b1274e3fd572d8a067dd84145a3e68_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 21 -->
+</div>
+
+</div>
+</div>
+<a id="a6b521a682e2cbe43fed1ff2da54f6aab" name="a6b521a682e2cbe43fed1ff2da54f6aab"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6b521a682e2cbe43fed1ff2da54f6aab">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[17/26]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">debug_session_active_predicate</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_a6b521a682e2cbe43fed1ff2da54f6aab_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a6b521a682e2cbe43fed1ff2da54f6aab_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 22 -->
 </div>
 
 </div>
 </div>
 <a id="afef96dbd2685cd3a0610bfcad80ba2f0" name="afef96dbd2685cd3a0610bfcad80ba2f0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#afef96dbd2685cd3a0610bfcad80ba2f0">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[11/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#afef96dbd2685cd3a0610bfcad80ba2f0">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[18/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -633,13 +878,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_afef96dbd2685cd3a0610bfcad80ba2f0_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_afef96dbd2685cd3a0610bfcad80ba2f0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
 </div>
 <a id="a54eef5622751f22cc3e9dd89430fdce5" name="a54eef5622751f22cc3e9dd89430fdce5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a54eef5622751f22cc3e9dd89430fdce5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[12/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a54eef5622751f22cc3e9dd89430fdce5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[19/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -660,13 +905,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_a54eef5622751f22cc3e9dd89430fdce5_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a54eef5622751f22cc3e9dd89430fdce5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
 </div>
 <a id="a18c797b6a0529d17bf680a2217f0c1a4" name="a18c797b6a0529d17bf680a2217f0c1a4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a18c797b6a0529d17bf680a2217f0c1a4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[13/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a18c797b6a0529d17bf680a2217f0c1a4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[20/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -687,7 +932,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a008dda988d8c4e616d6260281d74d75d" name="a008dda988d8c4e616d6260281d74d75d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a008dda988d8c4e616d6260281d74d75d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[14/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a008dda988d8c4e616d6260281d74d75d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[21/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -708,13 +953,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_a008dda988d8c4e616d6260281d74d75d_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a008dda988d8c4e616d6260281d74d75d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 25 -->
 </div>
 
 </div>
 </div>
 <a id="aebe338b2850b8eeebac68754c3df74fe" name="aebe338b2850b8eeebac68754c3df74fe"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aebe338b2850b8eeebac68754c3df74fe">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[15/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aebe338b2850b8eeebac68754c3df74fe">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[22/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -735,13 +980,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_aebe338b2850b8eeebac68754c3df74fe_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_aebe338b2850b8eeebac68754c3df74fe_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 26 -->
 </div>
 
 </div>
 </div>
 <a id="a3db1719231a904efbbd098326f19e260" name="a3db1719231a904efbbd098326f19e260"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3db1719231a904efbbd098326f19e260">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[16/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a3db1719231a904efbbd098326f19e260">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[23/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -761,8 +1006,62 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a22203e13045ae9a8475f5cbb10644290" name="a22203e13045ae9a8475f5cbb10644290"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a22203e13045ae9a8475f5cbb10644290">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[24/26]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">debug_stop_snapshot_budget_live</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_a22203e13045ae9a8475f5cbb10644290_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a22203e13045ae9a8475f5cbb10644290_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 27 -->
+</div>
+
+</div>
+</div>
+<a id="a0c4fd1cdd6f5ee85f64bc4ccbe3311a1" name="a0c4fd1cdd6f5ee85f64bc4ccbe3311a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c4fd1cdd6f5ee85f64bc4ccbe3311a1">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[25/26]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">debug_stop_snapshot_budget_zero_without_server</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__syscall_8cpp_a0c4fd1cdd6f5ee85f64bc4ccbe3311a1_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a0c4fd1cdd6f5ee85f64bc4ccbe3311a1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 28 -->
+</div>
+
+</div>
+</div>
 <a id="a48177c5cdd8883dd2b2c5de055f91139" name="a48177c5cdd8883dd2b2c5de055f91139"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a48177c5cdd8883dd2b2c5de055f91139">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[17/17]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a48177c5cdd8883dd2b2c5de055f91139">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[26/26]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -783,7 +1082,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_a48177c5cdd8883dd2b2c5de055f91139_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a48177c5cdd8883dd2b2c5de055f91139_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -808,7 +1107,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__syscall_8cpp_a64eb9b30d63acad2d77717de57c2ebf8_cgraph.png" border="0" usemap="#atest__debug__syscall_8cpp_a64eb9b30d63acad2d77717de57c2ebf8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 30 -->
 </div>
 
 </div>
@@ -849,7 +1148,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock* g_dbg_victim = nullptr</td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>* g_dbg_victim = nullptr</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -868,7 +1167,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kFaultInsn[] = {0x00, 0x00, 0x00, 0x00}</td>
+          <td class="memname">uint8_t kFaultInsn[] = {0x00, 0x00, 0x00, 0x00}</td>
         </tr>
       </table>
   </td>
@@ -890,7 +1189,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kKindBp = 1</td>
+          <td class="memname">uint64_t kKindBp = 1</td>
         </tr>
       </table>
   </td>
@@ -914,7 +1213,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kKindDeath = 4</td>
+          <td class="memname">uint64_t kKindDeath = 4</td>
         </tr>
       </table>
   </td>
@@ -936,7 +1235,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kKindFault = 3</td>
+          <td class="memname">uint64_t kKindFault = 3</td>
         </tr>
       </table>
   </td>
@@ -958,7 +1257,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kKindStep = 2</td>
+          <td class="memname">uint64_t kKindStep = 2</td>
         </tr>
       </table>
   </td>
@@ -980,7 +1279,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kSelBpClr = 4</td>
+          <td class="memname">uint64_t kSelBpClr = 4</td>
         </tr>
       </table>
   </td>
@@ -1002,7 +1301,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kSelBpIns = 3</td>
+          <td class="memname">uint64_t kSelBpIns = 3</td>
         </tr>
       </table>
   </td>
@@ -1024,7 +1323,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kSelCont = 6</td>
+          <td class="memname">uint64_t kSelCont = 6</td>
         </tr>
       </table>
   </td>
@@ -1046,7 +1345,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kSelGrant = 7</td>
+          <td class="memname">uint64_t kSelGrant = 7</td>
         </tr>
       </table>
   </td>
@@ -1070,7 +1369,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kSelPoll = 2</td>
+          <td class="memname">uint64_t kSelPoll = 2</td>
         </tr>
       </table>
   </td>
@@ -1094,7 +1393,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kSelRevoke = 8</td>
+          <td class="memname">uint64_t kSelRevoke = 8</td>
         </tr>
       </table>
   </td>
@@ -1116,7 +1415,29 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kSelStep = 5</td>
+          <td class="memname">uint64_t kSelStep = 5</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6345732ebcc9c389f3f1e056e429e3e7" name="a6345732ebcc9c389f3f1e056e429e3e7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6345732ebcc9c389f3f1e056e429e3e7">&#9670;&#160;</a></span>kSelStop</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kSelStop = 9</td>
         </tr>
       </table>
   </td>

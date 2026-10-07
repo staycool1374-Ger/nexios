@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -135,37 +135,37 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('task__queue_8h
 <div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    }</div>
 </div>
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span></div>
-<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#a921f7a683bc08d9016cf18fa58b59f99">push_back</a>(TaskControlBlock &amp;tcb) <span class="keyword">noexcept</span>;</div>
-<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>    TaskControlBlock *<a class="code hl_function" href="classkernel_1_1_task_queue.html#ab3a49cc31ec76ab3df013b2ce6997662">pop_front</a>() <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a>;</div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#ad622d703040e5089beed1eda860bf57b">remove</a>(TaskControlBlock &amp;tcb) <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a>;</div>
+<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#a921f7a683bc08d9016cf18fa58b59f99">push_back</a>(<a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;tcb) <span class="keyword">noexcept</span>;</div>
+<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>    <a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *<a class="code hl_function" href="classkernel_1_1_task_queue.html#ab3a49cc31ec76ab3df013b2ce6997662">pop_front</a>() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>;</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#ad622d703040e5089beed1eda860bf57b">remove</a>(<a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;tcb) <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>;</div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span></div>
 <div class="foldopen" id="foldopen00027" data-start="{" data-end="}">
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#a3905fd071681a0e864923ccad27d682d">   27</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#a3905fd071681a0e864923ccad27d682d">empty</a>() const <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#a3905fd071681a0e864923ccad27d682d">   27</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#a3905fd071681a0e864923ccad27d682d">empty</a>() const <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>        <span class="keywordflow">return</span> count_ == 0;</div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    }</div>
 </div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span></div>
 <div class="foldopen" id="foldopen00031" data-start="{" data-end="}">
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#a11497a31721fe4d5c95973e534261b5b">   31</a></span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_function" href="classkernel_1_1_task_queue.html#a11497a31721fe4d5c95973e534261b5b">count</a>() const <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#a11497a31721fe4d5c95973e534261b5b">   31</a></span>    uint64_t <a class="code hl_function" href="classkernel_1_1_task_queue.html#a11497a31721fe4d5c95973e534261b5b">count</a>() const <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>        <span class="keywordflow">return</span> count_;</div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>    }</div>
 </div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span></div>
 <div class="foldopen" id="foldopen00036" data-start="{" data-end="}">
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#ac679ad082b6979eb92d7605573caa40b">   36</a></span>    TaskControlBlock *<a class="code hl_function" href="classkernel_1_1_task_queue.html#ac679ad082b6979eb92d7605573caa40b">head</a>() const <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#ac679ad082b6979eb92d7605573caa40b">   36</a></span>    <a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *<a class="code hl_function" href="classkernel_1_1_task_queue.html#ac679ad082b6979eb92d7605573caa40b">head</a>() const <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>        <span class="keywordflow">return</span> head_;</div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    }</div>
 </div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span></div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#ae58560e9bcb13b6d7518ce0064f89a6b">contains</a>(<span class="keyword">const</span> TaskControlBlock &amp;tcb) <span class="keyword">const</span> <span class="keyword">noexcept</span>;</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#ae58560e9bcb13b6d7518ce0064f89a6b">contains</a>(<span class="keyword">const</span> <a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;tcb) <span class="keyword">const</span> <span class="keyword">noexcept</span>;</div>
 <div class="foldopen" id="foldopen00045" data-start="{" data-end="}">
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#a1a7a6c176f1150ed49f8203d65b2a15d">   45</a></span>    TaskControlBlock *<a class="code hl_function" href="classkernel_1_1_task_queue.html#a1a7a6c176f1150ed49f8203d65b2a15d">tail</a>() const <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#a1a7a6c176f1150ed49f8203d65b2a15d">   45</a></span>    <a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *<a class="code hl_function" href="classkernel_1_1_task_queue.html#a1a7a6c176f1150ed49f8203d65b2a15d">tail</a>() const <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>        <span class="keywordflow">return</span> tail_;</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    }</div>
 </div>
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span></div>
 <div class="foldopen" id="foldopen00051" data-start="{" data-end="}">
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#afebb07f021c6dfe6f89820d2805b72be">   51</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#afebb07f021c6dfe6f89820d2805b72be">reset</a>() <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#afebb07f021c6dfe6f89820d2805b72be">   51</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#afebb07f021c6dfe6f89820d2805b72be">reset</a>() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>        head_ = <span class="keyword">nullptr</span>;</div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>        tail_ = <span class="keyword">nullptr</span>;</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>        count_ = 0;</div>
@@ -174,8 +174,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('task__queue_8h
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span></div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)</span></div>
 <div class="foldopen" id="foldopen00060" data-start="{" data-end="}">
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#aa5a4c0397d73f35c198c22b40e9e4d9e">   60</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#aa5a4c0397d73f35c198c22b40e9e4d9e">set_raw</a>(TaskControlBlock *h, TaskControlBlock *t,</div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>                 <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> c) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno"><a class="line" href="classkernel_1_1_task_queue.html#aa5a4c0397d73f35c198c22b40e9e4d9e">   60</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_task_queue.html#aa5a4c0397d73f35c198c22b40e9e4d9e">set_raw</a>(<a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *h, <a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t,</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>                 uint64_t c) <span class="keyword">noexcept</span> {</div>
 <div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>        head_ = h;</div>
 <div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>        tail_ = t;</div>
 <div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>        count_ = c;</div>
@@ -183,9 +183,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('task__queue_8h
 </div>
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span> </div>
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>  <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    TaskControlBlock *head_; </div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>    TaskControlBlock *tail_; </div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> count_;         </div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    <a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *head_; </div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>    <a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *tail_; </div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    uint64_t count_;         </div>
 <div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>};</div>
 </div>
 <div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span> </div>
@@ -202,10 +202,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('task__queue_8h
 <div class="ttc" id="aclasskernel_1_1_task_queue_html_ae58560e9bcb13b6d7518ce0064f89a6b"><div class="ttname"><a href="classkernel_1_1_task_queue.html#ae58560e9bcb13b6d7518ce0064f89a6b">kernel::TaskQueue::contains</a></div><div class="ttdeci">bool contains(const TaskControlBlock &amp;tcb) const noexcept</div><div class="ttdoc">Returns true if the given TCB is physically linked in this queue (walks the intrusive list)....</div><div class="ttdef"><b>Definition</b> task_queue.cpp:113</div></div>
 <div class="ttc" id="aclasskernel_1_1_task_queue_html_afebb07f021c6dfe6f89820d2805b72be"><div class="ttname"><a href="classkernel_1_1_task_queue.html#afebb07f021c6dfe6f89820d2805b72be">kernel::TaskQueue::reset</a></div><div class="ttdeci">void reset() noexcept</div><div class="ttdoc">Resets queue to empty state without following pointers. Safe to call even when pointers may be dangli...</div><div class="ttdef"><b>Definition</b> task_queue.hpp:51</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
-<div class="ttc" id="anamespacekernel_html_ac84f34d32e4683fb9c3f512c093068cf"><div class="ttname"><a href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:133</div></div>
+<div class="ttc" id="anamespacekernel_html_ae4d161da19fc465fa4e81d74e0a5b4f8"><div class="ttname"><a href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:149</div></div>
+<div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:227</div></div>
 <div class="ttc" id="atask__fwd_8hpp_html"><div class="ttname"><a href="task__fwd_8hpp.html">task_fwd.hpp</a></div><div class="ttdoc">Forward declaration of TaskControlBlock.</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -144,7 +144,7 @@ Namespaces</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a0ecf34d3e30ff218069c96a3645cf261" id="r_a0ecf34d3e30ff218069c96a3645cf261"><td class="memItemLeft"><a class="el" href="classkernel_1_1cap_1_1_c_node.html">cap::CNode</a> *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a0ecf34d3e30ff218069c96a3645cf261">kernel::current_cspace</a> ()</td></tr>
-<tr class="memdesc:a0ecf34d3e30ff218069c96a3645cf261"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion).  <br /></td></tr>
+<tr class="memdesc:a0ecf34d3e30ff218069c96a3645cf261"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (<a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> exhaustion).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>SYS_IOPORT_GRANT / SYS_MMIO_MAP / SYS_MMIO_UNMAP handlers (issues #3/#8): capability-gated, per-task x86_64 I/O-port delegation via the TSS I/O permission bitmap, and capability-gated user-space MMIO page-frame mapping for Ring 3 drivers. Non-x86_64 builds return -1 (no port I/O). No blocking; all dereferences through a capability slot validated by cap::lookup. </p>

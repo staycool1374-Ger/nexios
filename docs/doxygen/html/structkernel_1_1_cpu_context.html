@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -132,11 +132,11 @@ Collaboration diagram for kernel::CpuContext:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:a6fc2e17fe50ebb47643b65870bbfa109" id="r_a6fc2e17fe50ebb47643b65870bbfa109"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a6fc2e17fe50ebb47643b65870bbfa109">current</a> = nullptr</td></tr>
+<tr class="memitem:a6fc2e17fe50ebb47643b65870bbfa109" id="r_a6fc2e17fe50ebb47643b65870bbfa109"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a6fc2e17fe50ebb47643b65870bbfa109">current</a> = nullptr</td></tr>
 <tr class="memdesc:a6fc2e17fe50ebb47643b65870bbfa109"><td class="mdescLeft">&#160;</td><td class="mdescRight">The physically-running task (per-CPU cache). INV-1: the RSP-ownership scan in switch_to_task remains authoritative; this cache is only published atomically.  <br /></td></tr>
-<tr class="memitem:a01ddf0f07e15307e0251a3414a25aec5" id="r_a01ddf0f07e15307e0251a3414a25aec5"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a01ddf0f07e15307e0251a3414a25aec5">ticks</a> = 0</td></tr>
+<tr class="memitem:a01ddf0f07e15307e0251a3414a25aec5" id="r_a01ddf0f07e15307e0251a3414a25aec5"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a01ddf0f07e15307e0251a3414a25aec5">ticks</a> = 0</td></tr>
 <tr class="memdesc:a01ddf0f07e15307e0251a3414a25aec5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU tick counter (timer ISR RMW; readers use atomic load).  <br /></td></tr>
-<tr class="memitem:a85714e17216d98d919ac6223f1559a6b" id="r_a85714e17216d98d919ac6223f1559a6b"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a85714e17216d98d919ac6223f1559a6b">last_switch_tick</a> = 0</td></tr>
+<tr class="memitem:a85714e17216d98d919ac6223f1559a6b" id="r_a85714e17216d98d919ac6223f1559a6b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a85714e17216d98d919ac6223f1559a6b">last_switch_tick</a> = 0</td></tr>
 <tr class="memdesc:a85714e17216d98d919ac6223f1559a6b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Last tick an actual context switch ran (debug).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -151,7 +151,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock* kernel::CpuContext::current = nullptr</td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>* kernel::CpuContext::current = nullptr</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -167,7 +167,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::CpuContext::last_switch_tick = 0</td>
+          <td class="memname">uint64_t kernel::CpuContext::last_switch_tick = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -183,7 +183,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::CpuContext::ticks = 0</td>
+          <td class="memname">uint64_t kernel::CpuContext::ticks = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">

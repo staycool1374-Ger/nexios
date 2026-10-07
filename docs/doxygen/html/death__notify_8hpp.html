@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -144,7 +144,7 @@ Data Structures</h2></td></tr>
 <tr class="memitem:kernel_3A_3Aipc_3A_3ADeathRecord" id="r_kernel_3A_3Aipc_3A_3ADeathRecord"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ipc_1_1_death_record.html">kernel::ipc::DeathRecord</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A single task-death record delivered to a supervisor.  <a href="structkernel_1_1ipc_1_1_death_record.html#details">More...</a><br /></td></tr>
 <tr class="memitem:kernel_3A_3Aipc_3A_3ADeathNotify" id="r_kernel_3A_3Aipc_3A_3ADeathNotify"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1ipc_1_1_death_notify.html">kernel::ipc::DeathNotify</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Asynchronous task-death notification registry (issue #105 Part B). A static bounded table pairing watched tasks with supervisors. When a watched task dies, its record is latched in the registry (exactly once, in TaskControlBlock::cleanup()) and the supervisor's Notify is pulsed; the supervisor drains via SYS_DEATH_RECV (never blocks). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; death notify lock (never held across a scheduler call or a Notify poke — supervisors are collected under the lock and poked outside it).  <a href="classkernel_1_1ipc_1_1_death_notify.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Asynchronous task-death notification registry (issue #105 Part B). A static bounded table pairing watched tasks with supervisors. When a watched task dies, its record is latched in the registry (exactly once, in <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a>) and the supervisor's Notify is pulsed; the supervisor drains via SYS_DEATH_RECV (never blocks). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; death notify lock (never held across a scheduler call or a Notify poke — supervisors are collected under the lock and poked outside it).  <a href="classkernel_1_1ipc_1_1_death_notify.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
@@ -154,9 +154,9 @@ Namespaces</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
-<tr class="memitem:afda77acf485f592f5694942f370f6ba3" id="r_afda77acf485f592f5694942f370f6ba3"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ipc.html#afda77acf485f592f5694942f370f6ba3">kernel::ipc::DEATH_FLAG_SIGNAL</a> = 1ULL &lt;&lt; 0</td></tr>
+<tr class="memitem:afda77acf485f592f5694942f370f6ba3" id="r_afda77acf485f592f5694942f370f6ba3"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ipc.html#afda77acf485f592f5694942f370f6ba3">kernel::ipc::DEATH_FLAG_SIGNAL</a> = 1ULL &lt;&lt; 0</td></tr>
 <tr class="memdesc:afda77acf485f592f5694942f370f6ba3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Death record flag: the death was an abnormal termination (a signal / crash) rather than a clean exit. Encoded from the high bit of the task's exit code (negative exit codes carry the signal value).  <br /></td></tr>
-<tr class="memitem:ad4c5f6e636bcbfb1eb3014700428982c" id="r_ad4c5f6e636bcbfb1eb3014700428982c"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ipc.html#ad4c5f6e636bcbfb1eb3014700428982c">kernel::ipc::DEATH_WAKE_PULSE</a> = 0xDEAD0001</td></tr>
+<tr class="memitem:ad4c5f6e636bcbfb1eb3014700428982c" id="r_ad4c5f6e636bcbfb1eb3014700428982c"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ipc.html#ad4c5f6e636bcbfb1eb3014700428982c">kernel::ipc::DEATH_WAKE_PULSE</a> = 0xDEAD0001</td></tr>
 <tr class="memdesc:ad4c5f6e636bcbfb1eb3014700428982c"><td class="mdescLeft">&#160;</td><td class="mdescRight">The wakeup value pulsed into a supervisor's Notify when one of its watched tasks dies. The authoritative data lives in the registry (drained via SYS_DEATH_RECV); the pulse is a wakeup only, so a single 64-bit slot cannot lose a fan-in of multiple deaths.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>

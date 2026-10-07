@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -146,10 +146,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('aarch64_2hal_2
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacearch.html">arch</a> {</div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span></div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="keyword">struct </span>CpuIdResult {</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> eax, ebx, ecx, edx;</div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> eax, ebx, ecx, edx;</div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>};</div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span></div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="keyword">inline</span> CpuIdResult cpuid(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> leaf) {</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="keyword">inline</span> CpuIdResult cpuid(<a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> leaf) {</div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    (void)leaf;</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>    <span class="keywordflow">return</span> {};</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>}</div>
@@ -162,18 +162,18 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('aarch64_2hal_2
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>}</div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span></div>
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="keyword">inline</span> <span class="keywordtype">bool</span> has_fpu() {</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> id_aa64pfr0{};</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> id_aa64pfr0{};</div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    <span class="keyword">asm</span> <span class="keyword">volatile</span>(<span class="stringliteral">&quot;mrs %0, id_aa64pfr0_el1&quot;</span> : <span class="stringliteral">&quot;=r&quot;</span>(id_aa64pfr0));</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> fp = (id_aa64pfr0 &gt;&gt; 16) &amp; 0xF;</div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> advsimd = (id_aa64pfr0 &gt;&gt; 20) &amp; 0xF;</div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> fp = (id_aa64pfr0 &gt;&gt; 16) &amp; 0xF;</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> advsimd = (id_aa64pfr0 &gt;&gt; 20) &amp; 0xF;</div>
 <div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    <span class="keywordflow">return</span> fp != 0xF &amp;&amp; advsimd != 0xF;</div>
 <div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>}</div>
 <div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span> </div>
 <div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>} <span class="comment">// namespace arch</span></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:35</div></div>
+<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

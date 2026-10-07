@@ -89,6 +89,8 @@ var syscall_8h =
     [ "SYS_UNAME", "syscall_8h.html#a5e86aeeb6c36885c63c51f45afd6810a", null ],
     [ "SYS_UNLINK", "syscall_8h.html#ad6cd58960ba6c69c79cdd195a6b9f4f4", null ],
     [ "SYS_WAITPID", "syscall_8h.html#aecded11a130b00224aed5a246e4fda35", null ],
+    [ "SYS_WATCHDOG_CREATE", "syscall_8h.html#a01c2e63c68e91d3733c54a5f0d6480c3", null ],
+    [ "SYS_WATCHDOG_KICK", "syscall_8h.html#a47f327a7746f5cebcff8d0971099348d", null ],
     [ "SYS_WRITE", "syscall_8h.html#a5d873acf1ed604853238dade4838ad58", null ],
     [ "SYS_YIELD", "syscall_8h.html#a7aec547f35607f17d2605b106e704975", null ]
 ];

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -146,15 +146,15 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('crc32_8hpp_sou
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno"><a class="line" href="classkernel_1_1_c_r_c32.html">   25</a></span><span class="keyword">class </span><a class="code hl_class" href="classkernel_1_1_c_r_c32.html">CRC32</a> {</div>
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="keyword">public</span>:</div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1_c_r_c32.html#a8d636603129700c9ca4ff5f1629cca13">init</a>();</div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> <a class="code hl_function" href="classkernel_1_1_c_r_c32.html#ac21f4ee9e91b9cd5b189be578a566c01">update</a>(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> crc, <span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>* data, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> len);</div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> <a class="code hl_function" href="classkernel_1_1_c_r_c32.html#a51e3e3730cc4af6f8f2dea43b2aeca42">finalize</a>(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> crc);</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    <span class="keyword">static</span> uint32_t <a class="code hl_function" href="classkernel_1_1_c_r_c32.html#ac21f4ee9e91b9cd5b189be578a566c01">update</a>(uint32_t crc, <span class="keyword">const</span> uint8_t* data, uint64_t len);</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    <span class="keyword">static</span> uint32_t <a class="code hl_function" href="classkernel_1_1_c_r_c32.html#a51e3e3730cc4af6f8f2dea43b2aeca42">finalize</a>(uint32_t crc);</div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span> </div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="classkernel_1_1_c_r_c32.html#ad3b73507e9c32b7ed204fa8f86c6c285">   31</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> <a class="code hl_variable" href="classkernel_1_1_c_r_c32.html#ad3b73507e9c32b7ed204fa8f86c6c285">INITIAL</a> = 0xFFFFFFFF;</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="classkernel_1_1_c_r_c32.html#a2dc16100d0d9d2b71a8833ce3aa65a94">   32</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> <a class="code hl_variable" href="classkernel_1_1_c_r_c32.html#a2dc16100d0d9d2b71a8833ce3aa65a94">XOR_OUT</a> = 0xFFFFFFFF;</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="classkernel_1_1_c_r_c32.html#ad3b73507e9c32b7ed204fa8f86c6c285">   31</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> uint32_t <a class="code hl_variable" href="classkernel_1_1_c_r_c32.html#ad3b73507e9c32b7ed204fa8f86c6c285">INITIAL</a> = 0xFFFFFFFF;</div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="classkernel_1_1_c_r_c32.html#a2dc16100d0d9d2b71a8833ce3aa65a94">   32</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> uint32_t <a class="code hl_variable" href="classkernel_1_1_c_r_c32.html#a2dc16100d0d9d2b71a8833ce3aa65a94">XOR_OUT</a> = 0xFFFFFFFF;</div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span> </div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">private</span>:</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> POLY = 0xEDB88320;</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <span class="keyword">static</span> <span class="keyword">constinit</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> table_[256];</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> uint32_t POLY = 0xEDB88320;</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <span class="keyword">static</span> <span class="keyword">constinit</span> uint32_t table_[256];</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    <span class="keyword">static</span> <span class="keyword">constinit</span> <span class="keywordtype">bool</span> initialized_;</div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>};</div>
 </div>
@@ -168,9 +168,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('crc32_8hpp_sou
 <div class="ttc" id="aclasskernel_1_1_c_r_c32_html_ad3b73507e9c32b7ed204fa8f86c6c285"><div class="ttname"><a href="classkernel_1_1_c_r_c32.html#ad3b73507e9c32b7ed204fa8f86c6c285">kernel::CRC32::INITIAL</a></div><div class="ttdeci">static constexpr uint32_t INITIAL</div><div class="ttdef"><b>Definition</b> crc32.hpp:31</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

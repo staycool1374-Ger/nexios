@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__ipc__rob
 <code>#include &lt;<a class="el" href="semaphore_8hpp_source.html">kernel/sync/semaphore.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq__guard_8hpp_source.html">kernel/arch/irq_guard.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
 <code>#include &quot;<a class="el" href="test__sched__helpers_8hpp_source.html">test_sched_helpers.hpp</a>&quot;</code><br />
@@ -147,6 +148,10 @@ Functions</h2></td></tr>
 <tr class="memitem:a6460572856439bbf66153fa50d386b7d" id="r_a6460572856439bbf66153fa50d386b7d"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a6460572856439bbf66153fa50d386b7d">TEST_CLASS</a> (IpcBidirectionalSendSync)</td></tr>
 <tr class="memitem:aa7a78742b13af7031ddf944e766f1faf" id="r_aa7a78742b13af7031ddf944e766f1faf"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aa7a78742b13af7031ddf944e766f1faf">TEST_CLASS</a> (IpcBlockedSenderOnReceiverCleanup)</td></tr>
 <tr class="memitem:a3575fd480c3351d4723011446624e152" id="r_a3575fd480c3351d4723011446624e152"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a3575fd480c3351d4723011446624e152">TEST_CLASS</a> (IpcPriorityOrderedWake)</td></tr>
+<tr class="memitem:a25a99d31130928df54e2c082439d77d0" id="r_a25a99d31130928df54e2c082439d77d0"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a25a99d31130928df54e2c082439d77d0">TEST_CLASS</a> (IpcSendSyncSkipsNonReply)</td></tr>
+<tr class="memitem:a8b4494286d682f956df6095526a51d6e" id="r_a8b4494286d682f956df6095526a51d6e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a8b4494286d682f956df6095526a51d6e">TEST_CLASS</a> (IpcSendSyncDeadPeerFailsFast)</td></tr>
+<tr class="memitem:a56f6539969ed4fd4ef20820c6dd70677" id="r_a56f6539969ed4fd4ef20820c6dd70677"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a56f6539969ed4fd4ef20820c6dd70677">TEST_CLASS</a> (IpcSendSyncOversizedMatchStaysClamped)</td></tr>
+<tr class="memitem:aefb746ea9eb651518dd642476b98776d" id="r_aefb746ea9eb651518dd642476b98776d"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aefb746ea9eb651518dd642476b98776d">TEST_CLASS</a> (IpcSendSyncStaleSameSenderOrder)</td></tr>
 <tr class="memitem:afe441c8e887115786c3195a2b25101e3" id="r_afe441c8e887115786c3195a2b25101e3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afe441c8e887115786c3195a2b25101e3">register_ipc_robustness_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -177,7 +182,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a6460572856439bbf66153fa50d386b7d" name="a6460572856439bbf66153fa50d386b7d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6460572856439bbf66153fa50d386b7d">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[1/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a6460572856439bbf66153fa50d386b7d">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[1/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -200,7 +205,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="aa7a78742b13af7031ddf944e766f1faf" name="aa7a78742b13af7031ddf944e766f1faf"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa7a78742b13af7031ddf944e766f1faf">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[2/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aa7a78742b13af7031ddf944e766f1faf">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[2/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -223,7 +228,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a1581d61be9725f947d402b48bdaaa399" name="a1581d61be9725f947d402b48bdaaa399"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1581d61be9725f947d402b48bdaaa399">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[3/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a1581d61be9725f947d402b48bdaaa399">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[3/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -246,7 +251,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="aae2805771385c24dc6e11f468b5601a1" name="aae2805771385c24dc6e11f468b5601a1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aae2805771385c24dc6e11f468b5601a1">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[4/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aae2805771385c24dc6e11f468b5601a1">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[4/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -269,7 +274,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="afc4dc39ac62cfba110864842245cc9dd" name="afc4dc39ac62cfba110864842245cc9dd"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#afc4dc39ac62cfba110864842245cc9dd">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[5/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#afc4dc39ac62cfba110864842245cc9dd">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[5/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -292,7 +297,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a3575fd480c3351d4723011446624e152" name="a3575fd480c3351d4723011446624e152"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3575fd480c3351d4723011446624e152">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[6/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a3575fd480c3351d4723011446624e152">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[6/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -315,7 +320,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a8099edc40784f26046b41d3489e07a8e" name="a8099edc40784f26046b41d3489e07a8e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8099edc40784f26046b41d3489e07a8e">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[7/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a8099edc40784f26046b41d3489e07a8e">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[7/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -328,6 +333,104 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__ipc__robustness_8cpp_a8099edc40784f26046b41d3489e07a8e_cgraph.png" border="0" usemap="#atest__ipc__robustness_8cpp_a8099edc40784f26046b41d3489e07a8e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
+</div>
+
+</div>
+</div>
+<a id="a8b4494286d682f956df6095526a51d6e" name="a8b4494286d682f956df6095526a51d6e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8b4494286d682f956df6095526a51d6e">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[8/11]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">TEST_CLASS </td>
+          <td>(</td>
+          <td class="paramtype">IpcSendSyncDeadPeerFailsFast</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__ipc__robustness_8cpp_a8b4494286d682f956df6095526a51d6e_cgraph.png" border="0" usemap="#atest__ipc__robustness_8cpp_a8b4494286d682f956df6095526a51d6e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
+</div>
+
+</div>
+</div>
+<a id="a56f6539969ed4fd4ef20820c6dd70677" name="a56f6539969ed4fd4ef20820c6dd70677"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a56f6539969ed4fd4ef20820c6dd70677">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[9/11]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">TEST_CLASS </td>
+          <td>(</td>
+          <td class="paramtype">IpcSendSyncOversizedMatchStaysClamped</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__ipc__robustness_8cpp_a56f6539969ed4fd4ef20820c6dd70677_cgraph.png" border="0" usemap="#atest__ipc__robustness_8cpp_a56f6539969ed4fd4ef20820c6dd70677_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 10 -->
+</div>
+
+</div>
+</div>
+<a id="a25a99d31130928df54e2c082439d77d0" name="a25a99d31130928df54e2c082439d77d0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a25a99d31130928df54e2c082439d77d0">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[10/11]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">TEST_CLASS </td>
+          <td>(</td>
+          <td class="paramtype">IpcSendSyncSkipsNonReply</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__ipc__robustness_8cpp_a25a99d31130928df54e2c082439d77d0_cgraph.png" border="0" usemap="#atest__ipc__robustness_8cpp_a25a99d31130928df54e2c082439d77d0_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="aefb746ea9eb651518dd642476b98776d" name="aefb746ea9eb651518dd642476b98776d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aefb746ea9eb651518dd642476b98776d">&#9670;&#160;</a></span>TEST_CLASS() <span class="overload">[11/11]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">TEST_CLASS </td>
+          <td>(</td>
+          <td class="paramtype">IpcSendSyncStaleSameSenderOrder</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__ipc__robustness_8cpp_aefb746ea9eb651518dd642476b98776d_cgraph.png" border="0" usemap="#atest__ipc__robustness_8cpp_aefb746ea9eb651518dd642476b98776d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
+</div>
 
 </div>
 </div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -142,18 +142,19 @@ Functions</h2></td></tr>
 <tr class="memitem:ae67f8eb9aed06e2d81ec60c1f4c65d22" id="r_ae67f8eb9aed06e2d81ec60c1f4c65d22"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ae67f8eb9aed06e2d81ec60c1f4c65d22">JARVIS_TEST</a> (stack_alloc_user_task_has_guard_page, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a02d38f1c38acb0313e71b219486d5855" id="r_a02d38f1c38acb0313e71b219486d5855"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a02d38f1c38acb0313e71b219486d5855">JARVIS_TEST</a> (stack_alloc_stack_alignment, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a335fa9a945a9c45b11facbf05a9a9c09" id="r_a335fa9a945a9c45b11facbf05a9a9c09"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a335fa9a945a9c45b11facbf05a9a9c09">JARVIS_TEST</a> (stack_alloc_multiple_tasks_distinct_stacks, &quot;PRE: none | POST: none&quot;)</td></tr>
-<tr class="memitem:aebf9c76b4ca8fb2a8e32ca3fd1679fea" id="r_aebf9c76b4ca8fb2a8e32ca3fd1679fea"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aebf9c76b4ca8fb2a8e32ca3fd1679fea">stack_overflow_hook</a> (kernel::TaskControlBlock *task)</td></tr>
+<tr class="memitem:aebf9c76b4ca8fb2a8e32ca3fd1679fea" id="r_aebf9c76b4ca8fb2a8e32ca3fd1679fea"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aebf9c76b4ca8fb2a8e32ca3fd1679fea">stack_overflow_hook</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> *task)</td></tr>
 <tr class="memitem:a1e45607a7acecd47342f058bebe54290" id="r_a1e45607a7acecd47342f058bebe54290"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1e45607a7acecd47342f058bebe54290">JARVIS_TEST</a> (stack_alloc_overflow_hook_weak_symbol, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a5f6f8aac9529154596367ace6432c43e" id="r_a5f6f8aac9529154596367ace6432c43e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5f6f8aac9529154596367ace6432c43e">JARVIS_TEST</a> (kstack_guard_base_unmapped, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:ade624542ad80dbf8c870dc2774c68dd8" id="r_ade624542ad80dbf8c870dc2774c68dd8"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ade624542ad80dbf8c870dc2774c68dd8">JARVIS_TEST</a> (kstack_overflow_invokes_hook, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a240c242a6b03d6e999d8dd778f4a69e5" id="r_a240c242a6b03d6e999d8dd778f4a69e5"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a240c242a6b03d6e999d8dd778f4a69e5">JARVIS_TEST</a> (kstack_slot_snapshot_restore_safe, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a79cfb27c9ebcc8cb5f561276ec5b405e" id="r_a79cfb27c9ebcc8cb5f561276ec5b405e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a79cfb27c9ebcc8cb5f561276ec5b405e">JARVIS_TEST</a> (kstack_snapshot_null_page_slot_roundtrip, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:ac303217336710aa10ae442b2e02c685b" id="r_ac303217336710aa10ae442b2e02c685b"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ac303217336710aa10ae442b2e02c685b">JARVIS_TEST</a> (stack_alloc_user_stack_phys_freed_on_cleanup, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:ac37b7a387bcde57916fc552db0e69b84" id="r_ac37b7a387bcde57916fc552db0e69b84"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ac37b7a387bcde57916fc552db0e69b84">JARVIS_TEST</a> (stack_alloc_user_stack_size_in_config, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a465d0a1793fbe7178f27f6bf4c16445c" id="r_a465d0a1793fbe7178f27f6bf4c16445c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a465d0a1793fbe7178f27f6bf4c16445c">register_stack_alloc_tests</a> ()</td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a5f6f8aac9529154596367ace6432c43e" name="a5f6f8aac9529154596367ace6432c43e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5f6f8aac9529154596367ace6432c43e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a5f6f8aac9529154596367ace6432c43e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -170,11 +171,17 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__stack__alloc_8cpp_a5f6f8aac9529154596367ace6432c43e_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_a5f6f8aac9529154596367ace6432c43e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
 <a id="ade624542ad80dbf8c870dc2774c68dd8" name="ade624542ad80dbf8c870dc2774c68dd8"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ade624542ad80dbf8c870dc2774c68dd8">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ade624542ad80dbf8c870dc2774c68dd8">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -195,13 +202,13 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__stack__alloc_8cpp_ade624542ad80dbf8c870dc2774c68dd8_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_ade624542ad80dbf8c870dc2774c68dd8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
 </div>
 <a id="a240c242a6b03d6e999d8dd778f4a69e5" name="a240c242a6b03d6e999d8dd778f4a69e5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a240c242a6b03d6e999d8dd778f4a69e5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a240c242a6b03d6e999d8dd778f4a69e5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -222,13 +229,40 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__stack__alloc_8cpp_a240c242a6b03d6e999d8dd778f4a69e5_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_a240c242a6b03d6e999d8dd778f4a69e5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="a79cfb27c9ebcc8cb5f561276ec5b405e" name="a79cfb27c9ebcc8cb5f561276ec5b405e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a79cfb27c9ebcc8cb5f561276ec5b405e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/12]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">kstack_snapshot_null_page_slot_roundtrip</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__stack__alloc_8cpp_a79cfb27c9ebcc8cb5f561276ec5b405e_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_a79cfb27c9ebcc8cb5f561276ec5b405e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
 </div>
 
 </div>
 </div>
 <a id="af17a6ee8110c5f00e34d6896244a0db2" name="af17a6ee8110c5f00e34d6896244a0db2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af17a6ee8110c5f00e34d6896244a0db2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#af17a6ee8110c5f00e34d6896244a0db2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -249,7 +283,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a335fa9a945a9c45b11facbf05a9a9c09" name="a335fa9a945a9c45b11facbf05a9a9c09"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a335fa9a945a9c45b11facbf05a9a9c09">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a335fa9a945a9c45b11facbf05a9a9c09">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -266,11 +300,17 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__stack__alloc_8cpp_a335fa9a945a9c45b11facbf05a9a9c09_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_a335fa9a945a9c45b11facbf05a9a9c09_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
 
 </div>
 </div>
 <a id="a1e45607a7acecd47342f058bebe54290" name="a1e45607a7acecd47342f058bebe54290"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1e45607a7acecd47342f058bebe54290">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a1e45607a7acecd47342f058bebe54290">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -291,13 +331,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__stack__alloc_8cpp_a1e45607a7acecd47342f058bebe54290_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_a1e45607a7acecd47342f058bebe54290_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
 </div>
 <a id="a02d38f1c38acb0313e71b219486d5855" name="a02d38f1c38acb0313e71b219486d5855"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a02d38f1c38acb0313e71b219486d5855">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a02d38f1c38acb0313e71b219486d5855">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -314,11 +354,17 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__stack__alloc_8cpp_a02d38f1c38acb0313e71b219486d5855_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_a02d38f1c38acb0313e71b219486d5855_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
 
 </div>
 </div>
 <a id="a534e223466bf8523bbb4995930e811a7" name="a534e223466bf8523bbb4995930e811a7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a534e223466bf8523bbb4995930e811a7">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a534e223466bf8523bbb4995930e811a7">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -335,11 +381,17 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__stack__alloc_8cpp_a534e223466bf8523bbb4995930e811a7_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_a534e223466bf8523bbb4995930e811a7_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
+</div>
 
 </div>
 </div>
 <a id="ac303217336710aa10ae442b2e02c685b" name="ac303217336710aa10ae442b2e02c685b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac303217336710aa10ae442b2e02c685b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ac303217336710aa10ae442b2e02c685b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -356,11 +408,17 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__stack__alloc_8cpp_ac303217336710aa10ae442b2e02c685b_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_ac303217336710aa10ae442b2e02c685b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
+</div>
 
 </div>
 </div>
 <a id="ac37b7a387bcde57916fc552db0e69b84" name="ac37b7a387bcde57916fc552db0e69b84"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac37b7a387bcde57916fc552db0e69b84">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ac37b7a387bcde57916fc552db0e69b84">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[11/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -381,7 +439,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="ae67f8eb9aed06e2d81ec60c1f4c65d22" name="ae67f8eb9aed06e2d81ec60c1f4c65d22"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae67f8eb9aed06e2d81ec60c1f4c65d22">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[11/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ae67f8eb9aed06e2d81ec60c1f4c65d22">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[12/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -398,6 +456,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__stack__alloc_8cpp_ae67f8eb9aed06e2d81ec60c1f4c65d22_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_ae67f8eb9aed06e2d81ec60c1f4c65d22_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 10 -->
+</div>
 
 </div>
 </div>
@@ -419,7 +483,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__stack__alloc_8cpp_a465d0a1793fbe7178f27f6bf4c16445c_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_a465d0a1793fbe7178f27f6bf4c16445c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -433,7 +497,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void stack_overflow_hook </td>
           <td>(</td>
-          <td class="paramtype">kernel::TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -442,7 +506,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__stack__alloc_8cpp_aebf9c76b4ca8fb2a8e32ca3fd1679fea_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_aebf9c76b4ca8fb2a8e32ca3fd1679fea_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 12 -->
 </div>
 
 </div>

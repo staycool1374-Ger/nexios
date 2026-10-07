@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -145,41 +145,41 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('icmp_8hpp_sour
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacenet.html">net</a> {</div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span></div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> ICMP_TYPE_ECHO_REPLY = 0;</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> ICMP_TYPE_ECHO_REQUEST = 8;</div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> ICMP_TYPE_ECHO_REPLY = 0;</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> ICMP_TYPE_ECHO_REQUEST = 8;</div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span></div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> ICMP_HEADER_LEN = 8;</div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span></div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="keyword">struct </span>IcmpHeader {</div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> type;      </div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> code;      </div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> checksum; </div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> ident;    </div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> seq;      </div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> type;      </div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> code;      </div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> checksum; </div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> ident;    </div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> seq;      </div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>} <a class="code hl_function" href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">__attribute__</a>((packed));</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span></div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> icmp_checksum(<span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data, <span class="keywordtype">size_t</span> len) {</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> sum = 0;</div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    <span class="keyword">auto</span> *words = <span class="keyword">reinterpret_cast&lt;</span><span class="keyword">const </span><a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> *<span class="keyword">&gt;</span>(data);</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> icmp_checksum(<span class="keyword">const</span> uint8_t *data, <span class="keywordtype">size_t</span> len) {</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> sum = 0;</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    <span class="keyword">auto</span> *words = <span class="keyword">reinterpret_cast&lt;</span><span class="keyword">const </span><a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> *<span class="keyword">&gt;</span>(data);</div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>    <span class="keywordtype">size_t</span> word_count = len / 2;</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; word_count; ++i) {</div>
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>        sum += words[i];</div>
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    }</div>
 <div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <span class="keywordflow">if</span> (len &amp; 1) {</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>        sum += <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a><span class="keyword">&gt;</span>(data[len - 1]) &lt;&lt; 8;</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>        sum += <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a><span class="keyword">&gt;</span>(data[len - 1]) &lt;&lt; 8;</div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    }</div>
 <div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="keywordflow">while</span> (sum &gt;&gt; 16)</div>
 <div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>        sum = (sum &amp; 0xFFFF) + (sum &gt;&gt; 16);</div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    <span class="keywordflow">return</span> <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a><span class="keyword">&gt;</span>(~sum &amp; 0xFFFF);</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    <span class="keywordflow">return</span> <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a><span class="keyword">&gt;</span>(~sum &amp; 0xFFFF);</div>
 <div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>}</div>
 <div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span> </div>
 <div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>} <span class="comment">// namespace net</span></div>
+<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
+<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
+<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a00c53aee04ed1b36b1a86a010b49ef61"><div class="ttname"><a href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">initrd::__attribute__</a></div><div class="ttdeci">struct initrd::CpioNewcHeader __attribute__((packed))</div></div>
 <div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> global_state.hpp:59</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
-<div class="ttc" id="atypes_8hpp_html_a64be82add362de7c99ce6671d7f4f0a6"><div class="ttname"><a href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> types.hpp:25</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

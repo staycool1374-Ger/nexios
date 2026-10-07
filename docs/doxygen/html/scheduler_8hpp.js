@@ -5,6 +5,7 @@ var scheduler_8hpp =
     [ "kernel::Scheduler::TaskIter", "structkernel_1_1_scheduler_1_1_task_iter.html", "structkernel_1_1_scheduler_1_1_task_iter" ],
     [ "kernel::Scheduler::TaskFields", "structkernel_1_1_scheduler_1_1_task_fields.html", "structkernel_1_1_scheduler_1_1_task_fields" ],
     [ "kernel::Scheduler::SwSlots", "structkernel_1_1_scheduler_1_1_sw_slots.html", null ],
+    [ "kernel::__attribute__", "namespacekernel.html#aadf277954fd86eeba0a08c68e1f25c06", null ],
     [ "kernel::deadline_detection_integrity", "namespacekernel.html#a9280448447d20124500fb1be0a0ed68f", null ],
     [ "kernel::fpu_nm_depth_max", "namespacekernel.html#a0635983d70bccde24c7125eba436d74e", null ],
     [ "kernel::scheduler_corruption_count", "namespacekernel.html#a48b013f336f1cc7c0546ff7a5aa9db11", null ],

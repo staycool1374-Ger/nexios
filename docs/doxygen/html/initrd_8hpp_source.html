@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -144,23 +144,23 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('initrd_8hpp_so
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
 <div class="foldopen" id="foldopen00025" data-start="{" data-end="};">
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno"><a class="line" href="structinitrd_1_1_initrd_file.html">   25</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structinitrd_1_1_initrd_file.html">InitrdFile</a> {</div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno"><a class="line" href="structinitrd_1_1_initrd_file.html#a284f0fa77e17e6f90b6675a0bc0025e6">   26</a></span>    <span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>* <a class="code hl_variable" href="structinitrd_1_1_initrd_file.html#a284f0fa77e17e6f90b6675a0bc0025e6">data</a>;</div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="structinitrd_1_1_initrd_file.html#a12c4378096fead7fb8006af8aff74eef">   27</a></span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="structinitrd_1_1_initrd_file.html#a12c4378096fead7fb8006af8aff74eef">size</a>;</div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno"><a class="line" href="structinitrd_1_1_initrd_file.html#a284f0fa77e17e6f90b6675a0bc0025e6">   26</a></span>    <span class="keyword">const</span> uint8_t* <a class="code hl_variable" href="structinitrd_1_1_initrd_file.html#a284f0fa77e17e6f90b6675a0bc0025e6">data</a>;</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="structinitrd_1_1_initrd_file.html#a12c4378096fead7fb8006af8aff74eef">   27</a></span>    uint64_t <a class="code hl_variable" href="structinitrd_1_1_initrd_file.html#a12c4378096fead7fb8006af8aff74eef">size</a>;</div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>};</div>
 </div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span> </div>
 <div class="foldopen" id="foldopen00030" data-start="{" data-end="};">
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno"><a class="line" href="structinitrd_1_1_initrd_entry.html">   30</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structinitrd_1_1_initrd_entry.html">InitrdEntry</a> {</div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="structinitrd_1_1_initrd_entry.html#a24f154639a5c63a728a195ccda894956">   31</a></span>    <span class="keywordtype">char</span> <a class="code hl_variable" href="structinitrd_1_1_initrd_entry.html#a24f154639a5c63a728a195ccda894956">name</a>[256];</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="structinitrd_1_1_initrd_entry.html#a9174fa5a8a400c8c333902345c1d53cf">   32</a></span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="structinitrd_1_1_initrd_entry.html#a9174fa5a8a400c8c333902345c1d53cf">size</a>;</div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="structinitrd_1_1_initrd_entry.html#a9174fa5a8a400c8c333902345c1d53cf">   32</a></span>    uint64_t <a class="code hl_variable" href="structinitrd_1_1_initrd_entry.html#a9174fa5a8a400c8c333902345c1d53cf">size</a>;</div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="structinitrd_1_1_initrd_entry.html#a48e95a6e7d3e3e0f77113e60847c9670">   33</a></span>    <span class="keywordtype">bool</span> <a class="code hl_variable" href="structinitrd_1_1_initrd_entry.html#a48e95a6e7d3e3e0f77113e60847c9670">is_dir</a>;</div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>};</div>
 </div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span> </div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>(<span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>* start, <span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>* end);</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>(<span class="keyword">const</span> uint8_t* start, <span class="keyword">const</span> uint8_t* end);</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><a class="code hl_struct" href="structinitrd_1_1_initrd_file.html">InitrdFile</a> <a class="code hl_function" href="namespaceinitrd.html#a08db2dcf48cc3117394e849a12e1fc19">find</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* path);</div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span> </div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespaceinitrd.html#a36c2e1ae3322f0ee5973773ba6a3f6fe">readdir</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>* pos, <a class="code hl_struct" href="structinitrd_1_1_initrd_entry.html">InitrdEntry</a>* entry);</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespaceinitrd.html#a36c2e1ae3322f0ee5973773ba6a3f6fe">readdir</a>(uint64_t* pos, <a class="code hl_struct" href="structinitrd_1_1_initrd_entry.html">InitrdEntry</a>* entry);</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span> </div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>} <span class="comment">// namespace initrd</span></div>
 <div class="ttc" id="anamespaceinitrd_html"><div class="ttname"><a href="namespaceinitrd.html">initrd</a></div><div class="ttdef"><b>Definition</b> initrd.cpp:22</div></div>
@@ -175,8 +175,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('initrd_8hpp_so
 <div class="ttc" id="astructinitrd_1_1_initrd_file_html_a12c4378096fead7fb8006af8aff74eef"><div class="ttname"><a href="structinitrd_1_1_initrd_file.html#a12c4378096fead7fb8006af8aff74eef">initrd::InitrdFile::size</a></div><div class="ttdeci">uint64_t size</div><div class="ttdef"><b>Definition</b> initrd.hpp:27</div></div>
 <div class="ttc" id="astructinitrd_1_1_initrd_file_html_a284f0fa77e17e6f90b6675a0bc0025e6"><div class="ttname"><a href="structinitrd_1_1_initrd_file.html#a284f0fa77e17e6f90b6675a0bc0025e6">initrd::InitrdFile::data</a></div><div class="ttdeci">const uint8_t * data</div><div class="ttdef"><b>Definition</b> initrd.hpp:26</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

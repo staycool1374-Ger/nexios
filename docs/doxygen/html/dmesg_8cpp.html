@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -122,8 +122,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dmesg_8cpp.htm
 <p>DmesgService singleton — the private DmesgBuffer ring is defined inline in <a class="el" href="dmesg_8hpp.html" title="Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer, DmesgService singleton,...">dmesg.hpp</a> (friend-tested, no explicit instantiation needed).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dmesg__catalog_8hpp_source.html">kernel/log/dmesg_catalog.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="kernel_8hpp_source.html">kernel/kernel.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for dmesg.cpp:</div>
 <div class="dyncontent">
@@ -136,6 +139,13 @@ Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
 <tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Alog" id="r_kernel_3A_3Alog"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html">kernel::log</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ac6086b9f241e6ab82dc53c140c90926b" id="r_ac6086b9f241e6ab82dc53c140c90926b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#ac6086b9f241e6ab82dc53c140c90926b">kernel::log::current_wall_ms</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ac6086b9f241e6ab82dc53c140c90926b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wall-clock milliseconds since the Unix epoch for log entries. Defined in <a class="el" href="dmesg_8cpp.html" title="DmesgService singleton — the private DmesgBuffer ring is defined inline in dmesg.hpp (friend-tested,...">dmesg.cpp</a> (reads the boot epoch + tick count); returns 0 while no wall time is available (early boot) — the renderer then falls back to the boot-tick count per the issue-#234 time rule.  <br /></td></tr>
+<tr class="memitem:a65b3b1de43a3a9dfd5327df857001131" id="r_a65b3b1de43a3a9dfd5327df857001131"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a65b3b1de43a3a9dfd5327df857001131">kernel::log::format_dmesg_entry</a> (char *out_buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> out_cap, const <a class="el" href="structkernel_1_1log_1_1_log_entry.html">LogEntry</a> &amp;entry) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a65b3b1de43a3a9dfd5327df857001131"><td class="mdescLeft">&#160;</td><td class="mdescRight">Render one entry in the canonical issue-#234 line format: <span class="tt">[DMESG &lt;<a class="el" href="namespacekernel_1_1time.html">time</a>&gt;ms]: &lt;TYPE&gt; &lt;CODEBASE&gt; &lt;error-nr&gt; &lt;err-text&gt;: &lt;msg&gt;</span> <span class="tt">  [<a class="el" href="namespacekernel_1_1task.html">task</a>=&lt;id&gt; ctx=0x&lt;hex&gt;]</span> &lt;time&gt; is wall_ms when set, else the boot-tick timestamp. The output is always NUL-terminated and truncated to fit; bounded loops only.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>DmesgService singleton — the private DmesgBuffer ring is defined inline in <a class="el" href="dmesg_8hpp.html" title="Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer, DmesgService singleton,...">dmesg.hpp</a> (friend-tested, no explicit instantiation needed). </p>

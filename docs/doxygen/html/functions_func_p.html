@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -120,25 +120,56 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 
 
 <h3 class="doxsection"><a id="index_p" name="index_p"></a>- p -</h3><ul>
+<li>page_index()&#160;:&#160;<a class="el" href="classarch_1_1kernel_1_1_page_address.html#ad3479bb04e49a3380901d055e092b196">arch::kernel::PageAddress</a>, <a class="el" href="classkernel_1_1_page_address.html#a8212ec3ea22f906584166d808fb28b78">kernel::PageAddress</a></li>
+<li>PageAddress()&#160;:&#160;<a class="el" href="classarch_1_1kernel_1_1_page_address.html#a8ea63e7b8f244f3e3b6c13106e6bdd3d">arch::kernel::PageAddress</a>, <a class="el" href="classkernel_1_1_page_address.html#a909aef1a145b7baa3721c16e4e4f6022">kernel::PageAddress</a></li>
 <li>pass()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_test_base.html#a65169196f9556bd9e35e7248b6773acf">kernel::test::TestBase</a></li>
 <li>passed()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_registry.html#ad30c0be8d7ba6161c038aa562c3ac885">kernel::test::Registry</a></li>
 <li>peek()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#a6d962205da2437f62bb1491e1f63fcc2">kernel::cap::CNode</a></li>
 <li>peek_earliest()&#160;:&#160;<a class="el" href="classkernel_1_1_deadline_list.html#a66045dfac6d5333994007baf94273ac7">kernel::DeadlineList</a></li>
 <li>peek_highest()&#160;:&#160;<a class="el" href="classkernel_1_1_ready_queue_manager.html#a7cd0fb1e8df2a42e98dc99dc0957a5e3">kernel::ReadyQueueManager</a></li>
-<li>pending_count()&#160;:&#160;<a class="el" href="classkernel_1_1_tlb_shootdown.html#aeb14d0e971ecf8d62f59bffb22026374">kernel::TlbShootdown</a></li>
+<li>pending_count()&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#a5772a501b3eb0df8688705394b5c5e5b">kernel::task::SporadicServer</a>, <a class="el" href="classkernel_1_1_tlb_shootdown.html#aeb14d0e971ecf8d62f59bffb22026374">kernel::TlbShootdown</a></li>
 <li>pending_fault()&#160;:&#160;<a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html#a38abbeb2bc89ceec0cfde4e3c05c9fea">kernel::ipc::PagerRegistry</a></li>
+<li>period()&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#ab5bd8cf9b74ab74440b935ff87f297d7">kernel::task::SporadicServer</a></li>
+<li>PhysicalAddress()&#160;:&#160;<a class="el" href="classarch_1_1kernel_1_1_physical_address.html#a87dc6d28f7bb69167c8ee56dcea4b173">arch::kernel::PhysicalAddress</a>, <a class="el" href="classkernel_1_1_physical_address.html#a17ec45a26978569e7cfc6cdb521744e5">kernel::PhysicalAddress</a></li>
 <li>picolibc_string()&#160;:&#160;<a class="el" href="structkernel_1_1_version.html#aed11ebd7bded5cfb2ef3e1d51ce86d68">kernel::Version</a></li>
+<li>pin_block()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a6574e0763aea733d25070b254c4a9daa">kernel::MemPool</a></li>
 <li>pitch()&#160;:&#160;<a class="el" href="classservice_1_1_framebuffer.html#a6eb99344927b7b6ce014f9c17886ce1e">service::Framebuffer</a></li>
-<li>pop()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a0387a8f14b7ef2ad6d8e212aebc30e56">kernel::log::DmesgService</a></li>
+<li>Pool()&#160;:&#160;<a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html#a5f3c97d9b24fc29bd093c3b1548ac4b4">kernel::MemPool::Pool</a></li>
+<li>pool_bump_generation()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#ae1c3212c9f00a811acfa37e87a062480">kernel::PMM</a></li>
+<li>pool_count()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a3556de6ec5da7d91d286de37fcc0b7f2">kernel::MemPool</a></li>
+<li>pool_data_bytes()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a0f399177b0784f66fafc6bf0c7dffd9a">kernel::MemPool</a></li>
+<li>pool_end()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a7e09b10dd9705576e440b915bdc20d13">kernel::PMM</a></li>
+<li>pool_free_count()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a9b4b566672c26e373019680d14e52828">kernel::MemPool</a></li>
+<li>pool_generation()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#ad194ba1dcb46438e14794497afaee75e">kernel::PMM</a></li>
+<li>pool_is_mapped()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a6bb03f66d5a3bc4cb76b9efd9915b4d4">kernel::PMM</a></li>
+<li>pool_is_poisoned()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#af988fa54a681c375f0341c376934c443">kernel::PMM</a></li>
+<li>pool_is_tainted()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#acfa5be31df9c22bc15e0a3f528bcdeed">kernel::PMM</a></li>
+<li>pool_ref_dec()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#aa5f2e27f19324131e2393548b60f399c">kernel::PMM</a></li>
+<li>pool_ref_inc()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a355b1598a040b6dc8877d31a78e8ffef">kernel::PMM</a></li>
+<li>pool_refcount()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#ab304772f2ff56af75470caa073ffe5e6">kernel::PMM</a></li>
+<li>pool_set_poisoned()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#adaf2f82509447ee397cfb124f8d23b8b">kernel::PMM</a></li>
+<li>pool_set_tainted()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a74aead42af2a10b535172d2f99a3f031">kernel::PMM</a></li>
+<li>pool_start()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#af98c82a6817a3a6e63eb606f3c7cd32e">kernel::PMM</a></li>
+<li>pool_total_pages()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#af0364ddfe5c3576fda38b59e1384b833">kernel::PMM</a></li>
+<li>pool_used_pages()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#ad271d4f32472671bc9dc70867c4ebf84">kernel::PMM</a></li>
+<li>pop()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a0387a8f14b7ef2ad6d8e212aebc30e56">kernel::log::DmesgService</a>, <a class="el" href="structkernel_1_1_message_queue.html#a4a8b5699fccf8f2fd24701dc1c874fee">kernel::MessageQueue</a></li>
+<li>pop_clamped()&#160;:&#160;<a class="el" href="structkernel_1_1_message_queue.html#abea5b684d416c4467bb309fe146cbb8a">kernel::MessageQueue</a></li>
 <li>pop_earliest_if_expired()&#160;:&#160;<a class="el" href="classkernel_1_1_deadline_list.html#a9a187c4e54c196c3400b71549372ecec">kernel::DeadlineList</a></li>
+<li>pop_from_sender()&#160;:&#160;<a class="el" href="structkernel_1_1_message_queue.html#a7f429d387e8487c71ebe9c84ff296f03">kernel::MessageQueue</a></li>
+<li>pop_from_sender_clamped()&#160;:&#160;<a class="el" href="structkernel_1_1_message_queue.html#a41431013e685903689304dd877cc2bbe">kernel::MessageQueue</a></li>
 <li>pop_front()&#160;:&#160;<a class="el" href="classkernel_1_1_task_queue.html#ab3a49cc31ec76ab3df013b2ce6997662">kernel::TaskQueue</a></li>
+<li>post()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_semaphore.html#aae19cc2e2987d6a57ecf736312750ee8">kernel::sync::Semaphore</a></li>
+<li>post_err()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_semaphore.html#a22d386977a3f68483e72e68cf6ed7f0f">kernel::sync::Semaphore</a></li>
+<li>post_snapshot_overlay_apply()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a97c43cba164a3c85aeb475a83e904bd7">kernel::PMM</a></li>
+<li>post_snapshot_overlay_clear()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a5ae835d4732b0e93dd69b4ab65e64979">kernel::PMM</a></li>
 <li>print_dec()&#160;:&#160;<a class="el" href="classkernel_1_1_logger.html#ad2aea07eb751fad2fb738fe4123c7e7b">kernel::Logger</a></li>
 <li>print_hex()&#160;:&#160;<a class="el" href="classkernel_1_1_logger.html#ae7f9fd488685463ec9810c40d6f907c7">kernel::Logger</a></li>
 <li>PriorityMap()&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#a2d3e3d8feecbcb4b31dfb67a8adee94d">kernel::PriorityMap</a></li>
 <li>probe()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a49d55ccf28c9ef9ad6009a610d102d6b">kernel::iommu::IoMmuManager</a></li>
 <li>probe_hardware()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a8056e61793d4747342dcca012a3b38f7">kernel::iommu::IoMmuManager</a></li>
 <li>process_deferred_kills()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ac2ebbf950ac51a2d7700333fb0c4ba8e">kernel::Scheduler</a></li>
-<li>push()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a4b095d56b14b7c56c75284a04d0eded6">kernel::log::DmesgService</a></li>
+<li>process_replenishments()&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#af84fdf5fd66413625cbb631f48dd4d77">kernel::task::SporadicServer</a></li>
+<li>push()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a4b095d56b14b7c56c75284a04d0eded6">kernel::log::DmesgService</a>, <a class="el" href="structkernel_1_1_message_queue.html#ab0b722ca481a94d8a138fdd76a4c3922">kernel::MessageQueue</a></li>
 <li>push_back()&#160;:&#160;<a class="el" href="classkernel_1_1_task_queue.html#a921f7a683bc08d9016cf18fa58b59f99">kernel::TaskQueue</a></li>
 <li>putc()&#160;:&#160;<a class="el" href="classarch_1_1_qemu_debugcon.html#a49f6a51be9c63d005b4fcdeafb4c21cb">arch::QemuDebugcon</a></li>
 <li>putchar()&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#a2cdeef541005d6fe951835a03107ee48">service::Terminal</a></li>

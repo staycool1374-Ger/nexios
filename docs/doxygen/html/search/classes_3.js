@@ -6,5 +6,6 @@ var searchData=
   ['defaultdeleter_3',['DefaultDeleter',['../struct_default_deleter.html',1,'']]],
   ['deventry_4',['DevEntry',['../structkernel_1_1vfs_1_1_dev_entry.html',1,'kernel::vfs']]],
   ['dmarinfo_5',['DmarInfo',['../structkernel_1_1iommu_1_1dmar_1_1_dmar_info.html',1,'kernel::iommu::dmar']]],
-  ['dmesgservice_6',['DmesgService',['../classkernel_1_1log_1_1_dmesg_service.html',1,'kernel::log']]]
+  ['dmesgrecord_6',['DmesgRecord',['../structkernel_1_1log_1_1catalog_1_1_dmesg_record.html',1,'kernel::log::catalog']]],
+  ['dmesgservice_7',['DmesgService',['../classkernel_1_1log_1_1_dmesg_service.html',1,'kernel::log']]]
 ];

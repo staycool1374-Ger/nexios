@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -130,6 +130,11 @@ Collaboration diagram for kernel::PMM:</div>
 <!-- MAP 0 -->
 </div>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:WindowPages" id="r_WindowPages"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_p_m_m_1_1_window_pages.html">WindowPages</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocatable-window geometry in absolute page indices.  <a href="structkernel_1_1_p_m_m_1_1_window_pages.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-types" class="groupheader"><a id="pub-types" name="pub-types"></a>
 Public Types</h2></td></tr>
 <tr class="memitem:af496d6a7fea3abf9c72931e240ea8888" id="r_af496d6a7fea3abf9c72931e240ea8888"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#af496d6a7fea3abf9c72931e240ea8888">OOMHandler</a> = bool (*)()</td></tr>
@@ -137,10 +142,12 @@ Public Types</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:a5b0e255a792b629f160f6c690726950b" id="r_a5b0e255a792b629f160f6c690726950b"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a5b0e255a792b629f160f6c690726950b">init</a> (uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end)</td></tr>
-<tr class="memdesc:a5b0e255a792b629f160f6c690726950b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize the physical memory manager with a bitmap.  <br /></td></tr>
-<tr class="memitem:a6bbf5985171279c81d6bbf6933496391" id="r_a6bbf5985171279c81d6bbf6933496391"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">errors::PmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6bbf5985171279c81d6bbf6933496391">init_err</a> (uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end)</td></tr>
-<tr class="memdesc:a6bbf5985171279c81d6bbf6933496391"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize with error code.  <br /></td></tr>
+<tr class="memitem:a36e93eea368c86e6699b74cc39091bc5" id="r_a36e93eea368c86e6699b74cc39091bc5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a36e93eea368c86e6699b74cc39091bc5">init</a> (uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end, uint64_t window_base=0)</td></tr>
+<tr class="memdesc:a36e93eea368c86e6699b74cc39091bc5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize the physical memory manager with a bitmap.  <br /></td></tr>
+<tr class="memitem:a1b355693480bc253dcfab0afbf2ac569" id="r_a1b355693480bc253dcfab0afbf2ac569"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">errors::PmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1b355693480bc253dcfab0afbf2ac569">init_err</a> (uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end, uint64_t window_base=0)</td></tr>
+<tr class="memdesc:a1b355693480bc253dcfab0afbf2ac569"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize with error code.  <br /></td></tr>
+<tr class="memitem:ab5cae5425cfdac020f01d167b50fde2c" id="r_ab5cae5425cfdac020f01d167b50fde2c"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab5cae5425cfdac020f01d167b50fde2c">mark_init_done</a> ()</td></tr>
+<tr class="memdesc:ab5cae5425cfdac020f01d167b50fde2c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mark the <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> as fully initialized (post-boot). After this call, <a class="el" href="#acd322564470938305549042daa42732d" title="Allocates a single 4 KiB page (KERNEL ownership).">alloc_page()</a> checks CONFIG_STATIC_POOLS_ONLY and panics/returns 0 if a dynamic allocation is attempted.  <br /></td></tr>
 <tr class="memitem:acd322564470938305549042daa42732d" id="r_acd322564470938305549042daa42732d"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#acd322564470938305549042daa42732d">alloc_page</a> ()</td></tr>
 <tr class="memdesc:acd322564470938305549042daa42732d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocates a single 4 KiB page (KERNEL ownership).  <br /></td></tr>
 <tr class="memitem:a2b5af6ef9cd75524423988e0ecf27107" id="r_a2b5af6ef9cd75524423988e0ecf27107"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">errors::PmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2b5af6ef9cd75524423988e0ecf27107">alloc_page_err</a> (uint64_t &amp;out_phys_addr)</td></tr>
@@ -161,27 +168,95 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a8f9fb6564b0e66f0544e4af3205dd4d0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocates a single 4 KiB page for page tables (KERNEL ownership, from reserved low-memory pool).  <br /></td></tr>
 <tr class="memitem:aa463df4ae7427d4c22f07c2d2224653a" id="r_aa463df4ae7427d4c22f07c2d2224653a"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">errors::PmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa463df4ae7427d4c22f07c2d2224653a">alloc_page_table_err</a> (uint64_t &amp;out_phys_addr)</td></tr>
 <tr class="memdesc:aa463df4ae7427d4c22f07c2d2224653a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocates a single 4 KiB page for page tables with error code.  <br /></td></tr>
+<tr class="memitem:a4368a5f3c653b3cad719acede1ec8d43" id="r_a4368a5f3c653b3cad719acede1ec8d43"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4368a5f3c653b3cad719acede1ec8d43">color_of</a> (uint64_t phys_addr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a4368a5f3c653b3cad719acede1ec8d43"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page color of a physical address (issue #62; delegates to the cache_color contract — pure, lock-free, any ctx).  <br /></td></tr>
+<tr class="memitem:aeedaca3386682da1e14767a34243fe5b" id="r_aeedaca3386682da1e14767a34243fe5b"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aeedaca3386682da1e14767a34243fe5b">alloc_page_colored</a> (uint64_t color)</td></tr>
+<tr class="memdesc:aeedaca3386682da1e14767a34243fe5b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocates a single 4 KiB page of the requested color (KERNEL ownership; issue #62). Single-page only: colored-contiguous is over-constrained (same color AND contiguous is rarely satisfiable) — multi-page callers keep using alloc_contiguous. Creation/test-time path (color-strided scan + free-list rebuild, not RT-budgeted).  <br /></td></tr>
+<tr class="memitem:a8694e3d85b5ff92dd758cdc8270f4e5b" id="r_a8694e3d85b5ff92dd758cdc8270f4e5b"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">errors::PmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8694e3d85b5ff92dd758cdc8270f4e5b">alloc_page_colored_err</a> (uint64_t color, uint64_t &amp;out_phys_addr)</td></tr>
+<tr class="memdesc:a8694e3d85b5ff92dd758cdc8270f4e5b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Colored KERNEL alloc with error code.  <br /></td></tr>
+<tr class="memitem:a5e982e72fab0bc94ec9f9ef8e0fdc7b6" id="r_a5e982e72fab0bc94ec9f9ef8e0fdc7b6"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5e982e72fab0bc94ec9f9ef8e0fdc7b6">alloc_user_page_colored</a> (uint64_t color)</td></tr>
+<tr class="memdesc:a5e982e72fab0bc94ec9f9ef8e0fdc7b6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocates a single 4 KiB page of the requested color (USER ownership; issue #62). Same contract as the KERNEL variant above.  <br /></td></tr>
+<tr class="memitem:a62b98f9755e4d4b8434504c1dcdf6ca5" id="r_a62b98f9755e4d4b8434504c1dcdf6ca5"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">errors::PmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a62b98f9755e4d4b8434504c1dcdf6ca5">alloc_user_page_colored_err</a> (uint64_t color, uint64_t &amp;out_phys_addr)</td></tr>
+<tr class="memdesc:a62b98f9755e4d4b8434504c1dcdf6ca5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Colored USER alloc with error code.  <br /></td></tr>
+<tr class="memitem:a06602b03fc379b4e09aa58947b49dc3f" id="r_a06602b03fc379b4e09aa58947b49dc3f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a06602b03fc379b4e09aa58947b49dc3f">reset_color_cursor</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a06602b03fc379b4e09aa58947b49dc3f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset per-color allocation cursors (test hook, issue #62). Cursors affect placement only, never correctness; tests call this at entry for deterministic colors.  <br /></td></tr>
 <tr class="memitem:a0daaa2d1b36579ff9c0eb60caddee59d" id="r_a0daaa2d1b36579ff9c0eb60caddee59d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0daaa2d1b36579ff9c0eb60caddee59d">free_page</a> (uint64_t phys_addr)</td></tr>
 <tr class="memdesc:a0daaa2d1b36579ff9c0eb60caddee59d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees a page regardless of ownership.  <br /></td></tr>
 <tr class="memitem:ac875a7cc225949a791f100851d4bd470" id="r_ac875a7cc225949a791f100851d4bd470"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">errors::PmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac875a7cc225949a791f100851d4bd470">free_page_err</a> (uint64_t phys_addr)</td></tr>
 <tr class="memdesc:ac875a7cc225949a791f100851d4bd470"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees a page with error code.  <br /></td></tr>
+<tr class="memitem:a175fa84a3fb5c2ca07dcf37d1468f73d" id="r_a175fa84a3fb5c2ca07dcf37d1468f73d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a175fa84a3fb5c2ca07dcf37d1468f73d">reserve_range</a> (uint64_t start_phys, uint64_t end_phys)</td></tr>
+<tr class="memdesc:a175fa84a3fb5c2ca07dcf37d1468f73d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Marks a physical page range [start_phys, end_phys) as allocated KERNEL-owned (boot-time data: GRUB's Multiboot2 info must never be handed to an allocator). Call right after <a class="el" href="#a36e93eea368c86e6699b74cc39091bc5" title="Initialize the physical memory manager with a bitmap.">init()</a> before any allocation. No-op on pages outside the allocatable window or already marked.  <br /></td></tr>
+<tr class="memitem:ae1891b0dc99397676c930d8d3257235d" id="r_ae1891b0dc99397676c930d8d3257235d"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ae1891b0dc99397676c930d8d3257235d">is_allocated</a> (uint64_t phys_addr)</td></tr>
+<tr class="memdesc:ae1891b0dc99397676c930d8d3257235d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true if a physical page is currently allocated.  <br /></td></tr>
 <tr class="memitem:a25790262d20157b6e9919d423937e52d" id="r_a25790262d20157b6e9919d423937e52d"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a25790262d20157b6e9919d423937e52d">is_user_page</a> (uint64_t phys_addr)</td></tr>
 <tr class="memdesc:a25790262d20157b6e9919d423937e52d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true if the page was allocated as USER ownership.  <br /></td></tr>
 <tr class="memitem:a7b048500dce597426b18de4eee1f1119" id="r_a7b048500dce597426b18de4eee1f1119"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">errors::PmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7b048500dce597426b18de4eee1f1119">is_user_page_err</a> (uint64_t phys_addr, bool &amp;out_is_user)</td></tr>
 <tr class="memdesc:a7b048500dce597426b18de4eee1f1119"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true if the page was allocated as USER ownership with error code.  <br /></td></tr>
-<tr class="memitem:a00cdda7e7ef634b49f0486ccd1ff7956" id="r_a00cdda7e7ef634b49f0486ccd1ff7956"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a00cdda7e7ef634b49f0486ccd1ff7956">free_memory</a> () noexcept</td></tr>
-<tr class="memitem:a19ab9f1e2a4a123040d8a9d1e539318b" id="r_a19ab9f1e2a4a123040d8a9d1e539318b"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a19ab9f1e2a4a123040d8a9d1e539318b">total_memory</a> () noexcept</td></tr>
+<tr class="memitem:a00cdda7e7ef634b49f0486ccd1ff7956" id="r_a00cdda7e7ef634b49f0486ccd1ff7956"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a00cdda7e7ef634b49f0486ccd1ff7956">free_memory</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a00cdda7e7ef634b49f0486ccd1ff7956"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the amount of free physical memory in bytes.  <br /></td></tr>
+<tr class="memitem:a19ab9f1e2a4a123040d8a9d1e539318b" id="r_a19ab9f1e2a4a123040d8a9d1e539318b"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a19ab9f1e2a4a123040d8a9d1e539318b">total_memory</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a19ab9f1e2a4a123040d8a9d1e539318b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the total physical memory size in bytes.  <br /></td></tr>
+<tr class="memitem:aca314ea8b9aaa791a9f6aa643c1f025b" id="r_aca314ea8b9aaa791a9f6aa643c1f025b"><td class="memItemLeft">static constexpr <a class="el" href="structkernel_1_1_p_m_m_1_1_window_pages.html">WindowPages</a>&#160;</td><td class="memItemRight"><a class="el" href="#aca314ea8b9aaa791a9f6aa643c1f025b">compute_window_pages</a> (uint64_t mem_size, uint64_t window_base)</td></tr>
+<tr class="memdesc:aca314ea8b9aaa791a9f6aa643c1f025b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Compute the allocatable window for a memory layout (pure).  <br /></td></tr>
+<tr class="memitem:a09983cd9ca68e335f558fc37b3a3da58" id="r_a09983cd9ca68e335f558fc37b3a3da58"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a09983cd9ca68e335f558fc37b3a3da58">window_base_page</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a09983cd9ca68e335f558fc37b3a3da58"><td class="mdescLeft">&#160;</td><td class="mdescRight">First allocatable physical page index (diagnostic/test only).  <br /></td></tr>
+<tr class="memitem:ad7778e24949c06cbd4f298130c12cd50" id="r_ad7778e24949c06cbd4f298130c12cd50"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad7778e24949c06cbd4f298130c12cd50">window_end_page</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ad7778e24949c06cbd4f298130c12cd50"><td class="mdescLeft">&#160;</td><td class="mdescRight">One past the last allocatable physical page index (diagnostic/test only).  <br /></td></tr>
 <tr class="memitem:a0abccda473b2936b5aa008a686f52c86" id="r_a0abccda473b2936b5aa008a686f52c86"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0abccda473b2936b5aa008a686f52c86">set_oom_handler</a> (<a class="el" href="#af496d6a7fea3abf9c72931e240ea8888">OOMHandler</a> h)</td></tr>
+<tr class="memdesc:a0abccda473b2936b5aa008a686f52c86"><td class="mdescLeft">&#160;</td><td class="mdescRight">Install an OOM handler that the allocator calls when pages are exhausted.  <br /></td></tr>
 <tr class="memitem:a9273eca891a1f09d6eea421dc5af9fe7" id="r_a9273eca891a1f09d6eea421dc5af9fe7"><td class="memItemLeft">static <a class="el" href="#af496d6a7fea3abf9c72931e240ea8888">OOMHandler</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9273eca891a1f09d6eea421dc5af9fe7">get_oom_handler</a> ()</td></tr>
+<tr class="memdesc:a9273eca891a1f09d6eea421dc5af9fe7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the currently installed OOM handler.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-member-group" class="groupheader"><a id="member-group" name="member-group"></a>
 Test-isolation helpers</h2></td></tr>
-<tr><td class="ititle" colspan="2"><p>Expose internal bitmaps for snapshot/restore. </p>
+<tr><td class="ititle" colspan="2"><p>Expose internal bitmaps for snapshot/restore.</p>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to the allocation bitmap. </dd></dl>
 </td></tr>
 <tr class="memitem:a3ba6d609baf9da2794af9e9863c5d975" id="r_a3ba6d609baf9da2794af9e9863c5d975"><td class="memItemLeft">static uint8_t *&#160;</td><td class="memItemRight"><a class="el" href="#a3ba6d609baf9da2794af9e9863c5d975">bitmap_ptr</a> ()</td></tr>
 <tr class="memitem:acd88be2cef5299bedb357e96b782a757" id="r_acd88be2cef5299bedb357e96b782a757"><td class="memItemLeft">static uint8_t *&#160;</td><td class="memItemRight"><a class="el" href="#acd88be2cef5299bedb357e96b782a757">owner_bitmap_ptr</a> ()</td></tr>
+<tr class="memdesc:acd88be2cef5299bedb357e96b782a757"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return pointer to the owner-tracking bitmap.  <br /></td></tr>
 <tr class="memitem:adaff0461c22450209fb2c1e8d035110f" id="r_adaff0461c22450209fb2c1e8d035110f"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#adaff0461c22450209fb2c1e8d035110f">bitmap_bytes</a> ()</td></tr>
+<tr class="memdesc:adaff0461c22450209fb2c1e8d035110f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return size of each bitmap in bytes.  <br /></td></tr>
 <tr class="memitem:a762f33493160b0459a5e02468b834b1a" id="r_a762f33493160b0459a5e02468b834b1a"><td class="memItemLeft">static uint64_t &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a762f33493160b0459a5e02468b834b1a">free_pages_ref</a> ()</td></tr>
+<tr class="memdesc:a762f33493160b0459a5e02468b834b1a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return mutable reference to the free-page counter (for snapshot/restore).  <br /></td></tr>
+<tr class="memitem:a5f78d0a26f22879c409dd3eb02782498" id="r_a5f78d0a26f22879c409dd3eb02782498"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a5f78d0a26f22879c409dd3eb02782498">capture_pool_snapshot</a> (<a class="el" href="structkernel_1_1test_1_1_pt_pool_snapshot.html">kernel::test::PtPoolSnapshot</a> &amp;out)</td></tr>
+<tr class="memdesc:a5f78d0a26f22879c409dd3eb02782498"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture page-table pool state into a snapshot struct.  <br /></td></tr>
+<tr class="memitem:afcd345d7c5934145890ed5e63860f7e2" id="r_afcd345d7c5934145890ed5e63860f7e2"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#afcd345d7c5934145890ed5e63860f7e2">restore_pool_snapshot</a> (const <a class="el" href="structkernel_1_1test_1_1_pt_pool_snapshot.html">kernel::test::PtPoolSnapshot</a> &amp;src)</td></tr>
+<tr class="memdesc:afcd345d7c5934145890ed5e63860f7e2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore page-table pool state from a snapshot struct.  <br /></td></tr>
+<tr class="memitem:a5ae835d4732b0e93dd69b4ab65e64979" id="r_a5ae835d4732b0e93dd69b4ab65e64979"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a5ae835d4732b0e93dd69b4ab65e64979">post_snapshot_overlay_clear</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a5ae835d4732b0e93dd69b4ab65e64979"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear the post-snapshot pool overlay (issue #197: call once in snapshot_create; a mid-restore pool recapture must NOT clear it — allocations it records are still live).  <br /></td></tr>
+<tr class="memitem:a97c43cba164a3c85aeb475a83e904bd7" id="r_a97c43cba164a3c85aeb475a83e904bd7"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a97c43cba164a3c85aeb475a83e904bd7">post_snapshot_overlay_apply</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a97c43cba164a3c85aeb475a83e904bd7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Re-apply post-snapshot pool allocations onto the main bitmap (issue #197: call after restore_pool_snapshot, before the freelist rebuild — pages allocated mid-class would otherwise read untracked while still referenced by live page tables).  <br /></td></tr>
+<tr class="memitem:af98c82a6817a3a6e63eb606f3c7cd32e" id="r_af98c82a6817a3a6e63eb606f3c7cd32e"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#af98c82a6817a3a6e63eb606f3c7cd32e">pool_start</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:af98c82a6817a3a6e63eb606f3c7cd32e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page-table pool base physical address (0 if pool not active).  <br /></td></tr>
+<tr class="memitem:a7e09b10dd9705576e440b915bdc20d13" id="r_a7e09b10dd9705576e440b915bdc20d13"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a7e09b10dd9705576e440b915bdc20d13">pool_end</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a7e09b10dd9705576e440b915bdc20d13"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page-table pool end physical address.  <br /></td></tr>
+<tr class="memitem:ad271d4f32472671bc9dc70867c4ebf84" id="r_ad271d4f32472671bc9dc70867c4ebf84"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad271d4f32472671bc9dc70867c4ebf84">pool_used_pages</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ad271d4f32472671bc9dc70867c4ebf84"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of allocated pages in the page-table pool.  <br /></td></tr>
+<tr class="memitem:af0364ddfe5c3576fda38b59e1384b833" id="r_af0364ddfe5c3576fda38b59e1384b833"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#af0364ddfe5c3576fda38b59e1384b833">pool_total_pages</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:af0364ddfe5c3576fda38b59e1384b833"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total capacity of the page-table pool in pages.  <br /></td></tr>
+<tr class="memitem:ad194ba1dcb46438e14794497afaee75e" id="r_ad194ba1dcb46438e14794497afaee75e"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad194ba1dcb46438e14794497afaee75e">pool_generation</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ad194ba1dcb46438e14794497afaee75e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page-table pool generation (incremented on each snapshot capture).  <br /></td></tr>
+<tr class="memitem:ae1c3212c9f00a811acfa37e87a062480" id="r_ae1c3212c9f00a811acfa37e87a062480"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae1c3212c9f00a811acfa37e87a062480">pool_bump_generation</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ae1c3212c9f00a811acfa37e87a062480"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bump the pool generation.  <br /></td></tr>
+<tr class="memitem:ab304772f2ff56af75470caa073ffe5e6" id="r_ab304772f2ff56af75470caa073ffe5e6"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab304772f2ff56af75470caa073ffe5e6">pool_refcount</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ab304772f2ff56af75470caa073ffe5e6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pool reference count (tasks using pool pages).  <br /></td></tr>
+<tr class="memitem:a355b1598a040b6dc8877d31a78e8ffef" id="r_a355b1598a040b6dc8877d31a78e8ffef"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a355b1598a040b6dc8877d31a78e8ffef">pool_ref_inc</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a355b1598a040b6dc8877d31a78e8ffef"><td class="mdescLeft">&#160;</td><td class="mdescRight">Increment pool reference count.  <br /></td></tr>
+<tr class="memitem:aa5f2e27f19324131e2393548b60f399c" id="r_aa5f2e27f19324131e2393548b60f399c"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aa5f2e27f19324131e2393548b60f399c">pool_ref_dec</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:aa5f2e27f19324131e2393548b60f399c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Decrement pool reference count.  <br /></td></tr>
+<tr class="memitem:a6bb03f66d5a3bc4cb76b9efd9915b4d4" id="r_a6bb03f66d5a3bc4cb76b9efd9915b4d4"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a6bb03f66d5a3bc4cb76b9efd9915b4d4">pool_is_mapped</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a6bb03f66d5a3bc4cb76b9efd9915b4d4"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if the pool is mapped in the kernel PML4.  <br /></td></tr>
+<tr class="memitem:a74aead42af2a10b535172d2f99a3f031" id="r_a74aead42af2a10b535172d2f99a3f031"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a74aead42af2a10b535172d2f99a3f031">pool_set_tainted</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a74aead42af2a10b535172d2f99a3f031"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mark the page-table pool as tainted (HW error detected).  <br /></td></tr>
+<tr class="memitem:adaf2f82509447ee397cfb124f8d23b8b" id="r_adaf2f82509447ee397cfb124f8d23b8b"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#adaf2f82509447ee397cfb124f8d23b8b">pool_set_poisoned</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:adaf2f82509447ee397cfb124f8d23b8b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mark the page-table pool as poisoned (buffer overflow / UAF).  <br /></td></tr>
+<tr class="memitem:acfa5be31df9c22bc15e0a3f528bcdeed" id="r_acfa5be31df9c22bc15e0a3f528bcdeed"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#acfa5be31df9c22bc15e0a3f528bcdeed">pool_is_tainted</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:acfa5be31df9c22bc15e0a3f528bcdeed"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if the pool has been touched by a HW error.  <br /></td></tr>
+<tr class="memitem:af988fa54a681c375f0341c376934c443" id="r_af988fa54a681c375f0341c376934c443"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#af988fa54a681c375f0341c376934c443">pool_is_poisoned</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:af988fa54a681c375f0341c376934c443"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if the pool has been corrupted by a buffer overflow / UAF.  <br /></td></tr>
+<tr class="memitem:af9ebfa8acfe52014861ccf0e5f98dada" id="r_af9ebfa8acfe52014861ccf0e5f98dada"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af9ebfa8acfe52014861ccf0e5f98dada">rebuild_free_list</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:af9ebfa8acfe52014861ccf0e5f98dada"><td class="mdescLeft">&#160;</td><td class="mdescRight">Rebuild the general + pool free lists from the current bitmap. Called after <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> bitmap + pool snapshot restore to re-sync freelist heads (free_head_, pool_free_head_) with the restored bitmap state. Without this, <a class="el" href="#acd322564470938305549042daa42732d" title="Allocates a single 4 KiB page (KERNEL ownership).">alloc_page()</a>/alloc_page_table() follow stale freelist entries and return already-allocated pages.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Physical memory manager using a bitmap to track free 4 KiB pages. </p>
@@ -229,6 +304,14 @@ Test-isolation helpers</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Allocates a contiguous block of pages (KERNEL ownership). </p>
+<p>Allocate contiguous KERNEL pages. Invokes OOM handler on failure.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">count</td><td>Number of pages. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 (asserts on persistent OOM). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -266,6 +349,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates a contiguous block of pages (KERNEL ownership) with error code. </p>
+<p>Allocate contiguous KERNEL pages with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">count</td><td>Number of contiguous pages to allocate. </td></tr>
@@ -273,7 +357,15 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">PmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">count</td><td>Number of pages. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address on success. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -307,11 +399,102 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates a single 4 KiB page (KERNEL ownership). </p>
+<p>Allocate a single KERNEL page. Invokes OOM handler on failure.</p>
+<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 (asserts on persistent OOM). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_p_m_m_acd322564470938305549042daa42732d_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_acd322564470938305549042daa42732d_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="aeedaca3386682da1e14767a34243fe5b" name="aeedaca3386682da1e14767a34243fe5b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeedaca3386682da1e14767a34243fe5b">&#9670;&#160;</a></span>alloc_page_colored()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::alloc_page_colored </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>color</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Allocates a single 4 KiB page of the requested color (KERNEL ownership; issue #62). Single-page only: colored-contiguous is over-constrained (same color AND contiguous is rarely satisfiable) — multi-page callers keep using alloc_contiguous. Creation/test-time path (color-strided scan + free-list rebuild, not RT-budgeted). </p>
+<p>Allocate a single page of the requested color (KERNEL ownership, issue #62). Out-of-range colors fail closed (0). OOM-handler release/retry mirrors alloc_page.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">color</td><td>Color in [0, cache::NUM_COLORS); out-of-range returns 0. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 on failure/OOM.</dd>
+<dd>
+Physical address, or 0 (asserts on persistent OOM). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_aeedaca3386682da1e14767a34243fe5b_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_aeedaca3386682da1e14767a34243fe5b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="a8694e3d85b5ff92dd758cdc8270f4e5b" name="a8694e3d85b5ff92dd758cdc8270f4e5b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8694e3d85b5ff92dd758cdc8270f4e5b">&#9670;&#160;</a></span>alloc_page_colored_err()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">errors::PmmError</a> kernel::PMM::alloc_page_colored_err </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>color</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_phys_addr</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Colored KERNEL alloc with error code. </p>
+<p>Colored KERNEL alloc with error code (issue #62).</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">color</td><td>Requested color. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address of allocated page. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_a8694e3d85b5ff92dd758cdc8270f4e5b_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a8694e3d85b5ff92dd758cdc8270f4e5b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -340,18 +523,26 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates a single 4 KiB page (KERNEL ownership) with error code. </p>
+<p>Allocate a single KERNEL page with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address of allocated page. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">PmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address on success. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_p_m_m_a2b5af6ef9cd75524423988e0ecf27107_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a2b5af6ef9cd75524423988e0ecf27107_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -380,11 +571,13 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates a single 4 KiB page for page tables (KERNEL ownership, from reserved low-memory pool). </p>
+<p>Allocate a page from the reserved page-table pool (O(1) free list). Falls back to <a class="el" href="#acd322564470938305549042daa42732d" title="Allocates a single 4 KiB page (KERNEL ownership).">alloc_page()</a> when the pool is exhausted.</p>
+<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 (asserts on OOM). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_p_m_m_a8f9fb6564b0e66f0544e4af3205dd4d0_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a8f9fb6564b0e66f0544e4af3205dd4d0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -413,18 +606,26 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates a single 4 KiB page for page tables with error code. </p>
+<p>Allocate a page-table page (reserved pool, then fallback) with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address of allocated page table page. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">PmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address on success. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_p_m_m_aa463df4ae7427d4c22f07c2d2224653a_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_aa463df4ae7427d4c22f07c2d2224653a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -453,11 +654,19 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates contiguous pages (USER ownership). </p>
+<p>Allocate contiguous USER pages. Invokes OOM handler on failure.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">count</td><td>Number of pages. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 (asserts on persistent OOM). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_p_m_m_ae68479eae708fc368405715ad92a5fc3_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_ae68479eae708fc368405715ad92a5fc3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -490,6 +699,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates contiguous pages (USER ownership) with error code. </p>
+<p>Allocate contiguous USER pages with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">count</td><td>Number of contiguous pages to allocate. </td></tr>
@@ -497,12 +707,20 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">PmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">count</td><td>Number of pages. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address on success. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_p_m_m_ab6db019143467fd1a2da495b86d69c74_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_ab6db019143467fd1a2da495b86d69c74_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -531,11 +749,102 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates a single 4 KiB page (USER ownership). </p>
+<p>Allocate a single USER page. Invokes OOM handler on failure.</p>
+<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 (asserts on persistent OOM). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_p_m_m_a305d66e38020dc96af630796440c80f8_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a305d66e38020dc96af630796440c80f8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="a5e982e72fab0bc94ec9f9ef8e0fdc7b6" name="a5e982e72fab0bc94ec9f9ef8e0fdc7b6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5e982e72fab0bc94ec9f9ef8e0fdc7b6">&#9670;&#160;</a></span>alloc_user_page_colored()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::alloc_user_page_colored </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>color</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Allocates a single 4 KiB page of the requested color (USER ownership; issue #62). Same contract as the KERNEL variant above. </p>
+<p>Allocate a single page of the requested color (USER ownership, issue #62). Mirrors alloc_user_page.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">color</td><td>Color in [0, cache::NUM_COLORS). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 on failure/OOM.</dd>
+<dd>
+Physical address, or 0 (asserts on persistent OOM). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_a5e982e72fab0bc94ec9f9ef8e0fdc7b6_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a5e982e72fab0bc94ec9f9ef8e0fdc7b6_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
+</div>
+
+</div>
+</div>
+<a id="a62b98f9755e4d4b8434504c1dcdf6ca5" name="a62b98f9755e4d4b8434504c1dcdf6ca5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a62b98f9755e4d4b8434504c1dcdf6ca5">&#9670;&#160;</a></span>alloc_user_page_colored_err()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">errors::PmmError</a> kernel::PMM::alloc_user_page_colored_err </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>color</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_phys_addr</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Colored USER alloc with error code. </p>
+<p>Colored USER alloc with error code (issue #62).</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">color</td><td>Requested color. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address of allocated page. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_a62b98f9755e4d4b8434504c1dcdf6ca5_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a62b98f9755e4d4b8434504c1dcdf6ca5_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -564,18 +873,26 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates a single 4 KiB page (USER ownership) with error code. </p>
+<p>Allocate a single USER page with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address of allocated page. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">PmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address on success. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_p_m_m_ace62ea3ef912611c5a6e756b35f25e9a_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_ace62ea3ef912611c5a6e756b35f25e9a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -602,6 +919,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Return size of each bitmap in bytes. </p>
 
 </div>
 </div>
@@ -630,6 +949,118 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a5f78d0a26f22879c409dd3eb02782498" name="a5f78d0a26f22879c409dd3eb02782498"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5f78d0a26f22879c409dd3eb02782498">&#9670;&#160;</a></span>capture_pool_snapshot()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::capture_pool_snapshot </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1test_1_1_pt_pool_snapshot.html">kernel::test::PtPoolSnapshot</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Capture page-table pool state into a snapshot struct. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_a5f78d0a26f22879c409dd3eb02782498_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a5f78d0a26f22879c409dd3eb02782498_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 15 -->
+</div>
+
+</div>
+</div>
+<a id="a4368a5f3c653b3cad719acede1ec8d43" name="a4368a5f3c653b3cad719acede1ec8d43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4368a5f3c653b3cad719acede1ec8d43">&#9670;&#160;</a></span>color_of()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::color_of </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phys_addr</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Page color of a physical address (issue #62; delegates to the cache_color contract — pure, lock-free, any ctx). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">phys_addr</td><td>Byte physical address. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Color in [0, cache::NUM_COLORS). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_a4368a5f3c653b3cad719acede1ec8d43_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a4368a5f3c653b3cad719acede1ec8d43_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 16 -->
+</div>
+
+</div>
+</div>
+<a id="aca314ea8b9aaa791a9f6aa643c1f025b" name="aca314ea8b9aaa791a9f6aa643c1f025b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aca314ea8b9aaa791a9f6aa643c1f025b">&#9670;&#160;</a></span>compute_window_pages()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">constexpr <a class="el" href="structkernel_1_1_p_m_m_1_1_window_pages.html">WindowPages</a> kernel::PMM::compute_window_pages </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>mem_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>window_base</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Compute the allocatable window for a memory layout (pure). </p>
+<p>The window is the first HHDM_WINDOW_SIZE bytes of RAM starting at window_base, clamped to the bitmap span (mem_size). base_page == end_page encodes an empty window (window_base beyond the span). </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">mem_size</td><td>Total span covered by the bitmap in bytes. </td></tr>
+    <tr><td class="paramname">window_base</td><td>Physical base of usable RAM. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Window page range [base_page, end_page). </dd></dl>
+
+</div>
+</div>
 <a id="a00cdda7e7ef634b49f0486ccd1ff7956" name="a00cdda7e7ef634b49f0486ccd1ff7956"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a00cdda7e7ef634b49f0486ccd1ff7956">&#9670;&#160;</a></span>free_memory()</h2>
 
@@ -652,6 +1083,14 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Return the amount of free physical memory in bytes. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_a00cdda7e7ef634b49f0486ccd1ff7956_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a00cdda7e7ef634b49f0486ccd1ff7956_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 17 -->
+</div>
 
 </div>
 </div>
@@ -679,11 +1118,18 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Frees a page regardless of ownership. </p>
+<p>Free a physical page regardless of ownership. Ownership is managed at allocation time. Free pushes the page onto the O(1) free list.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">phys_addr</td><td>Physical address to free. </td></tr>
+  </table>
+  </dd>
+</dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_p_m_m_a0daaa2d1b36579ff9c0eb60caddee59d_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a0daaa2d1b36579ff9c0eb60caddee59d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -712,18 +1158,19 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Frees a page with error code. </p>
+<p>Free a physical page with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">phys_addr</td><td>Physical address to free. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">PmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_p_m_m_ac875a7cc225949a791f100851d4bd470_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_ac875a7cc225949a791f100851d4bd470_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -751,6 +1198,8 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Return mutable reference to the free-page counter (for snapshot/restore). </p>
+
 </div>
 </div>
 <a id="a9273eca891a1f09d6eea421dc5af9fe7" name="a9273eca891a1f09d6eea421dc5af9fe7"></a>
@@ -776,10 +1225,13 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Get the currently installed OOM handler. </p>
+<dl class="section return"><dt>Returns</dt><dd>Function pointer, or nullptr if none. </dd></dl>
+
 </div>
 </div>
-<a id="a5b0e255a792b629f160f6c690726950b" name="a5b0e255a792b629f160f6c690726950b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5b0e255a792b629f160f6c690726950b">&#9670;&#160;</a></span>init()</h2>
+<a id="a36e93eea368c86e6699b74cc39091bc5" name="a36e93eea368c86e6699b74cc39091bc5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a36e93eea368c86e6699b74cc39091bc5">&#9670;&#160;</a></span>init()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -800,7 +1252,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>kernel_end</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>kernel_end</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>window_base</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -811,19 +1268,31 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialize the physical memory manager with a bitmap. </p>
+<p>Initialise the <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> bitmap and mark kernel/reserved pages as allocated.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">mem_size</td><td>Total physical memory size in bytes. </td></tr>
     <tr><td class="paramname">kernel_start</td><td>Start of kernel image in physical memory. </td></tr>
     <tr><td class="paramname">kernel_end</td><td>End of kernel image in physical memory. </td></tr>
+    <tr><td class="paramname">window_base</td><td>Physical base of the allocatable RAM window (min usable-region base; 0 on x86_64). Must be covered by the architecture's MMU higher-half mapping.</td></tr>
+    <tr><td class="paramname">mem_size</td><td>Total physical memory in bytes. </td></tr>
+    <tr><td class="paramname">kernel_start</td><td>Physical address of kernel image start. </td></tr>
+    <tr><td class="paramname">kernel_end</td><td>Physical address of kernel image end. </td></tr>
+    <tr><td class="paramname">window_base</td><td>Physical base of the allocatable RAM window (min usable-region base; 0 on x86_64). </td></tr>
   </table>
   </dd>
 </dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_a36e93eea368c86e6699b74cc39091bc5_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a36e93eea368c86e6699b74cc39091bc5_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 20 -->
+</div>
 
 </div>
 </div>
-<a id="a6bbf5985171279c81d6bbf6933496391" name="a6bbf5985171279c81d6bbf6933496391"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6bbf5985171279c81d6bbf6933496391">&#9670;&#160;</a></span>init_err()</h2>
+<a id="a1b355693480bc253dcfab0afbf2ac569" name="a1b355693480bc253dcfab0afbf2ac569"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1b355693480bc253dcfab0afbf2ac569">&#9670;&#160;</a></span>init_err()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -844,7 +1313,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>kernel_end</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>kernel_end</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>window_base</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -855,7 +1329,76 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialize with error code. </p>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">PmmError</a> code. </dd></dl>
+<p>Initialise <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> with error-code return.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">mem_size</td><td>Total physical memory size in bytes. </td></tr>
+    <tr><td class="paramname">kernel_start</td><td>Start of kernel image in physical memory. </td></tr>
+    <tr><td class="paramname">kernel_end</td><td>End of kernel image in physical memory. </td></tr>
+    <tr><td class="paramname">window_base</td><td>Physical base of the allocatable RAM window. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">mem_size</td><td>Total physical memory in bytes. </td></tr>
+    <tr><td class="paramname">kernel_start</td><td>Physical address of kernel image start. </td></tr>
+    <tr><td class="paramname">kernel_end</td><td>Physical address of kernel image end. </td></tr>
+    <tr><td class="paramname">window_base</td><td>Physical base of the allocatable RAM window. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Unlike <a class="el" href="#a36e93eea368c86e6699b74cc39091bc5" title="Initialize the physical memory manager with a bitmap.">init()</a>, this variant does not build the O(1) free list (pre-existing behavior; no current callers). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_a1b355693480bc253dcfab0afbf2ac569_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a1b355693480bc253dcfab0afbf2ac569_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 21 -->
+</div>
+
+</div>
+</div>
+<a id="ae1891b0dc99397676c930d8d3257235d" name="ae1891b0dc99397676c930d8d3257235d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae1891b0dc99397676c930d8d3257235d">&#9670;&#160;</a></span>is_allocated()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::PMM::is_allocated </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phys_addr</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Returns true if a physical page is currently allocated. </p>
+<p>Check if a physical page is currently allocated.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">phys_addr</td><td>Physical address to check. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if the allocation bit is set.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">phys_addr</td><td>Physical address. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if allocated. </dd></dl>
 
 </div>
 </div>
@@ -883,6 +1426,14 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Returns true if the page was allocated as USER ownership. </p>
+<p>Check if a physical page was allocated as USER-owned.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">phys_addr</td><td>Physical address. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if USER-owned. </dd></dl>
 
 </div>
 </div>
@@ -914,6 +1465,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Returns true if the page was allocated as USER ownership with error code. </p>
+<p>Check USER ownership with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">phys_addr</td><td>Physical address to check. </td></tr>
@@ -921,7 +1473,42 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">PmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">phys_addr</td><td>Physical address. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_is_user</td><td>Set to true if USER-owned. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63" title="Error codes for the Physical Memory Manager.">PmmError</a> code. </dd></dl>
+
+</div>
+</div>
+<a id="ab5cae5425cfdac020f01d167b50fde2c" name="ab5cae5425cfdac020f01d167b50fde2c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab5cae5425cfdac020f01d167b50fde2c">&#9670;&#160;</a></span>mark_init_done()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::mark_init_done </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Mark the <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> as fully initialized (post-boot). After this call, <a class="el" href="#acd322564470938305549042daa42732d" title="Allocates a single 4 KiB page (KERNEL ownership).">alloc_page()</a> checks CONFIG_STATIC_POOLS_ONLY and panics/returns 0 if a dynamic allocation is attempted. </p>
 
 </div>
 </div>
@@ -948,6 +1535,586 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Return pointer to the owner-tracking bitmap. </p>
+
+</div>
+</div>
+<a id="ae1c3212c9f00a811acfa37e87a062480" name="ae1c3212c9f00a811acfa37e87a062480"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae1c3212c9f00a811acfa37e87a062480">&#9670;&#160;</a></span>pool_bump_generation()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::pool_bump_generation </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Bump the pool generation. </p>
+
+</div>
+</div>
+<a id="a7e09b10dd9705576e440b915bdc20d13" name="a7e09b10dd9705576e440b915bdc20d13"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7e09b10dd9705576e440b915bdc20d13">&#9670;&#160;</a></span>pool_end()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::pool_end </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Page-table pool end physical address. </p>
+
+</div>
+</div>
+<a id="ad194ba1dcb46438e14794497afaee75e" name="ad194ba1dcb46438e14794497afaee75e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad194ba1dcb46438e14794497afaee75e">&#9670;&#160;</a></span>pool_generation()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::pool_generation </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Page-table pool generation (incremented on each snapshot capture). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_ad194ba1dcb46438e14794497afaee75e_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_ad194ba1dcb46438e14794497afaee75e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 22 -->
+</div>
+
+</div>
+</div>
+<a id="a6bb03f66d5a3bc4cb76b9efd9915b4d4" name="a6bb03f66d5a3bc4cb76b9efd9915b4d4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6bb03f66d5a3bc4cb76b9efd9915b4d4">&#9670;&#160;</a></span>pool_is_mapped()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::PMM::pool_is_mapped </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True if the pool is mapped in the kernel PML4. </p>
+
+</div>
+</div>
+<a id="af988fa54a681c375f0341c376934c443" name="af988fa54a681c375f0341c376934c443"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af988fa54a681c375f0341c376934c443">&#9670;&#160;</a></span>pool_is_poisoned()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::PMM::pool_is_poisoned </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True if the pool has been corrupted by a buffer overflow / UAF. </p>
+
+</div>
+</div>
+<a id="acfa5be31df9c22bc15e0a3f528bcdeed" name="acfa5be31df9c22bc15e0a3f528bcdeed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acfa5be31df9c22bc15e0a3f528bcdeed">&#9670;&#160;</a></span>pool_is_tainted()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::PMM::pool_is_tainted </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True if the pool has been touched by a HW error. </p>
+
+</div>
+</div>
+<a id="aa5f2e27f19324131e2393548b60f399c" name="aa5f2e27f19324131e2393548b60f399c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa5f2e27f19324131e2393548b60f399c">&#9670;&#160;</a></span>pool_ref_dec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::pool_ref_dec </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Decrement pool reference count. </p>
+
+</div>
+</div>
+<a id="a355b1598a040b6dc8877d31a78e8ffef" name="a355b1598a040b6dc8877d31a78e8ffef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a355b1598a040b6dc8877d31a78e8ffef">&#9670;&#160;</a></span>pool_ref_inc()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::pool_ref_inc </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Increment pool reference count. </p>
+
+</div>
+</div>
+<a id="ab304772f2ff56af75470caa073ffe5e6" name="ab304772f2ff56af75470caa073ffe5e6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab304772f2ff56af75470caa073ffe5e6">&#9670;&#160;</a></span>pool_refcount()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::pool_refcount </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Pool reference count (tasks using pool pages). </p>
+
+</div>
+</div>
+<a id="adaf2f82509447ee397cfb124f8d23b8b" name="adaf2f82509447ee397cfb124f8d23b8b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adaf2f82509447ee397cfb124f8d23b8b">&#9670;&#160;</a></span>pool_set_poisoned()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::pool_set_poisoned </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Mark the page-table pool as poisoned (buffer overflow / UAF). </p>
+
+</div>
+</div>
+<a id="a74aead42af2a10b535172d2f99a3f031" name="a74aead42af2a10b535172d2f99a3f031"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a74aead42af2a10b535172d2f99a3f031">&#9670;&#160;</a></span>pool_set_tainted()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::pool_set_tainted </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Mark the page-table pool as tainted (HW error detected). </p>
+
+</div>
+</div>
+<a id="af98c82a6817a3a6e63eb606f3c7cd32e" name="af98c82a6817a3a6e63eb606f3c7cd32e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af98c82a6817a3a6e63eb606f3c7cd32e">&#9670;&#160;</a></span>pool_start()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::pool_start </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Page-table pool base physical address (0 if pool not active). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_af98c82a6817a3a6e63eb606f3c7cd32e_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_af98c82a6817a3a6e63eb606f3c7cd32e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 23 -->
+</div>
+
+</div>
+</div>
+<a id="af0364ddfe5c3576fda38b59e1384b833" name="af0364ddfe5c3576fda38b59e1384b833"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af0364ddfe5c3576fda38b59e1384b833">&#9670;&#160;</a></span>pool_total_pages()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::pool_total_pages </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Total capacity of the page-table pool in pages. </p>
+<dl class="section note"><dt>Note</dt><dd>Diagnostic/introspection only — O(1). </dd></dl>
+
+</div>
+</div>
+<a id="ad271d4f32472671bc9dc70867c4ebf84" name="ad271d4f32472671bc9dc70867c4ebf84"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad271d4f32472671bc9dc70867c4ebf84">&#9670;&#160;</a></span>pool_used_pages()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::pool_used_pages </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Number of allocated pages in the page-table pool. </p>
+<dl class="section note"><dt>Note</dt><dd>Diagnostic/introspection only — O(pool_size_pages). Must NOT be called from any WCET-budgeted hot path. </dd></dl>
+
+</div>
+</div>
+<a id="a97c43cba164a3c85aeb475a83e904bd7" name="a97c43cba164a3c85aeb475a83e904bd7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a97c43cba164a3c85aeb475a83e904bd7">&#9670;&#160;</a></span>post_snapshot_overlay_apply()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::post_snapshot_overlay_apply </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Re-apply post-snapshot pool allocations onto the main bitmap (issue #197: call after restore_pool_snapshot, before the freelist rebuild — pages allocated mid-class would otherwise read untracked while still referenced by live page tables). </p>
+
+</div>
+</div>
+<a id="a5ae835d4732b0e93dd69b4ab65e64979" name="a5ae835d4732b0e93dd69b4ab65e64979"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5ae835d4732b0e93dd69b4ab65e64979">&#9670;&#160;</a></span>post_snapshot_overlay_clear()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::post_snapshot_overlay_clear </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Clear the post-snapshot pool overlay (issue #197: call once in snapshot_create; a mid-restore pool recapture must NOT clear it — allocations it records are still live). </p>
+
+</div>
+</div>
+<a id="af9ebfa8acfe52014861ccf0e5f98dada" name="af9ebfa8acfe52014861ccf0e5f98dada"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af9ebfa8acfe52014861ccf0e5f98dada">&#9670;&#160;</a></span>rebuild_free_list()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::rebuild_free_list </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Rebuild the general + pool free lists from the current bitmap. Called after <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> bitmap + pool snapshot restore to re-sync freelist heads (free_head_, pool_free_head_) with the restored bitmap state. Without this, <a class="el" href="#acd322564470938305549042daa42732d" title="Allocates a single 4 KiB page (KERNEL ownership).">alloc_page()</a>/alloc_page_table() follow stale freelist entries and return already-allocated pages. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_af9ebfa8acfe52014861ccf0e5f98dada_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_af9ebfa8acfe52014861ccf0e5f98dada_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 24 -->
+</div>
+
+</div>
+</div>
+<a id="a175fa84a3fb5c2ca07dcf37d1468f73d" name="a175fa84a3fb5c2ca07dcf37d1468f73d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a175fa84a3fb5c2ca07dcf37d1468f73d">&#9670;&#160;</a></span>reserve_range()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::reserve_range </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>start_phys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>end_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Marks a physical page range [start_phys, end_phys) as allocated KERNEL-owned (boot-time data: GRUB's Multiboot2 info must never be handed to an allocator). Call right after <a class="el" href="#a36e93eea368c86e6699b74cc39091bc5" title="Initialize the physical memory manager with a bitmap.">init()</a> before any allocation. No-op on pages outside the allocatable window or already marked. </p>
+<p>Marks a physical page range as allocated KERNEL-owned. Used for boot-time data (GRUB's Multiboot2 info) that must never be handed to an allocator — a larger kernel can shift GRUB's info placement into the <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> free range, and the first allocation would overwrite it (issue #10).</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">start_phys</td><td>Inclusive first physical address. </td></tr>
+    <tr><td class="paramname">end_phys</td><td>Exclusive end physical address. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_p_m_m_a175fa84a3fb5c2ca07dcf37d1468f73d_cgraph.png" border="0" usemap="#aclasskernel_1_1_p_m_m_a175fa84a3fb5c2ca07dcf37d1468f73d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 25 -->
+</div>
+
+</div>
+</div>
+<a id="a06602b03fc379b4e09aa58947b49dc3f" name="a06602b03fc379b4e09aa58947b49dc3f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a06602b03fc379b4e09aa58947b49dc3f">&#9670;&#160;</a></span>reset_color_cursor()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::reset_color_cursor </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Reset per-color allocation cursors (test hook, issue #62). Cursors affect placement only, never correctness; tests call this at entry for deterministic colors. </p>
+
+</div>
+</div>
+<a id="afcd345d7c5934145890ed5e63860f7e2" name="afcd345d7c5934145890ed5e63860f7e2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afcd345d7c5934145890ed5e63860f7e2">&#9670;&#160;</a></span>restore_pool_snapshot()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::PMM::restore_pool_snapshot </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1test_1_1_pt_pool_snapshot.html">kernel::test::PtPoolSnapshot</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>src</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Restore page-table pool state from a snapshot struct. </p>
+
 </div>
 </div>
 <a id="a0abccda473b2936b5aa008a686f52c86" name="a0abccda473b2936b5aa008a686f52c86"></a>
@@ -973,6 +2140,14 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Install an OOM handler that the allocator calls when pages are exhausted. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">h</td><td>Function pointer; return true if memory may have been freed. </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <a id="a19ab9f1e2a4a123040d8a9d1e539318b" name="a19ab9f1e2a4a123040d8a9d1e539318b"></a>
@@ -997,6 +2172,62 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Return the total physical memory size in bytes. </p>
+
+</div>
+</div>
+<a id="a09983cd9ca68e335f558fc37b3a3da58" name="a09983cd9ca68e335f558fc37b3a3da58"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a09983cd9ca68e335f558fc37b3a3da58">&#9670;&#160;</a></span>window_base_page()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::window_base_page </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>First allocatable physical page index (diagnostic/test only). </p>
+
+</div>
+</div>
+<a id="ad7778e24949c06cbd4f298130c12cd50" name="ad7778e24949c06cbd4f298130c12cd50"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad7778e24949c06cbd4f298130c12cd50">&#9670;&#160;</a></span>window_end_page()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::PMM::window_end_page </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>One past the last allocatable physical page index (diagnostic/test only). </p>
 
 </div>
 </div>

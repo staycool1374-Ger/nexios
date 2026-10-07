@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -145,14 +145,18 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a1a558918e6a858475ec12ce19162414e" id="r_a1a558918e6a858475ec12ce19162414e"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1a558918e6a858475ec12ce19162414e">clear_bits_err</a> (uint64_t bits)</td></tr>
 <tr class="memdesc:a1a558918e6a858475ec12ce19162414e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Atomically clear bits (error-returning overload).  <br /></td></tr>
 <tr class="memitem:afd634f174190c204c6fb8be4d26b0560" id="r_afd634f174190c204c6fb8be4d26b0560"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#afd634f174190c204c6fb8be4d26b0560">get_bits</a> () const</td></tr>
-<tr class="memitem:add62c2c0758d7247b4103a948bc33bc5" id="r_add62c2c0758d7247b4103a948bc33bc5"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#add62c2c0758d7247b4103a948bc33bc5">wait_bits</a> (uint64_t bits, bool clear_on_exit=false)</td></tr>
-<tr class="memdesc:add62c2c0758d7247b4103a948bc33bc5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Block until any of the requested bits are set.  <br /></td></tr>
-<tr class="memitem:a4c00794ef6fa784690c6e36f1c3af1ec" id="r_a4c00794ef6fa784690c6e36f1c3af1ec"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4c00794ef6fa784690c6e36f1c3af1ec">wait_bits_err</a> (uint64_t bits, bool clear_on_exit, uint64_t *out_bits)</td></tr>
-<tr class="memdesc:a4c00794ef6fa784690c6e36f1c3af1ec"><td class="mdescLeft">&#160;</td><td class="mdescRight">Block until any of the requested bits are set (error-returning overload).  <br /></td></tr>
-<tr class="memitem:aab32781e6d0879be5947049ef1a39d0a" id="r_aab32781e6d0879be5947049ef1a39d0a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aab32781e6d0879be5947049ef1a39d0a">try_wait_bits</a> (uint64_t bits)</td></tr>
-<tr class="memdesc:aab32781e6d0879be5947049ef1a39d0a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if bits are set without blocking.  <br /></td></tr>
-<tr class="memitem:aef016961c249c6feefcd0f449e7bb0f1" id="r_aef016961c249c6feefcd0f449e7bb0f1"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a>&#160;</td><td class="memItemRight"><a class="el" href="#aef016961c249c6feefcd0f449e7bb0f1">try_wait_bits_err</a> (uint64_t bits, bool *out_result)</td></tr>
-<tr class="memdesc:aef016961c249c6feefcd0f449e7bb0f1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if bits are set without blocking (error-returning overload).  <br /></td></tr>
+<tr class="memitem:aeea6345a8aaf13300e421dfe1104cb48" id="r_aeea6345a8aaf13300e421dfe1104cb48"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aeea6345a8aaf13300e421dfe1104cb48">waiter_count</a> ()</td></tr>
+<tr class="memdesc:aeea6345a8aaf13300e421dfe1104cb48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of tasks currently blocked on this event group.  <br /></td></tr>
+<tr class="memitem:a571bb280fc68e907380f79c544a2de86" id="r_a571bb280fc68e907380f79c544a2de86"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a571bb280fc68e907380f79c544a2de86">remove_waiter</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task)</td></tr>
+<tr class="memdesc:a571bb280fc68e907380f79c544a2de86"><td class="mdescLeft">&#160;</td><td class="mdescRight">Detach a task from this event group's waiter list (lock-safe). Used by <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a> to unlink a reaped task before its TCB is freed. Verifies pointer AND generation match (guards against a recycled TCB occupying the slot).  <br /></td></tr>
+<tr class="memitem:a508d0bf2238e3f6cee873c46f3afae20" id="r_a508d0bf2238e3f6cee873c46f3afae20"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a508d0bf2238e3f6cee873c46f3afae20">wait_bits</a> (uint64_t wanted, bool clear_on_exit=<a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>)</td></tr>
+<tr class="memdesc:a508d0bf2238e3f6cee873c46f3afae20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Block until any of the requested bits are set.  <br /></td></tr>
+<tr class="memitem:ac171fa72f15577e737781d52858c43db" id="r_ac171fa72f15577e737781d52858c43db"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac171fa72f15577e737781d52858c43db">wait_bits_err</a> (uint64_t wanted, bool clear_on_exit, uint64_t *out_bits)</td></tr>
+<tr class="memdesc:ac171fa72f15577e737781d52858c43db"><td class="mdescLeft">&#160;</td><td class="mdescRight">Block until any of the requested bits are set (error-returning overload).  <br /></td></tr>
+<tr class="memitem:a1fb1136e2ba1805acc7f68e32443a56d" id="r_a1fb1136e2ba1805acc7f68e32443a56d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1fb1136e2ba1805acc7f68e32443a56d">try_wait_bits</a> (uint64_t wanted)</td></tr>
+<tr class="memdesc:a1fb1136e2ba1805acc7f68e32443a56d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if bits are set without blocking.  <br /></td></tr>
+<tr class="memitem:a86f7ee0aca03fd2e324c509f9084cdaf" id="r_a86f7ee0aca03fd2e324c509f9084cdaf"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a86f7ee0aca03fd2e324c509f9084cdaf">try_wait_bits_err</a> (uint64_t wanted, bool *out_result)</td></tr>
+<tr class="memdesc:a86f7ee0aca03fd2e324c509f9084cdaf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if bits are set without blocking (error-returning overload).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
@@ -200,6 +204,7 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Destructor — wakes any waiters before the object is freed. </p>
+<p>Destructor — wakes all waiters before the object is freed. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -290,6 +295,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialize the event group to zero bits. </p>
+<p>Initialise the event group to zero bits. </p>
 
 </div>
 </div>
@@ -309,7 +315,35 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialize the event group to zero bits (error-returning overload). </p>
+<p>Initialise the event group (error-returning overload).</p>
 <dl class="section return"><dt>Returns</dt><dd>SYNC_ERR_OK on success, SYNC_ERR_ALREADY_INITIALIZED if already initialized. </dd></dl>
+
+</div>
+</div>
+<a id="a571bb280fc68e907380f79c544a2de86" name="a571bb280fc68e907380f79c544a2de86"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a571bb280fc68e907380f79c544a2de86">&#9670;&#160;</a></span>remove_waiter()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::sync::EventGroup::remove_waiter </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Detach a task from this event group's waiter list (lock-safe). Used by <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a> to unlink a reaped task before its TCB is freed. Verifies pointer AND generation match (guards against a recycled TCB occupying the slot). </p>
+<p>Detach a task from the waiter array (lock-safe). Verifies pointer AND generation match so a recycled TCB that now occupies the slot is never removed.</p>
+<dl class="section return"><dt>Returns</dt><dd>true if the task was found and removed. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1sync_1_1_event_group_a571bb280fc68e907380f79c544a2de86_cgraph.png" border="0" usemap="#aclasskernel_1_1sync_1_1_event_group_a571bb280fc68e907380f79c544a2de86_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -329,6 +363,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Atomically set bits, waking satisfied waiters. </p>
+<p>Atomically set bits and wake waiters whose conditions are now met. </p>
 
 </div>
 </div>
@@ -348,12 +383,13 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Atomically set bits, waking satisfied waiters (error-returning overload). </p>
+<p>Atomically set bits (error-returning overload).</p>
 <dl class="section return"><dt>Returns</dt><dd>SYNC_ERR_OK on success. </dd></dl>
 
 </div>
 </div>
-<a id="aab32781e6d0879be5947049ef1a39d0a" name="aab32781e6d0879be5947049ef1a39d0a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aab32781e6d0879be5947049ef1a39d0a">&#9670;&#160;</a></span>try_wait_bits()</h2>
+<a id="a1fb1136e2ba1805acc7f68e32443a56d" name="a1fb1136e2ba1805acc7f68e32443a56d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1fb1136e2ba1805acc7f68e32443a56d">&#9670;&#160;</a></span>try_wait_bits()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -361,19 +397,20 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::sync::EventGroup::try_wait_bits </td>
           <td>(</td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>bits</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>wanted</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 <p>Check if bits are set without blocking. </p>
-<dl class="section return"><dt>Returns</dt><dd>true if any of the requested bits are currently set. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true if any of the requested bits are currently set.</dd></dl>
+<p>Read bits_ under the spinlock so a concurrent set/clear can't return a stale answer. </p>
 
 </div>
 </div>
-<a id="aef016961c249c6feefcd0f449e7bb0f1" name="aef016961c249c6feefcd0f449e7bb0f1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aef016961c249c6feefcd0f449e7bb0f1">&#9670;&#160;</a></span>try_wait_bits_err()</h2>
+<a id="a86f7ee0aca03fd2e324c509f9084cdaf" name="a86f7ee0aca03fd2e324c509f9084cdaf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a86f7ee0aca03fd2e324c509f9084cdaf">&#9670;&#160;</a></span>try_wait_bits_err()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -381,7 +418,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a> kernel::sync::EventGroup::try_wait_bits_err </td>
           <td>(</td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>bits</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>wanted</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -402,8 +439,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="add62c2c0758d7247b4103a948bc33bc5" name="add62c2c0758d7247b4103a948bc33bc5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#add62c2c0758d7247b4103a948bc33bc5">&#9670;&#160;</a></span>wait_bits()</h2>
+<a id="a508d0bf2238e3f6cee873c46f3afae20" name="a508d0bf2238e3f6cee873c46f3afae20"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a508d0bf2238e3f6cee873c46f3afae20">&#9670;&#160;</a></span>wait_bits()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -411,12 +448,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">uint64_t kernel::sync::EventGroup::wait_bits </td>
           <td>(</td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>bits</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>wanted</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>clear_on_exit</em></span><span class="paramdefsep"> = </span><span class="paramdefval">false</span>&#160;)</td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>clear_on_exit</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -424,23 +461,24 @@ Here is the call graph for this function:</div>
 <p>Block until any of the requested bits are set. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">bits</td><td>Bitmask of bits to wait for. </td></tr>
+    <tr><td class="paramname">wanted</td><td>Bitmask of bits to wait for. </td></tr>
     <tr><td class="paramname">clear_on_exit</td><td>If true, clear matched bits before returning. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>The bits that were set when the wait completed. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>The bits that were set when the wait completed.</dd></dl>
+<p>Never holds the spinlock across <a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch.">Scheduler::reschedule()</a> (same deadlock exposure as the semaphore). Waiter-table-full is reachable exhaustion: a retry condition, never ENSURE. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1sync_1_1_event_group_add62c2c0758d7247b4103a948bc33bc5_cgraph.png" border="0" usemap="#aclasskernel_1_1sync_1_1_event_group_add62c2c0758d7247b4103a948bc33bc5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<div class="center"><img src="classkernel_1_1sync_1_1_event_group_a508d0bf2238e3f6cee873c46f3afae20_cgraph.png" border="0" usemap="#aclasskernel_1_1sync_1_1_event_group_a508d0bf2238e3f6cee873c46f3afae20_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
 </div>
 
 </div>
 </div>
-<a id="a4c00794ef6fa784690c6e36f1c3af1ec" name="a4c00794ef6fa784690c6e36f1c3af1ec"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4c00794ef6fa784690c6e36f1c3af1ec">&#9670;&#160;</a></span>wait_bits_err()</h2>
+<a id="ac171fa72f15577e737781d52858c43db" name="ac171fa72f15577e737781d52858c43db"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac171fa72f15577e737781d52858c43db">&#9670;&#160;</a></span>wait_bits_err()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -448,7 +486,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a> kernel::sync::EventGroup::wait_bits_err </td>
           <td>(</td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>bits</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>wanted</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -466,7 +504,7 @@ Here is the call graph for this function:</div>
 <p>Block until any of the requested bits are set (error-returning overload). </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir"></td><td class="paramname">bits</td><td>Bitmask of bits to wait for. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">wanted</td><td>Bitmask of bits to wait for. </td></tr>
     <tr><td class="paramdir"></td><td class="paramname">clear_on_exit</td><td>If true, clear matched bits before returning. </td></tr>
     <tr><td class="paramdir">[out]</td><td class="paramname">out_bits</td><td>The bits that were set when the wait completed. </td></tr>
   </table>
@@ -476,9 +514,36 @@ Here is the call graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1sync_1_1_event_group_a4c00794ef6fa784690c6e36f1c3af1ec_cgraph.png" border="0" usemap="#aclasskernel_1_1sync_1_1_event_group_a4c00794ef6fa784690c6e36f1c3af1ec_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<div class="center"><img src="classkernel_1_1sync_1_1_event_group_ac171fa72f15577e737781d52858c43db_cgraph.png" border="0" usemap="#aclasskernel_1_1sync_1_1_event_group_ac171fa72f15577e737781d52858c43db_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
 </div>
+
+</div>
+</div>
+<a id="aeea6345a8aaf13300e421dfe1104cb48" name="aeea6345a8aaf13300e421dfe1104cb48"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeea6345a8aaf13300e421dfe1104cb48">&#9670;&#160;</a></span>waiter_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::sync::EventGroup::waiter_count </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Number of tasks currently blocked on this event group. </p>
 
 </div>
 </div>

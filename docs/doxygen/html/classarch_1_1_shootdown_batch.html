@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -134,26 +134,26 @@ Data Structures</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:a7bf540cc427d886e5d4ad7cc8e6a0409" id="r_a7bf540cc427d886e5d4ad7cc8e6a0409"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a7bf540cc427d886e5d4ad7cc8e6a0409">queue_remote</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cpu, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> va, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> pcid)</td></tr>
+<tr class="memitem:a7bf540cc427d886e5d4ad7cc8e6a0409" id="r_a7bf540cc427d886e5d4ad7cc8e6a0409"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a7bf540cc427d886e5d4ad7cc8e6a0409">queue_remote</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cpu, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> va, <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> pcid)</td></tr>
 <tr class="memdesc:a7bf540cc427d886e5d4ad7cc8e6a0409"><td class="mdescLeft">&#160;</td><td class="mdescRight">Queue one entry for <code class="param">cpu</code> (no IPI yet).  <br /></td></tr>
-<tr class="memitem:a5a61027e54f1a54d2630486bddf241ef" id="r_a5a61027e54f1a54d2630486bddf241ef"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5a61027e54f1a54d2630486bddf241ef">flush_target</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cpu)</td></tr>
+<tr class="memitem:a5a61027e54f1a54d2630486bddf241ef" id="r_a5a61027e54f1a54d2630486bddf241ef"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5a61027e54f1a54d2630486bddf241ef">flush_target</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cpu)</td></tr>
 <tr class="memdesc:a5a61027e54f1a54d2630486bddf241ef"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deliver <code class="param">cpu's</code> queued entries in bounded batches. Polls each batch drained before refilling (never overwrites a live batch). Entries stay queued on send failure. Callers must not hold IF=0 across the call for a self target (the delivery ISR cannot land until sti).  <br /></td></tr>
-<tr class="memitem:a7273c2d0deb75ef5795dbfd769546b3f" id="r_a7273c2d0deb75ef5795dbfd769546b3f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a7273c2d0deb75ef5795dbfd769546b3f">handle_cpu</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cpu)</td></tr>
+<tr class="memitem:a7273c2d0deb75ef5795dbfd769546b3f" id="r_a7273c2d0deb75ef5795dbfd769546b3f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a7273c2d0deb75ef5795dbfd769546b3f">handle_cpu</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cpu)</td></tr>
 <tr class="memdesc:a7273c2d0deb75ef5795dbfd769546b3f"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR entry: apply <code class="param">cpu's</code> slot (bounded), record order, clear the published count. Lock-free, allocation-free; caller performs exactly one EOI per run.  <br /></td></tr>
-<tr class="memitem:a2310f5ecfe7ec20ab15d64728dec9904" id="r_a2310f5ecfe7ec20ab15d64728dec9904"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2310f5ecfe7ec20ab15d64728dec9904">sends_for_test</a> ()</td></tr>
+<tr class="memitem:a2310f5ecfe7ec20ab15d64728dec9904" id="r_a2310f5ecfe7ec20ab15d64728dec9904"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2310f5ecfe7ec20ab15d64728dec9904">sends_for_test</a> ()</td></tr>
 <tr class="memdesc:a2310f5ecfe7ec20ab15d64728dec9904"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total IPIs accepted (wrapper-side, deterministic).  <br /></td></tr>
-<tr class="memitem:a30d0b1a8b2540e8e2862d080890517bd" id="r_a30d0b1a8b2540e8e2862d080890517bd"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a30d0b1a8b2540e8e2862d080890517bd">applied_for_test</a> ()</td></tr>
+<tr class="memitem:a30d0b1a8b2540e8e2862d080890517bd" id="r_a30d0b1a8b2540e8e2862d080890517bd"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a30d0b1a8b2540e8e2862d080890517bd">applied_for_test</a> ()</td></tr>
 <tr class="memdesc:a30d0b1a8b2540e8e2862d080890517bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total entries applied by handler runs.  <br /></td></tr>
-<tr class="memitem:aea702373545743744032a13d4578c8b0" id="r_aea702373545743744032a13d4578c8b0"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aea702373545743744032a13d4578c8b0">applied_va_for_test</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> idx)</td></tr>
+<tr class="memitem:aea702373545743744032a13d4578c8b0" id="r_aea702373545743744032a13d4578c8b0"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aea702373545743744032a13d4578c8b0">applied_va_for_test</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> idx)</td></tr>
 <tr class="memdesc:aea702373545743744032a13d4578c8b0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Applied VA log (ascending-check source for tests).  <br /></td></tr>
 <tr class="memitem:a9b7ed23b363929d73c130b2bb69783b7" id="r_a9b7ed23b363929d73c130b2bb69783b7"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a9b7ed23b363929d73c130b2bb69783b7">reset_for_test</a> ()</td></tr>
 <tr class="memdesc:a9b7ed23b363929d73c130b2bb69783b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset slots, counters and log (test isolation).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
-<tr class="memitem:a23b0e6a0134ba897d2c0adaef4a4c276" id="r_a23b0e6a0134ba897d2c0adaef4a4c276"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a23b0e6a0134ba897d2c0adaef4a4c276">BATCH_SLOTS</a> = 16</td></tr>
+<tr class="memitem:a23b0e6a0134ba897d2c0adaef4a4c276" id="r_a23b0e6a0134ba897d2c0adaef4a4c276"><td class="memItemLeft">static constexpr <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a23b0e6a0134ba897d2c0adaef4a4c276">BATCH_SLOTS</a> = 16</td></tr>
 <tr class="memdesc:a23b0e6a0134ba897d2c0adaef4a4c276"><td class="mdescLeft">&#160;</td><td class="mdescRight">Batch slot capacity (entries per IPI).  <br /></td></tr>
-<tr class="memitem:ae86ee4e2f608d27d3d2d5a1779499963" id="r_ae86ee4e2f608d27d3d2d5a1779499963"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae86ee4e2f608d27d3d2d5a1779499963">APPLIED_LOG</a> = 64</td></tr>
+<tr class="memitem:ae86ee4e2f608d27d3d2d5a1779499963" id="r_ae86ee4e2f608d27d3d2d5a1779499963"><td class="memItemLeft">static constexpr <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae86ee4e2f608d27d3d2d5a1779499963">APPLIED_LOG</a> = 64</td></tr>
 <tr class="memdesc:ae86ee4e2f608d27d3d2d5a1779499963"><td class="mdescLeft">&#160;</td><td class="mdescRight">Max log entries kept for order checks.  <br /></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
@@ -167,7 +167,7 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ShootdownBatch::applied_for_test </td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ShootdownBatch::applied_for_test </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -194,9 +194,9 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ShootdownBatch::applied_va_for_test </td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ShootdownBatch::applied_va_for_test </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>idx</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>idx</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -221,9 +221,9 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ShootdownBatch::flush_target </td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ShootdownBatch::flush_target </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -257,7 +257,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void arch::ShootdownBatch::handle_cpu </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -284,17 +284,17 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool arch::ShootdownBatch::queue_remote </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>pcid</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>pcid</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -346,7 +346,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ShootdownBatch::sends_for_test </td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ShootdownBatch::sends_for_test </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -374,7 +374,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> arch::ShootdownBatch::APPLIED_LOG = 64</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> arch::ShootdownBatch::APPLIED_LOG = 64</td>
         </tr>
       </table>
   </td>
@@ -398,7 +398,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> arch::ShootdownBatch::BATCH_SLOTS = 16</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> arch::ShootdownBatch::BATCH_SLOTS = 16</td>
         </tr>
       </table>
   </td>

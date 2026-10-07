@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -122,11 +122,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('taskdefs_8cpp.
 <p>Task definition table and reboot-from-table implementation.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="taskdefs_8hpp_source.html">kernel/task/taskdefs.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="sporadic__server_8hpp_source.html">kernel/task/sporadic_server.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="elf_8hpp_source.html">kernel/elf/elf.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vfsd_8hpp_source.html">kernel/vfs/vfsd.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="iocd_8hpp_source.html">kernel/driver/iocd.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="watchdogd_8hpp_source.html">kernel/watchdog/watchdogd.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="dmesg__task_8hpp_source.html">kernel/task/dmesg_task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="initrd_8hpp_source.html">initrd/initrd.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="shell_8hpp_source.html">services/shell.hpp</a>&gt;</code><br />
@@ -151,13 +153,20 @@ Namespaces</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a80e920b60042b6c2750fd88974610e99" id="r_a80e920b60042b6c2750fd88974610e99"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a80e920b60042b6c2750fd88974610e99">debug_write</a> (const char *s)</td></tr>
-<tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
+<tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (uint64_t value)</td></tr>
 <tr class="memitem:a3893cb01e13bf4e36090daef580b7426" id="r_a3893cb01e13bf4e36090daef580b7426"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3893cb01e13bf4e36090daef580b7426">init_task_main</a> ()</td></tr>
-<tr class="memitem:adc36214616607d88fa61adf5386788e4" id="r_adc36214616607d88fa61adf5386788e4"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#adc36214616607d88fa61adf5386788e4">kernel::task::taskdefs_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memitem:a6c2e4859b68a0571d2f50dda0efba2a8" id="r_a6c2e4859b68a0571d2f50dda0efba2a8"><td class="memItemLeft">const TaskDef *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a6c2e4859b68a0571d2f50dda0efba2a8">kernel::task::taskdefs_at</a> (<a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> i) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memitem:a134c6b74e9d9bc36270fd82a843ea357" id="r_a134c6b74e9d9bc36270fd82a843ea357"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a134c6b74e9d9bc36270fd82a843ea357">kernel::task::taskdefs_server_params_valid</a> (const TaskDef &amp;d) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memitem:acecadff66d32071ad6d02265945cc76a" id="r_acecadff66d32071ad6d02265945cc76a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#acecadff66d32071ad6d02265945cc76a">kernel::task::taskdefs_valid</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memitem:a7f227dc40c3e02534d8c4640812236c7" id="r_a7f227dc40c3e02534d8c4640812236c7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a7f227dc40c3e02534d8c4640812236c7">kernel::task::reboot_from_table</a> ()</td></tr>
+<tr class="memitem:a5133e0ef90772b93d6a07eee13cd474e" id="r_a5133e0ef90772b93d6a07eee13cd474e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a5133e0ef90772b93d6a07eee13cd474e">kernel::task::set_debugd_pid_cell</a> (uint64_t pid) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a5133e0ef90772b93d6a07eee13cd474e"><td class="mdescLeft">&#160;</td><td class="mdescRight">debugd PID cell accessors (issue #231): the taskdefs row owns the cell (TU-local in <a class="el" href="taskdefs_8cpp.html" title="Task definition table and reboot-from-table implementation.">taskdefs.cpp</a>); the shell reads it for on-demand debugd startup. A cell naming a dead generation counts as unset (caller validates via find_task).  <br /></td></tr>
+<tr class="memitem:a72a600e65033643940fd57c8900bc9a3" id="r_a72a600e65033643940fd57c8900bc9a3"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a72a600e65033643940fd57c8900bc9a3">kernel::task::get_debugd_pid_cell</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:adc36214616607d88fa61adf5386788e4" id="r_adc36214616607d88fa61adf5386788e4"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#adc36214616607d88fa61adf5386788e4">kernel::task::taskdefs_count</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:adc36214616607d88fa61adf5386788e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read-only task-table accessors (issue #24): the verify class inspects budgets/modes without spawning. No mutation, no alloc.  <br /></td></tr>
+<tr class="memitem:a6c2e4859b68a0571d2f50dda0efba2a8" id="r_a6c2e4859b68a0571d2f50dda0efba2a8"><td class="memItemLeft">const <a class="el" href="structkernel_1_1task_1_1_task_def.html">TaskDef</a> *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a6c2e4859b68a0571d2f50dda0efba2a8">kernel::task::taskdefs_at</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> i) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a134c6b74e9d9bc36270fd82a843ea357" id="r_a134c6b74e9d9bc36270fd82a843ea357"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a134c6b74e9d9bc36270fd82a843ea357">kernel::task::taskdefs_server_params_valid</a> (const <a class="el" href="structkernel_1_1task_1_1_task_def.html">TaskDef</a> &amp;d) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a134c6b74e9d9bc36270fd82a843ea357"><td class="mdescLeft">&#160;</td><td class="mdescRight">Single-entry server-params rule (issue #24): the same predicate the compile-time table check enforces, callable at runtime for negative tests (e.g. BACKGROUND with non-idle bg priority).  <br /></td></tr>
+<tr class="memitem:acecadff66d32071ad6d02265945cc76a" id="r_acecadff66d32071ad6d02265945cc76a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#acecadff66d32071ad6d02265945cc76a">kernel::task::taskdefs_valid</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:acecadff66d32071ad6d02265945cc76a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whole-table validation at runtime (mirrors the static_assert).  <br /></td></tr>
+<tr class="memitem:a23341a25427d54ae2f91ec33bb133c24" id="r_a23341a25427d54ae2f91ec33bb133c24"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a23341a25427d54ae2f91ec33bb133c24">kernel::task::reboot_from_table</a> () <a class="el" href="namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a>((noreturn))</td></tr>
+<tr class="memdesc:a23341a25427d54ae2f91ec33bb133c24"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kills all tasks (except idle), spawns the system from g_task_defs[], then enters the idle loop. Never returns.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Task definition table and reboot-from-table implementation. </p>
@@ -188,11 +197,17 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">void debug_write_hex </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="taskdefs_8cpp_afc833d2926e5dca3c9fbed32f7a7656a_cgraph.png" border="0" usemap="#ataskdefs_8cpp_afc833d2926e5dca3c9fbed32f7a7656a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -214,7 +229,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="taskdefs_8cpp_a3893cb01e13bf4e36090daef580b7426_cgraph.png" border="0" usemap="#ataskdefs_8cpp_a3893cb01e13bf4e36090daef580b7426_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>

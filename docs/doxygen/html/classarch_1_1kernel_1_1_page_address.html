@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -137,15 +137,24 @@ Collaboration diagram for arch::kernel::PageAddress:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a8ea63e7b8f244f3e3b6c13106e6bdd3d" id="r_a8ea63e7b8f244f3e3b6c13106e6bdd3d"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="#a8ea63e7b8f244f3e3b6c13106e6bdd3d">PageAddress</a> () noexcept=default</td></tr>
+<tr class="memdesc:a8ea63e7b8f244f3e3b6c13106e6bdd3d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default constructor — initialises to null page address.  <br /></td></tr>
 <tr class="memitem:abdf87ea435a5aaa6f24e44df3e9fb24e" id="r_abdf87ea435a5aaa6f24e44df3e9fb24e"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="#abdf87ea435a5aaa6f24e44df3e9fb24e">PageAddress</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> addr) noexcept</td></tr>
+<tr class="memdesc:abdf87ea435a5aaa6f24e44df3e9fb24e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Construct a page-aligned address from a raw value (clears offset bits).  <br /></td></tr>
 <tr class="memitem:af2782724e67364249ae37492276d46eb" id="r_af2782724e67364249ae37492276d46eb"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="#af2782724e67364249ae37492276d46eb">PageAddress</a> (<a class="el" href="classarch_1_1kernel_1_1_physical_address.html#a87dc6d28f7bb69167c8ee56dcea4b173">PhysicalAddress</a> phys) noexcept</td></tr>
+<tr class="memdesc:af2782724e67364249ae37492276d46eb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Construct a page-aligned address from a <a class="el" href="classarch_1_1kernel_1_1_physical_address.html" title="Physical address wrapper — eliminates raw reinterpret_cast for physical memory.">PhysicalAddress</a>.  <br /></td></tr>
 <tr class="memitem:ad3479bb04e49a3380901d055e092b196" id="r_ad3479bb04e49a3380901d055e092b196"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad3479bb04e49a3380901d055e092b196">page_index</a> () const noexcept</td></tr>
+<tr class="memdesc:ad3479bb04e49a3380901d055e092b196"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the page index (address / 4096).  <br /></td></tr>
 <tr class="memitem:a49280f3843e387eccadce0906c730922" id="r_a49280f3843e387eccadce0906c730922"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a49280f3843e387eccadce0906c730922">is_page_aligned</a> () const noexcept</td></tr>
+<tr class="memdesc:a49280f3843e387eccadce0906c730922"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the underlying address is already page-aligned.  <br /></td></tr>
 <tr class="inherit_header pub_methods_classarch_1_1kernel_1_1_physical_address"><td colspan="2">Public Member Functions inherited from <a class="el" href="classarch_1_1kernel_1_1_physical_address.html">arch::kernel::PhysicalAddress</a></td></tr>
 <tr class="memitem:a87dc6d28f7bb69167c8ee56dcea4b173 pub_methods_classarch_1_1kernel_1_1_physical_address" id="r_a87dc6d28f7bb69167c8ee56dcea4b173"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_physical_address.html#a87dc6d28f7bb69167c8ee56dcea4b173">PhysicalAddress</a> () noexcept</td></tr>
+<tr class="memdesc:a87dc6d28f7bb69167c8ee56dcea4b173 pub_methods_classarch_1_1kernel_1_1_physical_address"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default constructor — initialises to null address 0.  <br /></td></tr>
 <tr class="memitem:afecbd39b4ffafabb99af57673fa5f4c3 pub_methods_classarch_1_1kernel_1_1_physical_address" id="r_afecbd39b4ffafabb99af57673fa5f4c3"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_physical_address.html#afecbd39b4ffafabb99af57673fa5f4c3">PhysicalAddress</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> addr) noexcept</td></tr>
+<tr class="memdesc:afecbd39b4ffafabb99af57673fa5f4c3 pub_methods_classarch_1_1kernel_1_1_physical_address"><td class="mdescLeft">&#160;</td><td class="mdescRight">Construct from a raw physical address.  <br /></td></tr>
 <tr class="memitem:a0107ae712c1be254910e9527505d8428 pub_methods_classarch_1_1kernel_1_1_physical_address" id="r_a0107ae712c1be254910e9527505d8428"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_physical_address.html#a0107ae712c1be254910e9527505d8428">value</a> () const noexcept</td></tr>
+<tr class="memdesc:a0107ae712c1be254910e9527505d8428 pub_methods_classarch_1_1kernel_1_1_physical_address"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the raw physical address value.  <br /></td></tr>
 <tr class="memitem:af96f0507cd25239aee19e530299e16aa pub_methods_classarch_1_1kernel_1_1_physical_address" id="r_af96f0507cd25239aee19e530299e16aa"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_physical_address.html#af96f0507cd25239aee19e530299e16aa">is_null</a> () const noexcept</td></tr>
+<tr class="memdesc:af96f0507cd25239aee19e530299e16aa pub_methods_classarch_1_1kernel_1_1_physical_address"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the address is null (zero).  <br /></td></tr>
 <tr class="memitem:a413eb01e7708859e909d65e988f53281 pub_methods_classarch_1_1kernel_1_1_physical_address" id="r_a413eb01e7708859e909d65e988f53281"><td class="memItemLeft">constexpr <a class="el" href="classarch_1_1kernel_1_1_physical_address.html#a87dc6d28f7bb69167c8ee56dcea4b173">PhysicalAddress</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_physical_address.html#a413eb01e7708859e909d65e988f53281">operator=</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> addr) noexcept</td></tr>
 <tr class="memitem:a02101d34375964645e4ffbdb8fa346f5 pub_methods_classarch_1_1kernel_1_1_physical_address" id="r_a02101d34375964645e4ffbdb8fa346f5"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_physical_address.html#a02101d34375964645e4ffbdb8fa346f5">operator==</a> (<a class="el" href="classarch_1_1kernel_1_1_physical_address.html#a87dc6d28f7bb69167c8ee56dcea4b173">PhysicalAddress</a> other) const noexcept</td></tr>
 <tr class="memitem:a545c1d5f7910acd0e9c4dee87e0b4d93 pub_methods_classarch_1_1kernel_1_1_physical_address" id="r_a545c1d5f7910acd0e9c4dee87e0b4d93"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_physical_address.html#a545c1d5f7910acd0e9c4dee87e0b4d93">operator!=</a> (<a class="el" href="classarch_1_1kernel_1_1_physical_address.html#a87dc6d28f7bb69167c8ee56dcea4b173">PhysicalAddress</a> other) const noexcept</td></tr>
@@ -181,6 +190,8 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Default constructor — initialises to null page address. </p>
+
 </div>
 </div>
 <a id="abdf87ea435a5aaa6f24e44df3e9fb24e" name="abdf87ea435a5aaa6f24e44df3e9fb24e"></a>
@@ -206,6 +217,14 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Construct a page-aligned address from a raw value (clears offset bits). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">addr</td><td>Raw physical address (lower 12 bits are masked off). </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <a id="af2782724e67364249ae37492276d46eb" name="af2782724e67364249ae37492276d46eb"></a>
@@ -230,6 +249,14 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Construct a page-aligned address from a <a class="el" href="classarch_1_1kernel_1_1_physical_address.html" title="Physical address wrapper — eliminates raw reinterpret_cast for physical memory.">PhysicalAddress</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">phys</td><td>Physical address (lower 12 bits are masked off). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -257,6 +284,8 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Check whether the underlying address is already page-aligned. </p>
+
 </div>
 </div>
 <a id="ad3479bb04e49a3380901d055e092b196" name="ad3479bb04e49a3380901d055e092b196"></a>
@@ -281,6 +310,8 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Return the page index (address / 4096). </p>
 
 </div>
 </div>

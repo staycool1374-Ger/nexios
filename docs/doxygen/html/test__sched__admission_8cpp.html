@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -139,6 +139,11 @@ Include dependency graph for test_sched_admission.cpp:</div>
 <!-- MAP 0 -->
 </div>
 </div><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:ae886175cc5c137dd98ed440d4a46c203" id="r_ae886175cc5c137dd98ed440d4a46c203"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#ae886175cc5c137dd98ed440d4a46c203">SchedulerError</a> </td></tr>
+<tr class="memdesc:ae886175cc5c137dd98ed440d4a46c203"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="constants_8hpp.html#ab55f54011a8f17279e6e814f97523a91">Error</a> codes returned by scheduler operations.  <a href="#ae886175cc5c137dd98ed440d4a46c203">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:aaa6c88eb55367547af1f9ee44ea613db" id="r_aaa6c88eb55367547af1f9ee44ea613db"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aaa6c88eb55367547af1f9ee44ea613db">JARVIS_TEST</a> (admission_lub_rejects_overrun, &quot;PRE: none | POST: none&quot;)</td></tr>
@@ -154,7 +159,24 @@ Functions</h2></td></tr>
 <div class="textblock"><p>Enforced admission-control tests (issue #20, v0.4.8). </p>
 <p>DRIVEN: admission decisions are observed through REAL add_task_err() outcomes on live TCBs — the harness never fakes utilization sums and never mutates scheduler tables. Denied TCBs are destroyed (never registered ⇒ teardown no-ops); admitted tasks are terminated + drained. Background load during tests is zero by construction (init/harness and SS daemons are edf-exempt, shell/user-app are aperiodic, idle/monitor are skipped), so explicit-WCET fills give deterministic bounds.</p>
 <p>Liveness: every admitted task blocks on a test-local gate semaphore if ever dispatched. An empty-lambda entry would self-terminate on the first timer tick (dispatch race: the task vanishes from the LUB scan before the next setup call), flaking every multi-task assertion. </p>
-</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+</div><a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
+<a id="ae886175cc5c137dd98ed440d4a46c203" name="ae886175cc5c137dd98ed440d4a46c203"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae886175cc5c137dd98ed440d4a46c203">&#9670;&#160;</a></span>SchedulerError</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum <a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">kernel::errors::SchedulerError</a> : uint64_t</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p><a class="el" href="constants_8hpp.html#ab55f54011a8f17279e6e814f97523a91">Error</a> codes returned by scheduler operations. </p>
+
+</div>
+</div>
+<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a592c44cd74086493beeb3c8af4d83a21" name="a592c44cd74086493beeb3c8af4d83a21"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a592c44cd74086493beeb3c8af4d83a21">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/7]</span></h2>
 

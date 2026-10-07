@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dma_8cpp.html'
 <p>DMA driver implementation.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="dma_8hpp_source.html">kernel/driver/dma.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
@@ -142,12 +143,12 @@ Namespaces</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a9ed9bda8444aa6fed65a4d02bb7157d9" id="r_a9ed9bda8444aa6fed65a4d02bb7157d9"><td class="memItemLeft">DmaBuffer&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a9ed9bda8444aa6fed65a4d02bb7157d9">kernel::dma::alloc_buffer</a> (<a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> size)</td></tr>
+<tr class="memitem:a9ed9bda8444aa6fed65a4d02bb7157d9" id="r_a9ed9bda8444aa6fed65a4d02bb7157d9"><td class="memItemLeft">DmaBuffer&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a9ed9bda8444aa6fed65a4d02bb7157d9">kernel::dma::alloc_buffer</a> (<a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> size)</td></tr>
 <tr class="memitem:ae63cca35e8ce0810d35364b5e21a252d" id="r_ae63cca35e8ce0810d35364b5e21a252d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#ae63cca35e8ce0810d35364b5e21a252d">kernel::dma::free_buffer</a> (DmaBuffer &amp;buf)</td></tr>
-<tr class="memitem:a07c336f70f255888fe45aec890bda095" id="r_a07c336f70f255888fe45aec890bda095"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a07c336f70f255888fe45aec890bda095">kernel::dma::sg_from_buffer</a> (SgList &amp;sg, const DmaBuffer &amp;buf, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> offset, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> length)</td></tr>
-<tr class="memitem:a6d426c4def3e0e077f11e5f5617ea809" id="r_a6d426c4def3e0e077f11e5f5617ea809"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a6d426c4def3e0e077f11e5f5617ea809">kernel::dma::sg_from_virt</a> (SgList &amp;sg, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> virt_addr, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> length)</td></tr>
+<tr class="memitem:a07c336f70f255888fe45aec890bda095" id="r_a07c336f70f255888fe45aec890bda095"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a07c336f70f255888fe45aec890bda095">kernel::dma::sg_from_buffer</a> (SgList &amp;sg, const DmaBuffer &amp;buf, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> offset, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> length)</td></tr>
+<tr class="memitem:a6d426c4def3e0e077f11e5f5617ea809" id="r_a6d426c4def3e0e077f11e5f5617ea809"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a6d426c4def3e0e077f11e5f5617ea809">kernel::dma::sg_from_virt</a> (SgList &amp;sg, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> virt_addr, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> length)</td></tr>
 <tr class="memitem:a3694e0ff7a283647c1638774454314f2" id="r_a3694e0ff7a283647c1638774454314f2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a3694e0ff7a283647c1638774454314f2">kernel::dma::sg_reset</a> (SgList &amp;sg)</td></tr>
-<tr class="memitem:a2b0e39f4a2f3d6d1eb72850767919d44" id="r_a2b0e39f4a2f3d6d1eb72850767919d44"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a2b0e39f4a2f3d6d1eb72850767919d44">kernel::dma::prd_from_sg</a> (PrdTable &amp;prd, const SgList &amp;sg, bool eot)</td></tr>
+<tr class="memitem:a2b0e39f4a2f3d6d1eb72850767919d44" id="r_a2b0e39f4a2f3d6d1eb72850767919d44"><td class="memItemLeft"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a2b0e39f4a2f3d6d1eb72850767919d44">kernel::dma::prd_from_sg</a> (PrdTable &amp;prd, const SgList &amp;sg, bool eot)</td></tr>
 <tr class="memitem:a4ac8093b599e8f148c0873cb8657e7c2" id="r_a4ac8093b599e8f148c0873cb8657e7c2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a4ac8093b599e8f148c0873cb8657e7c2">kernel::dma::prd_reset</a> (PrdTable &amp;prd)</td></tr>
 <tr class="memitem:a7c295e7cd57137a154f6ce5fe0bbde68" id="r_a7c295e7cd57137a154f6ce5fe0bbde68"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a7c295e7cd57137a154f6ce5fe0bbde68">kernel::dma::pci_set_bus_master</a> (arch::PciBdf bdf, bool enable)</td></tr>
 </table>

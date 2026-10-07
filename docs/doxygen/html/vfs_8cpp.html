@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -137,30 +137,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('vfs_8cpp.html'
 Include dependency graph for vfs.cpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="vfs_8cpp__incl.png" border="0" usemap="#asrc_2kernel_2vfs_2vfs_8cpp" loading="lazy" alt=""/></div>
-<map name="asrc_2kernel_2vfs_2vfs_8cpp" id="asrc_2kernel_2vfs_2vfs_8cpp">
-<area shape="rect" title=" " alt="" coords="204,5,351,32"/>
-<area shape="rect" href="vfs_8hpp.html" title=" " alt="" coords="5,229,131,256"/>
-<area shape="poly" title=" " alt="" coords="245,34,212,54,169,80,128,114,96,156,83,185,75,215,70,213,78,184,91,153,125,111,166,76,209,49,249,31"/>
-<area shape="rect" href="scheduler_8hpp.html" title="Rate&#45;monotonic scheduler for task management and dispatching." alt="" coords="193,80,362,107"/>
-<area shape="poly" title=" " alt="" coords="278,30,280,65,275,63,276,35"/>
-<area shape="rect" href="task_8hpp.html" title="Task control block and state definitions for the kernel scheduler." alt="" coords="105,155,244,181"/>
-<area shape="poly" title=" " alt="" coords="240,34,210,54,195,66,184,81,174,110,173,140,168,139,169,109,179,79,192,63,207,49,244,31"/>
-<area shape="rect" href="string_8hpp.html" title="Memory and string utility functions (extern &quot;C&quot; for ABI compat)." alt="" coords="360,155,438,181"/>
-<area shape="poly" title=" " alt="" coords="310,30,346,50,377,78,392,108,399,140,394,138,387,110,373,82,343,54,310,35"/>
-<area shape="rect" href="utils_8hpp.html" title="Utility type traits and alignment helpers." alt="" coords="438,80,508,107"/>
-<area shape="poly" title=" " alt="" coords="311,30,427,73,422,75,312,35"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="245,304,323,331"/>
-<area shape="poly" title=" " alt="" coords="106,254,234,297,230,300,105,259"/>
-<area shape="poly" title=" " alt="" coords="282,105,297,171,301,213,300,256,293,291,289,287,295,256,296,213,291,171,280,110"/>
-<area shape="poly" title=" " alt="" coords="257,109,207,147,204,143,261,105"/>
-<area shape="poly" title=" " alt="" coords="154,184,101,222,98,218,158,180"/>
-<area shape="poly" title=" " alt="" coords="176,179,181,216,186,236,196,254,217,277,243,297,238,296,213,281,191,258,181,238,176,217,173,184"/>
-<area shape="rect" href="signal_8hpp.html" title="Signal definitions used by the kernel for user exception delivery." alt="" coords="205,229,286,256"/>
-<area shape="poly" title=" " alt="" coords="188,179,225,218,220,218,186,184"/>
-<area shape="poly" title=" " alt="" coords="253,254,273,291,268,289,251,259"/>
-<area shape="poly" title=" " alt="" coords="394,180,343,258,309,295,306,291,339,254,389,183"/>
-<area shape="poly" title=" " alt="" coords="474,105,468,143,452,183,423,220,390,252,322,298,320,294,386,247,420,216,447,180,463,141,470,109"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
@@ -187,11 +164,11 @@ Functions</h2></td></tr>
 <tr class="memdesc:a9d792be7e3f099e025d10c0a6ce0680d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find a mounted filesystem by name.  <br /></td></tr>
 <tr class="memitem:aab245675b2cdacc0a60a0576dcb4e267" id="r_aab245675b2cdacc0a60a0576dcb4e267"><td class="memItemLeft">Vnode *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#aab245675b2cdacc0a60a0576dcb4e267">kernel::vfs::resolve_parent</a> (const char *path, const char *&amp;out_name)</td></tr>
 <tr class="memdesc:aab245675b2cdacc0a60a0576dcb4e267"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve the parent vnode and leaf name from a path. Handles both absolute ("/foo/bar") and relative ("bar") paths by delegating sub-path resolution to <a class="el" href="namespacekernel_1_1vfs.html#a11645e6a37081ee178777f682740736d" title="Resolve an absolute or relative path to a vnode.">resolve()</a>, which already handles CWD, mount points, .., . etc.  <br /></td></tr>
-<tr class="memitem:a0411923a55f520a77d6497349fd7acf6" id="r_a0411923a55f520a77d6497349fd7acf6"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#a0411923a55f520a77d6497349fd7acf6">kernel::vfs::mkdir</a> (const char *path, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> mode)</td></tr>
+<tr class="memitem:a0411923a55f520a77d6497349fd7acf6" id="r_a0411923a55f520a77d6497349fd7acf6"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#a0411923a55f520a77d6497349fd7acf6">kernel::vfs::mkdir</a> (const char *path, uint16_t mode)</td></tr>
 <tr class="memdesc:a0411923a55f520a77d6497349fd7acf6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a subdirectory at the given path.  <br /></td></tr>
 <tr class="memitem:ab8191b68620f64ca864fad18239e5bce" id="r_ab8191b68620f64ca864fad18239e5bce"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#ab8191b68620f64ca864fad18239e5bce">kernel::vfs::unlink</a> (const char *path)</td></tr>
 <tr class="memdesc:ab8191b68620f64ca864fad18239e5bce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove a file or empty directory at the given path.  <br /></td></tr>
-<tr class="memitem:a94bddce0efe1b0b6a3dade264883f7ce" id="r_a94bddce0efe1b0b6a3dade264883f7ce"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#a94bddce0efe1b0b6a3dade264883f7ce">kernel::vfs::create</a> (const char *path, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> mode)</td></tr>
+<tr class="memitem:a94bddce0efe1b0b6a3dade264883f7ce" id="r_a94bddce0efe1b0b6a3dade264883f7ce"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#a94bddce0efe1b0b6a3dade264883f7ce">kernel::vfs::create</a> (const char *path, uint16_t mode)</td></tr>
 <tr class="memdesc:a94bddce0efe1b0b6a3dade264883f7ce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a regular file at the given path.  <br /></td></tr>
 <tr class="memitem:ad4618eec85ebd8a3d27bfc4d974d7591" id="r_ad4618eec85ebd8a3d27bfc4d974d7591"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#ad4618eec85ebd8a3d27bfc4d974d7591">kernel::vfs::mount_err</a> (Filesystem &amp;filesystem, const char *mount_point)</td></tr>
 <tr class="memdesc:ad4618eec85ebd8a3d27bfc4d974d7591"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mount a filesystem with error handling.  <br /></td></tr>
@@ -203,9 +180,9 @@ Functions</h2></td></tr>
 <tr class="memdesc:abf5c58a8fb7ecb09a275d19b1029b125"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the global root vnode with error code return.  <br /></td></tr>
 <tr class="memitem:ad31548f035d75326ab34f5fd3fce896a" id="r_ad31548f035d75326ab34f5fd3fce896a"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#ad31548f035d75326ab34f5fd3fce896a">kernel::vfs::resolve_err</a> (const char *path, Vnode *&amp;out_vnode)</td></tr>
 <tr class="memdesc:ad31548f035d75326ab34f5fd3fce896a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve an absolute path to a vnode with error code return.  <br /></td></tr>
-<tr class="memitem:a4e062ba9d7ffaca41f17dce1644388a8" id="r_a4e062ba9d7ffaca41f17dce1644388a8"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#a4e062ba9d7ffaca41f17dce1644388a8">kernel::vfs::mkdir_err</a> (const char *path, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> mode)</td></tr>
+<tr class="memitem:a4e062ba9d7ffaca41f17dce1644388a8" id="r_a4e062ba9d7ffaca41f17dce1644388a8"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#a4e062ba9d7ffaca41f17dce1644388a8">kernel::vfs::mkdir_err</a> (const char *path, uint16_t mode)</td></tr>
 <tr class="memdesc:a4e062ba9d7ffaca41f17dce1644388a8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a subdirectory with error code return.  <br /></td></tr>
-<tr class="memitem:a19093f8bf45bac4a87dc6818084e3843" id="r_a19093f8bf45bac4a87dc6818084e3843"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#a19093f8bf45bac4a87dc6818084e3843">kernel::vfs::create_err</a> (const char *path, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> mode)</td></tr>
+<tr class="memitem:a19093f8bf45bac4a87dc6818084e3843" id="r_a19093f8bf45bac4a87dc6818084e3843"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#a19093f8bf45bac4a87dc6818084e3843">kernel::vfs::create_err</a> (const char *path, uint16_t mode)</td></tr>
 <tr class="memdesc:a19093f8bf45bac4a87dc6818084e3843"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a regular file with error code return.  <br /></td></tr>
 <tr class="memitem:af555f6cb1ba4c592ec31fcf5902e367f" id="r_af555f6cb1ba4c592ec31fcf5902e367f"><td class="memItemLeft">VfsError&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#af555f6cb1ba4c592ec31fcf5902e367f">kernel::vfs::unlink_err</a> (const char *path)</td></tr>
 <tr class="memdesc:af555f6cb1ba4c592ec31fcf5902e367f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove a file or empty directory with error code return.  <br /></td></tr>

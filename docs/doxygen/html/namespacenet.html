@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacenet.h
 Functions</h2></td></tr>
 <tr class="memitem:a79a8aca148db07658e53ac5cd940c827" id="r_a79a8aca148db07658e53ac5cd940c827"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a79a8aca148db07658e53ac5cd940c827">net_icmp_clear_reply</a> ()</td></tr>
 <tr class="memdesc:a79a8aca148db07658e53ac5cd940c827"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset the ICMP echo reply record.  <br /></td></tr>
-<tr class="memitem:abb83793f177148ca1edb88ee4cea247a" id="r_abb83793f177148ca1edb88ee4cea247a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abb83793f177148ca1edb88ee4cea247a">net_icmp_set_reply</a> (<a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> ident, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> seq, Ipv4Addr src)</td></tr>
+<tr class="memitem:abb83793f177148ca1edb88ee4cea247a" id="r_abb83793f177148ca1edb88ee4cea247a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abb83793f177148ca1edb88ee4cea247a">net_icmp_set_reply</a> (uint16_t ident, uint16_t seq, Ipv4Addr src)</td></tr>
 <tr class="memdesc:abb83793f177148ca1edb88ee4cea247a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record an ICMP echo reply.  <br /></td></tr>
 <tr class="memitem:ad3ff6ca04a6c3b9a4c21fa4ce5bf1c8a" id="r_ad3ff6ca04a6c3b9a4c21fa4ce5bf1c8a"><td class="memItemLeft">const IcmpEchoReply *&#160;</td><td class="memItemRight"><a class="el" href="#ad3ff6ca04a6c3b9a4c21fa4ce5bf1c8a">net_icmp_last_reply</a> ()</td></tr>
 <tr class="memdesc:ad3ff6ca04a6c3b9a4c21fa4ce5bf1c8a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a pointer to the last received ICMP echo reply, or nullptr.  <br /></td></tr>
@@ -131,15 +131,15 @@ Functions</h2></td></tr>
 <tr class="memdesc:ac3d2624085f7a02e0560fff0dc457add"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a reference to the global ARP cache.  <br /></td></tr>
 <tr class="memitem:a725cddfef06955893790c0d4337dfae3" id="r_a725cddfef06955893790c0d4337dfae3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a725cddfef06955893790c0d4337dfae3">net_init</a> (Nic &amp;nic, MacAddr mac, Ipv4Addr ip, Ipv4Addr subnet, Ipv4Addr gateway)</td></tr>
 <tr class="memdesc:a725cddfef06955893790c0d4337dfae3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialise a NIC with its MAC, IP, subnet, and gateway.  <br /></td></tr>
-<tr class="memitem:abf47b87159dccdad00ced31edeec5b94" id="r_abf47b87159dccdad00ced31edeec5b94"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abf47b87159dccdad00ced31edeec5b94">net_handle_frame</a> (const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> len, Nic &amp;nic)</td></tr>
+<tr class="memitem:abf47b87159dccdad00ced31edeec5b94" id="r_abf47b87159dccdad00ced31edeec5b94"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abf47b87159dccdad00ced31edeec5b94">net_handle_frame</a> (const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> len, Nic &amp;nic)</td></tr>
 <tr class="memdesc:abf47b87159dccdad00ced31edeec5b94"><td class="mdescLeft">&#160;</td><td class="mdescRight">Handle an incoming Ethernet frame: dispatch ARP / IPv4 / ICMP.  <br /></td></tr>
-<tr class="memitem:a4942279d89399531882a47a9a44c063b" id="r_a4942279d89399531882a47a9a44c063b"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4942279d89399531882a47a9a44c063b">net_arp_resolve</a> (Nic &amp;nic, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> target_ip, MacAddr &amp;out_mac)</td></tr>
+<tr class="memitem:a4942279d89399531882a47a9a44c063b" id="r_a4942279d89399531882a47a9a44c063b"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4942279d89399531882a47a9a44c063b">net_arp_resolve</a> (Nic &amp;nic, uint32_t target_ip, MacAddr &amp;out_mac)</td></tr>
 <tr class="memdesc:a4942279d89399531882a47a9a44c063b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve an IPv4 address to a MAC via ARP (with retries and cache).  <br /></td></tr>
-<tr class="memitem:a1a57b9a29bb5404650605e8cf2d52cff" id="r_a1a57b9a29bb5404650605e8cf2d52cff"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1a57b9a29bb5404650605e8cf2d52cff">net_send_udp</a> (Nic &amp;nic, Ipv4Addr dst_ip, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> dst_port, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> src_port, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *payload, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> payload_len)</td></tr>
+<tr class="memitem:a1a57b9a29bb5404650605e8cf2d52cff" id="r_a1a57b9a29bb5404650605e8cf2d52cff"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1a57b9a29bb5404650605e8cf2d52cff">net_send_udp</a> (Nic &amp;nic, Ipv4Addr dst_ip, uint16_t dst_port, uint16_t src_port, const uint8_t *payload, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> payload_len)</td></tr>
 <tr class="memdesc:a1a57b9a29bb5404650605e8cf2d52cff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Build and send an IPv4+UDP packet.  <br /></td></tr>
 <tr class="memitem:a9b8dc944fd21a6ed2bf99a7174205fd7" id="r_a9b8dc944fd21a6ed2bf99a7174205fd7"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a9b8dc944fd21a6ed2bf99a7174205fd7">net_poll</a> (Nic &amp;nic)</td></tr>
 <tr class="memdesc:a9b8dc944fd21a6ed2bf99a7174205fd7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Poll the NIC for an incoming frame and dispatch it (non-blocking).  <br /></td></tr>
-<tr class="memitem:adaaadf3f0bb219c1503e146aba00c4c4" id="r_adaaadf3f0bb219c1503e146aba00c4c4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#adaaadf3f0bb219c1503e146aba00c4c4">net_send_icmp_echo</a> (Nic &amp;nic, Ipv4Addr dst_ip, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> id, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> seq, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> data_len)</td></tr>
+<tr class="memitem:adaaadf3f0bb219c1503e146aba00c4c4" id="r_adaaadf3f0bb219c1503e146aba00c4c4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#adaaadf3f0bb219c1503e146aba00c4c4">net_send_icmp_echo</a> (Nic &amp;nic, Ipv4Addr dst_ip, uint16_t id, uint16_t seq, const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> data_len)</td></tr>
 <tr class="memdesc:adaaadf3f0bb219c1503e146aba00c4c4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Build and send an ICMP Echo Request (with self-ping loopback).  <br /></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
@@ -176,7 +176,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>target_ip</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>target_ip</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -205,12 +205,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void net::net_handle_frame </td>
           <td>(</td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>data</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>data</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>len</em></span>, </td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>len</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -271,12 +271,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void net::net_icmp_set_reply </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>ident</em></span>, </td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>ident</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>seq</em></span>, </td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>seq</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -378,22 +378,22 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>id</em></span>, </td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>id</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>seq</em></span>, </td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>seq</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>data</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>data</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>data_len</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>data_len</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -427,22 +427,22 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>dst_port</em></span>, </td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>dst_port</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>src_port</em></span>, </td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>src_port</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>payload</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>payload</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>payload_len</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>payload_len</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">

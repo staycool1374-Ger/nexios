@@ -26,6 +26,8 @@ var namespacekernel_1_1elf =
     ] ],
     [ "alloc_user_stack_and_heap", "namespacekernel_1_1elf.html#af0f8dea59eb8cf69559d9199d5b78d10", null ],
     [ "apply_relocations", "namespacekernel_1_1elf.html#a30d32c118d2e72c3de96f0a5b0ac13c6", null ],
+    [ "collect_ro_ranges", "namespacekernel_1_1elf.html#a2cd5f8ff1d095878599d2ebd74125fb0", null ],
+    [ "crc_user_range", "namespacekernel_1_1elf.html#a9024e1c0be1324638cc1b83724001072", null ],
     [ "elf_loader_task_main", "namespacekernel_1_1elf.html#a1c90403a3aa9677a921069fbf64f5280", null ],
     [ "exec_into_current", "namespacekernel_1_1elf.html#a8587c966825c28717e2e90c6c754b87c", null ],
     [ "finalize_loaded_task", "namespacekernel_1_1elf.html#a4a78f2b4b292d565c901908fddd7b0a4", null ],
@@ -38,6 +40,8 @@ var namespacekernel_1_1elf =
     [ "release_task_libs", "namespacekernel_1_1elf.html#a6f1d5d14f51004bffabfae7b764586e1", null ],
     [ "relocate_closure", "namespacekernel_1_1elf.html#aecd3436bf70035c74beb3b35afeb66da", null ],
     [ "resolve_dependencies", "namespacekernel_1_1elf.html#afbeca3dfe561183e16bf811a2f3bb139", null ],
+    [ "snapshot_ro_baseline", "namespacekernel_1_1elf.html#a202ab589a130ada255a0629cb0fd9e89", null ],
+    [ "text_canary_slot", "namespacekernel_1_1elf.html#ab17534bb543abbd372af4f9129e7d433", null ],
     [ "unmap_acquired_ro", "namespacekernel_1_1elf.html#a1c98c2e07536a5a4afbbb8c71c8be241", null ],
     [ "validate_header", "namespacekernel_1_1elf.html#a53980ddec04e380da13a0325a465a554", null ],
     [ "validate_segment", "namespacekernel_1_1elf.html#a4c7c051d91c678ffce1d1a2e2b60c4f5", null ]

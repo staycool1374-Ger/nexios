@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -129,9 +129,9 @@ Collaboration diagram for kernel::test::PtPoolSnapshot:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:a40ffeb78e2ad81d7859d1886d721021b" id="r_a40ffeb78e2ad81d7859d1886d721021b"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a40ffeb78e2ad81d7859d1886d721021b">base</a></td></tr>
+<tr class="memitem:a40ffeb78e2ad81d7859d1886d721021b" id="r_a40ffeb78e2ad81d7859d1886d721021b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a40ffeb78e2ad81d7859d1886d721021b">base</a></td></tr>
 <tr class="memdesc:a40ffeb78e2ad81d7859d1886d721021b"><td class="mdescLeft">&#160;</td><td class="mdescRight">physical base (page_table_pool_start_)  <br /></td></tr>
-<tr class="memitem:afca65ea28f66303e7285aa528ddc8bb8" id="r_afca65ea28f66303e7285aa528ddc8bb8"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afca65ea28f66303e7285aa528ddc8bb8">size_pages</a></td></tr>
+<tr class="memitem:afca65ea28f66303e7285aa528ddc8bb8" id="r_afca65ea28f66303e7285aa528ddc8bb8"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#afca65ea28f66303e7285aa528ddc8bb8">size_pages</a></td></tr>
 <tr class="memdesc:afca65ea28f66303e7285aa528ddc8bb8"><td class="mdescLeft">&#160;</td><td class="mdescRight">pool extent in pages  <br /></td></tr>
 <tr class="memitem:af6bd7ed9b079b4c981e213581f84f988" id="r_af6bd7ed9b079b4c981e213581f84f988"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af6bd7ed9b079b4c981e213581f84f988">clean</a></td></tr>
 <tr class="memdesc:af6bd7ed9b079b4c981e213581f84f988"><td class="mdescLeft">&#160;</td><td class="mdescRight">known-good state after init  <br /></td></tr>
@@ -141,17 +141,17 @@ Data Fields</h2></td></tr>
 <tr class="memdesc:af910a0cc2780e163e87c19c243b1bfb8"><td class="mdescLeft">&#160;</td><td class="mdescRight">HW error (ECC, PCIe parity, etc.).  <br /></td></tr>
 <tr class="memitem:a0012ea8428b1d77822dc667ce16da4c3" id="r_a0012ea8428b1d77822dc667ce16da4c3"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a0012ea8428b1d77822dc667ce16da4c3">poisoned</a></td></tr>
 <tr class="memdesc:a0012ea8428b1d77822dc667ce16da4c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">buffer overflow / UAF detected in pool  <br /></td></tr>
-<tr class="memitem:ab52ab855556a9a345492482caedcec26" id="r_ab52ab855556a9a345492482caedcec26"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab52ab855556a9a345492482caedcec26">bitmap</a> [PT_POOL_SNAP_MAX_PAGES/8]</td></tr>
+<tr class="memitem:ab52ab855556a9a345492482caedcec26" id="r_ab52ab855556a9a345492482caedcec26"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ab52ab855556a9a345492482caedcec26">bitmap</a> [PT_POOL_SNAP_MAX_PAGES/8]</td></tr>
 <tr class="memdesc:ab52ab855556a9a345492482caedcec26"><td class="mdescLeft">&#160;</td><td class="mdescRight">covers pool bitmap  <br /></td></tr>
-<tr class="memitem:ac4d73dd8a8592ca18f43804b7865fb2e" id="r_ac4d73dd8a8592ca18f43804b7865fb2e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac4d73dd8a8592ca18f43804b7865fb2e">owner</a> [PT_POOL_SNAP_MAX_PAGES/8]</td></tr>
+<tr class="memitem:ac4d73dd8a8592ca18f43804b7865fb2e" id="r_ac4d73dd8a8592ca18f43804b7865fb2e"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ac4d73dd8a8592ca18f43804b7865fb2e">owner</a> [PT_POOL_SNAP_MAX_PAGES/8]</td></tr>
 <tr class="memdesc:ac4d73dd8a8592ca18f43804b7865fb2e"><td class="mdescLeft">&#160;</td><td class="mdescRight">owner bitmap  <br /></td></tr>
-<tr class="memitem:a073a2cad1d8d6ba96abf0e40ea427439" id="r_a073a2cad1d8d6ba96abf0e40ea427439"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a073a2cad1d8d6ba96abf0e40ea427439">generation</a></td></tr>
+<tr class="memitem:a073a2cad1d8d6ba96abf0e40ea427439" id="r_a073a2cad1d8d6ba96abf0e40ea427439"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a073a2cad1d8d6ba96abf0e40ea427439">generation</a></td></tr>
 <tr class="memdesc:a073a2cad1d8d6ba96abf0e40ea427439"><td class="mdescLeft">&#160;</td><td class="mdescRight">incremented per snapshot capture  <br /></td></tr>
-<tr class="memitem:a39c0490bdc2bee8b6daa70f032f240a5" id="r_a39c0490bdc2bee8b6daa70f032f240a5"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a39c0490bdc2bee8b6daa70f032f240a5">refcount</a></td></tr>
+<tr class="memitem:a39c0490bdc2bee8b6daa70f032f240a5" id="r_a39c0490bdc2bee8b6daa70f032f240a5"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a39c0490bdc2bee8b6daa70f032f240a5">refcount</a></td></tr>
 <tr class="memdesc:a39c0490bdc2bee8b6daa70f032f240a5"><td class="mdescLeft">&#160;</td><td class="mdescRight">tasks referencing this pool  <br /></td></tr>
-<tr class="memitem:a6389ebdbd180c4ce63e9c7c2ff0582d6" id="r_a6389ebdbd180c4ce63e9c7c2ff0582d6"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6389ebdbd180c4ce63e9c7c2ff0582d6">crc32</a></td></tr>
+<tr class="memitem:a6389ebdbd180c4ce63e9c7c2ff0582d6" id="r_a6389ebdbd180c4ce63e9c7c2ff0582d6"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a6389ebdbd180c4ce63e9c7c2ff0582d6">crc32</a></td></tr>
 <tr class="memdesc:a6389ebdbd180c4ce63e9c7c2ff0582d6"><td class="mdescLeft">&#160;</td><td class="mdescRight">integrity check over bitmap  <br /></td></tr>
-<tr class="memitem:a16b2854d620087f0dceaa84bdf5fdcb6" id="r_a16b2854d620087f0dceaa84bdf5fdcb6"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a16b2854d620087f0dceaa84bdf5fdcb6">_reserved</a> [4]</td></tr>
+<tr class="memitem:a16b2854d620087f0dceaa84bdf5fdcb6" id="r_a16b2854d620087f0dceaa84bdf5fdcb6"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a16b2854d620087f0dceaa84bdf5fdcb6">_reserved</a> [4]</td></tr>
 <tr class="memdesc:a16b2854d620087f0dceaa84bdf5fdcb6"><td class="mdescLeft">&#160;</td><td class="mdescRight">padding for forward compat  <br /></td></tr>
 </table>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
@@ -162,7 +162,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::test::PtPoolSnapshot::_reserved[4]</td>
+          <td class="memname">uint32_t kernel::test::PtPoolSnapshot::_reserved[4]</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -178,7 +178,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::test::PtPoolSnapshot::base</td>
+          <td class="memname">uint64_t kernel::test::PtPoolSnapshot::base</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -194,7 +194,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::test::PtPoolSnapshot::bitmap[PT_POOL_SNAP_MAX_PAGES/8]</td>
+          <td class="memname">uint8_t kernel::test::PtPoolSnapshot::bitmap[PT_POOL_SNAP_MAX_PAGES/8]</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -226,7 +226,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::test::PtPoolSnapshot::crc32</td>
+          <td class="memname">uint32_t kernel::test::PtPoolSnapshot::crc32</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -242,7 +242,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::test::PtPoolSnapshot::generation</td>
+          <td class="memname">uint32_t kernel::test::PtPoolSnapshot::generation</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -274,7 +274,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::test::PtPoolSnapshot::owner[PT_POOL_SNAP_MAX_PAGES/8]</td>
+          <td class="memname">uint8_t kernel::test::PtPoolSnapshot::owner[PT_POOL_SNAP_MAX_PAGES/8]</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -306,7 +306,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::test::PtPoolSnapshot::refcount</td>
+          <td class="memname">uint32_t kernel::test::PtPoolSnapshot::refcount</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -322,7 +322,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::test::PtPoolSnapshot::size_pages</td>
+          <td class="memname">uint64_t kernel::test::PtPoolSnapshot::size_pages</td>
         </tr>
       </table>
 </div><div class="memdoc">

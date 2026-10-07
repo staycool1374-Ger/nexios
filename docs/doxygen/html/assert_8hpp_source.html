@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -145,13 +145,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('assert_8hpp_so
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span></div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">extern</span> <span class="stringliteral">&quot;C&quot;</span> <span class="keywordtype">void</span> <a class="code hl_function" href="assert_8hpp.html#ae22655ba6f328217f1ebd6248ed82727">panic</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* msg);</div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span></div>
-<div class="foldopen" id="foldopen00034" data-start="{" data-end="}">
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno"><a class="line" href="namespacekernel_1_1errors.html">   34</a></span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1errors.html">kernel::errors</a> {</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1errors.html">kernel::errors</a> {</div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <span class="comment">// NOLINTNEXTLINE(performance-no-int-to-ptr)</span></div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <span class="keyword">template</span>&lt;kernel::ErrorEnum E&gt;</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="namespacekernel_1_1errors.html#a7a109eae637dbae8c0b5db75fad08745">   37</a></span>    <span class="keyword">inline</span> <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="namespacekernel_1_1errors.html#a7a109eae637dbae8c0b5db75fad08745">error_string</a>(E) { <span class="keywordflow">return</span> <span class="stringliteral">&quot;Unknown error&quot;</span>; }</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="namespacekernel_1_1errors.html#a7a109eae637dbae8c0b5db75fad08745">   37</a></span>    <span class="keyword">inline</span> <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="namespacekernel_1_1errors.html#abd7fc221d9b305cbbc7474467e0f34db">error_string</a>(E) { <span class="keywordflow">return</span> <span class="stringliteral">&quot;Unknown error&quot;</span>; }</div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>}</div>
-</div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span></div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="assert_8hpp.html#a6df1d22fb5f09eccc23b9f399670cfd7">   41</a></span><span class="preprocessor">#define STRINGIFY(x) #x</span></div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span></div>
@@ -179,11 +177,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('assert_8hpp_so
 <div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span> </div>
 <div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span> </div>
-<div class="ttc" id="aassert_8hpp_html_ae22655ba6f328217f1ebd6248ed82727"><div class="ttname"><a href="assert_8hpp.html#ae22655ba6f328217f1ebd6248ed82727">panic</a></div><div class="ttdeci">void panic(const char *msg)</div><div class="ttdoc">Triggers a kernel panic with a message (noreturn).</div><div class="ttdef"><b>Definition</b> kernel.cpp:1170</div></div>
+<div class="ttc" id="aassert_8hpp_html_ae22655ba6f328217f1ebd6248ed82727"><div class="ttname"><a href="assert_8hpp.html#ae22655ba6f328217f1ebd6248ed82727">panic</a></div><div class="ttdeci">void panic(const char *msg)</div><div class="ttdoc">Triggers a kernel panic with a message (noreturn).</div><div class="ttdef"><b>Definition</b> kernel.cpp:1535</div></div>
 <div class="ttc" id="aconcepts_8hpp_html"><div class="ttname"><a href="concepts_8hpp.html">concepts.hpp</a></div></div>
 <div class="ttc" id="alogger_8hpp_html"><div class="ttname"><a href="logger_8hpp.html">logger.hpp</a></div><div class="ttdoc">Kernel logger subsystem with verbosity tiers and color output.</div></div>
-<div class="ttc" id="anamespacekernel_1_1errors_html"><div class="ttname"><a href="namespacekernel_1_1errors.html">kernel::errors</a></div><div class="ttdoc">Primary template for per-module error-string lookup. Each module that defines error codes specialises...</div><div class="ttdef"><b>Definition</b> assert.hpp:34</div></div>
-<div class="ttc" id="anamespacekernel_1_1errors_html_a7a109eae637dbae8c0b5db75fad08745"><div class="ttname"><a href="namespacekernel_1_1errors.html#a7a109eae637dbae8c0b5db75fad08745">kernel::errors::error_string</a></div><div class="ttdeci">const char * error_string(E)</div><div class="ttdef"><b>Definition</b> assert.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_1_1errors_html"><div class="ttname"><a href="namespacekernel_1_1errors.html">kernel::errors</a></div><div class="ttdoc">Primary template for per-module error-string lookup. Each module that defines error codes specialises...</div><div class="ttdef"><b>Definition</b> mempool_errors.hpp:24</div></div>
+<div class="ttc" id="anamespacekernel_1_1errors_html_abd7fc221d9b305cbbc7474467e0f34db"><div class="ttname"><a href="namespacekernel_1_1errors.html#abd7fc221d9b305cbbc7474467e0f34db">kernel::errors::error_string</a></div><div class="ttdeci">const char * error_string(MemPoolError e)</div><div class="ttdoc">Return a human-readable string for a MemPool error code.</div><div class="ttdef"><b>Definition</b> mempool_errors.hpp:45</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

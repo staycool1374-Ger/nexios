@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,8 +121,96 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('task_8hpp.html
 
 <p>Task control block and state definitions for the kernel scheduler.  
 <a href="#details">More...</a></p>
-
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="spinlock_8hpp_source.html">kernel/sync/spinlock.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="spinlock__guard_8hpp_source.html">kernel/sync/spinlock_guard.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="task__errors_8hpp_source.html">kernel/task/task_errors.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="notify_8hpp_source.html">kernel/sync/notify.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="eventgroup_8hpp_source.html">kernel/sync/eventgroup.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="timer__wheel_8hpp_source.html">kernel/time/timer_wheel.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="kernel__object_8hpp_source.html">kernel/memory/kernel_object.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="sporadic__server_8hpp_source.html">kernel/task/sporadic_server.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="signal_8hpp_source.html">signal.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for task.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="task_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2task_2task_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div>
 <p><a href="task_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3AMessage" id="r_kernel_3A_3AMessage"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_message.html">kernel::Message</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">The register budget must fit the message payload (design paper #11 §3.8).  <a href="structkernel_1_1_message.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3AMessageQueue" id="r_kernel_3A_3AMessageQueue"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_message_queue.html">kernel::MessageQueue</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Priority-ordered circular message queue embedded in each TCB.  <a href="structkernel_1_1_message_queue.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3ATaskTimes" id="r_kernel_3A_3ATaskTimes"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_task_times.html">kernel::TaskTimes</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">CPU register save area for context switching.  <a href="structkernel_1_1_task_times.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3ATaskControlBlock" id="r_kernel_3A_3ATaskControlBlock"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task control block — represents a single thread of execution.  <a href="structkernel_1_1_task_control_block.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3ATaskControlBlock_3A_3ARoRange" id="r_kernel_3A_3ATaskControlBlock_3A_3ARoRange"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_task_control_block_1_1_ro_range.html">kernel::TaskControlBlock::RoRange</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One covered read-only range (vaddr + filesz, never BSS tail).  <a href="structkernel_1_1_task_control_block_1_1_ro_range.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Async" id="r_kernel_3A_3Async"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1sync.html">kernel::sync</a></td></tr>
+<tr class="memitem:kernel_3A_3Aipc" id="r_kernel_3A_3Aipc"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ipc.html">kernel::ipc</a></td></tr>
+<tr class="memitem:kernel_3A_3Atask" id="r_kernel_3A_3Atask"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html">kernel::task</a></td></tr>
+<tr class="memitem:kernel_3A_3Acap" id="r_kernel_3A_3Acap"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html">kernel::cap</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:aca8cb7bebc5bfc2d27dcb0c95fc18c3c" id="r_aca8cb7bebc5bfc2d27dcb0c95fc18c3c"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3c">kernel::TaskState</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca2baa69eafc7204f3bd8648eba580c489">kernel::READY</a>
+, <a class="el" href="namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca43491564ebcfd38568918efbd6e840fd">kernel::RUNNING</a>
+, <a class="el" href="namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3caeecba0068950a2df17c47e851e1eef14">kernel::BLOCKED</a>
+, <a class="el" href="namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca1869d56535e8b1449a6da54ff5e11f50">kernel::WAITING</a>
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca9d725163e44a2e9cf094059c0abfdef1">kernel::TERMINATED</a>
+, <a class="el" href="namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca9e266d90f8bb6c974d24e746a3301ed0">kernel::REAPED</a>
+<br />
+ }</td></tr>
+<tr class="memdesc:aca8cb7bebc5bfc2d27dcb0c95fc18c3c"><td class="mdescLeft">&#160;</td><td class="mdescRight">States a task can be in during its lifecycle.  <a href="namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3c">More...</a><br /></td></tr>
+<tr class="memitem:aa769cdcb7178170dcbb2c169fd774fdd" id="r_aa769cdcb7178170dcbb2c169fd774fdd"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fdd">kernel::SchedPolicy</a> { <a class="el" href="namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fddae1f2d5134ed2543d38a0de9751cf75d9">kernel::AUTO</a> = 0
+, <a class="el" href="namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fddac6e6dc18b53b4c2681394b9d8aefcec7">kernel::FIXED</a> = 1
+, <a class="el" href="namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fdda4768fa850648c6c87699d78474b7022f">kernel::EDF</a> = 2
+ }</td></tr>
+<tr class="memdesc:aa769cdcb7178170dcbb2c169fd774fdd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch-policy selector (issue #19, global EDF with exemptions). AUTO (default): finite-deadline non-exempt tasks dispatch EDF, everything else FIXED. FIXED/EDF force the class explicitly.  <a href="namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fdd">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:abb9b26c8d76b814b9ed2a3c78bad290e" id="r_abb9b26c8d76b814b9ed2a3c78bad290e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e">kernel::init_task_common</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;tcb)</td></tr>
+<tr class="memdesc:abb9b26c8d76b814b9ed2a3c78bad290e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize common task fields after allocation.  <br /></td></tr>
+<tr class="memitem:ae7fc9a59f78d98d18c2d3c5a25ec2193" id="r_ae7fc9a59f78d98d18c2d3c5a25ec2193"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#ae7fc9a59f78d98d18c2d3c5a25ec2193">kernel::task::dmesg_task_main</a> ()</td></tr>
+<tr class="memitem:a25626431fd5ef9ee4a6698a65b1f0895" id="r_a25626431fd5ef9ee4a6698a65b1f0895"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a25626431fd5ef9ee4a6698a65b1f0895">kernel::kslot_snapshot_bytes</a> ()</td></tr>
+<tr class="memdesc:a25626431fd5ef9ee4a6698a65b1f0895"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total snapshot bytes for the kernel-stack window state (v0.4.0 MP-6.3): 8 PT page contents + slot bookkeeping.  <br /></td></tr>
+<tr class="memitem:afa5566867274b1950bc3ed7acc375508" id="r_afa5566867274b1950bc3ed7acc375508"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#afa5566867274b1950bc3ed7acc375508">kernel::kslot_snapshot_capture</a> (uint8_t *dst)</td></tr>
+<tr class="memdesc:afa5566867274b1950bc3ed7acc375508"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture the kstack-window PT contents and slot bookkeeping into <code class="param">dst</code> (must hold &gt;= <a class="el" href="namespacekernel.html#a25626431fd5ef9ee4a6698a65b1f0895" title="Total snapshot bytes for the kernel-stack window state (v0.4.0 MP-6.3): 8 PT page contents + slot boo...">kslot_snapshot_bytes()</a> bytes).  <br /></td></tr>
+<tr class="memitem:a74d19182fedd131cc4450ebe5242359e" id="r_a74d19182fedd131cc4450ebe5242359e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a74d19182fedd131cc4450ebe5242359e">kernel::kslot_snapshot_restore</a> (const uint8_t *src)</td></tr>
+<tr class="memdesc:a74d19182fedd131cc4450ebe5242359e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore the kstack-window PT contents and slot bookkeeping from <code class="param">src</code>, and flush the TLB for every window VA.  <br /></td></tr>
+<tr class="memitem:a1d1f72f7161fa8a1f32d2692b7c90d8c" id="r_a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a1d1f72f7161fa8a1f32d2692b7c90d8c">kernel::canary_write_at</a> (uint64_t va, uint64_t value, uint64_t pml4)</td></tr>
+<tr class="memdesc:a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write an 8-byte canary value at <code class="param">va</code> through <code class="param">pml4</code> (resolving the frame via HHDM). No-op when the page is not present.  <br /></td></tr>
+<tr class="memitem:a772626334577fb34746dd85c3e6e3b9c" id="r_a772626334577fb34746dd85c3e6e3b9c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a772626334577fb34746dd85c3e6e3b9c">kernel::canary_install_user_segments</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t)</td></tr>
+<tr class="memdesc:a772626334577fb34746dd85c3e6e3b9c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Install the user-stack and initial-heap canaries for <code class="param">t</code> (call after the user stack + heap are mapped and program_break set).  <br /></td></tr>
+<tr class="memitem:ac6fb6d864696d4527766d2ab81c2e3ce" id="r_ac6fb6d864696d4527766d2ab81c2e3ce"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ac6fb6d864696d4527766d2ab81c2e3ce">kernel::canary_install_kernel_stack</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t)</td></tr>
+<tr class="memdesc:ac6fb6d864696d4527766d2ab81c2e3ce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Install the kernel-stack canary at kernel_stack[0..8).  <br /></td></tr>
+<tr class="memitem:a53fa9d70d7a01fd1f30b7746a449654d" id="r_a53fa9d70d7a01fd1f30b7746a449654d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a53fa9d70d7a01fd1f30b7746a449654d">kernel::canary_verify_user_segments</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t, uint8_t &amp;bad_segment, uint64_t &amp;bad_va)</td></tr>
+<tr class="memdesc:a53fa9d70d7a01fd1f30b7746a449654d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verify all installed user-segment canaries of <code class="param">t</code> (pure reads).  <br /></td></tr>
+<tr class="memitem:ad3793a2cf2cf423d61fe25cf2ecb8ba4" id="r_ad3793a2cf2cf423d61fe25cf2ecb8ba4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ad3793a2cf2cf423d61fe25cf2ecb8ba4">kernel::canary_verify_kernel_stack</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t)</td></tr>
+<tr class="memdesc:ad3793a2cf2cf423d61fe25cf2ecb8ba4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verify the kernel-stack canary of <code class="param">t</code> (pure read).  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a9195e1b7af9b4a49441377375ec07ae9" id="r_a9195e1b7af9b4a49441377375ec07ae9"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a9195e1b7af9b4a49441377375ec07ae9">kernel::task::kUserYieldStubVa</a> = 0x40000000ULL</td></tr>
+<tr class="memdesc:a9195e1b7af9b4a49441377375ec07ae9"><td class="mdescLeft">&#160;</td><td class="mdescRight">VA of the user-mode yield stub mapped into every create_user() task (issue #226: tests plant faults at a VA the task is guaranteed to execute — aarch64/riscv64 rewrite low-VA entries to this stub, so per-test mapped VAs never run there).  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Task control block and state definitions for the kernel scheduler. </p>
 </div></div><!-- contents -->

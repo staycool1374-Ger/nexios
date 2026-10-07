@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -124,15 +124,15 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('libfdt__intern
 <div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#include &lt;<a class="code" href="libfdt_8h.html">fdt/libfdt.h</a>&gt;</span></div>
 <div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span> </div>
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="comment">/* Byte swap helpers — FDT is big-endian, CPU is little-endian */</span></div>
-<div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span><span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> fdt32_to_cpu(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> x) {</div>
+<div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span><span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> fdt32_to_cpu(uint32_t x) {</div>
 <div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span>    <span class="keywordflow">return</span> __builtin_bswap32(x);</div>
 <div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span>}</div>
 <div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span> </div>
-<div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> fdt64_to_cpu(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> x) {</div>
+<div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> fdt64_to_cpu(uint64_t x) {</div>
 <div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span>    <span class="keywordflow">return</span> __builtin_bswap64(x);</div>
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span>}</div>
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span> </div>
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> cpu_to_fdt32(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *p, <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> v) {</div>
+<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> cpu_to_fdt32(uint32_t *p, uint32_t v) {</div>
 <div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    *p = __builtin_bswap32(v);</div>
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>}</div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span> </div>
@@ -143,10 +143,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('libfdt__intern
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    <span class="keywordflow">return</span> (<span class="keyword">const</span> <span class="keywordtype">char</span> *)fdt + fdt32_to_cpu(h-&gt;<a class="code hl_variable" href="structfdt__header.html#a8e523801459e62ff9687588ec3eafb99">off_dt_struct</a>) + offset;</div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>}</div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> fdt_next_tag_(<span class="keyword">const</span> <span class="keywordtype">void</span> *fdt, <span class="keywordtype">int</span> startoffset,</div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> fdt_next_tag_(<span class="keyword">const</span> <span class="keywordtype">void</span> *fdt, <span class="keywordtype">int</span> startoffset,</div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>                                     <span class="keywordtype">int</span> *nextoffset) {</div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    <span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *tagp = (<span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *)fdt_offset_ptr_(fdt, startoffset);</div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> tag = fdt32_to_cpu(*tagp);</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    <span class="keyword">const</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *tagp = (<span class="keyword">const</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *)fdt_offset_ptr_(fdt, startoffset);</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> tag = fdt32_to_cpu(*tagp);</div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>    <span class="keywordtype">int</span> offset = startoffset + <a class="code hl_define" href="fdt_8h.html#ada36dac7d767aceec040a00307dba77b">FDT_TAGSIZE</a>;</div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>    *nextoffset = -<a class="code hl_define" href="libfdt_8h.html#a2b814a0775d93b5da1442fc091e49958">FDT_ERR_TRUNCATED</a>;</div>
@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('libfdt__intern
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>        <span class="keywordflow">break</span>;</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    }</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <span class="keywordflow">case</span> <a class="code hl_define" href="fdt_8h.html#a3304a9313cbf7ecced77f89ff5f25dde">FDT_PROP</a>: {</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>        <span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *lenp = (<span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *)fdt_offset_ptr_(fdt, offset);</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>        <span class="keyword">const</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *lenp = (<span class="keyword">const</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *)fdt_offset_ptr_(fdt, offset);</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>        <span class="keywordflow">if</span> (!lenp) <span class="keywordflow">return</span> <a class="code hl_define" href="fdt_8h.html#a53275b16340fb458df4782462f283d8c">FDT_END</a>;</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>        offset += <a class="code hl_define" href="fdt_8h.html#ada36dac7d767aceec040a00307dba77b">FDT_TAGSIZE</a> + <a class="code hl_define" href="fdt_8h.html#ada36dac7d767aceec040a00307dba77b">FDT_TAGSIZE</a> + <span class="keyword">static_cast&lt;</span><span class="keywordtype">int</span><span class="keyword">&gt;</span>(fdt32_to_cpu(*lenp));</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>        offset = (offset + 3) &amp; ~3;</div>
@@ -199,12 +199,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('libfdt__intern
 <div class="ttc" id="alibfdt_8h_html"><div class="ttname"><a href="libfdt_8h.html">libfdt.h</a></div></div>
 <div class="ttc" id="alibfdt_8h_html_a2b814a0775d93b5da1442fc091e49958"><div class="ttname"><a href="libfdt_8h.html#a2b814a0775d93b5da1442fc091e49958">FDT_ERR_TRUNCATED</a></div><div class="ttdeci">#define FDT_ERR_TRUNCATED</div><div class="ttdef"><b>Definition</b> libfdt.h:17</div></div>
 <div class="ttc" id="alibfdt_8h_html_a5025b6b09a009bd2b516e6a831d7ce72"><div class="ttname"><a href="libfdt_8h.html#a5025b6b09a009bd2b516e6a831d7ce72">FDT_ERR_BADOFFSET</a></div><div class="ttdeci">#define FDT_ERR_BADOFFSET</div><div class="ttdef"><b>Definition</b> libfdt.h:13</div></div>
+<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="astructfdt__header_html"><div class="ttname"><a href="structfdt__header.html">fdt_header</a></div><div class="ttdef"><b>Definition</b> fdt.h:21</div></div>
 <div class="ttc" id="astructfdt__header_html_a38d6ec5e31d8559bb6dfc9b986517432"><div class="ttname"><a href="structfdt__header.html#a38d6ec5e31d8559bb6dfc9b986517432">fdt_header::size_dt_struct</a></div><div class="ttdeci">uint32_t size_dt_struct</div><div class="ttdef"><b>Definition</b> fdt.h:31</div></div>
 <div class="ttc" id="astructfdt__header_html_a8e523801459e62ff9687588ec3eafb99"><div class="ttname"><a href="structfdt__header.html#a8e523801459e62ff9687588ec3eafb99">fdt_header::off_dt_struct</a></div><div class="ttdeci">uint32_t off_dt_struct</div><div class="ttdef"><b>Definition</b> fdt.h:24</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

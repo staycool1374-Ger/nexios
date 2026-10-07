@@ -2,6 +2,7 @@ var unistd_8h =
 [
     [ "O_CREAT", "unistd_8h.html#a1cf6b1de1fffedaa1d26b189e9a8d2cc", null ],
     [ "O_NONBLOCK", "unistd_8h.html#a39d33ce33804efd4d52606d59071c6d8", null ],
+    [ "O_RAWTTY", "unistd_8h.html#a8b6ef4b6d1b448b5fbd1b28747cf75ac", null ],
     [ "O_RDONLY", "unistd_8h.html#a7a68c9ffaac7dbcd652225dd7c06a54b", null ],
     [ "O_RDWR", "unistd_8h.html#abb0586253488ee61072b73557eeb873b", null ],
     [ "O_WRONLY", "unistd_8h.html#a11b644a8526139c4cc1850dac1271ced", null ],

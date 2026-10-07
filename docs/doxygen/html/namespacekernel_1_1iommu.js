@@ -7,5 +7,6 @@ var namespacekernel_1_1iommu =
     [ "vtd", "namespacekernel_1_1iommu_1_1vtd.html", "namespacekernel_1_1iommu_1_1vtd" ],
     [ "IoMmuDomain", "structkernel_1_1iommu_1_1_io_mmu_domain.html", "structkernel_1_1iommu_1_1_io_mmu_domain" ],
     [ "IoMmuManager", "classkernel_1_1iommu_1_1_io_mmu_manager.html", null ],
-    [ "IoMmuMapping", "structkernel_1_1iommu_1_1_io_mmu_mapping.html", "structkernel_1_1iommu_1_1_io_mmu_mapping" ]
+    [ "IoMmuMapping", "structkernel_1_1iommu_1_1_io_mmu_mapping.html", "structkernel_1_1iommu_1_1_io_mmu_mapping" ],
+    [ "SpinLock", "classkernel_1_1iommu_1_1_spin_lock.html", "classkernel_1_1iommu_1_1_spin_lock" ]
 ];

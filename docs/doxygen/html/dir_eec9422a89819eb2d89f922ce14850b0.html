@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -165,6 +165,10 @@ Files</h2></td></tr>
 <tr class="memdesc:untyped_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Untyped memory object implementation (ROADMAP 0.4.1 item 3). <br /></td></tr>
 <tr class="memitem:untyped_2Ehpp" id="r_untyped_2Ehpp"><td class="memItemLeft"><a href="untyped_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="untyped_8hpp.html">untyped.hpp</a></td></tr>
 <tr class="memdesc:untyped_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Untyped memory object (ROADMAP 0.4.1 item 3): owns a contiguous PMM region and may be retyped at most once into a capability. <br /></td></tr>
+<tr class="memitem:wdog_2Ecpp" id="r_wdog_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="wdog_8cpp.html">wdog.cpp</a></td></tr>
+<tr class="memdesc:wdog_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">WdogCap implementation (issue #277). Bound by CONFIG_CAP_MAX_WDOG via a TU-local live counter (<a class="el" href="mmio_8cpp.html" title="MmioCap implementation (issue #3/#8). Bound by CONFIG_CAP_MAX_MMIO via a TU-local live counter (untyp...">mmio.cpp</a> pattern); folds into the existing cap_objects ResourceTracker counter. Single live cap per target pid is enforced by a static claim registry (MsixCap entry-claim precedent). <br /></td></tr>
+<tr class="memitem:wdog_2Ehpp" id="r_wdog_2Ehpp"><td class="memItemLeft"><a href="wdog_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="wdog_8hpp.html">wdog.hpp</a></td></tr>
+<tr class="memdesc:wdog_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capability-wrapped cross-task watchdog authority (issue #277). Owning a WdogCap for task T is the authority to arm/kick T's watchdog via WATCHDOG_CREATE/KICK with a pid argument (the self path needs no cap). Single live cap per target pid — create() fails closed when another live WdogCap already claims the same task. <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

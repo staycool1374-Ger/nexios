@@ -1,16 +1,17 @@
 var searchData=
 [
-  ['canceled_0',['CANCELED',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ad4539bffb6062bdcbd7e7cc1b1228926',1,'kernel::elf']]],
-  ['cap_5fright_5fcopy_1',['CAP_RIGHT_COPY',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5af0177bb4009a7a1acfdc5f6ee2ccd0f5',1,'kernel::cap']]],
-  ['cap_5fright_5fgrant_2',['CAP_RIGHT_GRANT',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5a25cb8d45a9e8d54082778c74d1c39fbb',1,'kernel::cap']]],
-  ['cap_5fright_5fread_3',['CAP_RIGHT_READ',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5adab68b51d572f1b802f432fa54aa580c',1,'kernel::cap']]],
-  ['cap_5fright_5fwrite_4',['CAP_RIGHT_WRITE',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ab512d4006cb9ec087a47d414741f8327',1,'kernel::cap']]],
-  ['cnode_5',['CNode',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a48818146589190cb4bc5c8e9a0fabb78',1,'kernel::cap']]],
-  ['completed_6',['COMPLETED',['../namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6fa8f7afecbc8fbc4cd0f50a57d1172482e',1,'kernel::elf']]],
-  ['cont_7',['CONT',['../namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a53f6b3ace3aa40916de167636293ac80',1,'kernel']]],
-  ['copying_5fsegments_8',['COPYING_SEGMENTS',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a712317846d9b1ee3d1def3c7be3905e9',1,'kernel::elf']]],
-  ['corrupted_9',['CORRUPTED',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a079c6dcd1b1ee137ecf0244d4f8bad01',1,'kernel']]],
-  ['create_10',['CREATE',['../namespacekernel_1_1time.html#ab13778b383b7889160470c87141ea20aa294ce20cdefa29be3be0735cb62e715d',1,'kernel::time']]],
-  ['ctrl_5fprobe_5ffailed_11',['CTRL_PROBE_FAILED',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a6f81a1adcd2d412efa339f924886d2d2',1,'arch']]],
-  ['ctrl_5ftimeout_12',['CTRL_TIMEOUT',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a86ee23012059305a75b5206c832d2620',1,'arch']]]
+  ['canary_5fsegments_0',['CANARY_SEGMENTS',['../structkernel_1_1_task_control_block.html#a3625e5ba8c9b4e01d06b4d7ac32056f4af211b464086dcfdc2143ad40d477b266',1,'kernel::TaskControlBlock']]],
+  ['canceled_1',['CANCELED',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ad4539bffb6062bdcbd7e7cc1b1228926',1,'kernel::elf']]],
+  ['cap_5fright_5fcopy_2',['CAP_RIGHT_COPY',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5af0177bb4009a7a1acfdc5f6ee2ccd0f5',1,'kernel::cap']]],
+  ['cap_5fright_5fgrant_3',['CAP_RIGHT_GRANT',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5a25cb8d45a9e8d54082778c74d1c39fbb',1,'kernel::cap']]],
+  ['cap_5fright_5fread_4',['CAP_RIGHT_READ',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5adab68b51d572f1b802f432fa54aa580c',1,'kernel::cap']]],
+  ['cap_5fright_5fwrite_5',['CAP_RIGHT_WRITE',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ab512d4006cb9ec087a47d414741f8327',1,'kernel::cap']]],
+  ['cnode_6',['CNode',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a48818146589190cb4bc5c8e9a0fabb78',1,'kernel::cap']]],
+  ['completed_7',['COMPLETED',['../namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6fa8f7afecbc8fbc4cd0f50a57d1172482e',1,'kernel::elf']]],
+  ['cont_8',['CONT',['../namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a53f6b3ace3aa40916de167636293ac80',1,'kernel']]],
+  ['copying_5fsegments_9',['COPYING_SEGMENTS',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a712317846d9b1ee3d1def3c7be3905e9',1,'kernel::elf']]],
+  ['corrupted_10',['CORRUPTED',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a079c6dcd1b1ee137ecf0244d4f8bad01',1,'kernel']]],
+  ['create_11',['CREATE',['../namespacekernel_1_1time.html#ab13778b383b7889160470c87141ea20aa294ce20cdefa29be3be0735cb62e715d',1,'kernel::time']]],
+  ['ctrl_5fprobe_5ffailed_12',['CTRL_PROBE_FAILED',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a6f81a1adcd2d412efa339f924886d2d2',1,'arch']]],
+  ['ctrl_5ftimeout_13',['CTRL_TIMEOUT',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a86ee23012059305a75b5206c832d2620',1,'arch']]]
 ];

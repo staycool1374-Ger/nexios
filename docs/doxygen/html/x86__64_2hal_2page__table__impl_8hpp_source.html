@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -146,26 +146,26 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span> </div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacearch.html">arch</a> {</div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span></div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch_page_table_current() {</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch_page_table_current() {</div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <span class="keywordflow">return</span> read_cr3();</div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>}</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keyword">inline</span> <span class="keywordtype">void</span> arch_page_table_activate(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4_phys) {</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keyword">inline</span> <span class="keywordtype">void</span> arch_page_table_activate(<a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> pml4_phys) {</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>    write_cr3(pml4_phys);</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>}</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="keyword">inline</span> <span class="keywordtype">void</span> arch_page_table_tlb_flush(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> virt_addr) {</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="keyword">inline</span> <span class="keywordtype">void</span> arch_page_table_tlb_flush(<a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> virt_addr) {</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <span class="keyword">asm</span> <span class="keyword">volatile</span>(<span class="stringliteral">&quot;invlpg (%0)&quot;</span> : : <span class="stringliteral">&quot;r&quot;</span>(virt_addr) : <span class="stringliteral">&quot;memory&quot;</span>);</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>}</div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="keyword">inline</span> <span class="keywordtype">void</span> arch_page_table_tlb_flush_all() {</div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cr3 = read_cr3();</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cr3 = read_cr3();</div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>    write_cr3(cr3 &amp; ~0xFFFULL);</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>}</div>
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span></div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="keyword">struct </span>TlbFlushStats {</div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> single_va;    </div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ctx_invpcid;  </div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ctx_fallback; </div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> all_invpcid;  </div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> all_fallback; </div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> single_va;    </div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ctx_invpcid;  </div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ctx_fallback; </div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> all_invpcid;  </div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> all_fallback; </div>
 <div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>};</div>
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span></div>
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span><span class="keyword">inline</span> TlbFlushStats &amp;tlb_flush_stats_store() {</div>
@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    <span class="keywordflow">return</span> out;</div>
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>}</div>
 <div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span></div>
-<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span><span class="keyword">inline</span> <span class="keywordtype">void</span> tlb_purge_context(<a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> pcid) {</div>
+<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span><span class="keyword">inline</span> <span class="keywordtype">void</span> tlb_purge_context(<a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> pcid) {</div>
 <div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    TlbFlushStats &amp;store = tlb_flush_stats_store();</div>
 <div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>    <span class="keywordflow">if</span> (has_invpcid()) {</div>
 <div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>        __atomic_fetch_add(&amp;store.ctx_invpcid, 1ULL, __ATOMIC_RELAXED);</div>
@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>        invpcid_emit(InvpcidType::SINGLE_CONTEXT, desc);</div>
 <div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    } <span class="keywordflow">else</span> {</div>
 <div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>        __atomic_fetch_add(&amp;store.ctx_fallback, 1ULL, __ATOMIC_RELAXED);</div>
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cr3 = read_cr3();</div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>        <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cr3 = read_cr3();</div>
 <div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>        write_cr3(cr3 &amp; ~0xFFFULL);</div>
 <div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    }</div>
 <div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>}</div>
@@ -209,20 +209,20 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>        invpcid_emit(InvpcidType::ALL_INCL_GLOBAL, desc);</div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>    } <span class="keywordflow">else</span> {</div>
 <div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>        __atomic_fetch_add(&amp;store.all_fallback, 1ULL, __ATOMIC_RELAXED);</div>
-<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cr3 = read_cr3();</div>
+<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>        <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cr3 = read_cr3();</div>
 <div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>        write_cr3(cr3 &amp; ~0xFFFULL);</div>
 <div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>    }</div>
 <div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>}</div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span></div>
 <div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span><span class="keyword">class </span>ArchPageTable {</div>
 <div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>  <span class="keyword">public</span>:</div>
-<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> current() {</div>
+<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> current() {</div>
 <div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>        <span class="keywordflow">return</span> arch_page_table_current();</div>
 <div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span>    }</div>
-<div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> activate(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4_phys) {</div>
+<div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> activate(uint64_t pml4_phys) {</div>
 <div class="line"><a id="l00131" name="l00131"></a><span class="lineno">  131</span>        arch_page_table_activate(pml4_phys);</div>
 <div class="line"><a id="l00132" name="l00132"></a><span class="lineno">  132</span>    }</div>
-<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> tlb_flush(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> virt_addr) {</div>
+<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> tlb_flush(uint64_t virt_addr) {</div>
 <div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>        TlbFlushStats &amp;store = tlb_flush_stats_store();</div>
 <div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>        __atomic_fetch_add(&amp;store.single_va, 1ULL, __ATOMIC_RELAXED);</div>
 <div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span>        arch_page_table_tlb_flush(virt_addr);</div>
@@ -231,29 +231,29 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span>        tlb_purge_all();</div>
 <div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>    }</div>
 <div class="line"><a id="l00141" name="l00141"></a><span class="lineno">  141</span></div>
-<div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af">PAGE_SIZE</a> = CONFIG_PAGE_SIZE;</div>
-<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ENTRIES = 512;</div>
+<div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="code hl_variable" href="namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af">PAGE_SIZE</a> = CONFIG_PAGE_SIZE;</div>
+<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ENTRIES = 512;</div>
 <div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span> </div>
 <div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>    <span class="comment">// ─── Page-table index constants (x86_64 4-level paging) ───────────────</span></div>
-<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PML4_SHIFT = 39;</div>
-<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PDPT_SHIFT = 30;</div>
-<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PD_SHIFT   = 21;</div>
-<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PT_SHIFT   = 12;</div>
-<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PML4_MASK  = 0x1FFULL &lt;&lt; PML4_SHIFT;</div>
-<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PDPT_MASK  = 0x1FFULL &lt;&lt; PDPT_SHIFT;</div>
-<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PD_MASK    = 0x1FFULL &lt;&lt; PD_SHIFT;</div>
-<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PT_MASK    = 0x1FFULL &lt;&lt; PT_SHIFT;</div>
+<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PML4_SHIFT = 39;</div>
+<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PDPT_SHIFT = 30;</div>
+<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PD_SHIFT   = 21;</div>
+<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PT_SHIFT   = 12;</div>
+<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PML4_MASK  = 0x1FFULL &lt;&lt; PML4_SHIFT;</div>
+<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PDPT_MASK  = 0x1FFULL &lt;&lt; PDPT_SHIFT;</div>
+<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PD_MASK    = 0x1FFULL &lt;&lt; PD_SHIFT;</div>
+<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PT_MASK    = 0x1FFULL &lt;&lt; PT_SHIFT;</div>
 <div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span></div>
-<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pml4_index(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vaddr) {</div>
+<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pml4_index(uint64_t vaddr) {</div>
 <div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>        <span class="keywordflow">return</span> (vaddr &amp; PML4_MASK) &gt;&gt; PML4_SHIFT;</div>
 <div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    }</div>
-<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pdpt_index(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vaddr) {</div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pdpt_index(uint64_t vaddr) {</div>
 <div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>        <span class="keywordflow">return</span> (vaddr &amp; PDPT_MASK) &gt;&gt; PDPT_SHIFT;</div>
 <div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>    }</div>
-<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pd_index(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vaddr) {</div>
+<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pd_index(uint64_t vaddr) {</div>
 <div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>        <span class="keywordflow">return</span> (vaddr &amp; PD_MASK) &gt;&gt; PD_SHIFT;</div>
 <div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>    }</div>
-<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pt_index(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vaddr) {</div>
+<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pt_index(uint64_t vaddr) {</div>
 <div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span>        <span class="keywordflow">return</span> (vaddr &amp; PT_MASK) &gt;&gt; PT_SHIFT;</div>
 <div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span>    }</div>
 <div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>};</div>
@@ -262,9 +262,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="ttc" id="ahal_2io_8hpp_html"><div class="ttname"><a href="hal_2io_8hpp.html">io.hpp</a></div><div class="ttdoc">Port I/O (x86_64) and memory-mapped I/O (AArch64, RISC-V) primitives.</div></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:35</div></div>
 <div class="ttc" id="anamespacearch_html_a9e56d1c39ac66468549b4230ebb9f5af"><div class="ttname"><a href="namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af">arch::PAGE_SIZE</a></div><div class="ttdeci">constexpr uint64_t PAGE_SIZE</div><div class="ttdef"><b>Definition</b> constants.hpp:63</div></div>
+<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
-<div class="ttc" id="atypes_8hpp_html_a64be82add362de7c99ce6671d7f4f0a6"><div class="ttname"><a href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> types.hpp:25</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

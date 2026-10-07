@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classkernel_1_
 </div><!--header-->
 <div class="contents">
 
+<p>Simple busy-wait spinlock using atomic_test_and_set.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="spinlock_8hpp_source.html">spinlock.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::sync::SpinLock:</div>
@@ -134,12 +137,19 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a3f749cd1923cde5a9f7ce0a0902957b2" id="r_a3f749cd1923cde5a9f7ce0a0902957b2"><td class="memItemLeft"><a class="el" href="#a23ce5409dd98d436e160743c979e36ba">SpinLock</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a3f749cd1923cde5a9f7ce0a0902957b2">operator=</a> (const <a class="el" href="#a23ce5409dd98d436e160743c979e36ba">SpinLock</a> &amp;)=delete</td></tr>
 <tr class="memitem:a065d94a108176854fd6e5e3ff4559683" id="r_a065d94a108176854fd6e5e3ff4559683"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a065d94a108176854fd6e5e3ff4559683">SpinLock</a> (SpinLock &amp;&amp;)=delete</td></tr>
 <tr class="memitem:ac720b9debc04ab54bbf1a5bea3d415f9" id="r_ac720b9debc04ab54bbf1a5bea3d415f9"><td class="memItemLeft"><a class="el" href="#a23ce5409dd98d436e160743c979e36ba">SpinLock</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#ac720b9debc04ab54bbf1a5bea3d415f9">operator=</a> (<a class="el" href="#a23ce5409dd98d436e160743c979e36ba">SpinLock</a> &amp;&amp;)=delete</td></tr>
-<tr class="memitem:a097026b8a7aef9e203d1ce500438f618" id="r_a097026b8a7aef9e203d1ce500438f618"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a097026b8a7aef9e203d1ce500438f618">lock</a> () noexcept</td></tr>
-<tr class="memitem:aa2cf505af8296bb91213f93d379c1930" id="r_aa2cf505af8296bb91213f93d379c1930"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa2cf505af8296bb91213f93d379c1930">unlock</a> () noexcept</td></tr>
-<tr class="memitem:a41e703bd7a7c64500b8837a290aa0062" id="r_a41e703bd7a7c64500b8837a290aa0062"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a41e703bd7a7c64500b8837a290aa0062">reset</a> () noexcept</td></tr>
-<tr class="memitem:abe0b78f8a620a351e3fd4d6b752783ab" id="r_abe0b78f8a620a351e3fd4d6b752783ab"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abe0b78f8a620a351e3fd4d6b752783ab">try_lock</a> () noexcept</td></tr>
+<tr class="memitem:a097026b8a7aef9e203d1ce500438f618" id="r_a097026b8a7aef9e203d1ce500438f618"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a097026b8a7aef9e203d1ce500438f618">lock</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a097026b8a7aef9e203d1ce500438f618"><td class="mdescLeft">&#160;</td><td class="mdescRight">Acquire the lock (spin until available).  <br /></td></tr>
+<tr class="memitem:aa2cf505af8296bb91213f93d379c1930" id="r_aa2cf505af8296bb91213f93d379c1930"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa2cf505af8296bb91213f93d379c1930">unlock</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:aa2cf505af8296bb91213f93d379c1930"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release the lock.  <br /></td></tr>
+<tr class="memitem:a41e703bd7a7c64500b8837a290aa0062" id="r_a41e703bd7a7c64500b8837a290aa0062"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a41e703bd7a7c64500b8837a290aa0062">reset</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a41e703bd7a7c64500b8837a290aa0062"><td class="mdescLeft">&#160;</td><td class="mdescRight">Force-unlock (used to initialise a lock after <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> allocation).  <br /></td></tr>
+<tr class="memitem:abe0b78f8a620a351e3fd4d6b752783ab" id="r_abe0b78f8a620a351e3fd4d6b752783ab"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abe0b78f8a620a351e3fd4d6b752783ab">try_lock</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:abe0b78f8a620a351e3fd4d6b752783ab"><td class="mdescLeft">&#160;</td><td class="mdescRight">Attempt to acquire without blocking.  <br /></td></tr>
+<tr class="memitem:ae27c030c65d1c5e50d29da4dc077d2e7" id="r_ae27c030c65d1c5e50d29da4dc077d2e7"><td class="memItemLeft">const void *&#160;</td><td class="memItemRight"><a class="el" href="#ae27c030c65d1c5e50d29da4dc077d2e7">holder</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 </table>
-<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Simple busy-wait spinlock using atomic_test_and_set. </p>
+</div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a23ce5409dd98d436e160743c979e36ba" name="a23ce5409dd98d436e160743c979e36ba"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a23ce5409dd98d436e160743c979e36ba">&#9670;&#160;</a></span>SpinLock() <span class="overload">[1/3]</span></h2>
 
@@ -228,6 +238,31 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="ae27c030c65d1c5e50d29da4dc077d2e7" name="ae27c030c65d1c5e50d29da4dc077d2e7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae27c030c65d1c5e50d29da4dc077d2e7">&#9670;&#160;</a></span>holder()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const void * kernel::sync::SpinLock::holder </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a097026b8a7aef9e203d1ce500438f618" name="a097026b8a7aef9e203d1ce500438f618"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a097026b8a7aef9e203d1ce500438f618">&#9670;&#160;</a></span>lock()</h2>
 
@@ -250,6 +285,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Acquire the lock (spin until available). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -344,6 +381,8 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Force-unlock (used to initialise a lock after <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> allocation). </p>
+
 </div>
 </div>
 <a id="abe0b78f8a620a351e3fd4d6b752783ab" name="abe0b78f8a620a351e3fd4d6b752783ab"></a>
@@ -368,6 +407,9 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Attempt to acquire without blocking. </p>
+<dl class="section return"><dt>Returns</dt><dd>true if the lock was acquired. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -399,6 +441,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Release the lock. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">

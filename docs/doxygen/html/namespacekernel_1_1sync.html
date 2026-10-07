@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,13 +121,26 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
+<tr class="memitem:EventGroup" id="r_EventGroup"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1sync_1_1_event_group.html">EventGroup</a></td></tr>
 <tr class="memitem:IrqSpinLockGuard" id="r_IrqSpinLockGuard"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html">IrqSpinLockGuard</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII guard that combines IRQ disable + SpinLock acquisition.  <a href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII guard that combines IRQ disable + <a class="el" href="classkernel_1_1sync_1_1_spin_lock.html" title="Simple busy-wait spinlock using atomic_test_and_set.">SpinLock</a> acquisition.  <a href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#details">More...</a><br /></td></tr>
+<tr class="memitem:Mutex" id="r_Mutex"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1sync_1_1_mutex.html">Mutex</a></td></tr>
+<tr class="memitem:Notify" id="r_Notify"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1sync_1_1_notify.html">Notify</a></td></tr>
+<tr class="memitem:Queue" id="r_Queue"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1sync_1_1_queue.html">Queue</a></td></tr>
+<tr class="memitem:QueueMessage" id="r_QueueMessage"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1sync_1_1_queue_message.html">QueueMessage</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A single message in the queue (fixed-size payload + size).  <a href="structkernel_1_1sync_1_1_queue_message.html#details">More...</a><br /></td></tr>
 <tr class="memitem:RwLock" id="r_RwLock"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1sync_1_1_rw_lock.html">RwLock</a></td></tr>
+<tr class="memitem:Semaphore" id="r_Semaphore"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1sync_1_1_semaphore.html">Semaphore</a></td></tr>
+<tr class="memitem:SpinLock" id="r_SpinLock"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1sync_1_1_spin_lock.html">SpinLock</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Simple busy-wait spinlock using atomic_test_and_set.  <a href="classkernel_1_1sync_1_1_spin_lock.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:aa2ee8b27f242c1625ef11e01adda6675" id="r_aa2ee8b27f242c1625ef11e01adda6675"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa2ee8b27f242c1625ef11e01adda6675">init_all</a> ()</td></tr>
+<tr class="memdesc:aa2ee8b27f242c1625ef11e01adda6675"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize all kernel synchronization primitives.  <br /></td></tr>
+<tr class="memitem:a3ad5224e6b2cd2435d4e3bd8180a1c41" id="r_a3ad5224e6b2cd2435d4e3bd8180a1c41"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a3ad5224e6b2cd2435d4e3bd8180a1c41">same_waiter</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *stored, uint64_t stored_gen, const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:aca4547d6940e9d463c2ddced5d92ded2" id="r_aca4547d6940e9d463c2ddced5d92ded2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aca4547d6940e9d463c2ddced5d92ded2">waiter_awakeable</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *stored, uint64_t stored_gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a190178f3cbd3c7a1e5c5f9609cb6fa32" id="r_a190178f3cbd3c7a1e5c5f9609cb6fa32"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a190178f3cbd3c7a1e5c5f9609cb6fa32">peer_stale</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *stored, uint64_t stored_gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="aa2ee8b27f242c1625ef11e01adda6675" name="aa2ee8b27f242c1625ef11e01adda6675"></a>
@@ -143,6 +156,100 @@ Functions</h2></td></tr>
           <td></td>
         </tr>
       </table>
+</div><div class="memdoc">
+
+<p>Initialize all kernel synchronization primitives. </p>
+
+</div>
+</div>
+<a id="a190178f3cbd3c7a1e5c5f9609cb6fa32" name="a190178f3cbd3c7a1e5c5f9609cb6fa32"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a190178f3cbd3c7a1e5c5f9609cb6fa32">&#9670;&#160;</a></span>peer_stale()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::sync::peer_stale </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>stored</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>stored_gen</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3ad5224e6b2cd2435d4e3bd8180a1c41" name="a3ad5224e6b2cd2435d4e3bd8180a1c41"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3ad5224e6b2cd2435d4e3bd8180a1c41">&#9670;&#160;</a></span>same_waiter()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::sync::same_waiter </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>stored</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>stored_gen</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aca4547d6940e9d463c2ddced5d92ded2" name="aca4547d6940e9d463c2ddced5d92ded2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aca4547d6940e9d463c2ddced5d92ded2">&#9670;&#160;</a></span>waiter_awakeable()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::sync::waiter_awakeable </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>stored</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>stored_gen</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
 
 </div>

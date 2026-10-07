@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -137,9 +137,13 @@ Collaboration diagram for arch::kernel::PhysicalAddress:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a87dc6d28f7bb69167c8ee56dcea4b173" id="r_a87dc6d28f7bb69167c8ee56dcea4b173"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="#a87dc6d28f7bb69167c8ee56dcea4b173">PhysicalAddress</a> () noexcept</td></tr>
+<tr class="memdesc:a87dc6d28f7bb69167c8ee56dcea4b173"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default constructor — initialises to null address 0.  <br /></td></tr>
 <tr class="memitem:afecbd39b4ffafabb99af57673fa5f4c3" id="r_afecbd39b4ffafabb99af57673fa5f4c3"><td class="memItemLeft">constexpr&#160;</td><td class="memItemRight"><a class="el" href="#afecbd39b4ffafabb99af57673fa5f4c3">PhysicalAddress</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> addr) noexcept</td></tr>
+<tr class="memdesc:afecbd39b4ffafabb99af57673fa5f4c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Construct from a raw physical address.  <br /></td></tr>
 <tr class="memitem:a0107ae712c1be254910e9527505d8428" id="r_a0107ae712c1be254910e9527505d8428"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0107ae712c1be254910e9527505d8428">value</a> () const noexcept</td></tr>
+<tr class="memdesc:a0107ae712c1be254910e9527505d8428"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the raw physical address value.  <br /></td></tr>
 <tr class="memitem:af96f0507cd25239aee19e530299e16aa" id="r_af96f0507cd25239aee19e530299e16aa"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#af96f0507cd25239aee19e530299e16aa">is_null</a> () const noexcept</td></tr>
+<tr class="memdesc:af96f0507cd25239aee19e530299e16aa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the address is null (zero).  <br /></td></tr>
 <tr class="memitem:a413eb01e7708859e909d65e988f53281" id="r_a413eb01e7708859e909d65e988f53281"><td class="memItemLeft">constexpr <a class="el" href="#a87dc6d28f7bb69167c8ee56dcea4b173">PhysicalAddress</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a413eb01e7708859e909d65e988f53281">operator=</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> addr) noexcept</td></tr>
 <tr class="memitem:a02101d34375964645e4ffbdb8fa346f5" id="r_a02101d34375964645e4ffbdb8fa346f5"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a02101d34375964645e4ffbdb8fa346f5">operator==</a> (<a class="el" href="#a87dc6d28f7bb69167c8ee56dcea4b173">PhysicalAddress</a> other) const noexcept</td></tr>
 <tr class="memitem:a545c1d5f7910acd0e9c4dee87e0b4d93" id="r_a545c1d5f7910acd0e9c4dee87e0b4d93"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a545c1d5f7910acd0e9c4dee87e0b4d93">operator!=</a> (<a class="el" href="#a87dc6d28f7bb69167c8ee56dcea4b173">PhysicalAddress</a> other) const noexcept</td></tr>
@@ -176,6 +180,8 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Default constructor — initialises to null address 0. </p>
+
 </div>
 </div>
 <a id="afecbd39b4ffafabb99af57673fa5f4c3" name="afecbd39b4ffafabb99af57673fa5f4c3"></a>
@@ -200,6 +206,14 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Construct from a raw physical address. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">addr</td><td>Physical memory address. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -226,6 +240,8 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Check whether the address is null (zero). </p>
 
 </div>
 </div>
@@ -451,6 +467,8 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Return the raw physical address value. </p>
 
 </div>
 </div>

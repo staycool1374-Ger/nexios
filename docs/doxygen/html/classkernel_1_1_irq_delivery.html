@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -132,21 +132,21 @@ Collaboration diagram for kernel::IrqDelivery:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:aed7bd6996e2e6dfabdf30b4a416af650" id="r_aed7bd6996e2e6dfabdf30b4a416af650"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aed7bd6996e2e6dfabdf30b4a416af650">find</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector)</td></tr>
+<tr class="memitem:aed7bd6996e2e6dfabdf30b4a416af650" id="r_aed7bd6996e2e6dfabdf30b4a416af650"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aed7bd6996e2e6dfabdf30b4a416af650">find</a> (uint8_t vector)</td></tr>
 <tr class="memdesc:aed7bd6996e2e6dfabdf30b4a416af650"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finds the occupied slot for <code class="param">vector</code>, or nullptr.  <br /></td></tr>
-<tr class="memitem:ad710df15480b638c643dbc8bf9bc068c" id="r_ad710df15480b638c643dbc8bf9bc068c"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#aba773967ee8f2b583e66876c028145cb">int16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad710df15480b638c643dbc8bf9bc068c">claim_slot</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector)</td></tr>
+<tr class="memitem:ad710df15480b638c643dbc8bf9bc068c" id="r_ad710df15480b638c643dbc8bf9bc068c"><td class="memItemLeft">static int16_t&#160;</td><td class="memItemRight"><a class="el" href="#ad710df15480b638c643dbc8bf9bc068c">claim_slot</a> (uint8_t vector)</td></tr>
 <tr class="memdesc:ad710df15480b638c643dbc8bf9bc068c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocates a free slot for <code class="param">vector</code> (no vector duplication).  <br /></td></tr>
-<tr class="memitem:a37d8943431ec5c4159e1c553c82bc17e" id="r_a37d8943431ec5c4159e1c553c82bc17e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a37d8943431ec5c4159e1c553c82bc17e">set_slot_owner</a> (<a class="el" href="types_8hpp.html#aba773967ee8f2b583e66876c028145cb">int16_t</a> idx, <a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> *owner)</td></tr>
+<tr class="memitem:a37d8943431ec5c4159e1c553c82bc17e" id="r_a37d8943431ec5c4159e1c553c82bc17e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a37d8943431ec5c4159e1c553c82bc17e">set_slot_owner</a> (int16_t idx, <a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> *owner)</td></tr>
 <tr class="memdesc:a37d8943431ec5c4159e1c553c82bc17e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Binds the owning cap to the slot at <code class="param">idx</code> (called by IrqCap/MsixCap::create after the cap object is constructed). Guards slot-reuse safety: a slot can only be released/armed by the cap that owns it.  <br /></td></tr>
-<tr class="memitem:a5cc6207daca08a7dcec01e66cabd9dfd" id="r_a5cc6207daca08a7dcec01e66cabd9dfd"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a5cc6207daca08a7dcec01e66cabd9dfd">arm</a> (<a class="el" href="types_8hpp.html#aba773967ee8f2b583e66876c028145cb">int16_t</a> reg_idx, <a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> &amp;owner, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector, TaskControlBlock &amp;recipient, <a class="el" href="namespacekernel.html#a39a8b332edefebba052488078097a45b">IrqDeliveryMode</a> delivery_mode=<a class="el" href="namespacekernel.html#a39a8b332edefebba052488078097a45bad5cc6a0064b5c25ba37826aa3fda910c">IrqDeliveryMode::WAIT</a>)</td></tr>
+<tr class="memitem:a5cc6207daca08a7dcec01e66cabd9dfd" id="r_a5cc6207daca08a7dcec01e66cabd9dfd"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a5cc6207daca08a7dcec01e66cabd9dfd">arm</a> (int16_t reg_idx, <a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> &amp;owner, uint8_t vector, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;recipient, <a class="el" href="namespacekernel.html#a39a8b332edefebba052488078097a45b">IrqDeliveryMode</a> delivery_mode=<a class="el" href="namespacekernel.html#a39a8b332edefebba052488078097a45bad5cc6a0064b5c25ba37826aa3fda910c">IrqDeliveryMode::WAIT</a>)</td></tr>
 <tr class="memdesc:a5cc6207daca08a7dcec01e66cabd9dfd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Arms delivery of <code class="param">owner's</code> vector to <code class="param">recipient</code> (unmasks the PIC line for PIC slots, unmasks the MSI-X table entry for MSIX slots). Fails if the vector is already armed, claimed by a threaded-IRQ handler, or the slot no longer belongs to <code class="param">owner</code> (slot-reuse safety: the ownership + arming decision is ONE atomic critical section — issue #2).  <br /></td></tr>
-<tr class="memitem:ae8c01dc070b3edef2055d2576a7438b1" id="r_ae8c01dc070b3edef2055d2576a7438b1"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ae8c01dc070b3edef2055d2576a7438b1">isr_entry</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector)</td></tr>
+<tr class="memitem:ae8c01dc070b3edef2055d2576a7438b1" id="r_ae8c01dc070b3edef2055d2576a7438b1"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ae8c01dc070b3edef2055d2576a7438b1">isr_entry</a> (uint8_t vector)</td></tr>
 <tr class="memdesc:ae8c01dc070b3edef2055d2576a7438b1"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR entry — called from handle_interrupt_c. Scans for an armed slot, EOI-acks the controller, and dispatches per delivery_mode: WAIT records a pending IRQ and wakes a blocked waiter; NOTIFY signals the recipient's Notify with the vector value (no pending/waiter bookkeeping — coalescing: last vector wins).  <br /></td></tr>
-<tr class="memitem:a5ccf22fe6d74cc52b0be94ba456f6f1d" id="r_a5ccf22fe6d74cc52b0be94ba456f6f1d"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a5ccf22fe6d74cc52b0be94ba456f6f1d">release_slot_idx</a> (<a class="el" href="types_8hpp.html#aba773967ee8f2b583e66876c028145cb">int16_t</a> reg_idx, const <a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> *owner)</td></tr>
+<tr class="memitem:a5ccf22fe6d74cc52b0be94ba456f6f1d" id="r_a5ccf22fe6d74cc52b0be94ba456f6f1d"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a5ccf22fe6d74cc52b0be94ba456f6f1d">release_slot_idx</a> (int16_t reg_idx, const <a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> *owner)</td></tr>
 <tr class="memdesc:a5ccf22fe6d74cc52b0be94ba456f6f1d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Disarms the slot at <code class="param">reg_idx</code> (re-masks the line / MSI-X entry) and wakes any blocked waiter with -1 (WAIT mode) or signals the recipient's Notify with the revoked sentinel (NOTIFY mode, issue #7). Called from IrqCap/MsixCap::dispose/revoke via the cap's stored reg_idx_. Revalidates ownership under the lock (issue #2): a slot drained-and-reused between an outer check and this call is NOT released. <code class="param">owner</code> == nullptr releases an ownerless claimed slot (create()'s alloc-failure path).  <br /></td></tr>
-<tr class="memitem:acdd61b9dd896ba96f88b8b6d36575986" id="r_acdd61b9dd896ba96f88b8b6d36575986"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#acdd61b9dd896ba96f88b8b6d36575986">drain_task</a> (TaskControlBlock &amp;tcb)</td></tr>
-<tr class="memdesc:acdd61b9dd896ba96f88b8b6d36575986"><td class="mdescLeft">&#160;</td><td class="mdescRight">Drains every slot whose recipient or waiter is <code class="param">tcb</code>. Called from TaskControlBlock::cleanup() so a dying task can never leave a dangling recipient/waiter in the delivery table.  <br /></td></tr>
-<tr class="memitem:aa16caf098d2c7d32d739c8e5e1bcf1d4" id="r_aa16caf098d2c7d32d739c8e5e1bcf1d4"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa16caf098d2c7d32d739c8e5e1bcf1d4">occupied_count</a> ()</td></tr>
+<tr class="memitem:acdd61b9dd896ba96f88b8b6d36575986" id="r_acdd61b9dd896ba96f88b8b6d36575986"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#acdd61b9dd896ba96f88b8b6d36575986">drain_task</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;tcb)</td></tr>
+<tr class="memdesc:acdd61b9dd896ba96f88b8b6d36575986"><td class="mdescLeft">&#160;</td><td class="mdescRight">Drains every slot whose recipient or waiter is <code class="param">tcb</code>. Called from <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a> so a dying task can never leave a dangling recipient/waiter in the delivery table.  <br /></td></tr>
+<tr class="memitem:aa16caf098d2c7d32d739c8e5e1bcf1d4" id="r_aa16caf098d2c7d32d739c8e5e1bcf1d4"><td class="memItemLeft">static <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa16caf098d2c7d32d739c8e5e1bcf1d4">occupied_count</a> ()</td></tr>
 <tr class="memdesc:aa16caf098d2c7d32d739c8e5e1bcf1d4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of occupied slots (debug/leak audit helper).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -165,7 +165,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">bool kernel::IrqDelivery::arm </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#aba773967ee8f2b583e66876c028145cb">int16_t</a></td>          <td class="paramname"><span class="paramname"><em>reg_idx</em></span>, </td>
+          <td class="paramtype">int16_t</td>          <td class="paramname"><span class="paramname"><em>reg_idx</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -175,12 +175,12 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span>, </td>
+          <td class="paramtype">uint8_t</td>          <td class="paramname"><span class="paramname"><em>vector</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>recipient</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>recipient</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -226,9 +226,9 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#aba773967ee8f2b583e66876c028145cb">int16_t</a> kernel::IrqDelivery::claim_slot </td>
+          <td class="memname">int16_t kernel::IrqDelivery::claim_slot </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
+          <td class="paramtype">uint8_t</td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -262,7 +262,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::IrqDelivery::drain_task </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -273,7 +273,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Drains every slot whose recipient or waiter is <code class="param">tcb</code>. Called from TaskControlBlock::cleanup() so a dying task can never leave a dangling recipient/waiter in the delivery table. </p>
+<p>Drains every slot whose recipient or waiter is <code class="param">tcb</code>. Called from <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a> so a dying task can never leave a dangling recipient/waiter in the delivery table. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -295,7 +295,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname"><a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a> * kernel::IrqDelivery::find </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
+          <td class="paramtype">uint8_t</td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -322,7 +322,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::IrqDelivery::isr_entry </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
+          <td class="paramtype">uint8_t</td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -354,7 +354,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::IrqDelivery::occupied_count </td>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::IrqDelivery::occupied_count </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -383,7 +383,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::IrqDelivery::release_slot_idx </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#aba773967ee8f2b583e66876c028145cb">int16_t</a></td>          <td class="paramname"><span class="paramname"><em>reg_idx</em></span>, </td>
+          <td class="paramtype">int16_t</td>          <td class="paramname"><span class="paramname"><em>reg_idx</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -421,7 +421,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::IrqDelivery::set_slot_owner </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#aba773967ee8f2b583e66876c028145cb">int16_t</a></td>          <td class="paramname"><span class="paramname"><em>idx</em></span>, </td>
+          <td class="paramtype">int16_t</td>          <td class="paramname"><span class="paramname"><em>idx</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>

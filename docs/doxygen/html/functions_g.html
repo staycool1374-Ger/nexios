@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,16 +121,24 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_g.ht
 
 <h3 class="doxsection"><a id="index_g" name="index_g"></a>- g -</h3><ul>
 <li>gen&#160;:&#160;<a class="el" href="structkernel_1_1cap_1_1_c_slot.html#a45a872901a4cb175744bb4467ac42039">kernel::cap::CSlot</a></li>
-<li>generation()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a829f0d3ed8bed38faa92180dafc1ed36">kernel::elf::ElfLoader</a>, <a class="el" href="structkernel_1_1_scheduler_1_1_sw_slots.html#aefd176decefd075d85b459057092d380">kernel::Scheduler::SwSlots</a>, <a class="el" href="structkernel_1_1test_1_1_pt_pool_snapshot.html#a073a2cad1d8d6ba96abf0e40ea427439">kernel::test::PtPoolSnapshot</a>, <a class="el" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html#ad17eaa9732319a7cf304fd67fff7b315">kernel::time::TimerWheel::Handle</a></li>
+<li>generation()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a829f0d3ed8bed38faa92180dafc1ed36">kernel::elf::ElfLoader</a>, <a class="el" href="structkernel_1_1_scheduler_1_1_sw_slots.html#aefd176decefd075d85b459057092d380">kernel::Scheduler::SwSlots</a>, <a class="el" href="structkernel_1_1_task_control_block.html#a8348a1c6650a5652de96bf0755c8ae8b">kernel::TaskControlBlock</a>, <a class="el" href="structkernel_1_1test_1_1_pt_pool_snapshot.html#a073a2cad1d8d6ba96abf0e40ea427439">kernel::test::PtPoolSnapshot</a>, <a class="el" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html#ad17eaa9732319a7cf304fd67fff7b315">kernel::time::TimerWheel::Handle</a></li>
 <li>get()&#160;:&#160;<a class="el" href="classservice_1_1_program_registry.html#aae87545e1784195bd0a8041edbcee336">service::ProgramRegistry</a>, <a class="el" href="class_unique_ptr.html#a2ee33fa2b9510eb782fadfccee197a65">UniquePtr&lt; T, Deleter &gt;</a></li>
 <li>get_affinity()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a3b30a91ca7fe9b1b0f2eb751d2183c54">kernel::Scheduler</a></li>
+<li>get_bits()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_event_group.html#afd634f174190c204c6fb8be4d26b0560">kernel::sync::EventGroup</a></li>
+<li>get_cspace()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#aba9a4367e5326c32b261c373247469fb">kernel::TaskControlBlock</a></li>
 <li>get_deleter()&#160;:&#160;<a class="el" href="class_unique_ptr.html#a0ea4cbed1b3969f4eb84c855cc5c7f2e">UniquePtr&lt; T, Deleter &gt;</a></li>
 <li>get_harness_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#af5b305024ca5def7df9d16843d92a0c5">kernel::Scheduler</a></li>
 <li>get_highest_priority()&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#af3fd4dd059962da83c80d7bfabf05831">kernel::PriorityMap</a></li>
 <li>get_idle_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ab3d622e0c4309eade918101d6fdd060a">kernel::Scheduler</a></li>
+<li>get_kernel_pml4()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a41f6aadd3a5d784d8324a8b1e0e11789">kernel::VMM</a></li>
+<li>get_oom_handler()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a9273eca891a1f09d6eea421dc5af9fe7">kernel::PMM</a></li>
+<li>get_pid_fn&#160;:&#160;<a class="el" href="structkernel_1_1task_1_1_task_def.html#a56d487bae40239b4859e6a801c93ef91">kernel::task::TaskDef</a></li>
+<li>get_pixel()&#160;:&#160;<a class="el" href="classservice_1_1_framebuffer.html#a6d27abd512bf6375e04acc5e7518a7d8">service::Framebuffer</a></li>
 <li>get_ppr()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a190226e971b40c56ec1f0553055dec56">arch::APIC</a></li>
 <li>get_sample_count()&#160;:&#160;<a class="el" href="classkernel_1_1profiling_1_1_sampler.html#a0b27adc6a46c9f27fb7ce1e885deb768">kernel::profiling::Sampler</a>, <a class="el" href="class_sampler.html#a0b27adc6a46c9f27fb7ce1e885deb768">Sampler</a></li>
 <li>get_shell_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a55de97d6b8215734d5095458bea24260">kernel::Scheduler</a></li>
+<li>get_signal_handler()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#aae7356ee75615112f9aa4abc5cd7cde9">kernel::TaskControlBlock</a></li>
+<li>get_sporadic_server()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a5c8c3da12f183005dbfe5563e39cb39c">kernel::TaskControlBlock</a></li>
 <li>get_test_context()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a9276d18a6cae34b677e7d36f39dc0bae">kernel::Scheduler</a></li>
 <li>get_tpr_class()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a80de8535337d66f30f91810b1880cbb4">arch::APIC</a></li>
 </ul>

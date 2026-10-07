@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('driver_8hpp_so
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span> </div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span></div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="keyword">enum class</span> DriverState : <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> {</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="keyword">enum class</span> DriverState : <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> {</div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>    UNLOADED,</div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>    LOADED,</div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>    <a class="code hl_enumvalue" href="namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2abb1ca97ec761fc37101737ba0aa2e7c5">ERROR</a>,</div>
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('driver_8hpp_so
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    bool (*init)();</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    void (*<a class="code hl_function" href="stdlib_8c.html#a55e99c539cf7723ec15e856b7e0a8cee">exit</a>)();</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    DriverState state;</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> irq_line;</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> irq_line;</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span> </div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    Driver()</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>        : name(nullptr), description(nullptr), <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>(nullptr), <a class="code hl_function" href="stdlib_8c.html#a55e99c539cf7723ec15e856b7e0a8cee">exit</a>(nullptr),</div>
@@ -166,7 +166,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('driver_8hpp_so
 <div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span> </div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)</span></div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    Driver(<span class="keyword">const</span> <span class="keywordtype">char</span> *name_, <span class="keyword">const</span> <span class="keywordtype">char</span> *description_, <span class="keywordtype">bool</span> (*init_)(),</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>           <span class="keywordtype">void</span> (*exit_)(), DriverState state_, <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> irq_line_)</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>           <span class="keywordtype">void</span> (*exit_)(), DriverState state_, uint32_t irq_line_)</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>        : name(name_), description(description_), <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>(init_), <a class="code hl_function" href="stdlib_8c.html#a55e99c539cf7723ec15e856b7e0a8cee">exit</a>(exit_),</div>
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>          state(state_), irq_line(irq_line_) {</div>
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    }</div>
@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('driver_8hpp_so
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)</span></div>
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> register_driver(<span class="keyword">const</span> <span class="keywordtype">char</span> *name, <span class="keyword">const</span> <span class="keywordtype">char</span> *description,</div>
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>                                <span class="keywordtype">bool</span> (*init)(), <span class="keywordtype">void</span> (*<a class="code hl_function" href="stdlib_8c.html#a55e99c539cf7723ec15e856b7e0a8cee">exit</a>)(),</div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>                                <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> irq_line = 0);</div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>                                uint32_t irq_line = 0);</div>
 <div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span></div>
 <div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">load</a>(<span class="keyword">const</span> <span class="keywordtype">char</span> *name);</div>
 <div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span></div>
@@ -198,22 +198,22 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('driver_8hpp_so
 <div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>    }</div>
 <div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span> </div>
 <div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>  <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> MAX_DRIVERS = <a class="code hl_define" href="nexios__config_8h.html#a932ae61284ebb00cdf5c763d479b47fd">CONFIG_MAX_DRIVERS</a>;</div>
+<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> MAX_DRIVERS = <a class="code hl_define" href="aarch64_2serial_8cpp.html#a932ae61284ebb00cdf5c763d479b47fd">CONFIG_MAX_DRIVERS</a>;</div>
 <div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>    <span class="keyword">static</span> <span class="keyword">constinit</span> Driver *drivers_[MAX_DRIVERS];</div>
 <div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    <span class="keyword">static</span> <span class="keyword">constinit</span> <span class="keywordtype">size_t</span> count_;</div>
 <div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>};</div>
 <div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span> </div>
 <div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a932ae61284ebb00cdf5c763d479b47fd"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a932ae61284ebb00cdf5c763d479b47fd">CONFIG_MAX_DRIVERS</a></div><div class="ttdeci">#define CONFIG_MAX_DRIVERS</div></div>
+<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
+<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a08db2dcf48cc3117394e849a12e1fc19"><div class="ttname"><a href="namespaceinitrd.html#a08db2dcf48cc3117394e849a12e1fc19">initrd::find</a></div><div class="ttdeci">InitrdFile find(const char *path)</div><div class="ttdef"><b>Definition</b> initrd.cpp:72</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
-<div class="ttc" id="anamespacekernel_1_1elf_html_ae81746671637a90991ec1b98cef60dc4"><div class="ttname"><a href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">kernel::elf::load</a></div><div class="ttdeci">TaskControlBlock * load(const ELF64Header *hdr, const uint8_t *file_data, uint64_t file_size)</div><div class="ttdef"><b>Definition</b> elf.cpp:475</div></div>
+<div class="ttc" id="anamespacekernel_1_1elf_html_ae81746671637a90991ec1b98cef60dc4"><div class="ttname"><a href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">kernel::elf::load</a></div><div class="ttdeci">TaskControlBlock * load(const ELF64Header *hdr, const uint8_t *file_data, uint64_t file_size)</div><div class="ttdef"><b>Definition</b> elf.cpp:494</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anamespacekernel_html_a608b4a9ee1c4d240362c930be12ae9f2abb1ca97ec761fc37101737ba0aa2e7c5"><div class="ttname"><a href="namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2abb1ca97ec761fc37101737ba0aa2e7c5">kernel::LogLevel::ERROR</a></div><div class="ttdeci">@ ERROR</div><div class="ttdef"><b>Definition</b> logger.hpp:40</div></div>
-<div class="ttc" id="anexios__config_8h_html_a932ae61284ebb00cdf5c763d479b47fd"><div class="ttname"><a href="nexios__config_8h.html#a932ae61284ebb00cdf5c763d479b47fd">CONFIG_MAX_DRIVERS</a></div><div class="ttdeci">#define CONFIG_MAX_DRIVERS</div><div class="ttdoc">Maximum number of registered device drivers.</div><div class="ttdef"><b>Definition</b> nexios_config.h:200</div></div>
 <div class="ttc" id="astdlib_8c_html_a55e99c539cf7723ec15e856b7e0a8cee"><div class="ttname"><a href="stdlib_8c.html#a55e99c539cf7723ec15e856b7e0a8cee">exit</a></div><div class="ttdeci">void exit(int status)</div><div class="ttdef"><b>Definition</b> stdlib.c:4</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

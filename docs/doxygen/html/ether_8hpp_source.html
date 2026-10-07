@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ether_8hpp_sou
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> ETH_FRAME_MAX = 1518;</div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span></div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keyword">struct </span>MacAddr {</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> addr[ETH_ADDR_LEN]; </div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> addr[ETH_ADDR_LEN]; </div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span> </div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    <span class="keywordtype">bool</span> operator==(<span class="keyword">const</span> MacAddr &amp;o)<span class="keyword"> const </span>{</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>        <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; ETH_ADDR_LEN; ++i)</div>
@@ -183,21 +183,21 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ether_8hpp_sou
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span><span class="keyword">struct </span>EtherHeader {</div>
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    MacAddr dst;   </div>
 <div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>    MacAddr src;   </div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> type; </div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> type; </div>
 <div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>} <a class="code hl_function" href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">__attribute__</a>((packed));</div>
 <div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span></div>
-<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="keyword">enum</span> EtherType : <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> {</div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="keyword">enum</span> EtherType : <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> {</div>
 <div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    ETH_TYPE_IPV4 = 0x0800, </div>
 <div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    ETH_TYPE_ARP = 0x0806,  </div>
 <div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    ETH_TYPE_IPV6 = 0x86DD, </div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>};</div>
 <div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span> </div>
 <div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>} <span class="comment">// namespace net</span></div>
+<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
+<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a00c53aee04ed1b36b1a86a010b49ef61"><div class="ttname"><a href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">initrd::__attribute__</a></div><div class="ttdeci">struct initrd::CpioNewcHeader __attribute__((packed))</div></div>
 <div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> global_state.hpp:59</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a64be82add362de7c99ce6671d7f4f0a6"><div class="ttname"><a href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> types.hpp:25</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

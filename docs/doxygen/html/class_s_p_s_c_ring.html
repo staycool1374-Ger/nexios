@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('class_s_p_s_c_
 </div><!--header-->
 <div class="contents">
 
+<p>Lock-free single-producer single-consumer ring buffer.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="spsc__ring_8hpp_source.html">spsc_ring.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for SPSCRing&lt; T, N &gt;:</div>
@@ -130,11 +133,25 @@ Collaboration diagram for SPSCRing&lt; T, N &gt;:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a81616fdd3faf3c96f3489183f1f7bc4d" id="r_a81616fdd3faf3c96f3489183f1f7bc4d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a81616fdd3faf3c96f3489183f1f7bc4d">try_push</a> (const T &amp;item)</td></tr>
+<tr class="memdesc:a81616fdd3faf3c96f3489183f1f7bc4d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Push an item (discards if full).  <br /></td></tr>
 <tr class="memitem:aa23a0ba676b8f4f87dae0c26493fff40" id="r_aa23a0ba676b8f4f87dae0c26493fff40"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa23a0ba676b8f4f87dae0c26493fff40">try_pop</a> (T &amp;item)</td></tr>
+<tr class="memdesc:aa23a0ba676b8f4f87dae0c26493fff40"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pop an item (no-op if empty).  <br /></td></tr>
 <tr class="memitem:a16b7c28cc6138d3a714bd69a573e0e5d" id="r_a16b7c28cc6138d3a714bd69a573e0e5d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a16b7c28cc6138d3a714bd69a573e0e5d">empty</a> () const</td></tr>
+<tr class="memdesc:a16b7c28cc6138d3a714bd69a573e0e5d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the buffer is empty.  <br /></td></tr>
 <tr class="memitem:aee423335954c345b27244c25499d90db" id="r_aee423335954c345b27244c25499d90db"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aee423335954c345b27244c25499d90db">reset</a> ()</td></tr>
+<tr class="memdesc:aee423335954c345b27244c25499d90db"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset to empty state. QUIESCENT-ONLY — must not be called while either side is active (the head/tail pair is not published atomically together).  <br /></td></tr>
 </table>
-<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><div class="compoundTemplParams">template&lt;typename T, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> N&gt;<br />
+class SPSCRing&lt; T, N &gt;</div><p>Lock-free single-producer single-consumer ring buffer. </p>
+<dl class="tparams"><dt>Template Parameters</dt><dd>
+  <table class="tparams">
+    <tr><td class="paramname">T</td><td>Element type. </td></tr>
+    <tr><td class="paramname">N</td><td>Capacity (must be a power of two). </td></tr>
+  </table>
+  </dd>
+</dl>
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="a16b7c28cc6138d3a714bd69a573e0e5d" name="a16b7c28cc6138d3a714bd69a573e0e5d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a16b7c28cc6138d3a714bd69a573e0e5d">&#9670;&#160;</a></span>empty()</h2>
 
@@ -159,6 +176,8 @@ template&lt;typename T, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Check whether the buffer is empty. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -192,6 +211,8 @@ template&lt;typename T, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Reset to empty state. QUIESCENT-ONLY — must not be called while either side is active (the head/tail pair is not published atomically together). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -225,6 +246,9 @@ template&lt;typename T, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Pop an item (no-op if empty). </p>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -258,6 +282,9 @@ template&lt;typename T, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Push an item (discards if full). </p>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">

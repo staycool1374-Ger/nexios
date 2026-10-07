@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -133,19 +133,19 @@ Collaboration diagram for kernel::DeadlineList:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a7613dee0cd5bbb9fbc9d934dbb898f20" id="r_a7613dee0cd5bbb9fbc9d934dbb898f20"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a7613dee0cd5bbb9fbc9d934dbb898f20">DeadlineList</a> ()=default</td></tr>
-<tr class="memitem:a2f6a12357489a4dfc0689f4bb1f986af" id="r_a2f6a12357489a4dfc0689f4bb1f986af"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2f6a12357489a4dfc0689f4bb1f986af">insert</a> (TaskControlBlock &amp;t) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a2f6a12357489a4dfc0689f4bb1f986af" id="r_a2f6a12357489a4dfc0689f4bb1f986af"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2f6a12357489a4dfc0689f4bb1f986af">insert</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a2f6a12357489a4dfc0689f4bb1f986af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Insert a task into the list, ordered by deadline_ticks ascending. Only meaningful for tasks with period_ticks &gt; 0 and deadline_ticks &gt; 0. O(n) where n ≤ CONFIG_MAX_TASKS (≤64).  <br /></td></tr>
-<tr class="memitem:ac8db6d821dbc12b49fca217807a1cd69" id="r_ac8db6d821dbc12b49fca217807a1cd69"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac8db6d821dbc12b49fca217807a1cd69">remove</a> (TaskControlBlock &amp;t) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ac8db6d821dbc12b49fca217807a1cd69" id="r_ac8db6d821dbc12b49fca217807a1cd69"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac8db6d821dbc12b49fca217807a1cd69">remove</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ac8db6d821dbc12b49fca217807a1cd69"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove a task from the list. Safe to call if t is not in the list (scans for matching node). O(n).  <br /></td></tr>
-<tr class="memitem:a9a187c4e54c196c3400b71549372ecec" id="r_a9a187c4e54c196c3400b71549372ecec"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a9a187c4e54c196c3400b71549372ecec">pop_earliest_if_expired</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a9a187c4e54c196c3400b71549372ecec" id="r_a9a187c4e54c196c3400b71549372ecec"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a9a187c4e54c196c3400b71549372ecec">pop_earliest_if_expired</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a9a187c4e54c196c3400b71549372ecec"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove and return the earliest-deadline task if its deadline has expired (arch::Timer::ticks() &gt; deadline_ticks). Returns nullptr if the list is empty or the earliest task's deadline has not yet passed. O(1).  <br /></td></tr>
-<tr class="memitem:a90b5ccdae1745e9dcab1573f15ac497f" id="r_a90b5ccdae1745e9dcab1573f15ac497f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a90b5ccdae1745e9dcab1573f15ac497f">empty</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a90b5ccdae1745e9dcab1573f15ac497f" id="r_a90b5ccdae1745e9dcab1573f15ac497f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a90b5ccdae1745e9dcab1573f15ac497f">empty</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a90b5ccdae1745e9dcab1573f15ac497f"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if the list contains no entries.  <br /></td></tr>
-<tr class="memitem:ae49552a3671708650d567756cfca60ca" id="r_ae49552a3671708650d567756cfca60ca"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae49552a3671708650d567756cfca60ca">size</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ae49552a3671708650d567756cfca60ca" id="r_ae49552a3671708650d567756cfca60ca"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ae49552a3671708650d567756cfca60ca">size</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ae49552a3671708650d567756cfca60ca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current number of entries in the list.  <br /></td></tr>
-<tr class="memitem:a15737e071e53deeab81e9074a29a9e2d" id="r_a15737e071e53deeab81e9074a29a9e2d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a15737e071e53deeab81e9074a29a9e2d">clear</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a15737e071e53deeab81e9074a29a9e2d" id="r_a15737e071e53deeab81e9074a29a9e2d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a15737e071e53deeab81e9074a29a9e2d">clear</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a15737e071e53deeab81e9074a29a9e2d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove all entries from the list without freeing them.  <br /></td></tr>
-<tr class="memitem:a66045dfac6d5333994007baf94273ac7" id="r_a66045dfac6d5333994007baf94273ac7"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a66045dfac6d5333994007baf94273ac7">peek_earliest</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a66045dfac6d5333994007baf94273ac7" id="r_a66045dfac6d5333994007baf94273ac7"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a66045dfac6d5333994007baf94273ac7">peek_earliest</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a66045dfac6d5333994007baf94273ac7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the earliest-deadline task without removing it.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -249,7 +249,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::DeadlineList::insert </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -261,6 +261,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Insert a task into the list, ordered by deadline_ticks ascending. Only meaningful for tasks with period_ticks &gt; 0 and deadline_ticks &gt; 0. O(n) where n ≤ CONFIG_MAX_TASKS (≤64). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_deadline_list_a2f6a12357489a4dfc0689f4bb1f986af_cgraph.png" border="0" usemap="#aclasskernel_1_1_deadline_list_a2f6a12357489a4dfc0689f4bb1f986af_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -274,7 +280,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::DeadlineList::peek_earliest </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::DeadlineList::peek_earliest </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td> const</td>
@@ -301,7 +307,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::DeadlineList::pop_earliest_if_expired </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::DeadlineList::pop_earliest_if_expired </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -330,7 +336,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::DeadlineList::remove </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -355,7 +361,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::DeadlineList::size </td>
+          <td class="memname">uint64_t kernel::DeadlineList::size </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td> const</td>

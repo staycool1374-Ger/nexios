@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,17 +119,22 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__checked_
 </div><!--header-->
 <div class="contents">
 
-<p>CheckedPtr / safe-copy template-instantiation tests (milestone v0.4.10 issue #127): 63 of the 100 functions in <a class="el" href="checked__ptr_8hpp.html">src/kernel/memory/checked_ptr.hpp</a> were never entered. They are <em>template instantiations</em>, so they exist in the ELF only where some TU instantiated them — and they are only ever entered when that instantiation is actually called. This class instantiates the whole API surface for every element type the kernel uses and calls every member.  
+<p><a class="el" href="classkernel_1_1_checked_ptr.html" title="Checked pointer for safe user-space memory access.">CheckedPtr</a> / safe-copy template-instantiation tests (milestone v0.4.10 issue #127): 63 of the 100 functions in <a class="el" href="checked__ptr_8hpp.html">src/kernel/memory/checked_ptr.hpp</a> were never entered. They are <em>template instantiations</em>, so they exist in the ELF only where some TU instantiated them — and they are only ever entered when that instantiation is actually called. This class instantiates the whole API surface for every element type the kernel uses and calls every member.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="kernel_8hpp_source.html">kernel/kernel.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="checked__ptr_8hpp_source.html">kernel/memory/checked_ptr.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="death__notify_8hpp_source.html">kernel/ipc/death_notify.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pager__registry_8hpp_source.html">kernel/ipc/pager_registry.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="signal_8hpp_source.html">signal.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="string_8hpp_source.html">string.hpp</a>&gt;</code><br />
+<code>#include &quot;<a class="el" href="test__sched__helpers_8hpp_source.html">test_sched_helpers.hpp</a>&quot;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for test_checked_ptr_api.cpp:</div>
 <div class="dyncontent">
@@ -151,7 +156,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a35149511255b02c2b61fb1cb5aa4ae43" id="r_a35149511255b02c2b61fb1cb5aa4ae43"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a35149511255b02c2b61fb1cb5aa4ae43">register_checked_ptr_api_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>CheckedPtr / safe-copy template-instantiation tests (milestone v0.4.10 issue #127): 63 of the 100 functions in <a class="el" href="checked__ptr_8hpp.html">src/kernel/memory/checked_ptr.hpp</a> were never entered. They are <em>template instantiations</em>, so they exist in the ELF only where some TU instantiated them — and they are only ever entered when that instantiation is actually called. This class instantiates the whole API surface for every element type the kernel uses and calls every member. </p>
+<div class="textblock"><p><a class="el" href="classkernel_1_1_checked_ptr.html" title="Checked pointer for safe user-space memory access.">CheckedPtr</a> / safe-copy template-instantiation tests (milestone v0.4.10 issue #127): 63 of the 100 functions in <a class="el" href="checked__ptr_8hpp.html">src/kernel/memory/checked_ptr.hpp</a> were never entered. They are <em>template instantiations</em>, so they exist in the ELF only where some TU instantiated them — and they are only ever entered when that instantiation is actually called. This class instantiates the whole API surface for every element type the kernel uses and calls every member. </p>
 <dl class="section note"><dt>Note</dt><dd>Safety: every probe passes a KERNEL address (a stack buffer). <span class="tt">is_user_range()</span> rejects anything at or above USER_SPACE_LIMIT, so <span class="tt">valid()</span> is false and <span class="tt">copy_from/copy_to/read/write</span> and both <span class="tt">safe_copy_*</span> variants all take their early-return path — the user pointer is never dereferenced and no fault is ever provoked. That is also the assertion being made: <b>a kernel address is never accepted as a user pointer</b>, which is the SMAP contract that keeps a confused-deputy syscall from touching kernel memory. </dd>
 <dd>
 const element types cannot instantiate <span class="tt"><a class="el" href="unistd_8c.html#abb39b21888372e95ad3e5c59b166f5c8">write()</a></span>, <span class="tt">copy_to()</span> or <span class="tt">safe_copy_to_user()</span> (they would store through a const pointer); those are guarded with <span class="tt">if constexpr</span> and reported as "not
@@ -388,6 +393,12 @@ const element types cannot instantiate <span class="tt"><a class="el" href="unis
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__checked__ptr__api_8cpp_acb4642f028eaf207ee20a8c0d47d83df_cgraph.png" border="0" usemap="#atest__checked__ptr__api_8cpp_acb4642f028eaf207ee20a8c0d47d83df_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -409,7 +420,7 @@ const element types cannot instantiate <span class="tt"><a class="el" href="unis
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__checked__ptr__api_8cpp_a35149511255b02c2b61fb1cb5aa4ae43_cgraph.png" border="0" usemap="#atest__checked__ptr__api_8cpp_a35149511255b02c2b61fb1cb5aa4ae43_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>

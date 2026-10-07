@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -133,37 +133,37 @@ Collaboration diagram for kernel::AllTasksRegistry:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:adde419447acdc31d8c26e174cd7591aa" id="r_adde419447acdc31d8c26e174cd7591aa"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#adde419447acdc31d8c26e174cd7591aa">AllTasksRegistry</a> ()</td></tr>
-<tr class="memitem:a199241391536429b4ee4947ded41d063" id="r_a199241391536429b4ee4947ded41d063"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a199241391536429b4ee4947ded41d063">append</a> (TaskControlBlock &amp;t) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a199241391536429b4ee4947ded41d063" id="r_a199241391536429b4ee4947ded41d063"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a199241391536429b4ee4947ded41d063">append</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a199241391536429b4ee4947ded41d063"><td class="mdescLeft">&#160;</td><td class="mdescRight">Append a task to its priority-level list. O(1).  <br /></td></tr>
-<tr class="memitem:add8c947d63359ff7e6d66eb8d09fc149" id="r_add8c947d63359ff7e6d66eb8d09fc149"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#add8c947d63359ff7e6d66eb8d09fc149">remove</a> (TaskControlBlock &amp;t) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:add8c947d63359ff7e6d66eb8d09fc149" id="r_add8c947d63359ff7e6d66eb8d09fc149"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#add8c947d63359ff7e6d66eb8d09fc149">remove</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:add8c947d63359ff7e6d66eb8d09fc149"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove a task from its priority-level list. O(1).  <br /></td></tr>
-<tr class="memitem:a51d3311f9146656152dcc24e168220ae" id="r_a51d3311f9146656152dcc24e168220ae"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a51d3311f9146656152dcc24e168220ae">remove_unsafe</a> (TaskControlBlock &amp;t) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a51d3311f9146656152dcc24e168220ae" id="r_a51d3311f9146656152dcc24e168220ae"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a51d3311f9146656152dcc24e168220ae">remove_unsafe</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a51d3311f9146656152dcc24e168220ae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove a task by scanning all priorities (for corrupted TCBs where all_bucket_ is unreliable). O(priority_count).  <br /></td></tr>
-<tr class="memitem:ab7329259334f17a70fc386b1e2943485" id="r_ab7329259334f17a70fc386b1e2943485"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#ab7329259334f17a70fc386b1e2943485">head</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> prio) const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ab7329259334f17a70fc386b1e2943485" id="r_ab7329259334f17a70fc386b1e2943485"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ab7329259334f17a70fc386b1e2943485">head</a> (uint64_t prio) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ab7329259334f17a70fc386b1e2943485"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the head of the list for a given priority, or nullptr.  <br /></td></tr>
-<tr class="memitem:a70f83366254c829ab7a654f6321c2ae3" id="r_a70f83366254c829ab7a654f6321c2ae3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a70f83366254c829ab7a654f6321c2ae3">highest_priority</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a70f83366254c829ab7a654f6321c2ae3" id="r_a70f83366254c829ab7a654f6321c2ae3"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a70f83366254c829ab7a654f6321c2ae3">highest_priority</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a70f83366254c829ab7a654f6321c2ae3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the highest priority that has at least one task. O(1). 0 if no tasks are registered.  <br /></td></tr>
-<tr class="memitem:a294176c2a3a6878efb176a9b2b8b818a" id="r_a294176c2a3a6878efb176a9b2b8b818a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a294176c2a3a6878efb176a9b2b8b818a">has_priority</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> prio) const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a294176c2a3a6878efb176a9b2b8b818a" id="r_a294176c2a3a6878efb176a9b2b8b818a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a294176c2a3a6878efb176a9b2b8b818a">has_priority</a> (uint64_t prio) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a294176c2a3a6878efb176a9b2b8b818a"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if a given priority level has any tasks.  <br /></td></tr>
-<tr class="memitem:a7fbb9448f467f03dc58ab96aa96fe675" id="r_a7fbb9448f467f03dc58ab96aa96fe675"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7fbb9448f467f03dc58ab96aa96fe675">size</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a7fbb9448f467f03dc58ab96aa96fe675" id="r_a7fbb9448f467f03dc58ab96aa96fe675"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a7fbb9448f467f03dc58ab96aa96fe675">size</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a7fbb9448f467f03dc58ab96aa96fe675"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total number of registered tasks.  <br /></td></tr>
-<tr class="memitem:a4947d9763dd3d94f251208ccb043bd00" id="r_a4947d9763dd3d94f251208ccb043bd00"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4947d9763dd3d94f251208ccb043bd00">empty</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a4947d9763dd3d94f251208ccb043bd00" id="r_a4947d9763dd3d94f251208ccb043bd00"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4947d9763dd3d94f251208ccb043bd00">empty</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a4947d9763dd3d94f251208ccb043bd00"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if no tasks are registered.  <br /></td></tr>
-<tr class="memitem:aa5583f4e1fef85cb33e38292f2f7ee50" id="r_aa5583f4e1fef85cb33e38292f2f7ee50"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa5583f4e1fef85cb33e38292f2f7ee50">first</a> (TaskControlBlock *&amp;out) const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:aa5583f4e1fef85cb33e38292f2f7ee50" id="r_aa5583f4e1fef85cb33e38292f2f7ee50"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa5583f4e1fef85cb33e38292f2f7ee50">first</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&amp;out) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:aa5583f4e1fef85cb33e38292f2f7ee50"><td class="mdescLeft">&#160;</td><td class="mdescRight">Iterate to the first task (highest priority, then insertion order). Returns false if empty (out is unchanged).  <br /></td></tr>
-<tr class="memitem:a1be43df29b2d559a802215ff818d0ca8" id="r_a1be43df29b2d559a802215ff818d0ca8"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1be43df29b2d559a802215ff818d0ca8">next</a> (TaskControlBlock *&amp;t) const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a1be43df29b2d559a802215ff818d0ca8" id="r_a1be43df29b2d559a802215ff818d0ca8"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1be43df29b2d559a802215ff818d0ca8">next</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&amp;t) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a1be43df29b2d559a802215ff818d0ca8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Advance to the next task after <code class="param">t</code> (same priority then next lower). Returns false if <code class="param">t</code> was the last task (t is unchanged).  <br /></td></tr>
-<tr class="memitem:a8be8215a359b3e23afcefb4addf71475" id="r_a8be8215a359b3e23afcefb4addf71475"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a8be8215a359b3e23afcefb4addf71475">first_ptr</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a8be8215a359b3e23afcefb4addf71475" id="r_a8be8215a359b3e23afcefb4addf71475"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a8be8215a359b3e23afcefb4addf71475">first_ptr</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a8be8215a359b3e23afcefb4addf71475"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pointer-returning <a class="el" href="#aa5583f4e1fef85cb33e38292f2f7ee50" title="Iterate to the first task (highest priority, then insertion order). Returns false if empty (out is un...">first()</a> — returns nullptr if empty.  <br /></td></tr>
-<tr class="memitem:a6d8ea5bceb1ebe20c3a30c1f420a44c9" id="r_a6d8ea5bceb1ebe20c3a30c1f420a44c9"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a6d8ea5bceb1ebe20c3a30c1f420a44c9">next_ptr</a> (TaskControlBlock *t) const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a6d8ea5bceb1ebe20c3a30c1f420a44c9" id="r_a6d8ea5bceb1ebe20c3a30c1f420a44c9"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a6d8ea5bceb1ebe20c3a30c1f420a44c9">next_ptr</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a6d8ea5bceb1ebe20c3a30c1f420a44c9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pointer-returning <a class="el" href="#a1be43df29b2d559a802215ff818d0ca8" title="Advance to the next task after t (same priority then next lower). Returns false if t was the last tas...">next()</a> — returns nullptr if none follow <code class="param">t</code>.  <br /></td></tr>
-<tr class="memitem:ac5bb897da77af76f4c557cfb94781ab4" id="r_ac5bb897da77af76f4c557cfb94781ab4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac5bb897da77af76f4c557cfb94781ab4">capture</a> (TaskControlBlock **out, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> max) const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ac5bb897da77af76f4c557cfb94781ab4" id="r_ac5bb897da77af76f4c557cfb94781ab4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac5bb897da77af76f4c557cfb94781ab4">capture</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> **out, uint64_t max) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ac5bb897da77af76f4c557cfb94781ab4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fill an output array with all task pointers (for snapshot capture).  <br /></td></tr>
-<tr class="memitem:a3632ddecb4543600458bb4c95eb7794e" id="r_a3632ddecb4543600458bb4c95eb7794e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3632ddecb4543600458bb4c95eb7794e">restore</a> (TaskControlBlock *const *in, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> count) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a3632ddecb4543600458bb4c95eb7794e" id="r_a3632ddecb4543600458bb4c95eb7794e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3632ddecb4543600458bb4c95eb7794e">restore</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *const *in, uint64_t count) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a3632ddecb4543600458bb4c95eb7794e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Rebuild from an array of task pointers (for snapshot restore).  <br /></td></tr>
-<tr class="memitem:a5db8372586fad566335b66db035081ba" id="r_a5db8372586fad566335b66db035081ba"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5db8372586fad566335b66db035081ba">clear</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a5db8372586fad566335b66db035081ba" id="r_a5db8372586fad566335b66db035081ba"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5db8372586fad566335b66db035081ba">clear</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a5db8372586fad566335b66db035081ba"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove all entries without freeing them.  <br /></td></tr>
-<tr class="memitem:ac43f5224ce9025352dde2504b4a16f15" id="r_ac43f5224ce9025352dde2504b4a16f15"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac43f5224ce9025352dde2504b4a16f15">rebuild</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ac43f5224ce9025352dde2504b4a16f15" id="r_ac43f5224ce9025352dde2504b4a16f15"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac43f5224ce9025352dde2504b4a16f15">rebuild</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ac43f5224ce9025352dde2504b4a16f15"><td class="mdescLeft">&#160;</td><td class="mdescRight">Rebuild per-priority linked lists using each task's current priority. Must be called after restoring per-task priority fields from a snapshot, because <a class="el" href="#a3632ddecb4543600458bb4c95eb7794e" title="Rebuild from an array of task pointers (for snapshot restore).">restore()</a> reads stale priority values at insertion time.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -207,7 +207,7 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">void kernel::AllTasksRegistry::append </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -234,12 +234,12 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">void kernel::AllTasksRegistry::capture </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock **</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> **</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>max</em></span>&#160;) const</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>max</em></span>&#160;) const</td>
         </tr>
       </table>
   </td>
@@ -319,7 +319,7 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">bool kernel::AllTasksRegistry::first </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock *&amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span></td><td>)</td>
           <td> const</td>
         </tr>
       </table>
@@ -344,7 +344,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::AllTasksRegistry::first_ptr </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::AllTasksRegistry::first_ptr </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td> const</td>
@@ -373,7 +373,7 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">bool kernel::AllTasksRegistry::has_priority </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>prio</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>prio</em></span></td><td>)</td>
           <td> const</td>
         </tr>
       </table>
@@ -398,9 +398,9 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::AllTasksRegistry::head </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::AllTasksRegistry::head </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>prio</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>prio</em></span></td><td>)</td>
           <td> const</td>
         </tr>
       </table>
@@ -425,7 +425,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::AllTasksRegistry::highest_priority </td>
+          <td class="memname">uint64_t kernel::AllTasksRegistry::highest_priority </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td> const</td>
@@ -454,7 +454,7 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">bool kernel::AllTasksRegistry::next </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock *&amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
           <td> const</td>
         </tr>
       </table>
@@ -479,9 +479,9 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::AllTasksRegistry::next_ptr </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::AllTasksRegistry::next_ptr </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
           <td> const</td>
         </tr>
       </table>
@@ -547,7 +547,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::AllTasksRegistry::remove </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -574,7 +574,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::AllTasksRegistry::remove_unsafe </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -601,12 +601,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::AllTasksRegistry::restore </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock *const *</td>          <td class="paramname"><span class="paramname"><em>in</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *const *</td>          <td class="paramname"><span class="paramname"><em>in</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>count</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>count</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -636,7 +636,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::AllTasksRegistry::size </td>
+          <td class="memname">uint64_t kernel::AllTasksRegistry::size </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td> const</td>

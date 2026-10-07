@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -132,7 +132,10 @@ Data Fields</h2></td></tr>
 <tr class="memitem:ab3b16e5dfb03278357ed90e04112978b" id="r_ab3b16e5dfb03278357ed90e04112978b"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab3b16e5dfb03278357ed90e04112978b">first_free</a></td></tr>
 <tr class="memitem:a8dd6f9f8c60f33674e9b56da105cc226" id="r_a8dd6f9f8c60f33674e9b56da105cc226"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8dd6f9f8c60f33674e9b56da105cc226">free_count</a></td></tr>
 <tr class="memitem:a903589b3c937e0b93189a1f1535fc0f6" id="r_a903589b3c937e0b93189a1f1535fc0f6"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a903589b3c937e0b93189a1f1535fc0f6">block_count</a></td></tr>
-<tr class="memitem:a30c3b4941b3f55d8e150d65494b10944" id="r_a30c3b4941b3f55d8e150d65494b10944"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a30c3b4941b3f55d8e150d65494b10944">freed_bitmap</a> [4]</td></tr>
+<tr class="memitem:a234fa4001ade1aa491d541692e93a2f9" id="r_a234fa4001ade1aa491d541692e93a2f9"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a234fa4001ade1aa491d541692e93a2f9">block_size</a></td></tr>
+<tr class="memitem:a9a2cd0bace834f35f8fb9135907b8eef" id="r_a9a2cd0bace834f35f8fb9135907b8eef"><td class="memItemLeft">uint8_t *&#160;</td><td class="memItemRight"><a class="el" href="#a9a2cd0bace834f35f8fb9135907b8eef">data</a></td></tr>
+<tr class="memitem:a23b52649885dc94cb0924fd4faf41a09" id="r_a23b52649885dc94cb0924fd4faf41a09"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a23b52649885dc94cb0924fd4faf41a09">freed_bitmap</a> [5]</td></tr>
+<tr class="memitem:a64124e36690232f2a200f6984cedb64a" id="r_a64124e36690232f2a200f6984cedb64a"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a64124e36690232f2a200f6984cedb64a">pinned_bitmap</a> [5]</td></tr>
 </table>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a903589b3c937e0b93189a1f1535fc0f6" name="a903589b3c937e0b93189a1f1535fc0f6"></a>
@@ -143,6 +146,34 @@ Data Fields</h2></td></tr>
       <table class="memname">
         <tr>
           <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::MemPool::PoolMeta::block_count</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a234fa4001ade1aa491d541692e93a2f9" name="a234fa4001ade1aa491d541692e93a2f9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a234fa4001ade1aa491d541692e93a2f9">&#9670;&#160;</a></span>block_size</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::MemPool::PoolMeta::block_size</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9a2cd0bace834f35f8fb9135907b8eef" name="a9a2cd0bace834f35f8fb9135907b8eef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9a2cd0bace834f35f8fb9135907b8eef">&#9670;&#160;</a></span>data</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t* kernel::MemPool::PoolMeta::data</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -177,14 +208,28 @@ Data Fields</h2></td></tr>
 
 </div>
 </div>
-<a id="a30c3b4941b3f55d8e150d65494b10944" name="a30c3b4941b3f55d8e150d65494b10944"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a30c3b4941b3f55d8e150d65494b10944">&#9670;&#160;</a></span>freed_bitmap</h2>
+<a id="a23b52649885dc94cb0924fd4faf41a09" name="a23b52649885dc94cb0924fd4faf41a09"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a23b52649885dc94cb0924fd4faf41a09">&#9670;&#160;</a></span>freed_bitmap</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::MemPool::PoolMeta::freed_bitmap[4]</td>
+          <td class="memname">uint64_t kernel::MemPool::PoolMeta::freed_bitmap[5]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a64124e36690232f2a200f6984cedb64a" name="a64124e36690232f2a200f6984cedb64a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a64124e36690232f2a200f6984cedb64a">&#9670;&#160;</a></span>pinned_bitmap</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::MemPool::PoolMeta::pinned_bitmap[5]</td>
         </tr>
       </table>
 </div><div class="memdoc">

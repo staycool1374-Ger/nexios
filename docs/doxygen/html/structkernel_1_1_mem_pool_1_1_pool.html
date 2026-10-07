@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -133,9 +133,27 @@ Collaboration diagram for kernel::MemPool::Pool:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a5f3c97d9b24fc29bd093c3b1548ac4b4" id="r_a5f3c97d9b24fc29bd093c3b1548ac4b4"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5f3c97d9b24fc29bd093c3b1548ac4b4">Pool</a> ()</td></tr>
+<tr class="memdesc:a5f3c97d9b24fc29bd093c3b1548ac4b4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default constructor — zero-initialises all fields.  <br /></td></tr>
 <tr class="memitem:a58812b08bc5a8c1697bdff40dd2d81a0" id="r_a58812b08bc5a8c1697bdff40dd2d81a0"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a58812b08bc5a8c1697bdff40dd2d81a0">is_block_freed</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> idx) const</td></tr>
+<tr class="memdesc:a58812b08bc5a8c1697bdff40dd2d81a0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if a block index is marked as freed in the bitmap.  <br /></td></tr>
 <tr class="memitem:a9587b64983618a26349bc89e7011cb64" id="r_a9587b64983618a26349bc89e7011cb64"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9587b64983618a26349bc89e7011cb64">set_block_freed</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> idx)</td></tr>
+<tr class="memdesc:a9587b64983618a26349bc89e7011cb64"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mark a block index as freed in the bitmap.  <br /></td></tr>
 <tr class="memitem:a0f5e013ef7c4863e78286aa0224a3b23" id="r_a0f5e013ef7c4863e78286aa0224a3b23"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0f5e013ef7c4863e78286aa0224a3b23">clear_block_freed</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> idx)</td></tr>
+<tr class="memdesc:a0f5e013ef7c4863e78286aa0224a3b23"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear the freed flag for a block index (mark as allocated).  <br /></td></tr>
+<tr class="memitem:ae4acf2e1404ffb9270e85ab0bf2da1eb" id="r_ae4acf2e1404ffb9270e85ab0bf2da1eb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae4acf2e1404ffb9270e85ab0bf2da1eb">copy_freed_bitmap</a> (uint64_t *dst) const</td></tr>
+<tr class="memdesc:ae4acf2e1404ffb9270e85ab0bf2da1eb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copy the freed bitmap to an external buffer.  <br /></td></tr>
+<tr class="memitem:a875367abb8bbd943c2a9e54d3a16053b" id="r_a875367abb8bbd943c2a9e54d3a16053b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a875367abb8bbd943c2a9e54d3a16053b">write_freed_bitmap</a> (const uint64_t *src)</td></tr>
+<tr class="memitem:a6b575c1737e1963b8a070c310b6205e8" id="r_a6b575c1737e1963b8a070c310b6205e8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6b575c1737e1963b8a070c310b6205e8">copy_pinned_bitmap</a> (uint64_t *dst) const</td></tr>
+<tr class="memdesc:a6b575c1737e1963b8a070c310b6205e8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copy the pinned bitmap to an external buffer.  <br /></td></tr>
+<tr class="memitem:a72d99ef9f35b74f9fcd2a0a4dfefd395" id="r_a72d99ef9f35b74f9fcd2a0a4dfefd395"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a72d99ef9f35b74f9fcd2a0a4dfefd395">write_pinned_bitmap</a> (const uint64_t *src)</td></tr>
+<tr class="memitem:aff830dafe414683a9f25b4ae1cd96e81" id="r_aff830dafe414683a9f25b4ae1cd96e81"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aff830dafe414683a9f25b4ae1cd96e81">clear_pinned_bitmap</a> ()</td></tr>
+<tr class="memdesc:aff830dafe414683a9f25b4ae1cd96e81"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear all pinned flags.  <br /></td></tr>
+<tr class="memitem:a231dfa9497d638337ad03f6b4a168ecd" id="r_a231dfa9497d638337ad03f6b4a168ecd"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a231dfa9497d638337ad03f6b4a168ecd">is_block_pinned</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> idx) const</td></tr>
+<tr class="memdesc:a231dfa9497d638337ad03f6b4a168ecd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if a block index is pinned (never freed / reused).  <br /></td></tr>
+<tr class="memitem:ac230b1c838eb718c093be3b8dd0dcac9" id="r_ac230b1c838eb718c093be3b8dd0dcac9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac230b1c838eb718c093be3b8dd0dcac9">set_block_pinned</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> idx)</td></tr>
+<tr class="memdesc:ac230b1c838eb718c093be3b8dd0dcac9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mark a block index as pinned.  <br /></td></tr>
+<tr class="memitem:a6387906d7540ab842a0295638788705d" id="r_a6387906d7540ab842a0295638788705d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6387906d7540ab842a0295638788705d">clear_block_pinned</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> idx)</td></tr>
+<tr class="memdesc:a6387906d7540ab842a0295638788705d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear the pinned flag for a block index.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
@@ -145,11 +163,6 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a544b588267663fce05897a8c7956da80" id="r_a544b588267663fce05897a8c7956da80"><td class="memItemLeft">uint8_t *&#160;</td><td class="memItemRight"><a class="el" href="#a544b588267663fce05897a8c7956da80">data</a></td></tr>
 <tr class="memitem:a1712ba7f89ef74b4d5a48ba30f06e6fc" id="r_a1712ba7f89ef74b4d5a48ba30f06e6fc"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1712ba7f89ef74b4d5a48ba30f06e6fc">first_free</a></td></tr>
 <tr class="memitem:a894191661b9b46df5af78628cd179340" id="r_a894191661b9b46df5af78628cd179340"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a894191661b9b46df5af78628cd179340">initialized</a></td></tr>
-</table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 id="header-member-group" class="groupheader"><a id="member-group" name="member-group"></a>
-Test-isolation helpers</h2></td></tr>
-<tr class="memitem:ae4acf2e1404ffb9270e85ab0bf2da1eb" id="r_ae4acf2e1404ffb9270e85ab0bf2da1eb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae4acf2e1404ffb9270e85ab0bf2da1eb">copy_freed_bitmap</a> (uint64_t *dst) const</td></tr>
-<tr class="memitem:a875367abb8bbd943c2a9e54d3a16053b" id="r_a875367abb8bbd943c2a9e54d3a16053b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a875367abb8bbd943c2a9e54d3a16053b">write_freed_bitmap</a> (const uint64_t *src)</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Describes a single pool of fixed-size blocks. </p>
@@ -178,6 +191,8 @@ Test-isolation helpers</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Default constructor — zero-initialises all fields. </p>
+
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
@@ -204,6 +219,74 @@ Test-isolation helpers</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Clear the freed flag for a block index (mark as allocated). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">idx</td><td>Block index. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a6387906d7540ab842a0295638788705d" name="a6387906d7540ab842a0295638788705d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6387906d7540ab842a0295638788705d">&#9670;&#160;</a></span>clear_block_pinned()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::MemPool::Pool::clear_block_pinned </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>idx</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Clear the pinned flag for a block index. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">idx</td><td>Block index. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="aff830dafe414683a9f25b4ae1cd96e81" name="aff830dafe414683a9f25b4ae1cd96e81"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aff830dafe414683a9f25b4ae1cd96e81">&#9670;&#160;</a></span>clear_pinned_bitmap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::MemPool::Pool::clear_pinned_bitmap </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Clear all pinned flags. </p>
+
 </div>
 </div>
 <a id="ae4acf2e1404ffb9270e85ab0bf2da1eb" name="ae4acf2e1404ffb9270e85ab0bf2da1eb"></a>
@@ -228,6 +311,47 @@ Test-isolation helpers</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Copy the freed bitmap to an external buffer. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">dst</td><td>Destination array (5 x uint64_t). </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a6b575c1737e1963b8a070c310b6205e8" name="a6b575c1737e1963b8a070c310b6205e8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6b575c1737e1963b8a070c310b6205e8">&#9670;&#160;</a></span>copy_pinned_bitmap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::MemPool::Pool::copy_pinned_bitmap </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>dst</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Copy the pinned bitmap to an external buffer. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">dst</td><td>Destination array (5 x uint64_t). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -254,6 +378,49 @@ Test-isolation helpers</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Check if a block index is marked as freed in the bitmap. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">idx</td><td>Block index. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if the block is free. </dd></dl>
+
+</div>
+</div>
+<a id="a231dfa9497d638337ad03f6b4a168ecd" name="a231dfa9497d638337ad03f6b4a168ecd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a231dfa9497d638337ad03f6b4a168ecd">&#9670;&#160;</a></span>is_block_pinned()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::MemPool::Pool::is_block_pinned </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>idx</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Check if a block index is pinned (never freed / reused). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">idx</td><td>Block index. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if the block is pinned. </dd></dl>
+
 </div>
 </div>
 <a id="a9587b64983618a26349bc89e7011cb64" name="a9587b64983618a26349bc89e7011cb64"></a>
@@ -279,6 +446,47 @@ Test-isolation helpers</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Mark a block index as freed in the bitmap. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">idx</td><td>Block index. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="ac230b1c838eb718c093be3b8dd0dcac9" name="ac230b1c838eb718c093be3b8dd0dcac9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac230b1c838eb718c093be3b8dd0dcac9">&#9670;&#160;</a></span>set_block_pinned()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::MemPool::Pool::set_block_pinned </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>idx</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Mark a block index as pinned. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">idx</td><td>Block index. </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <a id="a875367abb8bbd943c2a9e54d3a16053b" name="a875367abb8bbd943c2a9e54d3a16053b"></a>
@@ -303,6 +511,43 @@ Test-isolation helpers</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">src</td><td>Source array (5 x uint64_t). </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a72d99ef9f35b74f9fcd2a0a4dfefd395" name="a72d99ef9f35b74f9fcd2a0a4dfefd395"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a72d99ef9f35b74f9fcd2a0a4dfefd395">&#9670;&#160;</a></span>write_pinned_bitmap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::MemPool::Pool::write_pinned_bitmap </td>
+          <td>(</td>
+          <td class="paramtype">const uint64_t *</td>          <td class="paramname"><span class="paramname"><em>src</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">src</td><td>Source array (5 x uint64_t). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>

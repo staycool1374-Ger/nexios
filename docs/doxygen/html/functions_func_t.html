@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -123,9 +123,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 <li>tail()&#160;:&#160;<a class="el" href="classkernel_1_1_task_queue.html#a1a7a6c176f1150ed49f8203d65b2a15d">kernel::TaskQueue</a></li>
 <li>tail_index()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a804c4cfb722e82383e6d824343ae9b06">kernel::log::DmesgService</a></li>
 <li>take_completed()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#abfcf00a2150245962b363988c47550f4">kernel::elf::ElfLoader</a></li>
+<li>take_hhdm_modified()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#ac5cc5b13afcd183532d0f49f56d164d5">kernel::VMM</a></li>
+<li>take_identity_modified()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a287c73fed6d835188195b1992850d1ff">kernel::VMM</a></li>
 <li>task_at()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a77133baf25c2e9530f2b1709d881d1dc">kernel::Scheduler</a></li>
 <li>task_count()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a2cd9411be2c691fcec97a6ddfaa465f6">kernel::Scheduler</a></li>
 <li>task_main()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a34f023f52654f67830d355c1a6d5ffb7">kernel::elf::ElfLoader</a></li>
+<li>TaskControlBlock()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a9a59d792a7207bc29a804189f0ad7137">kernel::TaskControlBlock</a></li>
 <li>TaskIter()&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_iter.html#a19502037636492d9bdb74501410d7311">kernel::Scheduler::TaskIter</a></li>
 <li>TaskQueue()&#160;:&#160;<a class="el" href="classkernel_1_1_task_queue.html#a8804ebfccb0b109f71875d5ea72e7999">kernel::TaskQueue</a></li>
 <li>tearDown()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_test_base.html#a0cebebeb512d636d7aa505eac6a268ba">kernel::test::TestBase</a></li>
@@ -157,6 +160,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 <li>timespec_to_ns()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#a8d682debab8885e5b995395a48125965">kernel::time::PosixTime</a></li>
 <li>top_reset_samples()&#160;:&#160;<a class="el" href="classservice_1_1_shell.html#a8c3bf7ba23fb56c1734f8c61f73c2f07">service::Shell</a></li>
 <li>total()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_registry.html#abe9c6e1ab43f3977e1625a2e6b1c3a8e">kernel::test::Registry</a></li>
+<li>total_memory()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a19ab9f1e2a4a123040d8a9d1e539318b">kernel::PMM</a></li>
 <li>tpr_raise()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#ab63f9b0cbcbcbb282fa17edc51886485">arch::APIC</a></li>
 <li>tpr_restore()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a13f2ec36d9a52f4c7dff5f9cc7610aa1">arch::APIC</a></li>
 <li>TprGuard()&#160;:&#160;<a class="el" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">arch::TprGuard</a></li>
@@ -205,7 +209,19 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 <li>track_vnode_add()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_resource_tracker.html#a32f6625487713a98967186fa72379a06">kernel::test::ResourceTracker</a></li>
 <li>track_vnode_remove()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_resource_tracker.html#ae9b4b6e4da7760651e163157488d4b98">kernel::test::ResourceTracker</a></li>
 <li>translation_live()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#ac57d2c571a5d0e70f2f09afaf2d83a48">kernel::iommu::IoMmuManager</a></li>
+<li>try_lock()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_spin_lock.html#abe0b78f8a620a351e3fd4d6b752783ab">kernel::iommu::SpinLock</a>, <a class="el" href="classkernel_1_1sync_1_1_mutex.html#a44a2716f5eef3240695d13d2ea336d0b">kernel::sync::Mutex</a>, <a class="el" href="classkernel_1_1sync_1_1_spin_lock.html#abe0b78f8a620a351e3fd4d6b752783ab">kernel::sync::SpinLock</a></li>
+<li>try_lock_err()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_mutex.html#a2c10add2c52745fb38a034d7b8d6e086">kernel::sync::Mutex</a></li>
+<li>try_pop()&#160;:&#160;<a class="el" href="class_s_p_s_c_ring.html#aa23a0ba676b8f4f87dae0c26493fff40">SPSCRing&lt; T, N &gt;</a></li>
+<li>try_push()&#160;:&#160;<a class="el" href="class_s_p_s_c_ring.html#a81616fdd3faf3c96f3489183f1f7bc4d">SPSCRing&lt; T, N &gt;</a></li>
 <li>try_read_lock()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_rw_lock.html#ae71b89ff6577591e42e2e0cbf29159f4">kernel::sync::RwLock</a></li>
+<li>try_receive()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_queue.html#a68bf24596e5e242c54a765b5fabb9074">kernel::sync::Queue</a></li>
+<li>try_receive_err()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_queue.html#ac1d6b6e517641752502daaa5ce5fdb45">kernel::sync::Queue</a></li>
+<li>try_send()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_queue.html#ab48aea9d45391283bfdb83fae3bd8acb">kernel::sync::Queue</a></li>
+<li>try_send_err()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_queue.html#a7dda801315d3bd250b0014a9f6c7130f">kernel::sync::Queue</a></li>
+<li>try_wait()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_notify.html#adba405a64fbbe9fee6583e415cafc488">kernel::sync::Notify</a>, <a class="el" href="classkernel_1_1sync_1_1_semaphore.html#a6c5398821369051ea2be804ce33bdd4d">kernel::sync::Semaphore</a></li>
+<li>try_wait_bits()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_event_group.html#a1fb1136e2ba1805acc7f68e32443a56d">kernel::sync::EventGroup</a></li>
+<li>try_wait_bits_err()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_event_group.html#a86f7ee0aca03fd2e324c509f9084cdaf">kernel::sync::EventGroup</a></li>
+<li>try_wait_err()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_notify.html#a9e19afa2f0a412aecd8045fa5088a2f1">kernel::sync::Notify</a>, <a class="el" href="classkernel_1_1sync_1_1_semaphore.html#ad4a25ffbcecb26a72124da5de77340b3">kernel::sync::Semaphore</a></li>
 <li>try_write_lock()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_rw_lock.html#aa92d27a1cc0dc4ff5316494cf9068b30">kernel::sync::RwLock</a></li>
 </ul>
 </div><!-- contents -->

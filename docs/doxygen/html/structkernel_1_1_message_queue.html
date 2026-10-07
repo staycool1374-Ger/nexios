@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
-<p>Priority-ordered circular message queue embedded via pointer in each TCB.  
+<p>Priority-ordered circular message queue embedded in each TCB.  
  <a href="#details">More...</a></p>
 
-<p><code>#include &lt;<a class="el" href="ipc_8hpp_source.html">ipc.hpp</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="task_8hpp_source.html">task.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::MessageQueue:</div>
 <div class="dyncontent">
@@ -134,35 +134,41 @@ Collaboration diagram for kernel::MessageQueue:</div>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a1e2db928132955b19dfcc0c4aa5f2cba" id="r_a1e2db928132955b19dfcc0c4aa5f2cba"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1e2db928132955b19dfcc0c4aa5f2cba">MessageQueue</a> ()</td></tr>
 <tr class="memitem:a63dafcf01bfefb3194fdc6620b0b6955" id="r_a63dafcf01bfefb3194fdc6620b0b6955"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a63dafcf01bfefb3194fdc6620b0b6955">~MessageQueue</a> ()</td></tr>
-<tr class="memdesc:a63dafcf01bfefb3194fdc6620b0b6955"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destructor — wakes any blocked senders before the queue is freed.  <br /></td></tr>
+<tr class="memdesc:a63dafcf01bfefb3194fdc6620b0b6955"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destructor — wake all blocked senders before queue memory is freed.  <br /></td></tr>
 <tr class="memitem:a1acc304a5f48386ce13f03498eb86752" id="r_a1acc304a5f48386ce13f03498eb86752"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1acc304a5f48386ce13f03498eb86752">init</a> ()</td></tr>
-<tr class="memdesc:a1acc304a5f48386ce13f03498eb86752"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize the message queue to empty.  <br /></td></tr>
+<tr class="memdesc:a1acc304a5f48386ce13f03498eb86752"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialise or reset the message queue to empty.  <br /></td></tr>
 <tr class="memitem:ab0b722ca481a94d8a138fdd76a4c3922" id="r_ab0b722ca481a94d8a138fdd76a4c3922"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ab0b722ca481a94d8a138fdd76a4c3922">push</a> (const <a class="el" href="structkernel_1_1_message.html">Message</a> &amp;msg)</td></tr>
-<tr class="memdesc:ab0b722ca481a94d8a138fdd76a4c3922"><td class="mdescLeft">&#160;</td><td class="mdescRight">Push a message into the queue (priority-ordered insertion).  <br /></td></tr>
+<tr class="memdesc:ab0b722ca481a94d8a138fdd76a4c3922"><td class="mdescLeft">&#160;</td><td class="mdescRight">Insert a message at the tail of the queue.  <br /></td></tr>
 <tr class="memitem:a4a8b5699fccf8f2fd24701dc1c874fee" id="r_a4a8b5699fccf8f2fd24701dc1c874fee"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4a8b5699fccf8f2fd24701dc1c874fee">pop</a> (<a class="el" href="structkernel_1_1_message.html">Message</a> &amp;msg)</td></tr>
-<tr class="memdesc:a4a8b5699fccf8f2fd24701dc1c874fee"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pop the highest-priority message from the queue.  <br /></td></tr>
+<tr class="memdesc:a4a8b5699fccf8f2fd24701dc1c874fee"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove the highest-priority message (FIFO within same priority).  <br /></td></tr>
+<tr class="memitem:abea5b684d416c4467bb309fe146cbb8a" id="r_abea5b684d416c4467bb309fe146cbb8a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abea5b684d416c4467bb309fe146cbb8a">pop_clamped</a> (<a class="el" href="structkernel_1_1_message.html">Message</a> &amp;msg, uint32_t max_size)</td></tr>
+<tr class="memdesc:abea5b684d416c4467bb309fe146cbb8a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pop the highest-priority message only if it fits <code class="param">max_size</code>. Fail-closed for the IPC fastpath (issue #11, paper §3.9): an oversized best match is NOT removed (returns false). Callers disambiguate empty-vs-oversized with <a class="el" href="#a5fa4160216201932e9dba8f57706b5f9">is_empty()</a>.  <br /></td></tr>
+<tr class="memitem:a7f429d387e8487c71ebe9c84ff296f03" id="r_a7f429d387e8487c71ebe9c84ff296f03"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a7f429d387e8487c71ebe9c84ff296f03">pop_from_sender</a> (<a class="el" href="structkernel_1_1_message.html">Message</a> &amp;out, uint64_t sender_id)</td></tr>
+<tr class="memdesc:a7f429d387e8487c71ebe9c84ff296f03"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pop the highest-priority message from <code class="param">sender_id</code> only (issue #296): non-matching messages are never touched, so a send_sync waiter cannot eat another sender's message as its reply. FIFO within a priority among matching (INV-P kept).  <br /></td></tr>
+<tr class="memitem:a41431013e685903689304dd877cc2bbe" id="r_a41431013e685903689304dd877cc2bbe"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a41431013e685903689304dd877cc2bbe">pop_from_sender_clamped</a> (<a class="el" href="structkernel_1_1_message.html">Message</a> &amp;out, uint32_t max_size, uint64_t sender_id)</td></tr>
+<tr class="memdesc:a41431013e685903689304dd877cc2bbe"><td class="mdescLeft">&#160;</td><td class="mdescRight">pop_from_sender with the issue #11 clamp: an oversized best matching message stays queued (returns false); non-matching messages never count as oversized and are never consumed.  <br /></td></tr>
+<tr class="memitem:a3530aa73eae5586244af5ef20344a7cc" id="r_a3530aa73eae5586244af5ef20344a7cc"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a3530aa73eae5586244af5ef20344a7cc">has_from</a> (uint64_t sender_id)</td></tr>
+<tr class="memdesc:a3530aa73eae5586244af5ef20344a7cc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Non-destructive probe: is any message from <code class="param">sender_id</code> queued? Used for the send_sync dest-death path (a reply that arrived before the peer died must still be consumed).  <br /></td></tr>
 <tr class="memitem:a5fa4160216201932e9dba8f57706b5f9" id="r_a5fa4160216201932e9dba8f57706b5f9"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5fa4160216201932e9dba8f57706b5f9">is_empty</a> () const</td></tr>
 <tr class="memitem:aca8f26f8dd44c0c84f7d0aaa0b093d90" id="r_aca8f26f8dd44c0c84f7d0aaa0b093d90"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aca8f26f8dd44c0c84f7d0aaa0b093d90">is_full</a> () const</td></tr>
+<tr class="memitem:a740a59b0af3642342c1f5c76dc9581ad" id="r_a740a59b0af3642342c1f5c76dc9581ad"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a740a59b0af3642342c1f5c76dc9581ad">is_full_locked</a> ()</td></tr>
 <tr class="memitem:a8a538932b4d80a4aba47b95099a01060" id="r_a8a538932b4d80a4aba47b95099a01060"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8a538932b4d80a4aba47b95099a01060">highest_priority</a> () const</td></tr>
-<tr class="memdesc:a8a538932b4d80a4aba47b95099a01060"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the highest priority with messages, or IPC_PRIORITY_LEVELS if empty.  <br /></td></tr>
+<tr class="memdesc:a8a538932b4d80a4aba47b95099a01060"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the highest priority that has at least one message.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a83249920b380e779a5be6fe72df2f0a4" id="r_a83249920b380e779a5be6fe72df2f0a4"><td class="memItemLeft"><a class="el" href="structkernel_1_1_message.html">Message</a>&#160;</td><td class="memItemRight"><a class="el" href="#a83249920b380e779a5be6fe72df2f0a4">msgs</a> [IPC_MAX_QUEUE_MSG]</td></tr>
 <tr class="memitem:a9ceac56ebef91d9906621f0de6d5dda9" id="r_a9ceac56ebef91d9906621f0de6d5dda9"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9ceac56ebef91d9906621f0de6d5dda9">prio_bitmap</a></td></tr>
-<tr class="memdesc:a9ceac56ebef91d9906621f0de6d5dda9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bit n set = at least one msg at priority n.  <br /></td></tr>
-<tr class="memitem:afb613c6ecd4c4ce59d8ff90e72967301" id="r_afb613c6ecd4c4ce59d8ff90e72967301"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afb613c6ecd4c4ce59d8ff90e72967301">head</a></td></tr>
-<tr class="memitem:a3e66fc273639ced0a5443073577ee363" id="r_a3e66fc273639ced0a5443073577ee363"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3e66fc273639ced0a5443073577ee363">tail</a></td></tr>
-<tr class="memitem:a3c2c9d531546276cdc6144f3061e20e1" id="r_a3c2c9d531546276cdc6144f3061e20e1"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3c2c9d531546276cdc6144f3061e20e1">count</a></td></tr>
+<tr class="memitem:aaf593bcfcd080aab08217ee22b95da99" id="r_aaf593bcfcd080aab08217ee22b95da99"><td class="memItemLeft">volatile <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aaf593bcfcd080aab08217ee22b95da99">head</a></td></tr>
+<tr class="memitem:a2bc8d8941a5012e676a5ae717ad8f423" id="r_a2bc8d8941a5012e676a5ae717ad8f423"><td class="memItemLeft">volatile <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2bc8d8941a5012e676a5ae717ad8f423">tail</a></td></tr>
+<tr class="memitem:af5d6dfcc1ab6860052b69b17b156cca5" id="r_af5d6dfcc1ab6860052b69b17b156cca5"><td class="memItemLeft">volatile <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af5d6dfcc1ab6860052b69b17b156cca5">count</a></td></tr>
 <tr class="memitem:a0991e1e29c3868023f6940f7efb4ff02" id="r_a0991e1e29c3868023f6940f7efb4ff02"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0991e1e29c3868023f6940f7efb4ff02">blocked_senders_head</a></td></tr>
 <tr class="memitem:a7b7126788ade70c3124400a95a6ace4e" id="r_a7b7126788ade70c3124400a95a6ace4e"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a7b7126788ade70c3124400a95a6ace4e">blocked_senders_tail</a></td></tr>
 <tr class="memitem:a49723794c23b41f9b9552142f9277b72" id="r_a49723794c23b41f9b9552142f9277b72"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a49723794c23b41f9b9552142f9277b72">owner</a></td></tr>
-<tr class="memdesc:a49723794c23b41f9b9552142f9277b72"><td class="mdescLeft">&#160;</td><td class="mdescRight">TCB that owns this queue (set during task creation).  <br /></td></tr>
 <tr class="memitem:a39648f13a2c18bb6049b06a0ac5b1fab" id="r_a39648f13a2c18bb6049b06a0ac5b1fab"><td class="memItemLeft"><a class="el" href="classkernel_1_1sync_1_1_spin_lock.html">sync::SpinLock</a>&#160;</td><td class="memItemRight"><a class="el" href="#a39648f13a2c18bb6049b06a0ac5b1fab">lock_</a></td></tr>
-<tr class="memdesc:a39648f13a2c18bb6049b06a0ac5b1fab"><td class="mdescLeft">&#160;</td><td class="mdescRight">Protects queue + blocked_senders + owner state.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Priority-ordered circular message queue embedded via pointer in each TCB. </p>
+<div class="textblock"><p>Priority-ordered circular message queue embedded in each TCB. </p>
 </div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a1e2db928132955b19dfcc0c4aa5f2cba" name="a1e2db928132955b19dfcc0c4aa5f2cba"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a1e2db928132955b19dfcc0c4aa5f2cba">&#9670;&#160;</a></span>MessageQueue()</h2>
@@ -204,7 +210,7 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Destructor — wakes any blocked senders before the queue is freed. </p>
+<p>Destructor — wake all blocked senders before queue memory is freed. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -215,6 +221,26 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="a3530aa73eae5586244af5ef20344a7cc" name="a3530aa73eae5586244af5ef20344a7cc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3530aa73eae5586244af5ef20344a7cc">&#9670;&#160;</a></span>has_from()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::MessageQueue::has_from </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>sender_id</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Non-destructive probe: is any message from <code class="param">sender_id</code> queued? Used for the send_sync dest-death path (a reply that arrived before the peer died must still be consumed). </p>
+<p>Non-destructive probe for a queued message from <code class="param">sender_id</code> (issue #296, send_sync dest-death path). </p>
+
+</div>
+</div>
 <a id="a8a538932b4d80a4aba47b95099a01060" name="a8a538932b4d80a4aba47b95099a01060"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a8a538932b4d80a4aba47b95099a01060">&#9670;&#160;</a></span>highest_priority()</h2>
 
@@ -230,7 +256,8 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Returns the highest priority with messages, or IPC_PRIORITY_LEVELS if empty. </p>
+<p>Return the highest priority that has at least one message. </p>
+<dl class="section return"><dt>Returns</dt><dd>IPC_PRIORITY_LEVELS if empty. </dd></dl>
 
 </div>
 </div>
@@ -249,7 +276,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Initialize the message queue to empty. </p>
+<p>Initialise or reset the message queue to empty. </p>
 
 </div>
 </div>
@@ -303,6 +330,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a740a59b0af3642342c1f5c76dc9581ad" name="a740a59b0af3642342c1f5c76dc9581ad"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a740a59b0af3642342c1f5c76dc9581ad">&#9670;&#160;</a></span>is_full_locked()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::MessageQueue::is_full_locked </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a4a8b5699fccf8f2fd24701dc1c874fee" name="a4a8b5699fccf8f2fd24701dc1c874fee"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a4a8b5699fccf8f2fd24701dc1c874fee">&#9670;&#160;</a></span>pop()</h2>
 
@@ -312,13 +364,13 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::MessageQueue::pop </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_message.html">Message</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>msg</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_message.html">Message</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
 
-<p>Pop the highest-priority message from the queue. </p>
+<p>Remove the highest-priority message (FIFO within same priority). </p>
 <dl class="section return"><dt>Returns</dt><dd>true if a message was dequeued. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
@@ -326,6 +378,93 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="structkernel_1_1_message_queue_a4a8b5699fccf8f2fd24701dc1c874fee_cgraph.png" border="0" usemap="#astructkernel_1_1_message_queue_a4a8b5699fccf8f2fd24701dc1c874fee_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 2 -->
 </div>
+
+</div>
+</div>
+<a id="abea5b684d416c4467bb309fe146cbb8a" name="abea5b684d416c4467bb309fe146cbb8a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abea5b684d416c4467bb309fe146cbb8a">&#9670;&#160;</a></span>pop_clamped()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::MessageQueue::pop_clamped </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_message.html">Message</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>msg</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>max_size</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Pop the highest-priority message only if it fits <code class="param">max_size</code>. Fail-closed for the IPC fastpath (issue #11, paper §3.9): an oversized best match is NOT removed (returns false). Callers disambiguate empty-vs-oversized with <a class="el" href="#a5fa4160216201932e9dba8f57706b5f9">is_empty()</a>. </p>
+<p>Remove the highest-priority message only if it fits <code class="param">max_size</code>.</p>
+<dl class="section return"><dt>Returns</dt><dd>true if a fitting message was dequeued; false if the queue is empty OR the best match is oversized (NOT removed — fail-closed, issue #11 paper §3.9). Callers disambiguate with <a class="el" href="#a5fa4160216201932e9dba8f57706b5f9">is_empty()</a>. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="structkernel_1_1_message_queue_abea5b684d416c4467bb309fe146cbb8a_cgraph.png" border="0" usemap="#astructkernel_1_1_message_queue_abea5b684d416c4467bb309fe146cbb8a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="a7f429d387e8487c71ebe9c84ff296f03" name="a7f429d387e8487c71ebe9c84ff296f03"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7f429d387e8487c71ebe9c84ff296f03">&#9670;&#160;</a></span>pop_from_sender()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::MessageQueue::pop_from_sender </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_message.html">Message</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>sender_id</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Pop the highest-priority message from <code class="param">sender_id</code> only (issue #296): non-matching messages are never touched, so a send_sync waiter cannot eat another sender's message as its reply. FIFO within a priority among matching (INV-P kept). </p>
+<p>Remove the highest-priority message from <code class="param">sender_id</code> (issue #296). Non-matching messages are never touched.</p>
+<dl class="section return"><dt>Returns</dt><dd>true with <code class="param">out</code> filled; false when no message from <code class="param">sender_id</code> is queued.</dd>
+<dd>
+true with <code class="param">out</code> filled; false when none is queued. </dd></dl>
+
+</div>
+</div>
+<a id="a41431013e685903689304dd877cc2bbe" name="a41431013e685903689304dd877cc2bbe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a41431013e685903689304dd877cc2bbe">&#9670;&#160;</a></span>pop_from_sender_clamped()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::MessageQueue::pop_from_sender_clamped </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_message.html">Message</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>max_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>sender_id</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>pop_from_sender with the issue #11 clamp: an oversized best matching message stays queued (returns false); non-matching messages never count as oversized and are never consumed. </p>
+<p>pop_from_sender with the issue #11 clamp (issue #296): an oversized best matching message stays queued (returns false); non-matching messages never count as oversized and are never consumed. </p>
 
 </div>
 </div>
@@ -344,13 +483,13 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Push a message into the queue (priority-ordered insertion). </p>
+<p>Insert a message at the tail of the queue. </p>
 <dl class="section return"><dt>Returns</dt><dd>true on success, false if the queue is full. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_message_queue_ab0b722ca481a94d8a138fdd76a4c3922_cgraph.png" border="0" usemap="#astructkernel_1_1_message_queue_ab0b722ca481a94d8a138fdd76a4c3922_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -384,28 +523,28 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a3c2c9d531546276cdc6144f3061e20e1" name="a3c2c9d531546276cdc6144f3061e20e1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3c2c9d531546276cdc6144f3061e20e1">&#9670;&#160;</a></span>count</h2>
+<a id="af5d6dfcc1ab6860052b69b17b156cca5" name="af5d6dfcc1ab6860052b69b17b156cca5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af5d6dfcc1ab6860052b69b17b156cca5">&#9670;&#160;</a></span>count</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::MessageQueue::count</td>
+          <td class="memname">volatile <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::MessageQueue::count</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="afb613c6ecd4c4ce59d8ff90e72967301" name="afb613c6ecd4c4ce59d8ff90e72967301"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#afb613c6ecd4c4ce59d8ff90e72967301">&#9670;&#160;</a></span>head</h2>
+<a id="aaf593bcfcd080aab08217ee22b95da99" name="aaf593bcfcd080aab08217ee22b95da99"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaf593bcfcd080aab08217ee22b95da99">&#9670;&#160;</a></span>head</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::MessageQueue::head</td>
+          <td class="memname">volatile <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::MessageQueue::head</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -423,8 +562,6 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
-
-<p>Protects queue + blocked_senders + owner state. </p>
 
 </div>
 </div>
@@ -454,8 +591,6 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>TCB that owns this queue (set during task creation). </p>
-
 </div>
 </div>
 <a id="a9ceac56ebef91d9906621f0de6d5dda9" name="a9ceac56ebef91d9906621f0de6d5dda9"></a>
@@ -470,18 +605,16 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Bit n set = at least one msg at priority n. </p>
-
 </div>
 </div>
-<a id="a3e66fc273639ced0a5443073577ee363" name="a3e66fc273639ced0a5443073577ee363"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3e66fc273639ced0a5443073577ee363">&#9670;&#160;</a></span>tail</h2>
+<a id="a2bc8d8941a5012e676a5ae717ad8f423" name="a2bc8d8941a5012e676a5ae717ad8f423"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2bc8d8941a5012e676a5ae717ad8f423">&#9670;&#160;</a></span>tail</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::MessageQueue::tail</td>
+          <td class="memname">volatile <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::MessageQueue::tail</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -489,7 +622,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <hr/>The documentation for this struct was generated from the following files:<ul>
-<li>src/kernel/ipc/<a class="el" href="ipc_8hpp_source.html">ipc.hpp</a></li>
+<li>src/kernel/task/<a class="el" href="task_8hpp_source.html">task.hpp</a></li>
 <li>src/kernel/ipc/<a class="el" href="ipc_8cpp.html">ipc.cpp</a></li>
 </ul>
 </div><!-- contents -->

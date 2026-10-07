@@ -9,6 +9,7 @@ var classkernel_1_1log_1_1_dmesg_service =
     [ "operator=", "classkernel_1_1log_1_1_dmesg_service.html#a842d6335e7c2e20c786e40efd56b2b71", null ],
     [ "pop", "classkernel_1_1log_1_1_dmesg_service.html#a0387a8f14b7ef2ad6d8e212aebc30e56", null ],
     [ "push", "classkernel_1_1log_1_1_dmesg_service.html#a4b095d56b14b7c56c75284a04d0eded6", null ],
+    [ "push", "classkernel_1_1log_1_1_dmesg_service.html#a7796467d63a53640120d6eb823c48aa2", null ],
     [ "set_suppressed", "classkernel_1_1log_1_1_dmesg_service.html#a8c259c7ca1b3d7d77418d8f8596d1669", null ],
     [ "size", "classkernel_1_1log_1_1_dmesg_service.html#a27c7a2cdf9f1162d35e082bfa0be6c6c", null ],
     [ "tail_index", "classkernel_1_1log_1_1_dmesg_service.html#a804c4cfb722e82383e6d824343ae9b06", null ],

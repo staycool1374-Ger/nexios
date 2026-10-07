@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -147,13 +147,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacearch.html">arch</a> {</div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span></div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="keyword">struct </span>CpuIdResult {</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> eax; </div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> ebx; </div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> ecx; </div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> edx; </div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> eax; </div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> ebx; </div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> ecx; </div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> edx; </div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>};</div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span></div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="keyword">inline</span> CpuIdResult cpuid(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> leaf, <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> subleaf = 0) {</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="keyword">inline</span> CpuIdResult cpuid(<a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> leaf, <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> subleaf = 0) {</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    CpuIdResult r{};</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <span class="keyword">asm</span> <span class="keyword">volatile</span>(<span class="stringliteral">&quot;cpuid&quot;</span></div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>                 : <span class="stringliteral">&quot;=a&quot;</span>(r.eax), <span class="stringliteral">&quot;=b&quot;</span>(r.ebx), <span class="stringliteral">&quot;=c&quot;</span>(r.ecx), <span class="stringliteral">&quot;=d&quot;</span>(r.edx)</div>
@@ -161,18 +161,18 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    <span class="keywordflow">return</span> r;</div>
 <div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>}</div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span></div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_EDX1_FPU = 1u &lt;&lt; 0;</div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_EDX1_FXSR = 1u &lt;&lt; 24;</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_EDX1_SSE = 1u &lt;&lt; 25;</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_EDX1_SSE2 = 1u &lt;&lt; 26;</div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_ECX1_SSE3 = 1u &lt;&lt; 0;</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_ECX1_SSSE3 = 1u &lt;&lt; 9;</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_ECX1_SSE4_1 = 1u &lt;&lt; 19;</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_ECX1_SSE4_2 = 1u &lt;&lt; 20;</div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_ECX1_RDRAND = 1u &lt;&lt; 30;</div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_ECX1_PCID = 1u &lt;&lt; 17;</div>
-<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_EBX7_RDSEED = 1u &lt;&lt; 18;</div>
-<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_EBX7_INVPCID = 1u &lt;&lt; 10;</div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_EDX1_FPU = 1u &lt;&lt; 0;</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_EDX1_FXSR = 1u &lt;&lt; 24;</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_EDX1_SSE = 1u &lt;&lt; 25;</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_EDX1_SSE2 = 1u &lt;&lt; 26;</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_ECX1_SSE3 = 1u &lt;&lt; 0;</div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_ECX1_SSSE3 = 1u &lt;&lt; 9;</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_ECX1_SSE4_1 = 1u &lt;&lt; 19;</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_ECX1_SSE4_2 = 1u &lt;&lt; 20;</div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_ECX1_RDRAND = 1u &lt;&lt; 30;</div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_ECX1_PCID = 1u &lt;&lt; 17;</div>
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_EBX7_RDSEED = 1u &lt;&lt; 18;</div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_EBX7_INVPCID = 1u &lt;&lt; 10;</div>
 <div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span></div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span><span class="keyword">inline</span> <span class="keywordtype">bool</span> has_fpu() {</div>
 <div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    <span class="keywordflow">return</span> (cpuid(1).edx &amp; CPUID_EDX1_FPU) != 0;</div>
@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span><span class="keyword">inline</span> <span class="keywordtype">bool</span> has_rdseed() {</div>
 <div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>    <span class="keywordflow">return</span> (cpuid(7, 0).ebx &amp; CPUID_EBX7_RDSEED) != 0;</div>
 <div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>}</div>
-<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_ECX1_TSC_DEADLINE = 1u &lt;&lt; 24;</div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> CPUID_ECX1_TSC_DEADLINE = 1u &lt;&lt; 24;</div>
 <div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span><span class="keyword">inline</span> <span class="keywordtype">bool</span> has_tsc_deadline() {</div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>    <span class="keywordflow">return</span> (cpuid(1).ecx &amp; CPUID_ECX1_TSC_DEADLINE) != 0;</div>
 <div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>}</div>
@@ -222,21 +222,21 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00142" name="l00142"></a><span class="lineno">  142</span>    out[12] = <span class="charliteral">&#39;\0&#39;</span>;</div>
 <div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>}</div>
 <div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span></div>
-<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span><span class="keyword">inline</span> <span class="keywordtype">void</span> cpuid_family_model_stepping(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *family_out,</div>
-<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>                                        <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *model_out,</div>
-<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>                                        <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *stepping_out) {</div>
+<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span><span class="keyword">inline</span> <span class="keywordtype">void</span> cpuid_family_model_stepping(<a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *family_out,</div>
+<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>                                        <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *model_out,</div>
+<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>                                        <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *stepping_out) {</div>
 <div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="keywordflow">if</span> (!family_out || !model_out || !stepping_out)</div>
 <div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>        <span class="keywordflow">return</span>;</div>
-<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> eax = cpuid(1).eax;</div>
-<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> stepping = eax &amp; 0xFu;</div>
-<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> base_model = (eax &gt;&gt; 4) &amp; 0xFu;</div>
-<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> base_family = (eax &gt;&gt; 8) &amp; 0xFu;</div>
-<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> ext_model = (eax &gt;&gt; 16) &amp; 0xFu;</div>
-<div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> ext_family = (eax &gt;&gt; 20) &amp; 0xFFu;</div>
-<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> family = base_family;</div>
+<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> eax = cpuid(1).eax;</div>
+<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> stepping = eax &amp; 0xFu;</div>
+<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> base_model = (eax &gt;&gt; 4) &amp; 0xFu;</div>
+<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> base_family = (eax &gt;&gt; 8) &amp; 0xFu;</div>
+<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> ext_model = (eax &gt;&gt; 16) &amp; 0xFu;</div>
+<div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> ext_family = (eax &gt;&gt; 20) &amp; 0xFFu;</div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> family = base_family;</div>
 <div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>    <span class="keywordflow">if</span> (family == 6 || family == 15)</div>
 <div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>        family += ext_family;</div>
-<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> model = base_model;</div>
+<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> model = base_model;</div>
 <div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>    <span class="keywordflow">if</span> (family == 6 || family == 15)</div>
 <div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>        model += ext_model &lt;&lt; 4;</div>
 <div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    *family_out = family;</div>
@@ -247,10 +247,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span><span class="keyword">inline</span> <span class="keywordtype">void</span> cpuid_brand(<span class="keywordtype">char</span> *out) {</div>
 <div class="line"><a id="l00177" name="l00177"></a><span class="lineno">  177</span>    <span class="keywordflow">if</span> (!out)</div>
 <div class="line"><a id="l00178" name="l00178"></a><span class="lineno">  178</span>        <span class="keywordflow">return</span>;</div>
-<div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kBrandBytes = 48;</div>
+<div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> kBrandBytes = 48;</div>
 <div class="line"><a id="l00180" name="l00180"></a><span class="lineno">  180</span>    <span class="keywordflow">if</span> (cpuid(0x80000000).eax &lt; 0x80000004) {</div>
 <div class="line"><a id="l00181" name="l00181"></a><span class="lineno">  181</span>        <span class="keyword">const</span> <span class="keywordtype">char</span> *unknown = <span class="stringliteral">&quot;(unknown)&quot;</span>;</div>
-<div class="line"><a id="l00182" name="l00182"></a><span class="lineno">  182</span>        <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> i = 0;</div>
+<div class="line"><a id="l00182" name="l00182"></a><span class="lineno">  182</span>        <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> i = 0;</div>
 <div class="line"><a id="l00183" name="l00183"></a><span class="lineno">  183</span>        <span class="keywordflow">while</span> (unknown[i] &amp;&amp; i &lt; kBrandBytes) {</div>
 <div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span>            out[i] = unknown[i];</div>
 <div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span>            ++i;</div>
@@ -258,11 +258,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00187" name="l00187"></a><span class="lineno">  187</span>        out[i] = <span class="charliteral">&#39;\0&#39;</span>;</div>
 <div class="line"><a id="l00188" name="l00188"></a><span class="lineno">  188</span>        <span class="keywordflow">return</span>;</div>
 <div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>    }</div>
-<div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>    <span class="keywordflow">for</span> (<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> leaf = 0; leaf &lt; 3; ++leaf) {</div>
+<div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>    <span class="keywordflow">for</span> (<a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> leaf = 0; leaf &lt; 3; ++leaf) {</div>
 <div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>        CpuIdResult r = cpuid(0x80000002 + leaf);</div>
-<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>        <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> <a class="code hl_variable" href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a>[4] = {r.eax, r.ebx, r.ecx, r.edx};</div>
-<div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span>        <span class="keywordflow">for</span> (<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> w = 0; w &lt; 4; ++w) {</div>
-<div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span>            <span class="keywordflow">for</span> (<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> b = 0; b &lt; 4; ++b) {</div>
+<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>        <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> <a class="code hl_variable" href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a>[4] = {r.eax, r.ebx, r.ecx, r.edx};</div>
+<div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span>        <span class="keywordflow">for</span> (<a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> w = 0; w &lt; 4; ++w) {</div>
+<div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span>            <span class="keywordflow">for</span> (<a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> b = 0; b &lt; 4; ++b) {</div>
 <div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span>                out[leaf * 16 + w * 4 + b] =</div>
 <div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>                    <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(<a class="code hl_variable" href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a>[w] &gt;&gt; (b * 8));</div>
 <div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>            }</div>
@@ -273,10 +273,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span> </div>
 <div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>} <span class="comment">// namespace arch</span></div>
 <div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span><span class="comment">// NOLINTEND(bugprone-easily-swappable-parameters)</span></div>
-<div class="ttc" id="akernel_8cpp_html_acf673abd8f09c5656f8e1093ef6ef708"><div class="ttname"><a href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a></div><div class="ttdeci">uint64_t uint64_t uint64_t * regs</div><div class="ttdef"><b>Definition</b> kernel.cpp:1324</div></div>
+<div class="ttc" id="akernel_8cpp_html_acf673abd8f09c5656f8e1093ef6ef708"><div class="ttname"><a href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a></div><div class="ttdeci">uint64_t uint64_t uint64_t * regs</div><div class="ttdef"><b>Definition</b> kernel.cpp:1694</div></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:35</div></div>
+<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

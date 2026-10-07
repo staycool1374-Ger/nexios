@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,23 +121,23 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:abbd06a7cfc2786441dacd37ed6e1cbd0" id="r_abbd06a7cfc2786441dacd37ed6e1cbd0"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abbd06a7cfc2786441dacd37ed6e1cbd0">find_fat32_in_mbr</a> (block::BlockDevice &amp;device, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;partition_lba_out)</td></tr>
+<tr class="memitem:abbd06a7cfc2786441dacd37ed6e1cbd0" id="r_abbd06a7cfc2786441dacd37ed6e1cbd0"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abbd06a7cfc2786441dacd37ed6e1cbd0">find_fat32_in_mbr</a> (block::BlockDevice &amp;device, uint64_t &amp;partition_lba_out)</td></tr>
 <tr class="memdesc:abbd06a7cfc2786441dacd37ed6e1cbd0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find the first FAT32 partition in the MBR.  <br /></td></tr>
-<tr class="memitem:ad96c400fa4e603f70ae0ecd41241cbbf" id="r_ad96c400fa4e603f70ae0ecd41241cbbf"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad96c400fa4e603f70ae0ecd41241cbbf">format_short_name</a> (const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> raw_name[11], char *out, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> out_size)</td></tr>
+<tr class="memitem:ad96c400fa4e603f70ae0ecd41241cbbf" id="r_ad96c400fa4e603f70ae0ecd41241cbbf"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad96c400fa4e603f70ae0ecd41241cbbf">format_short_name</a> (const uint8_t raw_name[11], char *out, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> out_size)</td></tr>
 <tr class="memdesc:ad96c400fa4e603f70ae0ecd41241cbbf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Format a raw 8.3 directory entry name into "NAME.EXT".  <br /></td></tr>
-<tr class="memitem:a26ce5bbfe1af8c3aa136fb2f57743383" id="r_a26ce5bbfe1af8c3aa136fb2f57743383"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a26ce5bbfe1af8c3aa136fb2f57743383">read_dir_entry</a> (Fat32Partition &amp;fs, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> dir_cluster, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;pos, DirEntry &amp;entry)</td></tr>
+<tr class="memitem:a26ce5bbfe1af8c3aa136fb2f57743383" id="r_a26ce5bbfe1af8c3aa136fb2f57743383"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a26ce5bbfe1af8c3aa136fb2f57743383">read_dir_entry</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, uint64_t &amp;pos, DirEntry &amp;entry)</td></tr>
 <tr class="memdesc:a26ce5bbfe1af8c3aa136fb2f57743383"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the next directory entry from a cluster chain.  <br /></td></tr>
-<tr class="memitem:ae85fd58e1ca6c4db8cc25e966936083c" id="r_ae85fd58e1ca6c4db8cc25e966936083c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae85fd58e1ca6c4db8cc25e966936083c">lookup_in_dir</a> (Fat32Partition &amp;fs, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> dir_cluster, const char *name, DirEntry &amp;entry)</td></tr>
+<tr class="memitem:ae85fd58e1ca6c4db8cc25e966936083c" id="r_ae85fd58e1ca6c4db8cc25e966936083c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae85fd58e1ca6c4db8cc25e966936083c">lookup_in_dir</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name, DirEntry &amp;entry)</td></tr>
 <tr class="memdesc:ae85fd58e1ca6c4db8cc25e966936083c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Look up a name in a directory cluster chain.  <br /></td></tr>
-<tr class="memitem:ab2b90c3fd678120edc03be6e4d00a917" id="r_ab2b90c3fd678120edc03be6e4d00a917"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab2b90c3fd678120edc03be6e4d00a917">read_file</a> (Fat32Partition &amp;fs, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> first_cluster, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> file_size, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> offset, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> count, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer)</td></tr>
+<tr class="memitem:ab2b90c3fd678120edc03be6e4d00a917" id="r_ab2b90c3fd678120edc03be6e4d00a917"><td class="memItemLeft">int64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab2b90c3fd678120edc03be6e4d00a917">read_file</a> (Fat32Partition &amp;fs, uint32_t first_cluster, uint32_t file_size, uint64_t offset, uint64_t count, uint8_t *buffer)</td></tr>
 <tr class="memdesc:ab2b90c3fd678120edc03be6e4d00a917"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read data from a file's cluster chain.  <br /></td></tr>
-<tr class="memitem:acaa9ea1e7204014b1ee87d1b18e2786f" id="r_acaa9ea1e7204014b1ee87d1b18e2786f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acaa9ea1e7204014b1ee87d1b18e2786f">free_cluster_chain</a> (Fat32Partition &amp;fs, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> first_cluster)</td></tr>
+<tr class="memitem:acaa9ea1e7204014b1ee87d1b18e2786f" id="r_acaa9ea1e7204014b1ee87d1b18e2786f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acaa9ea1e7204014b1ee87d1b18e2786f">free_cluster_chain</a> (Fat32Partition &amp;fs, uint32_t first_cluster)</td></tr>
 <tr class="memdesc:acaa9ea1e7204014b1ee87d1b18e2786f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free an entire cluster chain starting from a given cluster.  <br /></td></tr>
-<tr class="memitem:a85225d8c344ad98eda0442d972d0eb31" id="r_a85225d8c344ad98eda0442d972d0eb31"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a85225d8c344ad98eda0442d972d0eb31">name_to_short_name</a> (const char *name, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> out[11])</td></tr>
+<tr class="memitem:a85225d8c344ad98eda0442d972d0eb31" id="r_a85225d8c344ad98eda0442d972d0eb31"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a85225d8c344ad98eda0442d972d0eb31">name_to_short_name</a> (const char *name, uint8_t out[11])</td></tr>
 <tr class="memdesc:a85225d8c344ad98eda0442d972d0eb31"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert a filename to 8.3 short name (uppercased, space-padded).  <br /></td></tr>
-<tr class="memitem:aa9f8a2b8e4f80b05086c924c915f3939" id="r_aa9f8a2b8e4f80b05086c924c915f3939"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa9f8a2b8e4f80b05086c924c915f3939">add_dir_entry</a> (Fat32Partition &amp;fs, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> dir_cluster, const DirEntryRaw &amp;raw)</td></tr>
+<tr class="memitem:aa9f8a2b8e4f80b05086c924c915f3939" id="r_aa9f8a2b8e4f80b05086c924c915f3939"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa9f8a2b8e4f80b05086c924c915f3939">add_dir_entry</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const DirEntryRaw &amp;raw)</td></tr>
 <tr class="memdesc:aa9f8a2b8e4f80b05086c924c915f3939"><td class="mdescLeft">&#160;</td><td class="mdescRight">Add a new directory entry to a directory cluster chain.  <br /></td></tr>
-<tr class="memitem:ac33004927f3699ee2b024a9bdd066f60" id="r_ac33004927f3699ee2b024a9bdd066f60"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac33004927f3699ee2b024a9bdd066f60">remove_dir_entry</a> (Fat32Partition &amp;fs, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> dir_cluster, const char *name)</td></tr>
+<tr class="memitem:ac33004927f3699ee2b024a9bdd066f60" id="r_ac33004927f3699ee2b024a9bdd066f60"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac33004927f3699ee2b024a9bdd066f60">remove_dir_entry</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name)</td></tr>
 <tr class="memdesc:ac33004927f3699ee2b024a9bdd066f60"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove a directory entry by name (mark as free).  <br /></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
@@ -155,7 +155,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>dir_cluster</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>dir_cluster</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -190,7 +190,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>partition_lba_out</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>partition_lba_out</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -209,7 +209,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::fat32::format_short_name </td>
           <td>(</td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>raw_name</em></span>[11], </td>
+          <td class="paramtype">const uint8_t</td>          <td class="paramname"><span class="paramname"><em>raw_name</em></span>[11], </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -219,7 +219,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>out_size</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>out_size</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -248,7 +248,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>first_cluster</em></span>&#160;)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>first_cluster</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -277,7 +277,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>dir_cluster</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>dir_cluster</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -317,7 +317,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>out</em></span>[11]&#160;)</td>
+          <td class="paramtype">uint8_t</td>          <td class="paramname"><span class="paramname"><em>out</em></span>[11]&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -346,12 +346,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>dir_cluster</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>dir_cluster</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>pos</em></span>, </td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>pos</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -379,34 +379,34 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::fat32::read_file </td>
+          <td class="memname">int64_t kernel::fat32::read_file </td>
           <td>(</td>
           <td class="paramtype">Fat32Partition &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>first_cluster</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>first_cluster</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>offset</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>offset</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>count</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>count</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>buffer</em></span>&#160;)</td>
+          <td class="paramtype">uint8_t *</td>          <td class="paramname"><span class="paramname"><em>buffer</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -436,7 +436,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>dir_cluster</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>dir_cluster</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>

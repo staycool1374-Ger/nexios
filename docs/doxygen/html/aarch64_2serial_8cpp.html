@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -132,14 +132,190 @@ Include dependency graph for serial.cpp:</div>
 <!-- MAP 0 -->
 </div>
 </div><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:arch_3A_3Akernel_3A_3APhysicalAddress" id="r_arch_3A_3Akernel_3A_3APhysicalAddress"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_physical_address.html">arch::kernel::PhysicalAddress</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical address wrapper — eliminates raw reinterpret_cast for physical memory.  <a href="classarch_1_1kernel_1_1_physical_address.html#details">More...</a><br /></td></tr>
+<tr class="memitem:arch_3A_3Akernel_3A_3AVirtualAddress" id="r_arch_3A_3Akernel_3A_3AVirtualAddress"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_virtual_address.html">arch::kernel::VirtualAddress</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual address wrapper — eliminates raw reinterpret_cast for virtual memory.  <a href="classarch_1_1kernel_1_1_virtual_address.html#details">More...</a><br /></td></tr>
+<tr class="memitem:arch_3A_3Akernel_3A_3APageAddress" id="r_arch_3A_3Akernel_3A_3APageAddress"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_page_address.html">arch::kernel::PageAddress</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page-aligned physical address.  <a href="classarch_1_1kernel_1_1_page_address.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
 <tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
+<tr class="memitem:arch_3A_3Akernel" id="r_arch_3A_3Akernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html">arch::kernel</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
-<tr class="memitem:aa501d94aad5260161a3f0b89ec827e92" id="r_aa501d94aad5260161a3f0b89ec827e92"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa501d94aad5260161a3f0b89ec827e92">UART_BASE</a>&#160;&#160;&#160;((volatile <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *)(<a class="el" href="namespacearch.html#a57c6bb74fdc3ee11eecab91b0142e95b">arch::HHDM_OFFSET</a> + 0x9000000ULL))</td></tr>
+<tr class="memitem:a6cbad48473f7f79a39d324ee988c0d46" id="r_a6cbad48473f7f79a39d324ee988c0d46"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6cbad48473f7f79a39d324ee988c0d46">JARVIS_CONFIG_H</a></td></tr>
+<tr class="memitem:a33fbd7e91d033fa1e09b4ed4de899c02" id="r_a33fbd7e91d033fa1e09b4ed4de899c02"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a33fbd7e91d033fa1e09b4ed4de899c02">CONFIG_VERSION</a>&#160;&#160;&#160;&quot;0.3.10-dev&quot;</td></tr>
+<tr class="memitem:aa1a69b49aa134e3a3c303489bccca599" id="r_aa1a69b49aa134e3a3c303489bccca599"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:acd02978616d37355da2ade116edf7bde" id="r_acd02978616d37355da2ade116edf7bde"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a>&#160;&#160;&#160;3</td></tr>
+<tr class="memitem:ad5dc4c87864bde8898026a5c2e00cb59" id="r_ad5dc4c87864bde8898026a5c2e00cb59"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad5dc4c87864bde8898026a5c2e00cb59">CONFIG_VERSION_PATCH</a>&#160;&#160;&#160;10</td></tr>
+<tr class="memitem:a9a1d7f74c8a2af39bd2b1c5b6f0fe5c5" id="r_a9a1d7f74c8a2af39bd2b1c5b6f0fe5c5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9a1d7f74c8a2af39bd2b1c5b6f0fe5c5">CONFIG_VERSION_NUM</a></td></tr>
+<tr class="memitem:a5a04f42c5fbcca541aeb36ade1671c80" id="r_a5a04f42c5fbcca541aeb36ade1671c80"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5a04f42c5fbcca541aeb36ade1671c80">CONFIG_MAX_TASKS</a>&#160;&#160;&#160;64</td></tr>
+<tr class="memitem:ad199022145d96f66cc77e4b84255faf6" id="r_ad199022145d96f66cc77e4b84255faf6"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a5c72f011f94e171f3516246cb40236d8" id="r_a5c72f011f94e171f3516246cb40236d8"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5c72f011f94e171f3516246cb40236d8">CONFIG_TICK_HZ</a>&#160;&#160;&#160;1000</td></tr>
+<tr class="memitem:a560bec767ff9229f8b02270422f9109f" id="r_a560bec767ff9229f8b02270422f9109f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a560bec767ff9229f8b02270422f9109f">CONFIG_PRIORITY_CEILING</a>&#160;&#160;&#160;127</td></tr>
+<tr class="memitem:abbd8a5d807d37174a80088bb5a34de10" id="r_abbd8a5d807d37174a80088bb5a34de10"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#abbd8a5d807d37174a80088bb5a34de10">CONFIG_PREEMPTION</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:af89c2f0694a0bee460698928f63ee649" id="r_af89c2f0694a0bee460698928f63ee649"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af89c2f0694a0bee460698928f63ee649">CONFIG_IDLE_YIELD</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a17a756a1a1d4b973d32c8a694b3a944d" id="r_a17a756a1a1d4b973d32c8a694b3a944d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a17a756a1a1d4b973d32c8a694b3a944d">CONFIG_TIME_SLICING</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:adae856c7e79cb395586e5ae9ddb5b0cc" id="r_adae856c7e79cb395586e5ae9ddb5b0cc"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adae856c7e79cb395586e5ae9ddb5b0cc">CONFIG_MAX_PRIORITY</a>&#160;&#160;&#160;128</td></tr>
+<tr class="memitem:a1f0f6f5cc7c492c7681e37388246ba52" id="r_a1f0f6f5cc7c492c7681e37388246ba52"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a1f0f6f5cc7c492c7681e37388246ba52">CONFIG_SPORADIC_SERVER_MAX_TASKS</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a31b2fca43fed672f65115a92304475a2" id="r_a31b2fca43fed672f65115a92304475a2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a31b2fca43fed672f65115a92304475a2">CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ad42f27563c0dabc8e3f69851bbbe9f9f" id="r_ad42f27563c0dabc8e3f69851bbbe9f9f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad42f27563c0dabc8e3f69851bbbe9f9f">CONFIG_PML4_USER_COUNT</a>&#160;&#160;&#160;256</td></tr>
+<tr class="memitem:aa345b3c812d23b1ef0f9ae26d6005f64" id="r_aa345b3c812d23b1ef0f9ae26d6005f64"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa345b3c812d23b1ef0f9ae26d6005f64">CONFIG_STACK_SIZE</a>&#160;&#160;&#160;65536</td></tr>
+<tr class="memitem:ae22e3ae7b4c39d839d5e02455b5a3aac" id="r_ae22e3ae7b4c39d839d5e02455b5a3aac"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae22e3ae7b4c39d839d5e02455b5a3aac">CONFIG_MIN_STACK_SIZE</a>&#160;&#160;&#160;4096</td></tr>
+<tr class="memitem:a4ec527a1c0761ea4dfcbf6d079aa7344" id="r_a4ec527a1c0761ea4dfcbf6d079aa7344"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a4ec527a1c0761ea4dfcbf6d079aa7344">CONFIG_HEAP_SIZE</a>&#160;&#160;&#160;16777216</td></tr>
+<tr class="memitem:a6522d992928275f4e75859915cec5b84" id="r_a6522d992928275f4e75859915cec5b84"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6522d992928275f4e75859915cec5b84">CONFIG_MAX_FDS</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:a941c94e5b716a5c776a30efc5e030724" id="r_a941c94e5b716a5c776a30efc5e030724"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a941c94e5b716a5c776a30efc5e030724">CONFIG_MAX_MOUNTS</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:a932ae61284ebb00cdf5c763d479b47fd" id="r_a932ae61284ebb00cdf5c763d479b47fd"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a932ae61284ebb00cdf5c763d479b47fd">CONFIG_MAX_DRIVERS</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:a2c580044f067f2f953c3bdd1471189c6" id="r_a2c580044f067f2f953c3bdd1471189c6"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a2c580044f067f2f953c3bdd1471189c6">CONFIG_MAX_DAEMONS</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:a0c3cfd9ed7438076d36385368e245b04" id="r_a0c3cfd9ed7438076d36385368e245b04"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0c3cfd9ed7438076d36385368e245b04">CONFIG_MAX_PROGRAMS</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:a428c0cbf9ea626d22920e29b3d0f1dd0" id="r_a428c0cbf9ea626d22920e29b3d0f1dd0"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a428c0cbf9ea626d22920e29b3d0f1dd0">CONFIG_IPC_MAX_MSG_SIZE</a>&#160;&#160;&#160;64</td></tr>
+<tr class="memitem:a7a99dd14385cd867ce4a1cdc36633c25" id="r_a7a99dd14385cd867ce4a1cdc36633c25"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a7a99dd14385cd867ce4a1cdc36633c25">CONFIG_IPC_FAST_PAYLOAD_BYTES</a>&#160;&#160;&#160;48</td></tr>
+<tr class="memitem:a338681951d97694dd0b4dc48373d879b" id="r_a338681951d97694dd0b4dc48373d879b"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a338681951d97694dd0b4dc48373d879b">CONFIG_IPC_MAX_QUEUE_MSG</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:a00ddc4bdfc7fab2e08f3a292412ef50c" id="r_a00ddc4bdfc7fab2e08f3a292412ef50c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a00ddc4bdfc7fab2e08f3a292412ef50c">CONFIG_IPC_PRIORITY_LEVELS</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:aece4b6a42c3c42a95b209e6fa873970f" id="r_aece4b6a42c3c42a95b209e6fa873970f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aece4b6a42c3c42a95b209e6fa873970f">CONFIG_IPC_SHMEM_MAX_PAGES</a>&#160;&#160;&#160;64</td></tr>
+<tr class="memitem:a4bb3575fefad83e2c4c0679539f0e1b1" id="r_a4bb3575fefad83e2c4c0679539f0e1b1"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a4bb3575fefad83e2c4c0679539f0e1b1">CONFIG_BUFFER_POOL_PAGES</a>&#160;&#160;&#160;128</td></tr>
+<tr class="memitem:a30115622457b1386f44b9b48cd2cb8f8" id="r_a30115622457b1386f44b9b48cd2cb8f8"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a30115622457b1386f44b9b48cd2cb8f8">CONFIG_MAX_PROCESS_PAGES</a>&#160;&#160;&#160;512</td></tr>
+<tr class="memitem:a19af128470be1231e7e9632aedb1f558" id="r_a19af128470be1231e7e9632aedb1f558"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a19af128470be1231e7e9632aedb1f558">CONFIG_PAGE_TABLE_POOL_SIZE</a>&#160;&#160;&#160;4096</td></tr>
+<tr class="memitem:af5882a79bc71755f7d4425f06d1d2374" id="r_af5882a79bc71755f7d4425f06d1d2374"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af5882a79bc71755f7d4425f06d1d2374">CONFIG_MAX_SIGNAL_HANDLERS</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:aab75aa8a7d758ce4e36fa6be7fbce78b" id="r_aab75aa8a7d758ce4e36fa6be7fbce78b"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aab75aa8a7d758ce4e36fa6be7fbce78b">CONFIG_VFS_MAX_PATH</a>&#160;&#160;&#160;256</td></tr>
+<tr class="memitem:a8125ddc77bbb15588608c8b894dfd1f3" id="r_a8125ddc77bbb15588608c8b894dfd1f3"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a8125ddc77bbb15588608c8b894dfd1f3">CONFIG_TASK_NAME_LEN</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:aa6208ddf66cdb8a09ee562e3f461be1c" id="r_aa6208ddf66cdb8a09ee562e3f461be1c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa6208ddf66cdb8a09ee562e3f461be1c">CONFIG_SYNC_MAX_WAITERS</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:a15f72011bdc6888b3a6aef544acc4604" id="r_a15f72011bdc6888b3a6aef544acc4604"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a15f72011bdc6888b3a6aef544acc4604">CONFIG_DMESG_CAPACITY</a>&#160;&#160;&#160;4096</td></tr>
+<tr class="memitem:acbcfbe0c56cbf62799c4a0ea83bdbd0e" id="r_acbcfbe0c56cbf62799c4a0ea83bdbd0e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#acbcfbe0c56cbf62799c4a0ea83bdbd0e">CONFIG_MEMPOOL_NUM_POOLS</a>&#160;&#160;&#160;9</td></tr>
+<tr class="memitem:a0b9c9423efd7e8b9bd77eea32bac9c93" id="r_a0b9c9423efd7e8b9bd77eea32bac9c93"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0b9c9423efd7e8b9bd77eea32bac9c93">CONFIG_MEMPOOL_BLOCK_SIZES</a>&#160;&#160;&#160;16, 32, 64, 128, 256, 512, 1024, 2048, 4096</td></tr>
+<tr class="memitem:ae77f8d4c41624b7b48deac1589673876" id="r_ae77f8d4c41624b7b48deac1589673876"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae77f8d4c41624b7b48deac1589673876">CONFIG_MEMPOOL_BLOCK_COUNTS</a>&#160;&#160;&#160;256, 128, 64, 32, 16, 8, 4, 2, 1</td></tr>
+<tr class="memitem:a92c54e3597ddb43ce61b8bcde9052bc1" id="r_a92c54e3597ddb43ce61b8bcde9052bc1"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a92c54e3597ddb43ce61b8bcde9052bc1">CONFIG_INCLUDE_SYS_YIELD</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:aa2a526b69a2d49b9eaef83c60f27512e" id="r_aa2a526b69a2d49b9eaef83c60f27512e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa2a526b69a2d49b9eaef83c60f27512e">CONFIG_INCLUDE_SYS_EXIT</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a68ed53fd6b95aac6db3e44695818bf0c" id="r_a68ed53fd6b95aac6db3e44695818bf0c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a68ed53fd6b95aac6db3e44695818bf0c">CONFIG_INCLUDE_SYS_FORK</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a0b5fcae55cc325a4a22a0fbbaaa943c9" id="r_a0b5fcae55cc325a4a22a0fbbaaa943c9"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0b5fcae55cc325a4a22a0fbbaaa943c9">CONFIG_INCLUDE_SYS_CLONE</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a2f9f787a7a26264de01ef2fbe8d5246d" id="r_a2f9f787a7a26264de01ef2fbe8d5246d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a2f9f787a7a26264de01ef2fbe8d5246d">CONFIG_INCLUDE_SYS_EXECVE</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a0eb00eae76043356257ebf25c7417e4e" id="r_a0eb00eae76043356257ebf25c7417e4e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0eb00eae76043356257ebf25c7417e4e">CONFIG_INCLUDE_SYS_WAITPID</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a60e23f6d80990d3a8e2588f4822be026" id="r_a60e23f6d80990d3a8e2588f4822be026"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a60e23f6d80990d3a8e2588f4822be026">CONFIG_INCLUDE_SYS_NANOSLEEP</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:aed16199ac0dbff8f53cc67ca95ce527a" id="r_aed16199ac0dbff8f53cc67ca95ce527a"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aed16199ac0dbff8f53cc67ca95ce527a">CONFIG_INCLUDE_SYS_GETPID</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ab9be880ba29de9c0c3a8cf33647da623" id="r_ab9be880ba29de9c0c3a8cf33647da623"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab9be880ba29de9c0c3a8cf33647da623">CONFIG_INCLUDE_SYS_GETPPID</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ae2a0246e0087b7cb06ed0468c6d1b455" id="r_ae2a0246e0087b7cb06ed0468c6d1b455"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae2a0246e0087b7cb06ed0468c6d1b455">CONFIG_INCLUDE_SYS_SETPRIO</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a53596d900f72f47729b2ae89045f28da" id="r_a53596d900f72f47729b2ae89045f28da"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a53596d900f72f47729b2ae89045f28da">CONFIG_INCLUDE_SYS_GETPRIO</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ae7247a6d5878506991c3a20d12d530ca" id="r_ae7247a6d5878506991c3a20d12d530ca"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae7247a6d5878506991c3a20d12d530ca">CONFIG_INCLUDE_SYS_SENDSYNC</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a837a901b5f4ca7bb74e83d20bac4ece1" id="r_a837a901b5f4ca7bb74e83d20bac4ece1"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a837a901b5f4ca7bb74e83d20bac4ece1">CONFIG_INCLUDE_SYS_RECV</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ab118f80a4ff475810c6710a4e748f16e" id="r_ab118f80a4ff475810c6710a4e748f16e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab118f80a4ff475810c6710a4e748f16e">CONFIG_INCLUDE_SYS_REPLY</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a0c463c0a261b2aded2e61cc266e61b38" id="r_a0c463c0a261b2aded2e61cc266e61b38"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0c463c0a261b2aded2e61cc266e61b38">CONFIG_INCLUDE_SYS_NOTIFY</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:af5831aaa5e81ee84cb1eeeee5e1f3119" id="r_af5831aaa5e81ee84cb1eeeee5e1f3119"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af5831aaa5e81ee84cb1eeeee5e1f3119">CONFIG_INCLUDE_SYS_NOTIFY_WAIT</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a2f6ad6284aaa1ba091cf06fe6f67d088" id="r_a2f6ad6284aaa1ba091cf06fe6f67d088"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a2f6ad6284aaa1ba091cf06fe6f67d088">CONFIG_INCLUDE_SYS_EVENT_POST</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a2485c748a6ebc8b2a808f594ec4fba23" id="r_a2485c748a6ebc8b2a808f594ec4fba23"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a2485c748a6ebc8b2a808f594ec4fba23">CONFIG_INCLUDE_SYS_EVENT_WAIT</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a662466b5f5973ab8f89c3c80704457f5" id="r_a662466b5f5973ab8f89c3c80704457f5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a662466b5f5973ab8f89c3c80704457f5">CONFIG_INCLUDE_SYS_BRK</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ae39d19d4345a0e8f6ce05001a00cc0a7" id="r_ae39d19d4345a0e8f6ce05001a00cc0a7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae39d19d4345a0e8f6ce05001a00cc0a7">CONFIG_INCLUDE_SYS_MMAP</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a6349c45c64602c48c0c5087a6027ffc0" id="r_a6349c45c64602c48c0c5087a6027ffc0"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6349c45c64602c48c0c5087a6027ffc0">CONFIG_INCLUDE_SYS_MUNMAP</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a6de0e5dcd80bc2cedef79821b7ac37e9" id="r_a6de0e5dcd80bc2cedef79821b7ac37e9"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6de0e5dcd80bc2cedef79821b7ac37e9">CONFIG_INCLUDE_SYS_OPEN</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:acad977a4de3bb6eb2369ae703b44ff37" id="r_acad977a4de3bb6eb2369ae703b44ff37"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#acad977a4de3bb6eb2369ae703b44ff37">CONFIG_INCLUDE_SYS_CLOSE</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a66781d74f2853fef8bc4b79908b24ac8" id="r_a66781d74f2853fef8bc4b79908b24ac8"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a66781d74f2853fef8bc4b79908b24ac8">CONFIG_INCLUDE_SYS_READ</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:acd15b74bb6f9487cc4bc12952d8d7257" id="r_acd15b74bb6f9487cc4bc12952d8d7257"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#acd15b74bb6f9487cc4bc12952d8d7257">CONFIG_INCLUDE_SYS_WRITE</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:adde30c382e97aef535a40630b631b80f" id="r_adde30c382e97aef535a40630b631b80f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adde30c382e97aef535a40630b631b80f">CONFIG_INCLUDE_SYS_SEEK</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:aefa28fad9028e06240df57a535e36f5c" id="r_aefa28fad9028e06240df57a535e36f5c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aefa28fad9028e06240df57a535e36f5c">CONFIG_INCLUDE_SYS_IOCTL</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:acd0ca92afe87cb20eac4bb3ff71e4322" id="r_acd0ca92afe87cb20eac4bb3ff71e4322"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#acd0ca92afe87cb20eac4bb3ff71e4322">CONFIG_INCLUDE_SYS_STAT</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a27810d82f14dd0845d2c9f7d1c4c4544" id="r_a27810d82f14dd0845d2c9f7d1c4c4544"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a27810d82f14dd0845d2c9f7d1c4c4544">CONFIG_INCLUDE_SYS_MKDIR</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a57f3b2807b05bf6784f193a3c985c54e" id="r_a57f3b2807b05bf6784f193a3c985c54e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a57f3b2807b05bf6784f193a3c985c54e">CONFIG_INCLUDE_SYS_UNLINK</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a2d50579916fbc84e4db5af66cd299aaf" id="r_a2d50579916fbc84e4db5af66cd299aaf"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a2d50579916fbc84e4db5af66cd299aaf">CONFIG_INCLUDE_SYS_RENAME</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a8d542b79c6b35331ae95d0341e6d9ca6" id="r_a8d542b79c6b35331ae95d0341e6d9ca6"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a8d542b79c6b35331ae95d0341e6d9ca6">CONFIG_INCLUDE_SYS_MOUNT</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ade6fddc937b474020a792b7cb2858bed" id="r_ade6fddc937b474020a792b7cb2858bed"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ade6fddc937b474020a792b7cb2858bed">CONFIG_INCLUDE_SYS_UMOUNT</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:aa9a2c921cb959838f5255d107e8fb22d" id="r_aa9a2c921cb959838f5255d107e8fb22d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa9a2c921cb959838f5255d107e8fb22d">CONFIG_INCLUDE_SYS_REBOOT</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ad5198f372947bd8e93d7fe73a1fd960d" id="r_ad5198f372947bd8e93d7fe73a1fd960d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad5198f372947bd8e93d7fe73a1fd960d">CONFIG_INCLUDE_SYS_HALT</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:adb1a44e12231914498173d371ade590f" id="r_adb1a44e12231914498173d371ade590f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adb1a44e12231914498173d371ade590f">CONFIG_SYSCALL_COUNT</a></td></tr>
+<tr class="memitem:a95ce8c171faeb012773cd4f72a0f2935" id="r_a95ce8c171faeb012773cd4f72a0f2935"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a95ce8c171faeb012773cd4f72a0f2935">CONFIG_HAS_MPU</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a835305cb9a116e1c539f8f2a6b880848" id="r_a835305cb9a116e1c539f8f2a6b880848"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a835305cb9a116e1c539f8f2a6b880848">CONFIG_HAS_HPET</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a700f59f32dcea3aeefaee7407867065a" id="r_a700f59f32dcea3aeefaee7407867065a"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a700f59f32dcea3aeefaee7407867065a">CONFIG_HRT_NS_WIDTH</a>&#160;&#160;&#160;64</td></tr>
+<tr class="memitem:a0600363aeeff028f814836fef3e54621" id="r_a0600363aeeff028f814836fef3e54621"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0600363aeeff028f814836fef3e54621">CONFIG_HRT_CALIBRATION_RETRIES</a>&#160;&#160;&#160;12</td></tr>
+<tr class="memitem:a05b47d11f3b104e148d4aace9059e921" id="r_a05b47d11f3b104e148d4aace9059e921"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a05b47d11f3b104e148d4aace9059e921">CONFIG_HRT_CALIBRATION_TIMEOUT_MS</a>&#160;&#160;&#160;500</td></tr>
+<tr class="memitem:a82e6d056624722ccc8199ed26d77f752" id="r_a82e6d056624722ccc8199ed26d77f752"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a82e6d056624722ccc8199ed26d77f752">CONFIG_HRT_SOURCE_PREFERENCE</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:aac781da257db7b6183fac86fc89095c5" id="r_aac781da257db7b6183fac86fc89095c5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aac781da257db7b6183fac86fc89095c5">CONFIG_PRIORITY_CEILING_PROTOCOL</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a9cd0e684a26b0270d442310ccd4330da" id="r_a9cd0e684a26b0270d442310ccd4330da"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9cd0e684a26b0270d442310ccd4330da">CONFIG_MAX_HELD_CEILINGS</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:ab7f91f26b4b36eff22a2b15ea5405621" id="r_ab7f91f26b4b36eff22a2b15ea5405621"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab7f91f26b4b36eff22a2b15ea5405621">CONFIG_MAX_PER_TASK_OBJECTS</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:ab545c44f329445003c7b23cb29d0a0e1" id="r_ab545c44f329445003c7b23cb29d0a0e1"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab545c44f329445003c7b23cb29d0a0e1">CONFIG_CSLOT_COUNT</a>&#160;&#160;&#160;64</td></tr>
+<tr class="memitem:abfb6b2ca517d4c58ad5d095d0f2fc66d" id="r_abfb6b2ca517d4c58ad5d095d0f2fc66d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#abfb6b2ca517d4c58ad5d095d0f2fc66d">CONFIG_CAP_MAX_DEPTH</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:ac78ec7ca9369e6f83fcf17effcd9103c" id="r_ac78ec7ca9369e6f83fcf17effcd9103c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac78ec7ca9369e6f83fcf17effcd9103c">CONFIG_CAP_MAX_UNTYPED</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:a6828726f88801e27e69ad4cb06a9eb37" id="r_a6828726f88801e27e69ad4cb06a9eb37"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6828726f88801e27e69ad4cb06a9eb37">CONFIG_CAP_MAX_MMIO</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:a6778865aa865b535c1b34a9ace0e3e0d" id="r_a6778865aa865b535c1b34a9ace0e3e0d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6778865aa865b535c1b34a9ace0e3e0d">CONFIG_CAP_MAX_IRQ</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:a3cd7a7aadd0941856a01b3894cb8c5d6" id="r_a3cd7a7aadd0941856a01b3894cb8c5d6"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3cd7a7aadd0941856a01b3894cb8c5d6">CONFIG_CAP_MAX_MSIX</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a7fce892edccb98126d05ce0c305f1bff" id="r_a7fce892edccb98126d05ce0c305f1bff"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a7fce892edccb98126d05ce0c305f1bff">CONFIG_CAP_MAX_WDOG</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a3dd102ae8468ee9fcc97b63304c59228" id="r_a3dd102ae8468ee9fcc97b63304c59228"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3dd102ae8468ee9fcc97b63304c59228">CONFIG_WATCHDOG_GRACE_TICKS</a>&#160;&#160;&#160;500</td></tr>
+<tr class="memitem:abaf10c78be3b51994a5d90814c390631" id="r_abaf10c78be3b51994a5d90814c390631"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#abaf10c78be3b51994a5d90814c390631">CONFIG_IOPB_MAX_TASKS</a>&#160;&#160;&#160;4</td></tr>
+<tr class="memitem:a4fdd70ee80f077b4a19d2824aac2517f" id="r_a4fdd70ee80f077b4a19d2824aac2517f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a4fdd70ee80f077b4a19d2824aac2517f">CONFIG_IOPB_MAX_GRANTS</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a1105a51187e5531d9b7090db548f48c2" id="r_a1105a51187e5531d9b7090db548f48c2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a1105a51187e5531d9b7090db548f48c2">CONFIG_CAP_MAX_MMIO_MAPS</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a5e540b0b74aced33f31700482c8654b9" id="r_a5e540b0b74aced33f31700482c8654b9"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5e540b0b74aced33f31700482c8654b9">CONFIG_USER_MMIO_VA_BASE</a>&#160;&#160;&#160;0x61000000ULL</td></tr>
+<tr class="memitem:a0ff10bacfb6e11a5da4a904a75232081" id="r_a0ff10bacfb6e11a5da4a904a75232081"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0ff10bacfb6e11a5da4a904a75232081">CONFIG_USER_MMIO_REGION_SIZE</a>&#160;&#160;&#160;0x200000ULL</td></tr>
+<tr class="memitem:a3062b6e90047fbde5b9f3562e1a728b0" id="r_a3062b6e90047fbde5b9f3562e1a728b0"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3062b6e90047fbde5b9f3562e1a728b0">CONFIG_CAP_MAX_FRAME_MAPS</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:af0283e1c9144b2b00b2ecd9d6d9525d8" id="r_af0283e1c9144b2b00b2ecd9d6d9525d8"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af0283e1c9144b2b00b2ecd9d6d9525d8">CONFIG_CAP_MAX_DEATH_WATCHES</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:ae789582adc0801a733e0efbe633ed200" id="r_ae789582adc0801a733e0efbe633ed200"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae789582adc0801a733e0efbe633ed200">CONFIG_DEBUG_MAX_STOPS</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:a728257b7b9189815e8fd31b9244dabf2" id="r_a728257b7b9189815e8fd31b9244dabf2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a728257b7b9189815e8fd31b9244dabf2">CONFIG_DEBUG_MAX_BREAKS</a>&#160;&#160;&#160;64</td></tr>
+<tr class="memitem:a099e380af1009e729fb8652beb22adb5" id="r_a099e380af1009e729fb8652beb22adb5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a099e380af1009e729fb8652beb22adb5">CONFIG_CAP_MAX_PAGER_CLIENTS</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a79634fa97a61d28d0ecd1f0004dab5f7" id="r_a79634fa97a61d28d0ecd1f0004dab5f7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a79634fa97a61d28d0ecd1f0004dab5f7">CONFIG_PAGER_FAULT_TIMEOUT_TICKS</a>&#160;&#160;&#160;1000</td></tr>
+<tr class="memitem:a0e8bd4d6885656c82396aadaf5d70290" id="r_a0e8bd4d6885656c82396aadaf5d70290"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0e8bd4d6885656c82396aadaf5d70290">CONFIG_PAGER_MAX_PAGES_PER_FAULT</a>&#160;&#160;&#160;4</td></tr>
+<tr class="memitem:a11d98a8c373874a2a405ca91f7d3c2ad" id="r_a11d98a8c373874a2a405ca91f7d3c2ad"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a11d98a8c373874a2a405ca91f7d3c2ad">CONFIG_PAGER_MAX_COMMITTED_PAGES</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:a18dd1e83705e019cadcdbc32c126c074" id="r_a18dd1e83705e019cadcdbc32c126c074"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a18dd1e83705e019cadcdbc32c126c074">CONFIG_USER_SHM_VA_BASE</a>&#160;&#160;&#160;0x62000000ULL</td></tr>
+<tr class="memitem:a7bb0eb267e80eb5d93163869b66b3bdd" id="r_a7bb0eb267e80eb5d93163869b66b3bdd"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a7bb0eb267e80eb5d93163869b66b3bdd">CONFIG_USER_SHM_REGION_SIZE</a>&#160;&#160;&#160;0x200000ULL</td></tr>
+<tr class="memitem:acac6c5abd4a9ddfdcfc8eed50e539d7e" id="r_acac6c5abd4a9ddfdcfc8eed50e539d7e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#acac6c5abd4a9ddfdcfc8eed50e539d7e">CONFIG_CAP_MAX_IOMMU</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:a72a0869a335f7c89656345e46a49a62d" id="r_a72a0869a335f7c89656345e46a49a62d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a72a0869a335f7c89656345e46a49a62d">CONFIG_IOMMU_MAX_DOMAINS</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a69e33b593b806e824e8d180143561fc4" id="r_a69e33b593b806e824e8d180143561fc4"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a69e33b593b806e824e8d180143561fc4">CONFIG_IOMMU_MAX_MAPPINGS</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:aa12295ff5adce28efb90a6448a99db90" id="r_aa12295ff5adce28efb90a6448a99db90"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa12295ff5adce28efb90a6448a99db90">CONFIG_IOMMU_MAX_BUSES</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:a61a5662bf5a217b097fec80856c09edc" id="r_a61a5662bf5a217b097fec80856c09edc"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a61a5662bf5a217b097fec80856c09edc">CONFIG_IOMMU_MMIO_BASE</a>&#160;&#160;&#160;0xFED90000ULL</td></tr>
+<tr class="memitem:ac3a9a02fb54f60642275bc88981958e2" id="r_ac3a9a02fb54f60642275bc88981958e2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac3a9a02fb54f60642275bc88981958e2">CONFIG_IOMMU_MAX_KERNEL_DEVICES</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:ad16f6b64a36d83cce633b6c7784a82df" id="r_ad16f6b64a36d83cce633b6c7784a82df"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad16f6b64a36d83cce633b6c7784a82df">CONFIG_MUTEX_PIP</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a7cf9db7fcc2c0bf9b1bb475b2bad3d93" id="r_a7cf9db7fcc2c0bf9b1bb475b2bad3d93"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a7cf9db7fcc2c0bf9b1bb475b2bad3d93">CONFIG_SEMAPHORE_PIP</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a08b1decd478ffc1359ac5e6385741d61" id="r_a08b1decd478ffc1359ac5e6385741d61"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a08b1decd478ffc1359ac5e6385741d61">CONFIG_QUEUE_PIP</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a804b850b1e890968b4dfb1f1004ee3b0" id="r_a804b850b1e890968b4dfb1f1004ee3b0"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a804b850b1e890968b4dfb1f1004ee3b0">CONFIG_PREEMPTION_LATENCY_MAX_CYCLES</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a5412009bb80bc2aac94e2a2121f9a02f" id="r_a5412009bb80bc2aac94e2a2121f9a02f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5412009bb80bc2aac94e2a2121f9a02f">CONFIG_KSTACK_WINDOW_BASE</a>&#160;&#160;&#160;0xFFFF900000000000ULL</td></tr>
+<tr class="memitem:a0bef3e0da616c80c28e1f7671b03401d" id="r_a0bef3e0da616c80c28e1f7671b03401d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0bef3e0da616c80c28e1f7671b03401d">CONFIG_KSTACK_WINDOW_SIZE</a>&#160;&#160;&#160;0x1000000ULL</td></tr>
+<tr class="memitem:a2526193a2bf2cb59e84e1d640af1a29f" id="r_a2526193a2bf2cb59e84e1d640af1a29f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a2526193a2bf2cb59e84e1d640af1a29f">CONFIG_KERNEL_PRIV_DATA_BASE</a>&#160;&#160;&#160;0xFFFFA00000000000ULL</td></tr>
+<tr class="memitem:ac1f84c6931f570beff33eb70e30cbe4e" id="r_ac1f84c6931f570beff33eb70e30cbe4e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac1f84c6931f570beff33eb70e30cbe4e">CONFIG_STACK_SIZE_TABLE</a>&#160;&#160;&#160;{65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536}</td></tr>
+<tr class="memitem:ab44671d00a3c95ec864336d0fd40979d" id="r_ab44671d00a3c95ec864336d0fd40979d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab44671d00a3c95ec864336d0fd40979d">CONFIG_ZOMBIE_STARVATION_LIMIT</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:aac30e89938cc6eef8d1516f75c2c3fc7" id="r_aac30e89938cc6eef8d1516f75c2c3fc7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aac30e89938cc6eef8d1516f75c2c3fc7">CONFIG_IRQ_LATENCY_HISTOGRAM</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a40b63eab36f99de494ff321df05721a4" id="r_a40b63eab36f99de494ff321df05721a4"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a40b63eab36f99de494ff321df05721a4">CONFIG_IRQ_LATENCY_MAX_NS</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:afff88f0519de5cce9a9edfb88c8a5052" id="r_afff88f0519de5cce9a9edfb88c8a5052"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#afff88f0519de5cce9a9edfb88c8a5052">CONFIG_USE_APIC_TIMER</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a34c264bdfb52e2047d5fd32486834070" id="r_a34c264bdfb52e2047d5fd32486834070"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a34c264bdfb52e2047d5fd32486834070">CONFIG_THREADED_IRQS</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a03a2952bcbbf877610fd24374cef4021" id="r_a03a2952bcbbf877610fd24374cef4021"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a03a2952bcbbf877610fd24374cef4021">CONFIG_MAX_THREADED_IRQS</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:af9d0f7c02c48d8057773b2045f011981" id="r_af9d0f7c02c48d8057773b2045f011981"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af9d0f7c02c48d8057773b2045f011981">CONFIG_IDLE_HOOK</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a836435ca7dbe895d16b9f942e7a00b43" id="r_a836435ca7dbe895d16b9f942e7a00b43"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a836435ca7dbe895d16b9f942e7a00b43">CONFIG_TICK_HOOK</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a5ed865b603ba7ee04437c1cc28ce89fa" id="r_a5ed865b603ba7ee04437c1cc28ce89fa"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5ed865b603ba7ee04437c1cc28ce89fa">CONFIG_STACK_OVERFLOW_HOOK</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ad0e38363c716013f000005b049f48338" id="r_ad0e38363c716013f000005b049f48338"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad0e38363c716013f000005b049f48338">CONFIG_CANARY_GUARD</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a58fca7bf098e6e35cc3151a9389b6105" id="r_a58fca7bf098e6e35cc3151a9389b6105"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a58fca7bf098e6e35cc3151a9389b6105">CONFIG_CANARY_SAMPLE_TICKS</a>&#160;&#160;&#160;64</td></tr>
+<tr class="memitem:a90a087504d57cc28a18745a08011e315" id="r_a90a087504d57cc28a18745a08011e315"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a90a087504d57cc28a18745a08011e315">CONFIG_SMEP</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a0416a4b1c68b556f00af37b87fdd0742" id="r_a0416a4b1c68b556f00af37b87fdd0742"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0416a4b1c68b556f00af37b87fdd0742">CONFIG_SMAP</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:ae4a9bca121aaa8acc25574a4cc3abbcf" id="r_ae4a9bca121aaa8acc25574a4cc3abbcf"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae4a9bca121aaa8acc25574a4cc3abbcf">CONFIG_PCID</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:aefd329133bd76dfd99be9cf6df1d57ed" id="r_aefd329133bd76dfd99be9cf6df1d57ed"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aefd329133bd76dfd99be9cf6df1d57ed">CONFIG_PAN</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:aaa67bf023e8838df96aa8ec37674ee90" id="r_aaa67bf023e8838df96aa8ec37674ee90"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aaa67bf023e8838df96aa8ec37674ee90">CONFIG_OOM_HOOK</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:aed09cfec33d0062ef3e3e9b872f17cc2" id="r_aed09cfec33d0062ef3e3e9b872f17cc2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aed09cfec33d0062ef3e3e9b872f17cc2">CONFIG_OOM_POLICY</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:ab4d048869d4222593c9b0691268d36bf" id="r_ab4d048869d4222593c9b0691268d36bf"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab4d048869d4222593c9b0691268d36bf">CONFIG_STATIC_POOLS_ONLY</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a9cbca81eabffa4f1a76bc6230845e648" id="r_a9cbca81eabffa4f1a76bc6230845e648"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9cbca81eabffa4f1a76bc6230845e648">CONFIG_MEMORY_BUDGET</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a5f748bfe245b9c25fb556172a5e4f2e5" id="r_a5f748bfe245b9c25fb556172a5e4f2e5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5f748bfe245b9c25fb556172a5e4f2e5">CONFIG_INIT_HOOK</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:afd4dfde1bb949f7e03c90dea7fe274f9" id="r_afd4dfde1bb949f7e03c90dea7fe274f9"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#afd4dfde1bb949f7e03c90dea7fe274f9">CONFIG_SPORADIC_SERVER_DEADLINE_HOOK</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ad7f0edb3b1228f6361d92c6cfa81fc30" id="r_ad7f0edb3b1228f6361d92c6cfa81fc30"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad7f0edb3b1228f6361d92c6cfa81fc30">CONFIG_DEADLINE_MISS_DETECTION</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a5347bb9dbf512963efd21650e2d3961c" id="r_a5347bb9dbf512963efd21650e2d3961c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5347bb9dbf512963efd21650e2d3961c">CONFIG_WCET_OVERRUN_DETECTION</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:afa71e737433cca1a4223e904afcf0a9c" id="r_afa71e737433cca1a4223e904afcf0a9c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#afa71e737433cca1a4223e904afcf0a9c">CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a5455f1222d9acfec0d65194205357b96" id="r_a5455f1222d9acfec0d65194205357b96"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5455f1222d9acfec0d65194205357b96">CONFIG_DM_PRIO_MIN</a>&#160;&#160;&#160;2</td></tr>
+<tr class="memitem:a43d9dab37b65e95fa2ac5777a4de4d95" id="r_a43d9dab37b65e95fa2ac5777a4de4d95"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a43d9dab37b65e95fa2ac5777a4de4d95">CONFIG_DM_PRIO_MAX</a>&#160;&#160;&#160;120</td></tr>
+<tr class="memitem:a9a7951d5ba3d567a2f0e372fd5540a44" id="r_a9a7951d5ba3d567a2f0e372fd5540a44"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9a7951d5ba3d567a2f0e372fd5540a44">CONFIG_DEADLINE_MONITOR_TASK</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a515a1e55a71216c50a7d94659c372998" id="r_a515a1e55a71216c50a7d94659c372998"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a515a1e55a71216c50a7d94659c372998">CONFIG_DEADLINE_ACTION</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a3163b31e3ebb9db40fdf2093b6edf7a5" id="r_a3163b31e3ebb9db40fdf2093b6edf7a5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3163b31e3ebb9db40fdf2093b6edf7a5">CONFIG_WATCHDOG_ACTION</a>&#160;&#160;&#160;3</td></tr>
+<tr class="memitem:a3d316041cb01da0e73130da4b0eab404" id="r_a3d316041cb01da0e73130da4b0eab404"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3d316041cb01da0e73130da4b0eab404">CONFIG_ADMISSION_SELFTEST</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:adbfd2982bfd8abcdb392578155755823" id="r_adbfd2982bfd8abcdb392578155755823"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adbfd2982bfd8abcdb392578155755823">CONFIG_DEADLINE_MONITOR_PID</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:ac774633c3e66e4033b61258ca2795155" id="r_ac774633c3e66e4033b61258ca2795155"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac774633c3e66e4033b61258ca2795155">CONFIG_BOOT_BUDGET_MS</a>&#160;&#160;&#160;30000</td></tr>
+<tr class="memitem:af7dbe515e22f94aa374530a637f8418c" id="r_af7dbe515e22f94aa374530a637f8418c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af7dbe515e22f94aa374530a637f8418c">CONFIG_ASSERT</a>(expr)</td></tr>
+<tr class="memitem:ab43611a2b8491153b305ae9408b050c9" id="r_ab43611a2b8491153b305ae9408b050c9"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab43611a2b8491153b305ae9408b050c9">CONFIG_IDLE_MONITOR_ENABLED</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:aa68a58c6e8b6408d8c994b31b10d38bf" id="r_aa68a58c6e8b6408d8c994b31b10d38bf"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa68a58c6e8b6408d8c994b31b10d38bf">CONFIG_IDLE_MONITOR_STACK_CHECK</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:abbcac397ffaedef7a642670de9fb7d67" id="r_abbcac397ffaedef7a642670de9fb7d67"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#abbcac397ffaedef7a642670de9fb7d67">CONFIG_IDLE_MONITOR_UTIL</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a6b9f06979978d13d3c948aa5b07024a6" id="r_a6b9f06979978d13d3c948aa5b07024a6"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6b9f06979978d13d3c948aa5b07024a6">CONFIG_IDLE_MONITOR_STALL</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a80410ca48d3e8f2f8754609424372afb" id="r_a80410ca48d3e8f2f8754609424372afb"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a80410ca48d3e8f2f8754609424372afb">CONFIG_IDLE_MONITOR_CHUNK</a>&#160;&#160;&#160;4</td></tr>
+<tr class="memitem:a723655babaed8e0cdd6c180e09e167e0" id="r_a723655babaed8e0cdd6c180e09e167e0"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a723655babaed8e0cdd6c180e09e167e0">CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS</a>&#160;&#160;&#160;5000</td></tr>
+<tr class="memitem:a70c975ce9dd99a1a8523471d660e115b" id="r_a70c975ce9dd99a1a8523471d660e115b"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a70c975ce9dd99a1a8523471d660e115b">CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS</a>&#160;&#160;&#160;1000</td></tr>
+<tr class="memitem:a0db72da672f2a6331a7b4f5c5df57e48" id="r_a0db72da672f2a6331a7b4f5c5df57e48"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0db72da672f2a6331a7b4f5c5df57e48">CONFIG_IDLE_MONITOR_MEM</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a761b3428b7e9e155f5fbf980446bac00" id="r_a761b3428b7e9e155f5fbf980446bac00"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a761b3428b7e9e155f5fbf980446bac00">CONFIG_IDLE_MONITOR_MEM_PASSES</a>&#160;&#160;&#160;3</td></tr>
+<tr class="memitem:aa7520ddb3e054abd0e900890d047aa51" id="r_aa7520ddb3e054abd0e900890d047aa51"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa7520ddb3e054abd0e900890d047aa51">CONFIG_IDLE_MONITOR_MEM_MIN_OPS</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:aa501d94aad5260161a3f0b89ec827e92" id="r_aa501d94aad5260161a3f0b89ec827e92"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa501d94aad5260161a3f0b89ec827e92">UART_BASE</a>&#160;&#160;&#160;((volatile uint32_t *)(<a class="el" href="namespacearch.html#a57c6bb74fdc3ee11eecab91b0142e95b">arch::HHDM_OFFSET</a> + 0x9000000ULL))</td></tr>
 <tr class="memitem:aeecfbcfb2237b106811fbaa70a0f16bb" id="r_aeecfbcfb2237b106811fbaa70a0f16bb"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aeecfbcfb2237b106811fbaa70a0f16bb">UART_DR</a>&#160;&#160;&#160;0x000</td></tr>
 <tr class="memitem:a6fb2c8bd5d9982f95334a59729c83cf1" id="r_a6fb2c8bd5d9982f95334a59729c83cf1"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6fb2c8bd5d9982f95334a59729c83cf1">UART_FR</a>&#160;&#160;&#160;0x018</td></tr>
 <tr class="memitem:a761a8cff38b80353fdb359e7ad1d28e3" id="r_a761a8cff38b80353fdb359e7ad1d28e3"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a761a8cff38b80353fdb359e7ad1d28e3">UART_IBRD</a>&#160;&#160;&#160;0x024</td></tr>
@@ -148,10 +324,2426 @@ Macros</h2></td></tr>
 <tr class="memitem:a36b08a2623a7c2c8862071efe1a3ca61" id="r_a36b08a2623a7c2c8862071efe1a3ca61"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a36b08a2623a7c2c8862071efe1a3ca61">UART_CR</a>&#160;&#160;&#160;0x030</td></tr>
 <tr class="memitem:a394165743592a6a268578d932a6a0493" id="r_a394165743592a6a268578d932a6a0493"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a394165743592a6a268578d932a6a0493">UART_IMSC</a>&#160;&#160;&#160;0x038</td></tr>
 <tr class="memitem:a21f48dd7004f171875f228a39fcbce01" id="r_a21f48dd7004f171875f228a39fcbce01"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a21f48dd7004f171875f228a39fcbce01">UART_ICR</a>&#160;&#160;&#160;0x044</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
+Typedefs</h2></td></tr>
+<tr class="memitem:abf2008b4b5cca56bc6c26fe0536ed955" id="r_abf2008b4b5cca56bc6c26fe0536ed955"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a> = unsigned char</td></tr>
+<tr class="memitem:aa151be51b9f762a1628c2336d87ebd5d" id="r_aa151be51b9f762a1628c2336d87ebd5d"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a> = unsigned short</td></tr>
+<tr class="memitem:ab42586e970f36ee70a86a866bb1fd44a" id="r_ab42586e970f36ee70a86a866bb1fd44a"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a> = unsigned int</td></tr>
+<tr class="memitem:ad530609e70d68f0070fd8dae621ff22a" id="r_ad530609e70d68f0070fd8dae621ff22a"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a> = unsigned long long</td></tr>
+<tr class="memitem:ad807ced5b2a69ed0abb2478a239ef54e" id="r_ad807ced5b2a69ed0abb2478a239ef54e"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ad807ced5b2a69ed0abb2478a239ef54e">arch::int8_t</a> = signed char</td></tr>
+<tr class="memitem:a22828bf7bcfab87c22084642f68ebf82" id="r_a22828bf7bcfab87c22084642f68ebf82"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a22828bf7bcfab87c22084642f68ebf82">arch::int16_t</a> = signed short</td></tr>
+<tr class="memitem:aba536ffa886b7df4bd983917fdb7cb73" id="r_aba536ffa886b7df4bd983917fdb7cb73"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#aba536ffa886b7df4bd983917fdb7cb73">arch::int32_t</a> = signed int</td></tr>
+<tr class="memitem:ab36a30458aed711e58ed074d7b427721" id="r_ab36a30458aed711e58ed074d7b427721"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ab36a30458aed711e58ed074d7b427721">arch::int64_t</a> = signed long long</td></tr>
+<tr class="memitem:ab14cee44c8235473f34c47e6a358dd52" id="r_ab14cee44c8235473f34c47e6a358dd52"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">arch::size_t</a> = <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td></tr>
+<tr class="memitem:ae8258d50bd304a11135fe074ef3d438e" id="r_ae8258d50bd304a11135fe074ef3d438e"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ae8258d50bd304a11135fe074ef3d438e">arch::uintptr_t</a> = <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td></tr>
+<tr class="memitem:afcda08df75a143f7f38c5b694076200f" id="r_afcda08df75a143f7f38c5b694076200f"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#afcda08df75a143f7f38c5b694076200f">arch::intptr_t</a> = <a class="el" href="namespacearch.html#ab36a30458aed711e58ed074d7b427721">int64_t</a></td></tr>
+<tr class="memitem:a04efa6b3c0547f1ce0bb801e33467690" id="r_a04efa6b3c0547f1ce0bb801e33467690"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a04efa6b3c0547f1ce0bb801e33467690">arch::nullptr_t</a> = decltype(nullptr)</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a0e50c016d8d43a8848c78ed1aafe025e" id="r_a0e50c016d8d43a8848c78ed1aafe025e"><td class="memItemLeft">void *&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a0e50c016d8d43a8848c78ed1aafe025e">arch::operator new</a> (unsigned long size, void *ptr) noexcept</td></tr>
+<tr class="memitem:aacc243b6f6ab0bbbab1c9d54e9d1be70" id="r_aacc243b6f6ab0bbbab1c9d54e9d1be70"><td class="memItemLeft">void *&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#aacc243b6f6ab0bbbab1c9d54e9d1be70">arch::operator new[]</a> (unsigned long size, void *ptr) noexcept</td></tr>
+<tr class="memitem:a1c35ec53665b5bbb1c2a397c7fc19ee6" id="r_a1c35ec53665b5bbb1c2a397c7fc19ee6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a1c35ec53665b5bbb1c2a397c7fc19ee6">arch::panic</a> (const char *msg)</td></tr>
+<tr class="memdesc:a1c35ec53665b5bbb1c2a397c7fc19ee6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Overridable assertion macro. Default calls panic on failure.  <br /></td></tr>
+<tr class="memitem:a4793ddf07e93583f1a7eabd519a69f11" id="r_a4793ddf07e93583f1a7eabd519a69f11"><td class="memItemLeft">constexpr <a class="el" href="classarch_1_1kernel_1_1_virtual_address.html">VirtualAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a4793ddf07e93583f1a7eabd519a69f11">arch::kernel::phys_to_virt</a> (<a class="el" href="classarch_1_1kernel_1_1_physical_address.html">PhysicalAddress</a> phys) noexcept</td></tr>
+<tr class="memdesc:a4793ddf07e93583f1a7eabd519a69f11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert physical address to higher-half virtual address.  <br /></td></tr>
+<tr class="memitem:a79b39c91ac679b2cf5c2734e608df421" id="r_a79b39c91ac679b2cf5c2734e608df421"><td class="memItemLeft">constexpr <a class="el" href="classarch_1_1kernel_1_1_physical_address.html">PhysicalAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a79b39c91ac679b2cf5c2734e608df421">arch::kernel::virt_to_phys</a> (<a class="el" href="classarch_1_1kernel_1_1_virtual_address.html">VirtualAddress</a> virt) noexcept</td></tr>
+<tr class="memdesc:a79b39c91ac679b2cf5c2734e608df421"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert higher-half virtual address to physical address.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>AArch64 PL011 UART serial driver. </p>
 </div><a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
+<a id="a3d316041cb01da0e73130da4b0eab404" name="a3d316041cb01da0e73130da4b0eab404"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3d316041cb01da0e73130da4b0eab404">&#9670;&#160;</a></span>CONFIG_ADMISSION_SELFTEST</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_ADMISSION_SELFTEST&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af7dbe515e22f94aa374530a637f8418c" name="af7dbe515e22f94aa374530a637f8418c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af7dbe515e22f94aa374530a637f8418c">&#9670;&#160;</a></span>CONFIG_ASSERT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_ASSERT</td>
+          <td>(</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>expr</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">do</span> {                                                                       \</div>
+<div class="line">    if (!(expr)) {                                                         \</div>
+<div class="line">        panic(<span class="stringliteral">&quot;CONFIG_ASSERT: &quot;</span> #expr <span class="stringliteral">&quot; at &quot;</span> __FILE__);                    \</div>
+<div class="line">    }                                                                      \</div>
+<div class="line">} <span class="keywordflow">while</span> (0)</div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="ac774633c3e66e4033b61258ca2795155" name="ac774633c3e66e4033b61258ca2795155"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac774633c3e66e4033b61258ca2795155">&#9670;&#160;</a></span>CONFIG_BOOT_BUDGET_MS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_BOOT_BUDGET_MS&#160;&#160;&#160;30000</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4bb3575fefad83e2c4c0679539f0e1b1" name="a4bb3575fefad83e2c4c0679539f0e1b1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4bb3575fefad83e2c4c0679539f0e1b1">&#9670;&#160;</a></span>CONFIG_BUFFER_POOL_PAGES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_BUFFER_POOL_PAGES&#160;&#160;&#160;128</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad0e38363c716013f000005b049f48338" name="ad0e38363c716013f000005b049f48338"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad0e38363c716013f000005b049f48338">&#9670;&#160;</a></span>CONFIG_CANARY_GUARD</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CANARY_GUARD&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a58fca7bf098e6e35cc3151a9389b6105" name="a58fca7bf098e6e35cc3151a9389b6105"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a58fca7bf098e6e35cc3151a9389b6105">&#9670;&#160;</a></span>CONFIG_CANARY_SAMPLE_TICKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CANARY_SAMPLE_TICKS&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af0283e1c9144b2b00b2ecd9d6d9525d8" name="af0283e1c9144b2b00b2ecd9d6d9525d8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af0283e1c9144b2b00b2ecd9d6d9525d8">&#9670;&#160;</a></span>CONFIG_CAP_MAX_DEATH_WATCHES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_DEATH_WATCHES&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abfb6b2ca517d4c58ad5d095d0f2fc66d" name="abfb6b2ca517d4c58ad5d095d0f2fc66d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abfb6b2ca517d4c58ad5d095d0f2fc66d">&#9670;&#160;</a></span>CONFIG_CAP_MAX_DEPTH</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_DEPTH&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3062b6e90047fbde5b9f3562e1a728b0" name="a3062b6e90047fbde5b9f3562e1a728b0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3062b6e90047fbde5b9f3562e1a728b0">&#9670;&#160;</a></span>CONFIG_CAP_MAX_FRAME_MAPS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_FRAME_MAPS&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acac6c5abd4a9ddfdcfc8eed50e539d7e" name="acac6c5abd4a9ddfdcfc8eed50e539d7e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acac6c5abd4a9ddfdcfc8eed50e539d7e">&#9670;&#160;</a></span>CONFIG_CAP_MAX_IOMMU</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_IOMMU&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6778865aa865b535c1b34a9ace0e3e0d" name="a6778865aa865b535c1b34a9ace0e3e0d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6778865aa865b535c1b34a9ace0e3e0d">&#9670;&#160;</a></span>CONFIG_CAP_MAX_IRQ</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_IRQ&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6828726f88801e27e69ad4cb06a9eb37" name="a6828726f88801e27e69ad4cb06a9eb37"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6828726f88801e27e69ad4cb06a9eb37">&#9670;&#160;</a></span>CONFIG_CAP_MAX_MMIO</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_MMIO&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1105a51187e5531d9b7090db548f48c2" name="a1105a51187e5531d9b7090db548f48c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1105a51187e5531d9b7090db548f48c2">&#9670;&#160;</a></span>CONFIG_CAP_MAX_MMIO_MAPS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_MMIO_MAPS&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3cd7a7aadd0941856a01b3894cb8c5d6" name="a3cd7a7aadd0941856a01b3894cb8c5d6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3cd7a7aadd0941856a01b3894cb8c5d6">&#9670;&#160;</a></span>CONFIG_CAP_MAX_MSIX</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_MSIX&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a099e380af1009e729fb8652beb22adb5" name="a099e380af1009e729fb8652beb22adb5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a099e380af1009e729fb8652beb22adb5">&#9670;&#160;</a></span>CONFIG_CAP_MAX_PAGER_CLIENTS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_PAGER_CLIENTS&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac78ec7ca9369e6f83fcf17effcd9103c" name="ac78ec7ca9369e6f83fcf17effcd9103c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac78ec7ca9369e6f83fcf17effcd9103c">&#9670;&#160;</a></span>CONFIG_CAP_MAX_UNTYPED</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_UNTYPED&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7fce892edccb98126d05ce0c305f1bff" name="a7fce892edccb98126d05ce0c305f1bff"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7fce892edccb98126d05ce0c305f1bff">&#9670;&#160;</a></span>CONFIG_CAP_MAX_WDOG</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_WDOG&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab545c44f329445003c7b23cb29d0a0e1" name="ab545c44f329445003c7b23cb29d0a0e1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab545c44f329445003c7b23cb29d0a0e1">&#9670;&#160;</a></span>CONFIG_CSLOT_COUNT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CSLOT_COUNT&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a515a1e55a71216c50a7d94659c372998" name="a515a1e55a71216c50a7d94659c372998"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a515a1e55a71216c50a7d94659c372998">&#9670;&#160;</a></span>CONFIG_DEADLINE_ACTION</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DEADLINE_ACTION&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad7f0edb3b1228f6361d92c6cfa81fc30" name="ad7f0edb3b1228f6361d92c6cfa81fc30"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad7f0edb3b1228f6361d92c6cfa81fc30">&#9670;&#160;</a></span>CONFIG_DEADLINE_MISS_DETECTION</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DEADLINE_MISS_DETECTION&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="adbfd2982bfd8abcdb392578155755823" name="adbfd2982bfd8abcdb392578155755823"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adbfd2982bfd8abcdb392578155755823">&#9670;&#160;</a></span>CONFIG_DEADLINE_MONITOR_PID</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DEADLINE_MONITOR_PID&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9a7951d5ba3d567a2f0e372fd5540a44" name="a9a7951d5ba3d567a2f0e372fd5540a44"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9a7951d5ba3d567a2f0e372fd5540a44">&#9670;&#160;</a></span>CONFIG_DEADLINE_MONITOR_TASK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DEADLINE_MONITOR_TASK&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a728257b7b9189815e8fd31b9244dabf2" name="a728257b7b9189815e8fd31b9244dabf2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a728257b7b9189815e8fd31b9244dabf2">&#9670;&#160;</a></span>CONFIG_DEBUG_MAX_BREAKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DEBUG_MAX_BREAKS&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae789582adc0801a733e0efbe633ed200" name="ae789582adc0801a733e0efbe633ed200"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae789582adc0801a733e0efbe633ed200">&#9670;&#160;</a></span>CONFIG_DEBUG_MAX_STOPS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DEBUG_MAX_STOPS&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a43d9dab37b65e95fa2ac5777a4de4d95" name="a43d9dab37b65e95fa2ac5777a4de4d95"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a43d9dab37b65e95fa2ac5777a4de4d95">&#9670;&#160;</a></span>CONFIG_DM_PRIO_MAX</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DM_PRIO_MAX&#160;&#160;&#160;120</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5455f1222d9acfec0d65194205357b96" name="a5455f1222d9acfec0d65194205357b96"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5455f1222d9acfec0d65194205357b96">&#9670;&#160;</a></span>CONFIG_DM_PRIO_MIN</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DM_PRIO_MIN&#160;&#160;&#160;2</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a15f72011bdc6888b3a6aef544acc4604" name="a15f72011bdc6888b3a6aef544acc4604"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a15f72011bdc6888b3a6aef544acc4604">&#9670;&#160;</a></span>CONFIG_DMESG_CAPACITY</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DMESG_CAPACITY&#160;&#160;&#160;4096</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a835305cb9a116e1c539f8f2a6b880848" name="a835305cb9a116e1c539f8f2a6b880848"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a835305cb9a116e1c539f8f2a6b880848">&#9670;&#160;</a></span>CONFIG_HAS_HPET</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HAS_HPET&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a95ce8c171faeb012773cd4f72a0f2935" name="a95ce8c171faeb012773cd4f72a0f2935"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a95ce8c171faeb012773cd4f72a0f2935">&#9670;&#160;</a></span>CONFIG_HAS_MPU</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HAS_MPU&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4ec527a1c0761ea4dfcbf6d079aa7344" name="a4ec527a1c0761ea4dfcbf6d079aa7344"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4ec527a1c0761ea4dfcbf6d079aa7344">&#9670;&#160;</a></span>CONFIG_HEAP_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HEAP_SIZE&#160;&#160;&#160;16777216</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0600363aeeff028f814836fef3e54621" name="a0600363aeeff028f814836fef3e54621"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0600363aeeff028f814836fef3e54621">&#9670;&#160;</a></span>CONFIG_HRT_CALIBRATION_RETRIES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HRT_CALIBRATION_RETRIES&#160;&#160;&#160;12</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a05b47d11f3b104e148d4aace9059e921" name="a05b47d11f3b104e148d4aace9059e921"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a05b47d11f3b104e148d4aace9059e921">&#9670;&#160;</a></span>CONFIG_HRT_CALIBRATION_TIMEOUT_MS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HRT_CALIBRATION_TIMEOUT_MS&#160;&#160;&#160;500</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a700f59f32dcea3aeefaee7407867065a" name="a700f59f32dcea3aeefaee7407867065a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a700f59f32dcea3aeefaee7407867065a">&#9670;&#160;</a></span>CONFIG_HRT_NS_WIDTH</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HRT_NS_WIDTH&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a82e6d056624722ccc8199ed26d77f752" name="a82e6d056624722ccc8199ed26d77f752"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a82e6d056624722ccc8199ed26d77f752">&#9670;&#160;</a></span>CONFIG_HRT_SOURCE_PREFERENCE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HRT_SOURCE_PREFERENCE&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af9d0f7c02c48d8057773b2045f011981" name="af9d0f7c02c48d8057773b2045f011981"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af9d0f7c02c48d8057773b2045f011981">&#9670;&#160;</a></span>CONFIG_IDLE_HOOK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_HOOK&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a70c975ce9dd99a1a8523471d660e115b" name="a70c975ce9dd99a1a8523471d660e115b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a70c975ce9dd99a1a8523471d660e115b">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS&#160;&#160;&#160;1000</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a80410ca48d3e8f2f8754609424372afb" name="a80410ca48d3e8f2f8754609424372afb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a80410ca48d3e8f2f8754609424372afb">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_CHUNK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_CHUNK&#160;&#160;&#160;4</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab43611a2b8491153b305ae9408b050c9" name="ab43611a2b8491153b305ae9408b050c9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab43611a2b8491153b305ae9408b050c9">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_ENABLED</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_ENABLED&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0db72da672f2a6331a7b4f5c5df57e48" name="a0db72da672f2a6331a7b4f5c5df57e48"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0db72da672f2a6331a7b4f5c5df57e48">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_MEM</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_MEM&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa7520ddb3e054abd0e900890d047aa51" name="aa7520ddb3e054abd0e900890d047aa51"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa7520ddb3e054abd0e900890d047aa51">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_MEM_MIN_OPS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_MEM_MIN_OPS&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a761b3428b7e9e155f5fbf980446bac00" name="a761b3428b7e9e155f5fbf980446bac00"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a761b3428b7e9e155f5fbf980446bac00">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_MEM_PASSES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_MEM_PASSES&#160;&#160;&#160;3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa68a58c6e8b6408d8c994b31b10d38bf" name="aa68a58c6e8b6408d8c994b31b10d38bf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa68a58c6e8b6408d8c994b31b10d38bf">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_STACK_CHECK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_STACK_CHECK&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6b9f06979978d13d3c948aa5b07024a6" name="a6b9f06979978d13d3c948aa5b07024a6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6b9f06979978d13d3c948aa5b07024a6">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_STALL</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_STALL&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a723655babaed8e0cdd6c180e09e167e0" name="a723655babaed8e0cdd6c180e09e167e0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a723655babaed8e0cdd6c180e09e167e0">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS&#160;&#160;&#160;5000</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abbcac397ffaedef7a642670de9fb7d67" name="abbcac397ffaedef7a642670de9fb7d67"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abbcac397ffaedef7a642670de9fb7d67">&#9670;&#160;</a></span>CONFIG_IDLE_MONITOR_UTIL</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_MONITOR_UTIL&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af89c2f0694a0bee460698928f63ee649" name="af89c2f0694a0bee460698928f63ee649"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af89c2f0694a0bee460698928f63ee649">&#9670;&#160;</a></span>CONFIG_IDLE_YIELD</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IDLE_YIELD&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a662466b5f5973ab8f89c3c80704457f5" name="a662466b5f5973ab8f89c3c80704457f5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a662466b5f5973ab8f89c3c80704457f5">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_BRK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_BRK&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0b5fcae55cc325a4a22a0fbbaaa943c9" name="a0b5fcae55cc325a4a22a0fbbaaa943c9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0b5fcae55cc325a4a22a0fbbaaa943c9">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_CLONE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_CLONE&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acad977a4de3bb6eb2369ae703b44ff37" name="acad977a4de3bb6eb2369ae703b44ff37"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acad977a4de3bb6eb2369ae703b44ff37">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_CLOSE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_CLOSE&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2f6ad6284aaa1ba091cf06fe6f67d088" name="a2f6ad6284aaa1ba091cf06fe6f67d088"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2f6ad6284aaa1ba091cf06fe6f67d088">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_EVENT_POST</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_EVENT_POST&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2485c748a6ebc8b2a808f594ec4fba23" name="a2485c748a6ebc8b2a808f594ec4fba23"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2485c748a6ebc8b2a808f594ec4fba23">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_EVENT_WAIT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_EVENT_WAIT&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2f9f787a7a26264de01ef2fbe8d5246d" name="a2f9f787a7a26264de01ef2fbe8d5246d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2f9f787a7a26264de01ef2fbe8d5246d">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_EXECVE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_EXECVE&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa2a526b69a2d49b9eaef83c60f27512e" name="aa2a526b69a2d49b9eaef83c60f27512e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa2a526b69a2d49b9eaef83c60f27512e">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_EXIT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_EXIT&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a68ed53fd6b95aac6db3e44695818bf0c" name="a68ed53fd6b95aac6db3e44695818bf0c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a68ed53fd6b95aac6db3e44695818bf0c">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_FORK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_FORK&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aed16199ac0dbff8f53cc67ca95ce527a" name="aed16199ac0dbff8f53cc67ca95ce527a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aed16199ac0dbff8f53cc67ca95ce527a">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_GETPID</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_GETPID&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab9be880ba29de9c0c3a8cf33647da623" name="ab9be880ba29de9c0c3a8cf33647da623"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab9be880ba29de9c0c3a8cf33647da623">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_GETPPID</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_GETPPID&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a53596d900f72f47729b2ae89045f28da" name="a53596d900f72f47729b2ae89045f28da"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53596d900f72f47729b2ae89045f28da">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_GETPRIO</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_GETPRIO&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad5198f372947bd8e93d7fe73a1fd960d" name="ad5198f372947bd8e93d7fe73a1fd960d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad5198f372947bd8e93d7fe73a1fd960d">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_HALT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_HALT&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aefa28fad9028e06240df57a535e36f5c" name="aefa28fad9028e06240df57a535e36f5c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aefa28fad9028e06240df57a535e36f5c">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_IOCTL</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_IOCTL&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a27810d82f14dd0845d2c9f7d1c4c4544" name="a27810d82f14dd0845d2c9f7d1c4c4544"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a27810d82f14dd0845d2c9f7d1c4c4544">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_MKDIR</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_MKDIR&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae39d19d4345a0e8f6ce05001a00cc0a7" name="ae39d19d4345a0e8f6ce05001a00cc0a7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae39d19d4345a0e8f6ce05001a00cc0a7">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_MMAP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_MMAP&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8d542b79c6b35331ae95d0341e6d9ca6" name="a8d542b79c6b35331ae95d0341e6d9ca6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8d542b79c6b35331ae95d0341e6d9ca6">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_MOUNT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_MOUNT&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6349c45c64602c48c0c5087a6027ffc0" name="a6349c45c64602c48c0c5087a6027ffc0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6349c45c64602c48c0c5087a6027ffc0">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_MUNMAP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_MUNMAP&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a60e23f6d80990d3a8e2588f4822be026" name="a60e23f6d80990d3a8e2588f4822be026"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a60e23f6d80990d3a8e2588f4822be026">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_NANOSLEEP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_NANOSLEEP&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0c463c0a261b2aded2e61cc266e61b38" name="a0c463c0a261b2aded2e61cc266e61b38"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c463c0a261b2aded2e61cc266e61b38">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_NOTIFY</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_NOTIFY&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af5831aaa5e81ee84cb1eeeee5e1f3119" name="af5831aaa5e81ee84cb1eeeee5e1f3119"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af5831aaa5e81ee84cb1eeeee5e1f3119">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_NOTIFY_WAIT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_NOTIFY_WAIT&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6de0e5dcd80bc2cedef79821b7ac37e9" name="a6de0e5dcd80bc2cedef79821b7ac37e9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6de0e5dcd80bc2cedef79821b7ac37e9">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_OPEN</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_OPEN&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a66781d74f2853fef8bc4b79908b24ac8" name="a66781d74f2853fef8bc4b79908b24ac8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a66781d74f2853fef8bc4b79908b24ac8">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_READ</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_READ&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa9a2c921cb959838f5255d107e8fb22d" name="aa9a2c921cb959838f5255d107e8fb22d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa9a2c921cb959838f5255d107e8fb22d">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_REBOOT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_REBOOT&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a837a901b5f4ca7bb74e83d20bac4ece1" name="a837a901b5f4ca7bb74e83d20bac4ece1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a837a901b5f4ca7bb74e83d20bac4ece1">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_RECV</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_RECV&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2d50579916fbc84e4db5af66cd299aaf" name="a2d50579916fbc84e4db5af66cd299aaf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2d50579916fbc84e4db5af66cd299aaf">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_RENAME</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_RENAME&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab118f80a4ff475810c6710a4e748f16e" name="ab118f80a4ff475810c6710a4e748f16e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab118f80a4ff475810c6710a4e748f16e">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_REPLY</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_REPLY&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="adde30c382e97aef535a40630b631b80f" name="adde30c382e97aef535a40630b631b80f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adde30c382e97aef535a40630b631b80f">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_SEEK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_SEEK&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae7247a6d5878506991c3a20d12d530ca" name="ae7247a6d5878506991c3a20d12d530ca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae7247a6d5878506991c3a20d12d530ca">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_SENDSYNC</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_SENDSYNC&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae2a0246e0087b7cb06ed0468c6d1b455" name="ae2a0246e0087b7cb06ed0468c6d1b455"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae2a0246e0087b7cb06ed0468c6d1b455">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_SETPRIO</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_SETPRIO&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acd0ca92afe87cb20eac4bb3ff71e4322" name="acd0ca92afe87cb20eac4bb3ff71e4322"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acd0ca92afe87cb20eac4bb3ff71e4322">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_STAT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_STAT&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ade6fddc937b474020a792b7cb2858bed" name="ade6fddc937b474020a792b7cb2858bed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade6fddc937b474020a792b7cb2858bed">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_UMOUNT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_UMOUNT&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a57f3b2807b05bf6784f193a3c985c54e" name="a57f3b2807b05bf6784f193a3c985c54e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a57f3b2807b05bf6784f193a3c985c54e">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_UNLINK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_UNLINK&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0eb00eae76043356257ebf25c7417e4e" name="a0eb00eae76043356257ebf25c7417e4e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0eb00eae76043356257ebf25c7417e4e">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_WAITPID</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_WAITPID&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acd15b74bb6f9487cc4bc12952d8d7257" name="acd15b74bb6f9487cc4bc12952d8d7257"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acd15b74bb6f9487cc4bc12952d8d7257">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_WRITE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_WRITE&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a92c54e3597ddb43ce61b8bcde9052bc1" name="a92c54e3597ddb43ce61b8bcde9052bc1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a92c54e3597ddb43ce61b8bcde9052bc1">&#9670;&#160;</a></span>CONFIG_INCLUDE_SYS_YIELD</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INCLUDE_SYS_YIELD&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5f748bfe245b9c25fb556172a5e4f2e5" name="a5f748bfe245b9c25fb556172a5e4f2e5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5f748bfe245b9c25fb556172a5e4f2e5">&#9670;&#160;</a></span>CONFIG_INIT_HOOK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_INIT_HOOK&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa12295ff5adce28efb90a6448a99db90" name="aa12295ff5adce28efb90a6448a99db90"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa12295ff5adce28efb90a6448a99db90">&#9670;&#160;</a></span>CONFIG_IOMMU_MAX_BUSES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IOMMU_MAX_BUSES&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a72a0869a335f7c89656345e46a49a62d" name="a72a0869a335f7c89656345e46a49a62d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a72a0869a335f7c89656345e46a49a62d">&#9670;&#160;</a></span>CONFIG_IOMMU_MAX_DOMAINS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IOMMU_MAX_DOMAINS&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac3a9a02fb54f60642275bc88981958e2" name="ac3a9a02fb54f60642275bc88981958e2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac3a9a02fb54f60642275bc88981958e2">&#9670;&#160;</a></span>CONFIG_IOMMU_MAX_KERNEL_DEVICES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IOMMU_MAX_KERNEL_DEVICES&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a69e33b593b806e824e8d180143561fc4" name="a69e33b593b806e824e8d180143561fc4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a69e33b593b806e824e8d180143561fc4">&#9670;&#160;</a></span>CONFIG_IOMMU_MAX_MAPPINGS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IOMMU_MAX_MAPPINGS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a61a5662bf5a217b097fec80856c09edc" name="a61a5662bf5a217b097fec80856c09edc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a61a5662bf5a217b097fec80856c09edc">&#9670;&#160;</a></span>CONFIG_IOMMU_MMIO_BASE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IOMMU_MMIO_BASE&#160;&#160;&#160;0xFED90000ULL</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4fdd70ee80f077b4a19d2824aac2517f" name="a4fdd70ee80f077b4a19d2824aac2517f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4fdd70ee80f077b4a19d2824aac2517f">&#9670;&#160;</a></span>CONFIG_IOPB_MAX_GRANTS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IOPB_MAX_GRANTS&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abaf10c78be3b51994a5d90814c390631" name="abaf10c78be3b51994a5d90814c390631"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abaf10c78be3b51994a5d90814c390631">&#9670;&#160;</a></span>CONFIG_IOPB_MAX_TASKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IOPB_MAX_TASKS&#160;&#160;&#160;4</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7a99dd14385cd867ce4a1cdc36633c25" name="a7a99dd14385cd867ce4a1cdc36633c25"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7a99dd14385cd867ce4a1cdc36633c25">&#9670;&#160;</a></span>CONFIG_IPC_FAST_PAYLOAD_BYTES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IPC_FAST_PAYLOAD_BYTES&#160;&#160;&#160;48</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a428c0cbf9ea626d22920e29b3d0f1dd0" name="a428c0cbf9ea626d22920e29b3d0f1dd0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a428c0cbf9ea626d22920e29b3d0f1dd0">&#9670;&#160;</a></span>CONFIG_IPC_MAX_MSG_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IPC_MAX_MSG_SIZE&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a338681951d97694dd0b4dc48373d879b" name="a338681951d97694dd0b4dc48373d879b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a338681951d97694dd0b4dc48373d879b">&#9670;&#160;</a></span>CONFIG_IPC_MAX_QUEUE_MSG</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IPC_MAX_QUEUE_MSG&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a00ddc4bdfc7fab2e08f3a292412ef50c" name="a00ddc4bdfc7fab2e08f3a292412ef50c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a00ddc4bdfc7fab2e08f3a292412ef50c">&#9670;&#160;</a></span>CONFIG_IPC_PRIORITY_LEVELS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IPC_PRIORITY_LEVELS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aece4b6a42c3c42a95b209e6fa873970f" name="aece4b6a42c3c42a95b209e6fa873970f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aece4b6a42c3c42a95b209e6fa873970f">&#9670;&#160;</a></span>CONFIG_IPC_SHMEM_MAX_PAGES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IPC_SHMEM_MAX_PAGES&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aac30e89938cc6eef8d1516f75c2c3fc7" name="aac30e89938cc6eef8d1516f75c2c3fc7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac30e89938cc6eef8d1516f75c2c3fc7">&#9670;&#160;</a></span>CONFIG_IRQ_LATENCY_HISTOGRAM</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IRQ_LATENCY_HISTOGRAM&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a40b63eab36f99de494ff321df05721a4" name="a40b63eab36f99de494ff321df05721a4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a40b63eab36f99de494ff321df05721a4">&#9670;&#160;</a></span>CONFIG_IRQ_LATENCY_MAX_NS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IRQ_LATENCY_MAX_NS&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2526193a2bf2cb59e84e1d640af1a29f" name="a2526193a2bf2cb59e84e1d640af1a29f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2526193a2bf2cb59e84e1d640af1a29f">&#9670;&#160;</a></span>CONFIG_KERNEL_PRIV_DATA_BASE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_KERNEL_PRIV_DATA_BASE&#160;&#160;&#160;0xFFFFA00000000000ULL</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5412009bb80bc2aac94e2a2121f9a02f" name="a5412009bb80bc2aac94e2a2121f9a02f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5412009bb80bc2aac94e2a2121f9a02f">&#9670;&#160;</a></span>CONFIG_KSTACK_WINDOW_BASE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_KSTACK_WINDOW_BASE&#160;&#160;&#160;0xFFFF900000000000ULL</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0bef3e0da616c80c28e1f7671b03401d" name="a0bef3e0da616c80c28e1f7671b03401d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0bef3e0da616c80c28e1f7671b03401d">&#9670;&#160;</a></span>CONFIG_KSTACK_WINDOW_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_KSTACK_WINDOW_SIZE&#160;&#160;&#160;0x1000000ULL</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad199022145d96f66cc77e4b84255faf6" name="ad199022145d96f66cc77e4b84255faf6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad199022145d96f66cc77e4b84255faf6">&#9670;&#160;</a></span>CONFIG_MAX_CPUS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_CPUS&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2c580044f067f2f953c3bdd1471189c6" name="a2c580044f067f2f953c3bdd1471189c6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2c580044f067f2f953c3bdd1471189c6">&#9670;&#160;</a></span>CONFIG_MAX_DAEMONS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_DAEMONS&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a932ae61284ebb00cdf5c763d479b47fd" name="a932ae61284ebb00cdf5c763d479b47fd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a932ae61284ebb00cdf5c763d479b47fd">&#9670;&#160;</a></span>CONFIG_MAX_DRIVERS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_DRIVERS&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6522d992928275f4e75859915cec5b84" name="a6522d992928275f4e75859915cec5b84"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6522d992928275f4e75859915cec5b84">&#9670;&#160;</a></span>CONFIG_MAX_FDS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_FDS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9cd0e684a26b0270d442310ccd4330da" name="a9cd0e684a26b0270d442310ccd4330da"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9cd0e684a26b0270d442310ccd4330da">&#9670;&#160;</a></span>CONFIG_MAX_HELD_CEILINGS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_HELD_CEILINGS&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a941c94e5b716a5c776a30efc5e030724" name="a941c94e5b716a5c776a30efc5e030724"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a941c94e5b716a5c776a30efc5e030724">&#9670;&#160;</a></span>CONFIG_MAX_MOUNTS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_MOUNTS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab7f91f26b4b36eff22a2b15ea5405621" name="ab7f91f26b4b36eff22a2b15ea5405621"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab7f91f26b4b36eff22a2b15ea5405621">&#9670;&#160;</a></span>CONFIG_MAX_PER_TASK_OBJECTS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_PER_TASK_OBJECTS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="adae856c7e79cb395586e5ae9ddb5b0cc" name="adae856c7e79cb395586e5ae9ddb5b0cc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adae856c7e79cb395586e5ae9ddb5b0cc">&#9670;&#160;</a></span>CONFIG_MAX_PRIORITY</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_PRIORITY&#160;&#160;&#160;128</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a30115622457b1386f44b9b48cd2cb8f8" name="a30115622457b1386f44b9b48cd2cb8f8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a30115622457b1386f44b9b48cd2cb8f8">&#9670;&#160;</a></span>CONFIG_MAX_PROCESS_PAGES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_PROCESS_PAGES&#160;&#160;&#160;512</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0c3cfd9ed7438076d36385368e245b04" name="a0c3cfd9ed7438076d36385368e245b04"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c3cfd9ed7438076d36385368e245b04">&#9670;&#160;</a></span>CONFIG_MAX_PROGRAMS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_PROGRAMS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af5882a79bc71755f7d4425f06d1d2374" name="af5882a79bc71755f7d4425f06d1d2374"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af5882a79bc71755f7d4425f06d1d2374">&#9670;&#160;</a></span>CONFIG_MAX_SIGNAL_HANDLERS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_SIGNAL_HANDLERS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5a04f42c5fbcca541aeb36ade1671c80" name="a5a04f42c5fbcca541aeb36ade1671c80"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5a04f42c5fbcca541aeb36ade1671c80">&#9670;&#160;</a></span>CONFIG_MAX_TASKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_TASKS&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a03a2952bcbbf877610fd24374cef4021" name="a03a2952bcbbf877610fd24374cef4021"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a03a2952bcbbf877610fd24374cef4021">&#9670;&#160;</a></span>CONFIG_MAX_THREADED_IRQS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_THREADED_IRQS&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9cbca81eabffa4f1a76bc6230845e648" name="a9cbca81eabffa4f1a76bc6230845e648"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9cbca81eabffa4f1a76bc6230845e648">&#9670;&#160;</a></span>CONFIG_MEMORY_BUDGET</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MEMORY_BUDGET&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae77f8d4c41624b7b48deac1589673876" name="ae77f8d4c41624b7b48deac1589673876"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae77f8d4c41624b7b48deac1589673876">&#9670;&#160;</a></span>CONFIG_MEMPOOL_BLOCK_COUNTS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MEMPOOL_BLOCK_COUNTS&#160;&#160;&#160;256, 128, 64, 32, 16, 8, 4, 2, 1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0b9c9423efd7e8b9bd77eea32bac9c93" name="a0b9c9423efd7e8b9bd77eea32bac9c93"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0b9c9423efd7e8b9bd77eea32bac9c93">&#9670;&#160;</a></span>CONFIG_MEMPOOL_BLOCK_SIZES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MEMPOOL_BLOCK_SIZES&#160;&#160;&#160;16, 32, 64, 128, 256, 512, 1024, 2048, 4096</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acbcfbe0c56cbf62799c4a0ea83bdbd0e" name="acbcfbe0c56cbf62799c4a0ea83bdbd0e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acbcfbe0c56cbf62799c4a0ea83bdbd0e">&#9670;&#160;</a></span>CONFIG_MEMPOOL_NUM_POOLS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MEMPOOL_NUM_POOLS&#160;&#160;&#160;9</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae22e3ae7b4c39d839d5e02455b5a3aac" name="ae22e3ae7b4c39d839d5e02455b5a3aac"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae22e3ae7b4c39d839d5e02455b5a3aac">&#9670;&#160;</a></span>CONFIG_MIN_STACK_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MIN_STACK_SIZE&#160;&#160;&#160;4096</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad16f6b64a36d83cce633b6c7784a82df" name="ad16f6b64a36d83cce633b6c7784a82df"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad16f6b64a36d83cce633b6c7784a82df">&#9670;&#160;</a></span>CONFIG_MUTEX_PIP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MUTEX_PIP&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aaa67bf023e8838df96aa8ec37674ee90" name="aaa67bf023e8838df96aa8ec37674ee90"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaa67bf023e8838df96aa8ec37674ee90">&#9670;&#160;</a></span>CONFIG_OOM_HOOK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_OOM_HOOK&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aed09cfec33d0062ef3e3e9b872f17cc2" name="aed09cfec33d0062ef3e3e9b872f17cc2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aed09cfec33d0062ef3e3e9b872f17cc2">&#9670;&#160;</a></span>CONFIG_OOM_POLICY</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_OOM_POLICY&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a19af128470be1231e7e9632aedb1f558" name="a19af128470be1231e7e9632aedb1f558"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a19af128470be1231e7e9632aedb1f558">&#9670;&#160;</a></span>CONFIG_PAGE_TABLE_POOL_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PAGE_TABLE_POOL_SIZE&#160;&#160;&#160;4096</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a79634fa97a61d28d0ecd1f0004dab5f7" name="a79634fa97a61d28d0ecd1f0004dab5f7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a79634fa97a61d28d0ecd1f0004dab5f7">&#9670;&#160;</a></span>CONFIG_PAGER_FAULT_TIMEOUT_TICKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PAGER_FAULT_TIMEOUT_TICKS&#160;&#160;&#160;1000</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a11d98a8c373874a2a405ca91f7d3c2ad" name="a11d98a8c373874a2a405ca91f7d3c2ad"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a11d98a8c373874a2a405ca91f7d3c2ad">&#9670;&#160;</a></span>CONFIG_PAGER_MAX_COMMITTED_PAGES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PAGER_MAX_COMMITTED_PAGES&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0e8bd4d6885656c82396aadaf5d70290" name="a0e8bd4d6885656c82396aadaf5d70290"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0e8bd4d6885656c82396aadaf5d70290">&#9670;&#160;</a></span>CONFIG_PAGER_MAX_PAGES_PER_FAULT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PAGER_MAX_PAGES_PER_FAULT&#160;&#160;&#160;4</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aefd329133bd76dfd99be9cf6df1d57ed" name="aefd329133bd76dfd99be9cf6df1d57ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aefd329133bd76dfd99be9cf6df1d57ed">&#9670;&#160;</a></span>CONFIG_PAN</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PAN&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae4a9bca121aaa8acc25574a4cc3abbcf" name="ae4a9bca121aaa8acc25574a4cc3abbcf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae4a9bca121aaa8acc25574a4cc3abbcf">&#9670;&#160;</a></span>CONFIG_PCID</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PCID&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad42f27563c0dabc8e3f69851bbbe9f9f" name="ad42f27563c0dabc8e3f69851bbbe9f9f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad42f27563c0dabc8e3f69851bbbe9f9f">&#9670;&#160;</a></span>CONFIG_PML4_USER_COUNT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PML4_USER_COUNT&#160;&#160;&#160;256</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abbd8a5d807d37174a80088bb5a34de10" name="abbd8a5d807d37174a80088bb5a34de10"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abbd8a5d807d37174a80088bb5a34de10">&#9670;&#160;</a></span>CONFIG_PREEMPTION</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PREEMPTION&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a804b850b1e890968b4dfb1f1004ee3b0" name="a804b850b1e890968b4dfb1f1004ee3b0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a804b850b1e890968b4dfb1f1004ee3b0">&#9670;&#160;</a></span>CONFIG_PREEMPTION_LATENCY_MAX_CYCLES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PREEMPTION_LATENCY_MAX_CYCLES&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a560bec767ff9229f8b02270422f9109f" name="a560bec767ff9229f8b02270422f9109f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a560bec767ff9229f8b02270422f9109f">&#9670;&#160;</a></span>CONFIG_PRIORITY_CEILING</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PRIORITY_CEILING&#160;&#160;&#160;127</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aac781da257db7b6183fac86fc89095c5" name="aac781da257db7b6183fac86fc89095c5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac781da257db7b6183fac86fc89095c5">&#9670;&#160;</a></span>CONFIG_PRIORITY_CEILING_PROTOCOL</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PRIORITY_CEILING_PROTOCOL&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a08b1decd478ffc1359ac5e6385741d61" name="a08b1decd478ffc1359ac5e6385741d61"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a08b1decd478ffc1359ac5e6385741d61">&#9670;&#160;</a></span>CONFIG_QUEUE_PIP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_QUEUE_PIP&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7cf9db7fcc2c0bf9b1bb475b2bad3d93" name="a7cf9db7fcc2c0bf9b1bb475b2bad3d93"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7cf9db7fcc2c0bf9b1bb475b2bad3d93">&#9670;&#160;</a></span>CONFIG_SEMAPHORE_PIP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SEMAPHORE_PIP&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0416a4b1c68b556f00af37b87fdd0742" name="a0416a4b1c68b556f00af37b87fdd0742"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0416a4b1c68b556f00af37b87fdd0742">&#9670;&#160;</a></span>CONFIG_SMAP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SMAP&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a90a087504d57cc28a18745a08011e315" name="a90a087504d57cc28a18745a08011e315"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a90a087504d57cc28a18745a08011e315">&#9670;&#160;</a></span>CONFIG_SMEP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SMEP&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a31b2fca43fed672f65115a92304475a2" name="a31b2fca43fed672f65115a92304475a2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a31b2fca43fed672f65115a92304475a2">&#9670;&#160;</a></span>CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afd4dfde1bb949f7e03c90dea7fe274f9" name="afd4dfde1bb949f7e03c90dea7fe274f9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afd4dfde1bb949f7e03c90dea7fe274f9">&#9670;&#160;</a></span>CONFIG_SPORADIC_SERVER_DEADLINE_HOOK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SPORADIC_SERVER_DEADLINE_HOOK&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afa71e737433cca1a4223e904afcf0a9c" name="afa71e737433cca1a4223e904afcf0a9c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afa71e737433cca1a4223e904afcf0a9c">&#9670;&#160;</a></span>CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1f0f6f5cc7c492c7681e37388246ba52" name="a1f0f6f5cc7c492c7681e37388246ba52"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f0f6f5cc7c492c7681e37388246ba52">&#9670;&#160;</a></span>CONFIG_SPORADIC_SERVER_MAX_TASKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SPORADIC_SERVER_MAX_TASKS&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5ed865b603ba7ee04437c1cc28ce89fa" name="a5ed865b603ba7ee04437c1cc28ce89fa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5ed865b603ba7ee04437c1cc28ce89fa">&#9670;&#160;</a></span>CONFIG_STACK_OVERFLOW_HOOK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_STACK_OVERFLOW_HOOK&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa345b3c812d23b1ef0f9ae26d6005f64" name="aa345b3c812d23b1ef0f9ae26d6005f64"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa345b3c812d23b1ef0f9ae26d6005f64">&#9670;&#160;</a></span>CONFIG_STACK_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_STACK_SIZE&#160;&#160;&#160;65536</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac1f84c6931f570beff33eb70e30cbe4e" name="ac1f84c6931f570beff33eb70e30cbe4e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac1f84c6931f570beff33eb70e30cbe4e">&#9670;&#160;</a></span>CONFIG_STACK_SIZE_TABLE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_STACK_SIZE_TABLE&#160;&#160;&#160;{65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536}</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab4d048869d4222593c9b0691268d36bf" name="ab4d048869d4222593c9b0691268d36bf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab4d048869d4222593c9b0691268d36bf">&#9670;&#160;</a></span>CONFIG_STATIC_POOLS_ONLY</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_STATIC_POOLS_ONLY&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa6208ddf66cdb8a09ee562e3f461be1c" name="aa6208ddf66cdb8a09ee562e3f461be1c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa6208ddf66cdb8a09ee562e3f461be1c">&#9670;&#160;</a></span>CONFIG_SYNC_MAX_WAITERS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SYNC_MAX_WAITERS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="adb1a44e12231914498173d371ade590f" name="adb1a44e12231914498173d371ade590f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adb1a44e12231914498173d371ade590f">&#9670;&#160;</a></span>CONFIG_SYSCALL_COUNT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SYSCALL_COUNT</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line">(<a class="code hl_define" href="#a92c54e3597ddb43ce61b8bcde9052bc1">CONFIG_INCLUDE_SYS_YIELD</a> + <a class="code hl_define" href="#aa2a526b69a2d49b9eaef83c60f27512e">CONFIG_INCLUDE_SYS_EXIT</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="#a68ed53fd6b95aac6db3e44695818bf0c">CONFIG_INCLUDE_SYS_FORK</a> + <a class="code hl_define" href="#a0b5fcae55cc325a4a22a0fbbaaa943c9">CONFIG_INCLUDE_SYS_CLONE</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="#a2f9f787a7a26264de01ef2fbe8d5246d">CONFIG_INCLUDE_SYS_EXECVE</a> + <a class="code hl_define" href="#a0eb00eae76043356257ebf25c7417e4e">CONFIG_INCLUDE_SYS_WAITPID</a> +                  \</div>
+<div class="line"> <a class="code hl_define" href="#a60e23f6d80990d3a8e2588f4822be026">CONFIG_INCLUDE_SYS_NANOSLEEP</a> + <a class="code hl_define" href="#aed16199ac0dbff8f53cc67ca95ce527a">CONFIG_INCLUDE_SYS_GETPID</a> +                \</div>
+<div class="line"> <a class="code hl_define" href="#ab9be880ba29de9c0c3a8cf33647da623">CONFIG_INCLUDE_SYS_GETPPID</a> + <a class="code hl_define" href="#ae2a0246e0087b7cb06ed0468c6d1b455">CONFIG_INCLUDE_SYS_SETPRIO</a> +                 \</div>
+<div class="line"> <a class="code hl_define" href="#a53596d900f72f47729b2ae89045f28da">CONFIG_INCLUDE_SYS_GETPRIO</a> + <a class="code hl_define" href="#ae7247a6d5878506991c3a20d12d530ca">CONFIG_INCLUDE_SYS_SENDSYNC</a> +                \</div>
+<div class="line"> <a class="code hl_define" href="#a837a901b5f4ca7bb74e83d20bac4ece1">CONFIG_INCLUDE_SYS_RECV</a> + <a class="code hl_define" href="#ab118f80a4ff475810c6710a4e748f16e">CONFIG_INCLUDE_SYS_REPLY</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="#a0c463c0a261b2aded2e61cc266e61b38">CONFIG_INCLUDE_SYS_NOTIFY</a> + <a class="code hl_define" href="#af5831aaa5e81ee84cb1eeeee5e1f3119">CONFIG_INCLUDE_SYS_NOTIFY_WAIT</a> +              \</div>
+<div class="line"> <a class="code hl_define" href="#a2f6ad6284aaa1ba091cf06fe6f67d088">CONFIG_INCLUDE_SYS_EVENT_POST</a> + <a class="code hl_define" href="#a2485c748a6ebc8b2a808f594ec4fba23">CONFIG_INCLUDE_SYS_EVENT_WAIT</a> +           \</div>
+<div class="line"> <a class="code hl_define" href="#a662466b5f5973ab8f89c3c80704457f5">CONFIG_INCLUDE_SYS_BRK</a> + <a class="code hl_define" href="#ae39d19d4345a0e8f6ce05001a00cc0a7">CONFIG_INCLUDE_SYS_MMAP</a> +                        \</div>
+<div class="line"> <a class="code hl_define" href="#a6349c45c64602c48c0c5087a6027ffc0">CONFIG_INCLUDE_SYS_MUNMAP</a> + <a class="code hl_define" href="#a6de0e5dcd80bc2cedef79821b7ac37e9">CONFIG_INCLUDE_SYS_OPEN</a> +                     \</div>
+<div class="line"> <a class="code hl_define" href="#acad977a4de3bb6eb2369ae703b44ff37">CONFIG_INCLUDE_SYS_CLOSE</a> + <a class="code hl_define" href="#a66781d74f2853fef8bc4b79908b24ac8">CONFIG_INCLUDE_SYS_READ</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="#acd15b74bb6f9487cc4bc12952d8d7257">CONFIG_INCLUDE_SYS_WRITE</a> + <a class="code hl_define" href="#adde30c382e97aef535a40630b631b80f">CONFIG_INCLUDE_SYS_SEEK</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="#aefa28fad9028e06240df57a535e36f5c">CONFIG_INCLUDE_SYS_IOCTL</a> + <a class="code hl_define" href="#acd0ca92afe87cb20eac4bb3ff71e4322">CONFIG_INCLUDE_SYS_STAT</a> +                      \</div>
+<div class="line"> <a class="code hl_define" href="#a27810d82f14dd0845d2c9f7d1c4c4544">CONFIG_INCLUDE_SYS_MKDIR</a> + <a class="code hl_define" href="#a57f3b2807b05bf6784f193a3c985c54e">CONFIG_INCLUDE_SYS_UNLINK</a> +                    \</div>
+<div class="line"> <a class="code hl_define" href="#a2d50579916fbc84e4db5af66cd299aaf">CONFIG_INCLUDE_SYS_RENAME</a> + <a class="code hl_define" href="#a8d542b79c6b35331ae95d0341e6d9ca6">CONFIG_INCLUDE_SYS_MOUNT</a> +                    \</div>
+<div class="line"> <a class="code hl_define" href="#ade6fddc937b474020a792b7cb2858bed">CONFIG_INCLUDE_SYS_UMOUNT</a> + <a class="code hl_define" href="#aa9a2c921cb959838f5255d107e8fb22d">CONFIG_INCLUDE_SYS_REBOOT</a> +                   \</div>
+<div class="line"> <a class="code hl_define" href="#ad5198f372947bd8e93d7fe73a1fd960d">CONFIG_INCLUDE_SYS_HALT</a>)</div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a0b5fcae55cc325a4a22a0fbbaaa943c9"><div class="ttname"><a href="#a0b5fcae55cc325a4a22a0fbbaaa943c9">CONFIG_INCLUDE_SYS_CLONE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_CLONE</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a0c463c0a261b2aded2e61cc266e61b38"><div class="ttname"><a href="#a0c463c0a261b2aded2e61cc266e61b38">CONFIG_INCLUDE_SYS_NOTIFY</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_NOTIFY</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a0eb00eae76043356257ebf25c7417e4e"><div class="ttname"><a href="#a0eb00eae76043356257ebf25c7417e4e">CONFIG_INCLUDE_SYS_WAITPID</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_WAITPID</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a2485c748a6ebc8b2a808f594ec4fba23"><div class="ttname"><a href="#a2485c748a6ebc8b2a808f594ec4fba23">CONFIG_INCLUDE_SYS_EVENT_WAIT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EVENT_WAIT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a27810d82f14dd0845d2c9f7d1c4c4544"><div class="ttname"><a href="#a27810d82f14dd0845d2c9f7d1c4c4544">CONFIG_INCLUDE_SYS_MKDIR</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MKDIR</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a2d50579916fbc84e4db5af66cd299aaf"><div class="ttname"><a href="#a2d50579916fbc84e4db5af66cd299aaf">CONFIG_INCLUDE_SYS_RENAME</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_RENAME</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a2f6ad6284aaa1ba091cf06fe6f67d088"><div class="ttname"><a href="#a2f6ad6284aaa1ba091cf06fe6f67d088">CONFIG_INCLUDE_SYS_EVENT_POST</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EVENT_POST</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a2f9f787a7a26264de01ef2fbe8d5246d"><div class="ttname"><a href="#a2f9f787a7a26264de01ef2fbe8d5246d">CONFIG_INCLUDE_SYS_EXECVE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EXECVE</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a53596d900f72f47729b2ae89045f28da"><div class="ttname"><a href="#a53596d900f72f47729b2ae89045f28da">CONFIG_INCLUDE_SYS_GETPRIO</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_GETPRIO</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a57f3b2807b05bf6784f193a3c985c54e"><div class="ttname"><a href="#a57f3b2807b05bf6784f193a3c985c54e">CONFIG_INCLUDE_SYS_UNLINK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_UNLINK</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a60e23f6d80990d3a8e2588f4822be026"><div class="ttname"><a href="#a60e23f6d80990d3a8e2588f4822be026">CONFIG_INCLUDE_SYS_NANOSLEEP</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_NANOSLEEP</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a6349c45c64602c48c0c5087a6027ffc0"><div class="ttname"><a href="#a6349c45c64602c48c0c5087a6027ffc0">CONFIG_INCLUDE_SYS_MUNMAP</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MUNMAP</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a662466b5f5973ab8f89c3c80704457f5"><div class="ttname"><a href="#a662466b5f5973ab8f89c3c80704457f5">CONFIG_INCLUDE_SYS_BRK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_BRK</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a66781d74f2853fef8bc4b79908b24ac8"><div class="ttname"><a href="#a66781d74f2853fef8bc4b79908b24ac8">CONFIG_INCLUDE_SYS_READ</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_READ</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a68ed53fd6b95aac6db3e44695818bf0c"><div class="ttname"><a href="#a68ed53fd6b95aac6db3e44695818bf0c">CONFIG_INCLUDE_SYS_FORK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_FORK</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a6de0e5dcd80bc2cedef79821b7ac37e9"><div class="ttname"><a href="#a6de0e5dcd80bc2cedef79821b7ac37e9">CONFIG_INCLUDE_SYS_OPEN</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_OPEN</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a837a901b5f4ca7bb74e83d20bac4ece1"><div class="ttname"><a href="#a837a901b5f4ca7bb74e83d20bac4ece1">CONFIG_INCLUDE_SYS_RECV</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_RECV</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a8d542b79c6b35331ae95d0341e6d9ca6"><div class="ttname"><a href="#a8d542b79c6b35331ae95d0341e6d9ca6">CONFIG_INCLUDE_SYS_MOUNT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MOUNT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a92c54e3597ddb43ce61b8bcde9052bc1"><div class="ttname"><a href="#a92c54e3597ddb43ce61b8bcde9052bc1">CONFIG_INCLUDE_SYS_YIELD</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_YIELD</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_aa2a526b69a2d49b9eaef83c60f27512e"><div class="ttname"><a href="#aa2a526b69a2d49b9eaef83c60f27512e">CONFIG_INCLUDE_SYS_EXIT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_EXIT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_aa9a2c921cb959838f5255d107e8fb22d"><div class="ttname"><a href="#aa9a2c921cb959838f5255d107e8fb22d">CONFIG_INCLUDE_SYS_REBOOT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_REBOOT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ab118f80a4ff475810c6710a4e748f16e"><div class="ttname"><a href="#ab118f80a4ff475810c6710a4e748f16e">CONFIG_INCLUDE_SYS_REPLY</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_REPLY</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ab9be880ba29de9c0c3a8cf33647da623"><div class="ttname"><a href="#ab9be880ba29de9c0c3a8cf33647da623">CONFIG_INCLUDE_SYS_GETPPID</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_GETPPID</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_acad977a4de3bb6eb2369ae703b44ff37"><div class="ttname"><a href="#acad977a4de3bb6eb2369ae703b44ff37">CONFIG_INCLUDE_SYS_CLOSE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_CLOSE</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_acd0ca92afe87cb20eac4bb3ff71e4322"><div class="ttname"><a href="#acd0ca92afe87cb20eac4bb3ff71e4322">CONFIG_INCLUDE_SYS_STAT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_STAT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_acd15b74bb6f9487cc4bc12952d8d7257"><div class="ttname"><a href="#acd15b74bb6f9487cc4bc12952d8d7257">CONFIG_INCLUDE_SYS_WRITE</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_WRITE</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ad5198f372947bd8e93d7fe73a1fd960d"><div class="ttname"><a href="#ad5198f372947bd8e93d7fe73a1fd960d">CONFIG_INCLUDE_SYS_HALT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_HALT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_adde30c382e97aef535a40630b631b80f"><div class="ttname"><a href="#adde30c382e97aef535a40630b631b80f">CONFIG_INCLUDE_SYS_SEEK</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_SEEK</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ade6fddc937b474020a792b7cb2858bed"><div class="ttname"><a href="#ade6fddc937b474020a792b7cb2858bed">CONFIG_INCLUDE_SYS_UMOUNT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_UMOUNT</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ae2a0246e0087b7cb06ed0468c6d1b455"><div class="ttname"><a href="#ae2a0246e0087b7cb06ed0468c6d1b455">CONFIG_INCLUDE_SYS_SETPRIO</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_SETPRIO</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ae39d19d4345a0e8f6ce05001a00cc0a7"><div class="ttname"><a href="#ae39d19d4345a0e8f6ce05001a00cc0a7">CONFIG_INCLUDE_SYS_MMAP</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_MMAP</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ae7247a6d5878506991c3a20d12d530ca"><div class="ttname"><a href="#ae7247a6d5878506991c3a20d12d530ca">CONFIG_INCLUDE_SYS_SENDSYNC</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_SENDSYNC</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_aed16199ac0dbff8f53cc67ca95ce527a"><div class="ttname"><a href="#aed16199ac0dbff8f53cc67ca95ce527a">CONFIG_INCLUDE_SYS_GETPID</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_GETPID</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_aefa28fad9028e06240df57a535e36f5c"><div class="ttname"><a href="#aefa28fad9028e06240df57a535e36f5c">CONFIG_INCLUDE_SYS_IOCTL</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_IOCTL</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_af5831aaa5e81ee84cb1eeeee5e1f3119"><div class="ttname"><a href="#af5831aaa5e81ee84cb1eeeee5e1f3119">CONFIG_INCLUDE_SYS_NOTIFY_WAIT</a></div><div class="ttdeci">#define CONFIG_INCLUDE_SYS_NOTIFY_WAIT</div></div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a8125ddc77bbb15588608c8b894dfd1f3" name="a8125ddc77bbb15588608c8b894dfd1f3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8125ddc77bbb15588608c8b894dfd1f3">&#9670;&#160;</a></span>CONFIG_TASK_NAME_LEN</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_TASK_NAME_LEN&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a34c264bdfb52e2047d5fd32486834070" name="a34c264bdfb52e2047d5fd32486834070"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a34c264bdfb52e2047d5fd32486834070">&#9670;&#160;</a></span>CONFIG_THREADED_IRQS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_THREADED_IRQS&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a836435ca7dbe895d16b9f942e7a00b43" name="a836435ca7dbe895d16b9f942e7a00b43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a836435ca7dbe895d16b9f942e7a00b43">&#9670;&#160;</a></span>CONFIG_TICK_HOOK</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_TICK_HOOK&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5c72f011f94e171f3516246cb40236d8" name="a5c72f011f94e171f3516246cb40236d8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5c72f011f94e171f3516246cb40236d8">&#9670;&#160;</a></span>CONFIG_TICK_HZ</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_TICK_HZ&#160;&#160;&#160;1000</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a17a756a1a1d4b973d32c8a694b3a944d" name="a17a756a1a1d4b973d32c8a694b3a944d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a17a756a1a1d4b973d32c8a694b3a944d">&#9670;&#160;</a></span>CONFIG_TIME_SLICING</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_TIME_SLICING&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afff88f0519de5cce9a9edfb88c8a5052" name="afff88f0519de5cce9a9edfb88c8a5052"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afff88f0519de5cce9a9edfb88c8a5052">&#9670;&#160;</a></span>CONFIG_USE_APIC_TIMER</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_USE_APIC_TIMER&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0ff10bacfb6e11a5da4a904a75232081" name="a0ff10bacfb6e11a5da4a904a75232081"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0ff10bacfb6e11a5da4a904a75232081">&#9670;&#160;</a></span>CONFIG_USER_MMIO_REGION_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_USER_MMIO_REGION_SIZE&#160;&#160;&#160;0x200000ULL</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5e540b0b74aced33f31700482c8654b9" name="a5e540b0b74aced33f31700482c8654b9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5e540b0b74aced33f31700482c8654b9">&#9670;&#160;</a></span>CONFIG_USER_MMIO_VA_BASE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_USER_MMIO_VA_BASE&#160;&#160;&#160;0x61000000ULL</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7bb0eb267e80eb5d93163869b66b3bdd" name="a7bb0eb267e80eb5d93163869b66b3bdd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7bb0eb267e80eb5d93163869b66b3bdd">&#9670;&#160;</a></span>CONFIG_USER_SHM_REGION_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_USER_SHM_REGION_SIZE&#160;&#160;&#160;0x200000ULL</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a18dd1e83705e019cadcdbc32c126c074" name="a18dd1e83705e019cadcdbc32c126c074"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a18dd1e83705e019cadcdbc32c126c074">&#9670;&#160;</a></span>CONFIG_USER_SHM_VA_BASE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_USER_SHM_VA_BASE&#160;&#160;&#160;0x62000000ULL</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a33fbd7e91d033fa1e09b4ed4de899c02" name="a33fbd7e91d033fa1e09b4ed4de899c02"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a33fbd7e91d033fa1e09b4ed4de899c02">&#9670;&#160;</a></span>CONFIG_VERSION</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_VERSION&#160;&#160;&#160;&quot;0.3.10-dev&quot;</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa1a69b49aa134e3a3c303489bccca599" name="aa1a69b49aa134e3a3c303489bccca599"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa1a69b49aa134e3a3c303489bccca599">&#9670;&#160;</a></span>CONFIG_VERSION_MAJOR</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_VERSION_MAJOR&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acd02978616d37355da2ade116edf7bde" name="acd02978616d37355da2ade116edf7bde"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acd02978616d37355da2ade116edf7bde">&#9670;&#160;</a></span>CONFIG_VERSION_MINOR</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_VERSION_MINOR&#160;&#160;&#160;3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9a1d7f74c8a2af39bd2b1c5b6f0fe5c5" name="a9a1d7f74c8a2af39bd2b1c5b6f0fe5c5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9a1d7f74c8a2af39bd2b1c5b6f0fe5c5">&#9670;&#160;</a></span>CONFIG_VERSION_NUM</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_VERSION_NUM</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line">((<a class="code hl_define" href="#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a> &lt;&lt; 16) | (<a class="code hl_define" href="#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a> &lt;&lt; 8) |              \</div>
+<div class="line"> <a class="code hl_define" href="#ad5dc4c87864bde8898026a5c2e00cb59">CONFIG_VERSION_PATCH</a>)</div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_aa1a69b49aa134e3a3c303489bccca599"><div class="ttname"><a href="#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a></div><div class="ttdeci">#define CONFIG_VERSION_MAJOR</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_acd02978616d37355da2ade116edf7bde"><div class="ttname"><a href="#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a></div><div class="ttdeci">#define CONFIG_VERSION_MINOR</div></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_ad5dc4c87864bde8898026a5c2e00cb59"><div class="ttname"><a href="#ad5dc4c87864bde8898026a5c2e00cb59">CONFIG_VERSION_PATCH</a></div><div class="ttdeci">#define CONFIG_VERSION_PATCH</div></div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="ad5dc4c87864bde8898026a5c2e00cb59" name="ad5dc4c87864bde8898026a5c2e00cb59"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad5dc4c87864bde8898026a5c2e00cb59">&#9670;&#160;</a></span>CONFIG_VERSION_PATCH</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_VERSION_PATCH&#160;&#160;&#160;10</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aab75aa8a7d758ce4e36fa6be7fbce78b" name="aab75aa8a7d758ce4e36fa6be7fbce78b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aab75aa8a7d758ce4e36fa6be7fbce78b">&#9670;&#160;</a></span>CONFIG_VFS_MAX_PATH</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_VFS_MAX_PATH&#160;&#160;&#160;256</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3163b31e3ebb9db40fdf2093b6edf7a5" name="a3163b31e3ebb9db40fdf2093b6edf7a5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3163b31e3ebb9db40fdf2093b6edf7a5">&#9670;&#160;</a></span>CONFIG_WATCHDOG_ACTION</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_WATCHDOG_ACTION&#160;&#160;&#160;3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3dd102ae8468ee9fcc97b63304c59228" name="a3dd102ae8468ee9fcc97b63304c59228"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3dd102ae8468ee9fcc97b63304c59228">&#9670;&#160;</a></span>CONFIG_WATCHDOG_GRACE_TICKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_WATCHDOG_GRACE_TICKS&#160;&#160;&#160;500</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5347bb9dbf512963efd21650e2d3961c" name="a5347bb9dbf512963efd21650e2d3961c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5347bb9dbf512963efd21650e2d3961c">&#9670;&#160;</a></span>CONFIG_WCET_OVERRUN_DETECTION</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_WCET_OVERRUN_DETECTION&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab44671d00a3c95ec864336d0fd40979d" name="ab44671d00a3c95ec864336d0fd40979d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab44671d00a3c95ec864336d0fd40979d">&#9670;&#160;</a></span>CONFIG_ZOMBIE_STARVATION_LIMIT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_ZOMBIE_STARVATION_LIMIT&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6cbad48473f7f79a39d324ee988c0d46" name="a6cbad48473f7f79a39d324ee988c0d46"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6cbad48473f7f79a39d324ee988c0d46">&#9670;&#160;</a></span>JARVIS_CONFIG_H</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define JARVIS_CONFIG_H</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="aa501d94aad5260161a3f0b89ec827e92" name="aa501d94aad5260161a3f0b89ec827e92"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aa501d94aad5260161a3f0b89ec827e92">&#9670;&#160;</a></span>UART_BASE</h2>
 
@@ -159,7 +2751,7 @@ Macros</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define UART_BASE&#160;&#160;&#160;((volatile <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *)(<a class="el" href="namespacearch.html#a57c6bb74fdc3ee11eecab91b0142e95b">arch::HHDM_OFFSET</a> + 0x9000000ULL))</td>
+          <td class="memname">#define UART_BASE&#160;&#160;&#160;((volatile uint32_t *)(<a class="el" href="namespacearch.html#a57c6bb74fdc3ee11eecab91b0142e95b">arch::HHDM_OFFSET</a> + 0x9000000ULL))</td>
         </tr>
       </table>
 </div><div class="memdoc">

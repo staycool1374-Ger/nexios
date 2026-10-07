@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -136,9 +136,9 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a5da462b4221e1837dadb8f296652904c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialises the <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> and sets up the kernel page tables.  <br /></td></tr>
 <tr class="memitem:abeb64ef713899d8f0a29c24d1a3b4be6" id="r_abeb64ef713899d8f0a29c24d1a3b4be6"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#abeb64ef713899d8f0a29c24d1a3b4be6">init_err</a> ()</td></tr>
 <tr class="memdesc:abeb64ef713899d8f0a29c24d1a3b4be6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialises the <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> with error code.  <br /></td></tr>
-<tr class="memitem:aa31478530f584907b7a8d79cd60a8e46" id="r_aa31478530f584907b7a8d79cd60a8e46"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aa31478530f584907b7a8d79cd60a8e46">map_page</a> (uint64_t virt_addr, uint64_t phys_addr, bool user=false)</td></tr>
+<tr class="memitem:aa31478530f584907b7a8d79cd60a8e46" id="r_aa31478530f584907b7a8d79cd60a8e46"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aa31478530f584907b7a8d79cd60a8e46">map_page</a> (uint64_t virt_addr, uint64_t phys_addr, bool user=<a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>)</td></tr>
 <tr class="memdesc:aa31478530f584907b7a8d79cd60a8e46"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a virtual page to a physical page in the kernel page table.  <br /></td></tr>
-<tr class="memitem:a00badc7d69ae6df6b9ec4ece614fe766" id="r_a00badc7d69ae6df6b9ec4ece614fe766"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a00badc7d69ae6df6b9ec4ece614fe766">map_page_err</a> (uint64_t virt_addr, uint64_t phys_addr, bool user=false)</td></tr>
+<tr class="memitem:a00badc7d69ae6df6b9ec4ece614fe766" id="r_a00badc7d69ae6df6b9ec4ece614fe766"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a00badc7d69ae6df6b9ec4ece614fe766">map_page_err</a> (uint64_t virt_addr, uint64_t phys_addr, bool user=<a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>)</td></tr>
 <tr class="memdesc:a00badc7d69ae6df6b9ec4ece614fe766"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a virtual page to a physical page with error code.  <br /></td></tr>
 <tr class="memitem:a0bf86a0e97402ac5e989fa1aa55a0df5" id="r_a0bf86a0e97402ac5e989fa1aa55a0df5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0bf86a0e97402ac5e989fa1aa55a0df5">unmap_page</a> (uint64_t virt_addr)</td></tr>
 <tr class="memdesc:a0bf86a0e97402ac5e989fa1aa55a0df5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps a virtual page.  <br /></td></tr>
@@ -154,20 +154,63 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a385de660f1f7a0aab86ad1a31cb4971b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Creates a fresh PML4: zeroes user entries (0-255), copies kernel entries (256-511). Used during exec/load — NOT for fork (which needs parent user entries).  <br /></td></tr>
 <tr class="memitem:a05dddb595ff91d7b1c0ed494e503b205" id="r_a05dddb595ff91d7b1c0ed494e503b205"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a05dddb595ff91d7b1c0ed494e503b205">clone_kernel_pml4_err</a> (uint64_t &amp;out_pml4_phys)</td></tr>
 <tr class="memdesc:a05dddb595ff91d7b1c0ed494e503b205"><td class="mdescLeft">&#160;</td><td class="mdescRight">Creates a fresh PML4 with error code.  <br /></td></tr>
+<tr class="memitem:ab1e588a7330966cfa208fdb3255ed778" id="r_ab1e588a7330966cfa208fdb3255ed778"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ab1e588a7330966cfa208fdb3255ed778">merge_kernel_half</a> (uint64_t src_pml4, uint64_t dst_pml4)</td></tr>
+<tr class="memdesc:ab1e588a7330966cfa208fdb3255ed778"><td class="mdescLeft">&#160;</td><td class="mdescRight">Converge a child PML4's kernel half (entries 256..511) toward <code class="param">src_pml4</code> (issue #96, kernel-half merge). Recursive top-down walk (PML4→PDPT→PD→PT): wherever the child lacks an entry present in the source, the entry is copied by value (link semantics — lower tables stay shared, never duplicated); entries already present are left untouched (idempotent); huge/leaf entries are copied by value. Performs ZERO allocations, so it cannot OOM by construction; the bool preserves the failure contract for future allocating revisions (callers must destroy the child table on false). No locking: single-threaded, runs before the first CR3 switch to the child (same window MP-7 uses).  <br /></td></tr>
+<tr class="memitem:aaea3e29ad09f4191bd7ad1bf1fcfdeb9" id="r_aaea3e29ad09f4191bd7ad1bf1fcfdeb9"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aaea3e29ad09f4191bd7ad1bf1fcfdeb9">snapshot_kernel_template</a> ()</td></tr>
+<tr class="memdesc:aaea3e29ad09f4191bd7ad1bf1fcfdeb9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot the live kernel PML4's kernel half (entries 256..511) into the bring-up template (issue #96). Call ONCE at end of bring-up, before the first task spawns.  <br /></td></tr>
+<tr class="memitem:a1c943ca077e476e51633526b6c4a67d5" id="r_a1c943ca077e476e51633526b6c4a67d5"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a1c943ca077e476e51633526b6c4a67d5">kernel_half_equal</a> (uint64_t a_pml4, uint64_t b_pml4)</td></tr>
+<tr class="memdesc:a1c943ca077e476e51633526b6c4a67d5"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when <code class="param">a_pml4</code> and <code class="param">b_pml4</code> agree on every kernel-half entry (256..511), compared recursively through shared tables (present+equal u64, or both-absent, at each level).  <br /></td></tr>
+<tr class="memitem:a07d72a53086737838d0072b7b12daeb9" id="r_a07d72a53086737838d0072b7b12daeb9"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a07d72a53086737838d0072b7b12daeb9">kernel_half_matches_template</a> (uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:a07d72a53086737838d0072b7b12daeb9"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when <code class="param">pml4_phys</code> matches the bring-up template on every kernel-half entry (diagnostics + tests; drift from legitimate late mappings is NOT a failure here).  <br /></td></tr>
+<tr class="memitem:ab4a1174de0ca4f1aab88831fc9439847" id="r_ab4a1174de0ca4f1aab88831fc9439847"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab4a1174de0ca4f1aab88831fc9439847">assert_kernel_half_converged</a> (uint64_t child_pml4)</td></tr>
+<tr class="memdesc:ab4a1174de0ca4f1aab88831fc9439847"><td class="mdescLeft">&#160;</td><td class="mdescRight">Halt unless <code class="param">child_pml4</code> converged to the LIVE kernel PML4's kernel half (issue #96, structural audit). Panics (debug AND release) on mismatch; template drift is debug-logged only — legitimate late mappings must converge, not panic (paper §4 row 2).  <br /></td></tr>
 <tr class="memitem:a6c283a922356a4a1b0a157a996a2bb03" id="r_a6c283a922356a4a1b0a157a996a2bb03"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6c283a922356a4a1b0a157a996a2bb03">map_page_in_pml4</a> (uint64_t virt_addr, uint64_t phys_addr, bool user, uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:a6c283a922356a4a1b0a157a996a2bb03"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a page into a specific page table (not the kernel one).  <br /></td></tr>
+<tr class="memitem:a39e966b6069fb70b5f4177d3fd6b58cb" id="r_a39e966b6069fb70b5f4177d3fd6b58cb"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a39e966b6069fb70b5f4177d3fd6b58cb">map_page_in_pml4</a> (uint64_t virt_addr, uint64_t phys_addr, bool user, bool executable, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:a39e966b6069fb70b5f4177d3fd6b58cb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a page into a specific page table with explicit W^X permission (VULN-H1). When <code class="param">executable</code> is false the architectural NX bit is set (x86_64 bit 63, aarch64 bit 54) or the X bit is dropped (riscv64), so the page cannot execute.  <br /></td></tr>
 <tr class="memitem:a60a557d98925cd250a9180effab1e774" id="r_a60a557d98925cd250a9180effab1e774"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a60a557d98925cd250a9180effab1e774">map_page_in_pml4_err</a> (uint64_t virt_addr, uint64_t phys_addr, bool user, uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:a60a557d98925cd250a9180effab1e774"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a page into a specific page table with error code.  <br /></td></tr>
 <tr class="memitem:a41f6aadd3a5d784d8324a8b1e0e11789" id="r_a41f6aadd3a5d784d8324a8b1e0e11789"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a41f6aadd3a5d784d8324a8b1e0e11789">get_kernel_pml4</a> ()</td></tr>
-<tr class="memdesc:a41f6aadd3a5d784d8324a8b1e0e11789"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the physical address of the kernel PML4.  <br /></td></tr>
+<tr class="memdesc:a41f6aadd3a5d784d8324a8b1e0e11789"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the physical address of the kernel PML4 table.  <br /></td></tr>
+<tr class="memitem:a14814ba2ea03a0fef26664c62410c8de" id="r_a14814ba2ea03a0fef26664c62410c8de"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a14814ba2ea03a0fef26664c62410c8de">deep_copy_user_pages</a> (uint64_t src_pml4, uint64_t dst_pml4)</td></tr>
+<tr class="memdesc:a14814ba2ea03a0fef26664c62410c8de"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees all user-space pages and page tables from a user PML4. Used during exec() to clean up the old address space. Skips kernel-owned pages (<a class="el" href="classkernel_1_1_p_m_m.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership.">PMM::is_user_page</a> owner-bit check) — v0.4.0 MP-7: no task shares another's user entries, so this is always the full teardown of a private address space.  <br /></td></tr>
 <tr class="memitem:ab204c9d0ee0ad66661be51ce72280bff" id="r_ab204c9d0ee0ad66661be51ce72280bff"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab204c9d0ee0ad66661be51ce72280bff">free_user_pages</a> (uint64_t pml4_phys)</td></tr>
-<tr class="memdesc:ab204c9d0ee0ad66661be51ce72280bff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees all user-space pages and page tables from a user PML4. Used during exec() to clean up the old address space. Skips kernel-owned pages (HHDM-mapped) and honours page_table_shared_ flag.  <br /></td></tr>
+<tr class="memdesc:ab204c9d0ee0ad66661be51ce72280bff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free all user-space pages and page tables owned by a user PML4. Skips kernel-owned pages (<a class="el" href="classkernel_1_1_p_m_m.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership.">PMM::is_user_page</a> owner-bit check).  <br /></td></tr>
 <tr class="memitem:ac75e4a39be64ad3c364d4321c1a621e1" id="r_ac75e4a39be64ad3c364d4321c1a621e1"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac75e4a39be64ad3c364d4321c1a621e1">free_user_pages_err</a> (uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:ac75e4a39be64ad3c364d4321c1a621e1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees all user-space pages and page tables with error code.  <br /></td></tr>
+<tr class="memitem:af38a18ef6db1e4e014d7c5aee0b71aaf" id="r_af38a18ef6db1e4e014d7c5aee0b71aaf"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#af38a18ef6db1e4e014d7c5aee0b71aaf">map_frame_from_cap</a> (class <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">cap::FrameCap</a> *fc, uint64_t virt_addr, bool user, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:af38a18ef6db1e4e014d7c5aee0b71aaf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps the frame(s) owned by a FrameCap into <code class="param">pml4_phys</code>. Refuses a revoked FrameCap (ROADMAP 0.4.1 CSpace) — mapping capability-gated memory requires a live, non-revoked cap.  <br /></td></tr>
+<tr class="memitem:a9d3b6e67113f63864a37d28320a7bc28" id="r_a9d3b6e67113f63864a37d28320a7bc28"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a9d3b6e67113f63864a37d28320a7bc28">unmap_frame_from_cap</a> (uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:a9d3b6e67113f63864a37d28320a7bc28"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps one page previously mapped via <a class="el" href="#af38a18ef6db1e4e014d7c5aee0b71aaf" title="Maps the frame(s) owned by a FrameCap into pml4_phys. Refuses a revoked FrameCap (ROADMAP 0....">map_frame_from_cap()</a>.  <br /></td></tr>
+<tr class="memitem:af2f11f9011cb503e77cdfcdd2c26618c" id="r_af2f11f9011cb503e77cdfcdd2c26618c"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#af2f11f9011cb503e77cdfcdd2c26618c">map_mmio_from_cap</a> (class <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *mmio, uint64_t virt_addr, bool user, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:af2f11f9011cb503e77cdfcdd2c26618c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps an MmioCap's memory BAR range into <code class="param">pml4_phys</code> (v0.4.2, issue #3). Refuses a revoked cap and IO-type ranges. Page-granular: the BAR tail is rounded up to a full page.  <br /></td></tr>
+<tr class="memitem:a4aba9fc6e5febed05a0dc3edfb0dc22f" id="r_a4aba9fc6e5febed05a0dc3edfb0dc22f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4aba9fc6e5febed05a0dc3edfb0dc22f">unmap_mmio_from_cap</a> (class <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *mmio, uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:a4aba9fc6e5febed05a0dc3edfb0dc22f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps an MmioCap's memory BAR range previously mapped via <a class="el" href="#af2f11f9011cb503e77cdfcdd2c26618c" title="Maps an MmioCap&#39;s memory BAR range into pml4_phys (v0.4.2, issue #3). Refuses a revoked cap and IO-ty...">map_mmio_from_cap()</a>.  <br /></td></tr>
+<tr class="memitem:a87e909fad18b6d7d49eb348c5183cbca" id="r_a87e909fad18b6d7d49eb348c5183cbca"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a87e909fad18b6d7d49eb348c5183cbca">unmap_page_in_pml4</a> (uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:a87e909fad18b6d7d49eb348c5183cbca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps one user page previously mapped into <code class="param">pml4_phys</code> (issue #95: shared-library RO pages must be unmapped — never freed — by each task teardown; the cache owns shared phys lifetime by refcount). Clears the PT leaf and flushes the VA; huge entries and absent tables are left alone.  <br /></td></tr>
 <tr class="memitem:a32036fcad3f6784d43cef83b23423d49" id="r_a32036fcad3f6784d43cef83b23423d49"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a32036fcad3f6784d43cef83b23423d49">virt_to_phys_in_pml4</a> (uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:a32036fcad3f6784d43cef83b23423d49"><td class="mdescLeft">&#160;</td><td class="mdescRight">Translates a virtual address to a physical address using a specific PML4.  <br /></td></tr>
 <tr class="memitem:a464e326efd7e29354e19617ca99d9e86" id="r_a464e326efd7e29354e19617ca99d9e86"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a464e326efd7e29354e19617ca99d9e86">virt_to_phys_in_pml4_err</a> (uint64_t virt_addr, uint64_t pml4_phys, uint64_t &amp;out_phys_addr)</td></tr>
 <tr class="memdesc:a464e326efd7e29354e19617ca99d9e86"><td class="mdescLeft">&#160;</td><td class="mdescRight">Translates a virtual address to a physical address using a specific PML4 with error code.  <br /></td></tr>
+<tr class="memitem:a70bf58e478f1a27ad8e1badfeb9fc1f2" id="r_a70bf58e478f1a27ad8e1badfeb9fc1f2"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a70bf58e478f1a27ad8e1badfeb9fc1f2">hhdm_was_modified</a> ()</td></tr>
+<tr class="memdesc:a70bf58e478f1a27ad8e1badfeb9fc1f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true if any test has modified the HHDM page tables since the last clear/take call (acquire: pairs with the release store in map_page).  <br /></td></tr>
+<tr class="memitem:a301ec275afeeb7bfecb93073618e67ea" id="r_a301ec275afeeb7bfecb93073618e67ea"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a301ec275afeeb7bfecb93073618e67ea">clear_hhdm_modified</a> ()</td></tr>
+<tr class="memdesc:a301ec275afeeb7bfecb93073618e67ea"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset the HHDM modification flag (called after PD restore).  <br /></td></tr>
+<tr class="memitem:ac5cc5b13afcd183532d0f49f56d164d5" id="r_ac5cc5b13afcd183532d0f49f56d164d5"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ac5cc5b13afcd183532d0f49f56d164d5">take_hhdm_modified</a> ()</td></tr>
+<tr class="memdesc:ac5cc5b13afcd183532d0f49f56d164d5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Atomically take the HHDM flag: returns the previous value and clears it in one step, so a set landing after the take is preserved for the next restore (fail-safe over-restore instead of fail-dangerous skip). Used by snapshot_restore.  <br /></td></tr>
+<tr class="memitem:a31597ed436d671994e03be2f5aa6de21" id="r_a31597ed436d671994e03be2f5aa6de21"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a31597ed436d671994e03be2f5aa6de21">identity_was_modified</a> ()</td></tr>
+<tr class="memdesc:a31597ed436d671994e03be2f5aa6de21"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true if any test has modified the low identity page tables since the last clear/take call.  <br /></td></tr>
+<tr class="memitem:a878fec96367292e290701c0827eb103e" id="r_a878fec96367292e290701c0827eb103e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a878fec96367292e290701c0827eb103e">clear_identity_modified</a> ()</td></tr>
+<tr class="memdesc:a878fec96367292e290701c0827eb103e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset the identity modification flag (called after PD restore).  <br /></td></tr>
+<tr class="memitem:a287c73fed6d835188195b1992850d1ff" id="r_a287c73fed6d835188195b1992850d1ff"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a287c73fed6d835188195b1992850d1ff">take_identity_modified</a> ()</td></tr>
+<tr class="memdesc:a287c73fed6d835188195b1992850d1ff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Atomically take the identity flag (same contract as the HHDM take above). Used by snapshot_restore.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
+Static Public Attributes</h2></td></tr>
+<tr class="memitem:a08f8461822ec82aad3f88467cd10482f" id="r_a08f8461822ec82aad3f88467cd10482f"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a08f8461822ec82aad3f88467cd10482f">hhdm_modified_</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memdesc:a08f8461822ec82aad3f88467cd10482f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set to true when a test modifies kernel-space page tables (HHDM range). Reset after PD restore in snapshot_restore. Plain bool with __atomic_* access: set-true is idempotent (no lost update), and restore takes it with an exchange (issue #60 VAR-17 SMP re-audit).  <br /></td></tr>
+<tr class="memitem:abf087941cad6d8ff827fcc49023b0cb8" id="r_abf087941cad6d8ff827fcc49023b0cb8"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#abf087941cad6d8ff827fcc49023b0cb8">identity_modified_</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memdesc:abf087941cad6d8ff827fcc49023b0cb8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set to true when a test modifies the LOW identity map (PD_IDENTITY, phys 0x3000 — VAs in PML4[0] below PML4_USER_COUNT). Reset after PD restore in snapshot_restore.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Virtual memory manager — maps virtual to physical pages. </p>
@@ -175,6 +218,93 @@ Static Public Member Functions</h2></td></tr>
 <dd>
 Supports user/kernel page flags, TLB flush after each mapping. </dd></dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="ab4a1174de0ca4f1aab88831fc9439847" name="ab4a1174de0ca4f1aab88831fc9439847"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab4a1174de0ca4f1aab88831fc9439847">&#9670;&#160;</a></span>assert_kernel_half_converged()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::assert_kernel_half_converged </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>child_pml4</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Halt unless <code class="param">child_pml4</code> converged to the LIVE kernel PML4's kernel half (issue #96, structural audit). Panics (debug AND release) on mismatch; template drift is debug-logged only — legitimate late mappings must converge, not panic (paper §4 row 2). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_ab4a1174de0ca4f1aab88831fc9439847_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_ab4a1174de0ca4f1aab88831fc9439847_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a301ec275afeeb7bfecb93073618e67ea" name="a301ec275afeeb7bfecb93073618e67ea"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a301ec275afeeb7bfecb93073618e67ea">&#9670;&#160;</a></span>clear_hhdm_modified()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::clear_hhdm_modified </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Reset the HHDM modification flag (called after PD restore). </p>
+
+</div>
+</div>
+<a id="a878fec96367292e290701c0827eb103e" name="a878fec96367292e290701c0827eb103e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a878fec96367292e290701c0827eb103e">&#9670;&#160;</a></span>clear_identity_modified()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::clear_identity_modified </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Reset the identity modification flag (called after PD restore). </p>
+
+</div>
+</div>
 <a id="a385de660f1f7a0aab86ad1a31cb4971b" name="a385de660f1f7a0aab86ad1a31cb4971b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a385de660f1f7a0aab86ad1a31cb4971b">&#9670;&#160;</a></span>clone_kernel_pml4()</h2>
 
@@ -199,12 +329,15 @@ Supports user/kernel page flags, TLB flush after each mapping. </dd></dl>
 </div><div class="memdoc">
 
 <p>Creates a fresh PML4: zeroes user entries (0-255), copies kernel entries (256-511). Used during exec/load — NOT for fork (which needs parent user entries). </p>
-<dl class="section return"><dt>Returns</dt><dd>Physical address of the new PML4, or 0 on failure. </dd></dl>
+<p>Create a new PML4: zeroes user entries, copies kernel entries.</p>
+<dl class="section return"><dt>Returns</dt><dd>Physical address of the new PML4, or 0 on failure.</dd>
+<dd>
+Physical address of new PML4, or 0 on failure. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a385de660f1f7a0aab86ad1a31cb4971b_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a385de660f1f7a0aab86ad1a31cb4971b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -233,18 +366,26 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Creates a fresh PML4 with error code. </p>
+<p>Clone kernel PML4 with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[out]</td><td class="paramname">out_pml4_phys</td><td>Physical address of the new PML4. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">VmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_pml4_phys</td><td>Physical address of new PML4 on success. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a05dddb595ff91d7b1c0ed494e503b205_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a05dddb595ff91d7b1c0ed494e503b205_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -273,12 +414,63 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Returns the physical address of the current PML4 table. </p>
-<dl class="section return"><dt>Returns</dt><dd>Physical address of PML4. </dd></dl>
+<p>Read the current PML4 physical address from CR3 (or equivalent).</p>
+<dl class="section return"><dt>Returns</dt><dd>Physical address of PML4.</dd>
+<dd>
+Physical address of the active PML4. </dd></dl>
+
+</div>
+</div>
+<a id="a14814ba2ea03a0fef26664c62410c8de" name="a14814ba2ea03a0fef26664c62410c8de"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a14814ba2ea03a0fef26664c62410c8de">&#9670;&#160;</a></span>deep_copy_user_pages()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::deep_copy_user_pages </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>src_pml4</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>dst_pml4</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Frees all user-space pages and page tables from a user PML4. Used during exec() to clean up the old address space. Skips kernel-owned pages (<a class="el" href="classkernel_1_1_p_m_m.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership.">PMM::is_user_page</a> owner-bit check) — v0.4.0 MP-7: no task shares another's user entries, so this is always the full teardown of a private address space. </p>
+<p>Deep-copy user-space page tables from src_pml4 to dst_pml4. Allocates new PDPT/PD/PT pages and copies data page content. dst_pml4 must already have kernel entries populated. Worst-case: PML4_USER_COUNT (256) × 512 × 512 × 512 leaf visits, each doing a 4 KiB memcpy. Yields every 64 leaf entries.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the user PML4.</td></tr>
+  </table>
+  </dd>
+</dl>
+<p>Deep-copy user-space page tables from src_pml4 to dst_pml4. Allocates new PDPT/PD/PT pages and copies data page content. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">src_pml4</td><td>Physical address of source PML4. </td></tr>
+    <tr><td class="paramname">dst_pml4</td><td>Physical address of destination PML4 (must already have kernel entries populated). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success, false on OOM (partial state may remain).</dd>
+<dd>
+true on success, false on OOM. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_v_m_m_a76ece689da1d37a1ff4c78d747035edf_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a76ece689da1d37a1ff4c78d747035edf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<div class="center"><img src="classkernel_1_1_v_m_m_a14814ba2ea03a0fef26664c62410c8de_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a14814ba2ea03a0fef26664c62410c8de_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -306,18 +498,19 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Frees all user-space pages and page tables from a user PML4. Used during exec() to clean up the old address space. Skips kernel-owned pages (HHDM-mapped) and honours page_table_shared_ flag. </p>
+<p>Free all user-space pages and page tables owned by a user PML4. Skips kernel-owned pages (<a class="el" href="classkernel_1_1_p_m_m.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership.">PMM::is_user_page</a> owner-bit check). </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">pml4_phys</td><td>Physical address of the user PML4. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the user PML4 to tear down.</td></tr>
   </table>
   </dd>
 </dl>
+<p>Free all user-accessible pages in a page table. Worst-case iterations: PML4_USER_COUNT (256) × 512 × 512 × 512 leaf visits ≈ 34 billion in a fully populated 4-level walk. In practice bounded by the actual mapped range (stack + heap + code segments). Yields every 64 leaf entries so higher-priority tasks can run during teardown of large address spaces. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_ab204c9d0ee0ad66661be51ce72280bff_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_ab204c9d0ee0ad66661be51ce72280bff_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -346,18 +539,19 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Frees all user-space pages and page tables with error code. </p>
+<p>Free all user pages from a PML4 with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">pml4_phys</td><td>Physical address of the user PML4. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">VmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_ac75e4a39be64ad3c364d4321c1a621e1_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_ac75e4a39be64ad3c364d4321c1a621e1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -385,7 +579,62 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Returns the physical address of the kernel PML4. </p>
+<p>Return the physical address of the kernel PML4 table. </p>
+<dl class="section return"><dt>Returns</dt><dd>Physical address of the kernel page-table root. </dd></dl>
+
+</div>
+</div>
+<a id="a70bf58e478f1a27ad8e1badfeb9fc1f2" name="a70bf58e478f1a27ad8e1badfeb9fc1f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a70bf58e478f1a27ad8e1badfeb9fc1f2">&#9670;&#160;</a></span>hhdm_was_modified()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::hhdm_was_modified </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Returns true if any test has modified the HHDM page tables since the last clear/take call (acquire: pairs with the release store in map_page). </p>
+
+</div>
+</div>
+<a id="a31597ed436d671994e03be2f5aa6de21" name="a31597ed436d671994e03be2f5aa6de21"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a31597ed436d671994e03be2f5aa6de21">&#9670;&#160;</a></span>identity_was_modified()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::identity_was_modified </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Returns true if any test has modified the low identity page tables since the last clear/take call. </p>
 
 </div>
 </div>
@@ -413,12 +662,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialises the <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> and sets up the kernel page tables. </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_v_m_m_a5da462b4221e1837dadb8f296652904c_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a5da462b4221e1837dadb8f296652904c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
-</div>
+<p>Initialise the <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a>: capture current PML4, zero residual bootloader entries. </p>
 
 </div>
 </div>
@@ -446,12 +690,189 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialises the <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> with error code. </p>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">VmmError</a> code. </dd></dl>
+<p>Initialise <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> with error-code return.</p>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code.</dd>
+<dd>
+VMM_ERR_OK. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_abeb64ef713899d8f0a29c24d1a3b4be6_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_abeb64ef713899d8f0a29c24d1a3b4be6_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a id="a1c943ca077e476e51633526b6c4a67d5" name="a1c943ca077e476e51633526b6c4a67d5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1c943ca077e476e51633526b6c4a67d5">&#9670;&#160;</a></span>kernel_half_equal()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::kernel_half_equal </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>a_pml4</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>b_pml4</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True when <code class="param">a_pml4</code> and <code class="param">b_pml4</code> agree on every kernel-half entry (256..511), compared recursively through shared tables (present+equal u64, or both-absent, at each level). </p>
+
+</div>
+</div>
+<a id="a07d72a53086737838d0072b7b12daeb9" name="a07d72a53086737838d0072b7b12daeb9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a07d72a53086737838d0072b7b12daeb9">&#9670;&#160;</a></span>kernel_half_matches_template()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::kernel_half_matches_template </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True when <code class="param">pml4_phys</code> matches the bring-up template on every kernel-half entry (diagnostics + tests; drift from legitimate late mappings is NOT a failure here). </p>
+
+</div>
+</div>
+<a id="af38a18ef6db1e4e014d7c5aee0b71aaf" name="af38a18ef6db1e4e014d7c5aee0b71aaf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af38a18ef6db1e4e014d7c5aee0b71aaf">&#9670;&#160;</a></span>map_frame_from_cap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::map_frame_from_cap </td>
+          <td>(</td>
+          <td class="paramtype">class <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">cap::FrameCap</a> *</td>          <td class="paramname"><span class="paramname"><em>fc</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Maps the frame(s) owned by a FrameCap into <code class="param">pml4_phys</code>. Refuses a revoked FrameCap (ROADMAP 0.4.1 CSpace) — mapping capability-gated memory requires a live, non-revoked cap. </p>
+<p>Maps every frame owned by a FrameCap into <code class="param">pml4_phys</code>. Refuses a revoked cap — capability-gated memory must not map after revocation (ROADMAP 0.4.1 CSpace). The caller must hold a pin (<a class="el" href="classkernel_1_1_scoped_ref.html" title="RAII scoped reference guard for KernelObject objects.">ScopedRef</a> / live capability slot) on <code class="param">fc</code>.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">fc</td><td>The FrameCap (must be pinned by the caller). </td></tr>
+    <tr><td class="paramname">virt_addr</td><td>Base virtual address (page-aligned). </td></tr>
+    <tr><td class="paramname">user</td><td>If true, sets user-accessible flag. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true when every frame was mapped, false on a revoked cap or a zero frame. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_af38a18ef6db1e4e014d7c5aee0b71aaf_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_af38a18ef6db1e4e014d7c5aee0b71aaf_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
+</div>
+
+</div>
+</div>
+<a id="af2f11f9011cb503e77cdfcdd2c26618c" name="af2f11f9011cb503e77cdfcdd2c26618c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af2f11f9011cb503e77cdfcdd2c26618c">&#9670;&#160;</a></span>map_mmio_from_cap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::map_mmio_from_cap </td>
+          <td>(</td>
+          <td class="paramtype">class <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *</td>          <td class="paramname"><span class="paramname"><em>mmio</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Maps an MmioCap's memory BAR range into <code class="param">pml4_phys</code> (v0.4.2, issue #3). Refuses a revoked cap and IO-type ranges. Page-granular: the BAR tail is rounded up to a full page. </p>
+<p>Maps an MmioCap's memory BAR range into <code class="param">pml4_phys</code>.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">mmio</td><td>The MmioCap (must be pinned by the caller). </td></tr>
+    <tr><td class="paramname">virt_addr</td><td>Base virtual address (page-aligned). </td></tr>
+    <tr><td class="paramname">user</td><td>If true, sets user-accessible flag. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true when every page was mapped, false on a revoked/IO-type cap or a zero range. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_af2f11f9011cb503e77cdfcdd2c26618c_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_af2f11f9011cb503e77cdfcdd2c26618c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -478,7 +899,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span><span class="paramdefsep"> = </span><span class="paramdefval">false</span>&#160;)</td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -489,6 +910,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Maps a virtual page to a physical page in the kernel page table. </p>
+<p>Map a 4 KiB page in the kernel page table.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address (page-aligned). </td></tr>
@@ -497,12 +919,20 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section note"><dt>Note</dt><dd>WCET is bounded: fixed-depth page walk + at most one huge-page split (512 iterations) when the target PD entry is a 2 MB block. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>WCET is bounded: fixed-depth page walk + at most one huge-page split (512 iterations) when the target PD entry is a 2 MB block.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address. </td></tr>
+    <tr><td class="paramname">phys_addr</td><td>Page-aligned physical address. </td></tr>
+    <tr><td class="paramname">user</td><td>If true, mark the page as user-accessible. </td></tr>
+  </table>
+  </dd>
+</dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_aa31478530f584907b7a8d79cd60a8e46_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_aa31478530f584907b7a8d79cd60a8e46_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -529,7 +959,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span><span class="paramdefsep"> = </span><span class="paramdefval">false</span>&#160;)</td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -540,6 +970,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Maps a virtual page to a physical page with error code. </p>
+<p>Map a page in the kernel table with alignment validation and error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address (page-aligned). </td></tr>
@@ -548,18 +979,89 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">VmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address. </td></tr>
+    <tr><td class="paramname">phys_addr</td><td>Page-aligned physical address. </td></tr>
+    <tr><td class="paramname">user</td><td>If true, mark as user-accessible. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a00badc7d69ae6df6b9ec4ece614fe766_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a00badc7d69ae6df6b9ec4ece614fe766_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="a39e966b6069fb70b5f4177d3fd6b58cb" name="a39e966b6069fb70b5f4177d3fd6b58cb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a39e966b6069fb70b5f4177d3fd6b58cb">&#9670;&#160;</a></span>map_page_in_pml4() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::map_page_in_pml4 </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phys_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>executable</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Maps a page into a specific page table with explicit W^X permission (VULN-H1). When <code class="param">executable</code> is false the architectural NX bit is set (x86_64 bit 63, aarch64 bit 54) or the X bit is dropped (riscv64), so the page cannot execute. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Virtual address (page-aligned). </td></tr>
+    <tr><td class="paramname">phys_addr</td><td>Physical address (page-aligned). </td></tr>
+    <tr><td class="paramname">user</td><td>If true, sets user-accessible flag. </td></tr>
+    <tr><td class="paramname">executable</td><td>If true, page is executable (NX clear); if false, NX set. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a39e966b6069fb70b5f4177d3fd6b58cb_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a39e966b6069fb70b5f4177d3fd6b58cb_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
 </div>
 
 </div>
 </div>
 <a id="a6c283a922356a4a1b0a157a996a2bb03" name="a6c283a922356a4a1b0a157a996a2bb03"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6c283a922356a4a1b0a157a996a2bb03">&#9670;&#160;</a></span>map_page_in_pml4()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c283a922356a4a1b0a157a996a2bb03">&#9670;&#160;</a></span>map_page_in_pml4() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -596,11 +1098,16 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Maps a page into a specific page table (not the kernel one). </p>
+<p>Map a page into a specific (non-kernel) PML4 page table.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address (page-aligned). </td></tr>
     <tr><td class="paramname">phys_addr</td><td>Physical address (page-aligned). </td></tr>
     <tr><td class="paramname">user</td><td>If true, sets user-accessible flag. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4.</td></tr>
+    <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address. </td></tr>
+    <tr><td class="paramname">phys_addr</td><td>Page-aligned physical address. </td></tr>
+    <tr><td class="paramname">user</td><td>If true, mark the page as user-accessible. </td></tr>
     <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
   </table>
   </dd>
@@ -609,7 +1116,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a6c283a922356a4a1b0a157a996a2bb03_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a6c283a922356a4a1b0a157a996a2bb03_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -652,6 +1159,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Maps a page into a specific page table with error code. </p>
+<p>Map page into a specific PML4 with alignment validation and error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address (page-aligned). </td></tr>
@@ -661,12 +1169,236 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">VmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address. </td></tr>
+    <tr><td class="paramname">phys_addr</td><td>Page-aligned physical address. </td></tr>
+    <tr><td class="paramname">user</td><td>If true, mark as user-accessible. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a60a557d98925cd250a9180effab1e774_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a60a557d98925cd250a9180effab1e774_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 14 -->
+</div>
+
+</div>
+</div>
+<a id="ab1e588a7330966cfa208fdb3255ed778" name="ab1e588a7330966cfa208fdb3255ed778"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab1e588a7330966cfa208fdb3255ed778">&#9670;&#160;</a></span>merge_kernel_half()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::merge_kernel_half </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>src_pml4</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>dst_pml4</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Converge a child PML4's kernel half (entries 256..511) toward <code class="param">src_pml4</code> (issue #96, kernel-half merge). Recursive top-down walk (PML4→PDPT→PD→PT): wherever the child lacks an entry present in the source, the entry is copied by value (link semantics — lower tables stay shared, never duplicated); entries already present are left untouched (idempotent); huge/leaf entries are copied by value. Performs ZERO allocations, so it cannot OOM by construction; the bool preserves the failure contract for future allocating revisions (callers must destroy the child table on false). No locking: single-threaded, runs before the first CR3 switch to the child (same window MP-7 uses). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">src_pml4</td><td>Physical address of the source (canonical) PML4. </td></tr>
+    <tr><td class="paramname">dst_pml4</td><td>Physical address of the child PML4 to converge. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success, false on invalid arguments (null or identical roots — never on allocation failure). </dd></dl>
+
+</div>
+</div>
+<a id="aaea3e29ad09f4191bd7ad1bf1fcfdeb9" name="aaea3e29ad09f4191bd7ad1bf1fcfdeb9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaea3e29ad09f4191bd7ad1bf1fcfdeb9">&#9670;&#160;</a></span>snapshot_kernel_template()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::snapshot_kernel_template </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Snapshot the live kernel PML4's kernel half (entries 256..511) into the bring-up template (issue #96). Call ONCE at end of bring-up, before the first task spawns. </p>
+
+</div>
+</div>
+<a id="ac5cc5b13afcd183532d0f49f56d164d5" name="ac5cc5b13afcd183532d0f49f56d164d5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac5cc5b13afcd183532d0f49f56d164d5">&#9670;&#160;</a></span>take_hhdm_modified()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::take_hhdm_modified </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Atomically take the HHDM flag: returns the previous value and clears it in one step, so a set landing after the take is preserved for the next restore (fail-safe over-restore instead of fail-dangerous skip). Used by snapshot_restore. </p>
+
+</div>
+</div>
+<a id="a287c73fed6d835188195b1992850d1ff" name="a287c73fed6d835188195b1992850d1ff"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a287c73fed6d835188195b1992850d1ff">&#9670;&#160;</a></span>take_identity_modified()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::take_identity_modified </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Atomically take the identity flag (same contract as the HHDM take above). Used by snapshot_restore. </p>
+
+</div>
+</div>
+<a id="a9d3b6e67113f63864a37d28320a7bc28" name="a9d3b6e67113f63864a37d28320a7bc28"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9d3b6e67113f63864a37d28320a7bc28">&#9670;&#160;</a></span>unmap_frame_from_cap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::unmap_frame_from_cap </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Unmaps one page previously mapped via <a class="el" href="#af38a18ef6db1e4e014d7c5aee0b71aaf" title="Maps the frame(s) owned by a FrameCap into pml4_phys. Refuses a revoked FrameCap (ROADMAP 0....">map_frame_from_cap()</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Virtual address to unmap. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a9d3b6e67113f63864a37d28320a7bc28_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a9d3b6e67113f63864a37d28320a7bc28_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 15 -->
+</div>
+
+</div>
+</div>
+<a id="a4aba9fc6e5febed05a0dc3edfb0dc22f" name="a4aba9fc6e5febed05a0dc3edfb0dc22f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4aba9fc6e5febed05a0dc3edfb0dc22f">&#9670;&#160;</a></span>unmap_mmio_from_cap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::unmap_mmio_from_cap </td>
+          <td>(</td>
+          <td class="paramtype">class <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *</td>          <td class="paramname"><span class="paramname"><em>mmio</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Unmaps an MmioCap's memory BAR range previously mapped via <a class="el" href="#af2f11f9011cb503e77cdfcdd2c26618c" title="Maps an MmioCap&#39;s memory BAR range into pml4_phys (v0.4.2, issue #3). Refuses a revoked cap and IO-ty...">map_mmio_from_cap()</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">mmio</td><td>The MmioCap (must be pinned by the caller). </td></tr>
+    <tr><td class="paramname">virt_addr</td><td>Base virtual address the range was mapped at. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a4aba9fc6e5febed05a0dc3edfb0dc22f_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a4aba9fc6e5febed05a0dc3edfb0dc22f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -695,18 +1427,13 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Unmaps a virtual page. </p>
+<p>Unmap a virtual page from the kernel page table.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address to unmap. </td></tr>
   </table>
   </dd>
 </dl>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_v_m_m_a0bf86a0e97402ac5e989fa1aa55a0df5_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a0bf86a0e97402ac5e989fa1aa55a0df5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
-</div>
 
 </div>
 </div>
@@ -734,19 +1461,58 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Unmaps a virtual page with error code. </p>
+<p>Unmap a page with alignment validation and error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address to unmap. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">VmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_af16c2a20fa00db35b4aea6f91227818b_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_af16c2a20fa00db35b4aea6f91227818b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 17 -->
 </div>
+
+</div>
+</div>
+<a id="a87e909fad18b6d7d49eb348c5183cbca" name="a87e909fad18b6d7d49eb348c5183cbca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a87e909fad18b6d7d49eb348c5183cbca">&#9670;&#160;</a></span>unmap_page_in_pml4()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::unmap_page_in_pml4 </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Unmaps one user page previously mapped into <code class="param">pml4_phys</code> (issue #95: shared-library RO pages must be unmapped — never freed — by each task teardown; the cache owns shared phys lifetime by refcount). Clears the PT leaf and flushes the VA; huge entries and absent tables are left alone. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address to unmap. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -774,6 +1540,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Translates a virtual address to its physical address. </p>
+<p>Translate a virtual address to a physical address via the kernel PML4.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address. </td></tr>
@@ -812,6 +1579,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Translates a virtual address to its physical address with error code. </p>
+<p>Translate virtual to physical via kernel PML4 with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">virt_addr</td><td>Virtual address. </td></tr>
@@ -819,12 +1587,12 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">VmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_aca50fe995582fa2e7697f4b241bf54ac_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_aca50fe995582fa2e7697f4b241bf54ac_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -857,9 +1625,18 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Translates a virtual address to a physical address using a specific PML4. </p>
+<p>Translate a virtual address using a specific PML4.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address to translate. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 if not mapped.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Virtual address. </td></tr>
     <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
   </table>
   </dd>
@@ -901,6 +1678,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Translates a virtual address to a physical address using a specific PML4 with error code. </p>
+<p>Translate virtual to physical in a specific PML4 with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">virt_addr</td><td>Virtual address to translate. </td></tr>
@@ -909,13 +1687,71 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">VmmError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">virt_addr</td><td>Virtual address. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address on success. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a464e326efd7e29354e19617ca99d9e86_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a464e326efd7e29354e19617ca99d9e86_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 19 -->
 </div>
+
+</div>
+</div>
+<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a id="a08f8461822ec82aad3f88467cd10482f" name="a08f8461822ec82aad3f88467cd10482f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a08f8461822ec82aad3f88467cd10482f">&#9670;&#160;</a></span>hhdm_modified_</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::hhdm_modified_ = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set to true when a test modifies kernel-space page tables (HHDM range). Reset after PD restore in snapshot_restore. Plain bool with __atomic_* access: set-true is idempotent (no lost update), and restore takes it with an exchange (issue #60 VAR-17 SMP re-audit). </p>
+
+</div>
+</div>
+<a id="abf087941cad6d8ff827fcc49023b0cb8" name="abf087941cad6d8ff827fcc49023b0cb8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abf087941cad6d8ff827fcc49023b0cb8">&#9670;&#160;</a></span>identity_modified_</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::identity_modified_ = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set to true when a test modifies the LOW identity map (PD_IDENTITY, phys 0x3000 — VAs in PML4[0] below PML4_USER_COUNT). Reset after PD restore in snapshot_restore. </p>
 
 </div>
 </div>

@@ -14,8 +14,10 @@ var searchData=
   ['loadavg_5f1min_11',['loadavg_1min',['../classkernel_1_1_scheduler.html#a57de2e75b31a04c67a30a0762d3705fd',1,'kernel::Scheduler']]],
   ['loadavg_5f5min_12',['loadavg_5min',['../classkernel_1_1_scheduler.html#a7ae2f1c2c7c7773139993bb5256414de',1,'kernel::Scheduler']]],
   ['loadavg_5fstep_13',['loadavg_step',['../classkernel_1_1_scheduler.html#aac7b9114e87c0554cc7907e3f05e6023',1,'kernel::Scheduler']]],
-  ['lock_14',['lock',['../classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6',1,'kernel::sync::IrqSpinLockGuard']]],
-  ['lookup_15',['lookup',['../namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8',1,'kernel::cap']]],
-  ['lookup_5fin_5fdir_16',['lookup_in_dir',['../namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c',1,'kernel::fat32']]],
-  ['lseek_17',['lseek',['../unistd_8c.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c'],['../unistd_8h.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c']]]
+  ['lock_14',['lock',['../classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6',1,'kernel::sync::IrqSpinLockGuard::lock()'],['../classkernel_1_1sync_1_1_mutex.html#a4249f0561e075fea3b1399dcc2bd2cb1',1,'kernel::sync::Mutex::lock()'],['../classkernel_1_1sync_1_1_spin_lock.html#a097026b8a7aef9e203d1ce500438f618',1,'kernel::sync::SpinLock::lock()'],['../classkernel_1_1iommu_1_1_spin_lock.html#a097026b8a7aef9e203d1ce500438f618',1,'kernel::iommu::SpinLock::lock()']]],
+  ['lock_5ferr_15',['lock_err',['../classkernel_1_1sync_1_1_mutex.html#a89da4d0ccfbb1d4c3eacc4e1b10302ad',1,'kernel::sync::Mutex']]],
+  ['lookup_16',['lookup',['../namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8',1,'kernel::cap']]],
+  ['lookup_5fin_5fdir_17',['lookup_in_dir',['../namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c',1,'kernel::fat32']]],
+  ['lookup_5fseverity_18',['lookup_severity',['../namespacekernel_1_1log_1_1catalog.html#a230b4bee0d20f0f61d72282162565f07',1,'kernel::log::catalog']]],
+  ['lseek_19',['lseek',['../unistd_8c.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c'],['../unistd_8h.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c']]]
 ];

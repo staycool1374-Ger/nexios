@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__cap__mmi
 </div><!--header-->
 <div class="contents">
 
-<p>User-space MMIO page-frame mapping tests (issue #8): the SYS_MMIO_MAP/SYS_MMIO_UNMAP syscall surface, the MmioUserMap registry (fixed user VA window), user-PML4 mapping resolution, revoke-invalidate, cleanup drain and registry exhaustion. Real device BARs are NOT accessed — the tests wrap a PMM page in an MmioCap and drive the registry/syscalls deterministically.  
+<p>User-space MMIO page-frame mapping tests (issue #8): the SYS_MMIO_MAP/SYS_MMIO_UNMAP syscall surface, the MmioUserMap registry (fixed user VA window), user-PML4 mapping resolution, revoke-invalidate, cleanup drain and registry exhaustion. Real device BARs are NOT accessed — the tests wrap a <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> page in an MmioCap and drive the registry/syscalls deterministically.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
@@ -157,7 +157,7 @@ Functions</h2></td></tr>
 <tr class="memdesc:a8e5e9bf3f3a8ac9db454ceeaa86e710d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Registers all user-space MMIO mapping test cases (issue #8).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>User-space MMIO page-frame mapping tests (issue #8): the SYS_MMIO_MAP/SYS_MMIO_UNMAP syscall surface, the MmioUserMap registry (fixed user VA window), user-PML4 mapping resolution, revoke-invalidate, cleanup drain and registry exhaustion. Real device BARs are NOT accessed — the tests wrap a PMM page in an MmioCap and drive the registry/syscalls deterministically. </p>
+<div class="textblock"><p>User-space MMIO page-frame mapping tests (issue #8): the SYS_MMIO_MAP/SYS_MMIO_UNMAP syscall surface, the MmioUserMap registry (fixed user VA window), user-PML4 mapping resolution, revoke-invalidate, cleanup drain and registry exhaustion. Real device BARs are NOT accessed — the tests wrap a <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> page in an MmioCap and drive the registry/syscalls deterministically. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="acbde170ebb961b9047a20fda9b9f7a6c" name="acbde170ebb961b9047a20fda9b9f7a6c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#acbde170ebb961b9047a20fda9b9f7a6c">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/9]</span></h2>

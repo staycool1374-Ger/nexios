@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -159,7 +159,7 @@ Files</h2></td></tr>
 <tr class="memdesc:pager__registry_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">External pager protocol registry (issue #107): user-space #PF delegation to a capability-designated Ring-3 pager. Mirrors DeathNotify/FrameUserMap: static bounded table, claim-under-lock / poke-outside-lock, id+generation revalidation. The bounded pager contract (docs/specs/external-pager.md §4) designs the "pager blocked while faulting
 task waits" deadlock out by construction. <br /></td></tr>
 <tr class="memitem:shm_5Fring_2Ehpp" id="r_shm_5Fring_2Ehpp"><td class="memItemLeft"><a href="shm__ring_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="shm__ring_8hpp.html">shm_ring.hpp</a></td></tr>
-<tr class="memdesc:shm__ring_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shared-memory ring protocol (issue #106 Part B). A SPSC ring living in the physical frames of a FrameCap shared by two user tasks via SYS_FRAME_MAP. Page 0 holds the SharedRingHeader (magic/version/capacity + cache-line-aligned head/tail); data pages 1..N-1 hold the ring payload. Zero-syscall after mapping: producer/consumer access the shared frames directly. Head/tail follow the SPSCRing acquire/release protocol (single producer / single consumer — never written by the other side). <br /></td></tr>
+<tr class="memdesc:shm__ring_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shared-memory ring protocol (issue #106 Part B). A SPSC ring living in the physical frames of a FrameCap shared by two user tasks via SYS_FRAME_MAP. Page 0 holds the SharedRingHeader (magic/version/capacity + cache-line-aligned head/tail); data pages 1..N-1 hold the ring payload. Zero-syscall after mapping: producer/consumer access the shared frames directly. Head/tail follow the <a class="el" href="class_s_p_s_c_ring.html" title="Lock-free single-producer single-consumer ring buffer.">SPSCRing</a> acquire/release protocol (single producer / single consumer — never written by the other side). <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

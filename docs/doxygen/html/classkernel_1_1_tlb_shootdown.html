@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -143,36 +143,36 @@ Public Types</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:ac023e26054da1c5c17510558bc738e5f" id="r_ac023e26054da1c5c17510558bc738e5f"><td class="memItemLeft">static <a class="el" href="#a64bcea6452f5f33c97ef7e0382ed173b">Error</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac023e26054da1c5c17510558bc738e5f">request</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> va, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> pcid) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:ac023e26054da1c5c17510558bc738e5f" id="r_ac023e26054da1c5c17510558bc738e5f"><td class="memItemLeft">static <a class="el" href="#a64bcea6452f5f33c97ef7e0382ed173b">Error</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac023e26054da1c5c17510558bc738e5f">request</a> (uint64_t va, uint16_t pcid) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ac023e26054da1c5c17510558bc738e5f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record a shootdown request (deduplicates exact pairs).  <br /></td></tr>
-<tr class="memitem:a44d7d77969a2552ddd15baf234726c0d" id="r_a44d7d77969a2552ddd15baf234726c0d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a44d7d77969a2552ddd15baf234726c0d">coalesce_and_apply</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a44d7d77969a2552ddd15baf234726c0d" id="r_a44d7d77969a2552ddd15baf234726c0d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a44d7d77969a2552ddd15baf234726c0d">coalesce_and_apply</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a44d7d77969a2552ddd15baf234726c0d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Coalesce pending requests and apply them locally (per-VA flush, or one context purge per large same-PCID group). Clears applied entries.  <br /></td></tr>
-<tr class="memitem:a863d02284dc2f983b51833cfd7dc229e" id="r_a863d02284dc2f983b51833cfd7dc229e"><td class="memItemLeft">static <a class="el" href="#a64bcea6452f5f33c97ef7e0382ed173b">Error</a>&#160;</td><td class="memItemRight"><a class="el" href="#a863d02284dc2f983b51833cfd7dc229e">hold</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> phys) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memdesc:a863d02284dc2f983b51833cfd7dc229e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Park an allocated page in quarantine (deferred free). The page stays bitmap-allocated (no track_pmm_free) until released; never touches the PMM bitmap itself.  <br /></td></tr>
-<tr class="memitem:a026bd8b2d9cdba46be79f75995839ba3" id="r_a026bd8b2d9cdba46be79f75995839ba3"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a026bd8b2d9cdba46be79f75995839ba3">release_all</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memdesc:a026bd8b2d9cdba46be79f75995839ba3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Apply pending shootdowns, then return every held page to the PMM free list.  <br /></td></tr>
-<tr class="memitem:a98c7328d9e8dfd56346249a4a15d4850" id="r_a98c7328d9e8dfd56346249a4a15d4850"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a98c7328d9e8dfd56346249a4a15d4850">on_tick</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> now) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a863d02284dc2f983b51833cfd7dc229e" id="r_a863d02284dc2f983b51833cfd7dc229e"><td class="memItemLeft">static <a class="el" href="#a64bcea6452f5f33c97ef7e0382ed173b">Error</a>&#160;</td><td class="memItemRight"><a class="el" href="#a863d02284dc2f983b51833cfd7dc229e">hold</a> (uint64_t phys) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a863d02284dc2f983b51833cfd7dc229e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Park an allocated page in quarantine (deferred free). The page stays bitmap-allocated (no track_pmm_free) until released; never touches the <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> bitmap itself.  <br /></td></tr>
+<tr class="memitem:a026bd8b2d9cdba46be79f75995839ba3" id="r_a026bd8b2d9cdba46be79f75995839ba3"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a026bd8b2d9cdba46be79f75995839ba3">release_all</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a026bd8b2d9cdba46be79f75995839ba3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Apply pending shootdowns, then return every held page to the <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> free list.  <br /></td></tr>
+<tr class="memitem:a98c7328d9e8dfd56346249a4a15d4850" id="r_a98c7328d9e8dfd56346249a4a15d4850"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a98c7328d9e8dfd56346249a4a15d4850">on_tick</a> (uint64_t now) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a98c7328d9e8dfd56346249a4a15d4850"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tick hook: force-release expired quarantine entries (bounded MAX_PER_TICK per call). ISR-safe: try-lock, skip on contention, never blocks or allocates.  <br /></td></tr>
-<tr class="memitem:aeb14d0e971ecf8d62f59bffb22026374" id="r_aeb14d0e971ecf8d62f59bffb22026374"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aeb14d0e971ecf8d62f59bffb22026374">pending_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:aeb14d0e971ecf8d62f59bffb22026374" id="r_aeb14d0e971ecf8d62f59bffb22026374"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aeb14d0e971ecf8d62f59bffb22026374">pending_count</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:aeb14d0e971ecf8d62f59bffb22026374"><td class="mdescLeft">&#160;</td><td class="mdescRight">Queued request count (introspection/test only).  <br /></td></tr>
-<tr class="memitem:a8b94e43531a18b0117850da93cdaa608" id="r_a8b94e43531a18b0117850da93cdaa608"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8b94e43531a18b0117850da93cdaa608">quarantine_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a8b94e43531a18b0117850da93cdaa608" id="r_a8b94e43531a18b0117850da93cdaa608"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a8b94e43531a18b0117850da93cdaa608">quarantine_count</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a8b94e43531a18b0117850da93cdaa608"><td class="mdescLeft">&#160;</td><td class="mdescRight">Quarantined page count (introspection/test only).  <br /></td></tr>
-<tr class="memitem:a2cd6ce0b6b3a1aebd5299bc689b857b0" id="r_a2cd6ce0b6b3a1aebd5299bc689b857b0"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2cd6ce0b6b3a1aebd5299bc689b857b0">set_timeout_ticks_for_test</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ticks) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a2cd6ce0b6b3a1aebd5299bc689b857b0" id="r_a2cd6ce0b6b3a1aebd5299bc689b857b0"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2cd6ce0b6b3a1aebd5299bc689b857b0">set_timeout_ticks_for_test</a> (uint64_t ticks) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a2cd6ce0b6b3a1aebd5299bc689b857b0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Override the quarantine timeout (test hook).  <br /></td></tr>
-<tr class="memitem:ab979fa67204c2decab7089c0a279ed36" id="r_ab979fa67204c2decab7089c0a279ed36"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab979fa67204c2decab7089c0a279ed36">reset</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memdesc:ab979fa67204c2decab7089c0a279ed36"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear queue + quarantine + timeout (test isolation). Does NOT free held pages (PMM rewind owns them); prevents stale-flush counter noise across tests.  <br /></td></tr>
+<tr class="memitem:ab979fa67204c2decab7089c0a279ed36" id="r_ab979fa67204c2decab7089c0a279ed36"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab979fa67204c2decab7089c0a279ed36">reset</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ab979fa67204c2decab7089c0a279ed36"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear queue + quarantine + timeout (test isolation). Does NOT free held pages (<a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> rewind owns them); prevents stale-flush counter noise across tests.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
-<tr class="memitem:afc7b622a82c19360fc06f25288625aca" id="r_afc7b622a82c19360fc06f25288625aca"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afc7b622a82c19360fc06f25288625aca">MAX_PENDING</a> = 64</td></tr>
+<tr class="memitem:afc7b622a82c19360fc06f25288625aca" id="r_afc7b622a82c19360fc06f25288625aca"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afc7b622a82c19360fc06f25288625aca">MAX_PENDING</a> = 64</td></tr>
 <tr class="memdesc:afc7b622a82c19360fc06f25288625aca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Max queued shootdown requests.  <br /></td></tr>
-<tr class="memitem:aec53a7accfe8715b2168c06dd09a3e0d" id="r_aec53a7accfe8715b2168c06dd09a3e0d"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aec53a7accfe8715b2168c06dd09a3e0d">MAX_QUARANTINE</a> = 64</td></tr>
+<tr class="memitem:aec53a7accfe8715b2168c06dd09a3e0d" id="r_aec53a7accfe8715b2168c06dd09a3e0d"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aec53a7accfe8715b2168c06dd09a3e0d">MAX_QUARANTINE</a> = 64</td></tr>
 <tr class="memdesc:aec53a7accfe8715b2168c06dd09a3e0d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Max quarantined pages.  <br /></td></tr>
-<tr class="memitem:a4c20c537c419671bccf5a6f85dcdac75" id="r_a4c20c537c419671bccf5a6f85dcdac75"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4c20c537c419671bccf5a6f85dcdac75">MAX_PER_TICK</a> = 8</td></tr>
+<tr class="memitem:a4c20c537c419671bccf5a6f85dcdac75" id="r_a4c20c537c419671bccf5a6f85dcdac75"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4c20c537c419671bccf5a6f85dcdac75">MAX_PER_TICK</a> = 8</td></tr>
 <tr class="memdesc:a4c20c537c419671bccf5a6f85dcdac75"><td class="mdescLeft">&#160;</td><td class="mdescRight">Max quarantine releases per on_tick call (RT bound).  <br /></td></tr>
-<tr class="memitem:aed5bead6eb87e3897e63ccc7baa9776d" id="r_aed5bead6eb87e3897e63ccc7baa9776d"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aed5bead6eb87e3897e63ccc7baa9776d">DEFAULT_TIMEOUT_TICKS</a> = 100</td></tr>
+<tr class="memitem:aed5bead6eb87e3897e63ccc7baa9776d" id="r_aed5bead6eb87e3897e63ccc7baa9776d"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aed5bead6eb87e3897e63ccc7baa9776d">DEFAULT_TIMEOUT_TICKS</a> = 100</td></tr>
 <tr class="memdesc:aed5bead6eb87e3897e63ccc7baa9776d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default quarantine timeout in ticks.  <br /></td></tr>
-<tr class="memitem:a69da60f898e08c54c55fa377b98ac4b5" id="r_a69da60f898e08c54c55fa377b98ac4b5"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a69da60f898e08c54c55fa377b98ac4b5">PURGE_GROUP_THRESHOLD</a> = 8</td></tr>
+<tr class="memitem:a69da60f898e08c54c55fa377b98ac4b5" id="r_a69da60f898e08c54c55fa377b98ac4b5"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a69da60f898e08c54c55fa377b98ac4b5">PURGE_GROUP_THRESHOLD</a> = 8</td></tr>
 <tr class="memdesc:a69da60f898e08c54c55fa377b98ac4b5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Single-PCID group size that upgrades per-VA flushes to one context purge (issue #158).  <br /></td></tr>
 </table>
 <a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Member Enumeration Documentation</h2>
@@ -186,7 +186,7 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#a64bcea6452f5f33c97ef7e0382ed173b">kernel::TlbShootdown::Error</a> : <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>
+          <td class="memname">enum class <a class="el" href="#a64bcea6452f5f33c97ef7e0382ed173b">kernel::TlbShootdown::Error</a> : uint64_t</td>
         </tr>
       </table>
   </td>
@@ -246,7 +246,7 @@ Static Public Attributes</h2></td></tr>
         <tr>
           <td class="memname"><a class="el" href="#a64bcea6452f5f33c97ef7e0382ed173b">TlbShootdown::Error</a> kernel::TlbShootdown::hold </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>phys</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phys</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -257,7 +257,7 @@ Static Public Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Park an allocated page in quarantine (deferred free). The page stays bitmap-allocated (no track_pmm_free) until released; never touches the PMM bitmap itself. </p>
+<p>Park an allocated page in quarantine (deferred free). The page stays bitmap-allocated (no track_pmm_free) until released; never touches the <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> bitmap itself. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">phys</td><td>Page-aligned physical address of an allocated page. </td></tr>
@@ -265,6 +265,12 @@ Static Public Attributes</h2></td></tr>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>OK, INVALID (unallocated/misaligned), or QUARANTINE_FULL (page stays allocated; caller frees it directly). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_tlb_shootdown_a863d02284dc2f983b51833cfd7dc229e_cgraph.png" border="0" usemap="#aclasskernel_1_1_tlb_shootdown_a863d02284dc2f983b51833cfd7dc229e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -280,7 +286,7 @@ Static Public Attributes</h2></td></tr>
         <tr>
           <td class="memname">void kernel::TlbShootdown::on_tick </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>now</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>now</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -302,7 +308,7 @@ Static Public Attributes</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_tlb_shootdown_a98c7328d9e8dfd56346249a4a15d4850_cgraph.png" border="0" usemap="#aclasskernel_1_1_tlb_shootdown_a98c7328d9e8dfd56346249a4a15d4850_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -317,7 +323,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::TlbShootdown::pending_count </td>
+          <td class="memname">uint64_t kernel::TlbShootdown::pending_count </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -344,7 +350,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::TlbShootdown::quarantine_count </td>
+          <td class="memname">uint64_t kernel::TlbShootdown::quarantine_count </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -384,12 +390,12 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Apply pending shootdowns, then return every held page to the PMM free list. </p>
+<p>Apply pending shootdowns, then return every held page to the <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> free list. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_tlb_shootdown_a026bd8b2d9cdba46be79f75995839ba3_cgraph.png" border="0" usemap="#aclasskernel_1_1_tlb_shootdown_a026bd8b2d9cdba46be79f75995839ba3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -406,12 +412,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname"><a class="el" href="#a64bcea6452f5f33c97ef7e0382ed173b">TlbShootdown::Error</a> kernel::TlbShootdown::request </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>pcid</em></span>&#160;)</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>pcid</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -456,7 +462,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Clear queue + quarantine + timeout (test isolation). Does NOT free held pages (PMM rewind owns them); prevents stale-flush counter noise across tests. </p>
+<p>Clear queue + quarantine + timeout (test isolation). Does NOT free held pages (<a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> rewind owns them); prevents stale-flush counter noise across tests. </p>
 
 </div>
 </div>
@@ -472,7 +478,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::TlbShootdown::set_timeout_ticks_for_test </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>ticks</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>ticks</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -498,7 +504,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::TlbShootdown::DEFAULT_TIMEOUT_TICKS = 100</td>
+          <td class="memname">uint64_t kernel::TlbShootdown::DEFAULT_TIMEOUT_TICKS = 100</td>
         </tr>
       </table>
   </td>
@@ -522,7 +528,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::TlbShootdown::MAX_PENDING = 64</td>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::TlbShootdown::MAX_PENDING = 64</td>
         </tr>
       </table>
   </td>
@@ -546,7 +552,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::TlbShootdown::MAX_PER_TICK = 8</td>
+          <td class="memname">uint64_t kernel::TlbShootdown::MAX_PER_TICK = 8</td>
         </tr>
       </table>
   </td>
@@ -570,7 +576,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::TlbShootdown::MAX_QUARANTINE = 64</td>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::TlbShootdown::MAX_QUARANTINE = 64</td>
         </tr>
       </table>
   </td>
@@ -594,7 +600,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::TlbShootdown::PURGE_GROUP_THRESHOLD = 8</td>
+          <td class="memname">uint64_t kernel::TlbShootdown::PURGE_GROUP_THRESHOLD = 8</td>
         </tr>
       </table>
   </td>

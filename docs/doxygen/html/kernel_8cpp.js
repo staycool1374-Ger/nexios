@@ -2,6 +2,9 @@ var kernel_8cpp =
 [
     [ "__attribute__", "kernel_8cpp.html#a6773415358edda571fb1be7fb810a2c2", null ],
     [ "__attribute__", "kernel_8cpp.html#ae2bf43943abd1cc6ac00d36b17a973c3", null ],
+    [ "kernel::boot_entry_raw", "namespacekernel.html#ae369e3a5b4081280571e619d0877856d", null ],
+    [ "kernel::boot_stage_delta", "namespacekernel.html#ad2597cced737d422c403d4c25437f61e", null ],
+    [ "kernel::boot_stage_mark", "namespacekernel.html#afe82421db302cf9007f1bfe16cff939d", null ],
     [ "debug_task_switch", "kernel_8cpp.html#a349d28bdc2232b6cde3b99f71e5d8672", null ],
     [ "debug_write", "kernel_8cpp.html#a91eed298aba5017394df23330bb70092", null ],
     [ "debug_write_dec", "kernel_8cpp.html#ac9b08212c79ab5465098caa93a4188bd", null ],
@@ -12,12 +15,16 @@ var kernel_8cpp =
     [ "init_task_main", "kernel_8cpp.html#a3893cb01e13bf4e36090daef580b7426", null ],
     [ "panic", "kernel_8cpp.html#aabfdfb827135142a9a9873c411fb99d1", null ],
     [ "panic", "kernel_8cpp.html#ae22655ba6f328217f1ebd6248ed82727", null ],
+    [ "report_user_task_end", "kernel_8cpp.html#a1b0a913cbbfa91a6fea452db23dc8cb8", null ],
     [ "syscall_handler", "kernel_8cpp.html#a05b6e6675cd9f2f3cb2fd0aa3bc812a3", null ],
+    [ "task_fault_cause", "kernel_8cpp.html#aa410b473247c0c5b4d142e11613e0549", null ],
     [ "_binary_initrd_cpio_end", "kernel_8cpp.html#a2c38eb4c3a51bab012a31eb7f42d54c0", null ],
     [ "_binary_initrd_cpio_start", "kernel_8cpp.html#a53b789d98a238ce07c0629d6ba055cff", null ],
     [ "error_code", "kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2", null ],
     [ "false", "kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01", null ],
     [ "kernel_virt_end", "kernel_8cpp.html#acf393da2fe85b8d9fa8cd83ff83a6a0c", null ],
+    [ "kTaskEndDmesgClean", "kernel_8cpp.html#a23910dbc483b0bbc8cc804e6f7258df2", null ],
+    [ "kTaskEndDmesgFault", "kernel_8cpp.html#a78b6052e5188c19ca39a2cf2d16e7acc", null ],
     [ "regs", "kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708", null ],
     [ "rip", "kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845", null ]
 ];

@@ -13,7 +13,9 @@ var structkernel_1_1task_1_1_task_def =
     [ "ss_bg_prio", "structkernel_1_1task_1_1_task_def.html#a321ed3db831c432f007858645bd56aab", null ],
     [ "ss_budget", "structkernel_1_1task_1_1_task_def.html#a776283f6c46fdea9a624d7a226aaa1f7", null ],
     [ "ss_budget_granularity", "structkernel_1_1task_1_1_task_def.html#a7eef95c0ef537af6c5d224770f769df7", null ],
+    [ "ss_mode", "structkernel_1_1task_1_1_task_def.html#af8a6678e8046a413df0c0d952c98a0b0", null ],
     [ "ss_period", "structkernel_1_1task_1_1_task_def.html#a689ebddb822faf5cdaac58095be26a14", null ],
     [ "type", "structkernel_1_1task_1_1_task_def.html#a49b48863f9e1c0d02ca13f10129ab27d", null ],
-    [ "user_stack_size", "structkernel_1_1task_1_1_task_def.html#ada5b7ac2f9388739e7ed1959a47980d8", null ]
+    [ "user_stack_size", "structkernel_1_1task_1_1_task_def.html#ada5b7ac2f9388739e7ed1959a47980d8", null ],
+    [ "wcet_ticks", "structkernel_1_1task_1_1_task_def.html#aed5ed00b8a127569b9d26410e40e486e", null ]
 ];

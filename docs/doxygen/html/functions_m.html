@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,35 +121,58 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_m.ht
 
 <h3 class="doxsection"><a id="index_m" name="index_m"></a>- m -</h3><ul>
 <li>machine&#160;:&#160;<a class="el" href="structkernel_1_1_utsname.html#a6eee42e6ff632c03b2c92a06333f80d5">kernel::Utsname</a>, <a class="el" href="struct_utsname.html#a8ef3dbdd05d465814b255af100b3759e">Utsname</a>, <a class="el" href="structutsname.html#adfa4a80ab040c7e5775dbbc6483f8512">utsname</a></li>
-<li>magic&#160;:&#160;<a class="el" href="structfdt__header.html#a2391f4d3f878ed789de2d641738c682d">fdt_header</a>, <a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#ae0442901731eb7f5df2d376feafd0788">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1shm_1_1_shared_ring_header.html#a59ba9e5bc0dc18bbe406e46c51ce7973">kernel::shm::SharedRingHeader</a></li>
+<li>magic&#160;:&#160;<a class="el" href="structfdt__header.html#a2391f4d3f878ed789de2d641738c682d">fdt_header</a>, <a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#ae0442901731eb7f5df2d376feafd0788">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1shm_1_1_shared_ring_header.html#a59ba9e5bc0dc18bbe406e46c51ce7973">kernel::shm::SharedRingHeader</a>, <a class="el" href="structkernel_1_1_task_control_block.html#ad3905179312a733cc653f37e4d3579af">kernel::TaskControlBlock</a></li>
 <li>major&#160;:&#160;<a class="el" href="structkernel_1_1_version.html#a3e2dcc490e3869f520c78346ca18425a">kernel::Version</a></li>
 <li>malformed&#160;:&#160;<a class="el" href="structkernel_1_1acpi_1_1_madt_info.html#ac9ec6c60e57cefc62d8eba18a56b7429">kernel::acpi::MadtInfo</a>, <a class="el" href="structkernel_1_1iommu_1_1dmar_1_1_dmar_info.html#ac57aca98cc458aa3d260c51340f2e59e">kernel::iommu::dmar::DmarInfo</a></li>
 <li>map()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_frame_user_map.html#a85d0da5d5967e598e5082a5482e375dd">kernel::cap::FrameUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html#afdd1e85f6b3cb6f4573f13a55b0a1c13">kernel::cap::MmioUserMap</a>, <a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html#a6e8b85887afecdbaae3de7bc976d837b">kernel::ipc::PagerRegistry</a></li>
 <li>map_frame()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#adbed9ff975a1f17ea0c2023eeb2217c9">kernel::iommu::IoMmuManager</a></li>
+<li>map_frame_from_cap()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#af38a18ef6db1e4e014d7c5aee0b71aaf">kernel::VMM</a></li>
 <li>map_in_progress&#160;:&#160;<a class="el" href="structkernel_1_1ipc_1_1_pager_fault.html#a3b2de91125d20af6058c18c2cb80f6cb">kernel::ipc::PagerFault</a></li>
 <li>map_mmio()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a12b1c16e3b9a9b899aa22d653cb77a9a">arch::APIC</a></li>
+<li>map_mmio_from_cap()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#af2f11f9011cb503e77cdfcdd2c26618c">kernel::VMM</a></li>
+<li>map_page()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#aa31478530f584907b7a8d79cd60a8e46">kernel::VMM</a></li>
+<li>map_page_err()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a00badc7d69ae6df6b9ec4ece614fe766">kernel::VMM</a></li>
+<li>map_page_in_pml4()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a6c283a922356a4a1b0a157a996a2bb03">kernel::VMM</a></li>
+<li>map_page_in_pml4_err()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a60a557d98925cd250a9180effab1e774">kernel::VMM</a></li>
 <li>mapped&#160;:&#160;<a class="el" href="structkernel_1_1test_1_1_pt_pool_snapshot.html#aed93f585a7d628d70693e2a5492727cb">kernel::test::PtPoolSnapshot</a></li>
 <li>mapping_count()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a15b657b8380e46b29e702228f3dba83d">kernel::iommu::IoMmuManager</a></li>
 <li>maps&#160;:&#160;<a class="el" href="structkernel_1_1iommu_1_1_io_mmu_domain.html#a3d9ca78cbac0b44c6b2614455c53b401">kernel::iommu::IoMmuDomain</a></li>
+<li>mark_init_done()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#ab5cae5425cfdac020f01d167b50fde2c">kernel::PMM</a></li>
 <li>mark_pool_backed()&#160;:&#160;<a class="el" href="classkernel_1_1_kernel_object.html#afbcf31356498702aeda5288e2c598068">kernel::KernelObject</a></li>
 <li>mask_irq()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#ab73eaa743edd148689d4f2d3342cac24">arch::APIC</a></li>
 <li>max&#160;:&#160;<a class="el" href="struct_bench_result.html#ad2e6fade7f798efb1d339ef33bdc6a9e">BenchResult</a></li>
+<li>max_budget()&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#a613b766f64760d57b7018e525a66f290">kernel::task::SporadicServer</a></li>
 <li>MAX_PENDING&#160;:&#160;<a class="el" href="classkernel_1_1_tlb_shootdown.html#afc7b622a82c19360fc06f25288625aca">kernel::TlbShootdown</a></li>
 <li>MAX_PER_TICK&#160;:&#160;<a class="el" href="classkernel_1_1_tlb_shootdown.html#a4c20c537c419671bccf5a6f85dcdac75">kernel::TlbShootdown</a></li>
 <li>MAX_QUARANTINE&#160;:&#160;<a class="el" href="classkernel_1_1_tlb_shootdown.html#aec53a7accfe8715b2168c06dd09a3e0d">kernel::TlbShootdown</a></li>
+<li>MAX_REPLENISHMENTS&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#a9ed027f650f166b9e31ad25ae062dd1f">kernel::task::SporadicServer</a></li>
+<li>MAX_WAITERS&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_event_group.html#a40e0ecacb81a4c370b8bca8e578486f8">kernel::sync::EventGroup</a>, <a class="el" href="classkernel_1_1sync_1_1_mutex.html#aab40dd38ede645bf4e4d44779fd5ac09">kernel::sync::Mutex</a>, <a class="el" href="classkernel_1_1sync_1_1_queue.html#afc15100ece9d3177d7a900d2522e08a4">kernel::sync::Queue</a>, <a class="el" href="classkernel_1_1sync_1_1_semaphore.html#af8cd0f4644603aca94b6d5e01a461f77">kernel::sync::Semaphore</a></li>
 <li>mbox_count&#160;:&#160;<a class="el" href="structkernel_1_1_sched_per_cpu_pod.html#a565ea9a3ccbcfb8200f47b73ee73162a">kernel::SchedPerCpuPod</a></li>
 <li>mbox_generation&#160;:&#160;<a class="el" href="structkernel_1_1_sched_per_cpu_pod.html#ab18769da3338b7ee1b9ef2da0d8e1c8f">kernel::SchedPerCpuPod</a></li>
 <li>mbox_id&#160;:&#160;<a class="el" href="structkernel_1_1_sched_per_cpu_pod.html#a42ca6ba56019c93bbb9fc25764a22a5f">kernel::SchedPerCpuPod</a></li>
 <li>mbox_task&#160;:&#160;<a class="el" href="structkernel_1_1_sched_per_cpu_pod.html#a14184f592c7e4f7122ec080d0098ff76">kernel::SchedPerCpuPod</a></li>
+<li>mem_alloc_ops_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a43cabcff61b0fd0cd600cce314f0c561">kernel::TaskControlBlock</a>, <a class="el" href="structkernel_1_1_task_exit_record.html#a286dc7a7ec38d73606cfff21ae5f9796">kernel::TaskExitRecord</a></li>
+<li>mem_free_ops_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#ac642fa894509be15025d1563202db67d">kernel::TaskControlBlock</a>, <a class="el" href="structkernel_1_1_task_exit_record.html#aa3853d750b361b3f4ec0a9b4e6dbb4a7">kernel::TaskExitRecord</a></li>
+<li>mem_leak_streak_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a96b86cc1cdf127fe1a132029d13a4324">kernel::TaskControlBlock</a></li>
+<li>mem_prev_outstanding_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#aab0022957eb6e6a220fe859f417d5aae">kernel::TaskControlBlock</a></li>
+<li>mem_prev_used_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a398284bb0214802da6936a9a65908bf1">kernel::TaskControlBlock</a></li>
+<li>memory_budget_pages_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a6b03f75073eabe0c50a2a78d4b468e4f">kernel::TaskControlBlock</a></li>
+<li>memory_used_pages_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a900999c32ede31fa0a2839b6060bfdb3">kernel::TaskControlBlock</a>, <a class="el" href="structkernel_1_1_task_exit_record.html#a16d54170eee4d04a956efab8c2e56a32">kernel::TaskExitRecord</a></li>
 <li>mempool_used&#160;:&#160;<a class="el" href="structkernel_1_1test_1_1_resource_counters.html#a73407a7ad1439f2237eea3cb4ad3601d">kernel::test::ResourceCounters</a></li>
+<li>merge_kernel_half()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#ab1e588a7330966cfa208fdb3255ed778">kernel::VMM</a></li>
 <li>message&#160;:&#160;<a class="el" href="structkernel_1_1log_1_1_log_entry.html#a7de65030a9cc87603b93acc622f4678d">kernel::log::LogEntry</a></li>
+<li>MessageQueue()&#160;:&#160;<a class="el" href="structkernel_1_1_message_queue.html#a1e2db928132955b19dfcc0c4aa5f2cba">kernel::MessageQueue</a></li>
 <li>migration_count()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ace626f0336bf030f74f984cf5d926eca">kernel::Scheduler</a></li>
 <li>min&#160;:&#160;<a class="el" href="struct_bench_result.html#aa965cc038522d0a43eaac5fec16bad58">BenchResult</a></li>
 <li>minor&#160;:&#160;<a class="el" href="structkernel_1_1_version.html#a651719f6269816e291c01c144e4cb9c4">kernel::Version</a></li>
 <li>mmio_base()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a7f3e6627e87ec0460f512779813b678f">kernel::iommu::IoMmuManager</a></li>
+<li>mode()&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#aa9d4d0252ad8a735e0f000270e9b9870">kernel::task::SporadicServer</a></li>
 <li>monitor_task_entry()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a5c115dae407624bae7db3b31baa29a14">kernel::Scheduler</a></li>
 <li>move_priority()&#160;:&#160;<a class="el" href="classkernel_1_1_ready_queue_manager.html#ab213aca16e35a1fe9d1702885cde4ef1">kernel::ReadyQueueManager</a>, <a class="el" href="classkernel_1_1_scheduler.html#ae543d07405d0c21a092c2561cbfe6735">kernel::Scheduler</a></li>
+<li>msg_queue&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a63c5a6981042ba48308775d7b0d7fa6a">kernel::TaskControlBlock</a></li>
 <li>msg_queues&#160;:&#160;<a class="el" href="structkernel_1_1test_1_1_resource_counters.html#afd4796e9d56e9debf80447b08b6d7c6a">kernel::test::ResourceCounters</a></li>
+<li>msgs&#160;:&#160;<a class="el" href="structkernel_1_1_message_queue.html#a83249920b380e779a5be6fe72df2f0a4">kernel::MessageQueue</a></li>
+<li>Mutex()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_mutex.html#a4f3663709d2c4a4858f5f05a5448e244">kernel::sync::Mutex</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

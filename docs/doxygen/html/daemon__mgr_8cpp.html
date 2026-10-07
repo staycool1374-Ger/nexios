@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -145,18 +145,18 @@ Namespaces</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a80e920b60042b6c2750fd88974610e99" id="r_a80e920b60042b6c2750fd88974610e99"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a80e920b60042b6c2750fd88974610e99">debug_write</a> (const char *s)</td></tr>
-<tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
+<tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (uint64_t value)</td></tr>
 <tr class="memitem:a0a2e6431675517acca87d324b2cff80e" id="r_a0a2e6431675517acca87d324b2cff80e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a0a2e6431675517acca87d324b2cff80e">kernel::daemon::init</a> ()</td></tr>
 <tr class="memdesc:a0a2e6431675517acca87d324b2cff80e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize the daemon manager — clear all entries and reset count.  <br /></td></tr>
-<tr class="memitem:a805ce70d7458d932a10b9f7aec27fde1" id="r_a805ce70d7458d932a10b9f7aec27fde1"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a805ce70d7458d932a10b9f7aec27fde1">kernel::daemon::register_daemon</a> (const char *name, const char *initrd_path, void(*set_pid)(<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>), <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>(*get_pid)())</td></tr>
+<tr class="memitem:a805ce70d7458d932a10b9f7aec27fde1" id="r_a805ce70d7458d932a10b9f7aec27fde1"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a805ce70d7458d932a10b9f7aec27fde1">kernel::daemon::register_daemon</a> (const char *name, const char *initrd_path, void(*set_pid)(uint64_t), uint64_t(*get_pid)())</td></tr>
 <tr class="memitem:af8c94939f398ca91404fdf9f7aef8171" id="r_af8c94939f398ca91404fdf9f7aef8171"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#af8c94939f398ca91404fdf9f7aef8171">kernel::daemon::reset_clear_daemons</a> ()</td></tr>
 <tr class="memdesc:af8c94939f398ca91404fdf9f7aef8171"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kill and re-register all daemons — resets state and clears count.  <br /></td></tr>
 <tr class="memitem:a21cc42dcf871a137a3918d82dcc1ecf4" id="r_a21cc42dcf871a137a3918d82dcc1ecf4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a21cc42dcf871a137a3918d82dcc1ecf4">kernel::daemon::set_suppress_death_msg</a> (bool v)</td></tr>
 <tr class="memdesc:a21cc42dcf871a137a3918d82dcc1ecf4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Notify the manager that a daemon has exited.  <br /></td></tr>
-<tr class="memitem:a92ec4786a10d49508858cb50f5a83ce3" id="r_a92ec4786a10d49508858cb50f5a83ce3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a92ec4786a10d49508858cb50f5a83ce3">kernel::daemon::notify_death</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pid, bool log_only)</td></tr>
-<tr class="memitem:ae09ac16adefc443c674743c771bf7df9" id="r_ae09ac16adefc443c674743c771bf7df9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#ae09ac16adefc443c674743c771bf7df9">kernel::daemon::capture_state</a> (DaemonEntry *out_entries, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;num_out)</td></tr>
+<tr class="memitem:a92ec4786a10d49508858cb50f5a83ce3" id="r_a92ec4786a10d49508858cb50f5a83ce3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a92ec4786a10d49508858cb50f5a83ce3">kernel::daemon::notify_death</a> (uint64_t pid, bool log_only)</td></tr>
+<tr class="memitem:ae09ac16adefc443c674743c771bf7df9" id="r_ae09ac16adefc443c674743c771bf7df9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#ae09ac16adefc443c674743c771bf7df9">kernel::daemon::capture_state</a> (DaemonEntry *out_entries, uint64_t &amp;num_out)</td></tr>
 <tr class="memdesc:ae09ac16adefc443c674743c771bf7df9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot all daemon entries for test isolation.  <br /></td></tr>
-<tr class="memitem:a813c05f435562a463683747e67315718" id="r_a813c05f435562a463683747e67315718"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a813c05f435562a463683747e67315718">kernel::daemon::restore_state</a> (const DaemonEntry *entries_in, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> num_in)</td></tr>
+<tr class="memitem:a813c05f435562a463683747e67315718" id="r_a813c05f435562a463683747e67315718"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a813c05f435562a463683747e67315718">kernel::daemon::restore_state</a> (const DaemonEntry *entries_in, uint64_t num_in)</td></tr>
 <tr class="memdesc:a813c05f435562a463683747e67315718"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore daemon entries from a captured snapshot (test isolation).  <br /></td></tr>
 <tr class="memitem:a7910dce2d3de5e1d57e8d1ac0cca68c9" id="r_a7910dce2d3de5e1d57e8d1ac0cca68c9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a7910dce2d3de5e1d57e8d1ac0cca68c9">kernel::daemon::restart_stale_daemons</a> ()</td></tr>
 <tr class="memdesc:a7910dce2d3de5e1d57e8d1ac0cca68c9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restart any daemons whose PID is 0 (crashed / never started). Respects MAX_RESTART_COUNT per daemon; logs warnings on failure.  <br /></td></tr>
@@ -166,7 +166,7 @@ Functions</h2></td></tr>
 <tr class="memdesc:a80477af4a63abcab7534fbffba7db6f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Terminate a daemon by name — marks task TERMINATED and clears entry.  <br /></td></tr>
 <tr class="memitem:aadff7e665c02eef5c3cf2d52db58b8bd" id="r_aadff7e665c02eef5c3cf2d52db58b8bd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#aadff7e665c02eef5c3cf2d52db58b8bd">kernel::daemon::reset_restart_count</a> (const char *name)</td></tr>
 <tr class="memdesc:aadff7e665c02eef5c3cf2d52db58b8bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset a daemon's restart count and PID so it can be restarted.  <br /></td></tr>
-<tr class="memitem:a978776a5839d1f7bbac1e5a22572afca" id="r_a978776a5839d1f7bbac1e5a22572afca"><td class="memItemLeft">const DaemonEntry &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a978776a5839d1f7bbac1e5a22572afca">kernel::daemon::get_entry</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> index)</td></tr>
+<tr class="memitem:a978776a5839d1f7bbac1e5a22572afca" id="r_a978776a5839d1f7bbac1e5a22572afca"><td class="memItemLeft">const DaemonEntry &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a978776a5839d1f7bbac1e5a22572afca">kernel::daemon::get_entry</a> (uint64_t index)</td></tr>
 <tr class="memdesc:a978776a5839d1f7bbac1e5a22572afca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a const reference to the i-th daemon entry.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -198,17 +198,11 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">void debug_write_hex </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="daemon__mgr_8cpp_afc833d2926e5dca3c9fbed32f7a7656a_cgraph.png" border="0" usemap="#adaemon__mgr_8cpp_afc833d2926e5dca3c9fbed32f7a7656a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
-</div>
 
 </div>
 </div>

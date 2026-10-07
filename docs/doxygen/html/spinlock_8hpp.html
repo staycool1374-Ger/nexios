@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,34 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('spinlock_8hpp.
 
 <p>Busy-wait spinlock using atomic exchange.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="atomic_8hpp_source.html">lib/atomic.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for spinlock.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="spinlock_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2sync_2spinlock_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="spinlock_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2sync_2spinlock_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="spinlock_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Async_3A_3ASpinLock" id="r_kernel_3A_3Async_3A_3ASpinLock"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1sync_1_1_spin_lock.html">kernel::sync::SpinLock</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Simple busy-wait spinlock using atomic_test_and_set.  <a href="classkernel_1_1sync_1_1_spin_lock.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Async" id="r_kernel_3A_3Async"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1sync.html">kernel::sync</a></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Busy-wait spinlock using atomic exchange. </p>
 <p>SMP-safe by construction (issue #61 audit): lock() is an atomic_exchange ACQUIRE loop with arch::pause() backoff and unlock() is an atomic_store RELEASE — mutual exclusion holds across CPUs. Task-context paths may block; ISR paths must use try_lock() (non-blocking skip-and-retry). </p>

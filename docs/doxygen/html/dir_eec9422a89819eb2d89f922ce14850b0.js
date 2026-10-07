@@ -18,5 +18,7 @@ var dir_eec9422a89819eb2d89f922ce14850b0 =
     [ "msix.cpp", "msix_8cpp.html", "msix_8cpp" ],
     [ "msix.hpp", "msix_8hpp.html", "msix_8hpp" ],
     [ "untyped.cpp", "untyped_8cpp.html", "untyped_8cpp" ],
-    [ "untyped.hpp", "untyped_8hpp.html", "untyped_8hpp" ]
+    [ "untyped.hpp", "untyped_8hpp.html", "untyped_8hpp" ],
+    [ "wdog.cpp", "wdog_8cpp.html", "wdog_8cpp" ],
+    [ "wdog.hpp", "wdog_8hpp.html", "wdog_8hpp" ]
 ];

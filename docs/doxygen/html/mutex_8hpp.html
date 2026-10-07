@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,24 +121,36 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mutex_8hpp.htm
 
 <p>Mutex with priority inheritance and blocking waiters.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="spinlock_8hpp_source.html">kernel/sync/spinlock.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="spinlock__guard_8hpp_source.html">kernel/sync/spinlock_guard.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="sync__errors_8hpp_source.html">kernel/sync/sync_errors.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for mutex.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="mutex_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2sync_2mutex_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="mutex_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2sync_2mutex_8hppdep" loading="lazy" alt=""/></div>
-<map name="asrc_2kernel_2sync_2mutex_8hppdep" id="asrc_2kernel_2sync_2mutex_8hppdep">
-<area shape="rect" title=" " alt="" coords="103,5,278,32"/>
-<area shape="rect" href="mutex_8cpp.html" title=" " alt="" coords="5,80,181,107"/>
-<area shape="poly" title=" " alt="" coords="159,43,111,82,108,78,163,40"/>
-<area shape="rect" href="sync_8hpp.html" title=" " alt="" coords="205,80,373,107"/>
-<area shape="poly" title=" " alt="" coords="220,39,275,79,269,80,219,44"/>
-<area shape="rect" href="kernel_8cpp.html" title=" " alt="" coords="128,155,271,181"/>
-<area shape="poly" title=" " alt="" coords="264,116,216,157,214,152,259,118"/>
-<area shape="rect" href="sync_8cpp.html" title=" " alt="" coords="295,155,462,181"/>
-<area shape="poly" title=" " alt="" coords="317,114,366,155,360,154,316,119"/>
-</map>
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="mutex_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Async_3A_3AMutex" id="r_kernel_3A_3Async_3A_3AMutex"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1sync_1_1_mutex.html">kernel::sync::Mutex</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Async" id="r_kernel_3A_3Async"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1sync.html">kernel::sync</a></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Mutex with priority inheritance and blocking waiters. </p>
 </div></div><!-- contents -->

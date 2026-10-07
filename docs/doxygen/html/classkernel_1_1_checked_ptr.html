@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classkernel_1_
 </div><!--header-->
 <div class="contents">
 
+<p>Checked pointer for safe user-space memory access.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="checked__ptr_8hpp_source.html">checked_ptr.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::CheckedPtr&lt; T &gt;:</div>
@@ -130,10 +133,13 @@ Collaboration diagram for kernel::CheckedPtr&lt; T &gt;:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a38b7b074db93756d4e420e323dacccc3" id="r_a38b7b074db93756d4e420e323dacccc3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a38b7b074db93756d4e420e323dacccc3">CheckedPtr</a> ()</td></tr>
+<tr class="memdesc:a38b7b074db93756d4e420e323dacccc3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default constructor — null pointer, zero count.  <br /></td></tr>
 <tr class="memitem:a81b915ddec0f1e6762e64f132f553514" id="r_a81b915ddec0f1e6762e64f132f553514"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a81b915ddec0f1e6762e64f132f553514">CheckedPtr</a> (T *user_ptr, uint64_t count=1)</td></tr>
+<tr class="memdesc:a81b915ddec0f1e6762e64f132f553514"><td class="mdescLeft">&#160;</td><td class="mdescRight">Construct from a raw user-space pointer with element count.  <br /></td></tr>
 <tr class="memitem:a317d90cb2eb7f98d46cc702f38412b7e" id="r_a317d90cb2eb7f98d46cc702f38412b7e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a317d90cb2eb7f98d46cc702f38412b7e">valid</a> () const</td></tr>
 <tr class="memdesc:a317d90cb2eb7f98d46cc702f38412b7e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if the pointer is valid (non-null, within user space).  <br /></td></tr>
 <tr class="memitem:ab6350dcd1a7c92b1b0ba3985950e29fa" id="r_ab6350dcd1a7c92b1b0ba3985950e29fa"><td class="memItemLeft">T *&#160;</td><td class="memItemRight"><a class="el" href="#ab6350dcd1a7c92b1b0ba3985950e29fa">unsafe_ptr</a> () const</td></tr>
+<tr class="memdesc:ab6350dcd1a7c92b1b0ba3985950e29fa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the raw pointer without validation.  <br /></td></tr>
 <tr class="memitem:af1f285a1e4ef86d24e61a67c7c0dfd83" id="r_af1f285a1e4ef86d24e61a67c7c0dfd83"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af1f285a1e4ef86d24e61a67c7c0dfd83">copy_from</a> (T *kernel_dst) const</td></tr>
 <tr class="memdesc:af1f285a1e4ef86d24e61a67c7c0dfd83"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copy count elements from user space to kernel buffer.  <br /></td></tr>
 <tr class="memitem:a6bfdef8cef4a7dbda0d352fc4186c10e" id="r_a6bfdef8cef4a7dbda0d352fc4186c10e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a6bfdef8cef4a7dbda0d352fc4186c10e">copy_to</a> (const T *kernel_src) const</td></tr>
@@ -143,7 +149,17 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ab81ae947b93fd57813a42da4651dfc20" id="r_ab81ae947b93fd57813a42da4651dfc20"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ab81ae947b93fd57813a42da4651dfc20">write</a> (const T &amp;value, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> index=0)</td></tr>
 <tr class="memdesc:ab81ae947b93fd57813a42da4651dfc20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write one element to user space at the given index.  <br /></td></tr>
 </table>
-<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><div class="compoundTemplParams">template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kernel::TriviallyCopiable</a> T&gt;<br />
+class kernel::CheckedPtr&lt; T &gt;</div><p>Checked pointer for safe user-space memory access. </p>
+<dl class="tparams"><dt>Template Parameters</dt><dd>
+  <table class="tparams">
+    <tr><td class="paramname">T</td><td>Element type (must be trivially copiable). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section note"><dt>Note</dt><dd>Provides bounds-validated load/store/copy operations that return default values on failure instead of panicking. </dd></dl>
+</div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a38b7b074db93756d4e420e323dacccc3" name="a38b7b074db93756d4e420e323dacccc3"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a38b7b074db93756d4e420e323dacccc3">&#9670;&#160;</a></span>CheckedPtr() <span class="overload">[1/2]</span></h2>
 
@@ -168,6 +184,8 @@ template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kerne
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Default constructor — null pointer, zero count. </p>
 
 </div>
 </div>
@@ -200,6 +218,15 @@ template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kerne
 </table>
 </div><div class="memdoc">
 
+<p>Construct from a raw user-space pointer with element count. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">user_ptr</td><td>Target user-space pointer. </td></tr>
+    <tr><td class="paramname">count</td><td>Number of elements (default 1). </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
@@ -230,6 +257,7 @@ template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kerne
 
 <p>Copy count elements from user space to kernel buffer. </p>
 <dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Issue #177: fault recovery redirects RIP only, so every faulting access must execute in this frame. The copy is a plain loop (no memcpy call): coverage flags (-fno-inline, -finstrument-functions) forbid inlining, so a fault inside a callee frame could not resume cleanly (observed as a #PF in print_test_header for the next test). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -266,6 +294,7 @@ template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kerne
 
 <p>Copy count elements from kernel buffer to user space. </p>
 <dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Issue #177: same-frame requirement, see copy_from. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -335,6 +364,9 @@ template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kerne
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Return the raw pointer without validation. </p>
+<dl class="section note"><dt>Note</dt><dd>Only safe when <a class="el" href="#a317d90cb2eb7f98d46cc702f38412b7e" title="Check if the pointer is valid (non-null, within user space).">valid()</a> has been checked beforehand. </dd></dl>
 
 </div>
 </div>

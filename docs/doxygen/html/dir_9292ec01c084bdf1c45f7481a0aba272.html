@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -131,6 +131,8 @@ Files</h2></td></tr>
 <tr class="memdesc:dmesg_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">DmesgService singleton — the private DmesgBuffer ring is defined inline in <a class="el" href="dmesg_8hpp.html" title="Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer, DmesgService singleton,...">dmesg.hpp</a> (friend-tested, no explicit instantiation needed). <br /></td></tr>
 <tr class="memitem:dmesg_2Ehpp" id="r_dmesg_2Ehpp"><td class="memItemLeft"><a href="dmesg_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="dmesg_8hpp.html">dmesg.hpp</a></td></tr>
 <tr class="memdesc:dmesg_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer, DmesgService singleton, error-string helpers. <br /></td></tr>
+<tr class="memitem:dmesg_5Fcatalog_2Ehpp" id="r_dmesg_5Fcatalog_2Ehpp"><td class="memItemLeft"><a href="dmesg__catalog_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="dmesg__catalog_8hpp.html">dmesg_catalog.hpp</a></td></tr>
+<tr class="memdesc:dmesg__catalog_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Central dmesg record catalog (issue #234): per-subsystem tables pairing canonical error-nr, severity, and text. Producers push the canonical number; renderers resolve severity/text through catalog_lookup. Legacy 0xDAxx/0xDBxx/0xDCxx BASE codes keep decoding through base_error_string (field-log compat) — see docs/specs/dmesg.md §5. <br /></td></tr>
 <tr class="memitem:ring_5Fbuffer_2Ecpp" id="r_ring_5Fbuffer_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="ring__buffer_8cpp.html">ring_buffer.cpp</a></td></tr>
 <tr class="memdesc:ring__buffer_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">KlogService singleton — kernel console character ring. <br /></td></tr>
 <tr class="memitem:ring_5Fbuffer_2Ehpp" id="r_ring_5Fbuffer_2Ehpp"><td class="memItemLeft"><a href="ring__buffer_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="ring__buffer_8hpp.html">ring_buffer.hpp</a></td></tr>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -158,26 +158,30 @@ Enumerations</h2></td></tr>
 Functions</h2></td></tr>
 <tr class="memitem:a53980ddec04e380da13a0325a465a554" id="r_a53980ddec04e380da13a0325a465a554"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a53980ddec04e380da13a0325a465a554">validate_header</a> (const ELF64Header *hdr)</td></tr>
 <tr class="memdesc:a53980ddec04e380da13a0325a465a554"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate an ELF64 header (magic, class, endianness, machine, bounds).  <br /></td></tr>
-<tr class="memitem:a4c7c051d91c678ffce1d1a2e2b60c4f5" id="r_a4c7c051d91c678ffce1d1a2e2b60c4f5"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4c7c051d91c678ffce1d1a2e2b60c4f5">validate_segment</a> (const ELF64ProgramHeader *phdr, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size)</td></tr>
+<tr class="memitem:a4c7c051d91c678ffce1d1a2e2b60c4f5" id="r_a4c7c051d91c678ffce1d1a2e2b60c4f5"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4c7c051d91c678ffce1d1a2e2b60c4f5">validate_segment</a> (const ELF64ProgramHeader *phdr, uint64_t file_size)</td></tr>
 <tr class="memdesc:a4c7c051d91c678ffce1d1a2e2b60c4f5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate a single program header segment. Checks bounds, permissions (W^X), size limits, and overflow safety.  <br /></td></tr>
-<tr class="memitem:af0f8dea59eb8cf69559d9199d5b78d10" id="r_af0f8dea59eb8cf69559d9199d5b78d10"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af0f8dea59eb8cf69559d9199d5b78d10">alloc_user_stack_and_heap</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *out_ustack_phys)</td></tr>
+<tr class="memitem:af0f8dea59eb8cf69559d9199d5b78d10" id="r_af0f8dea59eb8cf69559d9199d5b78d10"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af0f8dea59eb8cf69559d9199d5b78d10">alloc_user_stack_and_heap</a> (uint64_t pml4, uint64_t *out_ustack_phys)</td></tr>
 <tr class="memdesc:af0f8dea59eb8cf69559d9199d5b78d10"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocate and map the user stack (guard page + pages) and the initial heap into <code class="param">pml4</code>. Extracted from load_segments_and_stack for reuse by the background <a class="el" href="classkernel_1_1elf_1_1_elf_loader.html" title="Background ELF loader singleton.">ElfLoader</a> (chunked loader) which maps segments itself and only needs the stack + heap tail.  <br /></td></tr>
-<tr class="memitem:ae81746671637a90991ec1b98cef60dc4" id="r_ae81746671637a90991ec1b98cef60dc4"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#ae81746671637a90991ec1b98cef60dc4">load</a> (const ELF64Header *hdr, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *file_data, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size)</td></tr>
-<tr class="memitem:a4a78f2b4b292d565c901908fddd7b0a4" id="r_a4a78f2b4b292d565c901908fddd7b0a4"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a4a78f2b4b292d565c901908fddd7b0a4">finalize_loaded_task</a> (const ELF64Header *hdr, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ustack_phys, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *phdr_image, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size)</td></tr>
+<tr class="memitem:ae81746671637a90991ec1b98cef60dc4" id="r_ae81746671637a90991ec1b98cef60dc4"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ae81746671637a90991ec1b98cef60dc4">load</a> (const ELF64Header *hdr, const uint8_t *file_data, uint64_t file_size)</td></tr>
+<tr class="memitem:a4a78f2b4b292d565c901908fddd7b0a4" id="r_a4a78f2b4b292d565c901908fddd7b0a4"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a4a78f2b4b292d565c901908fddd7b0a4">finalize_loaded_task</a> (const ELF64Header *hdr, uint64_t pml4, uint64_t ustack_phys, const uint8_t *phdr_image, uint64_t file_size)</td></tr>
 <tr class="memdesc:a4a78f2b4b292d565c901908fddd7b0a4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finish a partially-built load: allocate the TCB, kernel stack, adopt <code class="param">pml4</code> as page_table_, wire std fds, setup the user stack frame and install segment canaries. Extracted from <a class="el" href="#ae81746671637a90991ec1b98cef60dc4">elf::load</a> for reuse by the background <a class="el" href="classkernel_1_1elf_1_1_elf_loader.html" title="Background ELF loader singleton.">ElfLoader</a> (chunked loader).  <br /></td></tr>
-<tr class="memitem:a8587c966825c28717e2e90c6c754b87c" id="r_a8587c966825c28717e2e90c6c754b87c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a8587c966825c28717e2e90c6c754b87c">exec_into_current</a> (const ELF64Header *hdr, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data, const char *const *argv, const char *const *envp, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size)</td></tr>
+<tr class="memitem:a8587c966825c28717e2e90c6c754b87c" id="r_a8587c966825c28717e2e90c6c754b87c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a8587c966825c28717e2e90c6c754b87c">exec_into_current</a> (const ELF64Header *hdr, const uint8_t *data, const char *const *argv, const char *const *envp, uint64_t *regs, uint64_t file_size)</td></tr>
+<tr class="memitem:a2cd5f8ff1d095878599d2ebd74125fb0" id="r_a2cd5f8ff1d095878599d2ebd74125fb0"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a2cd5f8ff1d095878599d2ebd74125fb0">collect_ro_ranges</a> (const uint8_t *phdr_image, uint64_t phdr_buf_off, uint16_t phnum, uint64_t phentsize, uint64_t file_size, <a class="el" href="structkernel_1_1_task_control_block_1_1_ro_range.html">TaskControlBlock::RoRange</a> *out, uint64_t max_ranges) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a9024e1c0be1324638cc1b83724001072" id="r_a9024e1c0be1324638cc1b83724001072"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a9024e1c0be1324638cc1b83724001072">crc_user_range</a> (uint64_t pml4, uint64_t vaddr, uint64_t len, uint32_t &amp;acc) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:ab17534bb543abbd372af4f9129e7d433" id="r_ab17534bb543abbd372af4f9129e7d433"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ab17534bb543abbd372af4f9129e7d433">text_canary_slot</a> (const uint8_t *phdr_image, uint64_t phdr_buf_off, uint16_t phnum, uint64_t phentsize, uint64_t file_size, uint64_t *slot_out) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a202ab589a130ada255a0629cb0fd9e89" id="r_a202ab589a130ada255a0629cb0fd9e89"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a202ab589a130ada255a0629cb0fd9e89">snapshot_ro_baseline</a> (uint64_t pml4, const uint8_t *phdr_image, uint64_t phdr_buf_off, uint16_t phnum, uint64_t phentsize, uint64_t file_size, bool has_dynamic, uint32_t load_crc, uint64_t canary_slot, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *tcb) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memitem:a1c90403a3aa9677a921069fbf64f5280" id="r_a1c90403a3aa9677a921069fbf64f5280"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1c90403a3aa9677a921069fbf64f5280">elf_loader_task_main</a> ()</td></tr>
 <tr class="memdesc:a1c90403a3aa9677a921069fbf64f5280"><td class="mdescLeft">&#160;</td><td class="mdescRight">The loader task's entry: block on the wake semaphore, run one load per accepted request, loop. Idle = blocked (zero CPU).  <br /></td></tr>
 <tr class="memitem:ad5d8f8b5d835105396ec8ed79a43e212" id="r_ad5d8f8b5d835105396ec8ed79a43e212"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad5d8f8b5d835105396ec8ed79a43e212">free_resolve_images</a> (DepResolveContext *ctx)</td></tr>
-<tr class="memitem:a1c98c2e07536a5a4afbbb8c71c8be241" id="r_a1c98c2e07536a5a4afbbb8c71c8be241"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1c98c2e07536a5a4afbbb8c71c8be241">unmap_acquired_ro</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4, const DepResolveContext *ctx, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> idx)</td></tr>
-<tr class="memitem:a6f1d5d14f51004bffabfae7b764586e1" id="r_a6f1d5d14f51004bffabfae7b764586e1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6f1d5d14f51004bffabfae7b764586e1">release_task_libs</a> (TaskControlBlock *tcb)</td></tr>
-<tr class="memitem:a23a6e02374b5473f5115da5597e27e19" id="r_a23a6e02374b5473f5115da5597e27e19"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a23a6e02374b5473f5115da5597e27e19">load_shared_object</a> (const char *soname, DepResolveContext *ctx, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> depth, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *out_load_base)</td></tr>
-<tr class="memitem:afbeca3dfe561183e16bf811a2f3bb139" id="r_afbeca3dfe561183e16bf811a2f3bb139"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afbeca3dfe561183e16bf811a2f3bb139">resolve_dependencies</a> (const ELF64Header *hdr, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *file_data, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size, DepResolveContext *ctx, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> depth, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> load_base)</td></tr>
+<tr class="memitem:a1c98c2e07536a5a4afbbb8c71c8be241" id="r_a1c98c2e07536a5a4afbbb8c71c8be241"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1c98c2e07536a5a4afbbb8c71c8be241">unmap_acquired_ro</a> (uint64_t pml4, const DepResolveContext *ctx, uint64_t idx)</td></tr>
+<tr class="memitem:a6f1d5d14f51004bffabfae7b764586e1" id="r_a6f1d5d14f51004bffabfae7b764586e1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6f1d5d14f51004bffabfae7b764586e1">release_task_libs</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *tcb)</td></tr>
+<tr class="memitem:a23a6e02374b5473f5115da5597e27e19" id="r_a23a6e02374b5473f5115da5597e27e19"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a23a6e02374b5473f5115da5597e27e19">load_shared_object</a> (const char *soname, DepResolveContext *ctx, uint64_t depth, uint64_t *out_load_base)</td></tr>
+<tr class="memitem:afbeca3dfe561183e16bf811a2f3bb139" id="r_afbeca3dfe561183e16bf811a2f3bb139"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afbeca3dfe561183e16bf811a2f3bb139">resolve_dependencies</a> (const ELF64Header *hdr, const uint8_t *file_data, uint64_t file_size, DepResolveContext *ctx, uint64_t depth, uint64_t load_base)</td></tr>
 <tr class="memitem:aecd3436bf70035c74beb3b35afeb66da" id="r_aecd3436bf70035c74beb3b35afeb66da"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aecd3436bf70035c74beb3b35afeb66da">relocate_closure</a> (DepResolveContext *ctx)</td></tr>
-<tr class="memitem:a30d32c118d2e72c3de96f0a5b0ac13c6" id="r_a30d32c118d2e72c3de96f0a5b0ac13c6"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a30d32c118d2e72c3de96f0a5b0ac13c6">apply_relocations</a> (const ELF64Header *hdr, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *file_data, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> load_base, DepResolveContext *ctx, const char *soname)</td></tr>
+<tr class="memitem:a30d32c118d2e72c3de96f0a5b0ac13c6" id="r_a30d32c118d2e72c3de96f0a5b0ac13c6"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a30d32c118d2e72c3de96f0a5b0ac13c6">apply_relocations</a> (const ELF64Header *hdr, const uint8_t *file_data, uint64_t file_size, uint64_t load_base, DepResolveContext *ctx, const char *soname)</td></tr>
 <tr class="memitem:a959d164cf66fb2ad436ea6771bc18caf" id="r_a959d164cf66fb2ad436ea6771bc18caf"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a959d164cf66fb2ad436ea6771bc18caf">get_soname</a> (const DynView *view)</td></tr>
-<tr class="memitem:ad222f0d787d28d86d6767eb23d5b36c0" id="r_ad222f0d787d28d86d6767eb23d5b36c0"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad222f0d787d28d86d6767eb23d5b36c0">get_needed</a> (const DynView *view, const char **needed)</td></tr>
-<tr class="memitem:aa8dc005c60ba0c7cf8eba8dbd7ec8586" id="r_aa8dc005c60ba0c7cf8eba8dbd7ec8586"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa8dc005c60ba0c7cf8eba8dbd7ec8586">read_dynamic_section</a> (const ELF64Header *hdr, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *file_data, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size, DynView *out_view)</td></tr>
+<tr class="memitem:ad222f0d787d28d86d6767eb23d5b36c0" id="r_ad222f0d787d28d86d6767eb23d5b36c0"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad222f0d787d28d86d6767eb23d5b36c0">get_needed</a> (const DynView *view, const char **needed)</td></tr>
+<tr class="memitem:aa8dc005c60ba0c7cf8eba8dbd7ec8586" id="r_aa8dc005c60ba0c7cf8eba8dbd7ec8586"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa8dc005c60ba0c7cf8eba8dbd7ec8586">read_dynamic_section</a> (const ELF64Header *hdr, const uint8_t *file_data, uint64_t file_size, DynView *out_view)</td></tr>
 </table>
 <a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
 <a id="ab90eb39dade009d486ffe40b02839796" name="ab90eb39dade009d486ffe40b02839796"></a>
@@ -190,7 +194,7 @@ Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#ab90eb39dade009d486ffe40b02839796">kernel::elf::LoadResult</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum class <a class="el" href="#ab90eb39dade009d486ffe40b02839796">kernel::elf::LoadResult</a> : uint8_t</td>
         </tr>
       </table>
   </td>
@@ -224,7 +228,7 @@ Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#a8f59bba1cd5bc9a93b5bd73e7c43bce5">kernel::elf::LoadState</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum class <a class="el" href="#a8f59bba1cd5bc9a93b5bd73e7c43bce5">kernel::elf::LoadState</a> : uint8_t</td>
         </tr>
       </table>
   </td>
@@ -268,7 +272,7 @@ Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="#abce3bf3f65d7f7924bf7925d4bf97f6f">kernel::elf::PostKind</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum class <a class="el" href="#abce3bf3f65d7f7924bf7925d4bf97f6f">kernel::elf::PostKind</a> : uint8_t</td>
         </tr>
       </table>
   </td>
@@ -300,12 +304,12 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">bool kernel::elf::alloc_user_stack_and_heap </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>out_ustack_phys</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>out_ustack_phys</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -328,17 +332,17 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>file_data</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>file_data</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>load_base</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>load_base</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -357,6 +361,111 @@ Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1elf_a30d32c118d2e72c3de96f0a5b0ac13c6_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_a30d32c118d2e72c3de96f0a5b0ac13c6_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 0 -->
+</div>
+
+</div>
+</div>
+<a id="a2cd5f8ff1d095878599d2ebd74125fb0" name="a2cd5f8ff1d095878599d2ebd74125fb0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2cd5f8ff1d095878599d2ebd74125fb0">&#9670;&#160;</a></span>collect_ro_ranges()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::elf::collect_ro_ranges </td>
+          <td>(</td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>phdr_image</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phdr_buf_off</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>phnum</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phentsize</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block_1_1_ro_range.html">TaskControlBlock::RoRange</a> *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>max_ranges</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1elf_a2cd5f8ff1d095878599d2ebd74125fb0_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_a2cd5f8ff1d095878599d2ebd74125fb0_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a9024e1c0be1324638cc1b83724001072" name="a9024e1c0be1324638cc1b83724001072"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9024e1c0be1324638cc1b83724001072">&#9670;&#160;</a></span>crc_user_range()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::elf::crc_user_range </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>vaddr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>len</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint32_t &amp;</td>          <td class="paramname"><span class="paramname"><em>acc</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1elf_a9024e1c0be1324638cc1b83724001072_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_a9024e1c0be1324638cc1b83724001072_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -382,7 +491,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1elf_a1c90403a3aa9677a921069fbf64f5280_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_a1c90403a3aa9677a921069fbf64f5280_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -401,7 +510,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>data</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>data</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -416,12 +525,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>regs</em></span>, </td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>regs</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -429,7 +538,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1elf_a8587c966825c28717e2e90c6c754b87c_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_a8587c966825c28717e2e90c6c754b87c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -441,29 +550,29 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::elf::finalize_loaded_task </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::elf::finalize_loaded_task </td>
           <td>(</td>
           <td class="paramtype">const ELF64Header *</td>          <td class="paramname"><span class="paramname"><em>hdr</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>ustack_phys</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>ustack_phys</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>phdr_image</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>phdr_image</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -479,12 +588,12 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>New TaskControlBlock, or nullptr on failure (partial state freed). </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>New <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a>, or nullptr on failure (partial state freed). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1elf_a4a78f2b4b292d565c901908fddd7b0a4_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_a4a78f2b4b292d565c901908fddd7b0a4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -513,7 +622,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::elf::get_needed </td>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::elf::get_needed </td>
           <td>(</td>
           <td class="paramtype">const DynView *</td>          <td class="paramname"><span class="paramname"><em>view</em></span>, </td>
         </tr>
@@ -551,19 +660,19 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock * kernel::elf::load </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::elf::load </td>
           <td>(</td>
           <td class="paramtype">const ELF64Header *</td>          <td class="paramname"><span class="paramname"><em>hdr</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>file_data</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>file_data</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -571,7 +680,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1elf_ae81746671637a90991ec1b98cef60dc4_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_ae81746671637a90991ec1b98cef60dc4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -595,12 +704,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>depth</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>depth</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>out_load_base</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>out_load_base</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -608,7 +717,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1elf_a23a6e02374b5473f5115da5597e27e19_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_a23a6e02374b5473f5115da5597e27e19_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -627,12 +736,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>file_data</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>file_data</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -653,11 +762,17 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::elf::release_task_libs </td>
           <td>(</td>
-          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1elf_a6f1d5d14f51004bffabfae7b764586e1_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_a6f1d5d14f51004bffabfae7b764586e1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
+</div>
 
 </div>
 </div>
@@ -679,7 +794,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1elf_aecd3436bf70035c74beb3b35afeb66da_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_aecd3436bf70035c74beb3b35afeb66da_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -698,12 +813,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>file_data</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>file_data</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -713,12 +828,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>depth</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>depth</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>load_base</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>load_base</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -726,7 +841,137 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1elf_afbeca3dfe561183e16bf811a2f3bb139_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_afbeca3dfe561183e16bf811a2f3bb139_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 10 -->
+</div>
+
+</div>
+</div>
+<a id="a202ab589a130ada255a0629cb0fd9e89" name="a202ab589a130ada255a0629cb0fd9e89"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a202ab589a130ada255a0629cb0fd9e89">&#9670;&#160;</a></span>snapshot_ro_baseline()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::elf::snapshot_ro_baseline </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>phdr_image</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phdr_buf_off</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>phnum</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phentsize</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>has_dynamic</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>load_crc</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>canary_slot</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1elf_a202ab589a130ada255a0629cb0fd9e89_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_a202ab589a130ada255a0629cb0fd9e89_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="ab17534bb543abbd372af4f9129e7d433" name="ab17534bb543abbd372af4f9129e7d433"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab17534bb543abbd372af4f9129e7d433">&#9670;&#160;</a></span>text_canary_slot()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::elf::text_canary_slot </td>
+          <td>(</td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>phdr_image</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phdr_buf_off</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>phnum</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phentsize</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>slot_out</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1elf_ab17534bb543abbd372af4f9129e7d433_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_ab17534bb543abbd372af4f9129e7d433_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -740,7 +985,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::elf::unmap_acquired_ro </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -750,10 +995,16 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>idx</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>idx</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1elf_a1c98c2e07536a5a4afbbb8c71c8be241_cgraph.png" border="0" usemap="#anamespacekernel_1_1elf_a1c98c2e07536a5a4afbbb8c71c8be241_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 13 -->
+</div>
 
 </div>
 </div>
@@ -791,7 +1042,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>file_size</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">

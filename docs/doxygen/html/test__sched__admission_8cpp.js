@@ -1,5 +1,6 @@
 var test__sched__admission_8cpp =
 [
+    [ "SchedulerError", "test__sched__admission_8cpp.html#ae886175cc5c137dd98ed440d4a46c203", null ],
     [ "JARVIS_TEST", "test__sched__admission_8cpp.html#a592c44cd74086493beeb3c8af4d83a21", null ],
     [ "JARVIS_TEST", "test__sched__admission_8cpp.html#abb4b085aef5a7f29860d517f401323eb", null ],
     [ "JARVIS_TEST", "test__sched__admission_8cpp.html#a944b2ad5b36d9ca0e93b916e8b8d5b22", null ],

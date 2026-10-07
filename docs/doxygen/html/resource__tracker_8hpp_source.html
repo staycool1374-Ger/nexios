@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('resource__trac
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
 <div class="foldopen" id="foldopen00029" data-start="{" data-end="};">
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_resource_counters.html">   29</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structkernel_1_1test_1_1_resource_counters.html">ResourceCounters</a> {</div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_resource_counters.html#a73407a7ad1439f2237eea3cb4ad3601d">   30</a></span>    <span class="keywordtype">size_t</span> <a class="code hl_variable" href="structkernel_1_1test_1_1_resource_counters.html#a73407a7ad1439f2237eea3cb4ad3601d">mempool_used</a>[MemPool::POOL_COUNT];</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_resource_counters.html#a73407a7ad1439f2237eea3cb4ad3601d">   30</a></span>    <span class="keywordtype">size_t</span> <a class="code hl_variable" href="structkernel_1_1test_1_1_resource_counters.html#a73407a7ad1439f2237eea3cb4ad3601d">mempool_used</a>[<a class="code hl_variable" href="classkernel_1_1_mem_pool.html#a46611dd1409f63831cd9238a5d15f37f">MemPool::POOL_COUNT</a>];</div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_resource_counters.html#ab85e8b09994f94242b55108844b9cc26">   31</a></span>    <span class="keywordtype">size_t</span> <a class="code hl_variable" href="structkernel_1_1test_1_1_resource_counters.html#ab85e8b09994f94242b55108844b9cc26">pmm_pages_used</a>;</div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_resource_counters.html#a5618a47f1f59452a7d6c81810412e111">   32</a></span>    <span class="keywordtype">size_t</span> <a class="code hl_variable" href="structkernel_1_1test_1_1_resource_counters.html#a5618a47f1f59452a7d6c81810412e111">tasks</a>;</div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_resource_counters.html#a612adf30a2c4ece738ca7b8b87b7977b">   33</a></span>    <span class="keywordtype">size_t</span> <a class="code hl_variable" href="structkernel_1_1test_1_1_resource_counters.html#a612adf30a2c4ece738ca7b8b87b7977b">bufpool_entries</a>;</div>
@@ -178,11 +178,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('resource__trac
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    }</div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span> </div>
 <div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_resource_tracker.html#a39c44e4ecaaaf36a5d5c50a4003895be">track_mempool_alloc</a>(<span class="keywordtype">size_t</span> pool_idx) {</div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>        <span class="keywordflow">if</span> (pool_idx &lt; MemPool::POOL_COUNT)</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>        <span class="keywordflow">if</span> (pool_idx &lt; <a class="code hl_variable" href="classkernel_1_1_mem_pool.html#a46611dd1409f63831cd9238a5d15f37f">MemPool::POOL_COUNT</a>)</div>
 <div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>            ++counters_.mempool_used[pool_idx];</div>
 <div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    }</div>
 <div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_resource_tracker.html#ad6a76117c28c904b9db90d90203e8545">track_mempool_free</a>(<span class="keywordtype">size_t</span> pool_idx) {</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>        <span class="keywordflow">if</span> (pool_idx &lt; MemPool::POOL_COUNT &amp;&amp;</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>        <span class="keywordflow">if</span> (pool_idx &lt; <a class="code hl_variable" href="classkernel_1_1_mem_pool.html#a46611dd1409f63831cd9238a5d15f37f">MemPool::POOL_COUNT</a> &amp;&amp;</div>
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>            counters_.mempool_used[pool_idx] &gt; 0)</div>
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>            --counters_.mempool_used[pool_idx];</div>
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    }</div>
@@ -552,6 +552,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('resource__trac
 <div class="line"><a id="l00334" name="l00334"></a><span class="lineno">  334</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00335" name="l00335"></a><span class="lineno">  335</span> </div>
 <div class="line"><a id="l00336" name="l00336"></a><span class="lineno">  336</span>} <span class="comment">// namespace kernel::test</span></div>
+<div class="ttc" id="aclasskernel_1_1_mem_pool_html_a46611dd1409f63831cd9238a5d15f37f"><div class="ttname"><a href="classkernel_1_1_mem_pool.html#a46611dd1409f63831cd9238a5d15f37f">kernel::MemPool::POOL_COUNT</a></div><div class="ttdeci">static constexpr size_t POOL_COUNT</div><div class="ttdef"><b>Definition</b> mempool.hpp:41</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_resource_tracker_html"><div class="ttname"><a href="classkernel_1_1test_1_1_resource_tracker.html">kernel::test::ResourceTracker</a></div><div class="ttdef"><b>Definition</b> resource_tracker.hpp:231</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_resource_tracker_html_a0ad847224fa544b4904a62e1245fbe41"><div class="ttname"><a href="classkernel_1_1test_1_1_resource_tracker.html#a0ad847224fa544b4904a62e1245fbe41">kernel::test::ResourceTracker::track_pmm_free</a></div><div class="ttdeci">void track_pmm_free(size_t)</div><div class="ttdef"><b>Definition</b> resource_tracker.hpp:243</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_resource_tracker_html_a11b11a7401c8227285e862cc97eadaf8"><div class="ttname"><a href="classkernel_1_1test_1_1_resource_tracker.html#a11b11a7401c8227285e862cc97eadaf8">kernel::test::ResourceTracker::track_death_watch_reset</a></div><div class="ttdeci">void track_death_watch_reset()</div><div class="ttdef"><b>Definition</b> resource_tracker.hpp:293</div></div>

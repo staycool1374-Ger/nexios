@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -124,11 +124,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 <li>failed()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_registry.html#a67e0bf935731e851c5130bab1b6c1861">kernel::test::Registry</a></li>
 <li>Fat32TestFixture()&#160;:&#160;<a class="el" href="struct_fat32_test_fixture.html#a562423ac6fc4638b844b46afedf71906">Fat32TestFixture</a></li>
 <li>fatal()&#160;:&#160;<a class="el" href="classkernel_1_1_logger.html#a174337cfc9a31a6333b723019fe7c940">kernel::Logger</a></li>
+<li>fb_terminated_line()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ad52b11c8e2ad0ee07e24ba2f55dc9acc">kernel::Scheduler</a></li>
 <li>fill_rect()&#160;:&#160;<a class="el" href="classservice_1_1_framebuffer.html#a21e2237e699ed029130bec158efd8935">service::Framebuffer</a></li>
 <li>finalize()&#160;:&#160;<a class="el" href="classkernel_1_1_c_r_c32.html#a51e3e3730cc4af6f8f2dea43b2aeca42">kernel::CRC32</a></li>
 <li>find()&#160;:&#160;<a class="el" href="classkernel_1_1_irq_delivery.html#aed7bd6996e2e6dfabdf30b4a416af650">kernel::IrqDelivery</a>, <a class="el" href="classservice_1_1_program_registry.html#a924e8fae2aa4c942c3eb813f9ac3f3e6">service::ProgramRegistry</a></li>
+<li>find_child()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a1a0b0c99fcacedaf0d60e51d87466052">kernel::TaskControlBlock</a></li>
 <li>find_function()&#160;:&#160;<a class="el" href="classkernel_1_1profiling_1_1_sampler.html#a980930f065f87f5b4ae5815a2c6b224b">kernel::profiling::Sampler</a>, <a class="el" href="class_sampler.html#a980930f065f87f5b4ae5815a2c6b224b">Sampler</a></li>
 <li>find_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#adbf15b7eb697f6c14bcf76c438895b18">kernel::Scheduler</a></li>
+<li>fire_stall_watchdog()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#abac41bdfb57739f351ab08f0116bceaa">kernel::Scheduler</a></li>
 <li>first()&#160;:&#160;<a class="el" href="classkernel_1_1_all_tasks_registry.html#aa5583f4e1fef85cb33e38292f2f7ee50">kernel::AllTasksRegistry</a></li>
 <li>first_ptr()&#160;:&#160;<a class="el" href="classkernel_1_1_all_tasks_registry.html#a8be8215a359b3e23afcefb4addf71475">kernel::AllTasksRegistry</a></li>
 <li>flush_target()&#160;:&#160;<a class="el" href="classarch_1_1_shootdown_batch.html#a5a61027e54f1a54d2630486bddf241ef">arch::ShootdownBatch</a></li>
@@ -136,6 +139,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 <li>for_each()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a8a5b54aee0bacdc7dabfb3929687a6cd">kernel::log::DmesgService</a></li>
 <li>force_apply()&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_sw_slots.html#adaaeb8554627b2a0c9265e7d8b7a9c95">kernel::Scheduler::SwSlots</a></li>
 <li>force_present()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#ab9de50cae7cb91af1391c2a0429eeeac">kernel::iommu::IoMmuManager</a></li>
+<li>free()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a1f64a714659b3a9b32efc18eb09e0830">kernel::MemPool</a></li>
+<li>free_err()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a3f1c8c8d44fb19cc7042070adb022533">kernel::MemPool</a></li>
+<li>free_memory()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a00cdda7e7ef634b49f0486ccd1ff7956">kernel::PMM</a></li>
+<li>free_page()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a0daaa2d1b36579ff9c0eb60caddee59d">kernel::PMM</a></li>
+<li>free_page_err()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#ac875a7cc225949a791f100851d4bd470">kernel::PMM</a></li>
+<li>free_pages_ref()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a762f33493160b0459a5e02468b834b1a">kernel::PMM</a></li>
+<li>free_user_pages()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#ab204c9d0ee0ad66661be51ce72280bff">kernel::VMM</a></li>
+<li>free_user_pages_err()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#ac75e4a39be64ad3c364d4321c1a621e1">kernel::VMM</a></li>
 <li>full_string()&#160;:&#160;<a class="el" href="structkernel_1_1_version.html#a6900c1bf9a13fb19ffdef8f8288bafe8">kernel::Version</a></li>
 </ul>
 </div><!-- contents -->

@@ -2,7 +2,7 @@ var classkernel_1_1cap_1_1_c_node =
 [
     [ "clear_grant", "classkernel_1_1cap_1_1_c_node.html#aa70e5ba0a72e5fd1f928026016230d30", null ],
     [ "dispose", "classkernel_1_1cap_1_1_c_node.html#a6f2392bbc0514c4623dc53a5ac1e54be", null ],
-    [ "install", "classkernel_1_1cap_1_1_c_node.html#ab6e71b22609a28abf0d8f9f4a1d99433", null ],
+    [ "install", "classkernel_1_1cap_1_1_c_node.html#a25aa483871e43e9d83ceacf6ddc1143f", null ],
     [ "is_shared", "classkernel_1_1cap_1_1_c_node.html#aa73bc0e7f514e8cdfeecbca9ff4c67df", null ],
     [ "peek", "classkernel_1_1cap_1_1_c_node.html#a6d962205da2437f62bb1491e1f63fcc2", null ],
     [ "remove", "classkernel_1_1cap_1_1_c_node.html#ace2a22c2d65ce6966fddd05e3e5f2182", null ],

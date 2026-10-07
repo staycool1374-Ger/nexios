@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -130,13 +130,13 @@ Collaboration diagram for kernel::CRC32:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a8d636603129700c9ca4ff5f1629cca13" id="r_a8d636603129700c9ca4ff5f1629cca13"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a8d636603129700c9ca4ff5f1629cca13">init</a> ()</td></tr>
-<tr class="memitem:ac21f4ee9e91b9cd5b189be578a566c01" id="r_ac21f4ee9e91b9cd5b189be578a566c01"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac21f4ee9e91b9cd5b189be578a566c01">update</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> crc, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> len)</td></tr>
-<tr class="memitem:a51e3e3730cc4af6f8f2dea43b2aeca42" id="r_a51e3e3730cc4af6f8f2dea43b2aeca42"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a51e3e3730cc4af6f8f2dea43b2aeca42">finalize</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> crc)</td></tr>
+<tr class="memitem:ac21f4ee9e91b9cd5b189be578a566c01" id="r_ac21f4ee9e91b9cd5b189be578a566c01"><td class="memItemLeft">static uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ac21f4ee9e91b9cd5b189be578a566c01">update</a> (uint32_t crc, const uint8_t *data, uint64_t len)</td></tr>
+<tr class="memitem:a51e3e3730cc4af6f8f2dea43b2aeca42" id="r_a51e3e3730cc4af6f8f2dea43b2aeca42"><td class="memItemLeft">static uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a51e3e3730cc4af6f8f2dea43b2aeca42">finalize</a> (uint32_t crc)</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
-<tr class="memitem:ad3b73507e9c32b7ed204fa8f86c6c285" id="r_ad3b73507e9c32b7ed204fa8f86c6c285"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad3b73507e9c32b7ed204fa8f86c6c285">INITIAL</a> = 0xFFFFFFFF</td></tr>
-<tr class="memitem:a2dc16100d0d9d2b71a8833ce3aa65a94" id="r_a2dc16100d0d9d2b71a8833ce3aa65a94"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2dc16100d0d9d2b71a8833ce3aa65a94">XOR_OUT</a> = 0xFFFFFFFF</td></tr>
+<tr class="memitem:ad3b73507e9c32b7ed204fa8f86c6c285" id="r_ad3b73507e9c32b7ed204fa8f86c6c285"><td class="memItemLeft">static constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ad3b73507e9c32b7ed204fa8f86c6c285">INITIAL</a> = 0xFFFFFFFF</td></tr>
+<tr class="memitem:a2dc16100d0d9d2b71a8833ce3aa65a94" id="r_a2dc16100d0d9d2b71a8833ce3aa65a94"><td class="memItemLeft">static constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a2dc16100d0d9d2b71a8833ce3aa65a94">XOR_OUT</a> = 0xFFFFFFFF</td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="a51e3e3730cc4af6f8f2dea43b2aeca42" name="a51e3e3730cc4af6f8f2dea43b2aeca42"></a>
@@ -149,9 +149,9 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::CRC32::finalize </td>
+          <td class="memname">uint32_t kernel::CRC32::finalize </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>crc</em></span></td><td>)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>crc</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -199,19 +199,19 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::CRC32::update </td>
+          <td class="memname">uint32_t kernel::CRC32::update </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>crc</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>crc</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>data</em></span>, </td>
+          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>data</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>len</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>len</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -234,7 +234,7 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::CRC32::INITIAL = 0xFFFFFFFF</td>
+          <td class="memname">uint32_t kernel::CRC32::INITIAL = 0xFFFFFFFF</td>
         </tr>
       </table>
   </td>
@@ -256,7 +256,7 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kernel::CRC32::XOR_OUT = 0xFFFFFFFF</td>
+          <td class="memname">uint32_t kernel::CRC32::XOR_OUT = 0xFFFFFFFF</td>
         </tr>
       </table>
   </td>

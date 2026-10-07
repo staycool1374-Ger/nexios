@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classkernel_1_
 </div><!--header-->
 <div class="contents">
 
-<p>Asynchronous task-death notification registry (issue #105 Part B). A static bounded table pairing watched tasks with supervisors. When a watched task dies, its record is latched in the registry (exactly once, in TaskControlBlock::cleanup()) and the supervisor's Notify is pulsed; the supervisor drains via SYS_DEATH_RECV (never blocks). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; death notify lock (never held across a scheduler call or a Notify poke — supervisors are collected under the lock and poked outside it).  
+<p>Asynchronous task-death notification registry (issue #105 Part B). A static bounded table pairing watched tasks with supervisors. When a watched task dies, its record is latched in the registry (exactly once, in <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a>) and the supervisor's Notify is pulsed; the supervisor drains via SYS_DEATH_RECV (never blocks). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; death notify lock (never held across a scheduler call or a Notify poke — supervisors are collected under the lock and poked outside it).  
  <a href="#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="death__notify_8hpp_source.html">death_notify.hpp</a>&gt;</code></p>
@@ -132,25 +132,25 @@ Collaboration diagram for kernel::ipc::DeathNotify:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:aaf1a691474770509f51b21319e557ada" id="r_aaf1a691474770509f51b21319e557ada"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#aaf1a691474770509f51b21319e557ada">watch</a> (kernel::TaskControlBlock &amp;actor, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> watched_pid, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> supervisor_pid)</td></tr>
+<tr class="memitem:aaf1a691474770509f51b21319e557ada" id="r_aaf1a691474770509f51b21319e557ada"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#aaf1a691474770509f51b21319e557ada">watch</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;actor, uint64_t watched_pid, uint64_t supervisor_pid)</td></tr>
 <tr class="memdesc:aaf1a691474770509f51b21319e557ada"><td class="mdescLeft">&#160;</td><td class="mdescRight">Registers a death watch. Authority: the caller may register (a) as the supervisor for <code class="param">watched_pid</code>, or (b) as the watched task designating <code class="param">supervisor_pid</code>. Fails closed when the registry is full or the pair is invalid.  <br /></td></tr>
-<tr class="memitem:ab4d10f3c665ac5d4057565d97beabf99" id="r_ab4d10f3c665ac5d4057565d97beabf99"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab4d10f3c665ac5d4057565d97beabf99">unwatch</a> (kernel::TaskControlBlock &amp;supervisor, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> watched_pid)</td></tr>
+<tr class="memitem:ab4d10f3c665ac5d4057565d97beabf99" id="r_ab4d10f3c665ac5d4057565d97beabf99"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab4d10f3c665ac5d4057565d97beabf99">unwatch</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;supervisor, uint64_t watched_pid)</td></tr>
 <tr class="memdesc:ab4d10f3c665ac5d4057565d97beabf99"><td class="mdescLeft">&#160;</td><td class="mdescRight">Removes every watch the supervisor holds on <code class="param">watched_pid</code> (ACTIVE or PENDING).  <br /></td></tr>
-<tr class="memitem:aa257d0dfb13ca02058d0ebf70e3e801e" id="r_aa257d0dfb13ca02058d0ebf70e3e801e"><td class="memItemLeft">static int&#160;</td><td class="memItemRight"><a class="el" href="#aa257d0dfb13ca02058d0ebf70e3e801e">recv</a> (kernel::TaskControlBlock &amp;supervisor, <a class="el" href="structkernel_1_1ipc_1_1_death_record.html">DeathRecord</a> &amp;out)</td></tr>
+<tr class="memitem:aa257d0dfb13ca02058d0ebf70e3e801e" id="r_aa257d0dfb13ca02058d0ebf70e3e801e"><td class="memItemLeft">static int&#160;</td><td class="memItemRight"><a class="el" href="#aa257d0dfb13ca02058d0ebf70e3e801e">recv</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;supervisor, <a class="el" href="structkernel_1_1ipc_1_1_death_record.html">DeathRecord</a> &amp;out)</td></tr>
 <tr class="memdesc:aa257d0dfb13ca02058d0ebf70e3e801e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Drains the next pending death record for <code class="param">supervisor</code> (never blocks).  <br /></td></tr>
-<tr class="memitem:af783ad818e7f806d3ac43a98af0243d4" id="r_af783ad818e7f806d3ac43a98af0243d4"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af783ad818e7f806d3ac43a98af0243d4">on_task_death</a> (kernel::TaskControlBlock &amp;dead)</td></tr>
+<tr class="memitem:af783ad818e7f806d3ac43a98af0243d4" id="r_af783ad818e7f806d3ac43a98af0243d4"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af783ad818e7f806d3ac43a98af0243d4">on_task_death</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;dead)</td></tr>
 <tr class="memdesc:af783ad818e7f806d3ac43a98af0243d4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Latch the death records for <code class="param">dead</code> and poke the supervisors. Called exactly once per task death from cleanup(). Never blocks.  <br /></td></tr>
-<tr class="memitem:add094bda0d6076340a7c1b588a679765" id="r_add094bda0d6076340a7c1b588a679765"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#add094bda0d6076340a7c1b588a679765">drain_task</a> (kernel::TaskControlBlock &amp;supervisor)</td></tr>
+<tr class="memitem:add094bda0d6076340a7c1b588a679765" id="r_add094bda0d6076340a7c1b588a679765"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#add094bda0d6076340a7c1b588a679765">drain_task</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;supervisor)</td></tr>
 <tr class="memdesc:add094bda0d6076340a7c1b588a679765"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees every slot whose supervisor is <code class="param">supervisor</code> (ACTIVE or PENDING). Called from cleanup() so a dying supervisor cannot leave stale watches behind.  <br /></td></tr>
 <tr class="memitem:a77e443ae91de3548d8c978c15fd6591e" id="r_a77e443ae91de3548d8c978c15fd6591e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a77e443ae91de3548d8c978c15fd6591e">snapshot_reset</a> ()</td></tr>
 <tr class="memdesc:a77e443ae91de3548d8c978c15fd6591e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clears the whole registry (test isolation snapshot restore).  <br /></td></tr>
-<tr class="memitem:a15374aff2420c1fa276ee14c4344e510" id="r_a15374aff2420c1fa276ee14c4344e510"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a15374aff2420c1fa276ee14c4344e510">live_count</a> ()</td></tr>
+<tr class="memitem:a15374aff2420c1fa276ee14c4344e510" id="r_a15374aff2420c1fa276ee14c4344e510"><td class="memItemLeft">static <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a15374aff2420c1fa276ee14c4344e510">live_count</a> ()</td></tr>
 <tr class="memdesc:a15374aff2420c1fa276ee14c4344e510"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of live (ACTIVE + PENDING) slots (test accessor).  <br /></td></tr>
-<tr class="memitem:a8611d522b34cb3200a332a68f2d23fa6" id="r_a8611d522b34cb3200a332a68f2d23fa6"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a8611d522b34cb3200a332a68f2d23fa6">is_watching</a> (kernel::TaskControlBlock &amp;supervisor, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> watched_pid)</td></tr>
+<tr class="memitem:a8611d522b34cb3200a332a68f2d23fa6" id="r_a8611d522b34cb3200a332a68f2d23fa6"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a8611d522b34cb3200a332a68f2d23fa6">is_watching</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;supervisor, uint64_t watched_pid)</td></tr>
 <tr class="memdesc:a8611d522b34cb3200a332a68f2d23fa6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether <code class="param">supervisor</code> currently holds a watch on <code class="param">watched_pid</code> (test accessor).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Asynchronous task-death notification registry (issue #105 Part B). A static bounded table pairing watched tasks with supervisors. When a watched task dies, its record is latched in the registry (exactly once, in TaskControlBlock::cleanup()) and the supervisor's Notify is pulsed; the supervisor drains via SYS_DEATH_RECV (never blocks). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; death notify lock (never held across a scheduler call or a Notify poke — supervisors are collected under the lock and poked outside it). </p>
+<div class="textblock"><p>Asynchronous task-death notification registry (issue #105 Part B). A static bounded table pairing watched tasks with supervisors. When a watched task dies, its record is latched in the registry (exactly once, in <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a>) and the supervisor's Notify is pulsed; the supervisor drains via SYS_DEATH_RECV (never blocks). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; death notify lock (never held across a scheduler call or a Notify poke — supervisors are collected under the lock and poked outside it). </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="add094bda0d6076340a7c1b588a679765" name="add094bda0d6076340a7c1b588a679765"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#add094bda0d6076340a7c1b588a679765">&#9670;&#160;</a></span>drain_task()</h2>
@@ -164,7 +164,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">void kernel::ipc::DeathNotify::drain_task </td>
           <td>(</td>
-          <td class="paramtype">kernel::TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>supervisor</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>supervisor</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -197,12 +197,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::ipc::DeathNotify::is_watching </td>
           <td>(</td>
-          <td class="paramtype">kernel::TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>supervisor</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>supervisor</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>watched_pid</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>watched_pid</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -226,7 +226,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::ipc::DeathNotify::live_count </td>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::ipc::DeathNotify::live_count </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -255,7 +255,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::ipc::DeathNotify::on_task_death </td>
           <td>(</td>
-          <td class="paramtype">kernel::TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>dead</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>dead</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -288,7 +288,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">int kernel::ipc::DeathNotify::recv </td>
           <td>(</td>
-          <td class="paramtype">kernel::TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>supervisor</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>supervisor</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -365,12 +365,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::ipc::DeathNotify::unwatch </td>
           <td>(</td>
-          <td class="paramtype">kernel::TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>supervisor</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>supervisor</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>watched_pid</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>watched_pid</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -402,17 +402,17 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::ipc::DeathNotify::watch </td>
           <td>(</td>
-          <td class="paramtype">kernel::TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>actor</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>actor</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>watched_pid</em></span>, </td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>watched_pid</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>supervisor_pid</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>supervisor_pid</em></span>&#160;)</td>
         </tr>
       </table>
   </td>

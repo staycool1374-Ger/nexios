@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -118,14 +118,73 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('checked__ptr_8
   <div class="headertitle"><div class="title">checked_ptr.hpp File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="string_8hpp_source.html">string.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="concepts_8hpp_source.html">concepts.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="hal_2io_8hpp_source.html">kernel/arch/hal/io.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for checked_ptr.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="checked__ptr_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2memory_2checked__ptr_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="checked__ptr_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2memory_2checked__ptr_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<map name="asrc_2kernel_2memory_2checked__ptr_8hppdep" id="asrc_2kernel_2memory_2checked__ptr_8hppdep">
+<area shape="rect" title=" " alt="" coords="61,5,244,48"/>
+<area shape="rect" href="elf_8cpp.html" title=" " alt="" coords="5,104,145,131"/>
+<area shape="poly" title=" " alt="" coords="127,59,88,106,84,102,122,60"/>
+<area shape="rect" href="syscall_8cpp.html" title=" " alt="" coords="169,96,293,139"/>
+<area shape="poly" title=" " alt="" coords="182,57,216,96,210,95,180,62"/>
+</map>
 </div>
 </div>
 <p><a href="checked__ptr_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3ACheckedPtr_3C_20T_20_3E" id="r_kernel_3A_3ACheckedPtr_3C_20T_20_3E"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_checked_ptr.html">kernel::CheckedPtr&lt; T &gt;</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Checked pointer for safe user-space memory access.  <a href="classkernel_1_1_checked_ptr.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:a54a8246615aceffb29f1c21b5aa404c2" id="r_a54a8246615aceffb29f1c21b5aa404c2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a54a8246615aceffb29f1c21b5aa404c2">NEXIOS_FAULT_RECOVERY_KEEP</a>(label)</td></tr>
+<tr class="memdesc:a54a8246615aceffb29f1c21b5aa404c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Opaque keep-alive edge for fault-recovery labels (issue #149). GCC deletes basic blocks unreachable by control flow even when their address is taken with &amp;&amp;label (verified at -O0/-Og/-O2: recover bodies absent binary-wide, labels resolve into the setup sequence, so a #PF resume re-arms and re-faults forever; only blocks rejoining hot code survive). A conditional goto through a value the compiler cannot fold (CR3 low 12 bits via volatile asm — always zero at runtime since the table root is page-aligned) forces emission with the label resolving to the real body. The condition is false at runtime; even if taken it only reaches the failure path (fail-closed, never fail-open).  <br /></td></tr>
+</table>
+<a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
+<a id="a54a8246615aceffb29f1c21b5aa404c2" name="a54a8246615aceffb29f1c21b5aa404c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a54a8246615aceffb29f1c21b5aa404c2">&#9670;&#160;</a></span>NEXIOS_FAULT_RECOVERY_KEEP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define NEXIOS_FAULT_RECOVERY_KEEP</td>
+          <td>(</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>label</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">do</span> {                                                                     \</div>
+<div class="line">    if ((arch::read_cr3() &amp; 0xFFFULL) == 0xFFFULL) {                      \</div>
+<div class="line">        <span class="keywordflow">goto</span> label;                                                      \</div>
+<div class="line">    }                                                                    \</div>
+<div class="line">} <span class="keywordflow">while</span> (0)</div>
+</div><!-- fragment -->
+<p>Opaque keep-alive edge for fault-recovery labels (issue #149). GCC deletes basic blocks unreachable by control flow even when their address is taken with &amp;&amp;label (verified at -O0/-Og/-O2: recover bodies absent binary-wide, labels resolve into the setup sequence, so a #PF resume re-arms and re-faults forever; only blocks rejoining hot code survive). A conditional goto through a value the compiler cannot fold (CR3 low 12 bits via volatile asm — always zero at runtime since the table root is page-aligned) forces emission with the label resolving to the real body. The condition is false at runtime; even if taken it only reaches the failure path (fail-closed, never fail-open). </p>
+<dl class="section note"><dt>Note</dt><dd>Place in reachable code before the label — either immediately after <span class="tt">g_user_access_recover_ip = &amp;&amp;label;</span>, or after the last initialized declaration when one sits between setup and label: the goto must not cross a non-vacuous initialization (hard error). Crossing clac/g=0/return tails is always safe. </dd></dl>
+
+</div>
+</div>
 </div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

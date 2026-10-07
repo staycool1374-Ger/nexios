@@ -20,10 +20,11 @@ var searchData=
   ['dmar_2ehpp_17',['dmar.hpp',['../dmar_8hpp.html',1,'']]],
   ['dmesg_2ecpp_18',['dmesg.cpp',['../dmesg_8cpp.html',1,'']]],
   ['dmesg_2ehpp_19',['dmesg.hpp',['../dmesg_8hpp.html',1,'']]],
-  ['dmesg_5ftask_2ecpp_20',['dmesg_task.cpp',['../dmesg__task_8cpp.html',1,'']]],
-  ['dmesg_5ftask_2ehpp_21',['dmesg_task.hpp',['../dmesg__task_8hpp.html',1,'']]],
-  ['driver_2ecpp_22',['driver.cpp',['../driver_8cpp.html',1,'']]],
-  ['driver_2ehpp_23',['driver.hpp',['../driver_8hpp.html',1,'']]],
-  ['dump_2ecpp_24',['dump.cpp',['../dump_8cpp.html',1,'']]],
-  ['dump_2ehpp_25',['dump.hpp',['../dump_8hpp.html',1,'']]]
+  ['dmesg_5fcatalog_2ehpp_20',['dmesg_catalog.hpp',['../dmesg__catalog_8hpp.html',1,'']]],
+  ['dmesg_5ftask_2ecpp_21',['dmesg_task.cpp',['../dmesg__task_8cpp.html',1,'']]],
+  ['dmesg_5ftask_2ehpp_22',['dmesg_task.hpp',['../dmesg__task_8hpp.html',1,'']]],
+  ['driver_2ecpp_23',['driver.cpp',['../driver_8cpp.html',1,'']]],
+  ['driver_2ehpp_24',['driver.hpp',['../driver_8hpp.html',1,'']]],
+  ['dump_2ecpp_25',['dump.cpp',['../dump_8cpp.html',1,'']]],
+  ['dump_2ehpp_26',['dump.hpp',['../dump_8hpp.html',1,'']]]
 ];

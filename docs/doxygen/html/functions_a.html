@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -125,6 +125,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_a.ht
 <li>abort()&#160;:&#160;<a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html#ad5dc5caaa2e644a7e978c182c3c8a87a">kernel::ipc::PagerRegistry</a></li>
 <li>acquire()&#160;:&#160;<a class="el" href="classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464">kernel::KernelObject</a></li>
 <li>action&#160;:&#160;<a class="el" href="structkernel_1_1_exception_signal_map.html#a31b74c0c27df363adb093881168f8980">kernel::ExceptionSignalMap</a></li>
+<li>ACTIVE&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#ac40cdbf3660bfe8f3824ad285eabf096a29c6b8a3505b922ae871b9f0f9075989">kernel::task::SporadicServer</a></li>
+<li>add_child()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a847355f329bada9a8093f49c40d54163">kernel::TaskControlBlock</a></li>
 <li>add_function()&#160;:&#160;<a class="el" href="classkernel_1_1profiling_1_1_sampler.html#af162f638970eefd42032a68570ed04a6">kernel::profiling::Sampler</a>, <a class="el" href="class_sampler.html#af162f638970eefd42032a68570ed04a6">Sampler</a></li>
 <li>add_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a392525912608998bc99fa1a3d4816538">kernel::Scheduler</a></li>
 <li>add_task_err()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#abe771365aff3aee22925d9339f9a5d9d">kernel::Scheduler</a></li>
@@ -133,12 +135,30 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_a.ht
 <li>admission_check_cpu_locked()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a535b83f13ee7f4db1c7f1fc46a5a8727">kernel::Scheduler</a></li>
 <li>admission_check_locked()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a88e2ee6d76a792ead0e59a889921cfba">kernel::Scheduler</a></li>
 <li>admission_exempted()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a88184659dfbb7070ae8ac82d3cfc5d1d">kernel::Scheduler</a></li>
-<li>alarm_armed&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a19746974d73ea97c73607c45ffd757db">kernel::Scheduler::TaskFields</a></li>
-<li>alarm_ticks&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a27309f0e9bc19f99776057140c067efe">kernel::Scheduler::TaskFields</a></li>
+<li>alarm_armed&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a19746974d73ea97c73607c45ffd757db">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#a79158a155308511aa1ddb404a7cee72e">kernel::TaskControlBlock</a></li>
+<li>alarm_ticks&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a27309f0e9bc19f99776057140c067efe">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#ae448c78f3c01bd7aa520e0525cb884a4">kernel::TaskControlBlock</a></li>
+<li>all_bucket_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a79631fe76eb87aad4f082d29b71b65b4">kernel::TaskControlBlock</a></li>
 <li>all_tasks()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#abe005618da247e2567e4ec2c40aeb176">kernel::Scheduler</a></li>
+<li>alloc()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a8902cb2684eb416cb181803ffbb04b9f">kernel::MemPool</a></li>
+<li>alloc_contiguous()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a604f2d4587e26dd794e13a22d2213615">kernel::PMM</a></li>
+<li>alloc_contiguous_err()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#ab9f9e75ec3300f19461a1c0580a85586">kernel::PMM</a></li>
+<li>alloc_err()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a0f83e43e9d8759a022fbe7806d015d3e">kernel::MemPool</a></li>
 <li>alloc_id()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ab34fba0f4de02e992d07e7ece93985ee">kernel::Scheduler</a></li>
 <li>alloc_id_err()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#afd4d3fa549d043821c690659b334caf1">kernel::Scheduler</a></li>
+<li>alloc_page()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#acd322564470938305549042daa42732d">kernel::PMM</a></li>
+<li>alloc_page_colored()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#aeedaca3386682da1e14767a34243fe5b">kernel::PMM</a></li>
+<li>alloc_page_colored_err()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a8694e3d85b5ff92dd758cdc8270f4e5b">kernel::PMM</a></li>
+<li>alloc_page_err()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a2b5af6ef9cd75524423988e0ecf27107">kernel::PMM</a></li>
+<li>alloc_page_table()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a8f9fb6564b0e66f0544e4af3205dd4d0">kernel::PMM</a></li>
+<li>alloc_page_table_err()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#aa463df4ae7427d4c22f07c2d2224653a">kernel::PMM</a></li>
+<li>alloc_user_contiguous()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#ae68479eae708fc368405715ad92a5fc3">kernel::PMM</a></li>
+<li>alloc_user_contiguous_err()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#ab6db019143467fd1a2da495b86d69c74">kernel::PMM</a></li>
+<li>alloc_user_page()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a305d66e38020dc96af630796440c80f8">kernel::PMM</a></li>
+<li>alloc_user_page_colored()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a5e982e72fab0bc94ec9f9ef8e0fdc7b6">kernel::PMM</a></li>
+<li>alloc_user_page_colored_err()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a62b98f9755e4d4b8434504c1dcdf6ca5">kernel::PMM</a></li>
+<li>alloc_user_page_err()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#ace62ea3ef912611c5a6e756b35f25e9a">kernel::PMM</a></li>
 <li>AllTasksRegistry()&#160;:&#160;<a class="el" href="classkernel_1_1_all_tasks_registry.html#adde419447acdc31d8c26e174cd7591aa">kernel::AllTasksRegistry</a></li>
+<li>amount&#160;:&#160;<a class="el" href="structkernel_1_1task_1_1_sporadic_server_1_1_replenishment.html#a9357559d3dd4707c2325a3472bbfabc4">kernel::task::SporadicServer::Replenishment</a></li>
 <li>anchor_reset_for_test()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#a62f364fcf0dd95995469981ee25c6236">kernel::time::PosixTime</a></li>
 <li>ap_tick()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#af7c93b15ca49dee1bfc0b1dd2acabd5e">kernel::Scheduler</a></li>
 <li>apic&#160;:&#160;<a class="el" href="structarch_1_1_caps.html#a7291ce27cc43e2fa80a81eba5b5c6ea2">arch::Caps</a></li>
@@ -150,9 +170,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_a.ht
 <li>arm()&#160;:&#160;<a class="el" href="classkernel_1_1_irq_delivery.html#a5cc6207daca08a7dcec01e66cabd9dfd">kernel::IrqDelivery</a>, <a class="el" href="classkernel_1_1time_1_1_timer_wheel.html#ae3dcf5f24986e4e77bbd10ab010901b8">kernel::time::TimerWheel</a></li>
 <li>arm_deadline()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#af9d9ee3e615a099cc4db05484bff493a">arch::APIC</a></li>
 <li>armed&#160;:&#160;<a class="el" href="structkernel_1_1_irq_registration.html#a444176bd4c4a05a4488d608909cb4154">kernel::IrqRegistration</a></li>
+<li>assert_kernel_half_converged()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#ab4a1174de0ca4f1aab88831fc9439847">kernel::VMM</a></li>
 <li>assign_deadline_priority()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#af35195e65c2d701329579b3a7bb21b79">kernel::Scheduler</a></li>
 <li>attach_device()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#aa2cfa572fccf0321a95c02adbb8164d0">kernel::iommu::IoMmuManager</a></li>
-<li>available()&#160;:&#160;<a class="el" href="classservice_1_1_framebuffer.html#ae27774c06353b1de3ea70262f75ef023">service::Framebuffer</a></li>
+<li>attach_object()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a02ff34baa1b5cff517d8d0263f906a38">kernel::TaskControlBlock</a></li>
+<li>auth_verify_step()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a3f5651c2fe0617331c4414c51d6c237a">kernel::Scheduler</a></li>
+<li>AuthStepResult&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aafa9966e76c491b9409a666d5dfd260d">kernel::Scheduler</a></li>
+<li>available()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_queue.html#a9b16fa6b927284308309f493ee5e35fa">kernel::sync::Queue</a>, <a class="el" href="classservice_1_1_framebuffer.html#ae27774c06353b1de3ea70262f75ef023">service::Framebuffer</a></li>
 <li>avg&#160;:&#160;<a class="el" href="struct_bench_result.html#a127e5613ffb60ddb99fc9d20c40dd680">BenchResult</a></li>
 </ul>
 </div><!-- contents -->

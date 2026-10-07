@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -146,8 +146,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dmar_8hpp_sour
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span></div>
 <div class="foldopen" id="foldopen00033" data-start="{" data-end="};">
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html">   33</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html">RemappingUnit</a> {</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno"><a class="line" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#aaf8c631baa674414f847c1dcdb29693c">   35</a></span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#aaf8c631baa674414f847c1dcdb29693c">base_phys</a> = 0;</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#aeffc89fbb0105e0f4557e934194a73f6">   37</a></span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> <a class="code hl_variable" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#aeffc89fbb0105e0f4557e934194a73f6">segment</a> = 0;</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno"><a class="line" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#aaf8c631baa674414f847c1dcdb29693c">   35</a></span>    uint64_t <a class="code hl_variable" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#aaf8c631baa674414f847c1dcdb29693c">base_phys</a> = 0;</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#aeffc89fbb0105e0f4557e934194a73f6">   37</a></span>    uint16_t <a class="code hl_variable" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#aeffc89fbb0105e0f4557e934194a73f6">segment</a> = 0;</div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno"><a class="line" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#adb27063fe0d6f819f23ffe632239a5e0">   39</a></span>    <span class="keywordtype">bool</span> <a class="code hl_variable" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#adb27063fe0d6f819f23ffe632239a5e0">present</a> = <span class="keyword">false</span>;</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#a71e30ef1d97196b6da9e82d24fa90b2e">   41</a></span>    <span class="keywordtype">bool</span> <a class="code hl_variable" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#a71e30ef1d97196b6da9e82d24fa90b2e">include_pci_all</a> = <span class="keyword">false</span>;</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>};</div>
@@ -174,8 +174,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dmar_8hpp_sour
 <div class="ttc" id="astructkernel_1_1iommu_1_1dmar_1_1_remapping_unit_html_adb27063fe0d6f819f23ffe632239a5e0"><div class="ttname"><a href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#adb27063fe0d6f819f23ffe632239a5e0">kernel::iommu::dmar::RemappingUnit::present</a></div><div class="ttdeci">bool present</div><div class="ttdoc">True when a DRHD structure was parsed and base is valid.</div><div class="ttdef"><b>Definition</b> dmar.hpp:39</div></div>
 <div class="ttc" id="astructkernel_1_1iommu_1_1dmar_1_1_remapping_unit_html_aeffc89fbb0105e0f4557e934194a73f6"><div class="ttname"><a href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#aeffc89fbb0105e0f4557e934194a73f6">kernel::iommu::dmar::RemappingUnit::segment</a></div><div class="ttdeci">uint16_t segment</div><div class="ttdoc">PCI segment number of the unit.</div><div class="ttdef"><b>Definition</b> dmar.hpp:37</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
-<div class="ttc" id="atypes_8hpp_html_a64be82add362de7c99ce6671d7f4f0a6"><div class="ttname"><a href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> types.hpp:25</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -147,28 +147,28 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('random_8hpp_so
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span></div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel.html#a03570b332ae94bd1acee2152e83dadd8">random_init</a>();</div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span></div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel.html#a3a9da091bb2229af08f856b08498fa51">random_fill</a>(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer, <span class="keywordtype">size_t</span> length);</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel.html#a3a9da091bb2229af08f856b08498fa51">random_fill</a>(uint8_t *buffer, <span class="keywordtype">size_t</span> length);</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span></div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> random_u64() {</div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> val{};</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_function" href="namespacekernel.html#a3a9da091bb2229af08f856b08498fa51">random_fill</a>(<span class="keyword">reinterpret_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *<span class="keyword">&gt;</span>(&amp;val), <span class="keyword">sizeof</span>(val));</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> random_u64() {</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> val{};</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_function" href="namespacekernel.html#a3a9da091bb2229af08f856b08498fa51">random_fill</a>(<span class="keyword">reinterpret_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *<span class="keyword">&gt;</span>(&amp;val), <span class="keyword">sizeof</span>(val));</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <span class="keywordflow">return</span> val;</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>}</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span></div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> random_u32() {</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> val{};</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <a class="code hl_function" href="namespacekernel.html#a3a9da091bb2229af08f856b08498fa51">random_fill</a>(<span class="keyword">reinterpret_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *<span class="keyword">&gt;</span>(&amp;val), <span class="keyword">sizeof</span>(val));</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keyword">inline</span> <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> random_u32() {</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> val{};</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <a class="code hl_function" href="namespacekernel.html#a3a9da091bb2229af08f856b08498fa51">random_fill</a>(<span class="keyword">reinterpret_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *<span class="keyword">&gt;</span>(&amp;val), <span class="keyword">sizeof</span>(val));</div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    <span class="keywordflow">return</span> val;</div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>}</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span> </div>
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
+<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anamespacekernel_html_a03570b332ae94bd1acee2152e83dadd8"><div class="ttname"><a href="namespacekernel.html#a03570b332ae94bd1acee2152e83dadd8">kernel::random_init</a></div><div class="ttdeci">void random_init()</div><div class="ttdef"><b>Definition</b> random.cpp:137</div></div>
 <div class="ttc" id="anamespacekernel_html_a3a9da091bb2229af08f856b08498fa51"><div class="ttname"><a href="namespacekernel.html#a3a9da091bb2229af08f856b08498fa51">kernel::random_fill</a></div><div class="ttdeci">void random_fill(uint8_t *buffer, size_t length)</div><div class="ttdef"><b>Definition</b> random.cpp:159</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

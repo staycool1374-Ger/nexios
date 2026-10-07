@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,8 +121,29 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('vmm_8hpp.html'
 
 <p>Virtual Memory Manager — cross-arch page table management with bounded page-walk depth (4-level x86_64/aarch64, 3-level riscv64 Sv39).  
 <a href="#details">More...</a></p>
-
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vmm__errors_8hpp_source.html">kernel/memory/vmm_errors.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for vmm.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="vmm_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2memory_2vmm_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div>
 <p><a href="vmm_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3AVMM" id="r_kernel_3A_3AVMM"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_v_m_m.html">kernel::VMM</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual memory manager — maps virtual to physical pages.  <a href="classkernel_1_1_v_m_m.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Acap" id="r_kernel_3A_3Acap"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html">kernel::cap</a></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Virtual Memory Manager — cross-arch page table management with bounded page-walk depth (4-level x86_64/aarch64, 3-level riscv64 Sv39). </p>
 </div></div><!-- contents -->

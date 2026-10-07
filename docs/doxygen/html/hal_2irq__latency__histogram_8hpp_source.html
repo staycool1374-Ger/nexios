@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -130,31 +130,31 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2irq__late
 <div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span><span class="keyword">class </span>IrqLatencyHistogram {</div>
 <div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="keyword">public</span>:</div>
 <div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> BUCKETS = 64;</div>
-<div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> RANGE_NS = 100000;</div>
+<div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> RANGE_NS = 100000;</div>
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span> </div>
 <div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>();</div>
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> record(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> entry_tsc);</div>
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> record(uint64_t entry_tsc);</div>
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> dump();</div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span> </div>
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="keyword">private</span>:</div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)</span></div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scale_;</div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> scale_;</div>
 <div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)</span></div>
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> buckets_[BUCKETS];</div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> buckets_[BUCKETS];</div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)</span></div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> count_;</div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> count_;</div>
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)</span></div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> max_ns_;</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> max_ns_;</div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>};</div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span> </div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>} <span class="comment">// namespace kernel</span></div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="preprocessor">#endif </span><span class="comment">// CONFIG_IRQ_LATENCY_HISTOGRAM</span></div>
+<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

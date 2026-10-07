@@ -57,5 +57,6 @@ var searchData=
   ['syscall_5fhandlers_5fshm_2ecpp_54',['syscall_handlers_shm.cpp',['../syscall__handlers__shm_8cpp.html',1,'']]],
   ['syscall_5fhandlers_5fsync_2ecpp_55',['syscall_handlers_sync.cpp',['../syscall__handlers__sync_8cpp.html',1,'']]],
   ['syscall_5fhandlers_5ftls_2ecpp_56',['syscall_handlers_tls.cpp',['../syscall__handlers__tls_8cpp.html',1,'']]],
-  ['syscall_5fhelpers_2ehpp_57',['syscall_helpers.hpp',['../syscall__helpers_8hpp.html',1,'']]]
+  ['syscall_5fhandlers_5fwatchdog_2ecpp_57',['syscall_handlers_watchdog.cpp',['../syscall__handlers__watchdog_8cpp.html',1,'']]],
+  ['syscall_5fhelpers_2ehpp_58',['syscall_helpers.hpp',['../syscall__helpers_8hpp.html',1,'']]]
 ];

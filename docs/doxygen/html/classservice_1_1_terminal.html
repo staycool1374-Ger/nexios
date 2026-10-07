@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -138,15 +138,17 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a2cdeef541005d6fe951835a03107ee48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Writes a single character to the terminal.  <br /></td></tr>
 <tr class="memitem:af69ff19b8c2a30f67c02701775fdc285" id="r_af69ff19b8c2a30f67c02701775fdc285"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af69ff19b8c2a30f67c02701775fdc285">write</a> (const char *str)</td></tr>
 <tr class="memdesc:af69ff19b8c2a30f67c02701775fdc285"><td class="mdescLeft">&#160;</td><td class="mdescRight">Writes a null-terminated string to the terminal.  <br /></td></tr>
-<tr class="memitem:ad4e08ccc7b8b654e02efd7ca6b356c22" id="r_ad4e08ccc7b8b654e02efd7ca6b356c22"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ad4e08ccc7b8b654e02efd7ca6b356c22">write</a> (const char *data, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> len)</td></tr>
+<tr class="memitem:ad4e08ccc7b8b654e02efd7ca6b356c22" id="r_ad4e08ccc7b8b654e02efd7ca6b356c22"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ad4e08ccc7b8b654e02efd7ca6b356c22">write</a> (const char *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> len)</td></tr>
 <tr class="memdesc:ad4e08ccc7b8b654e02efd7ca6b356c22"><td class="mdescLeft">&#160;</td><td class="mdescRight">Writes a buffer of given length to the terminal.  <br /></td></tr>
-<tr class="memitem:a86e177fe04cda56e97c27853fedfd996" id="r_a86e177fe04cda56e97c27853fedfd996"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a86e177fe04cda56e97c27853fedfd996">readline</a> (char *buf, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> max_len)</td></tr>
+<tr class="memitem:a86e177fe04cda56e97c27853fedfd996" id="r_a86e177fe04cda56e97c27853fedfd996"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a86e177fe04cda56e97c27853fedfd996">readline</a> (char *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> max_len)</td></tr>
 <tr class="memdesc:a86e177fe04cda56e97c27853fedfd996"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reads a line of input from the keyboard into a buffer.  <br /></td></tr>
 <tr class="memitem:a990cbcebc0f5826d941979d8da67b8c8" id="r_a990cbcebc0f5826d941979d8da67b8c8"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a990cbcebc0f5826d941979d8da67b8c8">puts</a> (const char *str)</td></tr>
 <tr class="memdesc:a990cbcebc0f5826d941979d8da67b8c8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Writes a string followed by a newline.  <br /></td></tr>
-<tr class="memitem:a4712348be841488fabef531ac46c963a" id="r_a4712348be841488fabef531ac46c963a"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4712348be841488fabef531ac46c963a">set_fg</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> color)</td></tr>
+<tr class="memitem:a84ea4964fa684a90e8399a1cd9f9ab3b" id="r_a84ea4964fa684a90e8399a1cd9f9ab3b"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a84ea4964fa684a90e8399a1cd9f9ab3b">write_fb</a> (const char *str)</td></tr>
+<tr class="memdesc:a84ea4964fa684a90e8399a1cd9f9ab3b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Renders a string on the framebuffer only (no serial output, no capture-buffer feed). For background producers (e.g. the ELF loader event log) whose serial channel is already served elsewhere (Logger/dmesg): without this, console users would never see their progress. Mirrors putchar's framebuffer half exactly (cursor, newline, fb_enabled_ gate).  <br /></td></tr>
+<tr class="memitem:a4712348be841488fabef531ac46c963a" id="r_a4712348be841488fabef531ac46c963a"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4712348be841488fabef531ac46c963a">set_fg</a> (uint32_t color)</td></tr>
 <tr class="memdesc:a4712348be841488fabef531ac46c963a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sets the foreground (text) color.  <br /></td></tr>
-<tr class="memitem:a05b4f144a8f03a9786757289d9e62ac7" id="r_a05b4f144a8f03a9786757289d9e62ac7"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a05b4f144a8f03a9786757289d9e62ac7">set_bg</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> color)</td></tr>
+<tr class="memitem:a05b4f144a8f03a9786757289d9e62ac7" id="r_a05b4f144a8f03a9786757289d9e62ac7"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a05b4f144a8f03a9786757289d9e62ac7">set_bg</a> (uint32_t color)</td></tr>
 <tr class="memdesc:a05b4f144a8f03a9786757289d9e62ac7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sets the background color.  <br /></td></tr>
 <tr class="memitem:a915d744db80ce07ee60c9aafe3789916" id="r_a915d744db80ce07ee60c9aafe3789916"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a915d744db80ce07ee60c9aafe3789916">clear</a> ()</td></tr>
 <tr class="memdesc:a915d744db80ce07ee60c9aafe3789916"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clears the entire terminal screen.  <br /></td></tr>
@@ -162,16 +164,16 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a50cec1566f383b8fba919b11eb9e50b3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shows the boot splash screen (version, build type) centered on the framebuffer.  <br /></td></tr>
 <tr class="memitem:a6fea6970b6feea416b83d0bfcc429e20" id="r_a6fea6970b6feea416b83d0bfcc429e20"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6fea6970b6feea416b83d0bfcc429e20">set_cursor_visible</a> (bool visible)</td></tr>
 <tr class="memdesc:a6fea6970b6feea416b83d0bfcc429e20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shows or hides a block cursor at the current text cursor position (framebuffer only).  <br /></td></tr>
-<tr class="memitem:a98c58178497a4bcf08d1175f7b1d2280" id="r_a98c58178497a4bcf08d1175f7b1d2280"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a98c58178497a4bcf08d1175f7b1d2280">capture_begin</a> (char *buf, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> size)</td></tr>
+<tr class="memitem:a98c58178497a4bcf08d1175f7b1d2280" id="r_a98c58178497a4bcf08d1175f7b1d2280"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a98c58178497a4bcf08d1175f7b1d2280">capture_begin</a> (char *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> size)</td></tr>
 <tr class="memdesc:a98c58178497a4bcf08d1175f7b1d2280"><td class="mdescLeft">&#160;</td><td class="mdescRight">Begin capturing serial output into a buffer (for shell redirection).  <br /></td></tr>
 <tr class="memitem:a4157043e77656172164a5fe524386fd0" id="r_a4157043e77656172164a5fe524386fd0"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4157043e77656172164a5fe524386fd0">capture_end</a> ()</td></tr>
 <tr class="memdesc:a4157043e77656172164a5fe524386fd0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stop capturing serial output.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
-<tr class="memitem:ade0d9f2c0f6b93e8a3930ff4ef945ad6" id="r_ade0d9f2c0f6b93e8a3930ff4ef945ad6"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ade0d9f2c0f6b93e8a3930ff4ef945ad6">STATUS_BAR_ROWS</a> = 2</td></tr>
+<tr class="memitem:ade0d9f2c0f6b93e8a3930ff4ef945ad6" id="r_ade0d9f2c0f6b93e8a3930ff4ef945ad6"><td class="memItemLeft">static constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ade0d9f2c0f6b93e8a3930ff4ef945ad6">STATUS_BAR_ROWS</a> = 2</td></tr>
 <tr class="memdesc:ade0d9f2c0f6b93e8a3930ff4ef945ad6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of pixel rows reserved for the persistent status bar at the bottom.  <br /></td></tr>
-<tr class="memitem:aaa9841cb6a1fb762bfc3ee845df1310b" id="r_aaa9841cb6a1fb762bfc3ee845df1310b"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aaa9841cb6a1fb762bfc3ee845df1310b">LINE_BUF_SIZE</a> = 256</td></tr>
+<tr class="memitem:aaa9841cb6a1fb762bfc3ee845df1310b" id="r_aaa9841cb6a1fb762bfc3ee845df1310b"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aaa9841cb6a1fb762bfc3ee845df1310b">LINE_BUF_SIZE</a> = 256</td></tr>
 <tr class="memdesc:aaa9841cb6a1fb762bfc3ee845df1310b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum length of the line-input buffer.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -195,7 +197,7 @@ Static Public Attributes</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>size</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>size</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -476,7 +478,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>max_len</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>max_len</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -549,7 +551,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void service::Terminal::set_bg </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>color</em></span></td><td>)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>color</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -654,7 +656,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void service::Terminal::set_fg </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>color</em></span></td><td>)</td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>color</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -725,7 +727,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>len</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>len</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -791,6 +793,45 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a84ea4964fa684a90e8399a1cd9f9ab3b" name="a84ea4964fa684a90e8399a1cd9f9ab3b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a84ea4964fa684a90e8399a1cd9f9ab3b">&#9670;&#160;</a></span>write_fb()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void service::Terminal::write_fb </td>
+          <td>(</td>
+          <td class="paramtype">const char *</td>          <td class="paramname"><span class="paramname"><em>str</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Renders a string on the framebuffer only (no serial output, no capture-buffer feed). For background producers (e.g. the ELF loader event log) whose serial channel is already served elsewhere (Logger/dmesg): without this, console users would never see their progress. Mirrors putchar's framebuffer half exactly (cursor, newline, fb_enabled_ gate). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">str</td><td>String to display (NUL-terminated). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classservice_1_1_terminal_a84ea4964fa684a90e8399a1cd9f9ab3b_cgraph.png" border="0" usemap="#aclassservice_1_1_terminal_a84ea4964fa684a90e8399a1cd9f9ab3b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
+</div>
+
+</div>
+</div>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="aaa9841cb6a1fb762bfc3ee845df1310b" name="aaa9841cb6a1fb762bfc3ee845df1310b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aaa9841cb6a1fb762bfc3ee845df1310b">&#9670;&#160;</a></span>LINE_BUF_SIZE</h2>
@@ -802,7 +843,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> service::Terminal::LINE_BUF_SIZE = 256</td>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> service::Terminal::LINE_BUF_SIZE = 256</td>
         </tr>
       </table>
   </td>
@@ -826,7 +867,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> service::Terminal::STATUS_BAR_ROWS = 2</td>
+          <td class="memname">uint32_t service::Terminal::STATUS_BAR_ROWS = 2</td>
         </tr>
       </table>
   </td>

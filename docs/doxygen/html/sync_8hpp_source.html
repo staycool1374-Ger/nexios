@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -139,27 +139,25 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('sync_8hpp_sour
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#pragma once</span></div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &lt;<a class="code" href="spinlock_8hpp.html">kernel/sync/spinlock.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#include &lt;<a class="code" href="spinlock__guard_8hpp.html">kernel/sync/spinlock_guard.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="preprocessor">#include &lt;<a class="code" href="semaphore_8hpp.html">kernel/sync/semaphore.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="preprocessor">#include &lt;<a class="code" href="mutex_8hpp.html">kernel/sync/mutex.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="preprocessor">#include &lt;<a class="code" href="queue_8hpp.html">kernel/sync/queue.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="preprocessor">#include &lt;<a class="code" href="notify_8hpp.html">kernel/sync/notify.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="preprocessor">#include &lt;<a class="code" href="eventgroup_8hpp.html">kernel/sync/eventgroup.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span> </div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1sync.html">sync</a> {</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span></div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1sync.html#aa2ee8b27f242c1625ef11e01adda6675">init_all</a>();</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span> </div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>} <span class="comment">// namespace sync</span></div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#include &lt;<a class="code" href="spinlock_8hpp.html">kernel/sync/spinlock.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#include &lt;<a class="code" href="spinlock__guard_8hpp.html">kernel/sync/spinlock_guard.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &lt;<a class="code" href="semaphore_8hpp.html">kernel/sync/semaphore.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#include &lt;<a class="code" href="mutex_8hpp.html">kernel/sync/mutex.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="preprocessor">#include &lt;<a class="code" href="queue_8hpp.html">kernel/sync/queue.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="preprocessor">#include &lt;<a class="code" href="notify_8hpp.html">kernel/sync/notify.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="preprocessor">#include &lt;<a class="code" href="eventgroup_8hpp.html">kernel/sync/eventgroup.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1sync.html">sync</a> {</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span></div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1sync.html#aa2ee8b27f242c1625ef11e01adda6675">init_all</a>();</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span> </div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>} <span class="comment">// namespace sync</span></div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>} <span class="comment">// namespace kernel</span></div>
 <div class="ttc" id="aeventgroup_8hpp_html"><div class="ttname"><a href="eventgroup_8hpp.html">eventgroup.hpp</a></div><div class="ttdoc">Event group (bitmask) — wait on any/set/clear with per-waiter clear-on-exit.</div></div>
 <div class="ttc" id="amutex_8hpp_html"><div class="ttname"><a href="mutex_8hpp.html">mutex.hpp</a></div><div class="ttdoc">Mutex with priority inheritance and blocking waiters.</div></div>
-<div class="ttc" id="anamespacekernel_1_1sync_html"><div class="ttname"><a href="namespacekernel_1_1sync.html">kernel::sync</a></div><div class="ttdef"><b>Definition</b> eventgroup.cpp:29</div></div>
-<div class="ttc" id="anamespacekernel_1_1sync_html_aa2ee8b27f242c1625ef11e01adda6675"><div class="ttname"><a href="namespacekernel_1_1sync.html#aa2ee8b27f242c1625ef11e01adda6675">kernel::sync::init_all</a></div><div class="ttdeci">void init_all()</div><div class="ttdef"><b>Definition</b> sync.cpp:27</div></div>
+<div class="ttc" id="anamespacekernel_1_1sync_html"><div class="ttname"><a href="namespacekernel_1_1sync.html">kernel::sync</a></div><div class="ttdef"><b>Definition</b> eventgroup.cpp:30</div></div>
+<div class="ttc" id="anamespacekernel_1_1sync_html_aa2ee8b27f242c1625ef11e01adda6675"><div class="ttname"><a href="namespacekernel_1_1sync.html#aa2ee8b27f242c1625ef11e01adda6675">kernel::sync::init_all</a></div><div class="ttdeci">void init_all()</div><div class="ttdoc">Initialize all kernel synchronization primitives.</div><div class="ttdef"><b>Definition</b> sync.cpp:27</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anotify_8hpp_html"><div class="ttname"><a href="notify_8hpp.html">notify.hpp</a></div><div class="ttdoc">One-shot notification (signalling) primitive — single waiter, value delivery.</div></div>
 <div class="ttc" id="aqueue_8hpp_html"><div class="ttname"><a href="queue_8hpp.html">queue.hpp</a></div><div class="ttdoc">Fixed-size message queue with blocking send/receive and priority-sorted waiters.</div></div>

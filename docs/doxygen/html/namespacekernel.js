@@ -34,7 +34,31 @@ var namespacekernel =
     ] ],
     [ "elf", "namespacekernel_1_1elf.html", "namespacekernel_1_1elf" ],
     [ "errors", "namespacekernel_1_1errors.html", [
-      [ "error_string", "namespacekernel_1_1errors.html#a7a109eae637dbae8c0b5db75fad08745", null ]
+      [ "MemPoolError", "namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f", [
+        [ "MEMPOOL_ERROR_CODES", "namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9fa9894bcb1bf2887c59cbb64539b160a0b", null ]
+      ] ],
+      [ "PmmError", "namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63", [
+        [ "PMM_ERROR_CODES", "namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63a8fef701d2ece7d021dc9a812df30dcbc", null ]
+      ] ],
+      [ "SchedulerError", "namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203", [
+        [ "SCHEDULER_ERROR_CODES", "namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203ac364bcc0b0496c9e76d83a9e0e2bbc07", null ]
+      ] ],
+      [ "SyncError", "namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c", [
+        [ "SYNC_ERROR_CODES", "namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9cac971f52a83605d83d1db920ea480b8b3", null ]
+      ] ],
+      [ "TaskError", "namespacekernel_1_1errors.html#acfb6c673c29495fd20c2656c972a5632", [
+        [ "TASK_ERROR_CODES", "namespacekernel_1_1errors.html#acfb6c673c29495fd20c2656c972a5632a607a3674699b42dbf9f094d5c087644c", null ]
+      ] ],
+      [ "VmmError", "namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d", [
+        [ "VMM_ERROR_CODES", "namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074da6317a158a3baf1810a442eafb77a6998", null ]
+      ] ],
+      [ "error_string", "namespacekernel_1_1errors.html#a7a109eae637dbae8c0b5db75fad08745", null ],
+      [ "error_string", "namespacekernel_1_1errors.html#abd7fc221d9b305cbbc7474467e0f34db", null ],
+      [ "error_string", "namespacekernel_1_1errors.html#a20df0cde913b71389ade6b505cf4c5ce", null ],
+      [ "error_string", "namespacekernel_1_1errors.html#a7704469821a036eebee42e8508b9492d", null ],
+      [ "error_string", "namespacekernel_1_1errors.html#a399a4655b96ab324d0e6e27a16b8de74", null ],
+      [ "error_string", "namespacekernel_1_1errors.html#a44ced2acadda3917cd2cb3ed5ce89876", null ],
+      [ "error_string", "namespacekernel_1_1errors.html#a87836b282ba740f635309702ec40d797", null ]
     ] ],
     [ "fat32", "namespacekernel_1_1fat32.html", [
       [ "add_dir_entry", "namespacekernel_1_1fat32.html#aa9f8a2b8e4f80b05086c924c915f3939", null ],
@@ -60,13 +84,24 @@ var namespacekernel =
       [ "__attribute__", "namespacekernel_1_1integrity.html#ac34d27f6c1120dc709c4df41e174d6ac", null ],
       [ "__attribute__", "namespacekernel_1_1integrity.html#a701ded0ede17a2bd566d1bd87905467e", null ],
       [ "ap_idle_main", "namespacekernel_1_1integrity.html#a25523b42cdf666f04fc00417ec829955", null ],
+      [ "auth_verify_poll", "namespacekernel_1_1integrity.html#a5170d87668a4ce13fbe1f655a10daf46", null ],
       [ "check_section_markers", "namespacekernel_1_1integrity.html#a59bcf541e40b053372b6fb8decd1afeb", null ],
       [ "crc_process_chunk", "namespacekernel_1_1integrity.html#ad8c610ebd258a2fd322fa982b5dccaff", null ],
       [ "idle_task_main", "namespacekernel_1_1integrity.html#ad55063ee7b6bc1542af1172a729102cb", null ],
       [ "reset_crc_state", "namespacekernel_1_1integrity.html#ac9e6d983b60e0f3c8f772b3c4d5fe9c9", null ],
-      [ "_expected_code_crc", "namespacekernel_1_1integrity.html#aa25210e27ff62940b580f8ba6e9b59b0", null ],
-      [ "_text_end", "namespacekernel_1_1integrity.html#a0912016436aa515459dee605cde9079a", null ],
-      [ "_text_start", "namespacekernel_1_1integrity.html#a656a8b22401d14c937c2a6354ca43fea", null ]
+      [ "_expected_code_crc", "namespacekernel_1_1integrity.html#a8b684d79cba79355289cf1dd5f482281", null ],
+      [ "_m_bss_end", "namespacekernel_1_1integrity.html#a06d6c9d53997870e41466bfc5cd33126", null ],
+      [ "_m_bss_start", "namespacekernel_1_1integrity.html#a6497d55d497994d1bd070b94bd76f2c7", null ],
+      [ "_m_data_end", "namespacekernel_1_1integrity.html#abcb210da02153b61966d2c5e26a32b4e", null ],
+      [ "_m_data_start", "namespacekernel_1_1integrity.html#a6d5f158621edcb9c8d06df392f4fc909", null ],
+      [ "_m_rodata_end", "namespacekernel_1_1integrity.html#a29b0b24fc7e7dcde9ca82900eb15f19b", null ],
+      [ "_m_rodata_start", "namespacekernel_1_1integrity.html#afd61e336a5083a5768266184886f3e67", null ],
+      [ "_m_stack_after", "namespacekernel_1_1integrity.html#a1619423fb46361a9b880670505dc50c5", null ],
+      [ "_m_stack_before", "namespacekernel_1_1integrity.html#a087f442863d86d561019436924c9634a", null ],
+      [ "_m_text_end", "namespacekernel_1_1integrity.html#a97976db32edaf6ced386aaa797cdd2c0", null ],
+      [ "_m_text_start", "namespacekernel_1_1integrity.html#aafd9bb5958cda6e98f63cdf89b595f21", null ],
+      [ "_text_end", "namespacekernel_1_1integrity.html#ad1087536ad5bb95653aa19d0a205c209", null ],
+      [ "_text_start", "namespacekernel_1_1integrity.html#ad2440137a4229cead5100122524a2dbe", null ]
     ] ],
     [ "iocd", "namespacekernel_1_1iocd.html", [
       [ "get_iocd_pid", "namespacekernel_1_1iocd.html#aa1211fe0fe67ae70efe5f05508b58a63", null ],
@@ -93,14 +128,7 @@ var namespacekernel =
       [ "trampoline_block_usable", "namespacekernel_1_1smp.html#a50951b19127b15afab09ae971163ff13", null ]
     ] ],
     [ "sync", "namespacekernel_1_1sync.html", "namespacekernel_1_1sync" ],
-    [ "task", "namespacekernel_1_1task.html", [
-      [ "dmesg_task_main", "namespacekernel_1_1task.html#ae7fc9a59f78d98d18c2d3c5a25ec2193", null ],
-      [ "reboot_from_table", "namespacekernel_1_1task.html#a7f227dc40c3e02534d8c4640812236c7", null ],
-      [ "taskdefs_at", "namespacekernel_1_1task.html#a6c2e4859b68a0571d2f50dda0efba2a8", null ],
-      [ "taskdefs_count", "namespacekernel_1_1task.html#adc36214616607d88fa61adf5386788e4", null ],
-      [ "taskdefs_server_params_valid", "namespacekernel_1_1task.html#a134c6b74e9d9bc36270fd82a843ea357", null ],
-      [ "taskdefs_valid", "namespacekernel_1_1task.html#acecadff66d32071ad6d02265945cc76a", null ]
-    ] ],
+    [ "task", "namespacekernel_1_1task.html", "namespacekernel_1_1task" ],
     [ "test", "namespacekernel_1_1test.html", "namespacekernel_1_1test" ],
     [ "time", "namespacekernel_1_1time.html", "namespacekernel_1_1time" ],
     [ "vfs", "namespacekernel_1_1vfs.html", "namespacekernel_1_1vfs" ],
@@ -109,7 +137,14 @@ var namespacekernel =
       [ "is_vfsd_task", "namespacekernel_1_1vfsd.html#a488cc7b15c3330b8558e1035654be4ba", null ],
       [ "set_vfsd_pid", "namespacekernel_1_1vfsd.html#acec8fc6583c65a737e190937b9062703", null ]
     ] ],
+    [ "watchdogd", "namespacekernel_1_1watchdogd.html", [
+      [ "get_watchdogd_pid", "namespacekernel_1_1watchdogd.html#a24cc66f4fc3cb3916760124ff0df5dfe", null ],
+      [ "grant_supervision", "namespacekernel_1_1watchdogd.html#ad84e3d5a764359bae92e641aa967ac0a", null ],
+      [ "is_watchdogd_task", "namespacekernel_1_1watchdogd.html#a50004d7a00a8c537040d2d926e386785", null ],
+      [ "set_watchdogd_pid", "namespacekernel_1_1watchdogd.html#ab9023f0735c28893ef3dfba7df8539ac", null ]
+    ] ],
     [ "AllTasksRegistry", "classkernel_1_1_all_tasks_registry.html", "classkernel_1_1_all_tasks_registry" ],
+    [ "CheckedPtr", "classkernel_1_1_checked_ptr.html", "classkernel_1_1_checked_ptr" ],
     [ "CpuContext", "structkernel_1_1_cpu_context.html", "structkernel_1_1_cpu_context" ],
     [ "CRC32", "classkernel_1_1_c_r_c32.html", null ],
     [ "DeadlineList", "classkernel_1_1_deadline_list.html", "classkernel_1_1_deadline_list" ],
@@ -117,10 +152,18 @@ var namespacekernel =
     [ "ErrorOr", "structkernel_1_1_error_or.html", "structkernel_1_1_error_or" ],
     [ "ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", "structkernel_1_1_error_or_3_01void_01_4" ],
     [ "ExceptionSignalMap", "structkernel_1_1_exception_signal_map.html", "structkernel_1_1_exception_signal_map" ],
+    [ "IdleScanCursor", "structkernel_1_1_idle_scan_cursor.html", "structkernel_1_1_idle_scan_cursor" ],
+    [ "IdleScanProgress", "structkernel_1_1_idle_scan_progress.html", "structkernel_1_1_idle_scan_progress" ],
     [ "IrqDelivery", "classkernel_1_1_irq_delivery.html", null ],
     [ "IrqRegistration", "structkernel_1_1_irq_registration.html", "structkernel_1_1_irq_registration" ],
     [ "KernelObject", "classkernel_1_1_kernel_object.html", "classkernel_1_1_kernel_object" ],
     [ "Logger", "classkernel_1_1_logger.html", null ],
+    [ "MemPool", "classkernel_1_1_mem_pool.html", "classkernel_1_1_mem_pool" ],
+    [ "Message", "structkernel_1_1_message.html", "structkernel_1_1_message" ],
+    [ "MessageQueue", "structkernel_1_1_message_queue.html", "structkernel_1_1_message_queue" ],
+    [ "PageAddress", "classkernel_1_1_page_address.html", "classkernel_1_1_page_address" ],
+    [ "PhysicalAddress", "classkernel_1_1_physical_address.html", "classkernel_1_1_physical_address" ],
+    [ "PMM", "classkernel_1_1_p_m_m.html", "classkernel_1_1_p_m_m" ],
     [ "PriorityMap", "classkernel_1_1_priority_map.html", "classkernel_1_1_priority_map" ],
     [ "ReadyQueueManager", "classkernel_1_1_ready_queue_manager.html", "classkernel_1_1_ready_queue_manager" ],
     [ "ReadyQueuePOD", "structkernel_1_1_ready_queue_p_o_d.html", "structkernel_1_1_ready_queue_p_o_d" ],
@@ -130,12 +173,17 @@ var namespacekernel =
     [ "SchedulerConfig", "structkernel_1_1_scheduler_config.html", "structkernel_1_1_scheduler_config" ],
     [ "ScopedRef", "classkernel_1_1_scoped_ref.html", "classkernel_1_1_scoped_ref" ],
     [ "SignalFrame", "structkernel_1_1_signal_frame.html", "structkernel_1_1_signal_frame" ],
+    [ "TaskControlBlock", "structkernel_1_1_task_control_block.html", "structkernel_1_1_task_control_block" ],
+    [ "TaskExitRecord", "structkernel_1_1_task_exit_record.html", "structkernel_1_1_task_exit_record" ],
     [ "TaskQueue", "classkernel_1_1_task_queue.html", "classkernel_1_1_task_queue" ],
+    [ "TaskTimes", "structkernel_1_1_task_times.html", "structkernel_1_1_task_times" ],
     [ "TestContext", "structkernel_1_1_test_context.html", "structkernel_1_1_test_context" ],
     [ "Timeval", "structkernel_1_1_timeval.html", "structkernel_1_1_timeval" ],
     [ "TlbShootdown", "classkernel_1_1_tlb_shootdown.html", "classkernel_1_1_tlb_shootdown" ],
     [ "Utsname", "structkernel_1_1_utsname.html", "structkernel_1_1_utsname" ],
     [ "Version", "structkernel_1_1_version.html", null ],
+    [ "VirtualAddress", "classkernel_1_1_virtual_address.html", "classkernel_1_1_virtual_address" ],
+    [ "VMM", "classkernel_1_1_v_m_m.html", null ],
     [ "Integral", "conceptkernel_1_1_integral.html", null ],
     [ "TriviallyCopiable", "conceptkernel_1_1_trivially_copiable.html", null ],
     [ "ValueType", "conceptkernel_1_1_value_type.html", null ],
@@ -174,6 +222,11 @@ var namespacekernel =
       [ "RLIMIT_STACK", "namespacekernel.html#a4c7abd4d7b6e60921e6661d7e6ac80afafa92ee44ab9e8ffac445366271d021e3", null ],
       [ "RLIMIT_NOFILE", "namespacekernel.html#a4c7abd4d7b6e60921e6661d7e6ac80afa3af036df3d1c74c3a8a9b127e668495f", null ]
     ] ],
+    [ "SchedPolicy", "namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fdd", [
+      [ "AUTO", "namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fddae1f2d5134ed2543d38a0de9751cf75d9", null ],
+      [ "FIXED", "namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fddac6e6dc18b53b4c2681394b9d8aefcec7", null ],
+      [ "EDF", "namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fdda4768fa850648c6c87699d78474b7022f", null ]
+    ] ],
     [ "Signal", "namespacekernel.html#aab4cc62899bcb5fcce7228da55cd0e18", [
       [ "SIG_NONE", "namespacekernel.html#aab4cc62899bcb5fcce7228da55cd0e18abe1b5cc142851a9d68baf85010fd51df", null ],
       [ "SIGHUP", "namespacekernel.html#aab4cc62899bcb5fcce7228da55cd0e18a139267a4cd115fbe116fca16a8c8ca2c", null ],
@@ -204,7 +257,23 @@ var namespacekernel =
       [ "STOP", "namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a615a46af313786fc4e349f34118be111", null ],
       [ "CONT", "namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a53f6b3ace3aa40916de167636293ac80", null ]
     ] ],
+    [ "TaskState", "namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3c", [
+      [ "READY", "namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca2baa69eafc7204f3bd8648eba580c489", null ],
+      [ "RUNNING", "namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca43491564ebcfd38568918efbd6e840fd", null ],
+      [ "BLOCKED", "namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3caeecba0068950a2df17c47e851e1eef14", null ],
+      [ "WAITING", "namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca1869d56535e8b1449a6da54ff5e11f50", null ],
+      [ "TERMINATED", "namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca9d725163e44a2e9cf094059c0abfdef1", null ],
+      [ "REAPED", "namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca9e266d90f8bb6c974d24e746a3301ed0", null ]
+    ] ],
+    [ "TestTouchWarn", "namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76", [
+      [ "kMapL1", "namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76a7c08c5d7293555a01f96e45c5bda679a", null ],
+      [ "kMapPd", "namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76ac6ade7a2363248a06b0b4b867339edfc", null ],
+      [ "kUnmapL0", "namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76aeeaf371b06deba7b2cc1be7045e17f12", null ],
+      [ "kUnmapPml4", "namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76a97a69bbd59f34061aaafe4ad56d2a659", null ],
+      [ "kAccessPml4", "namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76a0edbdcae5dc159be1ce3b046ec939f3d", null ]
+    ] ],
     [ "__attribute__", "namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885", null ],
+    [ "__attribute__", "namespacekernel.html#aadf277954fd86eeba0a08c68e1f25c06", null ],
     [ "admission_boot_selftest", "namespacekernel.html#a5f757c7023bc8616bb0fd21b7c6d8f9f", null ],
     [ "atomic_acquire_fence", "namespacekernel.html#a0a3c6d96045314e760c63011e9568f9b", null ],
     [ "atomic_compare_exchange", "namespacekernel.html#abb19c90f47d9e7fb9a58a92ea6c56444", null ],
@@ -219,6 +288,9 @@ var namespacekernel =
     [ "atomic_release_fence", "namespacekernel.html#a694a81cf88aaa57b10bbb8850672ef0c", null ],
     [ "atomic_store", "namespacekernel.html#a990823fa4f88496f91379344984fe8d5", null ],
     [ "atomic_store", "namespacekernel.html#a6150ab02de411dbe57ab81bb5b9ff39a", null ],
+    [ "boot_entry_raw", "namespacekernel.html#ae369e3a5b4081280571e619d0877856d", null ],
+    [ "boot_stage_delta", "namespacekernel.html#ad2597cced737d422c403d4c25437f61e", null ],
+    [ "boot_stage_mark", "namespacekernel.html#afe82421db302cf9007f1bfe16cff939d", null ],
     [ "canary_check_on_full_path", "namespacekernel.html#a59203fb708dcb70f7046b645fb81052e", null ],
     [ "canary_install_kernel_stack", "namespacekernel.html#ac6fb6d864696d4527766d2ab81c2e3ce", null ],
     [ "canary_install_user_segments", "namespacekernel.html#a772626334577fb34746dd85c3e6e3b9c", null ],
@@ -231,12 +303,28 @@ var namespacekernel =
     [ "debug_data_begin", "namespacekernel.html#a90086829567f6b5bf9c0730a8f3d7b08", null ],
     [ "for", "namespacekernel.html#a1dae18e023980d3a17ebc183f9986bd3", null ],
     [ "fpu_owner_own", "namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54", null ],
+    [ "idle_aggregate_util", "namespacekernel.html#afcb17dd10fbc535bd63bb71f13f14272", null ],
+    [ "idle_clear_exit_records", "namespacekernel.html#a7a3e0e56701df314c0bda1619f352aa5", null ],
+    [ "idle_escalate_stall", "namespacekernel.html#ad5b4191fcd81829821bf9a34fb3e6609", null ],
+    [ "idle_find_exit_record", "namespacekernel.html#a927c7ddb31b40327f97d6f3b14f09963", null ],
+    [ "idle_find_exit_record_for_user", "namespacekernel.html#aa63c25ddb5169f04129d082f0840e7c2", null ],
+    [ "idle_monitor_slice", "namespacekernel.html#a39e8dac481c31dd6182cf722a37edf6d", null ],
+    [ "idle_note_exec_sample", "namespacekernel.html#ab716281fc620e28eba1868befe8eff05", null ],
+    [ "idle_note_period_reload", "namespacekernel.html#a557395ebdd63f7e893ea647d8a932949", null ],
+    [ "idle_note_progress", "namespacekernel.html#a7a3612e8fdeabbd0c9a5909f85764ae4", null ],
+    [ "idle_publish_stack_low_water", "namespacekernel.html#a747c14344ca50bb4943022f3b1835189", null ],
+    [ "idle_record_task_exit", "namespacekernel.html#a81f47d51c706c42c9a88694b7b62c4e8", null ],
+    [ "idle_scan_mem", "namespacekernel.html#a5b0a423c64722dbea816b61fcff3adcc", null ],
+    [ "idle_scan_stack", "namespacekernel.html#a6f5906a123859e1a431b15e664ddcbc1", null ],
+    [ "idle_scan_stall", "namespacekernel.html#a94c5d1c256bee29196d539e12936237f", null ],
+    [ "idle_util_for", "namespacekernel.html#a6c56ed2f79f8dbd879ee519c1c791f24", null ],
     [ "init_task_common", "namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e", null ],
     [ "is_timerfd_vnode", "namespacekernel.html#a39fa71941abf971947793936af03c774", null ],
     [ "isr_nesting_own", "namespacekernel.html#a0571e17de31b74de7a47a25459361c20", null ],
     [ "kslot_snapshot_bytes", "namespacekernel.html#a25626431fd5ef9ee4a6698a65b1f0895", null ],
     [ "kslot_snapshot_capture", "namespacekernel.html#afa5566867274b1950bc3ed7acc375508", null ],
     [ "kslot_snapshot_restore", "namespacekernel.html#a74d19182fedd131cc4450ebe5242359e", null ],
+    [ "phys_to_virt", "namespacekernel.html#a39f9dcd4db2a052fd3f980499660a022", null ],
     [ "random_fill", "namespacekernel.html#a3a9da091bb2229af08f856b08498fa51", null ],
     [ "random_init", "namespacekernel.html#a03570b332ae94bd1acee2152e83dadd8", null ],
     [ "syscall_is_user_task", "namespacekernel.html#a9bbea2daa70fd81363d98ce7b9c9f943", null ],
@@ -244,6 +332,7 @@ var namespacekernel =
     [ "syscall_task", "namespacekernel.html#aa7278439c20dc6234a77d3b08290701f", null ],
     [ "syscall_task_open", "namespacekernel.html#afbcf504abb27c24da8a91380e1f73882", null ],
     [ "timerfd_read_entry", "namespacekernel.html#aa583fe65545291d14aa9afd4b95f2576", null ],
+    [ "virt_to_phys", "namespacekernel.html#acb68f2e2a60586a7d3dd7453b668d2cd", null ],
     [ "while", "namespacekernel.html#a058eeb27b3f54e789e5f17935940c161", null ],
     [ "_is_integral_v", "namespacekernel.html#a3fb2836fc67f3791312d86a01372cc32", null ],
     [ "_is_integral_v< bool >", "namespacekernel.html#a0918223d95121a29478551a127691778", null ],
@@ -283,8 +372,9 @@ var namespacekernel =
     [ "IRQ_VECTOR_MIN", "namespacekernel.html#ad6ca324811bf34cc24e412c7353d1c31", null ],
     [ "isr_nesting_depth", "namespacekernel.html#a5fbbc3448d7b738e78241f86230e0f48", null ],
     [ "kIrqNotifyRevoked", "namespacekernel.html#ab596ed6f93b40b1636ef3dfcf39ebd1e", null ],
+    [ "kTaskExitRingDepth", "namespacekernel.html#aee5d1a5418bf1d00cf1dc061ff2832b8", null ],
     [ "MSIX_VECTOR_MAX", "namespacekernel.html#a92ff3aab226103aecc5cee29134cd925", null ],
-    [ "noexcept", "namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf", null ],
+    [ "noexcept", "namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8", null ],
     [ "return", "namespacekernel.html#a3bc3a31c6af358bc14fd59ca1ec1d75e", null ],
     [ "scheduler_corruption_count", "namespacekernel.html#a48b013f336f1cc7c0546ff7a5aa9db11", null ],
     [ "scheduler_force_apply", "namespacekernel.html#a914ef87f8e792f89a48aafc7c67b3112", null ],

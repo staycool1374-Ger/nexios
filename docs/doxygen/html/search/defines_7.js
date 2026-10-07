@@ -4,7 +4,7 @@ var searchData=
   ['jarvis_5fassert_5feq_1',['JARVIS_ASSERT_EQ',['../test_8hpp.html#a49403c168ea4b3a44b7cebd4eb5178b8',1,'test.hpp']]],
   ['jarvis_5fassert_5ffmt_2',['JARVIS_ASSERT_FMT',['../test_8hpp.html#aa489f4f0e59be8f90da251140ac3f61d',1,'test.hpp']]],
   ['jarvis_5fassert_5fhex_5feq_3',['JARVIS_ASSERT_HEX_EQ',['../test_8hpp.html#a97a6a193c23a6c013f125d670fca1547',1,'test.hpp']]],
-  ['jarvis_5fconfig_5fh_4',['JARVIS_CONFIG_H',['../nexios__config_8h.html#a6cbad48473f7f79a39d324ee988c0d46',1,'nexios_config.h']]],
+  ['jarvis_5fconfig_5fh_4',['JARVIS_CONFIG_H',['../aarch64_2serial_8cpp.html#a6cbad48473f7f79a39d324ee988c0d46',1,'JARVIS_CONFIG_H:&#160;serial.cpp'],['../nexios__config_8h.html#a6cbad48473f7f79a39d324ee988c0d46',1,'JARVIS_CONFIG_H:&#160;serial.cpp']]],
   ['jarvis_5ffail_5',['JARVIS_FAIL',['../test_8hpp.html#a94a59c91c6346de8eeff27bab97b2f51',1,'test.hpp']]],
   ['jarvis_5fregister_5frelease_5ftest_6',['JARVIS_REGISTER_RELEASE_TEST',['../test_8hpp.html#ace88e8d25337f01fa0b540f62b0889e7',1,'test.hpp']]],
   ['jarvis_5fregister_5frelease_5ftest_5fsuite_7',['JARVIS_REGISTER_RELEASE_TEST_SUITE',['../test_8hpp.html#aea3010f67d1cac2e436b9cbe6915a317',1,'test.hpp']]],

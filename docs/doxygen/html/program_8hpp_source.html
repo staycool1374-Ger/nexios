@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -165,7 +165,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('program_8hpp_s
 </div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span> </div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="keyword">private</span>:</div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> MAX_PROGRAMS = <a class="code hl_define" href="nexios__config_8h.html#a0c3cfd9ed7438076d36385368e245b04">CONFIG_MAX_PROGRAMS</a>;</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> MAX_PROGRAMS = <a class="code hl_define" href="aarch64_2serial_8cpp.html#a0c3cfd9ed7438076d36385368e245b04">CONFIG_MAX_PROGRAMS</a>;</div>
 <div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)</span></div>
 <div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    <span class="keyword">static</span> <span class="keyword">const</span> Program* programs_[MAX_PROGRAMS];</div>
 <div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)</span></div>
@@ -174,6 +174,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('program_8hpp_s
 </div>
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span> </div>
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>} <span class="comment">// namespace service</span></div>
+<div class="ttc" id="aaarch64_2serial_8cpp_html_a0c3cfd9ed7438076d36385368e245b04"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a0c3cfd9ed7438076d36385368e245b04">CONFIG_MAX_PROGRAMS</a></div><div class="ttdeci">#define CONFIG_MAX_PROGRAMS</div></div>
 <div class="ttc" id="aclassservice_1_1_program_registry_html"><div class="ttname"><a href="classservice_1_1_program_registry.html">service::ProgramRegistry</a></div><div class="ttdoc">Manages a registry of programs that can be launched by the shell.</div><div class="ttdef"><b>Definition</b> program.hpp:29</div></div>
 <div class="ttc" id="aclassservice_1_1_program_registry_html_a0945281ed00a49ce4956c43d2f526458"><div class="ttname"><a href="classservice_1_1_program_registry.html#a0945281ed00a49ce4956c43d2f526458">service::ProgramRegistry::count</a></div><div class="ttdeci">static size_t count()</div><div class="ttdoc">Returns the number of registered programs.</div><div class="ttdef"><b>Definition</b> program.hpp:51</div></div>
 <div class="ttc" id="aclassservice_1_1_program_registry_html_a5da174bb474c1969d7d9cd0dc3bfe6be"><div class="ttname"><a href="classservice_1_1_program_registry.html#a5da174bb474c1969d7d9cd0dc3bfe6be">service::ProgramRegistry::register_program</a></div><div class="ttdeci">static void register_program(const char *name, const char *desc, void(*entry)())</div><div class="ttdoc">Registers a program with the registry.</div><div class="ttdef"><b>Definition</b> program.cpp:30</div></div>
@@ -181,7 +182,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('program_8hpp_s
 <div class="ttc" id="aclassservice_1_1_program_registry_html_aae87545e1784195bd0a8041edbcee336"><div class="ttname"><a href="classservice_1_1_program_registry.html#aae87545e1784195bd0a8041edbcee336">service::ProgramRegistry::get</a></div><div class="ttdeci">static const Program * get(size_t index)</div><div class="ttdoc">Returns the program at the given index.</div><div class="ttdef"><b>Definition</b> program.hpp:55</div></div>
 <div class="ttc" id="aclassservice_1_1_program_registry_html_acf3afcb001a03c51db8d2f9505ed193a"><div class="ttname"><a href="classservice_1_1_program_registry.html#acf3afcb001a03c51db8d2f9505ed193a">service::ProgramRegistry::init</a></div><div class="ttdeci">static void init()</div><div class="ttdoc">Initialises the program registry.</div><div class="ttdef"><b>Definition</b> program.cpp:26</div></div>
 <div class="ttc" id="anamespaceservice_html"><div class="ttname"><a href="namespaceservice.html">service</a></div><div class="ttdef"><b>Definition</b> program.cpp:21</div></div>
-<div class="ttc" id="anexios__config_8h_html_a0c3cfd9ed7438076d36385368e245b04"><div class="ttname"><a href="nexios__config_8h.html#a0c3cfd9ed7438076d36385368e245b04">CONFIG_MAX_PROGRAMS</a></div><div class="ttdeci">#define CONFIG_MAX_PROGRAMS</div><div class="ttdoc">Maximum number of programs in the program registry.</div><div class="ttdef"><b>Definition</b> nexios_config.h:210</div></div>
 <div class="ttc" id="astructservice_1_1_program_registry_1_1_program_html"><div class="ttname"><a href="structservice_1_1_program_registry_1_1_program.html">service::ProgramRegistry::Program</a></div><div class="ttdoc">Describes a registered program.</div><div class="ttdef"><b>Definition</b> program.hpp:32</div></div>
 <div class="ttc" id="astructservice_1_1_program_registry_1_1_program_html_a47854a298a5b3981083c830e78614d27"><div class="ttname"><a href="structservice_1_1_program_registry_1_1_program.html#a47854a298a5b3981083c830e78614d27">service::ProgramRegistry::Program::name</a></div><div class="ttdeci">const char * name</div><div class="ttdef"><b>Definition</b> program.hpp:33</div></div>
 <div class="ttc" id="astructservice_1_1_program_registry_1_1_program_html_ab28711d90ac14b8534fc16b46be1cf19"><div class="ttname"><a href="structservice_1_1_program_registry_1_1_program.html#ab28711d90ac14b8534fc16b46be1cf19">service::ProgramRegistry::Program::entry</a></div><div class="ttdeci">void(* entry)()</div><div class="ttdef"><b>Definition</b> program.hpp:35</div></div>

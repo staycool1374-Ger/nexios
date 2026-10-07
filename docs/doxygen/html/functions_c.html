@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -135,6 +135,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_c.ht
 <li>c_rdevminor&#160;:&#160;<a class="el" href="structinitrd_1_1_cpio_newc_header.html#a603f417a72b9ee66579b7061073ae3f5">initrd::CpioNewcHeader</a></li>
 <li>c_uid&#160;:&#160;<a class="el" href="structinitrd_1_1_cpio_newc_header.html#a29f54805bb65465530037c97c19c5412">initrd::CpioNewcHeader</a></li>
 <li>caller&#160;:&#160;<a class="el" href="structkernel_1_1diag_1_1_tcb_write_log.html#ac567a8d693c11e39979df50b4cb0ab3f">kernel::diag::TcbWriteLog</a></li>
+<li>canary_after&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#affd2bda554be3cf041d08fd08430acaa">kernel::TaskControlBlock</a></li>
+<li>canary_before&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#acae541958dcc7d4008cddcac19f7eef9">kernel::TaskControlBlock</a></li>
+<li>canary_installed&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a93a5704dcb7c25a444004df2d26b60da">kernel::TaskControlBlock</a></li>
+<li>CANARY_MAGIC&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a40208733224ce792ffbf58fe4ce82e2e">kernel::TaskControlBlock</a></li>
+<li>CANARY_SEGMENTS&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a3625e5ba8c9b4e01d06b4d7ac32056f4af211b464086dcfdc2143ad40d477b266">kernel::TaskControlBlock</a></li>
+<li>CanarySegment&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a3625e5ba8c9b4e01d06b4d7ac32056f4">kernel::TaskControlBlock</a></li>
 <li>cancel()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_timer_wheel.html#ad3a26df7cdf858c1c1952d212cb6e248">kernel::time::TimerWheel</a></li>
 <li>cancel_pending()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a825e445a84f991d8223d85d59be220f3">kernel::elf::ElfLoader</a></li>
 <li>cancel_pending_switch()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a7ea9fb9eb997735769deb6fdcc70f178">kernel::Scheduler</a></li>
@@ -147,57 +153,92 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_c.ht
 <li>capture_end()&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#a4157043e77656172164a5fe524386fd0">service::Terminal</a></li>
 <li>capture_percpu()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ab84ffc50f854095cefc04aa73ad8e238">kernel::Scheduler</a></li>
 <li>capture_pod()&#160;:&#160;<a class="el" href="classkernel_1_1_ready_queue_manager.html#a8cb07c4fb75d6550366d039599e1174d">kernel::ReadyQueueManager</a></li>
+<li>capture_pool_data()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a2883ada8e2cba2c8435e9097c8f59692">kernel::MemPool</a></li>
+<li>capture_pool_meta()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a16409e2e3d019838c1193343571aab70">kernel::MemPool</a></li>
+<li>capture_pool_snapshot()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a5f78d0a26f22879c409dd3eb02782498">kernel::PMM</a></li>
 <li>capture_rqpod()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a8672a015d5e35285915d39ce88e35084">kernel::Scheduler</a></li>
 <li>capture_state()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a8378abad25413cddf0c6b92b2489dfcb">kernel::Scheduler</a></li>
 <li>capture_task_fields()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a0df71d0030a6ba02919b2c810fd72861">kernel::Scheduler</a></li>
 <li>charge_task_memory()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a6ce74ebd0c568fc4dbd19bc24c1d4f8c">kernel::Scheduler</a></li>
 <li>check()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_resource_tracker.html#a564f1155089c2d73d397d4ba55e2e115">kernel::test::ResourceTracker</a></li>
 <li>check_wcet_locked()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#acc70bd87fe33c3d577ded008085a20b7">kernel::Scheduler</a></li>
+<li>CheckedPtr()&#160;:&#160;<a class="el" href="classkernel_1_1_checked_ptr.html#a38b7b074db93756d4e420e323dacccc3">kernel::CheckedPtr&lt; T &gt;</a></li>
 <li>claim_once()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#a6f13444e981e15673ee4511df10a24da">kernel::cap::UntypedMem</a></li>
 <li>claim_slot()&#160;:&#160;<a class="el" href="classkernel_1_1_irq_delivery.html#ad710df15480b638c643dbc8bf9bc068c">kernel::IrqDelivery</a></li>
 <li>class_count()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_registry.html#a411c6c20c905159702b1dde679e4baf3">kernel::test::Registry</a></li>
 <li>class_section()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_registry.html#ae2797911154428cb63e49c7003c7250a">kernel::test::Registry</a></li>
 <li>clean&#160;:&#160;<a class="el" href="structkernel_1_1test_1_1_pt_pool_snapshot.html#af6bd7ed9b079b4c981e213581f84f988">kernel::test::PtPoolSnapshot</a></li>
+<li>cleanup()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb">kernel::TaskControlBlock</a></li>
 <li>cleanup_step()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a0dd60567b314b96f16c4ba03a2ddecf9">kernel::Scheduler</a></li>
 <li>cleanup_step_try()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a66efaa5a205ef6eb473f02603bc430c0">kernel::Scheduler</a></li>
 <li>cleanup_test_tasks()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a6cb4f7ab4207b34c9e4a278492fe8efc">kernel::Scheduler</a></li>
 <li>clear()&#160;:&#160;<a class="el" href="classkernel_1_1_all_tasks_registry.html#a5db8372586fad566335b66db035081ba">kernel::AllTasksRegistry</a>, <a class="el" href="classkernel_1_1_deadline_list.html#a15737e071e53deeab81e9074a29a9e2d">kernel::DeadlineList</a>, <a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a12d6d811e2d671bbb39f5dfae603dd8e">kernel::log::DmesgService</a>, <a class="el" href="classkernel_1_1_priority_map.html#aa8093c607a3dea727abd84f6e2a6da10">kernel::PriorityMap</a>, <a class="el" href="classkernel_1_1profiling_1_1_sampler.html#ad919821e575899360e702eb5ce62cc54">kernel::profiling::Sampler</a>, <a class="el" href="classkernel_1_1test_1_1_registry.html#a07cbcf0036f91f4201ce1901ace2534d">kernel::test::Registry</a>, <a class="el" href="class_sampler.html#ad919821e575899360e702eb5ce62cc54">Sampler</a>, <a class="el" href="classservice_1_1_framebuffer.html#a1274c42c1bd5ce66854ba171f64a8e82">service::Framebuffer</a>, <a class="el" href="classservice_1_1_terminal.html#a915d744db80ce07ee60c9aafe3789916">service::Terminal</a></li>
 <li>clear_all()&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#a47efd18d86037f561fb04359e24348c9">kernel::PriorityMap</a>, <a class="el" href="classkernel_1_1_ready_queue_manager.html#ab7ff6b1fe966757c41f775c8781ef03c">kernel::ReadyQueueManager</a></li>
 <li>clear_attachment()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a2183155ddfc340b08c95383afe78d64d">kernel::iommu::IoMmuManager</a></li>
+<li>clear_bits()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_event_group.html#a6a5e8825ec074435b4e311a887b39ad5">kernel::sync::EventGroup</a></li>
+<li>clear_bits_err()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_event_group.html#a1a558918e6a858475ec12ce19162414e">kernel::sync::EventGroup</a></li>
+<li>clear_block_freed()&#160;:&#160;<a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html#a0f5e013ef7c4863e78286aa0224a3b23">kernel::MemPool::Pool</a></li>
+<li>clear_block_pinned()&#160;:&#160;<a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html#a6387906d7540ab842a0295638788705d">kernel::MemPool::Pool</a></li>
 <li>clear_grant()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#aa70e5ba0a72e5fd1f928026016230d30">kernel::cap::CNode</a></li>
+<li>clear_hhdm_modified()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a301ec275afeeb7bfecb93073618e67ea">kernel::VMM</a></li>
+<li>clear_identity_modified()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a878fec96367292e290701c0827eb103e">kernel::VMM</a></li>
+<li>clear_pinned_bitmap()&#160;:&#160;<a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html#aff830dafe414683a9f25b4ae1cd96e81">kernel::MemPool::Pool</a></li>
 <li>clear_switch_globals()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a6c0f3b2bd32b59b696f200f5ad323910">kernel::Scheduler</a></li>
 <li>client_gen&#160;:&#160;<a class="el" href="structkernel_1_1ipc_1_1_pager_fault.html#ae35e38622eff870543c1708feb13a500">kernel::ipc::PagerFault</a></li>
 <li>client_id&#160;:&#160;<a class="el" href="structkernel_1_1ipc_1_1_pager_fault.html#a34b8846c502d20022c2ec4b05498b487">kernel::ipc::PagerFault</a>, <a class="el" href="structkernel_1_1ipc_1_1_pager_fault_msg.html#a1354ec43a04335715f9b8ff8c7a7b673">kernel::ipc::PagerFaultMsg</a></li>
 <li>client_pml4&#160;:&#160;<a class="el" href="structkernel_1_1ipc_1_1_pager_fault.html#abd04d4785809247cb4d62ed28f880465">kernel::ipc::PagerFault</a></li>
 <li>clock_monotonic_ns()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#afd438c21d6d6abd77d8204d3ffb10656">kernel::time::PosixTime</a></li>
 <li>clock_realtime_ns()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#a4b5575217053a3b5169f93f49962efbe">kernel::time::PosixTime</a></li>
+<li>clone()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a1443c8caa63e4d8af39ad150f91d413d">kernel::TaskControlBlock</a></li>
+<li>clone_err()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a3c6d103f4da66b64efa1af7f31a5b763">kernel::TaskControlBlock</a></li>
+<li>clone_kernel_pml4()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a385de660f1f7a0aab86ad1a31cb4971b">kernel::VMM</a></li>
+<li>clone_kernel_pml4_err()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a05dddb595ff91d7b1c0ed494e503b205">kernel::VMM</a></li>
 <li>cluster&#160;:&#160;<a class="el" href="structkernel_1_1vfs_1_1_fat32_vnode_data.html#a460c18510e510862c9ac81276a5bdc6c">kernel::vfs::Fat32VnodeData</a></li>
 <li>coalesce_and_apply()&#160;:&#160;<a class="el" href="classkernel_1_1_tlb_shootdown.html#a44d7d77969a2552ddd15baf234726c0d">kernel::TlbShootdown</a></li>
+<li>coalesce_count()&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#aebdf8b73efaf1497ea883fc22e5eae3f">kernel::task::SporadicServer</a></li>
+<li>color_of()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a4368a5f3c653b3cad719acede1ec8d43">kernel::PMM</a></li>
 <li>CommandFunc&#160;:&#160;<a class="el" href="classservice_1_1_shell.html#a705f545a46e17f1d0a0f9da3f3399728">service::Shell</a></li>
-<li>contains()&#160;:&#160;<a class="el" href="classkernel_1_1_task_queue.html#ae58560e9bcb13b6d7518ce0064f89a6b">kernel::TaskQueue</a></li>
+<li>completed_entry()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#aa4ba931eead59458577987f88123df1f">kernel::elf::ElfLoader</a></li>
+<li>compute_window_pages()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#aca314ea8b9aaa791a9f6aa643c1f025b">kernel::PMM</a></li>
+<li>consume()&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#a9403aae1570e64968dbd6ccca43570bd">kernel::task::SporadicServer</a></li>
+<li>contains()&#160;:&#160;<a class="el" href="classkernel_1_1_mem_pool.html#a04165cf98a4f36671b9e99d47290e19a">kernel::MemPool</a>, <a class="el" href="classkernel_1_1_task_queue.html#ae58560e9bcb13b6d7518ce0064f89a6b">kernel::TaskQueue</a></li>
 <li>content&#160;:&#160;<a class="el" href="structkernel_1_1vfs_1_1_mem_info_vnode.html#a411a3d7899d767c92aff38ff28b20ed4">kernel::vfs::MemInfoVnode</a>, <a class="el" href="structkernel_1_1vfs_1_1_pci_vnode.html#aea575a2c77b9377f2be9c8cad5bf1c02">kernel::vfs::PciVnode</a></li>
 <li>content_len&#160;:&#160;<a class="el" href="structkernel_1_1vfs_1_1_mem_info_vnode.html#aaf25d42e245a32389ddd0332bbe347be">kernel::vfs::MemInfoVnode</a>, <a class="el" href="structkernel_1_1vfs_1_1_pci_vnode.html#a497fe004dc2a0c522b1b2187541797ef">kernel::vfs::PciVnode</a></li>
-<li>context&#160;:&#160;<a class="el" href="structkernel_1_1log_1_1_log_entry.html#aa40f5ec9579dd01cb69a34400b52bf5f">kernel::log::LogEntry</a>, <a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#acc617a3c02f77a652a45be6ccb81a0a6">kernel::Scheduler::TaskFields</a></li>
+<li>context&#160;:&#160;<a class="el" href="structkernel_1_1log_1_1_log_entry.html#aa40f5ec9579dd01cb69a34400b52bf5f">kernel::log::LogEntry</a>, <a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#acc617a3c02f77a652a45be6ccb81a0a6">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#a5711823597101c626bccd6439ce3a998">kernel::TaskControlBlock</a></li>
 <li>context_asr()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a939682e591c6d5536f7e9922cfd662f0">kernel::iommu::IoMmuManager</a></li>
 <li>context_entry()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a47c6da71f79d17984e9c3c01765ba860">kernel::iommu::IoMmuManager</a></li>
-<li>count&#160;:&#160;<a class="el" href="struct_bench_result.html#a1f1c0f9c1e6cdc73ddc3c51e93d86814">BenchResult</a>, <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#a0b2ff77a2f6faffb50b7190f75ebc057">kernel::cap::FrameCap</a>, <a class="el" href="structkernel_1_1elf_1_1_map_out.html#a4a8601ae81cabc61337340527eb44a1a">kernel::elf::MapOut</a>, <a class="el" href="classkernel_1_1_task_queue.html#a11497a31721fe4d5c95973e534261b5b">kernel::TaskQueue</a>, <a class="el" href="structkernel_1_1test_1_1_class_section.html#a514bd317958e33d9f501903acd64a9b4">kernel::test::ClassSection</a>, <a class="el" href="classkernel_1_1test_1_1_registry.html#ae1c6719a50dda5616660226460c8fbdf">kernel::test::Registry</a>, <a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html#a66a9e380ae7d9214ef5e8769ca41e0cf">kernel::vfs::PipeBuffer</a>, <a class="el" href="classservice_1_1_program_registry.html#a0945281ed00a49ce4956c43d2f526458">service::ProgramRegistry</a></li>
+<li>copy_freed_bitmap()&#160;:&#160;<a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html#ae4acf2e1404ffb9270e85ab0bf2da1eb">kernel::MemPool::Pool</a></li>
+<li>copy_from()&#160;:&#160;<a class="el" href="classkernel_1_1_checked_ptr.html#af1f285a1e4ef86d24e61a67c7c0dfd83">kernel::CheckedPtr&lt; T &gt;</a></li>
+<li>copy_pinned_bitmap()&#160;:&#160;<a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html#a6b575c1737e1963b8a070c310b6205e8">kernel::MemPool::Pool</a></li>
+<li>copy_to()&#160;:&#160;<a class="el" href="classkernel_1_1_checked_ptr.html#a6bfdef8cef4a7dbda0d352fc4186c10e">kernel::CheckedPtr&lt; T &gt;</a></li>
+<li>count&#160;:&#160;<a class="el" href="struct_bench_result.html#a1f1c0f9c1e6cdc73ddc3c51e93d86814">BenchResult</a>, <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#a0b2ff77a2f6faffb50b7190f75ebc057">kernel::cap::FrameCap</a>, <a class="el" href="structkernel_1_1elf_1_1_map_out.html#a4a8601ae81cabc61337340527eb44a1a">kernel::elf::MapOut</a>, <a class="el" href="structkernel_1_1_message_queue.html#af5d6dfcc1ab6860052b69b17b156cca5">kernel::MessageQueue</a>, <a class="el" href="classkernel_1_1_task_queue.html#a11497a31721fe4d5c95973e534261b5b">kernel::TaskQueue</a>, <a class="el" href="structkernel_1_1test_1_1_class_section.html#a514bd317958e33d9f501903acd64a9b4">kernel::test::ClassSection</a>, <a class="el" href="classkernel_1_1test_1_1_registry.html#ae1c6719a50dda5616660226460c8fbdf">kernel::test::Registry</a>, <a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html#a66a9e380ae7d9214ef5e8769ca41e0cf">kernel::vfs::PipeBuffer</a>, <a class="el" href="classservice_1_1_program_registry.html#a0945281ed00a49ce4956c43d2f526458">service::ProgramRegistry</a></li>
 <li>cpu&#160;:&#160;<a class="el" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html#a8fc26e27405f766fe4634bbc4473d360">kernel::time::TimerWheel::Handle</a></li>
-<li>cpu_affinity&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a3749b14b62fad5b1f55b4281964ad10a">kernel::Scheduler::TaskFields</a></li>
+<li>cpu_affinity&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a3749b14b62fad5b1f55b4281964ad10a">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#ae7e7414b45ffceadb5ddc9ec9042362e">kernel::TaskControlBlock</a></li>
 <li>cpu_pct&#160;:&#160;<a class="el" href="structservice_1_1_top_row.html#a4bb0223ba46269334a24514f4ab9866e">service::TopRow</a></li>
+<li>CPU_PLACEMENT_NONE&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#af9b6e1cb499efc21547dbb310650d620">kernel::TaskControlBlock</a></li>
 <li>crc32&#160;:&#160;<a class="el" href="structkernel_1_1test_1_1_pt_pool_snapshot.html#a6389ebdbd180c4ce63e9c7c2ff0582d6">kernel::test::PtPoolSnapshot</a></li>
-<li>create()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#a147ef95779be7de6be04f184428af38a">kernel::cap::CNode</a>, <a class="el" href="classkernel_1_1cap_1_1_endpoint.html#a061ae002e50ad3089b84405e2d5d23c2">kernel::cap::Endpoint</a>, <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#ac0c60306fceefb7fc1adb8f942cc3a4d">kernel::cap::FrameCap</a>, <a class="el" href="classkernel_1_1cap_1_1_io_mmu_dma_cap.html#acc8ea5c69179d6a070b04e6e93a8fe2f">kernel::cap::IoMmuDmaCap</a>, <a class="el" href="classkernel_1_1cap_1_1_irq_cap.html#a431f0d545c33a7def28b059cbcd7ad52">kernel::cap::IrqCap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html#aede23b8ce20058bba0fbcaca32ee8e4e">kernel::cap::MmioCap</a>, <a class="el" href="classkernel_1_1cap_1_1_msix_cap.html#adebf7d7225063f1318a2c50c8de92d5b">kernel::cap::MsixCap</a>, <a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#ab92f388242ed99dc0ec045af584ff545">kernel::cap::UntypedMem</a></li>
+<li>create()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#a147ef95779be7de6be04f184428af38a">kernel::cap::CNode</a>, <a class="el" href="classkernel_1_1cap_1_1_endpoint.html#a061ae002e50ad3089b84405e2d5d23c2">kernel::cap::Endpoint</a>, <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#ac0c60306fceefb7fc1adb8f942cc3a4d">kernel::cap::FrameCap</a>, <a class="el" href="classkernel_1_1cap_1_1_io_mmu_dma_cap.html#acc8ea5c69179d6a070b04e6e93a8fe2f">kernel::cap::IoMmuDmaCap</a>, <a class="el" href="classkernel_1_1cap_1_1_irq_cap.html#a431f0d545c33a7def28b059cbcd7ad52">kernel::cap::IrqCap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html#aede23b8ce20058bba0fbcaca32ee8e4e">kernel::cap::MmioCap</a>, <a class="el" href="classkernel_1_1cap_1_1_msix_cap.html#adebf7d7225063f1318a2c50c8de92d5b">kernel::cap::MsixCap</a>, <a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#ab92f388242ed99dc0ec045af584ff545">kernel::cap::UntypedMem</a>, <a class="el" href="classkernel_1_1cap_1_1_wdog_cap.html#ae913da1e7ca71572827c718aaa2cf3df">kernel::cap::WdogCap</a>, <a class="el" href="structkernel_1_1_task_control_block.html#a82a06cb63bdaa30a038a40e5632fbe9d">kernel::TaskControlBlock</a></li>
 <li>create_ap_idle()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aaed8cef7db685c4e8682d15b14b1c104">kernel::Scheduler</a></li>
+<li>create_err()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a5970a87b395499a88856bb6bf9c1cd57">kernel::TaskControlBlock</a></li>
 <li>create_from_bar()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html#af478229ca9e294d1772d607f1b73c68b">kernel::cap::MmioCap</a></li>
 <li>create_subrange()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#a379e94b36ac0c197107c79e8eb34c6e5">kernel::cap::UntypedMem</a></li>
+<li>create_user()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#ac1a2ba759b6c98d3c734d755a5380b3f">kernel::TaskControlBlock</a></li>
+<li>create_user_err()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#aef2b708bdbeae5ee1d520a8a7f91325b">kernel::TaskControlBlock</a></li>
 <li>credit_task_memory()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a09892078dd5b82b04d527059650aaa3f">kernel::Scheduler</a></li>
+<li>cspace_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a138884aab599a1d369124c0e16a5c930">kernel::TaskControlBlock</a></li>
 <li>cspace_id&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#a87d7d8fcc86582a72ba8a9d6a0312c55">kernel::cap::CNode</a></li>
 <li>cur_&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_iter.html#abb34ad4da599739fa2f81796987defed">kernel::Scheduler::TaskIter</a></li>
 <li>current&#160;:&#160;<a class="el" href="structkernel_1_1_cpu_context.html#a6fc2e17fe50ebb47643b65870bbfa109">kernel::CpuContext</a>, <a class="el" href="structkernel_1_1_sched_per_cpu_pod.html#a9f8fbe30bc522a1c112a22a2cb8d3a10">kernel::SchedPerCpuPod</a></li>
 <li>current_index()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a6ec2aee2d32d08a9b747a4ef076e0257">kernel::Scheduler</a></li>
 <li>current_on_cpu()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a397e8c1cff9ad82e9491d4e2449c10d2">kernel::Scheduler</a></li>
 <li>current_path()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#ab2b19b522ee9bb6e2c02173f2b3d552d">kernel::elf::ElfLoader</a></li>
+<li>current_pml4()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a76ece689da1d37a1ff4c78d747035edf">kernel::VMM</a></li>
+<li>current_priority()&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#a563468b3df274365d89b1e9455e84a60">kernel::task::SporadicServer</a></li>
 <li>current_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ac094d7e0ec9c48c58637e36fce587be2">kernel::Scheduler</a></li>
 <li>current_test_name()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_registry.html#a2e184916c79d80372a39ee0de29aaeb8">kernel::test::Registry</a></li>
+<li>cwd&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#ac08f621d86dbf9a157593002f25b6946">kernel::TaskControlBlock</a></li>
+<li>cwd_lock_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a8386780b7534dd000742e3979dbdcee5">kernel::TaskControlBlock</a></li>
+<li>cwd_vnode&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#ac1748c63af497d80196d5af3e6d79021">kernel::TaskControlBlock</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

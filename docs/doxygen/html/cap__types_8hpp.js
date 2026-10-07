@@ -17,10 +17,12 @@ var cap__types_8hpp =
       [ "kernel::cap::CapType::Mmio", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99ad4861c9dc3a4e2f4b3edcff3c8604c07", null ],
       [ "kernel::cap::CapType::Irq", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99ae72a6f2764689e0bd54a8a89b5393add", null ],
       [ "kernel::cap::CapType::IoMmuDma", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a1fe101e5a5b653d3e934ae22b5ca47d3", null ],
-      [ "kernel::cap::CapType::Msix", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a50073b0e818c9249ad19b1631149fad5", null ]
+      [ "kernel::cap::CapType::Msix", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a50073b0e818c9249ad19b1631149fad5", null ],
+      [ "kernel::cap::CapType::Wdog", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a4feec37b15db5f0a2684cf4a23c5ec3b", null ]
     ] ],
     [ "kernel::cap::cap_slot_bits", "namespacekernel_1_1cap.html#ade55928be04f23829263375da7b1cb45", null ],
     [ "kernel::cap::encode_handle", "namespacekernel_1_1cap.html#ad0673cef188c336d042b38b4d31a68e4", null ],
+    [ "kernel::cap::encode_user_handle", "namespacekernel_1_1cap.html#ae2fc790efce56f1e725fba9c13f4cc9f", null ],
     [ "kernel::cap::handle_cspace", "namespacekernel_1_1cap.html#af786fec3da41a870f0b445726bf6f325", null ],
     [ "kernel::cap::handle_gen", "namespacekernel_1_1cap.html#a216351b9a88c69e0bed5c69bcf1ff684", null ],
     [ "kernel::cap::handle_slot", "namespacekernel_1_1cap.html#a56523952ffab65cb3f5413884b5b2711", null ],

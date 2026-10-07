@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -147,6 +147,10 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a22d386977a3f68483e72e68cf6ed7f0f" id="r_a22d386977a3f68483e72e68cf6ed7f0f"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">errors::SyncError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a22d386977a3f68483e72e68cf6ed7f0f">post_err</a> ()</td></tr>
 <tr class="memdesc:a22d386977a3f68483e72e68cf6ed7f0f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Increment count, waking a waiter if any (error-returning overload).  <br /></td></tr>
 <tr class="memitem:a96a5559d4206a239aba56b92e6e07326" id="r_a96a5559d4206a239aba56b92e6e07326"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a96a5559d4206a239aba56b92e6e07326">value</a> () const</td></tr>
+<tr class="memitem:afe29c8b8eff11edcc591bb0aaa6ab25d" id="r_afe29c8b8eff11edcc591bb0aaa6ab25d"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afe29c8b8eff11edcc591bb0aaa6ab25d">waiter_count</a> ()</td></tr>
+<tr class="memdesc:afe29c8b8eff11edcc591bb0aaa6ab25d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of tasks currently blocked on this semaphore.  <br /></td></tr>
+<tr class="memitem:a11f89d894b149e0c193217b98e3e73bd" id="r_a11f89d894b149e0c193217b98e3e73bd"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a11f89d894b149e0c193217b98e3e73bd">remove_waiter</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task)</td></tr>
+<tr class="memdesc:a11f89d894b149e0c193217b98e3e73bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Detach a task from this semaphore's waiter list (lock-safe). Used by <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a> to unlink a reaped task before its TCB is freed. Verifies pointer AND generation match (guards against a recycled TCB occupying the slot).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
@@ -199,6 +203,7 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Initialize semaphore with a count and optional maximum. </p>
+<p>Initialise the semaphore with a starting count and optional max.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">initial</td><td>Starting count. </td></tr>
@@ -229,6 +234,7 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Initialize semaphore with a count and optional maximum (error-returning overload). </p>
+<p>Initialise the semaphore (error-returning overload).</p>
 <dl class="section return"><dt>Returns</dt><dd>SYNC_ERR_OK on success, SYNC_ERR_ALREADY_INITIALIZED if already initialized. </dd></dl>
 
 </div>
@@ -269,6 +275,33 @@ Static Public Attributes</h2></td></tr>
 
 <p>Increment count, waking a waiter if any (error-returning overload). </p>
 <dl class="section return"><dt>Returns</dt><dd>SYNC_ERR_OK on success, SYNC_ERR_BUFFER_FULL if max count reached. </dd></dl>
+
+</div>
+</div>
+<a id="a11f89d894b149e0c193217b98e3e73bd" name="a11f89d894b149e0c193217b98e3e73bd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a11f89d894b149e0c193217b98e3e73bd">&#9670;&#160;</a></span>remove_waiter()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::sync::Semaphore::remove_waiter </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Detach a task from this semaphore's waiter list (lock-safe). Used by <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup()</a> to unlink a reaped task before its TCB is freed. Verifies pointer AND generation match (guards against a recycled TCB occupying the slot). </p>
+<p>Detach a task from the waiter array (caller must hold lock_). Verifies pointer AND generation match so a recycled TCB that now occupies the slot is never removed. Mirrors the swap-remove pattern of Queue::remove_send_waiter / IPC::unblock_sender_rollback.</p>
+<dl class="section return"><dt>Returns</dt><dd>true if the task was found and removed. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1sync_1_1_semaphore_a11f89d894b149e0c193217b98e3e73bd_cgraph.png" border="0" usemap="#aclasskernel_1_1sync_1_1_semaphore_a11f89d894b149e0c193217b98e3e73bd_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -353,11 +386,13 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Decrement count, blocking if zero. </p>
+<p>Decrement the count, blocking if zero.</p>
+<p>Never holds the spinlock across <a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch.">Scheduler::reschedule()</a>: reschedule() arms a deferred switch and re-enables IRQs, so a timer tick before this frame unwinds would save the task holding lock_ and the ISR-side <a class="el" href="#aae19cc2e2987d6a57ecf736312750ee8" title="Increment count, waking a waiter if any.">post()</a> would spin on it forever. Waiter-table-full is reachable exhaustion: yield and retry, never ENSURE. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1sync_1_1_semaphore_a420b57b04448016d930f8eb327215bc0_cgraph.png" border="0" usemap="#aclasskernel_1_1sync_1_1_semaphore_a420b57b04448016d930f8eb327215bc0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -378,13 +413,41 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Decrement count, blocking if zero (error-returning overload). </p>
+<p>Decrement the count, blocking if zero (error-returning overload).</p>
 <dl class="section return"><dt>Returns</dt><dd>SYNC_ERR_OK on success, SYNC_ERR_NO_TASK if no current task, SYNC_ERR_MAX_WAITERS if waiter limit reached. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1sync_1_1_semaphore_afb3bcce002a8c49c2d089e92e516e2ac_cgraph.png" border="0" usemap="#aclasskernel_1_1sync_1_1_semaphore_afb3bcce002a8c49c2d089e92e516e2ac_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
+
+</div>
+</div>
+<a id="afe29c8b8eff11edcc591bb0aaa6ab25d" name="afe29c8b8eff11edcc591bb0aaa6ab25d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afe29c8b8eff11edcc591bb0aaa6ab25d">&#9670;&#160;</a></span>waiter_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::sync::Semaphore::waiter_count </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Number of tasks currently blocked on this semaphore. </p>
 
 </div>
 </div>

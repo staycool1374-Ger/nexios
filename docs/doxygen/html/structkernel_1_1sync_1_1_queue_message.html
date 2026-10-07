@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
+<p>A single message in the queue (fixed-size payload + size).  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="queue_8hpp_source.html">queue.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::sync::QueueMessage:</div>
@@ -130,9 +133,13 @@ Collaboration diagram for kernel::sync::QueueMessage:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a98cd7fb408d8fcd59a4bb04a22f20411" id="r_a98cd7fb408d8fcd59a4bb04a22f20411"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a98cd7fb408d8fcd59a4bb04a22f20411">data</a> [QUEUE_MAX_MSG_SIZE]</td></tr>
+<tr class="memdesc:a98cd7fb408d8fcd59a4bb04a22f20411"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structkernel_1_1_message.html" title="The register budget must fit the message payload (design paper #11 §3.8).">Message</a> payload.  <br /></td></tr>
 <tr class="memitem:aca166f8766acd679ce675e43c4ffff05" id="r_aca166f8766acd679ce675e43c4ffff05"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aca166f8766acd679ce675e43c4ffff05">size</a></td></tr>
+<tr class="memdesc:aca166f8766acd679ce675e43c4ffff05"><td class="mdescLeft">&#160;</td><td class="mdescRight">Actual payload size in bytes.  <br /></td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>A single message in the queue (fixed-size payload + size). </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a98cd7fb408d8fcd59a4bb04a22f20411" name="a98cd7fb408d8fcd59a4bb04a22f20411"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a98cd7fb408d8fcd59a4bb04a22f20411">&#9670;&#160;</a></span>data</h2>
 
@@ -144,6 +151,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p><a class="el" href="structkernel_1_1_message.html" title="The register budget must fit the message payload (design paper #11 §3.8).">Message</a> payload. </p>
 
 </div>
 </div>
@@ -158,6 +167,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Actual payload size in bytes. </p>
 
 </div>
 </div>

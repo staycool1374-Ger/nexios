@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <h3 class="doxsection"><a id="index_s" name="index_s"></a>- s -</h3><ul>
 <li>s&#160;:&#160;<a class="el" href="structcrypto_1_1_cha_cha_state.html#af5c400acee5e6bde18bd11cd9a100e8a">crypto::ChaChaState</a></li>
 <li>sat_add()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#a92252f1c299adc0264d49832cb813678">kernel::time::PosixTime</a></li>
+<li>save_context()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a9f10ae084c3466bd1d69cde85e791339">kernel::TaskControlBlock</a></li>
 <li>save_rsp_to&#160;:&#160;<a class="el" href="structkernel_1_1_sched_per_cpu_pod.html#a6948ca773425b2e2a88b435daf75cb3b">kernel::SchedPerCpuPod</a>, <a class="el" href="structkernel_1_1_scheduler_1_1_sw_slots.html#aec870842b02fa2e9d6978a93e32f0d39">kernel::Scheduler::SwSlots</a></li>
 <li>saved_cs&#160;:&#160;<a class="el" href="structkernel_1_1_signal_frame.html#ae3d3af3664ac0c84bbe9b58d5acacf10">kernel::SignalFrame</a></li>
 <li>saved_rflags&#160;:&#160;<a class="el" href="structkernel_1_1_signal_frame.html#a461379be453467dd43f92bc9db033ba4">kernel::SignalFrame</a></li>
@@ -129,23 +130,38 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>saved_rsp&#160;:&#160;<a class="el" href="structkernel_1_1_signal_frame.html#a91b9c50890212ba2da3ef4ee993204d9">kernel::SignalFrame</a></li>
 <li>saved_ss&#160;:&#160;<a class="el" href="structkernel_1_1_signal_frame.html#ad3c279bf44c7fb9f12cebc2c1faa4553">kernel::SignalFrame</a></li>
 <li>scan_deadlines()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aabd465f67eed45ec2c20877a6f7398b8">kernel::Scheduler</a></li>
+<li>scan_watchdogs_locked()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aee24447b418fb12e7ef96e9033950fd2">kernel::Scheduler</a></li>
+<li>scanned&#160;:&#160;<a class="el" href="structkernel_1_1_idle_scan_progress.html#ad9ee31bd6f3e45b0232a328c1fabc7b3">kernel::IdleScanProgress</a></li>
 <li>sched_cpu()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a08909dbd61fc213d9a5a36cc7b6c072a">kernel::Scheduler</a></li>
 <li>sched_ipi_handler()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a42d074c7f070204bd85737823bce150a">kernel::Scheduler</a></li>
-<li>sched_policy&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a070de214a76cbaa040b511236225ce25">kernel::Scheduler::TaskFields</a></li>
+<li>sched_policy&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a070de214a76cbaa040b511236225ce25">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#af926084a10e17db27e4b1494479bcae5">kernel::TaskControlBlock</a></li>
 <li>SCHED_VECTOR&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a119fe66aa1954384cb4b6d51758e73f2">arch::APIC</a></li>
 <li>ScopedCurrentTask()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_scoped_current_task.html#abaa46b4f89a7425f5c8618f79f766031">kernel::test::ScopedCurrentTask</a></li>
 <li>ScopedRef()&#160;:&#160;<a class="el" href="classkernel_1_1_scoped_ref.html#acb2546ff153c5e93e46d59ec1ce98cc1">kernel::ScopedRef</a></li>
 <li>ScopeGuard()&#160;:&#160;<a class="el" href="class_scope_guard.html#a75bfcbc7dc1d0b110015945b48f557ad">ScopeGuard&lt; Fn &gt;</a></li>
 <li>scroll()&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#aa1ee0f9463fa052f2b04b561eff19533">service::Terminal</a></li>
 <li>sec&#160;:&#160;<a class="el" href="structkernel_1_1time_1_1_timespec_u.html#a54174d8804cfaaf78d8f83beed7cdf92">kernel::time::TimespecU</a></li>
+<li>SEG_DATA&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a3625e5ba8c9b4e01d06b4d7ac32056f4a8309e21d9a3460e2f288404fa750cdfa">kernel::TaskControlBlock</a></li>
+<li>SEG_HEAP&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a3625e5ba8c9b4e01d06b4d7ac32056f4a2b9f81dc917a152f6cff74abae6a3ff5">kernel::TaskControlBlock</a></li>
+<li>SEG_STACK&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a3625e5ba8c9b4e01d06b4d7ac32056f4a6eabba6bdf41e17e595bbd9fee586a34">kernel::TaskControlBlock</a></li>
+<li>SEG_TEXT&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a3625e5ba8c9b4e01d06b4d7ac32056f4a6c92a69d3815990685ab36b77293e3d4">kernel::TaskControlBlock</a></li>
 <li>segment&#160;:&#160;<a class="el" href="structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#aeffc89fbb0105e0f4557e934194a73f6">kernel::iommu::dmar::RemappingUnit</a></li>
+<li>Semaphore()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_semaphore.html#a57966c9bede9dbc9119c7c45793a9e0f">kernel::sync::Semaphore</a></li>
+<li>send()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_queue.html#a695903ebc76f7dee0922bb3ab59a111c">kernel::sync::Queue</a></li>
+<li>send_err()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_queue.html#aaa6469206558097df3c402ecb39cf190">kernel::sync::Queue</a></li>
 <li>send_ipi()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a2955b5b89ac50be8c8896d91a9d6b2f4">arch::APIC</a></li>
+<li>sender_id&#160;:&#160;<a class="el" href="structkernel_1_1_message.html#a77e30ace620faf4de41b341646cd6cf2">kernel::Message</a></li>
 <li>sends_for_test()&#160;:&#160;<a class="el" href="classarch_1_1_shootdown_batch.html#a2310f5ecfe7ec20ab15d64728dec9904">arch::ShootdownBatch</a></li>
 <li>seq&#160;:&#160;<a class="el" href="structkernel_1_1diag_1_1_tcb_write_log.html#ae8786a6c83ff26718092ccadbc73fbee">kernel::diag::TcbWriteLog</a></li>
 <li>set()&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#a698aa08d85c3fc99888ed1127aec69f8">kernel::PriorityMap</a></li>
 <li>set_affinity()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a596d9088e1f0680b0b636847a365ab96">kernel::Scheduler</a></li>
 <li>set_affinity_err()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#afd72a0a3a500b9a324188949d6a5e6b4">kernel::Scheduler</a></li>
+<li>set_base_priority()&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#a18ea63756803965143e8462cddcd4430">kernel::task::SporadicServer</a></li>
 <li>set_bg()&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#a05b4f144a8f03a9786757289d9e62ac7">service::Terminal</a></li>
+<li>set_bits()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_event_group.html#ab712cb3c095eef9d9df777c573d7d4ab">kernel::sync::EventGroup</a></li>
+<li>set_bits_err()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_event_group.html#a177d90d09bf3cd699c572f13deef0ca1">kernel::sync::EventGroup</a></li>
+<li>set_block_freed()&#160;:&#160;<a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html#a9587b64983618a26349bc89e7011cb64">kernel::MemPool::Pool</a></li>
+<li>set_block_pinned()&#160;:&#160;<a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html#ac230b1c838eb718c093be3b8dd0dcac9">kernel::MemPool::Pool</a></li>
 <li>set_current()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804">kernel::Scheduler</a></li>
 <li>set_current_index()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a3c89637a429ed31290338b912cc8695d">kernel::Scheduler</a></li>
 <li>set_current_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a6c327d25c2a2293e83682bbdc0db5dcf">kernel::Scheduler</a></li>
@@ -159,12 +175,15 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>set_fg()&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#a4712348be841488fabef531ac46c963a">service::Terminal</a></li>
 <li>set_harness_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#abe47dcde6076815882bb4051c2146467">kernel::Scheduler</a></li>
 <li>set_level()&#160;:&#160;<a class="el" href="classkernel_1_1_logger.html#a43b9f217c9e092b4ef02b4a42b8a0ca5">kernel::Logger</a></li>
+<li>set_oom_handler()&#160;:&#160;<a class="el" href="classkernel_1_1_p_m_m.html#a0abccda473b2936b5aa008a686f52c86">kernel::PMM</a></li>
+<li>set_pid_fn&#160;:&#160;<a class="el" href="structkernel_1_1task_1_1_task_def.html#acae36674107c8d2c8302eb6c3bac5458">kernel::task::TaskDef</a></li>
 <li>set_preemptible()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a4c1ed78d8d8325dc44743510045c8f19">kernel::Scheduler</a></li>
 <li>set_priority()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a460f3e4e082b3a13c6966a350b270d23">kernel::Scheduler</a></li>
 <li>set_raw()&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#ae2c0e1d8c1477ffbc144b3b3a31792c8">kernel::PriorityMap</a>, <a class="el" href="classkernel_1_1_task_queue.html#aa5a4c0397d73f35c198c22b40e9e4d9e">kernel::TaskQueue</a></li>
 <li>set_sample_rate()&#160;:&#160;<a class="el" href="classkernel_1_1profiling_1_1_sampler.html#ae631e7c38c8858dd612c8a51ab9d50e9">kernel::profiling::Sampler</a>, <a class="el" href="class_sampler.html#ae631e7c38c8858dd612c8a51ab9d50e9">Sampler</a></li>
 <li>set_sched_policy()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ad78e190e0aff46c0548846a223cfcc32">kernel::Scheduler</a></li>
 <li>set_shell_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a940a027ee35b641fd1c7fc73f9235c65">kernel::Scheduler</a></li>
+<li>set_signal_handler()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#ac01961e7ed10f1efbc39de08b7cf25be">kernel::TaskControlBlock</a></li>
 <li>set_slot_owner()&#160;:&#160;<a class="el" href="classkernel_1_1_irq_delivery.html#a37d8943431ec5c4159e1c553c82bc17e">kernel::IrqDelivery</a></li>
 <li>set_suppress_terminated_log()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aca1f956c7e183393301034d90657e0f5">kernel::Scheduler</a></li>
 <li>set_suppressed()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a8c259c7ca1b3d7d77418d8f8596d1669">kernel::log::DmesgService</a></li>
@@ -177,23 +196,29 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>set_tpr_class()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#ad903889e8587ca2fa1a27d87d06b375c">arch::APIC</a></li>
 <li>setUp()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_test_base.html#af76d8e4a5b1cacde0f101fa0b1e246b8">kernel::test::TestBase</a></li>
 <li>setup_func&#160;:&#160;<a class="el" href="struct_test_meta.html#a841d476c595e900140a35b839904f7a8">TestMeta</a></li>
+<li>severity&#160;:&#160;<a class="el" href="structkernel_1_1log_1_1catalog_1_1_dmesg_record.html#a991763dd3eb5ac489225f410cb257ee6">kernel::log::catalog::DmesgRecord</a>, <a class="el" href="structkernel_1_1log_1_1_log_entry.html#ae7420690c05fb284e2eea39f5e6b3540">kernel::log::LogEntry</a></li>
 <li>shell_task_main()&#160;:&#160;<a class="el" href="classservice_1_1_shell.html#ad4e5adf46f0f562f7b5a566fd53d37c0">service::Shell</a></li>
 <li>SHOOTDOWN_BATCH_VECTOR&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a7be32486fcc6b89abf1498ef029b8ddb">arch::APIC</a></li>
 <li>show_splash()&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#a50cec1566f383b8fba919b11eb9e50b3">service::Terminal</a></li>
 <li>sig&#160;:&#160;<a class="el" href="structkernel_1_1_signal_frame.html#a4dfe827fdec52cdea94e78625f4ba2be">kernel::SignalFrame</a></li>
 <li>signal&#160;:&#160;<a class="el" href="structkernel_1_1_exception_signal_map.html#aecb62d8ded868510dba2b50d872a76fc">kernel::ExceptionSignalMap</a></li>
-<li>size&#160;:&#160;<a class="el" href="structfdt__reserve__entry.html#af52cff09de1f57b2458400ad8264e2a5">fdt_reserve_entry</a>, <a class="el" href="structinitrd_1_1_initrd_entry.html#a9174fa5a8a400c8c333902345c1d53cf">initrd::InitrdEntry</a>, <a class="el" href="structinitrd_1_1_initrd_file.html#a12c4378096fead7fb8006af8aff74eef">initrd::InitrdFile</a>, <a class="el" href="classkernel_1_1_all_tasks_registry.html#a7fbb9448f467f03dc58ab96aa96fe675">kernel::AllTasksRegistry</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html#adfa1655cdbfbb67043910736c5bedd6f">kernel::cap::MmioCap</a>, <a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#ad8a48bc96fcc417589db5199f0e87126">kernel::cap::UntypedMem</a>, <a class="el" href="classkernel_1_1_deadline_list.html#ae49552a3671708650d567756cfca60ca">kernel::DeadlineList</a>, <a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a27c7a2cdf9f1162d35e082bfa0be6c6c">kernel::log::DmesgService</a>, <a class="el" href="structkernel_1_1vfs_1_1_fat32_vnode_data.html#a3470195eff6604393e9ef2c01650350d">kernel::vfs::Fat32VnodeData</a>, <a class="el" href="structkernel_1_1vfs_1_1_initrd_file_node.html#ae3f1b55ebd7d762418cf83669dc7a5c5">kernel::vfs::InitrdFileNode</a></li>
+<li>signal_handlers&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#adcd0c0f1f2a70ecd56e3cb0cc7ef52c9">kernel::TaskControlBlock</a></li>
+<li>size&#160;:&#160;<a class="el" href="structfdt__reserve__entry.html#af52cff09de1f57b2458400ad8264e2a5">fdt_reserve_entry</a>, <a class="el" href="structinitrd_1_1_initrd_entry.html#a9174fa5a8a400c8c333902345c1d53cf">initrd::InitrdEntry</a>, <a class="el" href="structinitrd_1_1_initrd_file.html#a12c4378096fead7fb8006af8aff74eef">initrd::InitrdFile</a>, <a class="el" href="classkernel_1_1_all_tasks_registry.html#a7fbb9448f467f03dc58ab96aa96fe675">kernel::AllTasksRegistry</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html#adfa1655cdbfbb67043910736c5bedd6f">kernel::cap::MmioCap</a>, <a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#ad8a48bc96fcc417589db5199f0e87126">kernel::cap::UntypedMem</a>, <a class="el" href="classkernel_1_1_deadline_list.html#ae49552a3671708650d567756cfca60ca">kernel::DeadlineList</a>, <a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a27c7a2cdf9f1162d35e082bfa0be6c6c">kernel::log::DmesgService</a>, <a class="el" href="structkernel_1_1sync_1_1_queue_message.html#aca166f8766acd679ce675e43c4ffff05">kernel::sync::QueueMessage</a>, <a class="el" href="structkernel_1_1vfs_1_1_fat32_vnode_data.html#a3470195eff6604393e9ef2c01650350d">kernel::vfs::Fat32VnodeData</a>, <a class="el" href="structkernel_1_1vfs_1_1_initrd_file_node.html#ae3f1b55ebd7d762418cf83669dc7a5c5">kernel::vfs::InitrdFileNode</a></li>
 <li>size_dt_strings&#160;:&#160;<a class="el" href="structfdt__header.html#a1aded707874a2c73f0f98ef8327b6a0f">fdt_header</a></li>
 <li>size_dt_struct&#160;:&#160;<a class="el" href="structfdt__header.html#a38d6ec5e31d8559bb6dfc9b986517432">fdt_header</a></li>
 <li>size_pages&#160;:&#160;<a class="el" href="structkernel_1_1test_1_1_pt_pool_snapshot.html#afca65ea28f66303e7285aa528ddc8bb8">kernel::test::PtPoolSnapshot</a></li>
+<li>skipped&#160;:&#160;<a class="el" href="structkernel_1_1_idle_scan_progress.html#a898beb0b407d1dcf4674782c0a3b3370">kernel::IdleScanProgress</a></li>
 <li>sl_flags&#160;:&#160;<a class="el" href="structkernel_1_1iommu_1_1_io_mmu_mapping.html#ac1683806298205ae9fcaf378e3fdc2e7">kernel::iommu::IoMmuMapping</a></li>
 <li>sl_root()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a5a8be334015c0e43e47309e7b2cb3756">kernel::iommu::IoMmuManager</a></li>
 <li>sl_root_phys&#160;:&#160;<a class="el" href="structkernel_1_1iommu_1_1_io_mmu_domain.html#ac6ca45c09e5f27b0f6ab7d4d77896fa7">kernel::iommu::IoMmuDomain</a></li>
 <li>sleep_arm()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#abc0a8f21b4ee01a37a68e76855f23d1d">kernel::time::PosixTime</a></li>
-<li>sleep_armed&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#ab86c8406cae7dfe55589811c12d7fe48">kernel::Scheduler::TaskFields</a></li>
+<li>sleep_armed&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#ab86c8406cae7dfe55589811c12d7fe48">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#a915eeaff90740538a7f0c2c46855a042">kernel::TaskControlBlock</a></li>
 <li>sleep_cancel()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#a0d37ef2e16195ce75f11f83cfb97f5ba">kernel::time::PosixTime</a></li>
-<li>sleep_expired&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a5dc27e36c6857669cab39a3b729b94be">kernel::Scheduler::TaskFields</a></li>
+<li>sleep_expired&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a5dc27e36c6857669cab39a3b729b94be">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#a9476da1a59032d459ad0f39df352aa2f">kernel::TaskControlBlock</a></li>
+<li>sleep_expiry_ns&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a212f6313076b477004daf92481497efd">kernel::TaskControlBlock</a></li>
 <li>sleep_fire()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#a63b2c2a95fb9fd51b08ff8f0632fbc1d">kernel::time::PosixTime</a></li>
+<li>sleep_gen&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#ad75c7e14c16fa39cfaec658d44a59e0e">kernel::TaskControlBlock</a></li>
+<li>sleep_handle&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a9bc5599610e0bbde4b007920c14a1b13">kernel::TaskControlBlock</a></li>
 <li>slot&#160;:&#160;<a class="el" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html#a38f6cc824dcda0e98db17539f033695e">kernel::time::TimerWheel::Handle</a></li>
 <li>slot_gen()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#a50c1861513d5f6250caedd8a1cd72b2c">kernel::cap::CNode</a></li>
 <li>slots&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#ac02e9e493dd50fbeee17b2740c095c1f">kernel::cap::CNode</a></li>
@@ -201,30 +226,50 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>snap_prio&#160;:&#160;<a class="el" href="structkernel_1_1debug_1_1_stop_event.html#ae7e70a8cce4a9e9b94d366cd0eef1913">kernel::debug::StopEvent</a></li>
 <li>snap_state&#160;:&#160;<a class="el" href="structkernel_1_1debug_1_1_stop_event.html#a15b127dbd2fdd4ca41855a0e64777f74">kernel::debug::StopEvent</a></li>
 <li>snapshot_id_size()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aab329dc8044aa9af0f574cfeebf9863f">kernel::Scheduler</a></li>
+<li>snapshot_kernel_template()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#aaea3e29ad09f4191bd7ad1bf1fcfdeb9">kernel::VMM</a></li>
 <li>snapshot_max_tasks()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a87db2c94d70b94cdc81de27fd519f71c">kernel::Scheduler</a></li>
-<li>snapshot_reset()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_frame_user_map.html#a31ec33541ce5d8f47f7d57bb038d1c97">kernel::cap::FrameUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html#af04b5a232d6d39a8c541f66b43f2bf84">kernel::cap::MmioUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_msix_cap.html#a4b215d06b8899453b205fca1e1ff9789">kernel::cap::MsixCap</a>, <a class="el" href="classkernel_1_1ipc_1_1_death_notify.html#a77e443ae91de3548d8c978c15fd6591e">kernel::ipc::DeathNotify</a>, <a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html#a2b83bb73759ccfd610f3239a14e68085">kernel::ipc::PagerRegistry</a>, <a class="el" href="classkernel_1_1time_1_1_posix_time.html#ab273de2cfc0da14cae7a44a71d30cb57">kernel::time::PosixTime</a>, <a class="el" href="classkernel_1_1time_1_1_timer_wheel.html#a62a163f1c173368852db45fb5d94c0ec">kernel::time::TimerWheel</a></li>
+<li>snapshot_reset()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_frame_user_map.html#a31ec33541ce5d8f47f7d57bb038d1c97">kernel::cap::FrameUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html#af04b5a232d6d39a8c541f66b43f2bf84">kernel::cap::MmioUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_msix_cap.html#a4b215d06b8899453b205fca1e1ff9789">kernel::cap::MsixCap</a>, <a class="el" href="classkernel_1_1cap_1_1_wdog_cap.html#ad3180cc437e79428c8e6d51dcfddfa4f">kernel::cap::WdogCap</a>, <a class="el" href="classkernel_1_1ipc_1_1_death_notify.html#a77e443ae91de3548d8c978c15fd6591e">kernel::ipc::DeathNotify</a>, <a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html#a2b83bb73759ccfd610f3239a14e68085">kernel::ipc::PagerRegistry</a>, <a class="el" href="classkernel_1_1time_1_1_posix_time.html#ab273de2cfc0da14cae7a44a71d30cb57">kernel::time::PosixTime</a>, <a class="el" href="classkernel_1_1time_1_1_timer_wheel.html#a62a163f1c173368852db45fb5d94c0ec">kernel::time::TimerWheel</a></li>
 <li>snapshot_task_fields_size()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a4625d7361b1e39ef0b913b698d797ece">kernel::Scheduler</a></li>
 <li>snapshot_zombies()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#abba7c4e61baa2c7a2e835b3d6a443e7d">kernel::Scheduler</a></li>
+<li>SpinLock()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_spin_lock.html#a23ce5409dd98d436e160743c979e36ba">kernel::iommu::SpinLock</a>, <a class="el" href="classkernel_1_1sync_1_1_spin_lock.html#a23ce5409dd98d436e160743c979e36ba">kernel::sync::SpinLock</a></li>
 <li>SpinLockGuard()&#160;:&#160;<a class="el" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard&lt; Lock &gt;</a></li>
 <li>sporadic_count()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a902ff9913bdb3c981b9665c46f08a530">kernel::Scheduler</a></li>
+<li>sporadic_server&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a6fa0dc332a06d99652dad7d7ee66fcd0">kernel::TaskControlBlock</a></li>
 <li>sporadic_task_count&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_config.html#aa10acd32f5111441ef78978d5d1864a9">kernel::SchedulerConfig</a></li>
+<li>SporadicServer()&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#a09df36c50bc0250fcab5baf9f4a8977d">kernel::task::SporadicServer</a></li>
+<li>ss_bg_prio&#160;:&#160;<a class="el" href="structkernel_1_1task_1_1_task_def.html#a321ed3db831c432f007858645bd56aab">kernel::task::TaskDef</a></li>
+<li>ss_budget&#160;:&#160;<a class="el" href="structkernel_1_1task_1_1_task_def.html#a776283f6c46fdea9a624d7a226aaa1f7">kernel::task::TaskDef</a></li>
+<li>ss_budget_granularity&#160;:&#160;<a class="el" href="structkernel_1_1task_1_1_task_def.html#a7eef95c0ef537af6c5d224770f769df7">kernel::task::TaskDef</a></li>
+<li>ss_budget_on_deadline_miss&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a6dd7ac4deb83308a36755ea1f2785f4e">kernel::TaskControlBlock</a></li>
+<li>ss_mode&#160;:&#160;<a class="el" href="structkernel_1_1task_1_1_task_def.html#af8a6678e8046a413df0c0d952c98a0b0">kernel::task::TaskDef</a></li>
+<li>ss_period&#160;:&#160;<a class="el" href="structkernel_1_1task_1_1_task_def.html#a689ebddb822faf5cdaac58095be26a14">kernel::task::TaskDef</a></li>
+<li>ss_state_on_deadline_miss&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#aa8eca00dd3de87a5378c10cb15a8eaaf">kernel::TaskControlBlock</a></li>
 <li>st_ino&#160;:&#160;<a class="el" href="structstat.html#a420fc2454334a400de3c5d55484b0b73">stat</a></li>
 <li>st_mode&#160;:&#160;<a class="el" href="structstat.html#a5cbdd829011af82ba61e83773bbcbc7d">stat</a></li>
 <li>st_size&#160;:&#160;<a class="el" href="structstat.html#a040e19c8b9766f841fde8786ce9297bf">stat</a></li>
+<li>stack_low_water_bytes&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a946cd43cb506d35d1f57a2c13c5c6e34">kernel::TaskControlBlock</a></li>
+<li>stack_pdpt_phys_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a3ceaa370cd26d918c7cb88094eb4c8b1">kernel::TaskControlBlock</a></li>
+<li>stack_phys_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a038a9cb3e854cd7adb8f25adf95e961d">kernel::TaskControlBlock</a></li>
+<li>STACK_SIZE&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a6874cf3eb23c811bdf5a3c32c600ef68">kernel::TaskControlBlock</a></li>
 <li>stage&#160;:&#160;<a class="el" href="structkernel_1_1_version.html#a8547427f278d7deaba58223598f3b074">kernel::Version</a></li>
+<li>stall_reported&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a44a33df788a2f01e2083ccb4778ab201">kernel::TaskControlBlock</a></li>
 <li>start&#160;:&#160;<a class="el" href="structkernel_1_1test_1_1_class_section.html#a9f312b547a9ada6ef088236f33a497bd">kernel::test::ClassSection</a></li>
+<li>STARVABLE_NONE&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#a6ed8b048e3782059351e7a30a8752640">kernel::PriorityMap</a></li>
 <li>stat_data&#160;:&#160;<a class="el" href="structkernel_1_1vfs_1_1_pid_dir_vnode.html#a0579fd3201b25ade43e9eb96da1b49b9">kernel::vfs::PidDirVnode</a></li>
 <li>stat_vnode&#160;:&#160;<a class="el" href="structkernel_1_1vfs_1_1_pid_dir_vnode.html#ad442fa828cb32a88b711902da5927f85">kernel::vfs::PidDirVnode</a></li>
-<li>state()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a23b6e4584cedc7d2f5acbf5e5a8d946f">kernel::elf::ElfLoader</a>, <a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a01bde2d9b3887ac260ba8d6e8b1cbd2c">kernel::Scheduler::TaskFields</a></li>
+<li>State&#160;:&#160;<a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#ac40cdbf3660bfe8f3824ad285eabf096">kernel::task::SporadicServer</a></li>
+<li>state()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a23b6e4584cedc7d2f5acbf5e5a8d946f">kernel::elf::ElfLoader</a>, <a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a01bde2d9b3887ac260ba8d6e8b1cbd2c">kernel::Scheduler::TaskFields</a>, <a class="el" href="classkernel_1_1task_1_1_sporadic_server.html#aec67df65c12d086e6ca4d9b624c161cb">kernel::task::SporadicServer</a>, <a class="el" href="structkernel_1_1_task_control_block.html#a7bea3e48edf06c046139842022ca464c">kernel::TaskControlBlock</a></li>
 <li>STATUS_BAR_ROWS&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#ade0d9f2c0f6b93e8a3930ff4ef945ad6">service::Terminal</a></li>
 <li>string()&#160;:&#160;<a class="el" href="structkernel_1_1_version.html#ac8b5bac12d2bfd0b7fcb454b6b610a8d">kernel::Version</a></li>
 <li>stuck_rescue_count()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ad2330cfddaa2b84ec354130793750296">kernel::Scheduler</a></li>
-<li>subsystem&#160;:&#160;<a class="el" href="structkernel_1_1log_1_1_log_entry.html#aa3e5aa4193e20451174665ffb603b1c8">kernel::log::LogEntry</a></li>
+<li>stuck_suspected&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a996427b1589b099d506adff30766dcd8">kernel::TaskControlBlock</a></li>
+<li>subsystem&#160;:&#160;<a class="el" href="structkernel_1_1log_1_1catalog_1_1_dmesg_record.html#a7be8b0bc95e5cbbcaac5841a3067632c">kernel::log::catalog::DmesgRecord</a>, <a class="el" href="structkernel_1_1log_1_1_log_entry.html#aa3e5aa4193e20451174665ffb603b1c8">kernel::log::LogEntry</a></li>
 <li>suite&#160;:&#160;<a class="el" href="structkernel_1_1test_1_1_test_case.html#a386beda7b093fee1df728f035b0bd351">kernel::test::TestCase</a></li>
 <li>suppress_terminated_log&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_config.html#af2d6e527fd771cb816898a185c30ff95">kernel::SchedulerConfig</a></li>
 <li>switch_away_from_terminating()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a5a5da40795060d45b9fa143b26805e42">kernel::Scheduler</a></li>
 <li>switch_generation&#160;:&#160;<a class="el" href="structkernel_1_1_sched_per_cpu_pod.html#a9ffa8c170717728751390336c827fdf2">kernel::SchedPerCpuPod</a></li>
 <li>sysname&#160;:&#160;<a class="el" href="structkernel_1_1_utsname.html#a4dd0d4cb656b3b37d1bc46cedf33c0a6">kernel::Utsname</a>, <a class="el" href="struct_utsname.html#a69e8b9e015ac226e2d608ff06837834e">Utsname</a>, <a class="el" href="structutsname.html#ae1899be40d84f3bb388971f8ffbcbacb">utsname</a></li>
+<li>system_ceiling_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#afb8a7aca1e8b77d773feafb479cd5e06">kernel::TaskControlBlock</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

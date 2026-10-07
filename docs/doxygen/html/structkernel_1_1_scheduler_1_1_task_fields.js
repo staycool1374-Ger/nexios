@@ -37,5 +37,10 @@ var structkernel_1_1_scheduler_1_1_task_fields =
     [ "state", "structkernel_1_1_scheduler_1_1_task_fields.html#a01bde2d9b3887ac260ba8d6e8b1cbd2c", null ],
     [ "tls_base", "structkernel_1_1_scheduler_1_1_task_fields.html#a49103023bc79a7d3fbba4acc48fdd020", null ],
     [ "waiting_child_pid", "structkernel_1_1_scheduler_1_1_task_fields.html#a7f67f7194f39c7f8417c1839bf46c44c", null ],
-    [ "waiting_child_status", "structkernel_1_1_scheduler_1_1_task_fields.html#abea76adbdcd55bcde7d4ef877d045a84", null ]
+    [ "waiting_child_status", "structkernel_1_1_scheduler_1_1_task_fields.html#abea76adbdcd55bcde7d4ef877d045a84", null ],
+    [ "wdog_armed", "structkernel_1_1_scheduler_1_1_task_fields.html#a1baf7c2177cd0cd3674c7d69584750c6", null ],
+    [ "wdog_expiry_tick", "structkernel_1_1_scheduler_1_1_task_fields.html#ad09ec71af3d86d216a448750bb897bfb", null ],
+    [ "wdog_gen", "structkernel_1_1_scheduler_1_1_task_fields.html#a0a5dd270fdea04a47b50f1c2cf3b92ff", null ],
+    [ "wdog_last_kick_tick", "structkernel_1_1_scheduler_1_1_task_fields.html#ad372df8c32cfd696190e98187eca3064", null ],
+    [ "wdog_period_ticks", "structkernel_1_1_scheduler_1_1_task_fields.html#a2ff6d826a817bffdcf95b5c7cc5c86fb", null ]
 ];

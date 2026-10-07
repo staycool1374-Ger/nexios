@@ -3,6 +3,7 @@ var test__syscall_8cpp =
     [ "Timeval", "struct_timeval.html", "struct_timeval" ],
     [ "Utsname", "struct_utsname.html", "struct_utsname" ],
     [ "JARVIS_TEST", "test__syscall_8cpp.html#ac87688bf09d0a64b4221007323122d24", null ],
+    [ "JARVIS_TEST", "test__syscall_8cpp.html#a8f98769838de306260fdd89bd5975d6f", null ],
     [ "JARVIS_TEST", "test__syscall_8cpp.html#a37d6748bed84da667c82ac6ee630c224", null ],
     [ "JARVIS_TEST", "test__syscall_8cpp.html#a47abfd6b62cec7eaa027a1b4ad847c76", null ],
     [ "JARVIS_TEST", "test__syscall_8cpp.html#a67a0b7aec13112f845ba83ada7c0611e", null ],

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,137 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler__err
 
 <p>Scheduler error codes and string lookup.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="assert_8hpp_source.html">assert.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for scheduler_errors.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="scheduler__errors_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2task_2scheduler__errors_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="scheduler__errors_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2task_2scheduler__errors_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="scheduler__errors_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Aerrors" id="r_kernel_3A_3Aerrors"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html">kernel::errors</a></td></tr>
+<tr class="memdesc:namespacekernel_1_1errors"><td class="mdescLeft">&#160;</td><td class="mdescRight">Primary template for per-module error-string lookup. Each module that defines error codes specialises this template (e.g. &lt;<a class="el" href="task__errors_8hpp.html" title="Task module error codes and string lookup.">kernel/task/task_errors.hpp</a>&gt;). <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:a73a8231ae35b47e811fadf7c206489b7" id="r_a73a8231ae35b47e811fadf7c206489b7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a73a8231ae35b47e811fadf7c206489b7">SCHEDULER_ERROR_CODES</a></td></tr>
+<tr class="memitem:a3e2fb76eadf55aca2104b61591c1d165" id="r_a3e2fb76eadf55aca2104b61591c1d165"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3e2fb76eadf55aca2104b61591c1d165">X</a>(name,  num,  msg)</td></tr>
+<tr class="memitem:a47fb9cc75ae083f1d9af376bdbf18c9c" id="r_a47fb9cc75ae083f1d9af376bdbf18c9c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a47fb9cc75ae083f1d9af376bdbf18c9c">X</a>(name,  num,  msg)</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:ae886175cc5c137dd98ed440d4a46c203" id="r_ae886175cc5c137dd98ed440d4a46c203"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">kernel::errors::SchedulerError</a> : uint64_t { <a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203ac364bcc0b0496c9e76d83a9e0e2bbc07">kernel::errors::SCHEDULER_ERROR_CODES</a>
+ }</td></tr>
+<tr class="memdesc:ae886175cc5c137dd98ed440d4a46c203"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">Error</a> codes returned by scheduler operations.  <a href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a7704469821a036eebee42e8508b9492d" id="r_a7704469821a036eebee42e8508b9492d"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a7704469821a036eebee42e8508b9492d template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html#a7704469821a036eebee42e8508b9492d">kernel::errors::error_string</a> (<a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">SchedulerError</a> e)</td></tr>
+<tr class="memdesc:a7704469821a036eebee42e8508b9492d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a scheduler error code.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Scheduler error codes and string lookup. </p>
-</div></div><!-- contents -->
+</div><a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
+<a id="a73a8231ae35b47e811fadf7c206489b7" name="a73a8231ae35b47e811fadf7c206489b7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a73a8231ae35b47e811fadf7c206489b7">&#9670;&#160;</a></span>SCHEDULER_ERROR_CODES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define SCHEDULER_ERROR_CODES</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="mempool__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165">X</a>(OK, 0, <span class="stringliteral">&quot;OK&quot;</span>)                                                             \</div>
+<div class="line">X(TABLE_FULL, 1, <span class="stringliteral">&quot;Task table full (MAX_TASKS reached)&quot;</span>)                    \</div>
+<div class="line">X(NOT_FOUND, 2, <span class="stringliteral">&quot;Task not found&quot;</span>)                                          \</div>
+<div class="line">X(DUPLICATE_ID, 3, <span class="stringliteral">&quot;Task ID already in use&quot;</span>)                               \</div>
+<div class="line">X(INVALID_STATE, 4, <span class="stringliteral">&quot;Task in invalid state for operation&quot;</span>)                 \</div>
+<div class="line">X(NO_CURRENT, 5, <span class="stringliteral">&quot;No current task context&quot;</span>)                                \</div>
+<div class="line">X(NO_IDLE, 6, <span class="stringliteral">&quot;Idle task not initialized&quot;</span>)                                 \</div>
+<div class="line">X(PREEMPT_DISABLED, 7, <span class="stringliteral">&quot;Preemption is disabled&quot;</span>)                           \</div>
+<div class="line">X(ZOMBIE, 8, <span class="stringliteral">&quot;Task is a zombie (freed but not reaped)&quot;</span>)                    \</div>
+<div class="line">X(INVALID_MAGIC, 9, <span class="stringliteral">&quot;Task control block magic invalid&quot;</span>)                    \</div>
+<div class="line">X(NO_SHELL, 10, <span class="stringliteral">&quot;Shell task not set&quot;</span>)                                      \</div>
+<div class="line">X(INVALID_ARGS, 11, <span class="stringliteral">&quot;Invalid arguments&quot;</span>)                                   \</div>
+<div class="line">X(ADMISSION_DENIED, 12, <span class="stringliteral">&quot;Admission denied: Liu-Leyland bound exceeded&quot;</span>)    \</div>
+<div class="line">X(WCET_INVALID, 13, <span class="stringliteral">&quot;Invalid WCET: exceeds period or period untracked&quot;</span>) \</div>
+<div class="line">X(REMOTE_CURRENT, 14, <span class="stringliteral">&quot;Task is current on another CPU&quot;</span>)</div>
+<div class="ttc" id="amempool__errors_8hpp_html_a3e2fb76eadf55aca2104b61591c1d165"><div class="ttname"><a href="mempool__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165">X</a></div><div class="ttdeci">#define X(name, num, msg)</div><div class="ttdef"><b>Definition</b> mempool_errors.hpp:39</div></div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a47fb9cc75ae083f1d9af376bdbf18c9c" name="a47fb9cc75ae083f1d9af376bdbf18c9c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a47fb9cc75ae083f1d9af376bdbf18c9c">&#9670;&#160;</a></span>X <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define X</td>
+          <td>(</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>num</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>msg</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">case</span> SCHED_ERR_##name:                                                     \</div>
+<div class="line">    <span class="keywordflow">return</span> msg;</div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a3e2fb76eadf55aca2104b61591c1d165" name="a3e2fb76eadf55aca2104b61591c1d165"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3e2fb76eadf55aca2104b61591c1d165">&#9670;&#160;</a></span>X <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define X</td>
+          <td>(</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>num</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>msg</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line">SCHED_ERR_##name = (num),</div>
+</div><!-- fragment -->
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

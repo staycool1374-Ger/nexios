@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -150,10 +150,12 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a1f64a714659b3a9b32efc18eb09e0830"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees a block previously returned by <a class="el" href="#a8902cb2684eb416cb181803ffbb04b9f" title="Allocates a block of at least the requested size.">alloc()</a>.  <br /></td></tr>
 <tr class="memitem:a3f1c8c8d44fb19cc7042070adb022533" id="r_a3f1c8c8d44fb19cc7042070adb022533"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f">errors::MemPoolError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3f1c8c8d44fb19cc7042070adb022533">free_err</a> (void *block)</td></tr>
 <tr class="memdesc:a3f1c8c8d44fb19cc7042070adb022533"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees a block with error code.  <br /></td></tr>
+<tr class="memitem:a9bdbdfdc85534ec0d5c3e6497cc35253" id="r_a9bdbdfdc85534ec0d5c3e6497cc35253"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f">errors::MemPoolError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9bdbdfdc85534ec0d5c3e6497cc35253">reserve</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> pool_idx, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> count)</td></tr>
+<tr class="memdesc:a9bdbdfdc85534ec0d5c3e6497cc35253"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reserve (pin) <span class="tt">count</span> blocks in pool <span class="tt">pool_idx</span> at init time.  <br /></td></tr>
 <tr class="memitem:a04165cf98a4f36671b9e99d47290e19a" id="r_a04165cf98a4f36671b9e99d47290e19a"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a04165cf98a4f36671b9e99d47290e19a">contains</a> (void *ptr)</td></tr>
 <tr class="memdesc:a04165cf98a4f36671b9e99d47290e19a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if a pointer falls within any <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> pool range.  <br /></td></tr>
 <tr class="memitem:a0f8971c21e35bc327dcc4492fa533dbf" id="r_a0f8971c21e35bc327dcc4492fa533dbf"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a0f8971c21e35bc327dcc4492fa533dbf">is_ready</a> ()</td></tr>
-<tr class="memdesc:a0f8971c21e35bc327dcc4492fa533dbf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true after <a class="el" href="#afa2f4dd4e1b0bfbd311c339b772498c0" title="Initialises all pool classes from pre-allocated memory.">init()</a> completes.  <br /></td></tr>
+<tr class="memdesc:a0f8971c21e35bc327dcc4492fa533dbf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> subsystem has been initialised.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
@@ -164,17 +166,23 @@ Test-isolation helpers (snapshot / restore)</h2></td></tr>
 <tr class="memitem:a3556de6ec5da7d91d286de37fcc0b7f2" id="r_a3556de6ec5da7d91d286de37fcc0b7f2"><td class="memItemLeft">static <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3556de6ec5da7d91d286de37fcc0b7f2">pool_count</a> ()</td></tr>
 <tr class="memdesc:a3556de6ec5da7d91d286de37fcc0b7f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the number of pool classes.  <br /></td></tr>
 <tr class="memitem:a9b4b566672c26e373019680d14e52828" id="r_a9b4b566672c26e373019680d14e52828"><td class="memItemLeft">static <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9b4b566672c26e373019680d14e52828">pool_free_count</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> idx)</td></tr>
-<tr class="memdesc:a9b4b566672c26e373019680d14e52828"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return free count for pool at index <code class="param">idx</code>.  <br /></td></tr>
+<tr class="memdesc:a9b4b566672c26e373019680d14e52828"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the free block count for a given pool.  <br /></td></tr>
 <tr class="memitem:a16409e2e3d019838c1193343571aab70" id="r_a16409e2e3d019838c1193343571aab70"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a16409e2e3d019838c1193343571aab70">capture_pool_meta</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> idx, <a class="el" href="structkernel_1_1_mem_pool_1_1_pool_meta.html">PoolMeta</a> &amp;out)</td></tr>
-<tr class="memdesc:a16409e2e3d019838c1193343571aab70"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fill <code class="param">out</code> with the meta of pool <code class="param">idx</code>.  <br /></td></tr>
+<tr class="memdesc:a16409e2e3d019838c1193343571aab70"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot the metadata of one pool (free-list head, free count, bitmap).  <br /></td></tr>
 <tr class="memitem:a49b59b580660edb43a54ef4142359163" id="r_a49b59b580660edb43a54ef4142359163"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a49b59b580660edb43a54ef4142359163">restore_pool_meta</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> idx, const <a class="el" href="structkernel_1_1_mem_pool_1_1_pool_meta.html">PoolMeta</a> &amp;meta)</td></tr>
-<tr class="memdesc:a49b59b580660edb43a54ef4142359163"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore pool <code class="param">idx</code> from <code class="param">meta</code> and rebuild its free list.  <br /></td></tr>
+<tr class="memdesc:a49b59b580660edb43a54ef4142359163"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore a pool's metadata from a previous snapshot and rebuild its free list.  <br /></td></tr>
 <tr class="memitem:a2883ada8e2cba2c8435e9097c8f59692" id="r_a2883ada8e2cba2c8435e9097c8f59692"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2883ada8e2cba2c8435e9097c8f59692">capture_pool_data</a> (uint8_t *dst)</td></tr>
-<tr class="memdesc:a2883ada8e2cba2c8435e9097c8f59692"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write all pool block-data into <code class="param">dst</code> (size = <a class="el" href="#a0f399177b0784f66fafc6bf0c7dffd9a" title="Total bytes needed to hold all pool block-data copies.">pool_data_bytes()</a>).  <br /></td></tr>
+<tr class="memdesc:a2883ada8e2cba2c8435e9097c8f59692"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copy all pool block data into a contiguous external buffer.  <br /></td></tr>
 <tr class="memitem:a04c07ce4a93a180bd1e7d1a5a86a123d" id="r_a04c07ce4a93a180bd1e7d1a5a86a123d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a04c07ce4a93a180bd1e7d1a5a86a123d">restore_pool_data</a> (const uint8_t *src)</td></tr>
-<tr class="memdesc:a04c07ce4a93a180bd1e7d1a5a86a123d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Overwrite all pool block-data from <code class="param">src</code>.  <br /></td></tr>
+<tr class="memdesc:a04c07ce4a93a180bd1e7d1a5a86a123d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Overwrite all pool block data from a contiguous external buffer.  <br /></td></tr>
 <tr class="memitem:a0f399177b0784f66fafc6bf0c7dffd9a" id="r_a0f399177b0784f66fafc6bf0c7dffd9a"><td class="memItemLeft">static <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0f399177b0784f66fafc6bf0c7dffd9a">pool_data_bytes</a> ()</td></tr>
-<tr class="memdesc:a0f399177b0784f66fafc6bf0c7dffd9a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total bytes needed to hold all pool block-data copies.  <br /></td></tr>
+<tr class="memdesc:a0f399177b0784f66fafc6bf0c7dffd9a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Calculate total bytes needed to hold all pool block data.  <br /></td></tr>
+<tr class="memitem:a6574e0763aea733d25070b254c4a9daa" id="r_a6574e0763aea733d25070b254c4a9daa"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6574e0763aea733d25070b254c4a9daa">pin_block</a> (void *ptr)</td></tr>
+<tr class="memdesc:a6574e0763aea733d25070b254c4a9daa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pin a block so it is never returned by <a class="el" href="#a8902cb2684eb416cb181803ffbb04b9f" title="Allocates a block of at least the requested size.">alloc()</a> and never released by <a class="el" href="#a1f64a714659b3a9b32efc18eb09e0830" title="Frees a block previously returned by alloc().">free()</a>. Used by the test-isolation snapshot to reserve the baseline task-control-block memory, which the scheduler snapshot references by raw pointer — if those blocks were recycled onto test tasks, the captured pointers would alias foreign TCBs and corrupt the live task set.  <br /></td></tr>
+<tr class="memitem:a675ef93434017b95062071bece7c1e50" id="r_a675ef93434017b95062071bece7c1e50"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a675ef93434017b95062071bece7c1e50">unpin_block</a> (void *ptr)</td></tr>
+<tr class="memdesc:a675ef93434017b95062071bece7c1e50"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear the pin on a previously pinned block.  <br /></td></tr>
+<tr class="memitem:a88c35687376bef0912b462fe10fad005" id="r_a88c35687376bef0912b462fe10fad005"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a88c35687376bef0912b462fe10fad005">is_block_pinned</a> (void *ptr)</td></tr>
+<tr class="memdesc:a88c35687376bef0912b462fe10fad005"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if the pointer refers to a pinned block.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Fixed-size block memory allocator with 9 pool classes. </p>
@@ -208,13 +216,21 @@ Test-isolation helpers (snapshot / restore)</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Allocates a block of at least the requested size. </p>
+<p>Allocate a block from the smallest pool class that fits <code class="param">size</code>.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">size</td><td>Minimum number of bytes. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>Pointer to the allocated block, or nullptr. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to the allocated block, or nullptr.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">size</td><td>Minimum number of bytes required. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to the block, or nullptr on failure. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -252,6 +268,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates a block with error code. </p>
+<p>Allocate a block with error-code return instead of nullptr.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">size</td><td>Minimum number of bytes. </td></tr>
@@ -259,7 +276,15 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f">MemPoolError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f" title="Error codes for the MemPool allocator.">MemPoolError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">size</td><td>Minimum bytes required. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_ptr</td><td>Set to the allocated block on success. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f" title="Error codes for the MemPool allocator.">MemPoolError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -292,7 +317,21 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Write all pool block-data into <code class="param">dst</code> (size = <a class="el" href="#a0f399177b0784f66fafc6bf0c7dffd9a" title="Total bytes needed to hold all pool block-data copies.">pool_data_bytes()</a>). </p>
+<p>Copy all pool block data into a contiguous external buffer. </p>
+<p>Copy all pool block data into a contiguous buffer.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">dst</td><td>Destination buffer (size must be &gt;= <a class="el" href="#a0f399177b0784f66fafc6bf0c7dffd9a" title="Calculate total bytes needed to hold all pool block data.">pool_data_bytes()</a>).</td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">dst</td><td>Destination buffer (must be &gt;= <a class="el" href="#a0f399177b0784f66fafc6bf0c7dffd9a" title="Calculate total bytes needed to hold all pool block data.">pool_data_bytes()</a>). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_mem_pool_a2883ada8e2cba2c8435e9097c8f59692_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a2883ada8e2cba2c8435e9097c8f59692_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
 
 </div>
 </div>
@@ -323,7 +362,23 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Fill <code class="param">out</code> with the meta of pool <code class="param">idx</code>. </p>
+<p>Snapshot the metadata of one pool (free-list head, free count, bitmap). </p>
+<p>Snapshot the free-list head, free count, and freed bitmap for a pool.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">idx</td><td><a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html" title="Describes a single pool of fixed-size blocks.">Pool</a> index. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out</td><td>Filled with the pool's current metadata.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">idx</td><td><a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html" title="Describes a single pool of fixed-size blocks.">Pool</a> index. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out</td><td>Destination to fill with metadata. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_mem_pool_a16409e2e3d019838c1193343571aab70_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a16409e2e3d019838c1193343571aab70_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
 
 </div>
 </div>
@@ -357,7 +412,20 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>true if ptr is owned by <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true if ptr is owned by <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">ptr</td><td>Pointer to test. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if the pointer is owned by any initialised pool. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_mem_pool_a04165cf98a4f36671b9e99d47290e19a_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a04165cf98a4f36671b9e99d47290e19a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
 
 </div>
 </div>
@@ -385,9 +453,11 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Frees a block previously returned by <a class="el" href="#a8902cb2684eb416cb181803ffbb04b9f" title="Allocates a block of at least the requested size.">alloc()</a>. </p>
+<p>Return a previously allocated block to its pool.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">block</td><td>Pointer to the block to free. </td></tr>
+    <tr><td class="paramname">block</td><td>Pointer to the block to free.</td></tr>
+    <tr><td class="paramname">block</td><td>Pointer returned by a previous <a class="el" href="#a8902cb2684eb416cb181803ffbb04b9f" title="Allocates a block of at least the requested size.">alloc()</a> call (null is a no-op). </td></tr>
   </table>
   </dd>
 </dl>
@@ -395,7 +465,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_mem_pool_a1f64a714659b3a9b32efc18eb09e0830_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a1f64a714659b3a9b32efc18eb09e0830_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -424,19 +494,21 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Frees a block with error code. </p>
+<p>Free a block with error-code return.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">block</td><td>Pointer to the block to free. </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f">MemPoolError</a> code. </dd></dl>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_mem_pool_a3f1c8c8d44fb19cc7042070adb022533_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a3f1c8c8d44fb19cc7042070adb022533_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
-</div>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f" title="Error codes for the MemPool allocator.">MemPoolError</a> code.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">block</td><td>Pointer to free (null returns MEMPOOL_ERR_INVALID_PTR). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f" title="Error codes for the MemPool allocator.">MemPoolError</a> code. </dd></dl>
 
 </div>
 </div>
@@ -464,12 +536,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialises all pool classes from pre-allocated memory. </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_mem_pool_afa2f4dd4e1b0bfbd311c339b772498c0_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_afa2f4dd4e1b0bfbd311c339b772498c0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
-</div>
+<p>Initialise all 9 pool classes from page-aligned <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> allocations. Each pool carves its region into fixed-size blocks and builds an embedded free list. </p>
 
 </div>
 </div>
@@ -497,12 +564,54 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialises with error code. </p>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f">MemPoolError</a> code. </dd></dl>
+<p>Initialise all pools and return OK.</p>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f" title="Error codes for the MemPool allocator.">MemPoolError</a> code.</dd>
+<dd>
+MEMPOOL_ERR_OK after successful init. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_mem_pool_a6118e3487183d980a9f35e1fc8adc509_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a6118e3487183d980a9f35e1fc8adc509_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a id="a88c35687376bef0912b462fe10fad005" name="a88c35687376bef0912b462fe10fad005"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a88c35687376bef0912b462fe10fad005">&#9670;&#160;</a></span>is_block_pinned()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::MemPool::is_block_pinned </td>
+          <td>(</td>
+          <td class="paramtype">void *</td>          <td class="paramname"><span class="paramname"><em>ptr</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True if the pointer refers to a pinned block. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">ptr</td><td>Pointer to query. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_mem_pool_a88c35687376bef0912b462fe10fad005_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a88c35687376bef0912b462fe10fad005_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -530,7 +639,47 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Returns true after <a class="el" href="#afa2f4dd4e1b0bfbd311c339b772498c0" title="Initialises all pool classes from pre-allocated memory.">init()</a> completes. </p>
+<p>Check whether the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> subsystem has been initialised. </p>
+<dl class="section return"><dt>Returns</dt><dd>true after <a class="el" href="#afa2f4dd4e1b0bfbd311c339b772498c0" title="Initialises all pool classes from pre-allocated memory.">init()</a> completes successfully. </dd></dl>
+
+</div>
+</div>
+<a id="a6574e0763aea733d25070b254c4a9daa" name="a6574e0763aea733d25070b254c4a9daa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6574e0763aea733d25070b254c4a9daa">&#9670;&#160;</a></span>pin_block()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::MemPool::pin_block </td>
+          <td>(</td>
+          <td class="paramtype">void *</td>          <td class="paramname"><span class="paramname"><em>ptr</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Pin a block so it is never returned by <a class="el" href="#a8902cb2684eb416cb181803ffbb04b9f" title="Allocates a block of at least the requested size.">alloc()</a> and never released by <a class="el" href="#a1f64a714659b3a9b32efc18eb09e0830" title="Frees a block previously returned by alloc().">free()</a>. Used by the test-isolation snapshot to reserve the baseline task-control-block memory, which the scheduler snapshot references by raw pointer — if those blocks were recycled onto test tasks, the captured pointers would alias foreign TCBs and corrupt the live task set. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">ptr</td><td>Pointer inside a pool block (must be block-aligned). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_mem_pool_a6574e0763aea733d25070b254c4a9daa_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a6574e0763aea733d25070b254c4a9daa_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
+</div>
 
 </div>
 </div>
@@ -584,7 +733,17 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Total bytes needed to hold all pool block-data copies. </p>
+<p>Calculate total bytes needed to hold all pool block data. </p>
+<p>Compute total bytes across all initialised pools.</p>
+<dl class="section return"><dt>Returns</dt><dd>Sum of (block_size * block_count) over all initialised pools.</dd>
+<dd>
+Sum of (block_count * block_size) for each pool. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_mem_pool_a0f399177b0784f66fafc6bf0c7dffd9a_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a0f399177b0784f66fafc6bf0c7dffd9a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 10 -->
+</div>
 
 </div>
 </div>
@@ -611,7 +770,45 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Return free count for pool at index <code class="param">idx</code>. </p>
+<p>Return the free block count for a given pool. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">idx</td><td><a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html" title="Describes a single pool of fixed-size blocks.">Pool</a> index (0..POOL_COUNT-1). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of free blocks in that pool. </dd></dl>
+
+</div>
+</div>
+<a id="a9bdbdfdc85534ec0d5c3e6497cc35253" name="a9bdbdfdc85534ec0d5c3e6497cc35253"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9bdbdfdc85534ec0d5c3e6497cc35253">&#9670;&#160;</a></span>reserve()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f">MemPoolError</a> kernel::MemPool::reserve </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>pool_idx</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>count</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Reserve (pin) <span class="tt">count</span> blocks in pool <span class="tt">pool_idx</span> at init time. </p>
 
 </div>
 </div>
@@ -638,7 +835,20 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Overwrite all pool block-data from <code class="param">src</code>. </p>
+<p>Overwrite all pool block data from a contiguous external buffer. </p>
+<p>Restore all pool block data from a contiguous buffer.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">src</td><td>Source buffer previously filled by <a class="el" href="#a2883ada8e2cba2c8435e9097c8f59692" title="Copy all pool block data into a contiguous external buffer.">capture_pool_data()</a>. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_mem_pool_a04c07ce4a93a180bd1e7d1a5a86a123d_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a04c07ce4a93a180bd1e7d1a5a86a123d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 11 -->
+</div>
 
 </div>
 </div>
@@ -669,7 +879,60 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Restore pool <code class="param">idx</code> from <code class="param">meta</code> and rebuild its free list. </p>
+<p>Restore a pool's metadata from a previous snapshot and rebuild its free list. </p>
+<p>Restore a pool's metadata from a snapshot and rebuild the free list. Any blocks added since the snapshot are marked free.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">idx</td><td><a class="el" href="structkernel_1_1_mem_pool_1_1_pool.html" title="Describes a single pool of fixed-size blocks.">Pool</a> index. </td></tr>
+    <tr><td class="paramname">meta</td><td>Previously captured metadata. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_mem_pool_a49b59b580660edb43a54ef4142359163_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a49b59b580660edb43a54ef4142359163_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
+</div>
+
+</div>
+</div>
+<a id="a675ef93434017b95062071bece7c1e50" name="a675ef93434017b95062071bece7c1e50"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a675ef93434017b95062071bece7c1e50">&#9670;&#160;</a></span>unpin_block()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::MemPool::unpin_block </td>
+          <td>(</td>
+          <td class="paramtype">void *</td>          <td class="paramname"><span class="paramname"><em>ptr</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Clear the pin on a previously pinned block. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">ptr</td><td>Pointer inside a pool block. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_mem_pool_a675ef93434017b95062071bece7c1e50_cgraph.png" border="0" usemap="#aclasskernel_1_1_mem_pool_a675ef93434017b95062071bece7c1e50_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 13 -->
+</div>
 
 </div>
 </div>

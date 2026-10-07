@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,127 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('pmm__errors_8h
 
 <p>Physical Memory Manager error codes and string lookup.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="assert_8hpp_source.html">assert.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for pmm_errors.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="pmm__errors_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2memory_2pmm__errors_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="pmm__errors_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2memory_2pmm__errors_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="pmm__errors_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Aerrors" id="r_kernel_3A_3Aerrors"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html">kernel::errors</a></td></tr>
+<tr class="memdesc:namespacekernel_1_1errors"><td class="mdescLeft">&#160;</td><td class="mdescRight">Primary template for per-module error-string lookup. Each module that defines error codes specialises this template (e.g. &lt;<a class="el" href="task__errors_8hpp.html" title="Task module error codes and string lookup.">kernel/task/task_errors.hpp</a>&gt;). <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:af32598a66e0dbf6105b93a6b9f0ff977" id="r_af32598a66e0dbf6105b93a6b9f0ff977"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af32598a66e0dbf6105b93a6b9f0ff977">PMM_ERROR_CODES</a></td></tr>
+<tr class="memitem:a3e2fb76eadf55aca2104b61591c1d165" id="r_a3e2fb76eadf55aca2104b61591c1d165"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3e2fb76eadf55aca2104b61591c1d165">X</a>(name,  num,  msg)</td></tr>
+<tr class="memitem:a47fb9cc75ae083f1d9af376bdbf18c9c" id="r_a47fb9cc75ae083f1d9af376bdbf18c9c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a47fb9cc75ae083f1d9af376bdbf18c9c">X</a>(name,  num,  msg)</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:afa35d54dec63a101ca7d8eae809c4f63" id="r_afa35d54dec63a101ca7d8eae809c4f63"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">kernel::errors::PmmError</a> : uint64_t { <a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63a8fef701d2ece7d021dc9a812df30dcbc">kernel::errors::PMM_ERROR_CODES</a>
+ }</td></tr>
+<tr class="memdesc:afa35d54dec63a101ca7d8eae809c4f63"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">Error</a> codes for the Physical Memory Manager.  <a href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a20df0cde913b71389ade6b505cf4c5ce" id="r_a20df0cde913b71389ade6b505cf4c5ce"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a20df0cde913b71389ade6b505cf4c5ce template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html#a20df0cde913b71389ade6b505cf4c5ce">kernel::errors::error_string</a> (<a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">PmmError</a> e)</td></tr>
+<tr class="memdesc:a20df0cde913b71389ade6b505cf4c5ce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> error code.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Physical Memory Manager error codes and string lookup. </p>
-</div></div><!-- contents -->
+</div><a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
+<a id="af32598a66e0dbf6105b93a6b9f0ff977" name="af32598a66e0dbf6105b93a6b9f0ff977"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af32598a66e0dbf6105b93a6b9f0ff977">&#9670;&#160;</a></span>PMM_ERROR_CODES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define PMM_ERROR_CODES</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="mempool__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165">X</a>(OK, 0, <span class="stringliteral">&quot;OK&quot;</span>)                                                             \</div>
+<div class="line">X(OOM, 1, <span class="stringliteral">&quot;Out of memory — no free physical pages&quot;</span>)                        \</div>
+<div class="line">X(USER_OOM, 2, <span class="stringliteral">&quot;Out of memory — no free user physical pages&quot;</span>)              \</div>
+<div class="line">X(TABLE_OOM, 3, <span class="stringliteral">&quot;Out of memory — page table pool exhausted&quot;</span>)               \</div>
+<div class="line">X(INVALID, 4, <span class="stringliteral">&quot;Invalid physical address&quot;</span>)</div>
+<div class="ttc" id="amempool__errors_8hpp_html_a3e2fb76eadf55aca2104b61591c1d165"><div class="ttname"><a href="mempool__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165">X</a></div><div class="ttdeci">#define X(name, num, msg)</div><div class="ttdef"><b>Definition</b> mempool_errors.hpp:39</div></div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a47fb9cc75ae083f1d9af376bdbf18c9c" name="a47fb9cc75ae083f1d9af376bdbf18c9c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a47fb9cc75ae083f1d9af376bdbf18c9c">&#9670;&#160;</a></span>X <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define X</td>
+          <td>(</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>num</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>msg</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">case</span> PMM_ERR_##name:                                                       \</div>
+<div class="line">    <span class="keywordflow">return</span> msg;</div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a3e2fb76eadf55aca2104b61591c1d165" name="a3e2fb76eadf55aca2104b61591c1d165"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3e2fb76eadf55aca2104b61591c1d165">&#9670;&#160;</a></span>X <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define X</td>
+          <td>(</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>num</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>msg</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line">PMM_ERR_##name = (num),</div>
+</div><!-- fragment -->
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

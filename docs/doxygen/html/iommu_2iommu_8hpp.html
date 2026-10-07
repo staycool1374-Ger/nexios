@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -145,9 +145,9 @@ Data Structures</h2></td></tr>
 <tr class="memitem:kernel_3A_3Aiommu_3A_3AIoMmuMapping" id="r_kernel_3A_3Aiommu_3A_3AIoMmuMapping"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1iommu_1_1_io_mmu_mapping.html">kernel::iommu::IoMmuMapping</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One outstanding DMA mapping: a contiguous frame range mapped at its own physical address (identity IOVA — device DMA to an unmapped address faults, it cannot bypass translation).  <a href="structkernel_1_1iommu_1_1_io_mmu_mapping.html#details">More...</a><br /></td></tr>
 <tr class="memitem:kernel_3A_3Aiommu_3A_3AIoMmuDomain" id="r_kernel_3A_3Aiommu_3A_3AIoMmuDomain"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1iommu_1_1_io_mmu_domain.html">kernel::iommu::IoMmuDomain</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One DMA protection domain: owns a private second-level page-table root (one PMM page) and a bounded mapping-record table. Bound to exactly one creating task (the IoMmuDmaCap owner).  <a href="structkernel_1_1iommu_1_1_io_mmu_domain.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One DMA protection domain: owns a private second-level page-table root (one <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> page) and a bounded mapping-record table. Bound to exactly one creating task (the IoMmuDmaCap owner).  <a href="structkernel_1_1iommu_1_1_io_mmu_domain.html#details">More...</a><br /></td></tr>
 <tr class="memitem:kernel_3A_3Aiommu_3A_3AIoMmuManager" id="r_kernel_3A_3Aiommu_3A_3AIoMmuManager"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html">kernel::iommu::IoMmuManager</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static bounded IOMMU translation-table manager. All tables are fixed .bss allocations except per-domain SL pages (PMM, zeroed on allocation). One leaf SpinLock serializes all manager state; it is a leaf lock (never held while calling into cap/cspace layers, dispose() or MemPool::free; never held across reschedule()).  <a href="classkernel_1_1iommu_1_1_io_mmu_manager.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static bounded IOMMU translation-table manager. All tables are fixed .bss allocations except per-domain SL pages (<a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>, zeroed on allocation). One leaf <a class="el" href="classkernel_1_1iommu_1_1_spin_lock.html" title="Simple busy-wait spinlock using atomic_test_and_set.">SpinLock</a> serializes all manager state; it is a leaf lock (never held while calling into cap/cspace layers, dispose() or <a class="el" href="classkernel_1_1_mem_pool.html#a1f64a714659b3a9b32efc18eb09e0830" title="Frees a block previously returned by alloc().">MemPool::free</a>; never held across reschedule()).  <a href="classkernel_1_1iommu_1_1_io_mmu_manager.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>

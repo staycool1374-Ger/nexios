@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -147,7 +147,7 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>VFS error-code API tests (milestone v0.4.10 issue #124): the whole <span class="tt">*_err</span> family in <a class="el" href="vfs_8cpp.html" title="VFS core implementation: path resolution, mounting, file/directory ops.">src/kernel/vfs/vfs.cpp</a> (alloc_err, free_err, get_err, resolve_err, mount_err, init_err, find_fs_err, set_root_vnode_err, mkdir_err, create_err, unlink_err) was never entered, so none of the VfsError codes defined in <a class="el" href="vfs__errors_8hpp.html" title="VFS error code definitions and error-string conversion.">vfs_errors.hpp</a> were ever exercised — including the NOT_DIR / NOT_SUPPORTED / NOT_FOUND / IO_ERROR discrimination rules. </p>
-<dl class="section note"><dt>Note</dt><dd>Any test that creates tmpfs entries unlinks them BEFORE asserting, so an assertion early-return can never leave MemPool blocks behind. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Any test that creates tmpfs entries unlinks them BEFORE asserting, so an assertion early-return can never leave <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> blocks behind. </dd></dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="aae8f9e38be0d3919c2b18bd89819249e" name="aae8f9e38be0d3919c2b18bd89819249e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aae8f9e38be0d3919c2b18bd89819249e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/6]</span></h2>

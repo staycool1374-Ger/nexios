@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -124,7 +124,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__klog_8cp
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="ring__buffer_8hpp_source.html">kernel/log/ring_buffer.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="checked__ptr_8hpp_source.html">kernel/memory/checked_ptr.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="irq__guard_8hpp_source.html">kernel/arch/irq_guard.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="kernel_8hpp_source.html">kernel/kernel.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="string_8hpp_source.html">string.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for test_klog.cpp:</div>
@@ -143,13 +148,14 @@ Functions</h2></td></tr>
 <tr class="memitem:a5a8ec4f3aa87931b51b4373ac81f867f" id="r_a5a8ec4f3aa87931b51b4373ac81f867f"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5a8ec4f3aa87931b51b4373ac81f867f">JARVIS_TEST</a> (klog_empty_read, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a3a59bbc7a82f0f4e38482bab9f676f56" id="r_a3a59bbc7a82f0f4e38482bab9f676f56"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a3a59bbc7a82f0f4e38482bab9f676f56">JARVIS_TEST</a> (klog_clear, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a080d00f12e53cff4ce6f49a109cd425f" id="r_a080d00f12e53cff4ce6f49a109cd425f"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a080d00f12e53cff4ce6f49a109cd425f">JARVIS_TEST</a> (klog_read_partial, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:ac39660f6935ef9984ebff206f013e7b3" id="r_ac39660f6935ef9984ebff206f013e7b3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ac39660f6935ef9984ebff206f013e7b3">JARVIS_TEST</a> (task_end_report_silent_in_tests, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a0aa04608f5608ad916b21f1d7639fce8" id="r_a0aa04608f5608ad916b21f1d7639fce8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0aa04608f5608ad916b21f1d7639fce8">register_klog_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Kernel log (klog) tests. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a998ec3f8b80e44bc2c1501f70dc96bbc" name="a998ec3f8b80e44bc2c1501f70dc96bbc"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a998ec3f8b80e44bc2c1501f70dc96bbc">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/8]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a998ec3f8b80e44bc2c1501f70dc96bbc">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -170,7 +176,7 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a id="a3a59bbc7a82f0f4e38482bab9f676f56" name="a3a59bbc7a82f0f4e38482bab9f676f56"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3a59bbc7a82f0f4e38482bab9f676f56">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/8]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a3a59bbc7a82f0f4e38482bab9f676f56">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -191,7 +197,7 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a id="a525d6390f7ba771b62d6ad625e460c1d" name="a525d6390f7ba771b62d6ad625e460c1d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a525d6390f7ba771b62d6ad625e460c1d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/8]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a525d6390f7ba771b62d6ad625e460c1d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -212,7 +218,7 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a id="a5a8ec4f3aa87931b51b4373ac81f867f" name="a5a8ec4f3aa87931b51b4373ac81f867f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5a8ec4f3aa87931b51b4373ac81f867f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/8]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a5a8ec4f3aa87931b51b4373ac81f867f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -233,7 +239,7 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a id="aa6a03c1465646e1f993d615887ff1e78" name="aa6a03c1465646e1f993d615887ff1e78"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa6a03c1465646e1f993d615887ff1e78">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/8]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aa6a03c1465646e1f993d615887ff1e78">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -254,7 +260,7 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a id="a4c21f716de8ac11a4d6e9bf863cfaaab" name="a4c21f716de8ac11a4d6e9bf863cfaaab"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4c21f716de8ac11a4d6e9bf863cfaaab">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/8]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a4c21f716de8ac11a4d6e9bf863cfaaab">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -275,7 +281,7 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a id="a080d00f12e53cff4ce6f49a109cd425f" name="a080d00f12e53cff4ce6f49a109cd425f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a080d00f12e53cff4ce6f49a109cd425f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/8]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a080d00f12e53cff4ce6f49a109cd425f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -296,7 +302,7 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a id="a65aebaa137a65adeca7a84a2dd883526" name="a65aebaa137a65adeca7a84a2dd883526"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a65aebaa137a65adeca7a84a2dd883526">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/8]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a65aebaa137a65adeca7a84a2dd883526">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -313,6 +319,33 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac39660f6935ef9984ebff206f013e7b3" name="ac39660f6935ef9984ebff206f013e7b3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac39660f6935ef9984ebff206f013e7b3">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/9]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">task_end_report_silent_in_tests</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__klog_8cpp_ac39660f6935ef9984ebff206f013e7b3_cgraph.png" border="0" usemap="#atest__klog_8cpp_ac39660f6935ef9984ebff206f013e7b3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -334,7 +367,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__klog_8cpp_a0aa04608f5608ad916b21f1d7639fce8_cgraph.png" border="0" usemap="#atest__klog_8cpp_a0aa04608f5608ad916b21f1d7639fce8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>

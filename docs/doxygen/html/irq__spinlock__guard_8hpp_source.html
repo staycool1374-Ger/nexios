@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('irq__spinlock_
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html">   17</a></span><span class="keyword">class </span>[[nodiscard]] <a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#adbaa09714184b111bb674152b0a970a3">IrqSpinLockGuard</a> {</div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>  <span class="keyword">public</span>:</div>
 <div class="foldopen" id="foldopen00019" data-start="{" data-end="}">
-<div class="line"><a id="l00019" name="l00019"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#adbaa09714184b111bb674152b0a970a3">   19</a></span>    <span class="keyword">explicit</span> <a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#adbaa09714184b111bb674152b0a970a3">IrqSpinLockGuard</a>(SpinLock &amp;<a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6">lock</a>) <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></div>
+<div class="line"><a id="l00019" name="l00019"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#adbaa09714184b111bb674152b0a970a3">   19</a></span>    <span class="keyword">explicit</span> <a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#adbaa09714184b111bb674152b0a970a3">IrqSpinLockGuard</a>(<a class="code hl_class" href="classkernel_1_1sync_1_1_spin_lock.html">SpinLock</a> &amp;<a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6">lock</a>) <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>        : lock_(<a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6">lock</a>), irq_was_(arch::interrupts_enabled()), held_(<span class="keyword">true</span>) {</div>
 <div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>        arch::cli();</div>
 <div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>        lock_.lock();</div>
@@ -138,14 +138,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('irq__spinlock_
 </div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
 <div class="foldopen" id="foldopen00025" data-start="{" data-end="}">
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a07041ca69da7e73f37e9a287e1fe8e5e">   25</a></span>    <a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a07041ca69da7e73f37e9a287e1fe8e5e">~IrqSpinLockGuard</a>() <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a07041ca69da7e73f37e9a287e1fe8e5e">   25</a></span>    <a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a07041ca69da7e73f37e9a287e1fe8e5e">~IrqSpinLockGuard</a>() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>        <span class="keywordflow">if</span> (held_)</div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>            do_unlock();</div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    }</div>
 </div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span></div>
 <div class="foldopen" id="foldopen00033" data-start="{" data-end="}">
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a2219ff078b9fd2f8759fc9b8adf9eabc">   33</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a2219ff078b9fd2f8759fc9b8adf9eabc">unlock</a>() <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a2219ff078b9fd2f8759fc9b8adf9eabc">   33</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a2219ff078b9fd2f8759fc9b8adf9eabc">unlock</a>() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>        <span class="keywordflow">if</span> (held_) {</div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>            do_unlock();</div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>            held_ = <span class="keyword">false</span>;</div>
@@ -154,7 +154,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('irq__spinlock_
 </div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span></div>
 <div class="foldopen" id="foldopen00041" data-start="{" data-end="}">
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6">   41</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6">lock</a>() <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6">   41</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6">lock</a>() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>        <span class="keywordflow">if</span> (!held_) {</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>            irq_was_ = arch::interrupts_enabled();</div>
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>            arch::cli();</div>
@@ -165,7 +165,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('irq__spinlock_
 </div>
 <div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span> </div>
 <div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>  <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <span class="keywordtype">void</span> do_unlock() <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> {</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <span class="keywordtype">void</span> do_unlock() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>        lock_.unlock();</div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>        <span class="keywordflow">if</span> (irq_was_)</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>            arch::sti();</div>
@@ -183,10 +183,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('irq__spinlock_
 <div class="ttc" id="aclasskernel_1_1sync_1_1_irq_spin_lock_guard_html_a2219ff078b9fd2f8759fc9b8adf9eabc"><div class="ttname"><a href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a2219ff078b9fd2f8759fc9b8adf9eabc">kernel::sync::IrqSpinLockGuard::unlock</a></div><div class="ttdeci">void unlock() noexcept</div><div class="ttdoc">Temporarily release the lock and re-enable IRQs. Used by OOM handler paths: release before calling ha...</div><div class="ttdef"><b>Definition</b> irq_spinlock_guard.hpp:33</div></div>
 <div class="ttc" id="aclasskernel_1_1sync_1_1_irq_spin_lock_guard_html_a9726a45b13b0b389752caf1a8756f2e6"><div class="ttname"><a href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6">kernel::sync::IrqSpinLockGuard::lock</a></div><div class="ttdeci">void lock() noexcept</div><div class="ttdoc">Re-acquire lock and disable IRQs after a temporary unlock().</div><div class="ttdef"><b>Definition</b> irq_spinlock_guard.hpp:41</div></div>
 <div class="ttc" id="aclasskernel_1_1sync_1_1_irq_spin_lock_guard_html_adbaa09714184b111bb674152b0a970a3"><div class="ttname"><a href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#adbaa09714184b111bb674152b0a970a3">kernel::sync::IrqSpinLockGuard::IrqSpinLockGuard</a></div><div class="ttdeci">IrqSpinLockGuard(SpinLock &amp;lock) noexcept</div><div class="ttdef"><b>Definition</b> irq_spinlock_guard.hpp:19</div></div>
+<div class="ttc" id="aclasskernel_1_1sync_1_1_spin_lock_html"><div class="ttname"><a href="classkernel_1_1sync_1_1_spin_lock.html">kernel::sync::SpinLock</a></div><div class="ttdoc">Simple busy-wait spinlock using atomic_test_and_set.</div><div class="ttdef"><b>Definition</b> spinlock.hpp:37</div></div>
 <div class="ttc" id="ahal_2irq__guard_8hpp_html"><div class="ttname"><a href="hal_2irq__guard_8hpp.html">irq_guard.hpp</a></div><div class="ttdoc">RAII interrupt disable — disable IRQs on construction, restore on destruction.</div></div>
-<div class="ttc" id="anamespacekernel_1_1sync_html"><div class="ttname"><a href="namespacekernel_1_1sync.html">kernel::sync</a></div><div class="ttdef"><b>Definition</b> eventgroup.cpp:29</div></div>
+<div class="ttc" id="anamespacekernel_1_1sync_html"><div class="ttname"><a href="namespacekernel_1_1sync.html">kernel::sync</a></div><div class="ttdef"><b>Definition</b> eventgroup.cpp:30</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
-<div class="ttc" id="anamespacekernel_html_ac84f34d32e4683fb9c3f512c093068cf"><div class="ttname"><a href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:133</div></div>
+<div class="ttc" id="anamespacekernel_html_ae4d161da19fc465fa4e81d74e0a5b4f8"><div class="ttname"><a href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:149</div></div>
 <div class="ttc" id="aspinlock_8hpp_html"><div class="ttname"><a href="spinlock_8hpp.html">spinlock.hpp</a></div><div class="ttdoc">Busy-wait spinlock using atomic exchange.</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

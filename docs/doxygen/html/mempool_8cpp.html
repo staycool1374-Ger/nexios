@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mempool_8cpp.h
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><code>#include &lt;<a class="el" href="mempool_8hpp_source.html">kernel/memory/mempool.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="resource__tracker_8hpp_source.html">kernel/test/resource_tracker.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq__spinlock__guard_8hpp_source.html">kernel/sync/irq_spinlock_guard.hpp</a>&gt;</code><br />
@@ -129,23 +130,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mempool_8cpp.h
 Include dependency graph for mempool.cpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="mempool_8cpp__incl.png" border="0" usemap="#asrc_2kernel_2memory_2mempool_8cpp" loading="lazy" alt=""/></div>
-<map name="asrc_2kernel_2memory_2mempool_8cpp" id="asrc_2kernel_2memory_2mempool_8cpp">
-<area shape="rect" title=" " alt="" coords="174,5,386,32"/>
-<area shape="rect" href="mempool_8hpp.html" title="Fixed&#45;size block memory pool allocator (k malloc)." alt="" coords="5,155,195,181"/>
-<area shape="poly" title=" " alt="" coords="208,34,166,53,145,66,127,82,111,110,104,141,99,139,106,108,123,78,142,61,164,48,213,31"/>
-<area shape="rect" href="pmm_8hpp.html" title="Physical Memory Manager — bitmap&#45;based page allocator with owner tracking." alt="" coords="137,80,303,107"/>
-<area shape="poly" title=" " alt="" coords="271,31,242,70,238,66,268,34"/>
-<area shape="rect" href="constants_8hpp.html" title="Central hardware and memory&#45;layout constants (no magic numbers)." alt="" coords="270,155,373,181"/>
-<area shape="poly" title=" " alt="" coords="290,30,305,53,317,79,323,110,325,141,320,138,318,111,312,81,301,55,289,35"/>
-<area shape="rect" href="assert_8hpp.html" title="Debug assertion macros and the panic handler declaration." alt="" coords="378,80,460,107"/>
-<area shape="poly" title=" " alt="" coords="304,30,383,72,378,73,304,35"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="237,229,315,256"/>
-<area shape="poly" title=" " alt="" coords="131,179,233,222,229,224,130,184"/>
-<area shape="poly" title=" " alt="" coords="227,105,268,215,263,214,223,109"/>
-<area shape="poly" title=" " alt="" coords="238,105,294,145,288,145,237,110"/>
-<area shape="poly" title=" " alt="" coords="316,181,294,218,290,214,311,183"/>
-<area shape="poly" title=" " alt="" coords="419,105,409,144,400,164,387,183,359,207,327,225,326,220,356,203,383,180,395,162,404,142,415,109"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -132,17 +132,17 @@ Collaboration diagram for kernel::shm::SharedRingHeader:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:a59ba9e5bc0dc18bbe406e46c51ce7973" id="r_a59ba9e5bc0dc18bbe406e46c51ce7973"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a59ba9e5bc0dc18bbe406e46c51ce7973">magic</a> = 0</td></tr>
+<tr class="memitem:a59ba9e5bc0dc18bbe406e46c51ce7973" id="r_a59ba9e5bc0dc18bbe406e46c51ce7973"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a59ba9e5bc0dc18bbe406e46c51ce7973">magic</a> = 0</td></tr>
 <tr class="memdesc:a59ba9e5bc0dc18bbe406e46c51ce7973"><td class="mdescLeft">&#160;</td><td class="mdescRight">Magic for sanity (0 when not initialised).  <br /></td></tr>
-<tr class="memitem:a1ae6c798ecdf04e40094dfc95fa5f82c" id="r_a1ae6c798ecdf04e40094dfc95fa5f82c"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1ae6c798ecdf04e40094dfc95fa5f82c">version</a> = 0</td></tr>
+<tr class="memitem:a1ae6c798ecdf04e40094dfc95fa5f82c" id="r_a1ae6c798ecdf04e40094dfc95fa5f82c"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a1ae6c798ecdf04e40094dfc95fa5f82c">version</a> = 0</td></tr>
 <tr class="memdesc:a1ae6c798ecdf04e40094dfc95fa5f82c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Protocol version.  <br /></td></tr>
-<tr class="memitem:a3fc0c0eb30186ce665025c3b87918747" id="r_a3fc0c0eb30186ce665025c3b87918747"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3fc0c0eb30186ce665025c3b87918747">capacity</a> = 0</td></tr>
+<tr class="memitem:a3fc0c0eb30186ce665025c3b87918747" id="r_a3fc0c0eb30186ce665025c3b87918747"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a3fc0c0eb30186ce665025c3b87918747">capacity</a> = 0</td></tr>
 <tr class="memdesc:a3fc0c0eb30186ce665025c3b87918747"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ring capacity in bytes = (frame_count - 1) * PAGE_SIZE (must be a power of two — see shm_ring_init).  <br /></td></tr>
-<tr class="memitem:a00e33d7fcb272e642d115b26e46aa6d0" id="r_a00e33d7fcb272e642d115b26e46aa6d0"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a00e33d7fcb272e642d115b26e46aa6d0">element_size</a> = 0</td></tr>
+<tr class="memitem:a00e33d7fcb272e642d115b26e46aa6d0" id="r_a00e33d7fcb272e642d115b26e46aa6d0"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a00e33d7fcb272e642d115b26e46aa6d0">element_size</a> = 0</td></tr>
 <tr class="memdesc:a00e33d7fcb272e642d115b26e46aa6d0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Element size in bytes (fixed-size elements).  <br /></td></tr>
-<tr class="memitem:a1425bcad949cab726170a06f88378859" id="r_a1425bcad949cab726170a06f88378859"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1425bcad949cab726170a06f88378859">head</a> = 0</td></tr>
+<tr class="memitem:a1425bcad949cab726170a06f88378859" id="r_a1425bcad949cab726170a06f88378859"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a1425bcad949cab726170a06f88378859">head</a> = 0</td></tr>
 <tr class="memdesc:a1425bcad949cab726170a06f88378859"><td class="mdescLeft">&#160;</td><td class="mdescRight">Producer index (bytes). Written only by the producer.  <br /></td></tr>
-<tr class="memitem:ad25c10f7f14728cab273723ef7dd25de" id="r_ad25c10f7f14728cab273723ef7dd25de"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad25c10f7f14728cab273723ef7dd25de">tail</a> = 0</td></tr>
+<tr class="memitem:ad25c10f7f14728cab273723ef7dd25de" id="r_ad25c10f7f14728cab273723ef7dd25de"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad25c10f7f14728cab273723ef7dd25de">tail</a> = 0</td></tr>
 <tr class="memdesc:ad25c10f7f14728cab273723ef7dd25de"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consumer index (bytes). Written only by the consumer.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -155,7 +155,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::shm::SharedRingHeader::capacity = 0</td>
+          <td class="memname">uint64_t kernel::shm::SharedRingHeader::capacity = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -171,7 +171,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::shm::SharedRingHeader::element_size = 0</td>
+          <td class="memname">uint64_t kernel::shm::SharedRingHeader::element_size = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -187,7 +187,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::shm::SharedRingHeader::head = 0</td>
+          <td class="memname">uint64_t kernel::shm::SharedRingHeader::head = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -203,7 +203,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::shm::SharedRingHeader::magic = 0</td>
+          <td class="memname">uint64_t kernel::shm::SharedRingHeader::magic = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -219,7 +219,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::shm::SharedRingHeader::tail = 0</td>
+          <td class="memname">uint64_t kernel::shm::SharedRingHeader::tail = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -235,7 +235,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::shm::SharedRingHeader::version = 0</td>
+          <td class="memname">uint64_t kernel::shm::SharedRingHeader::version = 0</td>
         </tr>
       </table>
 </div><div class="memdoc">

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
    </div>
   </td>
  </tr>
@@ -145,12 +145,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2io_8hpp_s
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span></div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">extern</span> <span class="stringliteral">&quot;C&quot;</span> {</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keywordtype">void</span> arch_outb(<a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> port, <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> val);</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch_inb(<a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> port);</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keywordtype">void</span> arch_outw(<a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> port, <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> val);</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> arch_inw(<a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> port);</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="keywordtype">void</span> arch_outl(<a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> port, <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> val);</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> arch_inl(<a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> port);</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keywordtype">void</span> arch_outb(uint16_t port, uint8_t val);</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch_inb(uint16_t port);</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keywordtype">void</span> arch_outw(uint16_t port, uint16_t val);</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arch_inw(uint16_t port);</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="keywordtype">void</span> arch_outl(uint16_t port, uint32_t val);</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch_inl(uint16_t port);</div>
 <div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keywordtype">void</span> arch_hlt();</div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="keywordtype">void</span> arch_pause();</div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><span class="keywordtype">void</span> arch_cli();</div>
@@ -169,11 +169,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2io_8hpp_s
 <div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span><span class="preprocessor">#error &quot;HAL: no io implementation for this architecture&quot;</span></div>
 <div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span><span class="preprocessor">#endif</span></div>
 <div class="ttc" id="aaarch64_2hal_2io__impl_8hpp_html"><div class="ttname"><a href="aarch64_2hal_2io__impl_8hpp.html">io_impl.hpp</a></div><div class="ttdoc">AArch64 I/O primitives — MMIO, port I/O stubs, barrier, and FP enable.</div></div>
+<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
+<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
+<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
 <div class="ttc" id="ariscv64_2hal_2io__impl_8hpp_html"><div class="ttname"><a href="riscv64_2hal_2io__impl_8hpp.html">io_impl.hpp</a></div><div class="ttdoc">RISC-V64 I/O HAL — MMIO load/store, CSR access, WFI, FPU enable, and stub x86 port I/O.</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
-<div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
-<div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
-<div class="ttc" id="atypes_8hpp_html_a64be82add362de7c99ce6671d7f4f0a6"><div class="ttname"><a href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> types.hpp:25</div></div>
 <div class="ttc" id="ax86__64_2hal_2io__impl_8hpp_html"><div class="ttname"><a href="x86__64_2hal_2io__impl_8hpp.html">io_impl.hpp</a></div><div class="ttdoc">x86_64 I/O port access, control register access, and CPU instruction wrappers.</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
