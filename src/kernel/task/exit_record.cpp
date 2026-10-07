@@ -49,8 +49,12 @@ void idle_record_task_exit(const TaskControlBlock &t,
                         kTaskExitRingDepth;
     TaskExitRecord &r = g_exit_ring[slot];
     r.id = t.id;
-    __builtin_strncpy(r.name, t.name, CONFIG_TASK_NAME_LEN - 1);
-    r.name[CONFIG_TASK_NAME_LEN - 1] = '\0';
+    // NUL-pad + truncate without strncpy: -Wstringop-truncation fires on the
+    // strncpy call under release -O2/-fanalyzer even with an explicit
+    // terminator.  memset + memcpy is byte-identical (short names keep NUL
+    // padding, long names truncate with the terminator from the memset).
+    __builtin_memset(r.name, 0, CONFIG_TASK_NAME_LEN);
+    __builtin_memcpy(r.name, t.name, CONFIG_TASK_NAME_LEN - 1);
     r.exit_code = t.exit_code;
     r.end_tick = end_tick;
     r.executed_ticks = t.executed_ticks;
