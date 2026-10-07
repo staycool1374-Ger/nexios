@@ -15,6 +15,22 @@ static inline bool safe_tcb(const TaskControlBlock *t) noexcept {
     return t->magic == TaskControlBlock::TCB_MAGIC;
 }
 
+// Highest safe chain head at bucket index <= top (issue #255 H8: shared by
+// first/first_ptr/next/next_ptr — the top-down bucket-descend loop was
+// quadruplicated).  Pure scan, no locks, no side effects; WCET bounded by
+// NUM_PRIORITIES (128).
+static TaskControlBlock *
+highest_head_upto(TaskControlBlock *const heads_[], uint64_t top) {
+    uint64_t p = top;
+    for (;;) {
+        if (safe_tcb(heads_[p]))
+            return heads_[p];
+        if (p == 0)
+            return nullptr;
+        --p;
+    }
+}
+
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 /// @brief Validate pointer at a given offset/name (for invasive diagnostics).
 static void diag_check_tails(uint64_t prio, const TaskControlBlock *ptr,
@@ -147,12 +163,11 @@ bucket_of(const TaskControlBlock *t, const TaskControlBlock *const heads_[],
 }
 
 bool AllTasksRegistry::first(TaskControlBlock *&out) const noexcept {
-    for (uint64_t prio = CONFIG_PRIORITY_CEILING;
-         prio != static_cast<uint64_t>(-1); --prio) {
-        if (safe_tcb(heads_[prio])) {
-            out = heads_[prio];
-            return true;
-        }
+    TaskControlBlock *found =
+        highest_head_upto(heads_, CONFIG_PRIORITY_CEILING);
+    if (found) {
+        out = found;
+        return true;
     }
     return false;
 }
@@ -165,15 +180,12 @@ bool AllTasksRegistry::next(TaskControlBlock *&t) const noexcept {
         return true;
     }
     uint64_t b = bucket_of(t, heads_, NUM_PRIORITIES);
-    if (b >= NUM_PRIORITIES)
+    if (b == 0)
         return false;
-    for (uint64_t p = b; p != static_cast<uint64_t>(-1); --p) {
-        if (p == b)
-            continue;
-        if (safe_tcb(heads_[p])) {
-            t = heads_[p];
-            return true;
-        }
+    TaskControlBlock *found = highest_head_upto(heads_, b - 1);
+    if (found) {
+        t = found;
+        return true;
     }
     return false;
 }
@@ -213,12 +225,7 @@ void AllTasksRegistry::clear() noexcept {
 }
 
 TaskControlBlock *AllTasksRegistry::first_ptr() const noexcept {
-    for (uint64_t prio = CONFIG_PRIORITY_CEILING;
-         prio != static_cast<uint64_t>(-1); --prio) {
-        if (safe_tcb(heads_[prio]))
-            return heads_[prio];
-    }
-    return nullptr;
+    return highest_head_upto(heads_, CONFIG_PRIORITY_CEILING);
 }
 
 __attribute__((noinline)) TaskControlBlock *
@@ -231,15 +238,9 @@ AllTasksRegistry::next_ptr(TaskControlBlock *t) const noexcept {
         return t->pri_next_;
 
     uint64_t b = bucket_of(t, heads_, NUM_PRIORITIES);
-    if (b >= NUM_PRIORITIES)
+    if (b == 0)
         return nullptr;
-    for (uint64_t p = b; p != static_cast<uint64_t>(-1); --p) {
-        if (p == b)
-            continue;
-        if (safe_tcb(heads_[p]))
-            return heads_[p];
-    }
-    return nullptr;
+    return highest_head_upto(heads_, b - 1);
 }
 
 void AllTasksRegistry::rebuild() noexcept {

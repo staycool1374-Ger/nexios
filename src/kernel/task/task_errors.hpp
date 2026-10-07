@@ -21,8 +21,6 @@
 /// @file task_errors.hpp
 /// @brief Task module error codes and string lookup.
 
-#pragma once
-
 #include <types.hpp>
 #include <assert.hpp>
 

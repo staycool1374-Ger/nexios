@@ -41,7 +41,11 @@ class PriorityMap {
         }
     }
 
-    /// @brief Returns the highest set priority level, or 0 if none.
+    /// @brief Lowest priority band: the idle band (issue #255 H6: was a
+    ///        bare `return 0`, indistinguishable from a valid level).
+    ///        Callers disambiguate via the queue-empty check.
+    static constexpr uint64_t IDLE_BAND = 0;
+    /// @brief Returns the highest set priority level, or IDLE_BAND if none.
     uint64_t get_highest_priority() const noexcept {
         if (bitmap_hi_) {
             return 64 + hal::bits::find_highest_bit(bitmap_hi_);
@@ -49,7 +53,7 @@ class PriorityMap {
         if (bitmap_lo_) {
             return hal::bits::find_highest_bit(bitmap_lo_);
         }
-        return 0;
+        return IDLE_BAND;
     }
 
     /// @brief Highest set level in [1, prio) — the starvation-breaker

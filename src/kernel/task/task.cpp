@@ -1083,7 +1083,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     // always taken.
     // ------------------------------------------------------------------
 #if defined(CONFIG_ARCH_X86_64)
-    if (!Scheduler::is_test_active()) {
+    if (!Scheduler::in_test_harness()) {
         uint64_t slot_va = alloc_kslot(stack_size);
         if (slot_va) {
             tcb->kstack_slot_va_ = slot_va;

@@ -1,1770 +1,633 @@
-diff --git a/src/kernel/memory/address.hpp b/src/kernel/memory/address.hpp
-index 9ad423fa2..36c7dde8e 100644
---- a/src/kernel/memory/address.hpp
-+++ b/src/kernel/memory/address.hpp
-@@ -22,8 +22,6 @@
- /// @brief Type-safe physical and virtual address wrappers (MISRA C++ 2023
- /// compliant).
- 
--#pragma once
--
- #include <types.hpp>
- 
- namespace kernel {
-diff --git a/src/kernel/memory/checked_ptr.hpp b/src/kernel/memory/checked_ptr.hpp
-index d48f69f8c..a956da777 100644
---- a/src/kernel/memory/checked_ptr.hpp
-+++ b/src/kernel/memory/checked_ptr.hpp
-@@ -18,8 +18,6 @@
-  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-  */
- 
--#pragma once
--
- #include <types.hpp>
- #include <string.hpp>
- #include <concepts.hpp>
-diff --git a/src/kernel/memory/integrity.cpp b/src/kernel/memory/integrity.cpp
-index 379dcb1e2..887f519d1 100644
---- a/src/kernel/memory/integrity.cpp
-+++ b/src/kernel/memory/integrity.cpp
-@@ -49,38 +49,52 @@ extern uint64_t _text_end[];
- extern uint64_t _expected_code_crc[];
+diff --git a/src/kernel/task/all_tasks_registry.cpp b/src/kernel/task/all_tasks_registry.cpp
+index 89be667b9..e1f5a9cdf 100644
+--- a/src/kernel/task/all_tasks_registry.cpp
++++ b/src/kernel/task/all_tasks_registry.cpp
+@@ -15,6 +15,22 @@ static inline bool safe_tcb(const TaskControlBlock *t) noexcept {
+     return t->magic == TaskControlBlock::TCB_MAGIC;
  }
  
-+// Issue #254 H5: named expected section-marker tags (were raw literals at
-+// the comparison sites below).  Values are linker-script ASCII tags;
-+// mechanical substitution only, values byte-identical.
-+static constexpr uint64_t kMagicTextStart = 0x545254535F545854ULL;
-+static constexpr uint64_t kMagicTextEnd = 0x5F444E455F545854ULL;
-+static constexpr uint64_t kMagicRodataStart = 0x545254535F544452ULL;
-+static constexpr uint64_t kMagicRodataEnd = 0x5F444E455F544452ULL;
-+static constexpr uint64_t kMagicDataStart = 0x545254535F415444ULL;
-+static constexpr uint64_t kMagicDataEnd = 0x5F444E455F415444ULL;
-+static constexpr uint64_t kMagicBssStart = 0x545254535F535342ULL;
-+static constexpr uint64_t kMagicBssEnd = 0x5F444E455F535342ULL;
-+static constexpr uint64_t kMagicStackBefore = 0x5F5246425F4B5453ULL;
-+static constexpr uint64_t kMagicStackAfter = 0x5F5446415F4B5453ULL;
-+
- /// @brief Verify section markers — compares each linker-placed magic constant
- ///        against its expected ASCII tag.  Fails via Logger on mismatch.
- /// @return true if all markers match.
- void check_section_markers() {
--    if (_m_text_start != 0x545254535F545854ULL) {
-+    if (_m_text_start != kMagicTextStart) {
-         panic("INTEGRITY: .text start marker corrupted");
-     }
--    if (_m_text_end != 0x5F444E455F545854ULL) {
-+    if (_m_text_end != kMagicTextEnd) {
-         panic("INTEGRITY: .text end marker corrupted");
-     }
--    if (_m_rodata_start != 0x545254535F544452ULL) {
-+    if (_m_rodata_start != kMagicRodataStart) {
-         panic("INTEGRITY: .rodata start marker corrupted");
-     }
--    if (_m_rodata_end != 0x5F444E455F544452ULL) {
-+    if (_m_rodata_end != kMagicRodataEnd) {
-         panic("INTEGRITY: .rodata end marker corrupted");
-     }
--    if (_m_data_start != 0x545254535F415444ULL) {
-+    if (_m_data_start != kMagicDataStart) {
-         panic("INTEGRITY: .data start marker corrupted");
-     }
--    if (_m_data_end != 0x5F444E455F415444ULL) {
-+    if (_m_data_end != kMagicDataEnd) {
-         panic("INTEGRITY: .data end marker corrupted");
-     }
--    if (_m_bss_start != 0x545254535F535342ULL) {
-+    if (_m_bss_start != kMagicBssStart) {
-         panic("INTEGRITY: .bss start marker corrupted");
-     }
--    if (_m_bss_end != 0x5F444E455F535342ULL) {
-+    if (_m_bss_end != kMagicBssEnd) {
-         panic("INTEGRITY: .bss end marker corrupted");
-     }
--    if (_m_stack_before != 0x5F5246425F4B5453ULL) {
-+    if (_m_stack_before != kMagicStackBefore) {
-         panic("INTEGRITY: stack before marker corrupted");
-     }
--    if (_m_stack_after != 0x5F5446415F4B5453ULL) {
-+    if (_m_stack_after != kMagicStackAfter) {
-         panic("INTEGRITY: stack after marker corrupted");
-     }
- }
-diff --git a/src/kernel/memory/integrity.hpp b/src/kernel/memory/integrity.hpp
-index c218cb7ae..2e0c127d8 100644
---- a/src/kernel/memory/integrity.hpp
-+++ b/src/kernel/memory/integrity.hpp
-@@ -18,8 +18,6 @@
-  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-  */
- 
--#pragma once
--
- #include <types.hpp>
- 
- namespace kernel {
-diff --git a/src/kernel/memory/mempool.cpp b/src/kernel/memory/mempool.cpp
-index 4c5d39044..c3ec8bf26 100644
---- a/src/kernel/memory/mempool.cpp
-+++ b/src/kernel/memory/mempool.cpp
-@@ -29,6 +29,11 @@ namespace kernel {
- 
- static sync::SpinLock mempool_lock_{};
- 
-+// Issue #254 H5: pool-index validity predicate (cheap compare first).
-+static bool has_pool(size_t idx) {
-+    return idx < MemPool::POOL_COUNT;
-+}
-+
- MemPool::Pool MemPool::pools_[POOL_COUNT] = {};
- constinit bool MemPool::ready_ = false;
- 
-@@ -93,22 +98,14 @@ void MemPool::init() {
- void *MemPool::alloc(size_t size) {
-     sync::IrqSpinLockGuard lock(mempool_lock_);
-     size_t idx = find_pool(size);
--    if (idx >= POOL_COUNT)
-+    if (!has_pool(idx))
-         return nullptr;
- 
-     auto &pool = pools_[idx];
-     if (pool.free_count == 0)
-         return nullptr;
- 
--    size_t block = pool.first_free;
--    ENSURE(block < pool.block_count);
--    ENSURE(pool.is_block_freed(block) &&
--           "free-list corruption: alloc of already-allocated block");
--    size_t *next =
--        reinterpret_cast<size_t *>(pool.data + block * pool.block_size);
--    pool.first_free = *next;
--    --pool.free_count;
--    pool.clear_block_freed(block);
-+    size_t block = pop_block_locked(idx);
- 
-     kernel::test::ResourceTracker::instance().track_mempool_alloc(idx);
-     return pool.data + block * pool.block_size;
-@@ -122,64 +119,39 @@ void MemPool::free(void *block) {
- 
-     sync::IrqSpinLockGuard lock(mempool_lock_);
- 
--    for (size_t i = 0; i < POOL_COUNT; ++i) {
--        auto &pool = pools_[i];
--        if (!pool.initialized)
--            continue;
--
--        uint8_t *start = pool.data;
--        uint8_t *end = pool.data + pool.block_size * pool.block_count;
--        uint8_t *p = static_cast<uint8_t *>(block);
--
--        if (p >= start && p < end) {
--            size_t offset = static_cast<size_t>(p - start);
--            size_t block_idx = offset / pool.block_size;
--            ENSURE(offset % pool.block_size == 0);
--            ENSURE(block_idx < pool.block_count);
--            // Pinned blocks are reserved (e.g. baseline TCBs referenced by the
--            // test-isolation snapshot).  Never return them to the free list;
--            // keep them allocated so they cannot be recycled onto test tasks.
--            if (pool.is_block_pinned(block_idx)) {
--                Logger::warn("MemPool::free: pinned block %zu in pool %zu",
--                             block_idx, i);
--                // Issue #234: pinned-free refusal enters the ring.
--                kernel::log::dmesg_push_sev(
--                    kernel::log::ErrorSubsystem::MEMPOOL,
--                    kernel::log::kDmesgBase_MPOOL + 3,
--                    kernel::log::LogSeverity::WARN, "pinned block kept",
--                    block_idx);
--                return;
--            }
--            ENSURE(!pool.is_block_freed(block_idx) && "double-free detected");
--#ifdef CONFIG_DEBUG
--            __builtin_memset(p, 0xDD, pool.block_size);
--#endif
--            pool.set_block_freed(block_idx);
--            size_t *next = reinterpret_cast<size_t *>(p);
--            *next = pool.first_free;
--            pool.first_free = block_idx;
--            ++pool.free_count;
--            kernel::test::ResourceTracker::instance().track_mempool_free(i);
--            return;
--        }
-+    size_t i = 0;
-+    size_t offset = 0;
-+    size_t block_idx = 0;
-+    if (!find_owner_pool(block, i, offset, block_idx))
-+        return;
-+    auto &pool = pools_[i];
-+    ENSURE(offset % pool.block_size == 0);
-+    ENSURE(block_idx < pool.block_count);
-+    // Pinned blocks are reserved (e.g. baseline TCBs referenced by the
-+    // test-isolation snapshot).  Never return them to the free list;
-+    // keep them allocated so they cannot be recycled onto test tasks.
-+    if (pool.is_block_pinned(block_idx)) {
-+        Logger::warn("MemPool::free: pinned block %zu in pool %zu",
-+                     block_idx, i);
-+        // Issue #234: pinned-free refusal enters the ring.
-+        kernel::log::dmesg_push_sev(
-+            kernel::log::ErrorSubsystem::MEMPOOL,
-+            kernel::log::kDmesgBase_MPOOL + 3,
-+            kernel::log::LogSeverity::WARN, "pinned block kept",
-+            block_idx);
-+        return;
-     }
-+    push_block_locked(i, static_cast<uint8_t *>(block), block_idx);
- }
- /// @param ptr Pointer to test.
- /// @return true if the pointer is owned by any initialised pool.
- bool MemPool::contains(void *ptr) {
-     if (!ptr)
-         return false;
--    uint8_t *p = static_cast<uint8_t *>(ptr);
--    for (size_t i = 0; i < POOL_COUNT; ++i) {
--        auto &pool = pools_[i];
--        if (!pool.initialized)
--            continue;
--        uint8_t *start = pool.data;
--        uint8_t *end = pool.data + pool.block_size * pool.block_count;
--        if (p >= start && p < end)
--            return true;
--    }
--    return false;
-+    size_t i = 0;
-+    size_t offset = 0;
-+    size_t block_idx = 0;
-+    return find_owner_pool(ptr, i, offset, block_idx);
- }
- 
- /// @brief Find the smallest initialised pool class whose block_size >= size.
-@@ -191,7 +163,58 @@ size_t MemPool::find_pool(size_t size) {
-             return i;
-         }
-     }
--    return static_cast<size_t>(-1);
-+    return kNoPool;
-+}
-+
-+size_t MemPool::pop_block_locked(size_t idx) {
-+    // WCET: O(1) flat pop (single-call depth from alloc/alloc_err).
-+    auto &pool = pools_[idx];
-+    size_t block = pool.first_free;
-+    ENSURE(block < pool.block_count);
-+    ENSURE(pool.is_block_freed(block) &&
-+           "free-list corruption: alloc of already-allocated block");
-+    size_t *next =
-+        reinterpret_cast<size_t *>(pool.data + block * pool.block_size);
-+    pool.first_free = *next;
-+    --pool.free_count;
-+    pool.clear_block_freed(block);
-+    return block;
-+}
-+
-+void MemPool::push_block_locked(size_t idx, uint8_t *block_ptr,
-+                                size_t block_idx) {
-+    // WCET: O(1) flat push (single-call depth from free/free_err).
-+    auto &pool = pools_[idx];
-+    ENSURE(!pool.is_block_freed(block_idx) && "double-free detected");
-+#ifdef CONFIG_DEBUG
-+    __builtin_memset(block_ptr, 0xDD, pool.block_size);
-+#endif
-+    pool.set_block_freed(block_idx);
-+    size_t *next = reinterpret_cast<size_t *>(block_ptr);
-+    *next = pool.first_free;
-+    pool.first_free = block_idx;
-+    ++pool.free_count;
-+    kernel::test::ResourceTracker::instance().track_mempool_free(idx);
-+}
-+
-+bool MemPool::find_owner_pool(void *block, size_t &pool_idx_out,
-+                              size_t &offset_out, size_t &block_idx_out) {
-+    uint8_t *p = static_cast<uint8_t *>(block);
-+    for (size_t i = 0; i < POOL_COUNT; ++i) {
-+        auto &pool = pools_[i];
-+        if (!pool.initialized)
-+            continue;
-+        uint8_t *start = pool.data;
-+        uint8_t *end = pool.data + pool.block_size * pool.block_count;
-+        if (p >= start && p < end) {
-+            size_t offset = static_cast<size_t>(p - start);
-+            offset_out = offset;
-+            block_idx_out = offset / pool.block_size;
-+            pool_idx_out = i;
-+            return true;
-+        }
++// Highest safe chain head at bucket index <= top (issue #255 H8: shared by
++// first/first_ptr/next/next_ptr — the top-down bucket-descend loop was
++// quadruplicated).  Pure scan, no locks, no side effects; WCET bounded by
++// NUM_PRIORITIES (128).
++static TaskControlBlock *
++highest_head_upto(TaskControlBlock *const heads_[], uint64_t top) {
++    uint64_t p = top;
++    for (;;) {
++        if (safe_tcb(heads_[p]))
++            return heads_[p];
++        if (p == 0)
++            return nullptr;
++        --p;
 +    }
-+    return false;
++}
++
+ // NOLINTBEGIN(bugprone-easily-swappable-parameters)
+ /// @brief Validate pointer at a given offset/name (for invasive diagnostics).
+ static void diag_check_tails(uint64_t prio, const TaskControlBlock *ptr,
+@@ -147,12 +163,11 @@ bucket_of(const TaskControlBlock *t, const TaskControlBlock *const heads_[],
  }
  
- // ---------------------------------------------------------------------------
-@@ -305,61 +328,40 @@ size_t MemPool::pool_data_bytes() {
- 
- void MemPool::pin_block(void *block) {
-     sync::IrqSpinLockGuard lock(mempool_lock_);
--    uint8_t *p = static_cast<uint8_t *>(block);
--    for (size_t i = 0; i < POOL_COUNT; ++i) {
--        auto &pool = pools_[i];
--        if (!pool.initialized)
--            continue;
--        uint8_t *start = pool.data;
--        uint8_t *end = pool.data + pool.block_size * pool.block_count;
--        if (p >= start && p < end) {
--            size_t offset = static_cast<size_t>(p - start);
--            size_t block_idx = offset / pool.block_size;
--            if (offset % pool.block_size == 0 && block_idx < pool.block_count) {
--                ENSURE(!pool.is_block_freed(block_idx) &&
--                       "pin_block: cannot pin a free-list block");
--                pool.set_block_pinned(block_idx);
--            }
--            return;
+ bool AllTasksRegistry::first(TaskControlBlock *&out) const noexcept {
+-    for (uint64_t prio = CONFIG_PRIORITY_CEILING;
+-         prio != static_cast<uint64_t>(-1); --prio) {
+-        if (safe_tcb(heads_[prio])) {
+-            out = heads_[prio];
+-            return true;
 -        }
-+    size_t i = 0;
-+    size_t offset = 0;
-+    size_t block_idx = 0;
-+    if (!find_owner_pool(block, i, offset, block_idx))
-+        return;
-+    auto &pool = pools_[i];
-+    if (offset % pool.block_size == 0 && block_idx < pool.block_count) {
-+        ENSURE(!pool.is_block_freed(block_idx) &&
-+               "pin_block: cannot pin a free-list block");
-+        pool.set_block_pinned(block_idx);
++    TaskControlBlock *found =
++        highest_head_upto(heads_, CONFIG_PRIORITY_CEILING);
++    if (found) {
++        out = found;
++        return true;
      }
- }
- 
- void MemPool::unpin_block(void *block) {
-     sync::IrqSpinLockGuard lock(mempool_lock_);
--    uint8_t *p = static_cast<uint8_t *>(block);
--    for (size_t i = 0; i < POOL_COUNT; ++i) {
--        auto &pool = pools_[i];
--        if (!pool.initialized)
--            continue;
--        uint8_t *start = pool.data;
--        uint8_t *end = pool.data + pool.block_size * pool.block_count;
--        if (p >= start && p < end) {
--            size_t offset = static_cast<size_t>(p - start);
--            size_t block_idx = offset / pool.block_size;
--            if (offset % pool.block_size == 0 && block_idx < pool.block_count)
--                pool.clear_block_pinned(block_idx);
--            return;
--        }
--    }
-+    size_t i = 0;
-+    size_t offset = 0;
-+    size_t block_idx = 0;
-+    if (!find_owner_pool(block, i, offset, block_idx))
-+        return;
-+    auto &pool = pools_[i];
-+    if (offset % pool.block_size == 0 && block_idx < pool.block_count)
-+        pool.clear_block_pinned(block_idx);
- }
- 
- bool MemPool::is_block_pinned(void *block) {
--    uint8_t *p = static_cast<uint8_t *>(block);
--    for (size_t i = 0; i < POOL_COUNT; ++i) {
--        auto &pool = pools_[i];
--        if (!pool.initialized)
--            continue;
--        uint8_t *start = pool.data;
--        uint8_t *end = pool.data + pool.block_size * pool.block_count;
--        if (p >= start && p < end) {
--            size_t offset = static_cast<size_t>(p - start);
--            size_t block_idx = offset / pool.block_size;
--            if (offset % pool.block_size == 0 && block_idx < pool.block_count)
--                return pool.is_block_pinned(block_idx);
--            return false;
--        }
--    }
-+    size_t i = 0;
-+    size_t offset = 0;
-+    size_t block_idx = 0;
-+    if (!find_owner_pool(block, i, offset, block_idx))
-+        return false;
-+    auto &pool = pools_[i];
-+    if (offset % pool.block_size == 0 && block_idx < pool.block_count)
-+        return pool.is_block_pinned(block_idx);
      return false;
  }
- 
-@@ -385,7 +387,7 @@ MemPoolError MemPool::alloc_err(size_t size, void *&out_ptr) {
-     sync::IrqSpinLockGuard lock(mempool_lock_);
- 
-     size_t idx = find_pool(size);
--    if (idx >= POOL_COUNT) {
-+    if (!has_pool(idx)) {
-         return MEMPOOL_ERR_TOO_LARGE;
+@@ -165,15 +180,12 @@ bool AllTasksRegistry::next(TaskControlBlock *&t) const noexcept {
+         return true;
      }
- 
-@@ -394,15 +396,7 @@ MemPoolError MemPool::alloc_err(size_t size, void *&out_ptr) {
-         return MEMPOOL_ERR_OOM;
-     }
- 
--    size_t block = pool.first_free;
--    ENSURE(block < pool.block_count);
--    ENSURE(pool.is_block_freed(block) &&
--           "free-list corruption: alloc of already-allocated block");
--    size_t *next =
--        reinterpret_cast<size_t *>(pool.data + block * pool.block_size);
--    pool.first_free = *next;
--    --pool.free_count;
--    pool.clear_block_freed(block);
-+    size_t block = pop_block_locked(idx);
- 
-     kernel::test::ResourceTracker::instance().track_mempool_alloc(idx);
-     out_ptr = pool.data + block * pool.block_size;
-@@ -419,37 +413,20 @@ MemPoolError MemPool::free_err(void *block) {
- 
-     sync::IrqSpinLockGuard lock(mempool_lock_);
- 
--    for (size_t i = 0; i < POOL_COUNT; ++i) {
--        auto &pool = pools_[i];
--        if (!pool.initialized)
+     uint64_t b = bucket_of(t, heads_, NUM_PRIORITIES);
+-    if (b >= NUM_PRIORITIES)
++    if (b == 0)
+         return false;
+-    for (uint64_t p = b; p != static_cast<uint64_t>(-1); --p) {
+-        if (p == b)
 -            continue;
--
--        uint8_t *start = pool.data;
--        uint8_t *end = pool.data + pool.block_size * pool.block_count;
--        uint8_t *p = static_cast<uint8_t *>(block);
--
--        if (p >= start && p < end) {
--            size_t offset = static_cast<size_t>(p - start);
--            size_t block_idx = offset / pool.block_size;
--            ENSURE(offset % pool.block_size == 0);
--            ENSURE(block_idx < pool.block_count);
--            // Pinned blocks stay allocated (see MemPool::free).
--            if (pool.is_block_pinned(block_idx))
--                return MEMPOOL_ERR_OK;
--            ENSURE(!pool.is_block_freed(block_idx) && "double-free detected");
--#ifdef CONFIG_DEBUG
--            __builtin_memset(p, 0xDD, pool.block_size);
--#endif
--            pool.set_block_freed(block_idx);
--            size_t *next = reinterpret_cast<size_t *>(p);
--            *next = pool.first_free;
--            pool.first_free = block_idx;
--            ++pool.free_count;
--            kernel::test::ResourceTracker::instance().track_mempool_free(i);
--            return MEMPOOL_ERR_OK;
+-        if (safe_tcb(heads_[p])) {
+-            t = heads_[p];
+-            return true;
 -        }
-+    size_t i = 0;
-+    size_t offset = 0;
-+    size_t block_idx = 0;
-+    if (!find_owner_pool(block, i, offset, block_idx)) {
-+        return MEMPOOL_ERR_INVALID_PTR;
++    TaskControlBlock *found = highest_head_upto(heads_, b - 1);
++    if (found) {
++        t = found;
++        return true;
      }
--    return MEMPOOL_ERR_INVALID_PTR;
-+    auto &pool = pools_[i];
-+    ENSURE(offset % pool.block_size == 0);
-+    ENSURE(block_idx < pool.block_count);
-+    // Pinned blocks stay allocated (see MemPool::free).
-+    if (pool.is_block_pinned(block_idx))
-+        return MEMPOOL_ERR_OK;
-+    push_block_locked(i, static_cast<uint8_t *>(block), block_idx);
-+    return MEMPOOL_ERR_OK;
+     return false;
+ }
+@@ -213,12 +225,7 @@ void AllTasksRegistry::clear() noexcept {
  }
  
- MemPoolError MemPool::reserve(size_t pool_idx, size_t count) {
-diff --git a/src/kernel/memory/mempool.hpp b/src/kernel/memory/mempool.hpp
-index 291423c80..b8c33e83d 100644
---- a/src/kernel/memory/mempool.hpp
-+++ b/src/kernel/memory/mempool.hpp
-@@ -22,8 +22,6 @@
- /// @brief Fixed-size block memory pool allocator (k malloc).  O(1) alloc/free
- ///        via embedded free-list per pool class (9 classes, 16–4480 bytes).
+ TaskControlBlock *AllTasksRegistry::first_ptr() const noexcept {
+-    for (uint64_t prio = CONFIG_PRIORITY_CEILING;
+-         prio != static_cast<uint64_t>(-1); --prio) {
+-        if (safe_tcb(heads_[prio]))
+-            return heads_[prio];
+-    }
+-    return nullptr;
++    return highest_head_upto(heads_, CONFIG_PRIORITY_CEILING);
+ }
+ 
+ __attribute__((noinline)) TaskControlBlock *
+@@ -231,15 +238,9 @@ AllTasksRegistry::next_ptr(TaskControlBlock *t) const noexcept {
+         return t->pri_next_;
+ 
+     uint64_t b = bucket_of(t, heads_, NUM_PRIORITIES);
+-    if (b >= NUM_PRIORITIES)
++    if (b == 0)
+         return nullptr;
+-    for (uint64_t p = b; p != static_cast<uint64_t>(-1); --p) {
+-        if (p == b)
+-            continue;
+-        if (safe_tcb(heads_[p]))
+-            return heads_[p];
+-    }
+-    return nullptr;
++    return highest_head_upto(heads_, b - 1);
+ }
+ 
+ void AllTasksRegistry::rebuild() noexcept {
+diff --git a/src/kernel/task/dmesg_task.hpp b/src/kernel/task/dmesg_task.hpp
+index eeca674a9..7846bac25 100644
+--- a/src/kernel/task/dmesg_task.hpp
++++ b/src/kernel/task/dmesg_task.hpp
+@@ -7,8 +7,6 @@
+ /// @file dmesg_task.hpp
+ /// @brief Kernel log consumer task that drains the dmesg ring buffer to UART.
  
 -#pragma once
 -
- #include <types.hpp>
- #include <kernel/memory/mempool_errors.hpp>
+ namespace kernel::task {
  
-@@ -232,12 +230,37 @@ class MemPool {
-     static Pool pools_[POOL_COUNT];
-     static constinit bool ready_;
- 
-+    /// @brief No-pool sentinel (issue #254 H5/H6: was a bare
-+    ///        `static_cast<size_t>(-1)` at the find_pool return site).
-+    ///        Value-identical to the old literal.
-+    static constexpr size_t kNoPool = static_cast<size_t>(-1);
-+
-     /// @brief Finds the smallest pool class that satisfies a given size.
-     ///        Linear scan over POOL_COUNT (9) entries — O(1) with small
-     ///        constant.
-     /// @param size Requested allocation size.
--    /// @return Pool index, or POOL_COUNT if too large.
-+    /// @return Pool index, or kNoPool if too large.
-     static size_t find_pool(size_t size);
-+
-+    /// @brief Pop the head block of pool @p idx (issue #254 H8: shared by
-+    ///        alloc/alloc_err — the pop + double-ENSURE sequence was
-+    ///        duplicated).  Caller holds mempool_lock_.  WCET: O(1) flat.
-+    /// @return Popped block index.
-+    static size_t pop_block_locked(size_t idx);
-+    /// @brief Push @p block_idx of pool @p idx back onto its free list
-+    ///        (issue #254 H8: shared by free/free_err — the double-free
-+    ///        ENSURE + poison + push + track sequence was duplicated).
-+    ///        Caller holds mempool_lock_.  WCET: O(1) flat.
-+    static void push_block_locked(size_t idx, uint8_t *block_ptr,
-+                                  size_t block_idx);
-+    /// @brief Locate the pool owning @p block (issue #254 H8: shared by
-+    ///        free/free_err/contains/pin/unpin/is_block_pinned — the
-+    ///        initialized-skip + range walk was duplicated six times).
-+    ///        Lock-agnostic: callers hold mempool_lock_ except the
-+    ///        lock-free contains() probe (unchanged from before).
-+    /// @return true on hit with pool/offset/block indices filled.
-+    static bool find_owner_pool(void *block, size_t &pool_idx_out,
-+                                size_t &offset_out, size_t &block_idx_out);
- };
- 
- } // namespace kernel
-diff --git a/src/kernel/memory/mempool_errors.hpp b/src/kernel/memory/mempool_errors.hpp
-index 596ac64cb..32c5d51c7 100644
---- a/src/kernel/memory/mempool_errors.hpp
-+++ b/src/kernel/memory/mempool_errors.hpp
-@@ -18,8 +18,6 @@
-  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-  */
- 
--#pragma once
--
- #include <types.hpp>
- #include <assert.hpp>
- 
-diff --git a/src/kernel/memory/pmm.cpp b/src/kernel/memory/pmm.cpp
-index a650df79b..3ca57b552 100644
---- a/src/kernel/memory/pmm.cpp
-+++ b/src/kernel/memory/pmm.cpp
-@@ -191,23 +191,30 @@ void PMM::rebuild_free_list() noexcept {
-     }
- }
- 
--/// @brief O(1) free-list KERNEL alloc for single pages, bitmap scan for
-+/// @brief O(1) free-list alloc for single pages, bitmap scan for
- ///        multi-page contiguous requests (list rebuilt afterward).
-+///        Shared kernel/user core (issue #254 H8): ownership is a
-+///        compile-time bit, so both wrappers stay branch-identical to
-+///        the old duplicated bodies.
- /// @param count Number of contiguous pages.
- /// @return Physical address or 0.
--uint64_t PMM::try_alloc_kernel(size_t count) {
-+template <bool kUserOwned>
-+uint64_t PMM::alloc_from_window_locked(size_t count) {
-     if (count == 0) {
+ void dmesg_task_main();
+diff --git a/src/kernel/task/idle_monitor.cpp b/src/kernel/task/idle_monitor.cpp
+index 03df1521b..890cca742 100644
+--- a/src/kernel/task/idle_monitor.cpp
++++ b/src/kernel/task/idle_monitor.cpp
+@@ -141,7 +141,7 @@ uint32_t idle_util_for(uint64_t exec_ns, uint64_t period_ticks) noexcept {
          return 0;
-     }
-     if (count == 1) {
-         // O(1) fast path: pop from free list (pages within the allocatable
-         // window).
--        if (free_head_ >= window_base_page_ &&
--            free_head_ < window_end_page_) {
-+        if (is_free_head_valid(free_head_)) {
-             uint64_t idx = free_head_;
-             free_head_ = reinterpret_cast<uint64_t *>(free_list_)[idx];
-             bitmap_set(idx);
--            owner_set_kernel(idx);
-+            if constexpr (kUserOwned) {
-+                owner_set_user(idx);
-+            } else {
-+                owner_set_kernel(idx);
-+            }
-             --free_pages_;
-             return idx * PAGE_SIZE;
+     const uint64_t period_ns = period_ticks * kNsPerTick;
+     if (period_ns == 0)
+-        return 0;
++        return 0; // Wraparound guard: huge period_ticks can overflow to 0.
+     uint64_t util = kPerMilleMax;
+     if (exec_ns <= UINT64_MAX / kPerMilleMax)
+         util = (exec_ns * kPerMilleMax) / period_ns;
+diff --git a/src/kernel/task/priority_map.hpp b/src/kernel/task/priority_map.hpp
+index e7773e03f..ef1a108d8 100644
+--- a/src/kernel/task/priority_map.hpp
++++ b/src/kernel/task/priority_map.hpp
+@@ -41,7 +41,11 @@ class PriorityMap {
          }
-@@ -217,7 +224,11 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
-              ++idx) {
-             if (!bitmap_test(idx)) {
-                 bitmap_set(idx);
--                owner_set_kernel(idx);
-+                if constexpr (kUserOwned) {
-+                    owner_set_user(idx);
-+                } else {
-+                    owner_set_kernel(idx);
-+                }
-                 --free_pages_;
-                 return idx * PAGE_SIZE;
-             }
-@@ -236,7 +247,11 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
-         if (ok) {
-             for (size_t j = 0; j < count; ++j) {
-                 bitmap_set(idx + j);
--                owner_set_kernel(idx + j);
-+                if constexpr (kUserOwned) {
-+                    owner_set_user(idx + j);
-+                } else {
-+                    owner_set_kernel(idx + j);
-+                }
-                 --free_pages_;
-             }
-             rebuild_free_list();
-@@ -246,55 +261,20 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
-     return 0;
- }
+     }
  
-+/// @brief O(1) free-list KERNEL alloc for single pages, bitmap scan for
-+///        multi-page contiguous requests (list rebuilt afterward).
-+/// @param count Number of contiguous pages.
-+/// @return Physical address or 0.
-+uint64_t PMM::try_alloc_kernel(size_t count) {
-+    return alloc_from_window_locked<false>(count);
-+}
-+
- /// @brief O(1) free-list USER alloc for single pages, bitmap scan for
- ///        multi-page contiguous requests (list rebuilt afterward).
- /// @param count Number of contiguous pages.
- /// @return Physical address or 0.
- uint64_t PMM::try_alloc_user(size_t count) {
--    if (count == 0) {
+-    /// @brief Returns the highest set priority level, or 0 if none.
++    /// @brief Lowest priority band: the idle band (issue #255 H6: was a
++    ///        bare `return 0`, indistinguishable from a valid level).
++    ///        Callers disambiguate via the queue-empty check.
++    static constexpr uint64_t IDLE_BAND = 0;
++    /// @brief Returns the highest set priority level, or IDLE_BAND if none.
+     uint64_t get_highest_priority() const noexcept {
+         if (bitmap_hi_) {
+             return 64 + hal::bits::find_highest_bit(bitmap_hi_);
+@@ -49,7 +53,7 @@ class PriorityMap {
+         if (bitmap_lo_) {
+             return hal::bits::find_highest_bit(bitmap_lo_);
+         }
 -        return 0;
--    }
--    if (count == 1) {
--        if (free_head_ >= window_base_page_ &&
--            free_head_ < window_end_page_) {
--            uint64_t idx = free_head_;
--            free_head_ = reinterpret_cast<uint64_t *>(free_list_)[idx];
--            bitmap_set(idx);
--            owner_set_user(idx);
--            --free_pages_;
--            return idx * PAGE_SIZE;
--        }
--        for (uint64_t idx = window_base_page_; idx < window_end_page_;
--             ++idx) {
--            if (!bitmap_test(idx)) {
--                bitmap_set(idx);
--                owner_set_user(idx);
--                --free_pages_;
--                return idx * PAGE_SIZE;
--            }
--        }
--        return 0;
--    }
--    for (uint64_t idx = window_base_page_;
--         idx + count <= window_end_page_; ++idx) {
--        bool ok = true;
--        for (size_t j = 0; j < count; ++j) {
--            if (bitmap_test(idx + j)) {
--                ok = false;
--                break;
--            }
--        }
--        if (ok) {
--            for (size_t j = 0; j < count; ++j) {
--                bitmap_set(idx + j);
--                owner_set_user(idx + j);
--                --free_pages_;
--            }
--            rebuild_free_list();
--            return idx * PAGE_SIZE;
--        }
--    }
--    return 0;
-+    return alloc_from_window_locked<true>(count);
- }
++        return IDLE_BAND;
+     }
  
- /// @brief First window index at/after @p from with page-index color
-@@ -308,12 +288,14 @@ static uint64_t first_congruent_from(uint64_t from, uint64_t color) {
-     return start;
- }
+     /// @brief Highest set level in [1, prio) — the starvation-breaker
+diff --git a/src/kernel/task/ready_queue_manager.cpp b/src/kernel/task/ready_queue_manager.cpp
+index e6a0125ed..c1b049def 100644
+--- a/src/kernel/task/ready_queue_manager.cpp
++++ b/src/kernel/task/ready_queue_manager.cpp
+@@ -9,6 +9,12 @@ extern "C" void debug_write_hex(uint64_t value);
  
--/// @brief Allocate one page of @p color with KERNEL ownership
--///        (issue #62).  Color-strided bitmap scan from the per-color
--///        cursor (wraps once); bitmap/owner/counter accounting mirrors
--///        try_alloc_kernel, then rebuild_free_list() re-syncs the free
--///        list the scan bypassed.  Caller holds pmm_lock_.
--uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
-+/// @brief Allocate one page of @p color (issue #62).  Shared
-+///        kernel/user core (issue #254 H8): ownership is a compile-time
-+///        bit.  Color-strided bitmap scan from the per-color cursor
-+///        (wraps once); bitmap/owner/counter accounting mirrors
-+///        alloc_from_window_locked, then rebuild_free_list() re-syncs the
-+///        free list the scan bypassed.  Caller holds pmm_lock_.
-+template <bool kUserOwned>
-+uint64_t PMM::alloc_colored_locked(uint64_t color) {
-     constexpr uint64_t k_num = cache::NUM_COLORS;
-     if (color >= k_num)
-         return 0;
-@@ -329,7 +311,11 @@ uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
-         for (uint64_t idx = start; idx < limit; idx += k_num) {
-             if (!bitmap_test(idx)) {
-                 bitmap_set(idx);
--                owner_set_kernel(idx);
-+                if constexpr (kUserOwned) {
-+                    owner_set_user(idx);
-+                } else {
-+                    owner_set_kernel(idx);
-+                }
-                 --free_pages_;
-                 color_cursor_[color] = idx + k_num;
-                 rebuild_free_list();
-@@ -341,34 +327,72 @@ uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
-     return 0;
- }
+ namespace kernel {
  
-+/// @brief Allocate one page of @p color with KERNEL ownership
-+///        (issue #62).  Color-strided bitmap scan from the per-color
-+///        cursor (wraps once); bitmap/owner/counter accounting mirrors
-+///        try_alloc_kernel, then rebuild_free_list() re-syncs the free
-+///        list the scan bypassed.  Caller holds pmm_lock_.
-+uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
-+    return alloc_colored_locked<false>(color);
++// A restored queue endpoint is live when null (empty) or a still-valid TCB
++// (issue #255 H5: the validity conjunction below is now named).
++static bool endpoint_live(TaskControlBlock *e) {
++    return e == nullptr || TaskControlBlock::is_valid(e);
 +}
 +
- /// @brief Allocate one page of @p color with USER ownership
- ///        (issue #62).  Same scan as the KERNEL variant above.
- uint64_t PMM::try_alloc_colored_user(uint64_t color) {
--    constexpr uint64_t k_num = cache::NUM_COLORS;
--    if (color >= k_num)
--        return 0;
--    uint64_t cur = color_cursor_[color];
--    if (cur < window_base_page_ || cur >= window_end_page_)
--        cur = window_base_page_;
--    uint64_t start0 = first_congruent_from(cur, color);
--    for (int pass = 0; pass < 2; ++pass) {
--        uint64_t start =
--            (pass == 0) ? start0
--                        : first_congruent_from(window_base_page_, color);
--        uint64_t limit = (pass == 0) ? window_end_page_ : start0;
--        for (uint64_t idx = start; idx < limit; idx += k_num) {
--            if (!bitmap_test(idx)) {
--                bitmap_set(idx);
--                owner_set_user(idx);
--                --free_pages_;
--                color_cursor_[color] = idx + k_num;
--                rebuild_free_list();
--                return idx * PAGE_SIZE;
--            }
--        }
--        cur = window_base_page_;
-+    return alloc_colored_locked<true>(color);
-+}
-+
-+PMM::OomOutcome PMM::run_oom_handler_locked(sync::IrqSpinLockGuard &lock) {
-+    if (!oom_handler_) {
-+        return {false, false};
+ void ReadyQueueManager::enqueue(TaskControlBlock &tcb,
+                                 uint64_t priority) noexcept {
+     // Guard against double-enqueue: re-enqueueing an already-queued TCB
+@@ -48,22 +54,10 @@ TaskControlBlock *ReadyQueueManager::dequeue_highest() noexcept {
+     if (prio == 0 && queues_[0].empty()) {
+         return nullptr;
      }
--    return 0;
-+    lock.unlock();
-+    bool retry = oom_handler_();
-+    lock.lock();
-+    return {true, retry};
-+}
-+
-+void PMM::attribute_alloc_to_current(TaskControlBlock *cur, size_t count) {
-+    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
-+#if CONFIG_MEMORY_BUDGET
-+        cur->memory_used_pages_ += count;
-+#endif
-+        if (cur->mem_alloc_ops_ < UINT64_MAX)
-+            ++cur->mem_alloc_ops_;
-+    }
-+}
-+
-+bool PMM::is_over_budget(TaskControlBlock *cur, size_t count) {
-+#if CONFIG_MEMORY_BUDGET
-+    // Issue #20: per-task budget 0 == unlimited (no task sets a budget by
-+    // default).  Without the > 0 guard every task (used=0, budget=0) would
-+    // fail every alloc once the global default flipped ON.
-+    if (!cur || cur->magic != TaskControlBlock::TCB_MAGIC ||
-+        cur->memory_budget_pages_ == 0) {
-+        return false;
-+    }
-+    if (count <= 1) {
-+        return cur->memory_used_pages_ >= cur->memory_budget_pages_;
-+    }
-+    return cur->memory_used_pages_ + count > cur->memory_budget_pages_;
-+#else
-+    (void)cur;
-+    (void)count;
-+    return false;
-+#endif
-+}
-+
-+bool PMM::is_free_head_valid(uint64_t head) {
-+    return head >= window_base_page_ && head < window_end_page_;
-+}
-+
-+bool PMM::is_table_pool_configured() {
-+    return is_table_pool_range_configured(page_table_pool_start_,
-+                                          page_table_pool_end_);
-+}
-+
-+bool PMM::is_table_pool_range_configured(uint64_t start, uint64_t end) {
-+    return start != 0 && end != 0;
+-    auto *tcb = queues_[prio].pop_front();
+-    if (queues_[prio].empty()) {
+-        bitmap_.clear(prio);
+-    }
+-    if (tcb) {
+-        tcb->rq_priority_ = 0;
+-        // The task is leaving the ready queue (it is being dispatched), so its
+-        // membership flag must be cleared.  Otherwise it keeps in_ready_queue_
+-        // true while not physically in the queue, and a later enqueue() (which
+-        // refuses already-queued TCBs) silently drops it — leaving a READY
+-        // task that next_task() can never find, wedging the scheduler in the
+-        // idle loop (observed as the `all` suite hanging at the atomic
+-        // context-switch tests).
+-        tcb->in_ready_queue_ = false;
+-    }
+-    return tcb;
++    // Membership-flag discipline: see pop_and_detach (a dispatched task must
++    // not look queued, or a later enqueue() silently drops a READY task the
++    // scheduler can then never find — the `all`-suite wedge).
++    return pop_and_detach(prio);
  }
  
- void PMM::reset_color_cursor() noexcept {
-@@ -392,35 +416,22 @@ uint64_t PMM::alloc_page() {
-     // unattributed by design — see spec §2.3.
-     auto *cur = Scheduler::current_task();
- #if CONFIG_MEMORY_BUDGET
--    // Issue #20: per-task budget 0 == unlimited (no task sets a budget by
--    // default).  Without the > 0 guard every task (used=0, budget=0) would
--    // fail every alloc once the global default flipped ON.
--    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
--        cur->memory_budget_pages_ > 0 &&
--        cur->memory_used_pages_ >= cur->memory_budget_pages_) {
-+    if (is_over_budget(cur, 1)) {
-         return 0;
+ TaskControlBlock *ReadyQueueManager::dequeue_level(uint64_t prio) noexcept {
+@@ -77,15 +71,23 @@ TaskControlBlock *ReadyQueueManager::dequeue_level(uint64_t prio) noexcept {
+         bitmap_.clear(prio);
+         return nullptr;
      }
- #endif
-     uint64_t result = try_alloc_kernel(1);
-     if (result) {
--        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
--#if CONFIG_MEMORY_BUDGET
--            cur->memory_used_pages_ += 1;
--#endif
--            if (cur->mem_alloc_ops_ < UINT64_MAX)
--                ++cur->mem_alloc_ops_;
--        }
-+        attribute_alloc_to_current(cur, 1);
-         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
-         return result;
-     }
-     // OOM handler: release lock, call handler, re-acquire for retry.
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
-+    OomOutcome oom = run_oom_handler_locked(lock);
-+    if (oom.handler_ran) {
-         cur = Scheduler::current_task();
-     }
-+    bool oom_retry = oom.retry;
-     if (oom_retry) {
-         result = try_alloc_kernel(1);
-     }
-@@ -428,13 +439,7 @@ uint64_t PMM::alloc_page() {
-         ASSERT(errors::PmmError::PMM_ERR_OOM);
-     }
-     if (result) {
--        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
--#if CONFIG_MEMORY_BUDGET
--            cur->memory_used_pages_ += 1;
--#endif
--            if (cur->mem_alloc_ops_ < UINT64_MAX)
--                ++cur->mem_alloc_ops_;
--        }
-+        attribute_alloc_to_current(cur, 1);
-         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
-     }
-     return result;
-@@ -461,33 +466,22 @@ uint64_t PMM::alloc_contiguous(size_t count) {
-     sync::IrqSpinLockGuard lock(pmm_lock_);
-     auto *cur = Scheduler::current_task(); // issue #284: always-on read
- #if CONFIG_MEMORY_BUDGET
--    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
--    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
--        cur->memory_budget_pages_ > 0 &&
--        cur->memory_used_pages_ + count > cur->memory_budget_pages_) {
-+    if (is_over_budget(cur, count)) {
-         return 0;
-     }
- #endif
-     uint64_t result = try_alloc_kernel(count);
-     if (result) {
--        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
--#if CONFIG_MEMORY_BUDGET
--            cur->memory_used_pages_ += count;
--#endif
--            if (cur->mem_alloc_ops_ < UINT64_MAX)
--                ++cur->mem_alloc_ops_;
--        }
-+        attribute_alloc_to_current(cur, count);
-         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
-         return result;
-     }
-     // OOM handler: release lock, call handler, re-acquire for retry.
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
-+    OomOutcome oom = run_oom_handler_locked(lock);
-+    if (oom.handler_ran) {
-         cur = Scheduler::current_task();
-     }
-+    bool oom_retry = oom.retry;
-     if (oom_retry) {
-         result = try_alloc_kernel(count);
-     }
-@@ -495,13 +489,7 @@ uint64_t PMM::alloc_contiguous(size_t count) {
-         ASSERT(errors::PmmError::PMM_ERR_OOM);
-     }
-     if (result) {
--        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
--#if CONFIG_MEMORY_BUDGET
--            cur->memory_used_pages_ += count;
--#endif
--            if (cur->mem_alloc_ops_ < UINT64_MAX)
--                ++cur->mem_alloc_ops_;
--        }
-+        attribute_alloc_to_current(cur, count);
-         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
-     }
-     return result;
-@@ -516,12 +504,7 @@ uint64_t PMM::alloc_user_page() {
-         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
-         return result;
-     }
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
--    }
-+    bool oom_retry = run_oom_handler_locked(lock).retry;
-     if (oom_retry) {
-         result = try_alloc_user(1);
-     }
-@@ -548,32 +531,22 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
-     sync::IrqSpinLockGuard lock(pmm_lock_);
-     auto *cur = Scheduler::current_task(); // issue #284: always-on read
- #if CONFIG_MEMORY_BUDGET
--    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
--    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
--        cur->memory_budget_pages_ > 0 &&
--        cur->memory_used_pages_ >= cur->memory_budget_pages_) {
-+    if (is_over_budget(cur, 1)) {
-         return 0;
-     }
- #endif
-     uint64_t result = try_alloc_colored_kernel(color);
-     if (result) {
--        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
--#if CONFIG_MEMORY_BUDGET
--            cur->memory_used_pages_ += 1;
--#endif
--            if (cur->mem_alloc_ops_ < UINT64_MAX)
--                ++cur->mem_alloc_ops_;
--        }
-+        attribute_alloc_to_current(cur, 1);
-         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
-         return result;
-     }
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
-+    // OOM handler: release lock, call handler, re-acquire for retry.
-+    OomOutcome oom = run_oom_handler_locked(lock);
-+    if (oom.handler_ran) {
-         cur = Scheduler::current_task();
-     }
-+    bool oom_retry = oom.retry;
-     if (oom_retry) {
-         result = try_alloc_colored_kernel(color);
-     }
-@@ -581,13 +554,7 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
-         ASSERT(errors::PmmError::PMM_ERR_OOM);
-     }
-     if (result) {
--        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
--#if CONFIG_MEMORY_BUDGET
--            cur->memory_used_pages_ += 1;
--#endif
--            if (cur->mem_alloc_ops_ < UINT64_MAX)
--                ++cur->mem_alloc_ops_;
--        }
-+        attribute_alloc_to_current(cur, 1);
-         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
-     }
-     return result;
-@@ -603,12 +570,7 @@ errors::PmmError PMM::alloc_page_colored_err(uint64_t color,
-         out_phys_addr = result;
-         return errors::PMM_ERR_OK;
-     }
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
--    }
-+    bool oom_retry = run_oom_handler_locked(lock).retry;
-     if (oom_retry) {
-         result = try_alloc_colored_kernel(color);
-     }
-@@ -630,12 +592,7 @@ uint64_t PMM::alloc_user_page_colored(uint64_t color) {
-         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
-         return result;
-     }
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
--    }
-+    bool oom_retry = run_oom_handler_locked(lock).retry;
-     if (oom_retry) {
-         result = try_alloc_colored_user(color);
-     }
-@@ -657,12 +614,7 @@ errors::PmmError PMM::alloc_user_page_colored_err(uint64_t color,
-         out_phys_addr = result;
-         return errors::PMM_ERR_OK;
-     }
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
--    }
-+    bool oom_retry = run_oom_handler_locked(lock).retry;
-     if (oom_retry) {
-         result = try_alloc_colored_user(color);
-     }
-@@ -686,12 +638,7 @@ uint64_t PMM::alloc_user_contiguous(size_t count) {
-         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
-         return result;
-     }
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
--    }
-+    bool oom_retry = run_oom_handler_locked(lock).retry;
-     if (oom_retry) {
-         result = try_alloc_user(count);
-     }
-@@ -707,7 +654,7 @@ uint64_t PMM::alloc_user_contiguous(size_t count) {
- ///        Falls back to alloc_page() when the pool is exhausted.
- /// @return Physical address, or 0 (asserts on OOM).
- uint64_t PMM::alloc_page_table() {
--    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0) {
-+    if (!is_table_pool_configured()) {
-         return alloc_page();
-     }
-     {
-@@ -757,7 +704,7 @@ void PMM::free_page(uint64_t phys_addr) {
-         // free_page calls before pool is set up).
-         uint64_t pool_start = page_table_pool_start_;
-         uint64_t pool_end = page_table_pool_end_;
--        if (pool_start != 0 && pool_end != 0) {
-+        if (is_table_pool_range_configured(pool_start, pool_end)) {
-             uint64_t ps = pool_start / PAGE_SIZE;
-             uint64_t pe = pool_end / PAGE_SIZE;
-             if (index >= ps && index < pe) {
-@@ -969,12 +916,7 @@ errors::PmmError PMM::alloc_page_err(uint64_t &out_phys_addr) {
-         out_phys_addr = result;
-         return errors::PMM_ERR_OK;
-     }
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
--    }
-+    bool oom_retry = run_oom_handler_locked(lock).retry;
-     if (oom_retry) {
-         result = try_alloc_kernel(1);
-     }
-@@ -1002,12 +944,7 @@ errors::PmmError PMM::alloc_contiguous_err(size_t count,
-         out_phys_addr = result;
-         return errors::PMM_ERR_OK;
-     }
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
--    }
-+    bool oom_retry = run_oom_handler_locked(lock).retry;
-     if (oom_retry) {
-         result = try_alloc_kernel(count);
-     }
-@@ -1030,12 +967,7 @@ errors::PmmError PMM::alloc_user_page_err(uint64_t &out_phys_addr) {
-         out_phys_addr = result;
-         return errors::PMM_ERR_OK;
-     }
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
--    }
-+    bool oom_retry = run_oom_handler_locked(lock).retry;
-     if (oom_retry) {
-         result = try_alloc_user(1);
-     }
-@@ -1063,12 +995,7 @@ errors::PmmError PMM::alloc_user_contiguous_err(size_t count,
-         out_phys_addr = result;
-         return errors::PMM_ERR_OK;
-     }
--    bool oom_retry = false;
--    if (oom_handler_) {
--        lock.unlock();
--        oom_retry = oom_handler_();
--        lock.lock();
--    }
-+    bool oom_retry = run_oom_handler_locked(lock).retry;
-     if (oom_retry) {
-         result = try_alloc_user(count);
-     }
-@@ -1085,7 +1012,7 @@ errors::PmmError PMM::alloc_user_contiguous_err(size_t count,
- /// @param[out] out_phys_addr Physical address on success.
- /// @return PmmError code.
- errors::PmmError PMM::alloc_page_table_err(uint64_t &out_phys_addr) {
--    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0) {
-+    if (!is_table_pool_configured()) {
-         return alloc_page_err(out_phys_addr);
-     }
-     uint64_t pool_start_page = page_table_pool_start_ / PAGE_SIZE;
-@@ -1198,7 +1125,7 @@ void PMM::post_snapshot_overlay_clear() noexcept {
- 
- void PMM::post_snapshot_overlay_apply() noexcept {
-     sync::IrqSpinLockGuard lock(pmm_lock_);
--    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
-+    if (!is_table_pool_configured())
-         return;
-     auto *bits = reinterpret_cast<uint8_t *>(bitmap_);
-     uint64_t start_bit = page_table_pool_start_ / PAGE_SIZE;
-@@ -1220,7 +1147,7 @@ void PMM::post_snapshot_overlay_apply() noexcept {
- }
- 
- uint64_t PMM::pool_used_pages() noexcept {
--    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
-+    if (!is_table_pool_configured())
-         return 0;
-     uint64_t start = page_table_pool_start_ / PAGE_SIZE;
-     uint64_t end   = page_table_pool_end_   / PAGE_SIZE;
-@@ -1233,7 +1160,7 @@ uint64_t PMM::pool_used_pages() noexcept {
- }
- 
- uint64_t PMM::pool_total_pages() noexcept {
--    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
-+    if (!is_table_pool_configured())
-         return 0;
-     return (page_table_pool_end_ - page_table_pool_start_) / PAGE_SIZE;
- }
-diff --git a/src/kernel/memory/pmm.hpp b/src/kernel/memory/pmm.hpp
-index a475bdff0..9cbc80fd5 100644
---- a/src/kernel/memory/pmm.hpp
-+++ b/src/kernel/memory/pmm.hpp
-@@ -22,12 +22,12 @@
- /// @brief Physical Memory Manager — bitmap-based page allocator with owner
- /// tracking.
- 
--#pragma once
--
- #include <types.hpp>
- #include <constants.hpp>
- #include <kernel/memory/pmm_errors.hpp>
- #include <kernel/memory/cache_color.hpp>
-+#include <kernel/task/task_fwd.hpp>
-+#include <kernel/sync/irq_spinlock_guard.hpp>
- 
- namespace kernel::test {
- struct PtPoolSnapshot;
-@@ -403,6 +403,53 @@ class PMM {
-     /// @param color Color in [0, cache::NUM_COLORS).
-     /// @return Physical address of first page, or 0 on failure.
-     static uint64_t try_alloc_colored_user(uint64_t color);
++    // Same membership-flag discipline as dequeue_highest (see pop_and_detach).
++    return pop_and_detach(prio);
++}
 +
-+    /// @brief Shared single/contiguous window allocator (issue #254 H8:
-+    ///        try_alloc_kernel/try_alloc_user differed only in the owner
-+    ///        bit).  Caller holds pmm_lock_.  WCET: intentional flat scan,
-+    ///        branch-free ownership via template (zero-cost if constexpr).
-+    /// @param count Number of contiguous pages.
-+    /// @return Physical address of first page, or 0 on failure.
-+    template <bool kUserOwned>
-+    static uint64_t alloc_from_window_locked(size_t count);
-+    /// @brief Shared single-page colored allocator (issue #254 H8: the
-+    ///        KERNEL/USER variants differed only in the owner bit).
-+    ///        Caller holds pmm_lock_.  Creation/test-time path (not
-+    ///        RT-budgeted).
-+    /// @param color Color in [0, cache::NUM_COLORS).
-+    /// @return Physical address of first page, or 0 on failure.
-+    template <bool kUserOwned>
-+    static uint64_t alloc_colored_locked(uint64_t color);
-+    /// @brief OOM-handler outcome (issue #254 H8: the 12× unlock/call/
-+    ///        relock epilogues shared one shape).  handler_ran records
-+    ///        that a handler was installed — callers re-read the current
-+    ///        task exactly then; retry is the handler verdict.
-+    struct OomOutcome {
-+        bool handler_ran;
-+        bool retry;
-+    };
-+    /// @brief Run the installed OOM handler with @p lock released and
-+    ///        re-acquire for retry (issue #254 H8).  Preserves the exact
-+    ///        unlock → handler → relock order; never blocks (handler runs
-+    ///        unlocked, same as before).
-+    static OomOutcome run_oom_handler_locked(sync::IrqSpinLockGuard &lock);
-+    /// @brief Attribute an allocation to the current task (issue #254 H8:
-+    ///        the magic-check + budget/accounting stanza was duplicated 6×).
-+    ///        No-op for null/foreign TCBs.
-+    static void attribute_alloc_to_current(TaskControlBlock *cur,
-+                                           size_t count);
-+    /// @brief Per-task budget check (issue #254 H5: the over-budget
-+    ///        conjunction was triplicated).  Cheap-pointer-first order
-+    ///        preserved; count<=1 keeps the legacy >= comparison exactly.
-+    static bool is_over_budget(TaskControlBlock *cur, size_t count);
-+    /// @brief Free-list head validity (issue #254 H5: the window-range
-+    ///        conjunction was triplicated across both free lists).
-+    static bool is_free_head_valid(uint64_t head);
-+    /// @brief Page-table pool configured (static range; issue #254 H5).
-+    static bool is_table_pool_configured();
-+    /// @brief Page-table pool range configured (issue #254 H5: De Morgan
-+    ///        dual of the early-out form above, for local copies).
-+    static bool is_table_pool_range_configured(uint64_t start, uint64_t end);
++TaskControlBlock *ReadyQueueManager::pop_and_detach(uint64_t prio) noexcept {
+     auto *tcb = queues_[prio].pop_front();
+     if (queues_[prio].empty()) {
+         bitmap_.clear(prio);
+     }
+     if (tcb) {
+         tcb->rq_priority_ = 0;
+-        // Same membership-flag discipline as dequeue_highest(): a dispatched
+-        // task must not look queued, or a later enqueue() silently drops a
+-        // READY task the scheduler can then never find.
++        // The task is leaving the ready queue (it is being dispatched), so its
++        // membership flag must be cleared.  Otherwise it keeps in_ready_queue_
++        // true while not physically in the queue, and a later enqueue() (which
++        // refuses already-queued TCBs) silently drops it — leaving a READY
++        // task that next_task() can never find, wedging the scheduler in the
++        // idle loop.
+         tcb->in_ready_queue_ = false;
+     }
+     return tcb;
+@@ -155,8 +157,7 @@ void ReadyQueueManager::restore_pod(const ReadyQueuePOD &src) noexcept {
+         // and tail are still live, valid TCBs; otherwise drop the queue to
+         // empty and let rebuild_ready_queue() reconstruct it from
+         // all_tasks_ (which is itself safe_tcb-guarded).
+-        if ((h == nullptr || TaskControlBlock::is_valid(h)) &&
+-            (t == nullptr || TaskControlBlock::is_valid(t))) {
++        if (endpoint_live(h) && endpoint_live(t)) {
+             // NOLINTNEXTLINE(performance-no-int-to-ptr)
+             queues_[i].set_raw(h, t, src.queue_counts[i]);
+             // Keep in_ready_queue_ consistent with the restored queues so the
+diff --git a/src/kernel/task/ready_queue_manager.hpp b/src/kernel/task/ready_queue_manager.hpp
+index 0a1a2b4a4..1145e2796 100644
+--- a/src/kernel/task/ready_queue_manager.hpp
++++ b/src/kernel/task/ready_queue_manager.hpp
+@@ -80,6 +80,13 @@ class ReadyQueueManager {
+     void clear_all() noexcept;
+     /// @brief Resets all queues and bitmap to empty state.
+     void reset() noexcept;
++
++  private:
++    /// @brief Pop the head of level @p prio and detach its membership flags
++    ///        (issue #255 H8: the pop + empty-clear + flag-detach tail was
++    ///        duplicated in dequeue_highest/dequeue_level).  Null-safe on
++    ///        empty levels (stale bit cleared).  WCET: O(1) flat.
++    TaskControlBlock *pop_and_detach(uint64_t prio) noexcept;
  };
  
  } // namespace kernel
-diff --git a/src/kernel/memory/pmm_errors.hpp b/src/kernel/memory/pmm_errors.hpp
-index d90c8dae2..e6fdb073f 100644
---- a/src/kernel/memory/pmm_errors.hpp
-+++ b/src/kernel/memory/pmm_errors.hpp
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index d77a408d9..e4bbc185e 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -83,7 +83,7 @@ static inline uint64_t current_sp() noexcept {
+     asm volatile("mv %0, sp" : "=r"(sp));
+     return sp;
+ #else
+-    return 0;
++    return 0; // Unknown arch: no SP readable (counted as null, not an error).
+ #endif
+ }
+ 
+@@ -198,6 +198,8 @@ bool Scheduler::canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t
+     uint8_t bad_seg = 0;
+     uint64_t bad_va = 0;
+     if (!canary_verify_user_segments(task, bad_seg, bad_va)) {
++        // Canary negative-test path (issue #255 H3): under test the trip is
++        // recorded, not fatal, so the canary suite can assert the latch.
+         if (kernel::Scheduler::is_test_active()) {
+             kernel::gs::set_canary_trip(task->id, bad_seg, rip);
+             return false;
+@@ -716,6 +718,50 @@ static uint64_t sched_up_cpus() noexcept {
+ #endif
+ }
+ 
++// Allowed-CPU mask for `up` online CPUs (issue #255 H5: named helper for
++// the nested ternary at the set_affinity_err site; cheap-compare-first
++// order preserved; the up>=64 arm avoids the UB shift 1ULL<<64).
++static uint64_t affinity_allowed_mask(uint64_t up) noexcept {
++    if (up >= 64) {
++        return ~0ULL;
++    }
++    if (up == 0) {
++        return 0ULL;
++    }
++    return (1ULL << up) - 1;
++}
++
++// Sporadic-server budget-exhausted predicate (issue #255 H5: named for the
++// deadline-miss conjunction in deadline_miss_handler).  Pure: no locks,
++// no side effects.
++static bool budget_exhausted_on_miss(const TaskControlBlock &task) noexcept {
++    return task.get_sporadic_server() != nullptr &&
++           static_cast<task::SporadicServer::State>(
++               task.ss_state_on_deadline_miss) ==
++               task::SporadicServer::State::EXHAUSTED;
++}
++
++// Watchdog due predicate (issue #255 H5: shared by scan_watchdogs_locked
++// and fire_stall_watchdog — the due conjunction was duplicated).  Pure:
++// no locks, no side effects; cheap-flag-first order preserved.
++static bool watchdog_due(const TaskControlBlock &task,
++                         uint64_t now) noexcept {
++    return task.wdog_armed && task.wdog_gen != 0 &&
++           now >= task.wdog_expiry_tick;
++}
++
++// Pinned-expiry ring record (issue #255 H7: shared by the tick scan and the
++// idle-seam fire path — the TIMING+6 ERROR push was duplicated).  Ring-only
++// (no shell/serial), severity-gated; production pins nothing.
++static void
++note_pinned_watchdog_expiry(const TaskControlBlock &task,
++                            uint64_t overdue_by_ticks) noexcept {
++    log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
++                        log::kDmesgBase_TIMING + 6,
++                        log::LogSeverity::ERROR, task.name,
++                        overdue_by_ticks);
++}
++
+ errors::SchedulerError
+ Scheduler::set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept {
+     // Quiesce window fences the lock-free AP current-apply path (spec
+@@ -725,7 +771,7 @@ Scheduler::set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept {
+     quiesce_enter();
+     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+     uint64_t up = sched_up_cpus();
+-    uint64_t allowed = (up >= 64) ? ~0ULL : ((up == 0) ? 0ULL : ((1ULL << up) - 1));
++    uint64_t allowed = affinity_allowed_mask(up);
+     if ((mask & allowed) == 0) {
+         Logger::warn(
+             "sched: set_affinity id=%u mask=0x%lx clamps to CPU0", task.id,
+@@ -1149,7 +1195,7 @@ void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
+ uint64_t Scheduler::snapshot_zombies(TaskControlBlock **out,
+                                      uint64_t max_out) noexcept {
+     if (!out || max_out == 0)
+-        return 0;
++        return 0; // Nothing to fill: empty count, not an error.
+     // drain_zombie_list precedent: IrqGuard + leaf only (callers hold no
+     // lock).  Read-only copy — no list surgery, no free.
+     arch::IrqGuard irq_guard{};
+@@ -2393,7 +2439,7 @@ uint64_t Scheduler::current_index() noexcept {
+             return i;
+         ++i;
+     }
+-    return 0;
++    return 0; // Current not listed: index 0 (idle slot), not an error.
+ }
+ 
+ void Scheduler::set_current_index(uint64_t idx) noexcept {
+@@ -3096,13 +3142,9 @@ void Scheduler::on_tick() noexcept {
+         }
+ #endif
+ #if CONFIG_DEADLINE_MONITOR_TASK
+-        // FIX(pret): s_test_active_ disables the deadline-monitor wake and
+-        // periodic reap_orphans() during test execution.  Without this guard,
+-        // the reaper (tick 100 reap_orphans below) frees terminated test tasks
+-        // before the test's ScopeGuard or snapshot_restore can clean them up,
+-        // causing double-free use-after-free.  Test termination is handled
+-        // entirely by the harness — the reaper must not race with it.
+-        if (!is_test_active()) {
++        // Harness owns lifecycle (see harness_owns_lifecycle): the reaper
++        // must not race test ScopeGuards (double-free UAF otherwise).
++        if (!harness_owns_lifecycle()) {
+             __atomic_store_n(&s_scan_requested_, 1, __ATOMIC_RELEASE);
+             // on_tick already holds scheduler_lock_ (acquired at line 548 and
+             // released at line 839).  The monitor's block transition also takes
+@@ -3569,17 +3611,11 @@ void Scheduler::on_tick() noexcept {
+ 
+     static uint64_t tick_counter = 0;
+     ++tick_counter;
+-// FIX(pret): reap_orphans runs every 100 ticks but is gated on
+-    // !s_test_active_ to prevent a UAF race with test ScopeGuards.  The test
+-    // harness owns its task lifecycle — it calls remove_task+cleanup+delete in
+-    // the ScopeGuard.  If the reaper frees the task first, the ScopeGuard's
+-    // delete double-frees the MemPool block.  Test tasks are short-lived and
+-    // few, so deferring reaping to the post-test snapshot_restore is safe and
+-    // avoids the race entirely.  The 100-tick batching ensures ammortised O(1)
+-    // cost in production while not being so infrequent that zombie count grows
+-    // unbounded (CONFIG_MAX_TASKS=64 caps the worst case).
++    // Harness owns lifecycle (see harness_owns_lifecycle): the reaper must
++    // not race test ScopeGuards (double-free UAF otherwise).  Deferring to
++    // snapshot_restore is safe: test tasks are short-lived and few.
+         if (tick_counter % 100 == 0) {
+-            if (!is_test_active())
++            if (!harness_owns_lifecycle())
+                 reap_orphans();
+             // ZombieList watchdog: force-flush ONLY when the zombie list has
+             // outgrown the starvation limit (idle hasn't kept up).  Gating on
+@@ -3597,12 +3633,11 @@ void Scheduler::on_tick() noexcept {
+         }
+     }  // end: gated tail sections (lock_acquired && IrqGuard)
+ 
+-    // Issue #61: RT load-balancer cadence (BSP tick only; production
+-    // only — tests drive balancer_tick() directly under IrqGuard so
+-    // placement asserts stay deterministic).
++    // Harness owns lifecycle (see harness_owns_lifecycle): tests drive
++    // balancer_tick() directly so placement asserts stay deterministic.
+     static uint64_t balancer_cadence = 0;
+     ++balancer_cadence;
+-    if (!is_test_active() &&
++    if (!harness_owns_lifecycle() &&
+         (balancer_cadence % BALANCER_TICK_PERIOD) == 0) {
+         balancer_tick();
+     }
+@@ -3618,6 +3653,19 @@ void Scheduler::on_tick() noexcept {
+ // reap_orphans
+ // ---------------------------------------------------------------------------
+ 
++void Scheduler::note_termination_and_free(TaskControlBlock *t) noexcept {
++    if (!suppress_terminated_log_) {
++        Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
++                     t->id);
++        fb_terminated_line(t->name, t->id); // issue #269
++    }
++    t->cleanup();
++    // Baseline-owned (pinned) blocks are never freed (see can_reap gate
++    // above and the zombie-drain paths).
++    if (!MemPool::is_block_pinned(t))
++        MemPool::free(t);
++}
++
+ void Scheduler::reap_orphans() noexcept {
+     auto *current = current_task();
+     auto *init_task = idle_task_;
+@@ -3722,16 +3770,7 @@ void Scheduler::reap_orphans() noexcept {
+                 TaskControlBlock::NO_PERIOD);
+             if (created) {
+                 created->state = TaskState::READY;
+-                if (!suppress_terminated_log_) {
+-                    Logger::info("Scheduler: task '%s' (ID=%u) terminated",
+-                                 t->name, t->id);
+-                    fb_terminated_line(t->name, t->id); // issue #269
+-                }
+-                t->cleanup();
+-                // Baseline-owned (pinned) blocks are never freed (see
+-                // can_reap gate above and the zombie-drain paths).
+-                if (!MemPool::is_block_pinned(t))
+-                    MemPool::free(t);
++                note_termination_and_free(t);
+                 new_idle = created;
+             } else {
+                 if (!suppress_terminated_log_)
+@@ -3746,15 +3785,7 @@ void Scheduler::reap_orphans() noexcept {
+                        "id_table full in reap (idle restore)");
+             }
+         } else {
+-            if (!suppress_terminated_log_) {
+-                Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
+-                             t->id);
+-                fb_terminated_line(t->name, t->id); // issue #269
+-            }
+-            t->cleanup();
+-            // Baseline-owned (pinned) blocks are never freed (see above).
+-            if (!MemPool::is_block_pinned(t))
+-                MemPool::free(t);
++            note_termination_and_free(t);
+         }
+     }
+ 
+@@ -5470,10 +5501,7 @@ void Scheduler::ensure_monitor() noexcept {
+ __attribute__((weak)) void
+ deadline_miss_handler(TaskControlBlock &task,
+                       uint64_t missed_by_ticks) noexcept {
+-    bool budget_exhausted = (task.get_sporadic_server() != nullptr &&
+-                             static_cast<task::SporadicServer::State>(
+-                                 task.ss_state_on_deadline_miss) ==
+-                                 task::SporadicServer::State::EXHAUSTED);
++    bool budget_exhausted = budget_exhausted_on_miss(task);
+ 
+     // Issue #234: every deadline/budget event enters the dmesg ring (the
+     // Logger lines above stay for the serial console). Severity ERROR: a
+@@ -5564,13 +5592,11 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
+     for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
+         if (t->magic != TaskControlBlock::TCB_MAGIC)
+             continue;
+-        if (!t->wdog_armed || t->wdog_gen == 0)
+-            continue;
+         // NOTE (audit #41 iter-1, S1): no generation cross-check here.
+         // t->generation is the global creation sequence, wdog_gen a per-TCB
+         // arm counter — comparing them fail-open skips live watchdogs.
+         // Staleness is covered by disarm-on-teardown + TaskFields rewind.
+-        if (now < t->wdog_expiry_tick)
++        if (!watchdog_due(*t, now))
+             continue;
+         // One-shot: disarm before dispatch so a slow handler cannot
+         // re-fire on the same arm; re-CREATE re-arms with a fresh gen.
+@@ -5583,10 +5609,7 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
+             // Record the expiry in the ring, skip the action. In
+             // production nothing is pinned, so this changes nothing
+             // outside tests.
+-            log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+-                                log::kDmesgBase_TIMING + 6,
+-                                log::LogSeverity::ERROR, t->name,
+-                                now - t->wdog_expiry_tick);
++            note_pinned_watchdog_expiry(*t, now - t->wdog_expiry_tick);
+             continue;
+         }
+         watchdog_expiry_handler(*t, now - t->wdog_expiry_tick);
+@@ -5601,15 +5624,11 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
+ void Scheduler::fire_stall_watchdog(TaskControlBlock &task,
+                                      uint64_t now) noexcept {
+     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+-    if (!task.wdog_armed || task.wdog_gen == 0 ||
+-        now < task.wdog_expiry_tick)
++    if (!watchdog_due(task, now))
+         return;
+     task.wdog_armed = false;
+     if (kernel::MemPool::is_block_pinned(&task)) {
+-        log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+-                            log::kDmesgBase_TIMING + 6,
+-                            log::LogSeverity::ERROR, task.name,
+-                            now - task.wdog_expiry_tick);
++        note_pinned_watchdog_expiry(task, now - task.wdog_expiry_tick);
+         return;
+     }
+     watchdog_expiry_handler(task, now - task.wdog_expiry_tick);
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index ba9ac0768..0bad83791 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -479,6 +479,21 @@ class Scheduler {
+     static bool is_test_active() noexcept {
+         return test_context_ ? test_context_->test_active : false;
+     }
++    /// @brief True while the test harness owns task lifecycle (issue #255 H2:
++    ///        named wrapper for the is_test_active() gates that stand down
++    ///        production daemons — monitor wake, orphan reap, balancer — so
++    ///        the reaper cannot race test ScopeGuards.  Bit-identical gate;
++    ///        full removal is out of scope (functional).
++    static bool harness_owns_lifecycle() noexcept {
++        return is_test_active();
++    }
++    /// @brief True while running inside the test harness (issue #255 H2:
++    ///        named wrapper for the is_test_active() stack-path gate in
++    ///        task creation — the HHDM fallback is test-only by design.
++    ///        Bit-identical gate.
++    static bool in_test_harness() noexcept {
++        return is_test_active();
++    }
+ #endif
+     /// @brief Clears assembly-level context-switch globals
+     ///        (scheduler_save_rsp_to, scheduler_load_rsp_from, etc.).
+@@ -1073,6 +1088,12 @@ struct SwSlots {
+ #endif
+     static constinit bool suppress_terminated_log_;
+ 
++    /// @brief Shared reap termination tail (issue #255 H8): terminated-line
++    ///        report + cleanup + pinned-aware free.  Caller holds
++    ///        scheduler_lock_ on the reap path (never the current task —
++    ///        the idle-recreate arm guarantees a live idle).
++    static void note_termination_and_free(TaskControlBlock *t) noexcept;
++
+     /// @brief Injected test-runner context (PfA-A).  nullptr in production so
+     ///        all test flags resolve to their compile-time-false defaults.
+     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+diff --git a/src/kernel/task/scheduler_errors.hpp b/src/kernel/task/scheduler_errors.hpp
+index c75392f73..f8239d062 100644
+--- a/src/kernel/task/scheduler_errors.hpp
++++ b/src/kernel/task/scheduler_errors.hpp
 @@ -21,8 +21,6 @@
- /// @file pmm_errors.hpp
- /// @brief Physical Memory Manager error codes and string lookup.
+ /// @file scheduler_errors.hpp
+ /// @brief Scheduler error codes and string lookup.
  
 -#pragma once
 -
  #include <types.hpp>
  #include <assert.hpp>
  
-diff --git a/src/kernel/memory/tlb_shootdown.cpp b/src/kernel/memory/tlb_shootdown.cpp
-index babe027f4..f78edc08b 100644
---- a/src/kernel/memory/tlb_shootdown.cpp
-+++ b/src/kernel/memory/tlb_shootdown.cpp
-@@ -56,6 +56,7 @@ TlbShootdown::Error TlbShootdown::request(uint64_t va, uint16_t pcid) noexcept {
- void TlbShootdown::coalesce_and_apply() noexcept {
-     // Snapshot under lock; apply without holding it (INVLPG/purge take
-     // no locks; keeps the critical section short).
-+    // WCET: bounded by MAX_PENDING (see header); no allocation.
-     Request batch[MAX_PENDING];
-     uint64_t count = 0;
-     {
-@@ -127,6 +128,7 @@ void TlbShootdown::on_tick(uint64_t now) noexcept {
-     // ISR-safe: IF is already clear on the tick path; try_lock skips on
-     // contention instead of spinning on a task-held lock (single-CPU
-     // deadlock otherwise).  Bounded: at most MAX_PER_TICK releases.
-+    // WCET: bounded scan + bounded releases; no allocation, never blocks.
-     arch::IrqGuard irq_guard{};
-     if (!shootdown_lock_.try_lock())
-         return;
-@@ -163,11 +165,14 @@ uint64_t TlbShootdown::quarantine_count() noexcept {
- }
- 
- void TlbShootdown::set_timeout_ticks_for_test(uint64_t ticks) noexcept {
-+    // Test-isolation hook: production paths never call this (the timeout
-+    // stays a live field — no test-mode branch in quarantine timing).
-     sync::IrqSpinLockGuard guard(shootdown_lock_);
-     timeout_ticks_ = ticks;
- }
- 
- void TlbShootdown::reset() noexcept {
-+    // Test-isolation hook (see set_timeout_ticks_for_test above).
-     sync::IrqSpinLockGuard guard(shootdown_lock_);
-     pending_count_ = 0;
-     quarantine_count_ = 0;
-diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index 3b643c5fa..97cd9401e 100644
---- a/src/kernel/memory/vmm.cpp
-+++ b/src/kernel/memory/vmm.cpp
-@@ -137,6 +137,9 @@ void VMM::init() {
- /// @param user_alloc If true, allocate USER-owned pages for the new table.
- /// @return Pointer to the next-level table, or nullptr if not present and
- /// !create.
-+/// WCET: intentional flat walk/split (bounded depth, at most one table
-+/// alloc per call); a failed alloc returns nullptr and the caller drops
-+/// the mapping through note_silent_drop_once (never retries in a loop).
- uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
-                          bool user_alloc) {
-     if (table[index] & PAGE_PRESENT) {
-@@ -250,6 +253,110 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
-     return new_table;
- }
- 
-+// Test-time kernel-VA touch notifiers (issue #254 H2: eleven
-+// is_test_active() control-flow branches hoisted here, bit-identical).
-+// WHY the flags exist: test tasks legitimately map/unmap kernel-half VAs;
-+// the snapshot mechanism must know which half was touched so restore rewinds
-+// exactly that half (HHDM PD / identity PD / Sv39 L1).  Release stores pair
-+// with the acquire take in snapshot_restore (issues #60/#152).  WHY the
-+// warns stay: silent kernel-half mutation hides test pollution; each message
-+// names the operation + index domain so the polluting test is identifiable.
-+enum class TestTouchWarn {
-+    kMapL1,
-+    kMapPd,
-+    kUnmapL0,
-+    kUnmapPml4,
-+    kAccessPml4,
-+};
-+
-+static void warn_test_kernel_touch(bool gate, TestTouchWarn warn,
-+                                   uint64_t va, size_t idx) {
-+    if (!gate || !Scheduler::is_test_active()) {
-+        return;
-+    }
-+    switch (warn) {
-+        case TestTouchWarn::kMapL1:
-+            Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
-+                         "(l0_idx=%zu) — L1 restore will clean up",
-+                         va, idx);
-+            break;
-+        case TestTouchWarn::kMapPd:
-+            Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
-+                         "(pml4_idx=%zu) — PD restore will clean up",
-+                         va, idx);
-+            break;
-+        case TestTouchWarn::kUnmapL0:
-+            Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
-+                         "(l0_idx=%zu)",
-+                         va, idx);
-+            break;
-+        case TestTouchWarn::kUnmapPml4:
-+            Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
-+                         "(pml4_idx=%zu)",
-+                         va, idx);
-+            break;
-+        case TestTouchWarn::kAccessPml4:
-+            Logger::warn("virt_to_phys: test accessing kernel-space VA 0x%lx "
-+                         "(pml4_idx=%zu)",
-+                         va, idx);
-+            break;
-+    }
-+}
-+
-+static void arm_test_touch_flags(bool arm_hhdm, bool arm_identity) {
-+    if (!Scheduler::is_test_active()) {
-+        return;
-+    }
-+    // Issue #60/#152: release stores pair with the acquire take in
-+    // snapshot_restore (a concurrent take can never lose a set).
-+    if (arm_hhdm) {
-+        __atomic_store_n(&VMM::hhdm_modified_, true, __ATOMIC_RELEASE);
-+    }
-+    if (arm_identity) {
-+        __atomic_store_n(&VMM::identity_modified_, true, __ATOMIC_RELEASE);
-+    }
-+}
-+
-+// Cap for bounded throttled diagnostics (issue #254 H5: was a raw 24).
-+static constexpr uint64_t kFupSkipLogCap = 24;
-+
-+// Hex-value half of the throttled diagnostics below (issue #254 H8: shared
-+// by note_silent_drop_once and the free_user_pages skip log — the 0x-print
-+// loop was duplicated).  Debugcon port IO only (lock-free, ISR-safe;
-+// no-op off x86_64).
-+static void write_hex_debugcon(uint64_t val) {
-+    char buf[24];
-+    int p = 0;
-+    buf[p++] = '0';
-+    buf[p++] = 'x';
-+    bool started = false;
-+    for (int sh = 60; sh >= 0; sh -= 4) {
-+        unsigned nib = static_cast<unsigned>((val >> sh) & 0xF);
-+        if (nib || started || sh == 0) {
-+            buf[p++] = "0123456789abcdef"[nib];
-+            started = true;
-+        }
-+    }
-+    buf[p++] = '\n';
-+    arch::QemuDebugcon::write(buf, static_cast<size_t>(p));
-+}
-+
-+// Bounded one-shot diagnostic for silently-dropped mappings (issue #254 H7).
-+// WHY silent drops exist: a missing table or a failed split-alloc means "no
-+// such mapping" to the caller, so these paths return without an error code.
-+// The throttled note keeps them observable without flooding the log.
-+// Lock-free (atomics + debugcon port IO only): safe from any context,
-+// including tick/ISR paths.  Never touches Logger/serial/shell.
-+static void note_silent_drop_once(const char *tag, uint64_t val) {
-+    static uint64_t count = 0;
-+    if (__atomic_load_n(&count, __ATOMIC_RELAXED) >= kFupSkipLogCap) {
-+        return;
-+    }
-+    __atomic_fetch_add(&count, 1UL, __ATOMIC_RELAXED);
-+    arch::QemuDebugcon::write(tag);
-+    write_hex_debugcon(val);
-+}
-+
- // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
- /// @brief Map a 4 KiB page in the kernel page table.
- /// @param virt_addr Page-aligned virtual address.
-@@ -265,33 +372,30 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
-     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
- 
--    // Issue #152: mirror the x86_64 modified-flags (is_test_active-gated
--    // release stores pairing with the acquire take in snapshot_restore).
--    // Exact-match gating (see kHhdmL0Idx below): the armed flag has an
--    // Sv39 restore covering it.  NOTE: no identity flag on riscv64 — the
--    // boot identity map (L0[2], boot.S) is dead at runtime (L0[2] reads
--    // zero; the kernel runs via HHDM), so there is no live low map to
--    // protect.  Low-half maps arm nothing.
-+    // Issue #152: snapshot pairing for Sv39 (see arm_test_touch_flags).
-+    // No identity flag on riscv64: the boot identity map is dead at
-+    // runtime, so low-half maps arm nothing.
-     // Allow kernel-space VAs when tests are active: the Sv39 L1
-     // save/restore in the snapshot mechanism undoes any 2MB-block splits.
--    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
--        Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
--                     "(l0_idx=%zu) — L1 restore will clean up",
--                     virt_addr, l0_idx);
--        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
--    }
-+    warn_test_kernel_touch(l0_idx == kHhdmL0Idx, TestTouchWarn::kMapL1,
-+                           virt_addr, l0_idx);
-+    arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
- 
-     auto *l1 = get_table(l0, l0_idx, true);
--    if (!l1)
-+    if (!l1) {
-+        note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
-         return;
-+    }
- 
-     // If L1 entry is a 2MB block, split it into 512 4KB entries.
-     // Issue #206: Sv39 PTE codec (raw & ~0x1FFFFF is x86-domain).
-     if ((l1[l1_idx] & PAGE_PRESENT) &&
-         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-         uint64_t new_l2_phys = PMM::alloc_page_table();
--        if (!new_l2_phys)
-+        if (!new_l2_phys) {
-+            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-             return;
-+        }
-         auto *new_l2 =
-             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_l2_phys);
-         uint64_t block_base =
-@@ -307,8 +411,10 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
-     }
- 
-     auto *l2 = get_table(l1, l1_idx, true);
--    if (!l2)
-+    if (!l2) {
-+        note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
-         return;
-+    }
- 
-     if (user && phys_addr < PMM::total_memory())
-         ENSURE(PMM::is_user_page(phys_addr) &&
-@@ -331,33 +437,28 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
-     // Allow kernel-space VAs when tests are active: PD save/restore in the
-     // snapshot mechanism undoes any huge-page splits.  Boot-time calls (APIC
-     // MMIO mapping, etc.) are still permitted as they run before snapshot.
--    if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
--        Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
--                     "(pml4_idx=%zu) — PD restore will clean up",
--                     virt_addr, pml4_idx);
--        // Issue #60: release store — pairs with the acquire take in
--        // snapshot_restore (a concurrent set can never be lost).
--        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
--    }
-+    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
-+                           TestTouchWarn::kMapPd, virt_addr, pml4_idx);
-+    arm_test_touch_flags(pml4_idx >= arch::PML4_USER_COUNT, false);
-     // Low identity-map VAs (pml4_idx 0, PD_IDENTITY phys 0x3000): a map_page
-     // here splits a boot 2 MiB identity huge entry into a PT page.  Flag it so
--    // snapshot_restore restores PD_IDENTITY (the HHDM-PD gate only covers
--    // pml4_idx >= PML4_USER_COUNT).
--    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
--        // Issue #60: release store (see hhdm site above).
--        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
--    }
-+    // snapshot_restore restores PD_IDENTITY (see arm_test_touch_flags).
-+    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
- 
-     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
- 
-     auto *pdpt = get_table(pml4, pml4_idx, true);
--    if (!pdpt)
-+    if (!pdpt) {
-+        note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
-         return;
-+    }
-     auto *pd = get_table(pdpt, pdpt_idx, true);
--    if (!pd)
-+    if (!pd) {
-+        note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
-         return;
-+    }
- 
-     // If the PD entry is a 2MB huge page, split it into 512 4KB entries
-     // so we can map an individual 4KB page within it.
-@@ -368,8 +469,10 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
- #endif
-     {
-         uint64_t new_pt_phys = PMM::alloc_page_table();
--        if (!new_pt_phys)
-+        if (!new_pt_phys) {
-+            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-             return;
-+        }
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         auto *new_pt =
-             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
-@@ -404,8 +507,10 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
-     }
- 
-     auto *pt = get_table(pd, pd_idx, true);
--    if (!pt)
-+    if (!pt) {
-+        note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
-         return;
-+    }
- 
-     if (user && phys_addr < PMM::total_memory())
-         ENSURE(PMM::is_user_page(phys_addr) &&
-@@ -443,21 +548,21 @@ void VMM::unmap_page(uint64_t virt_addr) {
-     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
- 
--    // Issue #152: mirror map_page (x86_64 unmap_page sets the identity
--    // flag only, plus a warn for kernel-space VAs). No identity flag on
--    // riscv64 (dead boot map — see map_page note above).
--    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
--        Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
--                     "(l0_idx=%zu)",
--                     virt_addr, l0_idx);
--    }
-+    // Issue #152: mirror map_page (x86_64 unmap_page arms the identity
-+    // flag only, plus a warn for kernel-space VAs; see the notifiers above).
-+    warn_test_kernel_touch(l0_idx == kHhdmL0Idx, TestTouchWarn::kUnmapL0,
-+                           virt_addr, l0_idx);
- 
-     auto *l1 = get_table(l0, l0_idx, false);
--    if (!l1)
-+    if (!l1) {
-+        note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
-         return;
-+    }
-     auto *l2 = get_table(l1, l1_idx, false);
--    if (!l2)
-+    if (!l2) {
-+        note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
-         return;
-+    }
- 
-     l2[l2_idx] = 0;
-     arch::ArchPageTable::tlb_flush(virt_addr);
-@@ -467,30 +572,30 @@ void VMM::unmap_page(uint64_t virt_addr) {
-                                               (kernel_pml4_ & ~0xFFFULL));
- 
-     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
--    if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
--        Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
--                     "(pml4_idx=%zu)",
--                     virt_addr, pml4_idx);
--    }
-+    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
-+                           TestTouchWarn::kUnmapPml4, virt_addr, pml4_idx);
-     // Low identity-map VAs: flag for PD_IDENTITY restore (see map_page).
--    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
--        // Issue #60: release store (see map_page sites above).
--        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
--    }
-+    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
- 
-     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
- 
-     auto *pdpt = get_table(pml4, pml4_idx, false);
--    if (!pdpt)
-+    if (!pdpt) {
-+        note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
-         return;
-+    }
-     auto *pd = get_table(pdpt, pdpt_idx, false);
--    if (!pd)
-+    if (!pd) {
-+        note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
-         return;
-+    }
-     auto *pt = get_table(pd, pd_idx, false);
--    if (!pt)
-+    if (!pt) {
-+        note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
-         return;
-+    }
- 
-     pt[pt_idx] = 0;
-     arch::ArchPageTable::tlb_flush(virt_addr);
-@@ -532,11 +637,8 @@ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
-                                               (kernel_pml4_ & ~0xFFFULL));
- 
-     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
--    if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
--        Logger::warn("virt_to_phys: test accessing kernel-space VA 0x%lx "
--                     "(pml4_idx=%zu)",
--                     virt_addr, pml4_idx);
--    }
-+    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
-+                           TestTouchWarn::kAccessPml4, virt_addr, pml4_idx);
- 
-     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-@@ -602,16 +704,18 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
-     // rewind.  Without this, splits never trigger it and persist across
-     // boundaries.  HHDM only (no live identity map on riscv64 — see
-     // map_page note above).
--    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
--        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
--    }
-+    arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
- 
-     auto *l1 = get_table(l0, l0_idx, true, true);
--    if (!l1)
-+    if (!l1) {
-+        note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
-         return;
-+    }
-     auto *l2 = get_table(l1, l1_idx, true, true);
--    if (!l2)
-+    if (!l2) {
-+        note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
-         return;
-+    }
- 
-     if (user && phys_addr < PMM::total_memory())
-         ENSURE(PMM::is_user_page(phys_addr) &&
-@@ -641,20 +745,19 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
-     // kernel table or share PD pages with it, so flag unconditionally).
-     // Without this, splits (e.g. test mb2 identity re-mapping) never
-     // trigger the snapshot PD rewind and persist across boundaries.
--    if (Scheduler::is_test_active() &&
--        pml4_idx >= arch::PML4_USER_COUNT) {
--        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
--    }
--    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
--        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
--    }
-+    arm_test_touch_flags(pml4_idx >= arch::PML4_USER_COUNT,
-+                         pml4_idx < arch::PML4_USER_COUNT);
- 
-     auto *pdpt = get_table(pml4, pml4_idx, true, true);
--    if (!pdpt)
-+    if (!pdpt) {
-+        note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
-         return;
-+    }
-     auto *pd = get_table(pdpt, pdpt_idx, true, true);
--    if (!pd)
-+    if (!pd) {
-+        note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
-         return;
-+    }
- 
- #if defined(CONFIG_ARCH_AARCH64)
-     if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
-@@ -663,8 +766,10 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
- #endif
-     {
-         uint64_t new_pt_phys = PMM::alloc_user_page();
--        if (!new_pt_phys)
-+        if (!new_pt_phys) {
-+            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-             return;
-+        }
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         auto *new_pt =
-             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
-@@ -691,8 +796,10 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
-     }
- 
-     auto *pt = get_table(pd, pd_idx, true, true);
--    if (!pt)
-+    if (!pt) {
-+        note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
-         return;
-+    }
- 
-     if (user && phys_addr < PMM::total_memory())
-         ENSURE(PMM::is_user_page(phys_addr) &&
-@@ -744,6 +851,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-     }
-     auto *l1 = get_table(top, l0_idx, false);
-     if (!l1) {
-+        note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
-         return;
-     }
-     if (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
-@@ -751,6 +859,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-     }
-     auto *l2 = get_table(l1, l1_idx, false);
-     if (!l2) {
-+        note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
-         return;
-     }
-     l2[l2_idx] = 0;
-@@ -761,15 +870,15 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
-     // Issue #197: mirror unmap_page — flag low-VA surgery for the
-     // PD_IDENTITY restore (see map_page_in_pml4 note above).
--    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
--        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
--    }
-+    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
-     auto *pdpt = get_table(top, pml4_idx, false);
-     if (!pdpt) {
-+        note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
-         return;
-     }
-     auto *pd = get_table(pdpt, pdpt_idx, false);
-     if (!pd) {
-+        note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
-         return;
-     }
- #if defined(CONFIG_ARCH_AARCH64)
-@@ -783,6 +892,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
- #endif
-     auto *pt = get_table(pd, pd_idx, false);
-     if (!pt) {
-+        note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
-         return;
-     }
-     pt[pt_idx] = 0;
-@@ -1166,24 +1276,12 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
-     // owner bit is KERNEL (free_user_pages only frees USER-owned table pages).
-     static uint64_t s_fup_skip_log = 0;
-     auto log_skip = [](const char *lvl, uint64_t phys) {
--        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >= 24)
-+        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >=
-+            kFupSkipLogCap)
-             return;
-         __atomic_fetch_add(&s_fup_skip_log, 1UL, __ATOMIC_RELAXED);
-         arch::QemuDebugcon::write(lvl);
--        char buf[24];
--        int p = 0;
--        buf[p++] = '0';
--        buf[p++] = 'x';
--        bool started = false;
--        for (int sh = 60; sh >= 0; sh -= 4) {
--            unsigned nib = static_cast<unsigned>((phys >> sh) & 0xF);
--            if (nib || started || sh == 0) {
--                buf[p++] = "0123456789abcdef"[nib];
--                started = true;
--            }
--        }
--        buf[p++] = '\n';
--        arch::QemuDebugcon::write(buf, static_cast<size_t>(p));
-+        write_hex_debugcon(phys);
-     };
-     for (int pml4_idx = 0; pml4_idx < static_cast<int>(arch::PML4_USER_COUNT);
-          ++pml4_idx) {
-diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
-index 7d2352c59..f816f6096 100644
---- a/src/kernel/memory/vmm.hpp
-+++ b/src/kernel/memory/vmm.hpp
+diff --git a/src/kernel/task/sporadic_server.hpp b/src/kernel/task/sporadic_server.hpp
+index 29d3bfd71..9bdfa8d16 100644
+--- a/src/kernel/task/sporadic_server.hpp
++++ b/src/kernel/task/sporadic_server.hpp
 @@ -23,8 +23,6 @@
- ///        bounded page-walk depth (4-level x86_64/aarch64, 3-level riscv64
- ///        Sv39).
+ /// Implements POSIX.1b Sporadic Server replenishment (IEEE Std 1003.1-2008)
+ /// with O(1) tick-driven replenishment processing and a bounded circular queue.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/nexios_config.h>
+ #include <kernel/memory/kernel_object.hpp>
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 112f4f07f..6fb2af5ae 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -1083,7 +1083,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
+     // always taken.
+     // ------------------------------------------------------------------
+ #if defined(CONFIG_ARCH_X86_64)
+-    if (!Scheduler::is_test_active()) {
++    if (!Scheduler::in_test_harness()) {
+         uint64_t slot_va = alloc_kslot(stack_size);
+         if (slot_va) {
+             tcb->kstack_slot_va_ = slot_va;
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index f2cf8e284..7c52ce882 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -21,8 +21,6 @@
+ /// @file task.hpp
+ /// @brief Task control block and state definitions for the kernel scheduler.
  
 -#pragma once
 -
  #include <types.hpp>
  #include <constants.hpp>
- #include <kernel/memory/vmm_errors.hpp>
-diff --git a/src/kernel/memory/vmm_errors.hpp b/src/kernel/memory/vmm_errors.hpp
-index fedc3497d..e536cc56f 100644
---- a/src/kernel/memory/vmm_errors.hpp
-+++ b/src/kernel/memory/vmm_errors.hpp
+ #include <kernel/sync/spinlock.hpp>
+diff --git a/src/kernel/task/task_errors.hpp b/src/kernel/task/task_errors.hpp
+index 10c978ce3..adf47605d 100644
+--- a/src/kernel/task/task_errors.hpp
++++ b/src/kernel/task/task_errors.hpp
 @@ -21,8 +21,6 @@
- /// @file vmm_errors.hpp
- /// @brief Virtual Memory Manager error codes and string lookup.
+ /// @file task_errors.hpp
+ /// @brief Task module error codes and string lookup.
  
 -#pragma once
 -
  #include <types.hpp>
  #include <assert.hpp>
+ 
+diff --git a/src/kernel/task/taskdefs.hpp b/src/kernel/task/taskdefs.hpp
+index cd8473207..2116ec2fb 100644
+--- a/src/kernel/task/taskdefs.hpp
++++ b/src/kernel/task/taskdefs.hpp
+@@ -21,8 +21,6 @@
+ /// @file taskdefs.hpp
+ /// @brief Boot-time task definition table and reboot-from-table facility.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/task/sporadic_server.hpp>
  

@@ -23,8 +23,6 @@
 /// Implements POSIX.1b Sporadic Server replenishment (IEEE Std 1003.1-2008)
 /// with O(1) tick-driven replenishment processing and a bounded circular queue.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/nexios_config.h>
 #include <kernel/memory/kernel_object.hpp>

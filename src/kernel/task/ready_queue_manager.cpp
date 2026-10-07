@@ -9,6 +9,12 @@ extern "C" void debug_write_hex(uint64_t value);
 
 namespace kernel {
 
+// A restored queue endpoint is live when null (empty) or a still-valid TCB
+// (issue #255 H5: the validity conjunction below is now named).
+static bool endpoint_live(TaskControlBlock *e) {
+    return e == nullptr || TaskControlBlock::is_valid(e);
+}
+
 void ReadyQueueManager::enqueue(TaskControlBlock &tcb,
                                 uint64_t priority) noexcept {
     // Guard against double-enqueue: re-enqueueing an already-queued TCB
@@ -48,22 +54,10 @@ TaskControlBlock *ReadyQueueManager::dequeue_highest() noexcept {
     if (prio == 0 && queues_[0].empty()) {
         return nullptr;
     }
-    auto *tcb = queues_[prio].pop_front();
-    if (queues_[prio].empty()) {
-        bitmap_.clear(prio);
-    }
-    if (tcb) {
-        tcb->rq_priority_ = 0;
-        // The task is leaving the ready queue (it is being dispatched), so its
-        // membership flag must be cleared.  Otherwise it keeps in_ready_queue_
-        // true while not physically in the queue, and a later enqueue() (which
-        // refuses already-queued TCBs) silently drops it — leaving a READY
-        // task that next_task() can never find, wedging the scheduler in the
-        // idle loop (observed as the `all` suite hanging at the atomic
-        // context-switch tests).
-        tcb->in_ready_queue_ = false;
-    }
-    return tcb;
+    // Membership-flag discipline: see pop_and_detach (a dispatched task must
+    // not look queued, or a later enqueue() silently drops a READY task the
+    // scheduler can then never find — the `all`-suite wedge).
+    return pop_and_detach(prio);
 }
 
 TaskControlBlock *ReadyQueueManager::dequeue_level(uint64_t prio) noexcept {
@@ -77,15 +71,23 @@ TaskControlBlock *ReadyQueueManager::dequeue_level(uint64_t prio) noexcept {
         bitmap_.clear(prio);
         return nullptr;
     }
+    // Same membership-flag discipline as dequeue_highest (see pop_and_detach).
+    return pop_and_detach(prio);
+}
+
+TaskControlBlock *ReadyQueueManager::pop_and_detach(uint64_t prio) noexcept {
     auto *tcb = queues_[prio].pop_front();
     if (queues_[prio].empty()) {
         bitmap_.clear(prio);
     }
     if (tcb) {
         tcb->rq_priority_ = 0;
-        // Same membership-flag discipline as dequeue_highest(): a dispatched
-        // task must not look queued, or a later enqueue() silently drops a
-        // READY task the scheduler can then never find.
+        // The task is leaving the ready queue (it is being dispatched), so its
+        // membership flag must be cleared.  Otherwise it keeps in_ready_queue_
+        // true while not physically in the queue, and a later enqueue() (which
+        // refuses already-queued TCBs) silently drops it — leaving a READY
+        // task that next_task() can never find, wedging the scheduler in the
+        // idle loop.
         tcb->in_ready_queue_ = false;
     }
     return tcb;
@@ -155,8 +157,7 @@ void ReadyQueueManager::restore_pod(const ReadyQueuePOD &src) noexcept {
         // and tail are still live, valid TCBs; otherwise drop the queue to
         // empty and let rebuild_ready_queue() reconstruct it from
         // all_tasks_ (which is itself safe_tcb-guarded).
-        if ((h == nullptr || TaskControlBlock::is_valid(h)) &&
-            (t == nullptr || TaskControlBlock::is_valid(t))) {
+        if (endpoint_live(h) && endpoint_live(t)) {
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             queues_[i].set_raw(h, t, src.queue_counts[i]);
             // Keep in_ready_queue_ consistent with the restored queues so the

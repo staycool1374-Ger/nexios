@@ -21,8 +21,6 @@
 /// @file scheduler_errors.hpp
 /// @brief Scheduler error codes and string lookup.
 
-#pragma once
-
 #include <types.hpp>
 #include <assert.hpp>
 

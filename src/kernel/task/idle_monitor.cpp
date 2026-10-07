@@ -141,7 +141,7 @@ uint32_t idle_util_for(uint64_t exec_ns, uint64_t period_ticks) noexcept {
         return 0;
     const uint64_t period_ns = period_ticks * kNsPerTick;
     if (period_ns == 0)
-        return 0;
+        return 0; // Wraparound guard: huge period_ticks can overflow to 0.
     uint64_t util = kPerMilleMax;
     if (exec_ns <= UINT64_MAX / kPerMilleMax)
         util = (exec_ns * kPerMilleMax) / period_ns;

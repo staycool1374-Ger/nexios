@@ -21,8 +21,6 @@
 /// @file task.hpp
 /// @brief Task control block and state definitions for the kernel scheduler.
 
-#pragma once
-
 #include <types.hpp>
 #include <constants.hpp>
 #include <kernel/sync/spinlock.hpp>

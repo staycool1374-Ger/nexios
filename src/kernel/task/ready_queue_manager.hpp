@@ -80,6 +80,13 @@ class ReadyQueueManager {
     void clear_all() noexcept;
     /// @brief Resets all queues and bitmap to empty state.
     void reset() noexcept;
+
+  private:
+    /// @brief Pop the head of level @p prio and detach its membership flags
+    ///        (issue #255 H8: the pop + empty-clear + flag-detach tail was
+    ///        duplicated in dequeue_highest/dequeue_level).  Null-safe on
+    ///        empty levels (stale bit cleared).  WCET: O(1) flat.
+    TaskControlBlock *pop_and_detach(uint64_t prio) noexcept;
 };
 
 } // namespace kernel

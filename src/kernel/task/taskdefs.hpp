@@ -21,8 +21,6 @@
 /// @file taskdefs.hpp
 /// @brief Boot-time task definition table and reboot-from-table facility.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/task/sporadic_server.hpp>
 

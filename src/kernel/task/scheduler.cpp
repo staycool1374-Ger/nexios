@@ -83,7 +83,7 @@ static inline uint64_t current_sp() noexcept {
     asm volatile("mv %0, sp" : "=r"(sp));
     return sp;
 #else
-    return 0;
+    return 0; // Unknown arch: no SP readable (counted as null, not an error).
 #endif
 }
 
@@ -198,6 +198,8 @@ bool Scheduler::canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t
     uint8_t bad_seg = 0;
     uint64_t bad_va = 0;
     if (!canary_verify_user_segments(task, bad_seg, bad_va)) {
+        // Canary negative-test path (issue #255 H3): under test the trip is
+        // recorded, not fatal, so the canary suite can assert the latch.
         if (kernel::Scheduler::is_test_active()) {
             kernel::gs::set_canary_trip(task->id, bad_seg, rip);
             return false;
@@ -716,6 +718,50 @@ static uint64_t sched_up_cpus() noexcept {
 #endif
 }
 
+// Allowed-CPU mask for `up` online CPUs (issue #255 H5: named helper for
+// the nested ternary at the set_affinity_err site; cheap-compare-first
+// order preserved; the up>=64 arm avoids the UB shift 1ULL<<64).
+static uint64_t affinity_allowed_mask(uint64_t up) noexcept {
+    if (up >= 64) {
+        return ~0ULL;
+    }
+    if (up == 0) {
+        return 0ULL;
+    }
+    return (1ULL << up) - 1;
+}
+
+// Sporadic-server budget-exhausted predicate (issue #255 H5: named for the
+// deadline-miss conjunction in deadline_miss_handler).  Pure: no locks,
+// no side effects.
+static bool budget_exhausted_on_miss(const TaskControlBlock &task) noexcept {
+    return task.get_sporadic_server() != nullptr &&
+           static_cast<task::SporadicServer::State>(
+               task.ss_state_on_deadline_miss) ==
+               task::SporadicServer::State::EXHAUSTED;
+}
+
+// Watchdog due predicate (issue #255 H5: shared by scan_watchdogs_locked
+// and fire_stall_watchdog — the due conjunction was duplicated).  Pure:
+// no locks, no side effects; cheap-flag-first order preserved.
+static bool watchdog_due(const TaskControlBlock &task,
+                         uint64_t now) noexcept {
+    return task.wdog_armed && task.wdog_gen != 0 &&
+           now >= task.wdog_expiry_tick;
+}
+
+// Pinned-expiry ring record (issue #255 H7: shared by the tick scan and the
+// idle-seam fire path — the TIMING+6 ERROR push was duplicated).  Ring-only
+// (no shell/serial), severity-gated; production pins nothing.
+static void
+note_pinned_watchdog_expiry(const TaskControlBlock &task,
+                            uint64_t overdue_by_ticks) noexcept {
+    log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                        log::kDmesgBase_TIMING + 6,
+                        log::LogSeverity::ERROR, task.name,
+                        overdue_by_ticks);
+}
+
 errors::SchedulerError
 Scheduler::set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept {
     // Quiesce window fences the lock-free AP current-apply path (spec
@@ -725,7 +771,7 @@ Scheduler::set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept {
     quiesce_enter();
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     uint64_t up = sched_up_cpus();
-    uint64_t allowed = (up >= 64) ? ~0ULL : ((up == 0) ? 0ULL : ((1ULL << up) - 1));
+    uint64_t allowed = affinity_allowed_mask(up);
     if ((mask & allowed) == 0) {
         Logger::warn(
             "sched: set_affinity id=%u mask=0x%lx clamps to CPU0", task.id,
@@ -1149,7 +1195,7 @@ void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
 uint64_t Scheduler::snapshot_zombies(TaskControlBlock **out,
                                      uint64_t max_out) noexcept {
     if (!out || max_out == 0)
-        return 0;
+        return 0; // Nothing to fill: empty count, not an error.
     // drain_zombie_list precedent: IrqGuard + leaf only (callers hold no
     // lock).  Read-only copy — no list surgery, no free.
     arch::IrqGuard irq_guard{};
@@ -2393,7 +2439,7 @@ uint64_t Scheduler::current_index() noexcept {
             return i;
         ++i;
     }
-    return 0;
+    return 0; // Current not listed: index 0 (idle slot), not an error.
 }
 
 void Scheduler::set_current_index(uint64_t idx) noexcept {
@@ -3096,13 +3142,9 @@ void Scheduler::on_tick() noexcept {
         }
 #endif
 #if CONFIG_DEADLINE_MONITOR_TASK
-        // FIX(pret): s_test_active_ disables the deadline-monitor wake and
-        // periodic reap_orphans() during test execution.  Without this guard,
-        // the reaper (tick 100 reap_orphans below) frees terminated test tasks
-        // before the test's ScopeGuard or snapshot_restore can clean them up,
-        // causing double-free use-after-free.  Test termination is handled
-        // entirely by the harness — the reaper must not race with it.
-        if (!is_test_active()) {
+        // Harness owns lifecycle (see harness_owns_lifecycle): the reaper
+        // must not race test ScopeGuards (double-free UAF otherwise).
+        if (!harness_owns_lifecycle()) {
             __atomic_store_n(&s_scan_requested_, 1, __ATOMIC_RELEASE);
             // on_tick already holds scheduler_lock_ (acquired at line 548 and
             // released at line 839).  The monitor's block transition also takes
@@ -3569,17 +3611,11 @@ void Scheduler::on_tick() noexcept {
 
     static uint64_t tick_counter = 0;
     ++tick_counter;
-// FIX(pret): reap_orphans runs every 100 ticks but is gated on
-    // !s_test_active_ to prevent a UAF race with test ScopeGuards.  The test
-    // harness owns its task lifecycle — it calls remove_task+cleanup+delete in
-    // the ScopeGuard.  If the reaper frees the task first, the ScopeGuard's
-    // delete double-frees the MemPool block.  Test tasks are short-lived and
-    // few, so deferring reaping to the post-test snapshot_restore is safe and
-    // avoids the race entirely.  The 100-tick batching ensures ammortised O(1)
-    // cost in production while not being so infrequent that zombie count grows
-    // unbounded (CONFIG_MAX_TASKS=64 caps the worst case).
+    // Harness owns lifecycle (see harness_owns_lifecycle): the reaper must
+    // not race test ScopeGuards (double-free UAF otherwise).  Deferring to
+    // snapshot_restore is safe: test tasks are short-lived and few.
         if (tick_counter % 100 == 0) {
-            if (!is_test_active())
+            if (!harness_owns_lifecycle())
                 reap_orphans();
             // ZombieList watchdog: force-flush ONLY when the zombie list has
             // outgrown the starvation limit (idle hasn't kept up).  Gating on
@@ -3597,12 +3633,11 @@ void Scheduler::on_tick() noexcept {
         }
     }  // end: gated tail sections (lock_acquired && IrqGuard)
 
-    // Issue #61: RT load-balancer cadence (BSP tick only; production
-    // only — tests drive balancer_tick() directly under IrqGuard so
-    // placement asserts stay deterministic).
+    // Harness owns lifecycle (see harness_owns_lifecycle): tests drive
+    // balancer_tick() directly so placement asserts stay deterministic.
     static uint64_t balancer_cadence = 0;
     ++balancer_cadence;
-    if (!is_test_active() &&
+    if (!harness_owns_lifecycle() &&
         (balancer_cadence % BALANCER_TICK_PERIOD) == 0) {
         balancer_tick();
     }
@@ -3617,6 +3652,19 @@ void Scheduler::on_tick() noexcept {
 // ---------------------------------------------------------------------------
 // reap_orphans
 // ---------------------------------------------------------------------------
+
+void Scheduler::note_termination_and_free(TaskControlBlock *t) noexcept {
+    if (!suppress_terminated_log_) {
+        Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
+                     t->id);
+        fb_terminated_line(t->name, t->id); // issue #269
+    }
+    t->cleanup();
+    // Baseline-owned (pinned) blocks are never freed (see can_reap gate
+    // above and the zombie-drain paths).
+    if (!MemPool::is_block_pinned(t))
+        MemPool::free(t);
+}
 
 void Scheduler::reap_orphans() noexcept {
     auto *current = current_task();
@@ -3722,16 +3770,7 @@ void Scheduler::reap_orphans() noexcept {
                 TaskControlBlock::NO_PERIOD);
             if (created) {
                 created->state = TaskState::READY;
-                if (!suppress_terminated_log_) {
-                    Logger::info("Scheduler: task '%s' (ID=%u) terminated",
-                                 t->name, t->id);
-                    fb_terminated_line(t->name, t->id); // issue #269
-                }
-                t->cleanup();
-                // Baseline-owned (pinned) blocks are never freed (see
-                // can_reap gate above and the zombie-drain paths).
-                if (!MemPool::is_block_pinned(t))
-                    MemPool::free(t);
+                note_termination_and_free(t);
                 new_idle = created;
             } else {
                 if (!suppress_terminated_log_)
@@ -3746,15 +3785,7 @@ void Scheduler::reap_orphans() noexcept {
                        "id_table full in reap (idle restore)");
             }
         } else {
-            if (!suppress_terminated_log_) {
-                Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
-                             t->id);
-                fb_terminated_line(t->name, t->id); // issue #269
-            }
-            t->cleanup();
-            // Baseline-owned (pinned) blocks are never freed (see above).
-            if (!MemPool::is_block_pinned(t))
-                MemPool::free(t);
+            note_termination_and_free(t);
         }
     }
 
@@ -5470,10 +5501,7 @@ void Scheduler::ensure_monitor() noexcept {
 __attribute__((weak)) void
 deadline_miss_handler(TaskControlBlock &task,
                       uint64_t missed_by_ticks) noexcept {
-    bool budget_exhausted = (task.get_sporadic_server() != nullptr &&
-                             static_cast<task::SporadicServer::State>(
-                                 task.ss_state_on_deadline_miss) ==
-                                 task::SporadicServer::State::EXHAUSTED);
+    bool budget_exhausted = budget_exhausted_on_miss(task);
 
     // Issue #234: every deadline/budget event enters the dmesg ring (the
     // Logger lines above stay for the serial console). Severity ERROR: a
@@ -5564,13 +5592,11 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
     for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
         if (t->magic != TaskControlBlock::TCB_MAGIC)
             continue;
-        if (!t->wdog_armed || t->wdog_gen == 0)
-            continue;
         // NOTE (audit #41 iter-1, S1): no generation cross-check here.
         // t->generation is the global creation sequence, wdog_gen a per-TCB
         // arm counter — comparing them fail-open skips live watchdogs.
         // Staleness is covered by disarm-on-teardown + TaskFields rewind.
-        if (now < t->wdog_expiry_tick)
+        if (!watchdog_due(*t, now))
             continue;
         // One-shot: disarm before dispatch so a slow handler cannot
         // re-fire on the same arm; re-CREATE re-arms with a fresh gen.
@@ -5583,10 +5609,7 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
             // Record the expiry in the ring, skip the action. In
             // production nothing is pinned, so this changes nothing
             // outside tests.
-            log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
-                                log::kDmesgBase_TIMING + 6,
-                                log::LogSeverity::ERROR, t->name,
-                                now - t->wdog_expiry_tick);
+            note_pinned_watchdog_expiry(*t, now - t->wdog_expiry_tick);
             continue;
         }
         watchdog_expiry_handler(*t, now - t->wdog_expiry_tick);
@@ -5601,15 +5624,11 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
 void Scheduler::fire_stall_watchdog(TaskControlBlock &task,
                                      uint64_t now) noexcept {
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
-    if (!task.wdog_armed || task.wdog_gen == 0 ||
-        now < task.wdog_expiry_tick)
+    if (!watchdog_due(task, now))
         return;
     task.wdog_armed = false;
     if (kernel::MemPool::is_block_pinned(&task)) {
-        log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
-                            log::kDmesgBase_TIMING + 6,
-                            log::LogSeverity::ERROR, task.name,
-                            now - task.wdog_expiry_tick);
+        note_pinned_watchdog_expiry(task, now - task.wdog_expiry_tick);
         return;
     }
     watchdog_expiry_handler(task, now - task.wdog_expiry_tick);

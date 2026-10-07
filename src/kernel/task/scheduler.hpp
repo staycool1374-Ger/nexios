@@ -479,6 +479,21 @@ class Scheduler {
     static bool is_test_active() noexcept {
         return test_context_ ? test_context_->test_active : false;
     }
+    /// @brief True while the test harness owns task lifecycle (issue #255 H2:
+    ///        named wrapper for the is_test_active() gates that stand down
+    ///        production daemons — monitor wake, orphan reap, balancer — so
+    ///        the reaper cannot race test ScopeGuards.  Bit-identical gate;
+    ///        full removal is out of scope (functional).
+    static bool harness_owns_lifecycle() noexcept {
+        return is_test_active();
+    }
+    /// @brief True while running inside the test harness (issue #255 H2:
+    ///        named wrapper for the is_test_active() stack-path gate in
+    ///        task creation — the HHDM fallback is test-only by design.
+    ///        Bit-identical gate.
+    static bool in_test_harness() noexcept {
+        return is_test_active();
+    }
 #endif
     /// @brief Clears assembly-level context-switch globals
     ///        (scheduler_save_rsp_to, scheduler_load_rsp_from, etc.).
@@ -1072,6 +1087,12 @@ struct SwSlots {
     static constinit uint64_t memory_budget_pages_;
 #endif
     static constinit bool suppress_terminated_log_;
+
+    /// @brief Shared reap termination tail (issue #255 H8): terminated-line
+    ///        report + cleanup + pinned-aware free.  Caller holds
+    ///        scheduler_lock_ on the reap path (never the current task —
+    ///        the idle-recreate arm guarantees a live idle).
+    static void note_termination_and_free(TaskControlBlock *t) noexcept;
 
     /// @brief Injected test-runner context (PfA-A).  nullptr in production so
     ///        all test flags resolve to their compile-time-false defaults.

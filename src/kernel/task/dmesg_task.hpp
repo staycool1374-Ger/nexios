@@ -7,8 +7,6 @@
 /// @file dmesg_task.hpp
 /// @brief Kernel log consumer task that drains the dmesg ring buffer to UART.
 
-#pragma once
-
 namespace kernel::task {
 
 void dmesg_task_main();
