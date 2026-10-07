@@ -2623,3 +2623,5 @@ SUMMARY: total=18 ok=0 fail=18
 2026-10-07 03:17:31 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
 
 SUMMARY: total=18 ok=17 fail=1
+2026-10-07 08:42:27 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 557ms
+2026-10-07 08:43:38 exc_table PASSED: 4 FAILED: 0 TIME: 140ms
