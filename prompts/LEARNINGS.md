@@ -19,12 +19,12 @@
 - Audit check #7 needs graphify/vault queries with dispositions on the thread BEFORE the call; rejected patches apply verbatim but verify first (git apply --check — patches can be corrupt).
 - TEMP-DIAG fully reverted (grep-verified); QEMU reaped after every session; `-serial mon:stdio` eats typed bytes — TCP/file serial for E2E input.
 - Freeze ticks (IrqGuard) around ISR-observed measurements; expiries derive from the live clock, never fixed bases; relative-over-absolute timing asserts (≥3× headroom); watchdog kills get STATUS history rows.
-- Cross-arch: link all three arches for shared-header edits; arch-guard test bodies; riscv low half is identity/MMIO (clone copies L0[0]); aarch64 needs HHDM aliases + 48-bit phys masks; S-mode cannot touch M-mode CSRs; riscv64 never folds __builtin_memcmp (no freestanding provider) — manual compares in tests.
-- TCG wall dilation is load-bearing (park-heavy riscv tests need ~30 s; ticks run ~0.6× wall): size every timeout tier from measured walls; re-verify flakes before bisecting.
 - Zero-S-line TIMEOUT + identical-binary rerun green = TCG stall, not regression (check host load first); never pipe make/test through `head` (SIGPIPE kills the run); debug-green never implies release-green (build release before any full gate).
 - Hunt-loop evidence is file-grade or it didn't happen: tee every loop to `/tmp/jarvis-hunt-<issue>-<YYYYMMDD-HHMMSS>.log`, record per-iteration PASS/TIMEOUT + load average inline, and post the file path + tally as an issue comment the same session (serial log is shared/singleton — raw output not tee'd is lost).
-- Boot time needs init-independent raw counters (`Timer::ns()` is 0 pre-calibrate on all archs — a zero-skip gate fail-opens forever); convert at use, zero-freq fails closed. Never cross-check per-object arm counters against global sequences (fail-open); staleness via disarm-on-teardown + snapshot rewind.
-- Pinned snapshot-baseline blocks are never freed anywhere (scan, defer_kill/destroy, all four drain paths, reap_orphans) and never killed (watchdog/deadline actions skip with ring-only record); production pins nothing. Test helpers the harness doesn't hlt-wait on run below harness priority; no TCB field reads after teardown drains.
+- TCG wall dilation is load-bearing: size every timeout tier from measured walls; re-verify flakes before bisecting.
+- Reap stray QEMUs after every session (tool-killed interactive runs survive reparented, burning ~25% CPU each, masquerading as load spells); recipe-only Makefile edits don't rebuild cpio/ISO — rm the artifacts to force repack.
+- Interactive user-task tests need a scripted handoff (`source`: loadelf/sleep/runelf/sleep — `fg` is a stub, /dev/tty shared); TCP-serial output before connect is lost (send CR first for a fresh prompt); convict user-space faults by pristine-binary control experiment, never by re-reading the derivation.
+- Cross-arch: link all three arches for shared-header edits; arch-guard test bodies; riscv low half is identity/MMIO (clone copies L0[0]); aarch64 needs HHDM aliases + 48-bit phys masks; S-mode cannot touch M-mode CSRs; riscv64 never folds __builtin_memcmp (no freestanding provider) — manual compares in tests.
 
 ## Entry format
 
@@ -44,6 +44,16 @@
 - **Style re-surface:** test-file idiom (JARVIS_ASSERT_FMT + u64 casts, namespaced helpers, include <kernel/kernel.hpp> + <kernel/nexios_config.h>).
 
 <!-- Newest first. Bodies carry durable guidance only. -->
+
+### #310 — userspace sh PATH + export (follows #274 /bin)
+- **Learned:** (1) Static analysis of the user entry contract can be airtight and still wrong: 3-arg main + envp import faulted instantly (#GP) at runelf start despite a verified rsp/rdx derivation — the pristine 2-arg control booted. Convict by control experiment, never by re-reading. (2) runelf tasks share /dev/tty with the kernel shell and `fg` is a stub, so typed input splits randomly between shells; deterministic handoff = `source` a script (loadelf, sleep, runelf, long sleep) and drive the user task while the kernel shell is blocked. (3) `clone()` inherits period/deadline, so fork from a runelf task (period 100, deadline +100 ticks) is admission-denied forever after (~1 s) — pre-existing, filed as #312; the runelf envp gap filed as #311. (4) Bare-name test helpers that skip on missing ELF (`if (!f.data) PASS`) silently lose coverage on layout moves — sweep every bare initrd name (tests, .exp/.py, taskdefs) before moving.
+- **Adapted:** sh.c PATH resolver + parent-side export + exec envp passthrough (no import; default PATH always); tests/sh310.txt handoff script; #311 + #312 filed with live evidence; #310 evidence comment (bare-exec proof pending #312).
+- **Style re-surface:** int-only matching TU style; static-only buffers with named caps (MAX_ENV/ENV_VAL_LEN inside the 64×256B exec window); fail-closed resolver (−1 → 127); no kernel changes.
+
+### #274 — initrd /bin hierarchy + dir vnodes
+- **Learned:** (1) `initrd::find` matches directory entries too — a find-first fast path returns bogus size-0 file vnodes once dirs exist; probe dir-ness (bounded readdir scan) BEFORE find. (2) Recipe-only mk changes don't rebuild the cpio — force repack or verification runs the stale image. (3) Runner-startup TCG stalls (zero S: lines post-SNAPSHOT, DMD spam) clear with identical-binary reruns (hal/ui/servers/capability/drivers/random/logging_debug all cleared; GDB-paced run also clears).
+- **Adapted:** InitrdDirNode + dir ops (close parity with file close, parent = static root, fail-closed bounded join); taskdefs bin/ daemon paths; 8 test call-sites + .exp/.py burn paths; `vfs_initrd_bin_resolve` test; count rows storage/vfs_core (+2 pre-existing stale: hal, ui); full debug 20/20 + release 18/18.
+- **Style re-surface:** §5 fail-closed on reachable input (no ENSURE); §10.5 named bounds (INITRD_MAX_SCAN/SUBDIR/JOINED); §11 no new locks (immutable image).
 
 ### #186 — Goal-2 snapshot budget export (v0.5.2 remainder)
 - **Learned:** (1) Planner-architected atomicity can be unimplementable: __atomic_load_n needs the field address, but budget_remaining_ is private — the public plain-read accessor + parked-target reasoning (auditor strengthened: consume() only debits t==cur) is the correct construction, not a compromise. (2) Userspace freestanding C defeats host LSP (wrong flags/sysroot) — verify with the real target/host builds, never LSP. (3) Count your own test lengths by hand: 12+8+8+9=37, not 36 — the host oracle caught it only because vectors pin exact bytes.
