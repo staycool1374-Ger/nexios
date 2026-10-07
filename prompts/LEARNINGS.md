@@ -21,6 +21,7 @@
 - Freeze ticks (IrqGuard) around ISR-observed measurements; expiries derive from the live clock, never fixed bases; relative-over-absolute timing asserts (≥3× headroom); watchdog kills get STATUS history rows.
 - Cross-arch: link all three arches for shared-header edits; arch-guard test bodies; riscv low half is identity/MMIO (clone copies L0[0]); aarch64 needs HHDM aliases + 48-bit phys masks; S-mode cannot touch M-mode CSRs; riscv64 never folds __builtin_memcmp (no freestanding provider) — manual compares in tests.
 - TCG wall dilation is load-bearing (park-heavy riscv tests need ~30 s; ticks run ~0.6× wall): size every timeout tier from measured walls; re-verify flakes before bisecting.
+- Zero-S-line TIMEOUT + identical-binary rerun green = TCG stall, not regression (check host load first); never pipe make/test through `head` (SIGPIPE kills the run); debug-green never implies release-green (build release before any full gate).
 - Boot time needs init-independent raw counters (`Timer::ns()` is 0 pre-calibrate on all archs — a zero-skip gate fail-opens forever); convert at use, zero-freq fails closed. Never cross-check per-object arm counters against global sequences (fail-open); staleness via disarm-on-teardown + snapshot rewind.
 - Pinned snapshot-baseline blocks are never freed anywhere (scan, defer_kill/destroy, all four drain paths, reap_orphans) and never killed (watchdog/deadline actions skip with ring-only record); production pins nothing. Test helpers the harness doesn't hlt-wait on run below harness priority; no TCB field reads after teardown drains.
 
@@ -42,6 +43,11 @@
 - **Style re-surface:** test-file idiom (JARVIS_ASSERT_FMT + u64 casts, namespaced helpers, include <kernel/kernel.hpp> + <kernel/nexios_config.h>).
 
 <!-- Newest first. Bodies carry durable guidance only. -->
+
+### #253 — cleanup batch #254/#255/#256 (memory/scheduler/sync pure refactor)
+- **Learned:** (1) Zero-S-line TIMEOUTs are TCG virtual-time stalls until proven otherwise: identical-binary rerun green (incl. 148/148 under GDB surveillance) disproves regression more cheaply than a stash rebuild; check host load first (load 7+ during the batch explained a 9-class TIMEOUT cluster). (2) Never pipe make/test output through `head -N` — SIGPIPE kills the build/test mid-run; consume full streams (tail/rg). (3) Debug-green never implies release-green: release-only -Werror (exit_record strncpy, latent since #294) needs an explicit release build before any full gate. (4) Auditor findings can be factually wrong (POST-255 S3 claimed a deleted NOTE standing verbatim at scheduler.cpp:5595-5598) — verify every finding against the file before accepting it. (5) `ps aux | rg PAT` matches the searching shell itself — read PIDs before concluding strays exist.
+- **Adapted:** pure-refactor helpers (alloc templates, waiter predicates, reap tail) + shared waiter_tag.hpp; exit_record memset+memcpy fix (d921a8539); evidence comments on #254/#255/#256; full debug+release gates green.
+- **Style re-surface:** §10.7 no const_cast (helper signatures over casts); §10.5 named constexprs (kNoPool/kMagic*/IDLE_BAND/NOTIFY_INVALID); §5 fail-closed preserved on every extracted predicate; §11 lock/pairing/generation-tag invariants byte-identical.
 
 ### #279 — session discipline failure (redundant pipeline)
 - **Learned:** Before starting ANY pipeline, re-read prompts/STATE.md + git log + issue thread: a committed, pushed increment looks exactly like unstarted work if you only read the issue body. I re-ran a full #232 implementation cycle (planner, work-begun post, ~20 edits, host tests) against already-committed code — all edits no-ops, plus a spurious thread comment requiring correction. Cost: a full session segment for zero delta.
