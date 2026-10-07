@@ -132,8 +132,39 @@ static int dbg_parse_addr_len(const char *p, unsigned long *addr,
 }
 
 /* Map a stop event kind to an RSP stop reply. Single thread model
- * (§13/Q1): thread 1, consistent with qC. Returns reply length. */
+ * (§13/Q1): thread 1, consistent with qC. Snapshot fields are appended
+ * as GDB-tolerated trailing key:val pairs (unknown keys are ignored by
+ * stock GDB). The W-reply (death) path is unchanged. Returns reply length.
+ * Worst-case growth vs the old reply: 3 keys x (7 + 16 hex + ;) = 69
+ * chars, 30x inside the g_reply ceiling (2*1024+64). */
+static unsigned long dbg_append_u64_hex(char *out, unsigned long pos,
+                                        unsigned long v) {
+    char tmp[16];
+    int n = 0;
+    do {
+        tmp[n++] = "0123456789abcdef"[v & 0xF];
+        v >>= 4;
+    } while (v);
+    while (n > 0) {
+        out[pos++] = tmp[--n];
+    }
+    return pos;
+}
+
+static void dbg_append_kv_hex(char *out, unsigned long *pos, const char *key,
+                              unsigned long v) {
+    while (*key) {
+        out[(*pos)++] = *key++;
+    }
+    out[(*pos)++] = ':';
+    *pos = dbg_append_u64_hex(out, *pos, v);
+    out[(*pos)++] = ';';
+}
+
 static unsigned long dbg_stop_reply_for_kind(unsigned long kind,
+                                             unsigned long snap_state,
+                                             unsigned long snap_prio,
+                                             unsigned long snap_budget,
                                              char *out) {
     unsigned long pos = 0;
     const char *sig = "T05";
@@ -159,6 +190,9 @@ static unsigned long dbg_stop_reply_for_kind(unsigned long kind,
     out[pos++] = ':';
     out[pos++] = '1';
     out[pos++] = ';';
+    dbg_append_kv_hex(out, &pos, "state", snap_state);
+    dbg_append_kv_hex(out, &pos, "prio", snap_prio);
+    dbg_append_kv_hex(out, &pos, "budget", snap_budget);
     out[pos] = '\0';
     return pos;
 }

@@ -698,7 +698,10 @@ constexpr uint64_t kKindDeath = 4;
 ///        queue + Notify pulse, no host involved).
 bool debug_wait_event(uint64_t h, uint64_t &kind_out, uint64_t &addr_out,
                       uint64_t *id_out = nullptr,
-                      uint64_t *gen_out = nullptr) {
+                      uint64_t *gen_out = nullptr,
+                      uint64_t *snap_state_out = nullptr,
+                      uint64_t *snap_prio_out = nullptr,
+                      uint64_t *snap_budget_out = nullptr) {
     kind_out = 0;
     addr_out = 0;
     for (int i = 0; i < 100; ++i) {
@@ -714,6 +717,12 @@ bool debug_wait_event(uint64_t h, uint64_t &kind_out, uint64_t &addr_out,
                 *gen_out = scratch[1];
             kind_out = scratch[2];
             addr_out = scratch[4];
+            if (snap_state_out != nullptr)
+                *snap_state_out = scratch[5];
+            if (snap_prio_out != nullptr)
+                *snap_prio_out = scratch[6];
+            if (snap_budget_out != nullptr)
+                *snap_budget_out = scratch[7];
             return true;
         }
         debug_sleep_ms(2);
@@ -1641,6 +1650,98 @@ JARVIS_TEST(debug_stop_poll_empty, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: stop-event snapshot carries the live sporadic-server remaining
+//           budget (issue #186 Goal 2, §9 introspection): a server-backed
+//           target parks with snap_budget == remaining_budget() sampled
+//           post-park, plus matching state/prio.
+// Input: spinner + init_sporadic_server(60, 1000, 0); attach; park; sel2 poll.
+// Expect: belt BP event; snap_state BLOCKED; snap_prio == base priority;
+//         snap_budget == post-park remaining_budget() (frozen while parked).
+// Depends: snap_budget_of, sel2 StopEvent copy, sporadic server.
+JARVIS_TEST(debug_stop_snapshot_budget_live, "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    t->init_sporadic_server(60, 1000, 0);
+    JARVIS_ASSERT_FMT(t->get_sporadic_server() != nullptr, "server missing");
+    uint64_t const scratch_phys = debug_map_scratch();
+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
+    const uint64_t pc = debug_park_and_get_pc(h);
+    JARVIS_ASSERT_FMT(pc != 0, "park/pc failed");
+    uint64_t kind = 0;
+    uint64_t addr = 0;
+    uint64_t snap_state = 0;
+    uint64_t snap_prio = 0;
+    uint64_t snap_budget = 0;
+    JARVIS_ASSERT_FMT(debug_wait_event(h, kind, addr, nullptr, nullptr,
+                                       &snap_state, &snap_prio, &snap_budget),
+                      "no belt event");
+    JARVIS_ASSERT_FMT(kind == kKindBp, "belt kind not BP: 0x%lx", kind);
+    JARVIS_ASSERT_FMT(snap_state == static_cast<uint64_t>(TaskState::BLOCKED),
+                      "snap_state not BLOCKED: 0x%lx", snap_state);
+    JARVIS_ASSERT_FMT(snap_prio == t->priority,
+                      "snap_prio mismatch: 0x%lx vs 0x%lx", snap_prio,
+                      t->priority);
+    const uint64_t want =
+        t->get_sporadic_server()->remaining_budget();
+    JARVIS_ASSERT_FMT(snap_budget == want,
+                      "snap_budget 0x%lx != remaining 0x%lx", snap_budget,
+                      want);
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
+                      "detach failed");
+    debug_unmap_scratch(scratch_phys);
+    debug_free_spinner_page(t, stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: stop-event snapshot reports zero budget for a target without a
+//           sporadic server (plain runelf-style activation): the Phase-2
+//           zero behavior is preserved, state/prio still filled.
+// Input: plain spinner (no server); attach; park; sel2 poll.
+// Expect: belt BP event; snap_budget == 0; snap_state BLOCKED; prio matches.
+// Depends: snap_budget_of null-server path, sel2 StopEvent copy.
+JARVIS_TEST(debug_stop_snapshot_budget_zero_without_server,
+            "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    JARVIS_ASSERT_FMT(t->get_sporadic_server() == nullptr,
+                      "spinner has a server");
+    uint64_t const scratch_phys = debug_map_scratch();
+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
+    const uint64_t pc = debug_park_and_get_pc(h);
+    JARVIS_ASSERT_FMT(pc != 0, "park/pc failed");
+    uint64_t kind = 0;
+    uint64_t addr = 0;
+    uint64_t snap_state = 0;
+    uint64_t snap_prio = 0;
+    uint64_t snap_budget = 0;
+    JARVIS_ASSERT_FMT(debug_wait_event(h, kind, addr, nullptr, nullptr,
+                                       &snap_state, &snap_prio, &snap_budget),
+                      "no belt event");
+    JARVIS_ASSERT_FMT(kind == kKindBp, "belt kind not BP: 0x%lx", kind);
+    JARVIS_ASSERT_FMT(snap_state == static_cast<uint64_t>(TaskState::BLOCKED),
+                      "snap_state not BLOCKED: 0x%lx", snap_state);
+    JARVIS_ASSERT_FMT(snap_prio == t->priority,
+                      "snap_prio mismatch: 0x%lx vs 0x%lx", snap_prio,
+                      t->priority);
+    JARVIS_ASSERT_FMT(snap_budget == 0, "snap_budget not zero: 0x%lx",
+                      snap_budget);
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
+                      "detach failed");
+    debug_unmap_scratch(scratch_phys);
+    debug_free_spinner_page(t, stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
 // Testidea: Supervisor-grant mint + use (issue #239, spec §14): the
 //           harness, as launcher, grants its own child to itself and
 //           drives the full handle lifecycle on the granted slot.
@@ -2235,6 +2336,8 @@ void register_debug_syscall_tests() {
     JARVIS_REGISTER_TEST(debug_stop_detach_disposition);
     JARVIS_REGISTER_TEST(debug_stop_debugger_death);
     JARVIS_REGISTER_TEST(debug_stop_poll_empty);
+    JARVIS_REGISTER_TEST(debug_stop_snapshot_budget_live);
+    JARVIS_REGISTER_TEST(debug_stop_snapshot_budget_zero_without_server);
     JARVIS_REGISTER_TEST(debug_grant_mint_use);
     JARVIS_REGISTER_TEST(debug_grant_denial_matrix);
     JARVIS_REGISTER_TEST(debug_grant_revoke_parked_disposition);

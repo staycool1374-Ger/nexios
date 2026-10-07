@@ -30,6 +30,7 @@
 #include <kernel/debug/debug_bind.hpp>
 #include <kernel/debug/debug_regs.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/sporadic_server.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -39,6 +40,20 @@
 namespace kernel::debug {
 
 namespace {
+
+// Budget snapshot for stop events (issue #186 §9: read-only export of the
+// sporadic-server remaining budget; 0 when the target has no server, e.g.
+// plain runelf activations — preserves the Phase-2 zero behavior there).
+// Plain aligned-u64 read matching every other budget_remaining_ reader: all
+// call sites observe parked/dead targets that consume() cannot advance
+// (a parked BLOCKED target is never dispatched while parked).
+static uint64_t snap_budget_of(const TaskControlBlock &tgt) noexcept {
+    kernel::task::SporadicServer *srv = tgt.get_sporadic_server();
+    if (!srv) {
+        return 0;
+    }
+    return srv->remaining_budget();
+}
 
 // Linux errno numerics are owned by the syscall layer; this module only
 // reports success/failure booleans.
@@ -291,7 +306,7 @@ void debug_note_requested_park(TaskControlBlock &tgt, uint64_t pc) noexcept {
     event.fault_addr = pc;
     event.snap_state = static_cast<uint64_t>(TaskState::BLOCKED);
     event.snap_prio = tgt.priority;
-    event.snap_budget = 0; // Phase 2: budget export is zero (see §9)
+    event.snap_budget = snap_budget_of(tgt);
     stop_enqueue(event);
     poke_debugger(debugger_id);
 }
@@ -376,7 +391,7 @@ bool debug_route_fault(TaskControlBlock &target, uint64_t kind, uint64_t num,
         event.fault_addr = addr;
         event.snap_state = static_cast<uint64_t>(TaskState::BLOCKED);
         event.snap_prio = target.priority;
-        event.snap_budget = 0; // Phase 2: budget export is zero (see §9)
+        event.snap_budget = snap_budget_of(target);
         stop_enqueue(event);
     }
     poke_debugger(debugger_id);
@@ -754,7 +769,7 @@ void debug_publish_death(TaskControlBlock &dying) noexcept {
     event.fault_addr = 0;
     event.snap_state = static_cast<uint64_t>(TaskState::TERMINATED);
     event.snap_prio = dying.priority;
-    event.snap_budget = 0;
+    event.snap_budget = snap_budget_of(dying);
     stop_enqueue(event); // death bypass: never dropped by normal pressure
     poke_debugger(debugger_id);
 #endif

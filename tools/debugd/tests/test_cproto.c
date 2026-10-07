@@ -90,21 +90,22 @@ static void test_addr_len(void) {
 }
 
 static void test_stop_reply(void) {
-    char out[32] = {0};
+    char out[128] = {0};
     unsigned long n = 0;
 
-    n = dbg_stop_reply_for_kind(DBG_STOP_BREAKPOINT, out);
-    CHECK(n == 12);
-    CHECK(strncmp(out, "T05thread:1;", 12) == 0);
-    n = dbg_stop_reply_for_kind(DBG_STOP_STEP, out);
-    CHECK(strncmp(out, "T05thread:1;", 12) == 0);
-    n = dbg_stop_reply_for_kind(DBG_STOP_FAULT, out);
-    CHECK(strncmp(out, "T0bthread:1;", 12) == 0);
-    n = dbg_stop_reply_for_kind(DBG_STOP_DEATH, out);
+    n = dbg_stop_reply_for_kind(DBG_STOP_BREAKPOINT, 2, 20, 0x10, out);
+    CHECK(n == 38);
+    CHECK(strncmp(out, "T05thread:1;state:2;prio:14;budget:10;", 38) == 0);
+    n = dbg_stop_reply_for_kind(DBG_STOP_STEP, 0, 0, 0, out);
+    CHECK(n == 36);
+    CHECK(strncmp(out, "T05thread:1;state:0;prio:0;budget:0;", 36) == 0);
+    n = dbg_stop_reply_for_kind(DBG_STOP_FAULT, 1, 127, 0, out);
+    CHECK(strncmp(out, "T0bthread:1;state:1;prio:7f;budget:0;", 37) == 0);
+    n = dbg_stop_reply_for_kind(DBG_STOP_DEATH, 4, 2, 7, out);
     CHECK(n == 3 && strncmp(out, "W00", 3) == 0);
     /* Unknown kinds fall back to TRAP (never empty, never garbage). */
-    n = dbg_stop_reply_for_kind(99, out);
-    CHECK(strncmp(out, "T05thread:1;", 12) == 0);
+    n = dbg_stop_reply_for_kind(99, 0, 0, 0, out);
+    CHECK(strncmp(out, "T05thread:1;state:0;prio:0;budget:0;", 36) == 0);
 }
 
 int main(void) {

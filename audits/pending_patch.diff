@@ -1,10 +1,368 @@
+diff --git a/src/kernel/debug/debug_stop.cpp b/src/kernel/debug/debug_stop.cpp
+index 8762bdd0c..334eac721 100644
+--- a/src/kernel/debug/debug_stop.cpp
++++ b/src/kernel/debug/debug_stop.cpp
+@@ -30,6 +30,7 @@
+ #include <kernel/debug/debug_bind.hpp>
+ #include <kernel/debug/debug_regs.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/task/sporadic_server.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/sync/spinlock_guard.hpp>
+@@ -40,6 +41,20 @@ namespace kernel::debug {
+ 
+ namespace {
+ 
++// Budget snapshot for stop events (issue #186 §9: read-only export of the
++// sporadic-server remaining budget; 0 when the target has no server, e.g.
++// plain runelf activations — preserves the Phase-2 zero behavior there).
++// Plain aligned-u64 read matching every other budget_remaining_ reader: all
++// call sites observe parked/dead targets that consume() cannot advance
++// (a parked BLOCKED target is never dispatched while parked).
++static uint64_t snap_budget_of(const TaskControlBlock &tgt) noexcept {
++    kernel::task::SporadicServer *srv = tgt.get_sporadic_server();
++    if (!srv) {
++        return 0;
++    }
++    return srv->remaining_budget();
++}
++
+ // Linux errno numerics are owned by the syscall layer; this module only
+ // reports success/failure booleans.
+ 
+@@ -291,7 +306,7 @@ void debug_note_requested_park(TaskControlBlock &tgt, uint64_t pc) noexcept {
+     event.fault_addr = pc;
+     event.snap_state = static_cast<uint64_t>(TaskState::BLOCKED);
+     event.snap_prio = tgt.priority;
+-    event.snap_budget = 0; // Phase 2: budget export is zero (see §9)
++    event.snap_budget = snap_budget_of(tgt);
+     stop_enqueue(event);
+     poke_debugger(debugger_id);
+ }
+@@ -376,7 +391,7 @@ bool debug_route_fault(TaskControlBlock &target, uint64_t kind, uint64_t num,
+         event.fault_addr = addr;
+         event.snap_state = static_cast<uint64_t>(TaskState::BLOCKED);
+         event.snap_prio = target.priority;
+-        event.snap_budget = 0; // Phase 2: budget export is zero (see §9)
++        event.snap_budget = snap_budget_of(target);
+         stop_enqueue(event);
+     }
+     poke_debugger(debugger_id);
+@@ -754,7 +769,7 @@ void debug_publish_death(TaskControlBlock &dying) noexcept {
+     event.fault_addr = 0;
+     event.snap_state = static_cast<uint64_t>(TaskState::TERMINATED);
+     event.snap_prio = dying.priority;
+-    event.snap_budget = 0;
++    event.snap_budget = snap_budget_of(dying);
+     stop_enqueue(event); // death bypass: never dropped by normal pressure
+     poke_debugger(debugger_id);
+ #endif
+diff --git a/src/kernel/debug/debug_stop.hpp b/src/kernel/debug/debug_stop.hpp
+index 8f47a1822..43c4e7730 100644
+--- a/src/kernel/debug/debug_stop.hpp
++++ b/src/kernel/debug/debug_stop.hpp
+@@ -54,7 +54,8 @@ struct StopEvent {
+     uint64_t fault_addr = 0;  // CR2 / FAR / stval / stop VA
+     uint64_t snap_state = 0;  // task-info snapshot: state at park time
+     uint64_t snap_prio = 0;   // task-info snapshot: priority
+-    uint64_t snap_budget = 0; // task-info snapshot: reserved (0 in Phase 2)
++    uint64_t snap_budget = 0; // task-info snapshot: sporadic-server remaining
++                             // budget at park time (0 when target has none)
+ };
+ 
+ /// @brief Notify pulse delivered to the debugger TCB on every enqueue.
+diff --git a/src/kernel/test/test_debug_syscall.cpp b/src/kernel/test/test_debug_syscall.cpp
+index 8d105163c..aaad7a989 100644
+--- a/src/kernel/test/test_debug_syscall.cpp
++++ b/src/kernel/test/test_debug_syscall.cpp
+@@ -698,7 +698,10 @@ constexpr uint64_t kKindDeath = 4;
+ ///        queue + Notify pulse, no host involved).
+ bool debug_wait_event(uint64_t h, uint64_t &kind_out, uint64_t &addr_out,
+                       uint64_t *id_out = nullptr,
+-                      uint64_t *gen_out = nullptr) {
++                      uint64_t *gen_out = nullptr,
++                      uint64_t *snap_state_out = nullptr,
++                      uint64_t *snap_prio_out = nullptr,
++                      uint64_t *snap_budget_out = nullptr) {
+     kind_out = 0;
+     addr_out = 0;
+     for (int i = 0; i < 100; ++i) {
+@@ -714,6 +717,12 @@ bool debug_wait_event(uint64_t h, uint64_t &kind_out, uint64_t &addr_out,
+                 *gen_out = scratch[1];
+             kind_out = scratch[2];
+             addr_out = scratch[4];
++            if (snap_state_out != nullptr)
++                *snap_state_out = scratch[5];
++            if (snap_prio_out != nullptr)
++                *snap_prio_out = scratch[6];
++            if (snap_budget_out != nullptr)
++                *snap_budget_out = scratch[7];
+             return true;
+         }
+         debug_sleep_ms(2);
+@@ -1641,6 +1650,98 @@ JARVIS_TEST(debug_stop_poll_empty, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: stop-event snapshot carries the live sporadic-server remaining
++//           budget (issue #186 Goal 2, §9 introspection): a server-backed
++//           target parks with snap_budget == remaining_budget() sampled
++//           post-park, plus matching state/prio.
++// Input: spinner + init_sporadic_server(60, 1000, 0); attach; park; sel2 poll.
++// Expect: belt BP event; snap_state BLOCKED; snap_prio == base priority;
++//         snap_budget == post-park remaining_budget() (frozen while parked).
++// Depends: snap_budget_of, sel2 StopEvent copy, sporadic server.
++JARVIS_TEST(debug_stop_snapshot_budget_live, "PRE: none | POST: none") {
++    uint64_t stub_phys = 0;
++    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
++    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
++    t->init_sporadic_server(60, 1000, 0);
++    JARVIS_ASSERT_FMT(t->get_sporadic_server() != nullptr, "server missing");
++    uint64_t const scratch_phys = debug_map_scratch();
++    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
++    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
++    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
++    const uint64_t pc = debug_park_and_get_pc(h);
++    JARVIS_ASSERT_FMT(pc != 0, "park/pc failed");
++    uint64_t kind = 0;
++    uint64_t addr = 0;
++    uint64_t snap_state = 0;
++    uint64_t snap_prio = 0;
++    uint64_t snap_budget = 0;
++    JARVIS_ASSERT_FMT(debug_wait_event(h, kind, addr, nullptr, nullptr,
++                                       &snap_state, &snap_prio, &snap_budget),
++                      "no belt event");
++    JARVIS_ASSERT_FMT(kind == kKindBp, "belt kind not BP: 0x%lx", kind);
++    JARVIS_ASSERT_FMT(snap_state == static_cast<uint64_t>(TaskState::BLOCKED),
++                      "snap_state not BLOCKED: 0x%lx", snap_state);
++    JARVIS_ASSERT_FMT(snap_prio == t->priority,
++                      "snap_prio mismatch: 0x%lx vs 0x%lx", snap_prio,
++                      t->priority);
++    const uint64_t want =
++        t->get_sporadic_server()->remaining_budget();
++    JARVIS_ASSERT_FMT(snap_budget == want,
++                      "snap_budget 0x%lx != remaining 0x%lx", snap_budget,
++                      want);
++    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
++                      "detach failed");
++    debug_unmap_scratch(scratch_phys);
++    debug_free_spinner_page(t, stub_phys);
++    debug_reap_child(t);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: stop-event snapshot reports zero budget for a target without a
++//           sporadic server (plain runelf-style activation): the Phase-2
++//           zero behavior is preserved, state/prio still filled.
++// Input: plain spinner (no server); attach; park; sel2 poll.
++// Expect: belt BP event; snap_budget == 0; snap_state BLOCKED; prio matches.
++// Depends: snap_budget_of null-server path, sel2 StopEvent copy.
++JARVIS_TEST(debug_stop_snapshot_budget_zero_without_server,
++            "PRE: none | POST: none") {
++    uint64_t stub_phys = 0;
++    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
++    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
++    JARVIS_ASSERT_FMT(t->get_sporadic_server() == nullptr,
++                      "spinner has a server");
++    uint64_t const scratch_phys = debug_map_scratch();
++    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
++    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
++    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
++    const uint64_t pc = debug_park_and_get_pc(h);
++    JARVIS_ASSERT_FMT(pc != 0, "park/pc failed");
++    uint64_t kind = 0;
++    uint64_t addr = 0;
++    uint64_t snap_state = 0;
++    uint64_t snap_prio = 0;
++    uint64_t snap_budget = 0;
++    JARVIS_ASSERT_FMT(debug_wait_event(h, kind, addr, nullptr, nullptr,
++                                       &snap_state, &snap_prio, &snap_budget),
++                      "no belt event");
++    JARVIS_ASSERT_FMT(kind == kKindBp, "belt kind not BP: 0x%lx", kind);
++    JARVIS_ASSERT_FMT(snap_state == static_cast<uint64_t>(TaskState::BLOCKED),
++                      "snap_state not BLOCKED: 0x%lx", snap_state);
++    JARVIS_ASSERT_FMT(snap_prio == t->priority,
++                      "snap_prio mismatch: 0x%lx vs 0x%lx", snap_prio,
++                      t->priority);
++    JARVIS_ASSERT_FMT(snap_budget == 0, "snap_budget not zero: 0x%lx",
++                      snap_budget);
++    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
++                      "detach failed");
++    debug_unmap_scratch(scratch_phys);
++    debug_free_spinner_page(t, stub_phys);
++    debug_reap_child(t);
++    JARVIS_TEST_PASS();
++}
++
+ // Testidea: Supervisor-grant mint + use (issue #239, spec §14): the
+ //           harness, as launcher, grants its own child to itself and
+ //           drives the full handle lifecycle on the granted slot.
+@@ -2235,6 +2336,8 @@ void register_debug_syscall_tests() {
+     JARVIS_REGISTER_TEST(debug_stop_detach_disposition);
+     JARVIS_REGISTER_TEST(debug_stop_debugger_death);
+     JARVIS_REGISTER_TEST(debug_stop_poll_empty);
++    JARVIS_REGISTER_TEST(debug_stop_snapshot_budget_live);
++    JARVIS_REGISTER_TEST(debug_stop_snapshot_budget_zero_without_server);
+     JARVIS_REGISTER_TEST(debug_grant_mint_use);
+     JARVIS_REGISTER_TEST(debug_grant_denial_matrix);
+     JARVIS_REGISTER_TEST(debug_grant_revoke_parked_disposition);
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 3a1a71271..06c4d43ba 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -69,7 +69,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"syscall_core",         33,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70)
+     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
+     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
+-    {"debug_syscall",         24,   24,      24     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295); arch-neutral, x86_64 measured via TCOUNT
++    {"debug_syscall",         26,   26,      26     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295) + 2 snapshot-budget (#186 Goal 2); arch-neutral, x86_64 measured via TCOUNT
+ 
+     // process
+     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
 diff --git a/test-history.txt b/test-history.txt
-index 1ff41cbd5..12a6cce54 100644
+index 12a6cce54..1036bf8d5 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -2623,3 +2623,5 @@ SUMMARY: total=18 ok=0 fail=18
- 2026-10-07 03:17:31 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
- 
+@@ -2625,3 +2625,5 @@ SUMMARY: total=18 ok=0 fail=18
  SUMMARY: total=18 ok=17 fail=1
-+2026-10-07 08:42:27 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 557ms
-+2026-10-07 08:43:38 exc_table PASSED: 4 FAILED: 0 TIME: 140ms
+ 2026-10-07 08:42:27 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 557ms
+ 2026-10-07 08:43:38 exc_table PASSED: 4 FAILED: 0 TIME: 140ms
++2026-10-07 13:19:41 debug_syscall PASSED: 26 FAILED: 0 TIME: 1002ms
++2026-10-07 13:20:01 shell_commands PASSED: 34 FAILED: 0 TIME: 1192ms
+diff --git a/tools/debugd/tests/test_cproto.c b/tools/debugd/tests/test_cproto.c
+index 100fbc424..ba50fa520 100644
+--- a/tools/debugd/tests/test_cproto.c
++++ b/tools/debugd/tests/test_cproto.c
+@@ -90,21 +90,22 @@ static void test_addr_len(void) {
+ }
+ 
+ static void test_stop_reply(void) {
+-    char out[32] = {0};
++    char out[128] = {0};
+     unsigned long n = 0;
+ 
+-    n = dbg_stop_reply_for_kind(DBG_STOP_BREAKPOINT, out);
+-    CHECK(n == 12);
+-    CHECK(strncmp(out, "T05thread:1;", 12) == 0);
+-    n = dbg_stop_reply_for_kind(DBG_STOP_STEP, out);
+-    CHECK(strncmp(out, "T05thread:1;", 12) == 0);
+-    n = dbg_stop_reply_for_kind(DBG_STOP_FAULT, out);
+-    CHECK(strncmp(out, "T0bthread:1;", 12) == 0);
+-    n = dbg_stop_reply_for_kind(DBG_STOP_DEATH, out);
++    n = dbg_stop_reply_for_kind(DBG_STOP_BREAKPOINT, 2, 20, 0x10, out);
++    CHECK(n == 38);
++    CHECK(strncmp(out, "T05thread:1;state:2;prio:14;budget:10;", 38) == 0);
++    n = dbg_stop_reply_for_kind(DBG_STOP_STEP, 0, 0, 0, out);
++    CHECK(n == 36);
++    CHECK(strncmp(out, "T05thread:1;state:0;prio:0;budget:0;", 36) == 0);
++    n = dbg_stop_reply_for_kind(DBG_STOP_FAULT, 1, 127, 0, out);
++    CHECK(strncmp(out, "T0bthread:1;state:1;prio:7f;budget:0;", 37) == 0);
++    n = dbg_stop_reply_for_kind(DBG_STOP_DEATH, 4, 2, 7, out);
+     CHECK(n == 3 && strncmp(out, "W00", 3) == 0);
+     /* Unknown kinds fall back to TRAP (never empty, never garbage). */
+-    n = dbg_stop_reply_for_kind(99, out);
+-    CHECK(strncmp(out, "T05thread:1;", 12) == 0);
++    n = dbg_stop_reply_for_kind(99, 0, 0, 0, out);
++    CHECK(strncmp(out, "T05thread:1;state:0;prio:0;budget:0;", 36) == 0);
+ }
+ 
+ int main(void) {
+diff --git a/userspace/debugd.c b/userspace/debugd.c
+index ec3dd0403..33e32de20 100644
+--- a/userspace/debugd.c
++++ b/userspace/debugd.c
+@@ -247,10 +247,12 @@ static int handle_query_stop(void) {
+     if (dbg_poll_stop(RSP_POLL_DEADLINE_TICKS) == 0) {
+         g_last_stop_kind = g_stop_ev.kind;
+         g_continue_outstanding = 0;
+-        r = dbg_stop_reply_for_kind(g_stop_ev.kind, g_reply);
++        r = dbg_stop_reply_for_kind(g_stop_ev.kind, g_stop_ev.snap_state,
++                                    g_stop_ev.snap_prio, g_stop_ev.snap_budget,
++                                    g_reply);
+     } else {
+         g_last_stop_kind = DBG_STOP_BREAKPOINT;
+-        r = dbg_stop_reply_for_kind(DBG_STOP_BREAKPOINT, g_reply);
++        r = dbg_stop_reply_for_kind(DBG_STOP_BREAKPOINT, 0, 0, 0, g_reply);
+     }
+     return rsp_send_packet(g_reply, r);
+ }
+@@ -479,7 +481,9 @@ static int handle_step(void) {
+         return rsp_send_packet("E01", 3);
+     g_last_stop_kind = g_stop_ev.kind;
+     g_continue_outstanding = 0;
+-    r = dbg_stop_reply_for_kind(g_stop_ev.kind, g_reply);
++    r = dbg_stop_reply_for_kind(g_stop_ev.kind, g_stop_ev.snap_state,
++                                g_stop_ev.snap_prio, g_stop_ev.snap_budget,
++                                g_reply);
+     return rsp_send_packet(g_reply, r);
+ }
+ 
+@@ -683,7 +687,9 @@ static void poll_async_stop(void) {
+         return;
+     g_last_stop_kind = g_stop_ev.kind;
+     g_continue_outstanding = 0;
+-    rl = dbg_stop_reply_for_kind(g_stop_ev.kind, g_reply);
++    rl = dbg_stop_reply_for_kind(g_stop_ev.kind, g_stop_ev.snap_state,
++                                 g_stop_ev.snap_prio, g_stop_ev.snap_budget,
++                                 g_reply);
+     rsp_send_packet(g_reply, rl);
+ }
+ 
+diff --git a/userspace/debugd_proto.h b/userspace/debugd_proto.h
+index ef9e55585..fbd7718e0 100644
+--- a/userspace/debugd_proto.h
++++ b/userspace/debugd_proto.h
+@@ -132,8 +132,39 @@ static int dbg_parse_addr_len(const char *p, unsigned long *addr,
+ }
+ 
+ /* Map a stop event kind to an RSP stop reply. Single thread model
+- * (§13/Q1): thread 1, consistent with qC. Returns reply length. */
++ * (§13/Q1): thread 1, consistent with qC. Snapshot fields are appended
++ * as GDB-tolerated trailing key:val pairs (unknown keys are ignored by
++ * stock GDB). The W-reply (death) path is unchanged. Returns reply length.
++ * Worst-case growth vs the old reply: 3 keys x (7 + 16 hex + ;) = 69
++ * chars, 30x inside the g_reply ceiling (2*1024+64). */
++static unsigned long dbg_append_u64_hex(char *out, unsigned long pos,
++                                        unsigned long v) {
++    char tmp[16];
++    int n = 0;
++    do {
++        tmp[n++] = "0123456789abcdef"[v & 0xF];
++        v >>= 4;
++    } while (v);
++    while (n > 0) {
++        out[pos++] = tmp[--n];
++    }
++    return pos;
++}
++
++static void dbg_append_kv_hex(char *out, unsigned long *pos, const char *key,
++                              unsigned long v) {
++    while (*key) {
++        out[(*pos)++] = *key++;
++    }
++    out[(*pos)++] = ':';
++    *pos = dbg_append_u64_hex(out, *pos, v);
++    out[(*pos)++] = ';';
++}
++
+ static unsigned long dbg_stop_reply_for_kind(unsigned long kind,
++                                             unsigned long snap_state,
++                                             unsigned long snap_prio,
++                                             unsigned long snap_budget,
+                                              char *out) {
+     unsigned long pos = 0;
+     const char *sig = "T05";
+@@ -159,6 +190,9 @@ static unsigned long dbg_stop_reply_for_kind(unsigned long kind,
+     out[pos++] = ':';
+     out[pos++] = '1';
+     out[pos++] = ';';
++    dbg_append_kv_hex(out, &pos, "state", snap_state);
++    dbg_append_kv_hex(out, &pos, "prio", snap_prio);
++    dbg_append_kv_hex(out, &pos, "budget", snap_budget);
+     out[pos] = '\0';
+     return pos;
+ }

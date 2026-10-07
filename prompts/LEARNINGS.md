@@ -44,6 +44,11 @@
 
 <!-- Newest first. Bodies carry durable guidance only. -->
 
+### #186 — Goal-2 snapshot budget export (v0.5.2 remainder)
+- **Learned:** (1) Planner-architected atomicity can be unimplementable: __atomic_load_n needs the field address, but budget_remaining_ is private — the public plain-read accessor + parked-target reasoning (auditor strengthened: consume() only debits t==cur) is the correct construction, not a compromise. (2) Userspace freestanding C defeats host LSP (wrong flags/sysroot) — verify with the real target/host builds, never LSP. (3) Count your own test lengths by hand: 12+8+8+9=37, not 36 — the host oracle caught it only because vectors pin exact bytes.
+- **Adapted:** snap_budget_of + 3 sites; stop-reply key:val display (+69 worst-case, ceiling-noted); 2 kernel tests (post-park sampling); extended cproto vectors; #186 stays open for B1/D1.
+- **Style re-surface:** §10.5 named bounds (ceiling math in comment); read-only rule verified by absence (no set_priority in debug paths); TCG-relative asserts only.
+
 ### #227 — debugd Phase 6 bare-metal audit (verification-only cycle)
 - **Learned:** (1) Audit tasks can complete with zero src changes — filings ARE the deliverable; POST-audit then reviews an (almost) empty patch, which is legitimate. (2) `git diff -- .` swallows audits/pending_patch.diff itself — always exclude it (`':!audits/pending_patch.diff'`) or the patch self-references (900+ garbage lines). (3) Verify the "missing" row before assuming loss: test-history appends from parallel runs interleave; `tail` lies, `rg` tells.
 - **Adapted:** 6 GAP follow-ups #304–#309 as sub-issues of #227; zero-change POST-227 APPROVED; hal_serial_logic + exc_table evidence rows.

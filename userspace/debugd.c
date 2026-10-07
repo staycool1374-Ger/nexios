@@ -247,10 +247,12 @@ static int handle_query_stop(void) {
     if (dbg_poll_stop(RSP_POLL_DEADLINE_TICKS) == 0) {
         g_last_stop_kind = g_stop_ev.kind;
         g_continue_outstanding = 0;
-        r = dbg_stop_reply_for_kind(g_stop_ev.kind, g_reply);
+        r = dbg_stop_reply_for_kind(g_stop_ev.kind, g_stop_ev.snap_state,
+                                    g_stop_ev.snap_prio, g_stop_ev.snap_budget,
+                                    g_reply);
     } else {
         g_last_stop_kind = DBG_STOP_BREAKPOINT;
-        r = dbg_stop_reply_for_kind(DBG_STOP_BREAKPOINT, g_reply);
+        r = dbg_stop_reply_for_kind(DBG_STOP_BREAKPOINT, 0, 0, 0, g_reply);
     }
     return rsp_send_packet(g_reply, r);
 }
@@ -479,7 +481,9 @@ static int handle_step(void) {
         return rsp_send_packet("E01", 3);
     g_last_stop_kind = g_stop_ev.kind;
     g_continue_outstanding = 0;
-    r = dbg_stop_reply_for_kind(g_stop_ev.kind, g_reply);
+    r = dbg_stop_reply_for_kind(g_stop_ev.kind, g_stop_ev.snap_state,
+                                g_stop_ev.snap_prio, g_stop_ev.snap_budget,
+                                g_reply);
     return rsp_send_packet(g_reply, r);
 }
 
@@ -683,7 +687,9 @@ static void poll_async_stop(void) {
         return;
     g_last_stop_kind = g_stop_ev.kind;
     g_continue_outstanding = 0;
-    rl = dbg_stop_reply_for_kind(g_stop_ev.kind, g_reply);
+    rl = dbg_stop_reply_for_kind(g_stop_ev.kind, g_stop_ev.snap_state,
+                                 g_stop_ev.snap_prio, g_stop_ev.snap_budget,
+                                 g_reply);
     rsp_send_packet(g_reply, rl);
 }
 

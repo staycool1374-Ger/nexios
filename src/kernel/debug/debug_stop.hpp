@@ -54,7 +54,8 @@ struct StopEvent {
     uint64_t fault_addr = 0;  // CR2 / FAR / stval / stop VA
     uint64_t snap_state = 0;  // task-info snapshot: state at park time
     uint64_t snap_prio = 0;   // task-info snapshot: priority
-    uint64_t snap_budget = 0; // task-info snapshot: reserved (0 in Phase 2)
+    uint64_t snap_budget = 0; // task-info snapshot: sporadic-server remaining
+                             // budget at park time (0 when target has none)
 };
 
 /// @brief Notify pulse delivered to the debugger TCB on every enqueue.

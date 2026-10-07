@@ -69,7 +69,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"syscall_core",         33,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
-    {"debug_syscall",         24,   24,      24     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295); arch-neutral, x86_64 measured via TCOUNT
+    {"debug_syscall",         26,   26,      26     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295) + 2 snapshot-budget (#186 Goal 2); arch-neutral, x86_64 measured via TCOUNT
 
     // process
     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
