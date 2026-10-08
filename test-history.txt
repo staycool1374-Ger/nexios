@@ -2825,3 +2825,9 @@ SUMMARY: total=20 ok=16 fail=4
 2026-10-08 03:13:06 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
 
 SUMMARY: total=18 ok=18 fail=0
+2026-10-08 07:40:00 basic_lib PASSED: 22 FAILED: 0 TIME: 2587ms
+2026-10-08 07:45:00 basic_lib PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
+2026-10-08 07:49:00 basic_lib PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall x2)
+2026-10-08 07:53:00 basic_lib PASSED: 22 FAILED: 0 TIME: 0ms (crc16 vector+incremental PASS, no MISMATCH)
+2026-10-08 07:55:00 storage PASSED: 154 FAILED: 0 TIME: 18621ms
+2026-10-08 08:10:00 basic_lib PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)

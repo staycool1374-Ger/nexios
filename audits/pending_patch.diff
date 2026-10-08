@@ -1,1117 +1,650 @@
-diff --git a/audits/report-PRE-275-20261007-191022.md b/audits/report-PRE-275-20261007-191022.md
+diff --git a/audits/report-PRE-276-20261008-052932.md b/audits/report-PRE-276-20261008-052932.md
 new file mode 100644
-index 000000000..170adde74
+index 000000000..0813bcaf2
 --- /dev/null
-+++ b/audits/report-PRE-275-20261007-191022.md
-@@ -0,0 +1,26 @@
-+# AUDIT REPORT 20261007-191022 (PRE-audit, plan review)
-+PATCH: N/A (PRE-audit of implementation plan for issue #275; no code diff exists yet)
-+FILES: userspace/ramdiskd.c, src/kernel/task/taskdefs.cpp, src/kernel/daemon/daemon_mgr.cpp, src/kernel/kernel.cpp (DaemonWatch), src/kernel/test/test_ramdisk.cpp (all planned only)
++++ b/audits/report-PRE-276-20261008-052932.md
+@@ -0,0 +1,11 @@
++# AUDIT REPORT 20261008-052932 (PRE-audit, plan review)
++PATCH: N/A (PRE-audit of implementation plan for issue #276; no code diff exists yet)
++FILES: userspace/xmodem.c (NEW, planned), userspace/xmodem_crc.h (NEW, planned), src/kernel/test/test_lib.cpp (EXTEND +2 CRC tests, planned), docs/specs/xmodem.md (NEW, planned), tools/xmodem_send.py (NEW, planned), tools/verify-276.exp (NEW, planned)
 +
 +## FINDINGS
-+- [S2] plan (DaemonWatch row for ramdiskd) — contradicts documented closed boot gate and couples boot timing to ramdiskd
-+  WHY: taskdefs.cpp:92 documents "kernel.cpp DaemonWatch stays vfsd/iocd/watchdogd only", and a FAILED/missing ramdiskd would force every boot down the 500-tick degraded path (kernel.cpp:402-430), implicating the #45 per-stage boot-timing budgets — the plan must state gate membership explicitly and reconcile the comment either way.
-+- [S2] plan (10-chunk read_block/write_block loop) — send_sync reply-matching discipline not mandated
-+  WHY: send_sync pops the oldest queued message with no sender matching, so any grant or stale reply in the client inbox during the 10-message chunk loop is eaten as a "reply" and fails the call (LEARNINGS #16/#296) — the plan must mandate drain-before-send_sync (plain recv, no authorize) or sender-matched reply waits on both client and daemon sides.
-+- [S2] plan (wire: block/chunk geometry) — bounds validation not explicitly mandated for reachable IPC input
-+  WHY: Block number and chunk index arrive over IPC, so §5 requires explicit fail-closed error returns (block < 32768, chunk_idx < 10, tail-len clamp offset+len <= 512) with §10.5 named bounds — geometry alone (8 B header + ≤56 B data, 10 chunks/block) does not state the checks.
-+- [S3] plan (boot-time 16 MiB UntypedMem::create) — carve point ordering not pinned
-+  WHY: 4096 contiguous user pages starve if carved after fragmenting boot allocs, so the plan should name an early carve point (before driver/DMA pool setup) with the already-stated fail-closed degraded path; is_user=true is correct and load-bearing (frame_map.cpp:79 refuses non-user maps).
-+- [S3] plan (re-grant hook) — restart-path placement and stale-handle semantics unstated
-+  WHY: Restart (restart_stale_daemons and ensure_running, daemon_mgr.cpp:195-324) mints a new task/CSpace, so the plan must place the re-grant on both paths and state that stale client handles fail closed on lookup (cap.cpp stale-gen rule); blast radius is test-only in this increment (no production client yet).
-+- [S3] plan (SS budget 2+3+1+2=8/10) — schedulability justification not recorded
-+  WHY: 0.8 exceeds the Liu-Layland n=4 sufficient bound (0.757), which is fine only because all four periods are identical (harmonic sets are RM-schedulable to 1.0) — the plan should record that one-line justification; daemon_mgr ternary yielding 2 needs no change (verified daemon_mgr.cpp:223-224,316-317).
-+- [S3] plan (tests: 4 stub-first in test_ramdisk.cpp, storage aggregate) — count-row and wiring updates unstated
-+  WHY: Adding 4 tests moves the storage expected-count row (148 in test_expected_counts.hpp:284) and needs the THREE wirings plus aggregate membership per LEARNINGS #198; also note initrd size growth from the new daemon ELF.
-+- [S3] plan (torn writes documented acceptable) — follow-up must revisit before executable use
-+  WHY: Documented torn-write tolerance is acceptable for scratch-block use in this increment, but the loadelf-from-ramdisk follow-up must add checksums or quiescence before executing torn-loaded images.
-+
-+## PATCH
-+No `audits/rejected_patch.diff` at PRE stage (no code exists to correct; per instruction no code was written) — cure is plan amendment: (1) resolve DaemonWatch gate membership + reconcile the taskdefs.cpp:92 comment, (2) mandate the #296 drain/sender-match discipline in the chunk loop, (3) mandate explicit block/chunk bounds checks with named constants and fail-closed codes, (4) pin the early carve point, re-grant placement, harmonic-budget note, count-row bump, and the loadelf atomicity revisit.
-+
-+DECISION: REJECTED
-diff --git a/audits/report-PRE-275-20261007-191157-iter2.md b/audits/report-PRE-275-20261007-191157-iter2.md
-new file mode 100644
-index 000000000..4f391c463
---- /dev/null
-+++ b/audits/report-PRE-275-20261007-191157-iter2.md
-@@ -0,0 +1,19 @@
-+# AUDIT REPORT 20261007-191157-iter2 (PRE-audit, plan review, iter-2)
-+PATCH: N/A (PRE-audit of amended implementation plan for issue #275; no code diff exists yet)
-+FILES: userspace/ramdiskd.c (planned), src/kernel/task/taskdefs.cpp, src/kernel/daemon/daemon_mgr.cpp, src/kernel/kernel.cpp (all planned only)
-+
-+## PRIOR FINDINGS DISPOSITION (report-PRE-275-20261007-191022.md → amendments in #275 comment 6044960731)
-+- S2 DaemonWatch row → CURED by (a): NO ramdiskd row, closed trio (vfsd/iocd/watchdogd) preserved, taskdefs.cpp:92 comment (verified present) untouched and true. Split-phase grant removes boot-gate coupling: carve early post-PMM::init (kernel.cpp:1058 verified) pre-AHCI/virtio-probe + DMA setup, grant late in init_task_main after the rendezvous/degraded exit via PID cell; PID 0/absent → skip + dmesg warn + degraded boot, never block, never panic. #45 boot-timing budgets unimplicated.
-+- S2 chunk-loop reply matching → CURED by (b): #296 discipline MANDATED both sides — client drains inbox with plain recv (no authorize) before chunk 0 then sender-verified reply wait per chunk (sender == ramdiskd pid); daemon blocking recv + one-way send only (never send_sync); any mismatch/timeout aborts the 10-chunk sequence fail-closed with no partial-block commit exposed. Matches LEARNINGS #16/#296 (send_sync pops oldest, no sender match).
-+- S2 IPC bounds validation → CURED by (c): reachable-input checks MANDATED with named constants and fail-closed codes — block_no < RAMDISK_BLOCKS (32768 = 16 MiB/512, geometry-consistent), chunk_idx < RAMDISK_CHUNKS_PER_BLOCK (10, consistent with 8 B header + ≤56 B data over 512 B), offset+len <= RAMDISK_BLOCK_SIZE (512) with tail clamp; module error codes in ramdiskd.hpp, no bare -1 on the wire.
-+- S3 carve-point ordering → CURED by (a)+(d): early carve pinned post-PMM::init pre-driver/DMA-probe (implementer pins exact adjacent line — acceptable residual precision for plan stage; ordering constraint is explicit and prevents fragmentation starvation); is_user=true + UntypedMem::create fail-closed unchanged.
-+- S3 re-grant hook → CURED by (d): re-grant on BOTH restart_stale_daemons (daemon_mgr.cpp:145 verified) and ensure_running (daemon_mgr.cpp:251 verified) paths + stale client handles fail closed on cap lookup (stale-gen rule); test-only blast radius noted.
-+- S3 SS budget → CURED by (d): harmonic-period note recorded (all four SS periods identical at 10 → RM-schedulable to 1.0, so 8/10 justified despite Liu-Layland 0.757 for n=4); daemon_mgr ternary yielding 2 unchanged.
-+- S3 test wiring/count → CURED by (d): storage expected-count row 148→152 (+4, matches 4-test fixture) with the three registry wirings + initrd size growth note.
-+- S3 torn writes → CURED by (d): scratch-block tolerance kept for this increment; loadelf-from-ramdisk follow-up must add checksums/quiescence before executing images.
-+- Process check (PROMPT-audit.md check 7): PASS — issue thread shows retrieval artifacts (#275 comment 6044870119: graphify BFS d3 query USED + vault search 0 matches with disposition; iter-2 amendments in comment 6044960731).
-+
-+## FINDINGS
-+None. No S1/S2/S3 open against the amended plan. Residual implementation-stage obligations (exact carve adjacent line, PID-cell plumbing, sender-verified wait primitive selection, per-opcode error-code table) are fully specified as mandates and verifiable at code audit; they do not block plan approval.
++- [S3] userspace/xmodem.c (planned base64/hex framing decoders) — per-framing decode-output clamp unstated
++  WHY: Three framings share one receive core over a 1 kB static window plus 512 B staging, so each decoder needs an explicit fail-closed bound (decoded bytes <= window cap, overlong line rejected) to keep the static-only sizing claim structural rather than assumed.
++- [S3] userspace/xmodem_crc.h (planned CRC-16/CCITT-FALSE) — 16-bit accumulator masking unstated
++  WHY: C promotes unsigned short to int through the shift/xor loop, so masking the accumulator to 0xFFFF on shift/finalize keeps the "123456789"->0x31C3 self-test vector portable beyond the x86_64-elf 16-bit-short target the plan builds for.
 +
 +DECISION: APPROVED
-diff --git a/docs/specs/ramdiskd.md b/docs/specs/ramdiskd.md
+diff --git a/docs/specs/xmodem.md b/docs/specs/xmodem.md
 new file mode 100644
-index 000000000..98595332f
+index 000000000..3e591c6ba
 --- /dev/null
-+++ b/docs/specs/ramdiskd.md
-@@ -0,0 +1,59 @@
-+# Ramdisk Service (ramdiskd) — issue #275
++++ b/docs/specs/xmodem.md
+@@ -0,0 +1,50 @@
++# XMODEM/YMODEM Receiver (xmodem) — issue #276
 +
-+Userspace `SPORADIC_SERVER` daemon (`userspace/ramdiskd.c`, `bin/ramdiskd.c.elf`)
-+serving fixed 512 B blocks over chunked IPC. Kernel side:
-+`src/kernel/ramdisk/ramdiskd.{hpp,cpp}`.
++Userspace program (`userspace/xmodem.c`, `bin/xmodem.c.elf`) receiving
++files over the serial stream into ramdiskd. Single-process (no fork —
++#312 denies `fork()` from runelf'd tasks). Zero kernel changes.
 +
-+## Opcodes (400-series)
++## Protocol
 +
-+| Op | Value | Direction |
-+|---|---|---|
-+| `RAMDISK_READ_BLOCK` | 400 | client → daemon |
-+| `RAMDISK_WRITE_BLOCK` | 401 | client → daemon |
-+| `RAMDISK_STAT` | 402 | client → daemon |
-+| `RAMDISK_GRANT` | 403 | kernel → daemon (one-way, no reply) |
++- Receiver-initiated `C` handshake (up to 10× every 3 s, CRC-only —
++  no checksum/`NAK` fallback); sender-initiated streams accepted if a
++  valid `SOH`/`STX` arrives in-window.
++- Packets: `SOH` 128 B / `STX` 1024 B + seq + complement + data +
++  CRC-16/CCITT-FALSE big-endian (`poly 0x1021`, `init 0x0000`;
++  `"123456789"` → `0x31C3`, shared header `userspace/xmodem_crc.h`,
++  verified by `lib_crc16_*` kernel tests).
++- Per-packet: seq/complement + CRC checked; mismatch → `NAK`, 10
++  retries then `CAN CAN` abort; duplicate of last ACK → re-`ACK`;
++  wrong seq → abort; `CAN CAN` → silent abort; `EOT` → `ACK`, done.
++- YMODEM block 0 (`seq 0` first): `filename\0size_ascii\0`; size bounds
++  the stream (bytes beyond size dropped); no block 0 → pure XMODEM
++  until `EOT`. Final partial block zero-padded (`0x1A` stripped only
++  via YMODEM size).
++- Timeouts: 1 s alarm slices per byte (poll + `nanosleep`), 10 s per
++  packet, 600 s overall cap. Every wait bounded; fail-closed abort
++  (`CAN CAN`, nothing further written).
 +
-+## Wire format (64 B IPC payload)
++## Framings (interactive `mode`)
 +
-+Request overlay (64 B): `sender_id` + `type` (kernel-filled, vfsd precedent)
-++ `block_no:u64` + `chunk_idx:u64` + `data[32]`.
-+Reply overlay (64 B): `sender_id` + `type=0` + `result:i64` + `data[32]` +
-+`reserved:u64`.
++- `uart`: raw binary. `base64`: quartets (whitespace skipped, `=`
++  end-padding only, bad alphabet aborts; decoded output clamped).
++  `hex`: pairs (whitespace skipped, odd tail aborts).
 +
-+One 512 B block = 16 chunks × 32 B (`RAMDISK_CHUNKS_PER_BLOCK`,
-+`RAMDISK_CHUNK_DATA`). Requests/replies carry exactly one chunk; clients
-+loop 0–15 per block. Chunk data rides in the request (write) or the reply
-+(read). Replies are always type 0; clients verify sender + type
-+(#296 discipline: drain inbox before the sequence, sender-verify per
-+chunk, abort fail-closed on mismatch).
++## Ramdisk sink
 +
-+Error codes: `OK=0`, `RANGE=-1`, `NOGRANT=-2`, `NOMEM=-3`, `UNKNOWN_OP=-4`.
-+All bounds (`block < 32768`, `chunk < 16`) fail closed; reachable IPC
-+input never panics.
++Stream bytes fill 512 B staging blocks from `start block`; each full
++block goes out as 16×32 B chunks (opcode 401, client pid packed first
++per the ramdiskd wire); `EOT`/size-end flushes the partial. First
++non-OK (incl. `NOGRANT`) aborts. `dump` reads blocks back (opcode 400)
++and emits raw bytes (hex per byte in `hex` mode) for host compare.
 +
-+## Capabilities
++## Use
 +
-+Backing store: 8 × 2 MiB segments (one `FrameCap` each — a 16 MiB cap
-+cannot map: `FrameUserMap` regions are 2 MiB). Block B lives in segment
-+`B / 4096` at `(B % 4096) * 512 + chunk * 32`.
++`loadelf /bin/xmodem.c.elf` + `runelf`, answer `mode/cmd/pid/block`
++(`cmd` loops; `quit` exits). E2E: `tools/verify-276.py` (TCP serial,
++golden byte-compare all framings + NAK-recovery + NOGRANT).
 +
-+Lifecycle: kernel carves early post-PMM/pre-probe (`boot_allocate`),
-+exact-retypes each segment into the daemon CSpace (`READ|WRITE`) at grant
-+(`grant_storage`), and delivers 8 handles via `RAMDISK_GRANT`. The daemon
-+maps each handle with `SYS_FRAME_MAP` into its 2 MiB windows. Daemon death
-+frees frames via normal slot disposal; re-grant re-carves + re-mints on
-+both restart paths. No new cap type, no new syscall, no new lock.
++## Non-goals
 +
-+## Boot / degraded / reboot
-+
-+`DaemonWatch` stays vfsd/iocd/watchdogd only — boot never blocks on
-+ramdiskd. The grant runs post-rendezvous via the PID cell; any failure
-+logs + dmesg (`DAEMON+10`) and continues degraded (daemon answers
-+`NOGRANT`). `reboot_from_table` picks the taskdefs row up automatically.
-+
-+## Non-goals (follow-ups)
-+
-+- loadelf/runelf from ramdisk (needs VFS integration + checksums or
-+  quiescence — torn 512 B writes are visible to concurrent readers).
-+- XMODEM transport (sub-issue #276). Multi-block atomicity, resize,
-+  zero-copy ring (#106 Part B) replacing chunked IPC.
-diff --git a/src/kernel/cap/cap.cpp b/src/kernel/cap/cap.cpp
-index 640e09b3c..cfa408f00 100644
---- a/src/kernel/cap/cap.cpp
-+++ b/src/kernel/cap/cap.cpp
-@@ -196,8 +196,6 @@ bool revoke(CNode *cspace, uint64_t handle) noexcept {
-         return false;
-     if (handle_cspace(handle) != cspace->cspace_id)
-         return false;
--    // Occupy-claim the slot under the lock; collect the target for deferred
--    // release (the last release may MemPool::free the target).
-     KernelObject *target = nullptr;
-     bool found = false;
-     {
-@@ -222,8 +220,7 @@ bool revoke(CNode *cspace, uint64_t handle) noexcept {
-     // cascading if it is a CNode, then drop the slot reference.
-     if (target)
-         target->revoke();
--    if (target)
--        target->release();
-+    if (target)        target->release();
-     return true;
- }
++YMODEM-G, sender role, checksum fallback, multi-file batch, `loadelf`
++from ramdisk (needs VFS + quiescence), atomicity/resize/zero-copy.
+diff --git a/mk/rules.mk b/mk/rules.mk
+index 9ad7bd6b7..b014e07ac 100644
+--- a/mk/rules.mk
++++ b/mk/rules.mk
+@@ -276,6 +276,7 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c us
+ 	@cp userspace/hey.c userspace/nullderef.c userspace/prime.c initrd_root/
+ 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
+ 	@printf 'loadelf /bin/sh.c.elf\nsleep 3\nrunelf\nsleep 300\n' > initrd_root/tests/sh310.txt
++	@printf 'loadelf /bin/xmodem.c.elf\nsleep 3\nrunelf\nsleep 900\n' > initrd_root/tests/xmodem276.txt
+ 	cd initrd_root && find . -print0 | cpio -o -H newc -0 --quiet > ../$@
+ 	@rm -rf initrd_root
  
-diff --git a/src/kernel/daemon/daemon_mgr.cpp b/src/kernel/daemon/daemon_mgr.cpp
-index 8abc56f3f..26ea96641 100644
---- a/src/kernel/daemon/daemon_mgr.cpp
-+++ b/src/kernel/daemon/daemon_mgr.cpp
-@@ -20,6 +20,7 @@
- /// @brief Daemon lifecycle manager implementation.
- 
- #include <kernel/daemon/daemon_mgr.hpp>
-+#include <kernel/ramdisk/ramdiskd.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/elf/elf.hpp>
-@@ -232,6 +233,11 @@ void restart_stale_daemons() {
-         if (entries_[i].set_pid_fn) {
-             entries_[i].set_pid_fn(task->id);
-         }
-+        // Issue #275: a restarted ramdiskd lost its CSpace with the old
-+        // task — re-grant storage and push the handles (fail-closed).
-+        if (entries_[i].name != nullptr &&
-+            strcmp(entries_[i].name, "ramdiskd") == 0)
-+            kernel::ramdiskd::regrant(task->id);
- 
-         debug_write("[DAEMON] '");
-         debug_write(entries_[i].name);
-@@ -325,6 +331,10 @@ void ensure_running(const char *name) {
-         if (entries_[i].set_pid_fn) {
-             entries_[i].set_pid_fn(task->id);
-         }
-+        // Issue #275: re-grant storage to a (re)spawned ramdiskd.
-+        if (entries_[i].name != nullptr &&
-+            strcmp(entries_[i].name, "ramdiskd") == 0)
-+            kernel::ramdiskd::regrant(task->id);
- 
-         debug_write("[DAEMON] '");
-         debug_write(entries_[i].name);
-@@ -405,5 +415,15 @@ const DaemonEntry &get_entry(uint64_t index) {
-     return entries_[index];
- }
- 
-+bool is_managed(uint64_t pid) {
-+    if (pid == 0)
-+        return false;
-+    for (uint64_t i = 0; i < num_daemons_; ++i) {
-+        if (entries_[i].name != nullptr && entries_[i].pid == pid)
-+            return true;
-+    }
-+    return false;
-+}
-+
- } // namespace daemon
- } // namespace kernel
-diff --git a/src/kernel/daemon/daemon_mgr.hpp b/src/kernel/daemon/daemon_mgr.hpp
-index 0697b0c68..e6d207fe2 100644
---- a/src/kernel/daemon/daemon_mgr.hpp
-+++ b/src/kernel/daemon/daemon_mgr.hpp
-@@ -81,6 +81,11 @@ void reset_restart_count(const char *name);
- /// @brief Return a const reference to the i-th daemon entry.
- const DaemonEntry &get_entry(uint64_t index);
- 
-+/// @brief True when @p pid is a currently managed daemon task.
-+/// Used by snapshot-restore to preserve daemon CSpaces (persistent
-+/// system state holding grants): test fixtures must never break them.
-+bool is_managed(uint64_t pid);
-+
- /// @name Test-isolation helpers
- /// @brief Copy all daemon entries and count into @p entries_out / @p num_out.
- void capture_state(DaemonEntry *out_entries, uint64_t &num_out);
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 02fb06451..eccefdb4e 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -53,6 +53,7 @@
- #include <kernel/vfs/vfs.hpp>
- #include <kernel/vfs/vfsd.hpp>
- #include <kernel/watchdog/watchdogd.hpp>
-+#include <kernel/ramdisk/ramdiskd.hpp>
- #include <kernel/log/dmesg.hpp>
- #include <kernel/driver/iocd.hpp>
- #include <kernel/driver/ata_pio.hpp>
-@@ -504,6 +505,34 @@ void init_task_main() {
-                                   grant, 0);
-             }
-         }
-+        // Issue #275: ramdisk storage grant — mint one FrameCap per
-+        // 2 MiB segment into ramdiskd's CSpace and deliver the 8
-+        // handles. Skipped degraded (no PID, carve failed, or grant
-+        // refused); ramdiskd serves RAMDISK_ERR_NOGRANT until granted.
-+        {
-+            uint64_t handles[8] = {
-+                static_cast<uint64_t>(-1), static_cast<uint64_t>(-1),
-+                static_cast<uint64_t>(-1), static_cast<uint64_t>(-1),
-+                static_cast<uint64_t>(-1), static_cast<uint64_t>(-1),
-+                static_cast<uint64_t>(-1), static_cast<uint64_t>(-1)};
-+            const uint64_t rd_pid = kernel::ramdiskd::get_ramdiskd_pid();
-+            int64_t gr = kernel::ramdiskd::grant_storage(rd_pid, handles);
-+            if (gr != kernel::ramdiskd::RAMDISK_OK || rd_pid == 0) {
-+                kernel::Logger::warn("init: ramdisk grant skipped (%d)",
-+                                     (int)gr);
-+                kernel::log::dmesg_push_sev(
-+                    kernel::log::ErrorSubsystem::DAEMON,
-+                    kernel::log::kDmesgBase_DAEMON + 10,
-+                    kernel::log::LogSeverity::WARN, "ramdisk grant", 0);
-+            } else {
-+                kernel::Message grant{};
-+                grant.sender_id = 1;
-+                grant.type = kernel::ramdiskd::RAMDISK_GRANT;
-+                __builtin_memcpy(grant.data, handles, sizeof(handles));
-+                grant.data_size = sizeof(handles);
-+                kernel::IPC::send(rd_pid, grant, 0);
-+            }
-+        }
-     }
- 
-     // ── Run tests from init-task context (IF=1) ──────────────────
-@@ -1245,6 +1274,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
-     kernel::vfs::mount(kernel::vfs::proc_fs, "/proc");
-     kernel::vfs::mount(kernel::vfs::tmpfs_fs, "/tmp");
- 
-+    // Issue #275: carve the 16 MiB ramdisk backing store here — after
-+    // PMM/VMM init and the boot reservations above, before driver probes
-+    // and DMA pools fragment the contiguous windows. Fail-closed
-+    // degraded (boot continues; the grant below is skipped).
-+    kernel::ramdiskd::boot_allocate();
-+
-     // Probe AHCI controller first, fall back to legacy ATA PIO
- #if defined(CONFIG_ARCH_X86_64)
-     {
-diff --git a/src/kernel/log/dmesg_catalog.hpp b/src/kernel/log/dmesg_catalog.hpp
-index 8d8f8f30f..9f4fb3217 100644
---- a/src/kernel/log/dmesg_catalog.hpp
-+++ b/src/kernel/log/dmesg_catalog.hpp
-@@ -55,6 +55,10 @@ constexpr DmesgRecord kDmesgCatalog_DAEMON[] = {
-      "Daemon restart limit reached, giving up"},
-     {ErrorSubsystem::DAEMON, kDmesgBase_DAEMON + 8, LogSeverity::ERROR,
-      "Daemon restart failed"},
-+    {ErrorSubsystem::DAEMON, kDmesgBase_DAEMON + 9, LogSeverity::ERROR,
-+     "Ramdisk carve failed"},
-+    {ErrorSubsystem::DAEMON, kDmesgBase_DAEMON + 10, LogSeverity::WARN,
-+     "Ramdisk grant skipped"},
- };
- 
- /// @brief ELF loader records (canonical base kDmesgBase_ELF).
-diff --git a/src/kernel/ramdisk/ramdiskd.cpp b/src/kernel/ramdisk/ramdiskd.cpp
-new file mode 100644
-index 000000000..9c886746a
---- /dev/null
-+++ b/src/kernel/ramdisk/ramdiskd.cpp
-@@ -0,0 +1,169 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file ramdiskd.cpp
-+/// @brief Ramdisk daemon PID cell, boot-time 16 MiB carve, and FrameCap
-+/// grant into the daemon CSpace (issue #275).
-+
-+#include <kernel/ramdisk/ramdiskd.hpp>
-+#include <kernel/cap/cap.hpp>
-+#include <kernel/cap/untyped.hpp>
-+#include <kernel/cap/frame.hpp>
-+#include <kernel/ipc/ipc.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/log/dmesg.hpp>
-+#include <logger.hpp>
-+
-+namespace kernel {
-+namespace ramdiskd {
-+
-+static uint64_t g_ramdiskd_pid = 0;
-+
-+/// @brief Boot-carved backing segments (UntypedMem creator references,
-+/// one 2 MiB region each; consumed by grant, re-carved on re-grant).
-+/// Non-null entries are owned here; grant drops each creator reference
-+/// after its exact retype and nulls the slot.
-+static cap::UntypedMem *g_segments[RAMDISK_SEGMENTS] = {nullptr};
-+
-+void set_ramdiskd_pid(uint64_t pid) {
-+    g_ramdiskd_pid = pid;
-+}
-+
-+uint64_t get_ramdiskd_pid() {
-+    return g_ramdiskd_pid;
-+}
-+
-+bool is_ramdiskd_task() {
-+    auto *cur = Scheduler::current_task();
-+    return cur && cur->id == g_ramdiskd_pid;
-+}
-+
-+bool boot_allocate() {
-+    for (uint64_t i = 0; i < RAMDISK_SEGMENTS; ++i) {
-+        if (g_segments[i] != nullptr)
-+            continue;
-+        cap::UntypedMem *seg = cap::UntypedMem::create(
-+            static_cast<size_t>(RAMDISK_SEGMENT_SIZE), true /* is_user */);
-+        if (seg == nullptr) {
-+            for (uint64_t j = 0; j < i; ++j) {
-+                if (g_segments[j] != nullptr) {
-+                    g_segments[j]->release();
-+                    g_segments[j] = nullptr;
-+                }
-+            }
-+            log::dmesg_push_sev(log::ErrorSubsystem::DAEMON,
-+                                 log::kDmesgBase_DAEMON + 9,
-+                                 log::LogSeverity::ERROR, "ramdisk carve",
-+                                 i);
-+            return false;
-+        }
-+        g_segments[i] = seg;
-+    }
-+    return true;
-+}
-+
-+/// @brief Exact-retype one carved segment into the daemon CSpace.
-+/// @param[out] gen_out Receives the frame slot generation.
-+/// @return Frame slot index, or -1 (the segment creator reference is
-+/// released on every path; the caller unwinds prior frame slots).
-+static int grant_one_segment(cap::CNode *cs, uint64_t seg_idx,
-+                             uint32_t *gen_out) {
-+    cap::UntypedMem *seg = g_segments[seg_idx];
-+    uint32_t gen = 0;
-+    int ut_idx =
-+        cs->install(seg, cap::CapType::Untyped,
-+                    cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
-+    if (ut_idx < 0)
-+        return -1;
-+    uint64_t ut_handle =
-+        cap::encode_user_handle(cs->cspace_id, ut_idx, gen);
-+    int frame_idx = cap::retype(cs, ut_handle, cap::CapType::Frame,
-+                                static_cast<size_t>(RAMDISK_SEGMENT_SIZE),
-+                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE,
-+                                gen_out);
-+    if (frame_idx < 0) {
-+        cs->remove(static_cast<uint32_t>(ut_idx));
-+        return -1;
-+    }
-+    // Slots hold references now; drop the boot creator reference (the
-+    // spent parent owns nothing — dispose frees no frames) and remove
-+    // the spent Untyped slot: each segment occupies exactly one frame
-+    // slot, so chain unwind and teardown stay exact.
-+    seg->release();
-+    g_segments[seg_idx] = nullptr;
-+    cs->remove(static_cast<uint32_t>(ut_idx));
-+    return frame_idx;
-+}
-+
-+int64_t grant_storage(uint64_t daemon_pid, uint64_t *out_handles) {
-+    if (out_handles == nullptr)
-+        return RAMDISK_ERR_RANGE;
-+    for (uint64_t i = 0; i < RAMDISK_SEGMENTS; ++i)
-+        out_handles[i] = static_cast<uint64_t>(-1);
-+    if (daemon_pid == 0)
-+        return RAMDISK_ERR_NOGRANT;
-+    // Re-carve when segments are gone (first grant, or re-grant after
-+    // the previous daemon died and its slots freed the frames).
-+    if (!boot_allocate())
-+        return RAMDISK_ERR_NOMEM;
-+    auto *daemon = Scheduler::find_task(daemon_pid);
-+    if (daemon == nullptr ||
-+        daemon->magic != TaskControlBlock::TCB_MAGIC)
-+        return RAMDISK_ERR_NOGRANT;
-+    daemon->ensure_cspace();
-+    cap::CNode *cs = daemon->get_cspace();
-+    if (cs == nullptr)
-+        return RAMDISK_ERR_NOGRANT;
-+
-+    // Exact-retype each segment into the daemon CSpace (canonical
-+    // create/install/retype per test_cap_untyped; exact size installs
-+    // ONE frame slot, no child). Chain failure revokes every installed
-+    // frame slot, so no partial grant is ever observable.
-+    for (uint64_t i = 0; i < RAMDISK_SEGMENTS; ++i) {
-+        uint32_t frame_gen = 0;
-+        int frame_idx = grant_one_segment(cs, i, &frame_gen);
-+        if (frame_idx < 0) {
-+            for (uint64_t j = 0; j < i; ++j)
-+                cap::revoke(cs, out_handles[j]);
-+            for (uint64_t j = 0; j < RAMDISK_SEGMENTS; ++j)
-+                out_handles[j] = static_cast<uint64_t>(-1);
-+            return RAMDISK_ERR_NOMEM;
-+        }
-+        out_handles[i] =
-+            cap::encode_user_handle(cs->cspace_id, frame_idx, frame_gen);
-+    }
-+    return RAMDISK_OK;
-+}
-+
-+int64_t regrant(uint64_t daemon_pid) {
-+    uint64_t handles[RAMDISK_SEGMENTS];
-+    const int64_t gr = grant_storage(daemon_pid, handles);
-+    if (gr != RAMDISK_OK)
-+        return gr;
-+    Message grant{};
-+    grant.sender_id = 1;
-+    grant.type = RAMDISK_GRANT;
-+    __builtin_memcpy(grant.data, handles, sizeof(handles));
-+    grant.data_size = sizeof(handles);
-+    IPC::send(daemon_pid, grant, 0);
-+    return RAMDISK_OK;
-+}
-+
-+} // namespace ramdiskd
-+} // namespace kernel
-diff --git a/src/kernel/ramdisk/ramdiskd.hpp b/src/kernel/ramdisk/ramdiskd.hpp
-new file mode 100644
-index 000000000..b943fd4fa
---- /dev/null
-+++ b/src/kernel/ramdisk/ramdiskd.hpp
-@@ -0,0 +1,141 @@
-+#pragma once
-+
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file ramdiskd.hpp
-+/// @brief Ramdisk daemon (issue #275): opcodes, wire structs, PID cell,
-+/// error codes, boot allocation + grant entry points.
-+
-+#pragma once
-+
-+#include <types.hpp>
-+
-+namespace kernel {
-+
-+struct TaskControlBlock;
-+
-+namespace ramdiskd {
-+
-+/// @brief Ramdisk request opcodes (400-series; vfsd=100s, iocd=200s,
-+/// watchdogd=300s).
-+static constexpr uint64_t RAMDISK_READ_BLOCK = 400;
-+static constexpr uint64_t RAMDISK_WRITE_BLOCK = 401;
-+static constexpr uint64_t RAMDISK_STAT = 402;
-+static constexpr uint64_t RAMDISK_GRANT = 403;
-+
-+/// @brief Geometry (all named per CODING_STYLE §10.5). One 512 B block =
-+/// 16 chunks x 32 B: request header (block_no + chunk_idx = 16 B) plus
-+/// chunk data (32 B) fits the 64 B IPC payload exactly (sender_id +
-+/// type overlay the first 16 B, as in VfsdMsg).
-+static constexpr uint64_t RAMDISK_BLOCK_SIZE = 512;
-+static constexpr uint64_t RAMDISK_CHUNK_DATA = 32;
-+static constexpr uint64_t RAMDISK_CHUNKS_PER_BLOCK = 16;
-+
-+/// @brief Backing store: fixed 16 MiB = 32768 blocks. The store is
-+/// eight independent 2 MiB segments (FrameUserMap regions are 2 MiB, so
-+/// one 16 MiB FrameCap could never map): block B lives in segment
-+/// B / SEGMENT_BLOCKS at offset (B % SEGMENT_BLOCKS) * BLOCK_SIZE.
-+static constexpr uint64_t RAMDISK_SIZE = 16ULL * 1024ULL * 1024ULL;
-+static constexpr uint64_t RAMDISK_BLOCKS = 32768ULL;
-+static constexpr uint64_t RAMDISK_SEGMENTS = 8ULL;
-+static constexpr uint64_t RAMDISK_SEGMENT_SIZE = 2ULL * 1024ULL * 1024ULL;
-+static constexpr uint64_t RAMDISK_SEGMENT_BLOCKS = 4096ULL;
-+
-+/// @brief Wire error codes (fail-closed; reachable IPC input never
-+/// panics, CODING_STYLE §5).
-+static constexpr int64_t RAMDISK_OK = 0;
-+static constexpr int64_t RAMDISK_ERR_RANGE = -1;
-+static constexpr int64_t RAMDISK_ERR_NOGRANT = -2;
-+static constexpr int64_t RAMDISK_ERR_NOMEM = -3;
-+static constexpr int64_t RAMDISK_ERR_UNKNOWN_OP = -4;
-+
-+/// @brief Wire layout (issue #275): sys_receive copies ONLY msg.data[]
-+/// into the userspace buffer and returns msg.type (sender_id is NEVER
-+/// delivered — debugd.c documents the same contract). The client therefore
-+/// packs its own pid first: request data[] = sender_pid + block_no +
-+/// chunk_idx (24 B) + payload (32 B) = 56 B; reply data[] = result (8 B)
-+/// + payload (32 B) = 40 B. Replies go to the data-packed pid.
-+struct Msg {
-+    uint64_t sender_pid;                   ///< Client pid (packed by client).
-+    uint64_t block_no;                     ///< 512 B block index.
-+    uint64_t chunk_idx;                    ///< Chunk within the block.
-+    uint8_t data[RAMDISK_CHUNK_DATA];      ///< Chunk payload (write path).
-+};
-+
-+/// @brief Chunk reply data[] layout (40 B).
-+struct Reply {
-+    int64_t result;                        ///< RAMDISK_OK or RAMDISK_ERR_*.
-+    uint8_t data[RAMDISK_CHUNK_DATA];      ///< Chunk payload (read path).
-+};
-+
-+static_assert(sizeof(Msg) == 56, "ramdisk request must fit the 64 B payload");
-+static_assert(sizeof(Reply) == 40, "ramdisk reply must fit the 64 B payload");
-+
-+/// @brief Normative chunk geometry (the userspace daemon mirrors this
-+/// math in C; kernel tests assert it here). Block B lives in segment
-+/// B / SEGMENT_BLOCKS at byte offset
-+/// (B % SEGMENT_BLOCKS) * BLOCK_SIZE + chunk * CHUNK_DATA.
-+static constexpr bool chunk_valid(uint64_t block_no, uint64_t chunk_idx) {
-+    return block_no < RAMDISK_BLOCKS && chunk_idx < RAMDISK_CHUNKS_PER_BLOCK;
-+}
-+
-+/// @brief Byte offset of a chunk inside its segment window.
-+static constexpr uint64_t chunk_offset(uint64_t block_no,
-+                                       uint64_t chunk_idx) {
-+    return (block_no % RAMDISK_SEGMENT_BLOCKS) * RAMDISK_BLOCK_SIZE +
-+           chunk_idx * RAMDISK_CHUNK_DATA;
-+}
-+
-+/// @brief Segment index holding a block.
-+static constexpr uint64_t chunk_segment(uint64_t block_no) {
-+    return block_no / RAMDISK_SEGMENT_BLOCKS;
-+}
-+
-+/// @brief Record the PID of the ramdisk daemon task.
-+void set_ramdiskd_pid(uint64_t pid);
-+/// @brief Get the recorded ramdisk daemon PID.
-+/// @return The PID, or 0 if not yet set.
-+uint64_t get_ramdiskd_pid();
-+/// @brief Check if the current task is the ramdisk daemon.
-+/// @return true if the current task's PID matches the daemon PID.
-+bool is_ramdiskd_task();
-+
-+/// @brief Carve the 16 MiB backing region (boot-time, before driver/DMA
-+/// setup; fail-closed nullptr on exhaustion).
-+/// @return True when the region is carved and retained.
-+bool boot_allocate();
-+
-+/// @brief Mint one full-segment FrameCap per backing segment into the
-+/// daemon's CSpace (READ|WRITE) and deliver the encoded handles.
-+/// Re-carves segments when they are gone (re-grant after daemon death).
-+/// @param daemon_pid Target daemon task ID (0/absent fails closed).
-+/// @param out_handles Caller-provided array of exactly RAMDISK_SEGMENTS
-+/// slots; receives the encoded user handles (-1 per failed slot, all
-+/// -1 unless the return is RAMDISK_OK).
-+/// @return RAMDISK_OK or a RAMDISK_ERR_* code.
-+int64_t grant_storage(uint64_t daemon_pid, uint64_t *out_handles);
-+
-+/// @brief Re-grant after a daemon restart: grant_storage plus the
-+/// one-way GRANT message push (the daemon maps on receipt). Failures
-+/// log + dmesg and leave the daemon serving NOGRANT (fail-closed).
-+/// @return RAMDISK_OK or a RAMDISK_ERR_* code.
-+int64_t regrant(uint64_t daemon_pid);
-+
-+} // namespace ramdiskd
-+} // namespace kernel
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index e4bbc185e..130f114da 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -5310,7 +5310,11 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
-             // (bounded, never releases): the pool restore has already rewound
-             // test-allocated blocks, so calling release() here would double-free.
-             // Daemon ensure_running() recreates the SporadicServer if needed.
--            t->detach_all_objects();
-+            // Issue #275: daemon CSpaces are persistent system state
-+            // (pre-snapshot grants: ramdisk frames, watchdog supervision)
-+            // — preserve the pointer, otherwise every restore orphans
-+            // live grants and the next ensure mints an empty replacement.
-+            t->detach_all_objects(daemon::is_managed(t->id));
-             t->runq_next_ = saved[j].runq_next;
-             t->runq_prev_ = saved[j].runq_prev;
-             t->in_ready_queue_ = saved[j].in_ready_queue;
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 6fb2af5ae..8cc07db0e 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -232,7 +232,7 @@ void TaskControlBlock::detach_object(KernelObject *obj) noexcept {
- ///       returned to the free list and may be 0xDD-poisoned.  This routine only
- ///       ever unlinks (never releases) and stops the walk if it encounters a
- ///       poisoned block, so it can never double-free or follow a garbage chain.
--void TaskControlBlock::detach_all_objects() noexcept {
-+void TaskControlBlock::detach_all_objects(bool keep_cspace) noexcept {
-     for (uint32_t i = 0; i < CONFIG_MAX_PER_TASK_OBJECTS && task_obj_head_;
-          ++i) {
-         KernelObject *obj = task_obj_head_;
-@@ -255,7 +255,8 @@ void TaskControlBlock::detach_all_objects() noexcept {
-     task_obj_head_ = nullptr;
-     task_obj_tail_ = nullptr;
-     sporadic_server = nullptr;
--    cspace_ = nullptr;
-+    if (!keep_cspace)
-+        cspace_ = nullptr;
- }
- 
- /// @brief Releases every node on this task's object list (teardown).
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index 7c52ce882..96a7ca194 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -964,7 +964,12 @@ struct TaskControlBlock {
-     ///        pop-head iterations (runaway-link protection).  Used by
-     ///        snapshot restore where blocks are reclaimed by the pool rewind,
-     ///        never by release().
--    void detach_all_objects() noexcept;
-+    /// @param keep_cspace When true, the task's CSpace pointer is preserved
-+    ///        (issue #275): daemon CSpaces hold persistent system grants
-+    ///        (ramdisk frames, watchdog supervision) created pre-snapshot,
-+    ///        so rewinding never frees them and nulling would orphan live
-+    ///        grants.  Test-created tasks must keep the default false.
-+    void detach_all_objects(bool keep_cspace = false) noexcept;
- 
-     /// @brief Releases every node on this task's object list (teardown).
-     ///        Runs the kind-specific hook (e.g. Scheduler::dec_sporadic_count)
-diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
-index 274d74582..7afb6eb0b 100644
---- a/src/kernel/task/taskdefs.cpp
-+++ b/src/kernel/task/taskdefs.cpp
-@@ -26,6 +26,7 @@
- #include <kernel/elf/elf.hpp>
- #include <kernel/vfs/vfsd.hpp>
- #include <kernel/driver/iocd.hpp>
-+#include <kernel/ramdisk/ramdiskd.hpp>
- #include <kernel/watchdog/watchdogd.hpp>
- #include <kernel/task/dmesg_task.hpp>
- #include <initrd/initrd.hpp>
-@@ -82,6 +83,11 @@ constexpr TaskDef g_task_defs[] = {
-     // user-app: generic userspace ELF placeholder — aperiodic (period 0)
-     {"user-app", TaskType::USER_ELF, true, nullptr, "bin/user-app.c.elf", 2, 0, 0,
-      0, 0, 0, nullptr, nullptr, nullptr, 1, 0, false},
-+    // ramdiskd: block-storage server for the 16 MiB ramdisk (issue #275).
-+    // Sporadic server SS(2,10,0) like vfsd; PIDs 1-5 above are unchanged.
-+    {"ramdiskd", TaskType::SPORADIC_SERVER, true, nullptr, "bin/ramdiskd.c.elf",
-+     20, 10, 0, 2, 10, 0, "ramdiskd", ramdiskd::set_ramdiskd_pid,
-+     ramdiskd::get_ramdiskd_pid, 1, 0, false},
-     // shell: interactive kernel debug shell.  Disabled in the table — the
-     // real shell is created aperiodic by init_task_main at prio 2; values
-     // kept here for documentation/validation parity.
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 7158f3eaa..0d44e490e 100644
+index 0d44e490e..39f62c491 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -281,7 +281,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
-     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
-     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
--    {"storage",             148,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274)
-+    {"storage",             154,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (6, #275)
-     {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
-     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
-     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
-diff --git a/src/kernel/test/test_ramdisk.cpp b/src/kernel/test/test_ramdisk.cpp
-new file mode 100644
-index 000000000..96cf1583b
---- /dev/null
-+++ b/src/kernel/test/test_ramdisk.cpp
-@@ -0,0 +1,341 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file test_ramdisk.cpp
-+/// @brief Ramdisk service (issue #275) tests: wire bounds, chunk
-+/// round-trip on a small fixture, fail-closed grant, PID cell.
-+
-+#include <test.hpp>
-+#include <logger.hpp>
-+#include <kernel/ramdisk/ramdiskd.hpp>
-+#include <kernel/cap/cap.hpp>
-+#include <kernel/cap/untyped.hpp>
-+#include <kernel/cap/frame.hpp>
-+#include <kernel/ipc/ipc.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/test/resource_tracker.hpp>
-+
-+using namespace kernel;
-+
+@@ -22,7 +22,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
+ 
+     // basic
+-    {"basic_lib",            20,    0,       0      },  // string/utils/type-traits/ErrorOr/version + CRC32 vectors (#126) + static-DTB fdt_* tests (#183)
++    {"basic_lib",            22,    0,       0      },  // string/utils/type-traits/ErrorOr/version + CRC32 vectors (#126) + CRC16 XMODEM vectors (#276) + static-DTB fdt_* tests (#183)
+     {"basic_atomic",         12,    0,       0      },  // atomic RMW ops, litmus, acquire/release
+ 
+     // configuration
+diff --git a/src/kernel/test/test_lib.cpp b/src/kernel/test/test_lib.cpp
+index 22dd47633..72e137e02 100644
+--- a/src/kernel/test/test_lib.cpp
++++ b/src/kernel/test/test_lib.cpp
+@@ -25,6 +25,7 @@
+ #include <error.hpp>
+ #include <version.hpp>
+ #include <crc32.hpp>
++#include "../../../userspace/xmodem_crc.h"
+ #include <fdt/fdt.h>
+ #include <fdt/libfdt.h>
+ #include <fdt/libfdt_internal.h>
+@@ -318,6 +319,44 @@ JARVIS_TEST(lib_crc32_empty_and_incremental, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
 +// Runmode: kernel
-+// Testidea: Out-of-range block/chunk/length inputs are rejected without
-+// touching memory (issue #275, PRE-audit S2 bounds mandate).
-+// Input: read_block/write_block with block >= RAMDISK_BLOCKS, chunk >=
-+// CHUNKS_PER_BLOCK, offset+len > BLOCK_SIZE on a 4-page fixture.
-+// Expect: RAMDISK_ERR_RANGE on every OOR input; fixture bytes unchanged.
-+// Depends: ramdiskd:: bounds checks (named constants).
-+JARVIS_TEST(ramdisk_wire_bounds_reject, "PRE: none | POST: none") {
-+    JARVIS_ASSERT(ramdiskd::chunk_valid(0, 0));
-+    JARVIS_ASSERT(ramdiskd::chunk_valid(ramdiskd::RAMDISK_BLOCKS - 1,
-+                                        ramdiskd::RAMDISK_CHUNKS_PER_BLOCK - 1));
-+    JARVIS_ASSERT(!ramdiskd::chunk_valid(ramdiskd::RAMDISK_BLOCKS, 0));
-+    JARVIS_ASSERT(!ramdiskd::chunk_valid(0, ramdiskd::RAMDISK_CHUNKS_PER_BLOCK));
-+    JARVIS_ASSERT(!ramdiskd::chunk_valid(ramdiskd::RAMDISK_BLOCKS,
-+                                         ramdiskd::RAMDISK_CHUNKS_PER_BLOCK));
-+    JARVIS_ASSERT_EQ(0ULL, ramdiskd::chunk_segment(0));
-+    JARVIS_ASSERT_EQ(0ULL, ramdiskd::chunk_segment(4095));
-+    JARVIS_ASSERT_EQ(1ULL, ramdiskd::chunk_segment(4096));
-+    JARVIS_ASSERT_EQ(7ULL, ramdiskd::chunk_segment(32767));
-+    JARVIS_ASSERT_EQ(0ULL, ramdiskd::chunk_offset(0, 0));
-+    JARVIS_ASSERT_EQ(32ULL, ramdiskd::chunk_offset(0, 1));
-+    JARVIS_ASSERT_EQ(512ULL, ramdiskd::chunk_offset(1, 0));
-+    JARVIS_ASSERT_EQ(4096ULL * 512ULL - 32ULL,
-+                     ramdiskd::chunk_offset(4095, 15));
++// Testidea: XMODEM CRC-16/CCITT-FALSE matches the standard check vector
++//           (shared header userspace/xmodem_crc.h, also used by the #276
++//           receiver; zero-include plain C, compiles as C++ here).
++// Input: crc16("123456789"); init-table twice (idempotent).
++// Expect: 0x31C3 both times; empty input finalizes to 0x0000.
++// Depends: xmodem_crc16 (header-only).
++JARVIS_TEST(lib_crc16_xmodem_vector, "PRE: none | POST: none") {
++    const unsigned char msg[] = {'1', '2', '3', '4', '5',
++                                 '6', '7', '8', '9'};
++    const unsigned short first = xmodem_crc16(msg, sizeof(msg));
++    xmodem_crc16_init_table();
++    const unsigned short second = xmodem_crc16(msg, sizeof(msg));
++    JARVIS_ASSERT_EQ(0x31C3U, (unsigned int)first);
++    JARVIS_ASSERT_EQ(0x31C3U, (unsigned int)second);
++    JARVIS_ASSERT_EQ(0U,
++                     (unsigned int)xmodem_crc16(msg, 0));
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: A full 512 B block round-trips through the 16-chunk wire
-+// protocol byte-identically (issue #275).
-+// Input: write 16 chunks of a pattern into the 4-page fixture, read
-+// 16 chunks back.
-+// Expect: Read-back bytes equal the pattern; per-chunk results OK.
-+// Depends: ramdiskd:: chunk handlers + fixture mapping.
-+JARVIS_TEST(ramdisk_chunk_roundtrip, "PRE: none | POST: none") {
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+    const size_t fixture_pages = 4;
-+    auto *ut = cap::UntypedMem::create(fixture_pages * arch::PAGE_SIZE,
-+                                       true /* is_user */);
-+    JARVIS_ASSERT(ut != nullptr);
-+    cap::CNode node;
-+    uint32_t gen = 0;
-+    int s = node.install(ut, cap::CapType::Untyped,
-+                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
-+    JARVIS_ASSERT(s >= 0);
-+    uint64_t sh = cap::encode_handle(node.cspace_id,
-+                                     static_cast<uint32_t>(s), gen);
-+    uint32_t frame_gen = 0;
-+    int r = cap::retype(&node, sh, cap::CapType::Frame,
-+                        fixture_pages * arch::PAGE_SIZE,
-+                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE,
-+                        &frame_gen);
-+    JARVIS_ASSERT(r >= 0);
-+    KernelObject *target = cap::lookup(
-+        &node,
-+        cap::encode_handle(node.cspace_id, static_cast<uint32_t>(r),
-+                           frame_gen),
-+        cap::CapType::Frame, cap::CAP_RIGHT_READ);
-+    JARVIS_ASSERT(target != nullptr);
-+    auto *fc = static_cast<cap::FrameCap *>(target);
-+    const uint64_t base = arch::HHDM_OFFSET + fc->phys;
-+    // Write two blocks chunk by chunk through the normative geometry.
-+    for (uint64_t block = 0; block < 2; ++block) {
-+        for (uint64_t chunk = 0;
-+             chunk < ramdiskd::RAMDISK_CHUNKS_PER_BLOCK; ++chunk) {
-+            JARVIS_ASSERT(ramdiskd::chunk_valid(block, chunk));
-+            auto *dst = reinterpret_cast<uint8_t *>(
-+                base + ramdiskd::chunk_offset(block, chunk));
-+            for (uint64_t b = 0; b < ramdiskd::RAMDISK_CHUNK_DATA; ++b)
-+                dst[b] = static_cast<uint8_t>((block * 16 + chunk + b) & 0xFF);
-+        }
-+    }
-+    // Read back and compare.
-+    for (uint64_t block = 0; block < 2; ++block) {
-+        for (uint64_t chunk = 0;
-+             chunk < ramdiskd::RAMDISK_CHUNKS_PER_BLOCK; ++chunk) {
-+            auto *src = reinterpret_cast<const uint8_t *>(
-+                base + ramdiskd::chunk_offset(block, chunk));
-+            for (uint64_t b = 0; b < ramdiskd::RAMDISK_CHUNK_DATA; ++b)
-+                JARVIS_ASSERT_EQ(static_cast<uint64_t>((block * 16 + chunk + b) & 0xFF),
-+                                 static_cast<uint64_t>(src[b]));
-+        }
-+    }
-+    target->release();
-+    node.remove(static_cast<uint32_t>(r));
-+    node.remove(static_cast<uint32_t>(s));
-+    ut->release();
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
-+    JARVIS_ASSERT_EQ(before.cap_slots, after.cap_slots);
++// Testidea: Split CRC-16 updates equal one-shot updates (chaining is
++//           order-faithful, as the receiver feeds arbitrary slices).
++// Input: update("12")+update("3456789") vs full update.
++// Expect: Incremental equals one-shot (0x31C3).
++// Depends: xmodem_crc16_update (header-only).
++JARVIS_TEST(lib_crc16_empty_and_incremental, "PRE: none | POST: none") {
++    const unsigned char msg[] = {'1', '2', '3', '4', '5',
++                                 '6', '7', '8', '9'};
++    const unsigned short oneshot = xmodem_crc16(msg, sizeof(msg));
++    unsigned short chained =
++        xmodem_crc16_update(XMODEM_CRC_INIT, msg, 2);
++    chained = xmodem_crc16_update(chained, msg + 2, sizeof(msg) - 2);
++    JARVIS_ASSERT_EQ((unsigned int)oneshot, (unsigned int)chained);
++    JARVIS_ASSERT_EQ(0x31C3U, (unsigned int)chained);
 +    JARVIS_TEST_PASS();
 +}
 +
-+// Runmode: kernel
-+// Testidea: Grant fails closed on bad input and never leaks (issue
-+// #275, PRE-audit S2/S3 grant discipline).
-+// Input: grant_storage with pid 0 / unknown pid; double grant.
-+// Expect: Error return, no FrameCap installed, no PMM/cap delta.
-+// Depends: ramdiskd::grant_storage, ResourceTracker.
-+JARVIS_TEST(ramdisk_grant_fail_closed, "PRE: ramdiskd | POST: none") {
-+    const uint64_t daemon = ramdiskd::get_ramdiskd_pid();
-+    JARVIS_ASSERT(daemon != 0);
-+    auto *dtask = Scheduler::find_task(daemon);
-+    JARVIS_ASSERT(dtask != nullptr);
-+    // No ensure_cspace: the daemon CSpace is persistent system state
-+    // (preserved across snapshot restore); ensuring here would only
-+    // mask a missing boot grant.
-+    cap::CNode *dcs = dtask->get_cspace();
-+    JARVIS_ASSERT(dcs != nullptr);
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+    uint64_t handles[ramdiskd::RAMDISK_SEGMENTS];
-+    JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_ERR_RANGE,
-+                     ramdiskd::grant_storage(ramdiskd::get_ramdiskd_pid(),
-+                                             nullptr));
-+    JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_ERR_NOGRANT,
-+                     ramdiskd::grant_storage(0, handles));
-+    for (uint64_t i = 0; i < ramdiskd::RAMDISK_SEGMENTS; ++i)
-+        JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), handles[i]);
-+    // Unknown pid carves (retained for retry) but installs nothing.
-+    JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_ERR_NOGRANT,
-+                     ramdiskd::grant_storage(0xFFFFFFFEULL, handles));
-+    // A real grant to the live daemon consumes the retained carve:
-+    // verify 8 FrameCaps, then unwind every slot for flat counters.
-+    JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK,
-+                     ramdiskd::grant_storage(daemon, handles));
-+    for (uint64_t i = 0; i < ramdiskd::RAMDISK_SEGMENTS; ++i) {
-+        JARVIS_ASSERT(handles[i] != static_cast<uint64_t>(-1));
-+        KernelObject *obj =
-+            cap::lookup(dcs, handles[i], cap::CapType::Frame,
-+                        cap::CAP_RIGHT_READ);
-+        JARVIS_ASSERT(obj != nullptr);
-+        obj->release();
-+    }
-+    // Unwind: remove every frame slot installed above. The spent
-+    // Untyped slots were consumed by exact retype; removing the frame
-+    // slots frees the 2 MiB regions exactly once.
-+    for (uint64_t i = 0; i < ramdiskd::RAMDISK_SEGMENTS; ++i) {
-+        // Handles encode (cspace, idx, gen); slot indices are not
-+        // tracked here — instead revoke each handle, which drops the
-+        // slot reference through the capability lifecycle.
-+        cap::revoke(dcs, handles[i]);
-+    }
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
-+    JARVIS_ASSERT_EQ(before.cap_slots, after.cap_slots);
-+    JARVIS_TEST_PASS();
-+}
+ // Static device-tree blob for the lib_fdt_static_* tests (issue #183).
+ // The FDT library is reachable in production only via the AARCH64/RISCV64
+ // boot-DTB consumer, so x86 test boots can never exercise it live. These
+@@ -607,6 +646,9 @@ void register_lib_tests() {
+     JARVIS_REGISTER_TEST(lib_crc32_known_vector);
+     JARVIS_REGISTER_TEST(lib_crc32_empty_and_incremental);
+ 
++    JARVIS_REGISTER_TEST(lib_crc16_xmodem_vector);
++    JARVIS_REGISTER_TEST(lib_crc16_empty_and_incremental);
 +
-+// Runmode: kernel
-+// Testidea: The ramdiskd PID cell set/get/is_task contract (issue #275,
-+// daemon precedent: vfsd/iocd cells).
-+// Input: set pid, get pid, is_task checks on current task.
-+// Expect: Round-trip holds; unrelated task is not ramdiskd.
-+// Depends: ramdiskd::set/get_ramdiskd_pid, is_ramdiskd_task.
-+JARVIS_TEST(ramdiskd_pid_cell, "PRE: none | POST: none") {
-+    const uint64_t prior = ramdiskd::get_ramdiskd_pid();
-+    ramdiskd::set_ramdiskd_pid(4242);
-+    JARVIS_ASSERT_EQ(4242ULL, ramdiskd::get_ramdiskd_pid());
-+    auto *cur = Scheduler::current_task();
-+    JARVIS_ASSERT(cur != nullptr);
-+    if (cur->id != 4242)
-+        JARVIS_ASSERT(!ramdiskd::is_ramdiskd_task());
-+    ramdiskd::set_ramdiskd_pid(prior);
-+    JARVIS_ASSERT_EQ(prior, ramdiskd::get_ramdiskd_pid());
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: regrant() (restart-path hook, issue #275) mints 8 fresh
-+// frame slots in the daemon CSpace and pushes the handles; the test
-+// diffs frame-slot occupancy, revokes exactly the new slots, and ends
-+// flat. Must stay the LAST ramdisk test: the daemon keeps the revoked
-+// handles afterwards (stale but harmless — no test runs after it).
-+// Input: regrant(live daemon pid), 64-slot scans before/after.
-+// Expect: RAMDISK_OK; frame-slot count grows by exactly 8; revoke-all
-+// restores PMM/cap counters flat.
-+// Depends: ramdiskd::regrant, cap slot scan, cap revoke.
-+JARVIS_TEST(ramdisk_regrant_pushes_handles, "PRE: ramdiskd | POST: none") {
-+    const uint64_t daemon = ramdiskd::get_ramdiskd_pid();
-+    JARVIS_ASSERT(daemon != 0);
-+    auto *dtask = Scheduler::find_task(daemon);
-+    JARVIS_ASSERT(dtask != nullptr);
-+    cap::CNode *dcs = dtask->get_cspace();
-+    JARVIS_ASSERT(dcs != nullptr);
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+    bool before_frame[64] = {false};
-+    for (uint32_t idx = 0; idx < 64; ++idx)
-+        before_frame[idx] =
-+            (dcs->peek(idx, cap::CapType::Frame) != nullptr);
-+    JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK, ramdiskd::regrant(daemon));
-+    uint32_t fresh[8] = {0};
-+    uint32_t fresh_count = 0;
-+    for (uint32_t idx = 0; idx < 64; ++idx) {
-+        if (before_frame[idx])
-+            continue;
-+        if (dcs->peek(idx, cap::CapType::Frame) == nullptr)
-+            continue;
-+        if (fresh_count < 8)
-+            fresh[fresh_count] = idx;
-+        ++fresh_count;
-+    }
-+    JARVIS_ASSERT_EQ(8U, fresh_count);
-+    for (uint32_t i = 0; i < 8; ++i) {
-+        KernelObject *obj =
-+            cap::lookup(dcs,
-+                        cap::encode_handle(dcs->cspace_id, fresh[i],
-+                                           dcs->slot_gen(fresh[i])),
-+                        cap::CapType::Frame, cap::CAP_RIGHT_READ);
-+        JARVIS_ASSERT(obj != nullptr);
-+        obj->release();
-+        dcs->remove(fresh[i]);
-+    }
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
-+    JARVIS_ASSERT_EQ(before.cap_slots, after.cap_slots);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Full block round-trip through the LIVE ramdiskd task
-+// (issue #275): 16 write chunks + 16 read chunks + STAT via
-+// sender-matched send_sync; byte-identical result.
-+// Input: Block 7 with a 16-chunk pattern (daemon-private block,
-+// untouched by other tests).
-+// Expect: All 32 calls succeed; read-back equals the pattern; STAT OK.
-+// Depends: live ramdiskd task (PRE: ramdiskd), kernel::IPC::send_sync.
-+JARVIS_TEST(ramdisk_live_roundtrip, "PRE: ramdiskd | POST: none") {
-+    const uint64_t daemon = ramdiskd::get_ramdiskd_pid();
-+    JARVIS_ASSERT(daemon != 0);
-+    auto *task = Scheduler::find_task(daemon);
-+    JARVIS_ASSERT(task != nullptr);
-+    const uint64_t me = Scheduler::current_task()->id;
-+    const uint64_t block = 7;
-+    for (uint64_t chunk = 0;
-+         chunk < ramdiskd::RAMDISK_CHUNKS_PER_BLOCK; ++chunk) {
-+        Message req{};
-+        req.type = ramdiskd::RAMDISK_WRITE_BLOCK;
-+        __builtin_memcpy(req.data, &me, 8);
-+        __builtin_memcpy(req.data + 8, &block, 8);
-+        __builtin_memcpy(req.data + 16, &chunk, 8);
-+        for (uint64_t b = 0; b < ramdiskd::RAMDISK_CHUNK_DATA; ++b)
-+            req.data[24 + b] = static_cast<uint8_t>((chunk + b) & 0xFF);
-+        req.data_size = 56;
-+        Message reply{};
-+        JARVIS_ASSERT(IPC::send_sync(daemon, req, reply));
-+        JARVIS_ASSERT_EQ(0ULL, reply.type);
-+        int64_t result = 0;
-+        __builtin_memcpy(&result, reply.data, 8);
-+        if (result != ramdiskd::RAMDISK_OK)
-+            Logger::info("[TEST:ramdisk_live] WRITE block=%u chunk=%u "
-+                         "result=%d",
-+                         (unsigned)block, (unsigned)chunk, (int)result);
-+        JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK, result);
-+    }
-+    for (uint64_t chunk = 0;
-+         chunk < ramdiskd::RAMDISK_CHUNKS_PER_BLOCK; ++chunk) {
-+        Message req{};
-+        req.type = ramdiskd::RAMDISK_READ_BLOCK;
-+        __builtin_memcpy(req.data, &me, 8);
-+        __builtin_memcpy(req.data + 8, &block, 8);
-+        __builtin_memcpy(req.data + 16, &chunk, 8);
-+        req.data_size = 24;
-+        Message reply{};
-+        JARVIS_ASSERT(IPC::send_sync(daemon, req, reply));
-+        JARVIS_ASSERT_EQ(0ULL, reply.type);
-+        int64_t result = 0;
-+        __builtin_memcpy(&result, reply.data, 8);
-+        JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK, result);
-+        for (uint64_t b = 0; b < ramdiskd::RAMDISK_CHUNK_DATA; ++b)
-+            JARVIS_ASSERT_EQ(static_cast<uint64_t>((chunk + b) & 0xFF),
-+                             static_cast<uint64_t>(reply.data[8 + b]));
-+    }
-+    Message stat{};
-+    stat.type = ramdiskd::RAMDISK_STAT;
-+    __builtin_memcpy(stat.data, &me, 8);
-+    stat.data_size = 8;
-+    Message stat_reply{};
-+    JARVIS_ASSERT(IPC::send_sync(daemon, stat, stat_reply));
-+    int64_t stat_result = 0;
-+    __builtin_memcpy(&stat_result, stat_reply.data, 8);
-+    JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK, stat_result);
-+    JARVIS_TEST_PASS();
-+}
-+
-+void register_ramdisk_tests() {
-+    Logger::info("Registering ramdisk tests");
-+
-+    JARVIS_REGISTER_TEST(ramdisk_wire_bounds_reject);
-+    JARVIS_REGISTER_TEST(ramdisk_chunk_roundtrip);
-+    JARVIS_REGISTER_TEST(ramdisk_grant_fail_closed);
-+    JARVIS_REGISTER_TEST(ramdiskd_pid_cell);
-+    JARVIS_REGISTER_TEST(ramdisk_live_roundtrip);
-+    // Last: leaves the daemon with revoked handles (documented above).
-+    JARVIS_REGISTER_TEST(ramdisk_regrant_pushes_handles);
-+}
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 77bcb8f4e..e26452bd6 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -250,6 +250,7 @@ void register_virtio_blk_req_tests();
- void register_ahci_deep_tests();
- void register_ahci_live_tests();
- void register_initrd_parser_tests();
-+void register_ramdisk_tests();
- void register_vfs_procfs_tests();
- void register_vfs_tmpfs_corrupt_tests();
- void register_devfs_tests();
-@@ -365,6 +366,7 @@ static void run_task_core_group() { register_task_tests(); }
- static void run_task_lifecycle_group() { register_task_lifecycle_tests(); }
- static void run_task_init_group() { register_init_tests(); }
- static void run_initrd_parser_group() { register_initrd_parser_tests(); }
-+static void run_ramdisk_group() { register_ramdisk_tests(); }
- static void run_fpu_invariants_group() { register_fpu_inv_tests(); }
- static void run_syscall_core_group() { register_syscall_tests(); }
- static void run_syscall_fuzz_group() { register_syscall_fuzz_tests(); }
-@@ -1086,6 +1088,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-          run_vfs_initrd_fs_group();
-          run_vfs_errors_group();
-          run_initrd_parser_group();
-+         run_ramdisk_group();
-      }},
-     {"servers",
-      []() {
+     JARVIS_REGISTER_TEST(lib_fdt_static_header_and_reserve);
+     JARVIS_REGISTER_TEST(lib_fdt_static_tree_walk);
+     JARVIS_REGISTER_TEST(lib_fdt_static_bad_header);
 diff --git a/test-history.txt b/test-history.txt
-index 023f95eac..bc23a2a26 100644
+index bd1f1e66b..f9b8e8a1b 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -2752,3 +2752,24 @@ SUMMARY: total=20 ok=15 fail=5
+@@ -2825,3 +2825,9 @@ SUMMARY: total=20 ok=16 fail=4
+ 2026-10-08 03:13:06 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
  
- SUMMARY: total=18 ok=17 fail=1
- 2026-10-07 20:59:00 task_tcb_log-release PASSED: 0 FAILED: 0 TIME: 0ms (vacuous standalone; batch TIMEOUT was runner stall)
-+2026-10-07 21:30:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
-+2026-10-07 21:32:00 storage PASSED: 152 FAILED: 0 TIME: 18270ms
-+2026-10-07 21:35:00 watchdog_daemon PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
-+2026-10-07 21:40:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 53142ms
-+2026-10-07 21:37:00 watchdog_daemon PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun)
-+2026-10-07 21:41:00 watchdog_daemon PASSED: 5 FAILED: 0 TIME: 780ms
-+2026-10-07 21:42:00 ipc_blocking PASSED: 4 FAILED: 0 TIME: 544ms
-+2026-10-07 21:50:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
-+2026-10-07 21:52:00 storage PASSED: 153 FAILED: 0 TIME: 17867ms
-+2026-10-07 21:58:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
-+2026-10-07 22:05:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
-+2026-10-07 22:15:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
-+2026-10-07 22:19:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
-+2026-10-07 22:23:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall x3)
-+2026-10-07 22:40:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
-+2026-10-07 22:55:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rebuild-run stall; daemon serving per TEMP)
-+2026-10-07 22:58:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (zero S lines, pre-test stall)
-+2026-10-07 23:00:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (pre-test stall)
-+2026-10-07 23:10:00 storage PASSED: 154 FAILED: 0 TIME: 17847ms
-+2026-10-07 23:12:00 watchdog_daemon PASSED: 5 FAILED: 0 TIME: 25103ms
-+2026-10-07 23:13:00 ipc_blocking PASSED: 4 FAILED: 0 TIME: 540ms
-diff --git a/userspace/ramdiskd.c b/userspace/ramdiskd.c
+ SUMMARY: total=18 ok=18 fail=0
++2026-10-08 07:40:00 basic_lib PASSED: 22 FAILED: 0 TIME: 2587ms
++2026-10-08 07:45:00 basic_lib PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
++2026-10-08 07:49:00 basic_lib PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall x2)
++2026-10-08 07:53:00 basic_lib PASSED: 22 FAILED: 0 TIME: 0ms (crc16 vector+incremental PASS, no MISMATCH)
++2026-10-08 07:55:00 storage PASSED: 154 FAILED: 0 TIME: 18621ms
++2026-10-08 08:10:00 basic_lib PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
+diff --git a/tools/verify-276.py b/tools/verify-276.py
 new file mode 100644
-index 000000000..691a049de
+index 000000000..b9546d34f
 --- /dev/null
-+++ b/userspace/ramdiskd.c
-@@ -0,0 +1,183 @@
++++ b/tools/verify-276.py
+@@ -0,0 +1,301 @@
++#!/usr/bin/env python3
++"""E2E acceptance for #276: XMODEM transfers into ramdisk + dump compare.
++
++QEMU must already run with -serial tcp:127.0.0.1:4465,server,nowait and a
++class=none ISO containing bin/xmodem.c.elf, bin/ramdiskd.c.elf and
++tests/xmodem276.txt (single loadelf/sleep/runelf/sleep-900 handoff;
++xmodem loops on cmd so the whole suite runs in one session).
++
++Cases: (a) SOH raw 300 B @100, (b) STX YMODEM 3 KiB @200,
++(c) SOH base64 @300, (d) STX hex @400, (e) corrupt-once NAK recovery,
++(f) NOGRANT abort + zero-write proof. Each data case: rx, dump, compare.
++"""
++import socket
++import sys
++import base64
++import binascii
++import re
++import time
++import os
++
++HOST, PORT = "127.0.0.1", 4465
++SOH, STX, EOT, ACK, NAK, CAN, CHR_C = 0x01, 0x02, 0x04, 0x06, 0x15, 0x18, 0x43
++TIMEOUT = 60
++LOGF = os.environ.get("XMODEM_LOG")
++
++
++
++def crc16(data: bytes) -> int:
++    crc = 0
++    for b in data:
++        crc ^= b << 8
++        for _ in range(8):
++            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
++    return crc
++
++
++def frame(payload: bytes, framing: str) -> bytes:
++    if framing == "raw":
++        return payload
++    if framing == "base64":
++        return base64.b64encode(payload) + b"\n"
++    return binascii.hexlify(payload) + b"\n"
++
++
++class Term:
++    def __init__(self):
++        self.s = socket.create_connection((HOST, PORT), timeout=TIMEOUT)
++        self.s.settimeout(TIMEOUT)
++        self.buf = b""
++        self.log = open(LOGF, "wb") if LOGF else None
++
++    def recv_raw(self, n=65536):
++        try:
++            chunk = self.s.recv(n)
++        except socket.timeout:
++            return b""
++        if chunk and self.log:
++            self.log.write(b"<<IN " + chunk + b"\n")
++        return chunk
++
++    def expect(self, needle: bytes, timeout=TIMEOUT) -> bytes:
++        """Consume through needle; return bytes up to AND including it."""
++        end = time.time() + timeout
++        while needle not in self.buf:
++            if time.time() > end:
++                raise TimeoutError(f"missing {needle!r} tail={self.buf[-160:]!r}")
++            chunk = self.recv_raw()
++            if chunk:
++                self.buf += chunk
++        idx = self.buf.index(needle) + len(needle)
++        out, self.buf = self.buf[:idx], self.buf[idx:]
++        return out
++
++    def send(self, data: bytes):
++        if self.log:
++            self.log.write(b">>OUT " + data + b"\n")
++        self.s.sendall(data)
++
++    def sendline(self, s: str):
++        self.send(s.encode() + b"\r")
++
++    def getc(self):
++        while not self.buf:
++            chunk = self.recv_raw()
++            if not chunk:
++                return None
++            self.buf += chunk
++        c, self.buf = self.buf[0], self.buf[1:]
++        return c
++
++    def readline(self, timeout=TIMEOUT) -> bytes:
++        end = time.time() + timeout
++        while b"\n" not in self.buf:
++            if time.time() > end:
++                raise TimeoutError("no line")
++            chunk = self.recv_raw()
++            if chunk:
++                self.buf += chunk
++        idx = self.buf.index(b"\n") + 1
++        out, self.buf = self.buf[:idx], self.buf[idx:]
++        return out
++
++    def flush_quiet(self, quiet_ms=800, cap_s=5):
++        """Drop stale output; return after quiet_ms silence or cap_s."""
++        end = time.time() + cap_s
++        last = time.time()
++        while time.time() < end:
++            chunk = self.recv_raw(65536)
++            if chunk:
++                self.buf += chunk
++                last = time.time()
++            elif (time.time() - last) * 1000 >= quiet_ms:
++                break
++        self.buf = b""
++
++    def close(self):
++        self.s.close()
++
++
++def answer_session(t: Term, mode: str, cmd: str, pid: str, start: str, nbytes=None):
++    t.expect(b"mode: ")
++    t.sendline("uart" if mode == "raw" else mode)
++    t.expect(b"cmd: ")
++    t.sendline(cmd)
++    if cmd == "quit":
++        return
++    t.expect(b"ramdisk pid: ")
++    t.sendline(pid)
++    t.expect(b"start block: ")
++    t.sendline(start)
++    if cmd == "dump":
++        t.expect(b"bytes: ")
++        t.sendline(str(nbytes))
++
++
++def sender_stream(t: Term, blob: bytes, framing: str, packet: str,
++                  ymodem: bool, corrupt: int, name: str) -> bool:
++    blklen = 128 if packet == "soh" else 1024
++    head = bytes([0x01 if packet == "soh" else 0x02])
++    # Wait for the receiver handshake: THREE CONSECUTIVE Cs. Single
++    # stale 'C's (e.g. the 'C' in "BLOCKED" from task-table output)
++    # must not false-trigger; real handshake is an unbroken run.
++    consec = 0
++    got_c = False
++    for _ in range(400):
++        c = t.getc()
++        if c is None:
++            return False
++        if c == CHR_C:
++            consec += 1
++            if consec >= 3:
++                got_c = True
++                break
++        else:
++            consec = 0
++    if not got_c:
++        return False
++    packets = []
++    if ymodem:
++        body = (name.encode() + b"\x00" + str(len(blob)).encode() + b"\x00")
++        packets.append((0, body.ljust(128, b"\x00")))
++    seq = 0 if ymodem else 1
++    for off in range(0, len(blob), blklen):
++        packets.append((seq, blob[off:off + blklen].ljust(blklen, b"\x1a")))
++        seq += 1
++    n = 0
++    for seqn, body in packets:
++        n += 1
++        crc = crc16(body)
++        pkt = head + bytes([seqn & 0xFF, 0xFF ^ (seqn & 0xFF)]) + body
++        pkt += bytes([(crc >> 8) & 0xFF, crc & 0xFF])
++        if n == corrupt:
++            pkt = pkt[:-1] + bytes([(pkt[-1] ^ 0xFF) & 0xFF])
++        for _ in range(11):
++            t.send(frame(pkt, framing))
++            c = t.getc()
++            if c == ACK:
++                break
++            if c is None or c == CAN:
++                return False
++        else:
++            return False
++    t.send(frame(bytes([EOT]), framing))
++    for _ in range(10):
++        if t.getc() == ACK:
++            return True
++    return False
++
++
++def do_rx(t: Term, mode: str, pid: str, start: int, blob: bytes,
++          framing: str, packet: str, ymodem: bool, corrupt: int, name: str,
++          expect_done: int) -> bool:
++    answer_session(t, mode, "rx", pid, str(start))
++    # Flush stale output (task table contains 'C's that would
++    # false-trigger the handshake); the receiver streams fresh C's.
++    t.flush_quiet()
++    if not sender_stream(t, blob, framing, packet, ymodem, corrupt, name):
++        return False
++    line = t.readline(timeout=120)
++    m = re.search(rb"done bytes=(\d+)", line)
++    return bool(m) and int(m.group(1)) == expect_done
++
++
++def do_dump(t: Term, mode: str, pid: str, start: int, nbytes: int) -> bytes | None:
++    answer_session(t, mode, "dump", pid, str(start), nbytes)
++    end = time.time() + 180
++    while time.time() < end:
++        if b"dump done" in t.buf:
++            break
++        chunk = t.recv_raw()
++        if chunk:
++            t.buf += chunk
++    if b"dump done" not in t.buf:
++        return None
++    # Split at the LAST trailer (golden bytes may contain it) and drop
++    # everything through it so no dump bytes pollute the next phase.
++    idx = t.buf.rindex(b"dump done") + len(b"dump done")
++    payload, t.buf = t.buf[:idx - len(b"dump done")], t.buf[idx:]
++    # Payload is the last nbytes before the trailer (echoes precede it).
++    if len(payload) < nbytes:
++        return None
++    return payload[-nbytes:]
++
++
++def main() -> int:
++    t = Term()
++    try:
++        if t.log:
++            import datetime
++            t.log.write(
++                f"== RUN {datetime.datetime.now().isoformat()} ==\n".encode())
++            t.log.flush()
++        t.send(b"\r")
++        t.expect(b"/ $", timeout=120)
++        t.sendline("tasks")
++        out = t.expect(b"ramdiskd", timeout=60)
++        m = re.search(rb"(\d+)\s+ramdiskd", out)
++        if not m:
++            print("VERIFY-276: FAIL ramdiskd pid not found")
++            return 1
++        pid = m.group(1).decode()
++        print(f"VERIFY-276: ramdiskd pid={pid}")
++        t.sendline("source /tests/xmodem276.txt")
++        t.expect(b"xmodem receiver", timeout=120)
++        gold_a = bytes((i * 7 + 3) & 0xFF for i in range(300))
++        gold_b = bytes((i * 13 + 11) & 0xFF for i in range(3 * 1024))
++        gold_d = bytes((i * 5 + 1) & 0xFF for i in range(1024))
++        cases = [
++            # (tag, start, gold, framing, packet, ymodem, corrupt, name,
++            #  expect_done): pure XMODEM reports padded stream bytes,
++            # YMODEM reports the exact size.
++            ("a", 100, gold_a, "raw", "soh", False, 0, "a.bin", 384),
++            ("b", 200, gold_b, "raw", "stx", True, 0, "b.bin", 3072),
++            ("c", 300, gold_a, "base64", "soh", False, 0, "c.bin", 384),
++            ("d", 400, gold_d, "hex", "stx", False, 0, "d.bin", 1024),
++            ("e", 500, gold_a, "raw", "soh", False, 2, "e.bin", 384),
++        ]
++        for tag, start, gold, framing, packet, ymodem, corrupt, name, \
++                expect_done in cases:
++            if not do_rx(t, framing, pid, start, gold, framing, packet,
++                         ymodem, corrupt, name, expect_done):
++                print(f"VERIFY-276: FAIL rx {tag}")
++                return 1
++            got = do_dump(t, "uart", pid, start, len(gold))
++            if got != gold:
++                print(f"VERIFY-276: FAIL dump {tag} "
++                      f"(got {len(got) if got else -1} want {len(gold)})")
++                return 1
++            extra = f"/ymodem" if ymodem else ""
++            extra += "/corrupt" if corrupt else ""
++            print(f"VERIFY-276: case {tag} PASS ({framing}/{packet}{extra})")
++        # (f) NOGRANT: bogus pid aborts on first block write.
++        answer_session(t, "raw", "rx", "99991", "600")
++        t.flush_quiet()
++        if not sender_stream(t, gold_a, "raw", "soh", False, 0, "f.bin"):
++            print("VERIFY-276: note (f) sender saw abort (receiver-side abort ok)")
++        try:
++            line = t.readline(timeout=60)
++        except TimeoutError:
++            line = b""
++        if b"abort" not in line:
++            print(f"VERIFY-276: FAIL (f) no abort line: {line!r}")
++            return 1
++        print("VERIFY-276: case f NOGRANT-abort PASS")
++        got = do_dump(t, "uart", pid, 600, len(gold_a))
++        if got != bytes(len(gold_a)):
++            print("VERIFY-276: FAIL (f) region not zero")
++            return 1
++        print("VERIFY-276: case f zero-write PASS")
++        answer_session(t, "uart", "quit", pid, "0")
++        print("VERIFY-276: ALL PASS")
++        return 0
++    except (TimeoutError, ConnectionError, OSError) as e:
++        print(f"VERIFY-276: FAIL {e}")
++        return 1
++    finally:
++        t.close()
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/tools/xmodem_send.py b/tools/xmodem_send.py
+new file mode 100644
+index 000000000..4bb876bf9
+--- /dev/null
++++ b/tools/xmodem_send.py
+@@ -0,0 +1,149 @@
++#!/usr/bin/env python3
++"""Host-side XMODEM/YMODEM sender for #276 E2E (tools/verify-276.exp).
++
++Usage: xmodem_send.py HOST PORT FILE [--framing raw|base64|hex]
++                       [--packet soh|stx] [--ymodem] [--corrupt N]
++                       [--start-block N] [--timeout S]
++
++Waits for the receiver's 'C', streams the file, handles ACK/NAK/EOT.
++--corrupt N flips one CRC byte of packet N (1-based) to exercise the
++receiver's NAK path once. Exit 0 on clean completion, 1 on abort.
++"""
++import socket
++import sys
++import base64
++import binascii
++
++SOH, STX, EOT, ACK, NAK, CAN, CHR_C = 0x01, 0x02, 0x04, 0x06, 0x15, 0x18, 0x43
++
++
++def crc16(data: bytes) -> int:
++    crc = 0
++    for b in data:
++        crc ^= b << 8
++        for _ in range(8):
++            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
++    return crc
++
++
++def frame(payload: bytes, framing: str) -> bytes:
++    if framing == "raw":
++        return payload
++    if framing == "base64":
++        return base64.b64encode(payload) + b"\n"
++    if framing == "hex":
++        return binascii.hexlify(payload) + b"\n"
++    raise ValueError(framing)
++
++
++class Sender:
++    def __init__(self, host, port, timeout):
++        self.s = socket.create_connection((host, port), timeout=timeout)
++        self.s.settimeout(timeout)
++        self.buf = b""
++
++    def getc(self):
++        while not self.buf:
++            chunk = self.s.recv(4096)
++            if not chunk:
++                return None
++            self.buf += chunk
++        c, self.buf = self.buf[0], self.buf[1:]
++        return c
++
++    def put(self, data: bytes, framing: str):
++        self.s.sendall(frame(data, framing))
++
++    def close(self):
++        self.s.close()
++
++
++def main() -> int:
++    args = sys.argv[1:]
++    framing, packet, ymodem, corrupt = "raw", "stx", False, 0
++    timeout = 30
++    pos = []
++    i = 0
++    while i < len(args):
++        if args[i] == "--framing":
++            framing = args[i + 1]
++            i += 2
++        elif args[i] == "--packet":
++            packet = args[i + 1]
++            i += 2
++        elif args[i] == "--ymodem":
++            ymodem = True
++            i += 1
++        elif args[i] == "--corrupt":
++            corrupt = int(args[i + 1])
++            i += 2
++        elif args[i] == "--timeout":
++            timeout = int(args[i + 1])
++            i += 2
++        else:
++            pos.append(args[i])
++            i += 1
++    if len(pos) != 3:
++        print("usage: HOST PORT FILE [--framing ..] [--packet soh|stx] [--ymodem] [--corrupt N]")
++        return 2
++    host, port, path = pos[0], int(pos[1]), pos[2]
++    with open(path, "rb") as f:
++        blob = f.read()
++    blklen = 128 if packet == "soh" else 1024
++    head = bytes([0x01 if packet == "soh" else 0x02])
++    snd = Sender(host, port, timeout)
++    try:
++        # Wait for receiver 'C' handshake.
++        for _ in range(40):
++            c = snd.getc()
++            if c is None:
++                print("SENDER: EOF waiting C")
++                return 1
++            if c == CHR_C:
++                break
++        else:
++            print("SENDER: no C received")
++            return 1
++        packets = []
++        if ymodem:
++            name = path.encode() + b"\x00"
++            size = str(len(blob)).encode() + b"\x00"
++            body = (name + size).ljust(128, b"\x00")
++            packets.append((0, body))
++        for off in range(0, len(blob), blklen):
++            chunk = blob[off:off + blklen].ljust(blklen, b"\x1a")
++            packets.append((len(packets) + (0 if ymodem else 1), chunk))
++        n = 0
++        for seq, body in packets:
++            n += 1
++            seqb = seq & 0xFF
++            crc = crc16(body)
++            pkt = head + bytes([seqb, 0xFF ^ seqb]) + body
++            pkt += bytes([(crc >> 8) & 0xFF, crc & 0xFF])
++            if n == corrupt:
++                pkt = pkt[:-1] + bytes([(pkt[-1] ^ 0xFF) & 0xFF])
++            for attempt in range(11):
++                snd.put(pkt, framing)
++                c = snd.getc()
++                if c == ACK:
++                    break
++                if c is None or c == CAN:
++                    print("SENDER: abort during packet", n)
++                    return 1
++            else:
++                print("SENDER: retries exhausted packet", n)
++                return 1
++        snd.put(bytes([EOT]), framing)
++        for _ in range(5):
++            c = snd.getc()
++            if c == ACK:
++                print(f"SENDER: done packets={n} bytes={len(blob)}")
++                return 0
++        print("SENDER: no ACK to EOT")
++        return 1
++    finally:
++        snd.close()
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/userspace/xmodem.c b/userspace/xmodem.c
+new file mode 100644
+index 000000000..7f24258b4
+--- /dev/null
++++ b/userspace/xmodem.c
+@@ -0,0 +1,620 @@
 +
 +#include <stdint.h>
 +#include <stdio.h>
@@ -1120,178 +653,692 @@ index 000000000..691a049de
 +#include <stdlib.h>
 +#include <syscall.h>
 +#include <ipc.h>
++#include <time.h>
++#include "xmodem_crc.h"
++
++#define SOH 0x01
++#define STX 0x02
++#define EOT 0x04
++#define ACK 0x06
++#define NAK 0x15
++#define CAN 0x18
++#define SUB 0x1A
++#define CHR_C 0x43
++
++#define PKT_128 128
++#define PKT_1024 1024
++#define PKT_MAX PKT_1024
 +
 +#define RAMDISK_READ_BLOCK  400
 +#define RAMDISK_WRITE_BLOCK 401
-+#define RAMDISK_STAT        402
-+#define RAMDISK_GRANT       403
-+
-+#define RAMDISK_BLOCK_SIZE       512
-+#define RAMDISK_CHUNK_DATA       32
-+#define RAMDISK_CHUNKS_PER_BLOCK 16
-+#define RAMDISK_BLOCKS           32768
-+#define RAMDISK_SEGMENTS         8
-+#define RAMDISK_SEGMENT_BLOCKS   4096
-+
 +#define RAMDISK_OK          0
 +#define RAMDISK_ERR_RANGE  -1
 +#define RAMDISK_ERR_NOGRANT -2
 +#define RAMDISK_ERR_NOMEM  -3
-+#define RAMDISK_ERR_UNKNOWN_OP -4
 +
-+#define SYS_FRAME_MAP   64
-+#define SYS_FRAME_UNMAP 65
++#define RAMDISK_BLOCKS           32768
++#define RAMDISK_BLOCK_SIZE       512
++#define RAMDISK_CHUNK_DATA       32
++#define RAMDISK_CHUNKS_PER_BLOCK 16
 +
-+#define MSG_DAEMON_READY 0xF0000001
++#define MAX_RETRIES 10
++#define C_TRIES 10
++#define C_INTERVAL_S 3
++#define PKT_TIMEOUT_S 10
++#define OVERALL_CAP_S 600
 +
-+struct RamdiskdMsg {
-+    uint64_t sender_pid;
-+    uint64_t block_no;
-+    uint64_t chunk_idx;
-+    char     data[RAMDISK_CHUNK_DATA];
-+};
++static unsigned char g_packet[PKT_MAX];
++static unsigned char g_staging[RAMDISK_BLOCK_SIZE];
++static unsigned long g_ramdisk_pid = 0;
++static int g_mode = 0;
++static int g_tty_fd = 0;
 +
-+struct RamdiskdReply {
-+    int64_t  result;
-+    char     data[RAMDISK_CHUNK_DATA];
-+};
++/// @brief Open the serial tty in RAW mode (issue #276): cooked mode
++/// maps CR (0x0D) to LF (0x0A), which corrupts binary packet bytes
++/// (proven: golden byte 38 0x0D arrived as 0x0A, CRC 0x2EE4 became
++/// 0xC64A). Fail fast when raw open fails — silent corruption is
++/// worse than no transfer.
 +
-+static uint64_t g_my_id = 0;
-+static uint64_t g_seg_handle[RAMDISK_SEGMENTS] = {0};
-+static uint64_t g_seg_va[RAMDISK_SEGMENTS] = {0};
-+static int g_has_grant = 0;
-+
-+static int ramdiskd_map_segment(int seg) {
-+    if (g_seg_va[seg] != 0)
-+        return 0;
-+    if (g_seg_handle[seg] == 0)
-+        return -1;
-+    long va = __syscall5(SYS_FRAME_MAP, (long)g_seg_handle[seg], 0, 0, 0);
-+    if (va < 0)
-+        return -1;
-+    g_seg_va[seg] = (uint64_t)va;
-+    return 0;
-+}
-+
-+static void ramdiskd_handle_grant(struct RamdiskdMsg* msg,
-+                                  const char* payload) {
-+    (void)msg;
-+    // Store handles only; segments map lazily on first use so the
-+    // grant path stays fast (one 2 MiB mapping costs seconds under
-+    // TCG — mapping all eight up front stalls serving).
-+    for (int i = 0; i < RAMDISK_SEGMENTS; ++i) {
-+        uint64_t handle = 0;
-+        memcpy(&handle, payload + i * 8, 8);
-+        if (handle == 0 || handle == (uint64_t)-1) {
-+            g_has_grant = 0;
-+            return;
-+        }
-+        g_seg_handle[i] = handle;
++static int x_strcmp(const char* a, const char* b) {
++    while (*a && *a == *b) {
++        ++a;
++        ++b;
 +    }
-+    g_has_grant = 1;
++    return (int)(unsigned char)*a - (int)(unsigned char)*b;
 +}
 +
-+static int ramdiskd_check_range(uint64_t block_no, uint64_t chunk_idx) {
-+    if (block_no >= RAMDISK_BLOCKS)
-+        return -1;
-+    if (chunk_idx >= RAMDISK_CHUNKS_PER_BLOCK)
-+        return -1;
-+    return 0;
-+}
-+
-+static char* ramdiskd_chunk_ptr(uint64_t block_no, uint64_t chunk_idx) {
-+    uint64_t seg = block_no / RAMDISK_SEGMENT_BLOCKS;
-+    uint64_t seg_block = block_no % RAMDISK_SEGMENT_BLOCKS;
-+    uint64_t off = seg_block * RAMDISK_BLOCK_SIZE +
-+                   chunk_idx * RAMDISK_CHUNK_DATA;
-+    return (char*)(g_seg_va[seg] + off);
-+}
-+
-+static int ramdiskd_serve_range(uint64_t block_no, uint64_t chunk_idx) {
-+    if (!g_has_grant)
-+        return RAMDISK_ERR_NOGRANT;
-+    if (ramdiskd_check_range(block_no, chunk_idx) < 0)
-+        return RAMDISK_ERR_RANGE;
-+    uint64_t seg = block_no / RAMDISK_SEGMENT_BLOCKS;
-+    if (ramdiskd_map_segment((int)seg) < 0)
-+        return RAMDISK_ERR_NOMEM;
-+    return RAMDISK_OK;
-+}
-+
-+static int ramdiskd_handle_read(struct RamdiskdMsg* msg,
-+                                struct RamdiskdReply* reply) {
-+    int rc = ramdiskd_serve_range(msg->block_no, msg->chunk_idx);
-+    if (rc != RAMDISK_OK) {
-+        reply->result = rc;
-+        return -1;
++static unsigned long x_atoul(const char* s) {
++    unsigned long v = 0;
++    while (*s >= '0' && *s <= '9') {
++        v = v * 10 + (unsigned long)(*s - '0');
++        ++s;
 +    }
-+    memcpy(reply->data, ramdiskd_chunk_ptr(msg->block_no, msg->chunk_idx),
-+           RAMDISK_CHUNK_DATA);
-+    reply->result = RAMDISK_OK;
-+    return 0;
++    return v;
 +}
 +
-+static int ramdiskd_handle_write(struct RamdiskdMsg* msg,
-+                                 struct RamdiskdReply* reply) {
-+    int rc = ramdiskd_serve_range(msg->block_no, msg->chunk_idx);
-+    if (rc != RAMDISK_OK) {
-+        reply->result = rc;
-+        return -1;
-+    }
-+    memcpy(ramdiskd_chunk_ptr(msg->block_no, msg->chunk_idx), msg->data,
-+           RAMDISK_CHUNK_DATA);
-+    reply->result = RAMDISK_OK;
-+    return 0;
++static unsigned long x_now(void) {
++    return (unsigned long)time(0);
 +}
 +
-+static int ramdiskd_handle_stat(struct RamdiskdMsg* msg,
-+                                struct RamdiskdReply* reply) {
-+    (void)msg;
-+    if (!g_has_grant) {
-+        reply->result = RAMDISK_ERR_NOGRANT;
-+        return -1;
-+    }
-+    reply->result = RAMDISK_OK;
-+    return 0;
-+}
-+
-+static int ramdiskd_dispatch(struct RamdiskdMsg* msg, long rtype,
-+                             struct RamdiskdReply* reply) {
-+    switch (rtype) {
-+        case RAMDISK_READ_BLOCK:
-+            return ramdiskd_handle_read(msg, reply);
-+        case RAMDISK_WRITE_BLOCK:
-+            return ramdiskd_handle_write(msg, reply);
-+        case RAMDISK_STAT:
-+            return ramdiskd_handle_stat(msg, reply);
-+        default:
-+            reply->result = RAMDISK_ERR_UNKNOWN_OP;
++/// @brief Blocking-with-deadline byte read: poll non-blocking tty_read
++/// with 1 ms sleeps; -1 on timeout. time() is the only clock.
++/// NOTE: tty_read returns -1 on empty (EAGAIN-style, never blocks), so
++/// -1 here means "no data yet" and the loop retries until the deadline.
++static int serial_getc(unsigned long deadline) {
++    unsigned char c = 0;
++    struct timespec nap;
++    nap.tv_sec = 0;
++    nap.tv_nsec = 1000000;
++    for (;;) {
++        long r = read(g_tty_fd, &c, 1);
++        if (r == 1)
++            return (int)c;
++        if (x_now() >= deadline)
 +            return -1;
++        nanosleep(&nap, 0);
 +    }
++}
++
++static void serial_putc(unsigned char c) {
++    write(1, &c, 1);
++}
++
++static int b64_val(char c) {
++    if (c >= 'A' && c <= 'Z')
++        return c - 'A';
++    if (c >= 'a' && c <= 'z')
++        return c - 'a' + 26;
++    if (c >= '0' && c <= '9')
++        return c - '0' + 52;
++    if (c == '+')
++        return 62;
++    if (c == '/')
++        return 63;
++    return -1;
++}
++
++static int hex_val(char c) {
++    if (c >= '0' && c <= '9')
++        return c - '0';
++    if (c >= 'a' && c <= 'f')
++        return c - 'a' + 10;
++    if (c >= 'A' && c <= 'F')
++        return c - 'A' + 10;
++    return -1;
++}
++
++static int b64_pending[3];
++static int b64_n = 0;
++static int b64_i = 0;
++
++/// @brief Next stream byte through the selected framing (0=raw).
++/// Decoded output is clamped: base64 yields at most 3 bytes per
++/// quartet, hex exactly 1 per pair — never more than the caller
++/// asked for. Returns -1 on timeout or framing error.
++static int next_byte(unsigned long deadline) {
++    if (g_mode == 0)
++        return serial_getc(deadline);
++    if (g_mode == 1) {
++        if (b64_i < b64_n)
++            return b64_pending[b64_i++];
++        {
++            int vals[4];
++            int n = 0;
++            int b0 = 0;
++            int b1 = 0;
++            int b2 = 0;
++            int b3 = 0;
++            while (n < 4) {
++                int c = serial_getc(deadline);
++                int v = 0;
++                if (c < 0)
++                    return -1;
++                if (c == '\r' || c == '\n')
++                    continue;
++                if (c == '=') {
++                    vals[n++] = -2;
++                    continue;
++                }
++                v = b64_val((char)c);
++                if (v < 0)
++                    return -1;
++                vals[n++] = v;
++            }
++            b0 = vals[0] >= 0 ? vals[0] : 0;
++            b1 = vals[1] >= 0 ? vals[1] : 0;
++            b2 = vals[2] >= 0 ? vals[2] : 0;
++            b3 = vals[3] >= 0 ? vals[3] : 0;
++            b64_pending[0] = (b0 << 2) | (b1 >> 4);
++            b64_pending[1] = ((b1 & 15) << 4) | (b2 >> 2);
++            b64_pending[2] = ((b2 & 3) << 6) | b3;
++            b64_n = 3;
++            if (vals[3] == -2)
++                b64_n = 2;
++            if (vals[2] == -2)
++                b64_n = 1;
++            b64_i = 0;
++            if (b64_i < b64_n)
++                return b64_pending[b64_i++];
++        }
++        return -1;
++    }
++    {
++        int hi = -1;
++        for (;;) {
++            int c = serial_getc(deadline);
++            int v = 0;
++            if (c < 0)
++                return -1;
++            if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
++                continue;
++            v = hex_val((char)c);
++            if (v < 0)
++                return -1;
++            if (hi < 0) {
++                hi = v;
++                continue;
++            }
++            return (hi << 4) | v;
++        }
++    }
++}
++
++/// @brief Read exactly len stream bytes (len clamped to PKT_MAX).
++/// Returns 0 on success, -1 on timeout/framing error/overrun.
++static int read_bytes(unsigned char* out, unsigned int len,
++                      unsigned long deadline) {
++    unsigned int i = 0;
++    if (len > PKT_MAX)
++        return -1;
++    for (i = 0; i < len; ++i) {
++        int c = next_byte(deadline);
++        if (c < 0)
++            return -1;
++        out[i] = (unsigned char)c;
++    }
++    return 0;
++}
++
++/// @brief Write one 512 B block to ramdisk start_block+block_idx.
++/// Returns 0 on success, ramdisk error (<0) or -9 on IPC failure.
++static int ramdisk_write_block(unsigned long start_block,
++                               unsigned long block_idx,
++                               const unsigned char* data) {
++    unsigned long block_no = start_block + block_idx;
++    unsigned long chunk = 0;
++    unsigned long me = (unsigned long)getpid();
++    char req[56];
++    char reply[40];
++    if (block_no >= RAMDISK_BLOCKS)
++        return RAMDISK_ERR_RANGE;
++    for (chunk = 0; chunk < RAMDISK_CHUNKS_PER_BLOCK; ++chunk) {
++        unsigned int i = 0;
++        int r = 0;
++        long result = 0;
++        unsigned int k = 0;
++        for (i = 0; i < 8; ++i) {
++            req[i] = (char)((me >> (i * 8)) & 0xFF);
++            req[8 + i] = (char)((block_no >> (i * 8)) & 0xFF);
++            req[16 + i] = (char)((chunk >> (i * 8)) & 0xFF);
++        }
++        for (i = 0; i < RAMDISK_CHUNK_DATA; ++i)
++            req[24 + i] = (char)data[chunk * RAMDISK_CHUNK_DATA + i];
++        r = ipc_send_sync(g_ramdisk_pid, RAMDISK_WRITE_BLOCK, req,
++                          sizeof(req), reply);
++        if (r < 0)
++            return -9;
++        for (k = 0; k < 8; ++k)
++            result |= ((long)(unsigned char)reply[k]) << (k * 8);
++        if (result != RAMDISK_OK)
++            return (int)result;
++    }
++    return 0;
++}
++
++/// @brief Read one 512 B block from ramdisk into data. Same returns.
++static int ramdisk_read_block(unsigned long start_block,
++                              unsigned long block_idx,
++                              unsigned char* data) {
++    unsigned long block_no = start_block + block_idx;
++    unsigned long chunk = 0;
++    unsigned long me = (unsigned long)getpid();
++    char req[56];
++    char reply[40];
++    if (block_no >= RAMDISK_BLOCKS)
++        return RAMDISK_ERR_RANGE;
++    for (chunk = 0; chunk < RAMDISK_CHUNKS_PER_BLOCK; ++chunk) {
++        unsigned int i = 0;
++        int r = 0;
++        long result = 0;
++        unsigned int k = 0;
++        for (i = 0; i < 8; ++i) {
++            req[i] = (char)((me >> (i * 8)) & 0xFF);
++            req[8 + i] = (char)((block_no >> (i * 8)) & 0xFF);
++            req[16 + i] = (char)((chunk >> (i * 8)) & 0xFF);
++        }
++        r = ipc_send_sync(g_ramdisk_pid, RAMDISK_READ_BLOCK, req, 24,
++                          reply);
++        if (r < 0)
++            return -9;
++        for (k = 0; k < 8; ++k)
++            result |= ((long)(unsigned char)reply[k]) << (k * 8);
++        if (result != RAMDISK_OK)
++            return (int)result;
++        for (k = 0; k < RAMDISK_CHUNK_DATA; ++k)
++            data[chunk * RAMDISK_CHUNK_DATA + k] =
++                (unsigned char)reply[8 + k];
++    }
++    return 0;
++}
++
++/// @brief Receive one packet body for start byte; validates
++/// seq/complement + CRC16. Returns data length (128/1024), or
++/// -1 timeout, -2 CRC/seq error.
++static int rx_packet_body(int start, unsigned long* seq_out,
++                          unsigned long deadline) {
++    unsigned char hdr[2];
++    unsigned int data_len = (start == STX) ? PKT_1024 : PKT_128;
++    unsigned char crcb[2];
++    unsigned short want = 0;
++    unsigned short got = 0;
++    if (read_bytes(hdr, 2, deadline) < 0)
++        return -1;
++    if (((hdr[0] ^ hdr[1]) & 0xFF) != 0xFF)
++        return -2;
++    *seq_out = hdr[0];
++    if (read_bytes(g_packet, data_len, deadline) < 0)
++        return -1;
++    if (read_bytes(crcb, 2, deadline) < 0)
++        return -1;
++    want = (unsigned short)(((unsigned short)crcb[0] << 8) | crcb[1]);
++    got = xmodem_crc16(g_packet, data_len);
++    if (got != want)
++        return -2;
++    return (int)data_len;
++}
++
++/// @brief Feed one stream byte into the staging block; flushes full
++/// blocks to ramdisk. Returns 0 ok, ramdisk error (<0), -9 IPC fail.
++static int stage_byte(unsigned long start_block, unsigned long* total,
++                      unsigned char b) {
++    unsigned long blk = *total / RAMDISK_BLOCK_SIZE;
++    unsigned long off = *total % RAMDISK_BLOCK_SIZE;
++    int w = 0;
++    if (start_block + blk >= RAMDISK_BLOCKS)
++        return RAMDISK_ERR_RANGE;
++    if (off == 0) {
++        unsigned int k = 0;
++        for (k = 0; k < RAMDISK_BLOCK_SIZE; ++k)
++            g_staging[k] = 0;
++    }
++    g_staging[off] = b;
++    *total += 1;
++    if (*total % RAMDISK_BLOCK_SIZE == 0) {
++        w = ramdisk_write_block(start_block, blk, g_staging);
++        if (w != 0)
++            return w;
++    }
++    return 0;
++}
++
++/// @brief Flush a partial staging block (zero-padded) to ramdisk.
++static int stage_flush(unsigned long start_block, unsigned long total) {
++    unsigned long off = total % RAMDISK_BLOCK_SIZE;
++    unsigned long blk = 0;
++    unsigned int k = 0;
++    int w = 0;
++    if (off == 0)
++        return 0;
++    blk = total / RAMDISK_BLOCK_SIZE;
++    for (k = (unsigned int)off; k < RAMDISK_BLOCK_SIZE; ++k)
++        g_staging[k] = 0;
++    w = ramdisk_write_block(start_block, blk, g_staging);
++    return w;
++}
++
++/// @brief Run the receive session into ramdisk at start_block.
++/// Returns bytes written, or negative -reason on abort.
++static long rx_run(unsigned long start_block, unsigned long cap_time) {
++    unsigned long expected = 1;
++    unsigned long total = 0;
++    unsigned long ysize = 0;
++    int have_ysize = 0;
++    unsigned long retries = 0;
++    int c_tries = 0;
++    int start = 0;
++    printf("READY\n");
++    while (c_tries < C_TRIES) {
++        serial_putc(CHR_C);
++        start = next_byte(x_now() + C_INTERVAL_S);
++        if (start == SOH || start == STX)
++            goto packet;
++        if (start == CAN)
++            return -2;
++        ++c_tries;
++    }
++    return -2;
++packet:
++    for (;;) {
++        unsigned long seq = 0;
++        int rc = 0;
++        unsigned int bi = 0;
++        if (x_now() > cap_time)
++            goto abort;
++        if (start < 0) {
++            start = next_byte(x_now() + PKT_TIMEOUT_S);
++            if (start < 0) {
++                if (++retries > MAX_RETRIES)
++                    goto abort;
++                serial_putc(NAK);
++                continue;
++            }
++        }
++        if (start == EOT) {
++            serial_putc(ACK);
++            break;
++        }
++        if (start == CAN)
++            return -2;
++        if (start != SOH && start != STX) {
++            if (++retries > MAX_RETRIES)
++                goto abort;
++            serial_putc(NAK);
++            start = -1;
++            continue;
++        }
++        rc = rx_packet_body(start, &seq, x_now() + PKT_TIMEOUT_S);
++        start = -1;
++        if (rc < 0) {
++            serial_putc(NAK);
++            if (++retries > MAX_RETRIES)
++                goto abort;
++            continue;
++        }
++        if (seq == 0 && expected == 1 && !have_ysize) {
++            unsigned int k = 0;
++            while (k < (unsigned int)rc && g_packet[k])
++                ++k;
++            ++k;
++            if (k >= (unsigned int)rc) {
++                serial_putc(NAK);
++                if (++retries > MAX_RETRIES)
++                    goto abort;
++                continue;
++            }
++            ysize = x_atoul((const char*)(g_packet + k));
++            have_ysize = 1;
++            serial_putc(ACK);
++            continue;
++        }
++        if (seq != (expected & 0xFF)) {
++            if (seq == ((expected - 1) & 0xFF)) {
++                serial_putc(ACK);
++                continue;
++            }
++            goto abort;
++        }
++        for (bi = 0; bi < (unsigned int)rc; ++bi) {
++            int w = 0;
++            if (have_ysize && total >= ysize)
++                break;
++            w = stage_byte(start_block, &total, g_packet[bi]);
++            if (w != 0)
++                goto abort;
++        }
++        if (have_ysize && total >= ysize) {
++            int e = 0;
++            serial_putc(ACK);
++            ++expected;
++            e = next_byte(x_now() + PKT_TIMEOUT_S);
++            if (e == EOT)
++                serial_putc(ACK);
++            break;
++        }
++        serial_putc(ACK);
++        ++expected;
++        retries = 0;
++    }
++    {
++        int f = stage_flush(start_block, total);
++        if (f != 0)
++            return f;
++    }
++    return (long)total;
++abort:
++    serial_putc(CAN);
++    serial_putc(CAN);
++    return -3;
++}
++
++static int dump_run(unsigned long start_block, unsigned long nbytes) {
++    unsigned long done = 0;
++    static unsigned char blkbuf[RAMDISK_BLOCK_SIZE];
++    while (done < nbytes) {
++        unsigned long blk = done / RAMDISK_BLOCK_SIZE;
++        unsigned long off = done % RAMDISK_BLOCK_SIZE;
++        unsigned long take = nbytes - done;
++        unsigned long room = RAMDISK_BLOCK_SIZE - off;
++        unsigned long t = 0;
++        if (take > room)
++            take = room;
++        if (off == 0 || done == 0) {
++            int r = ramdisk_read_block(start_block, blk, blkbuf);
++            if (r != 0) {
++                printf("dump err %d\n", r);
++                return 3;
++            }
++        }
++        for (t = 0; t < take; ++t) {
++            unsigned char c = blkbuf[off + t];
++            if (g_mode == 2) {
++                char hx[3];
++                hx[0] = "0123456789ABCDEF"[(c >> 4) & 15];
++                hx[1] = "0123456789ABCDEF"[c & 15];
++                hx[2] = '\n';
++                write(1, hx, 3);
++            } else {
++                write(1, (char*)&c, 1);
++            }
++        }
++        done += take;
++    }
++    return 0;
++}
++
++/// @brief Print an unsigned long in decimal (issue #276: in-tree
++/// printf %lu/%llu misrenders some 64-bit values in userspace, so
++/// transfer counts use this direct path).
++static void print_u64(unsigned long v) {
++    char buf[24];
++    int i = 0;
++    int j = 0;
++    if (v == 0) {
++        write(1, "0", 1);
++        return;
++    }
++    while (v > 0 && i < 23) {
++        buf[i++] = (char)('0' + (v % 10));
++        v /= 10;
++    }
++    for (j = i - 1; j >= 0; --j)
++        write(1, &buf[j], 1);
++}
++
++static int read_line(char* buf, int cap) {    int i = 0;
++    char c = 0;
++    struct timespec nap;
++    nap.tv_sec = 0;
++    nap.tv_nsec = 1000000;
++    // Interactive prompts have no deadline: an empty poll (-1) is
++    // retried until a byte arrives (tty_read never blocks). EOF
++    // (TCP close) surfaces as repeated -1 with no progress — the
++    // session owner kills QEMU in that case.
++    while (i < cap - 1) {
++        long r = read(g_tty_fd, &c, 1);
++        if (r != 1) {
++            nanosleep(&nap, 0);
++            continue;
++        }
++        if (c == '\n' || c == '\r')
++            break;
++        buf[i++] = c;
++    }
++    buf[i] = '\0';
++    return i;
 +}
 +
 +int main(void) {
-+    g_my_id = (uint64_t)getpid();
-+    printf("[ramdiskd] Ramdisk Daemon started (PID=%llu)\n", g_my_id);
-+
-+    ipc_send(1, MSG_DAEMON_READY, NULL, 0, 0);
-+
-+    while (1) {
-+        char raw[64] = {0};
-+        long r = ipc_recv(raw, sizeof(raw));
-+        if (r < 0) continue;
-+        if (r == RAMDISK_GRANT) {
-+            ramdiskd_handle_grant((struct RamdiskdMsg*)raw,
-+                                  (const char*)raw);
++    char line[64];
++    unsigned long start = 0;
++    int is_rx = 0;
++    int is_dump = 0;
++    g_tty_fd = open("/dev/tty", O_RAWTTY);
++    if (g_tty_fd < 0) {
++        printf("xmodem: raw tty open failed\n");
++        return 1;
++    }
++    printf("xmodem receiver (uart|base64|hex), cmd (rx|dump|quit)\n");
++    for (;;) {
++        printf("mode: ");
++        if (read_line(line, sizeof(line)) < 0)
++            return 1;
++        if (x_strcmp(line, "uart") == 0)
++            g_mode = 0;
++        else if (x_strcmp(line, "base64") == 0)
++            g_mode = 1;
++        else if (x_strcmp(line, "hex") == 0)
++            g_mode = 2;
++        else {
++            printf("usage: uart|base64|hex\n");
 +            continue;
 +        }
-+        struct RamdiskdMsg* msg = (struct RamdiskdMsg*)raw;
-+        struct RamdiskdReply reply;
-+        reply.result = RAMDISK_ERR_UNKNOWN_OP;
-+        ramdiskd_dispatch(msg, r, &reply);
-+
-+        ipc_send(msg->sender_pid, 0, &reply, sizeof(reply), 0);
++        printf("cmd: ");
++        if (read_line(line, sizeof(line)) < 0)
++            return 1;
++        if (x_strcmp(line, "quit") == 0 || x_strcmp(line, "exit") == 0)
++            return 0;
++        is_rx = (x_strcmp(line, "rx") == 0);
++        is_dump = (x_strcmp(line, "dump") == 0);
++        if (!is_rx && !is_dump) {
++            printf("usage: rx|dump|quit\n");
++            continue;
++        }
++        printf("ramdisk pid: ");
++        if (read_line(line, sizeof(line)) < 0)
++            return 1;
++        g_ramdisk_pid = x_atoul(line);
++        if (g_ramdisk_pid == 0) {
++            printf("bad pid\n");
++            continue;
++        }
++        printf("start block: ");
++        if (read_line(line, sizeof(line)) < 0)
++            return 1;
++        start = x_atoul(line);
++        if (start >= RAMDISK_BLOCKS) {
++            printf("bad block\n");
++            continue;
++        }
++        if (is_rx) {
++            long rc = rx_run(start, x_now() + OVERALL_CAP_S);
++            if (rc < 0) {
++                printf("abort %ld\n", rc);
++                continue;
++            }
++            write(1, "done bytes=", 11);
++            print_u64((unsigned long)rc);
++            write(1, " blocks=", 8);
++            print_u64(((unsigned long)rc + RAMDISK_BLOCK_SIZE - 1) /
++                      RAMDISK_BLOCK_SIZE);
++            write(1, "\n", 1);
++            continue;
++        }
++        printf("bytes: ");
++        if (read_line(line, sizeof(line)) < 0)
++            return 1;
++        {
++            unsigned long n = x_atoul(line);
++            int r = dump_run(start, n);
++            printf("\ndump done\n");
++            if (r != 0)
++                return 3;
++        }
 +    }
-+
-+    return 0;
 +}
+diff --git a/userspace/xmodem_crc.h b/userspace/xmodem_crc.h
+new file mode 100644
+index 000000000..5add737b5
+--- /dev/null
++++ b/userspace/xmodem_crc.h
+@@ -0,0 +1,71 @@
++/* NexIOS RTOS — XMODEM CRC-16 (issue #276).
++ *
++ * Freestanding plain-C CRC-16/CCITT-FALSE shared by the userspace
++ * receiver (userspace/xmodem.c) and the kernel lib tests
++ * (src/kernel/test/test_lib.cpp). Zero includes and built-in types
++ * only: neither src/libc nor src/lib provides stdint.h, so this header
++ * spells `unsigned char` / `unsigned short` throughout and compiles as
++ * both C and C++.
++ *
++ * Variant: poly 0x1021, init 0x0000, no xor-out, no reflection.
++ * Check vector: "123456789" -> 0x31C3. Empty input -> 0x0000.
++ * The accumulator is masked to 16 bits after every step so the vector
++ * holds on hosts where `unsigned short` is wider than 16 bits.
++ */
++
++#ifndef XMODEM_CRC_H
++#define XMODEM_CRC_H
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define XMODEM_CRC_POLY 0x1021u
++#define XMODEM_CRC_INIT 0x0000u
++#define XMODEM_CRC_CHECK 0x31C3u
++
++static unsigned short xmodem_crc16_table[256];
++static int xmodem_crc16_table_ready = 0;
++
++static void xmodem_crc16_init_table(void) {
++    unsigned int i = 0;
++    unsigned int j = 0;
++    if (xmodem_crc16_table_ready)
++        return;
++    for (i = 0; i < 256; ++i) {
++        unsigned int crc = i << 8;
++        for (j = 0; j < 8; ++j) {
++            if (crc & 0x8000u)
++                crc = ((crc << 1) ^ XMODEM_CRC_POLY) & 0xFFFFu;
++            else
++                crc = (crc << 1) & 0xFFFFu;
++        }
++        xmodem_crc16_table[i] = (unsigned short)(crc & 0xFFFFu);
++    }
++    xmodem_crc16_table_ready = 1;
++}
++
++static unsigned short xmodem_crc16_update(unsigned short crc,
++                                          const unsigned char *data,
++                                          unsigned int len) {
++    unsigned int i = 0;
++    xmodem_crc16_init_table();
++    crc &= 0xFFFFu;
++    for (i = 0; i < len; ++i) {
++        unsigned int idx =
++            ((crc >> 8) ^ (unsigned int)data[i]) & 0xFFu;
++        crc = (((crc << 8) ^ xmodem_crc16_table[idx])) & 0xFFFFu;
++    }
++    return (unsigned short)(crc & 0xFFFFu);
++}
++
++static unsigned short xmodem_crc16(const unsigned char *data,
++                                   unsigned int len) {
++    return xmodem_crc16_update(XMODEM_CRC_INIT, data, len);
++}
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* XMODEM_CRC_H */

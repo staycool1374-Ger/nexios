@@ -25,6 +25,7 @@
 #include <error.hpp>
 #include <version.hpp>
 #include <crc32.hpp>
+#include "../../../userspace/xmodem_crc.h"
 #include <fdt/fdt.h>
 #include <fdt/libfdt.h>
 #include <fdt/libfdt_internal.h>
@@ -318,6 +319,44 @@ JARVIS_TEST(lib_crc32_empty_and_incremental, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: XMODEM CRC-16/CCITT-FALSE matches the standard check vector
+//           (shared header userspace/xmodem_crc.h, also used by the #276
+//           receiver; zero-include plain C, compiles as C++ here).
+// Input: crc16("123456789"); init-table twice (idempotent).
+// Expect: 0x31C3 both times; empty input finalizes to 0x0000.
+// Depends: xmodem_crc16 (header-only).
+JARVIS_TEST(lib_crc16_xmodem_vector, "PRE: none | POST: none") {
+    const unsigned char msg[] = {'1', '2', '3', '4', '5',
+                                 '6', '7', '8', '9'};
+    const unsigned short first = xmodem_crc16(msg, sizeof(msg));
+    xmodem_crc16_init_table();
+    const unsigned short second = xmodem_crc16(msg, sizeof(msg));
+    JARVIS_ASSERT_EQ(0x31C3U, (unsigned int)first);
+    JARVIS_ASSERT_EQ(0x31C3U, (unsigned int)second);
+    JARVIS_ASSERT_EQ(0U,
+                     (unsigned int)xmodem_crc16(msg, 0));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Split CRC-16 updates equal one-shot updates (chaining is
+//           order-faithful, as the receiver feeds arbitrary slices).
+// Input: update("12")+update("3456789") vs full update.
+// Expect: Incremental equals one-shot (0x31C3).
+// Depends: xmodem_crc16_update (header-only).
+JARVIS_TEST(lib_crc16_empty_and_incremental, "PRE: none | POST: none") {
+    const unsigned char msg[] = {'1', '2', '3', '4', '5',
+                                 '6', '7', '8', '9'};
+    const unsigned short oneshot = xmodem_crc16(msg, sizeof(msg));
+    unsigned short chained =
+        xmodem_crc16_update(XMODEM_CRC_INIT, msg, 2);
+    chained = xmodem_crc16_update(chained, msg + 2, sizeof(msg) - 2);
+    JARVIS_ASSERT_EQ((unsigned int)oneshot, (unsigned int)chained);
+    JARVIS_ASSERT_EQ(0x31C3U, (unsigned int)chained);
+    JARVIS_TEST_PASS();
+}
+
 // Static device-tree blob for the lib_fdt_static_* tests (issue #183).
 // The FDT library is reachable in production only via the AARCH64/RISCV64
 // boot-DTB consumer, so x86 test boots can never exercise it live. These
@@ -606,6 +645,9 @@ void register_lib_tests() {
 
     JARVIS_REGISTER_TEST(lib_crc32_known_vector);
     JARVIS_REGISTER_TEST(lib_crc32_empty_and_incremental);
+
+    JARVIS_REGISTER_TEST(lib_crc16_xmodem_vector);
+    JARVIS_REGISTER_TEST(lib_crc16_empty_and_incremental);
 
     JARVIS_REGISTER_TEST(lib_fdt_static_header_and_reserve);
     JARVIS_REGISTER_TEST(lib_fdt_static_tree_walk);

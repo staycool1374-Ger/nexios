@@ -276,6 +276,7 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c us
 	@cp userspace/hey.c userspace/nullderef.c userspace/prime.c initrd_root/
 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
 	@printf 'loadelf /bin/sh.c.elf\nsleep 3\nrunelf\nsleep 300\n' > initrd_root/tests/sh310.txt
+	@printf 'loadelf /bin/xmodem.c.elf\nsleep 3\nrunelf\nsleep 900\n' > initrd_root/tests/xmodem276.txt
 	cd initrd_root && find . -print0 | cpio -o -H newc -0 --quiet > ../$@
 	@rm -rf initrd_root
 
