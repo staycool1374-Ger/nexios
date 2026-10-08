@@ -20,6 +20,7 @@
 /// @brief Daemon lifecycle manager implementation.
 
 #include <kernel/daemon/daemon_mgr.hpp>
+#include <kernel/ramdisk/ramdiskd.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/elf/elf.hpp>
@@ -232,6 +233,11 @@ void restart_stale_daemons() {
         if (entries_[i].set_pid_fn) {
             entries_[i].set_pid_fn(task->id);
         }
+        // Issue #275: a restarted ramdiskd lost its CSpace with the old
+        // task — re-grant storage and push the handles (fail-closed).
+        if (entries_[i].name != nullptr &&
+            strcmp(entries_[i].name, "ramdiskd") == 0)
+            kernel::ramdiskd::regrant(task->id);
 
         debug_write("[DAEMON] '");
         debug_write(entries_[i].name);
@@ -325,6 +331,10 @@ void ensure_running(const char *name) {
         if (entries_[i].set_pid_fn) {
             entries_[i].set_pid_fn(task->id);
         }
+        // Issue #275: re-grant storage to a (re)spawned ramdiskd.
+        if (entries_[i].name != nullptr &&
+            strcmp(entries_[i].name, "ramdiskd") == 0)
+            kernel::ramdiskd::regrant(task->id);
 
         debug_write("[DAEMON] '");
         debug_write(entries_[i].name);
@@ -403,6 +413,16 @@ const DaemonEntry &get_entry(uint64_t index) {
         return sentinel;
     }
     return entries_[index];
+}
+
+bool is_managed(uint64_t pid) {
+    if (pid == 0)
+        return false;
+    for (uint64_t i = 0; i < num_daemons_; ++i) {
+        if (entries_[i].name != nullptr && entries_[i].pid == pid)
+            return true;
+    }
+    return false;
 }
 
 } // namespace daemon

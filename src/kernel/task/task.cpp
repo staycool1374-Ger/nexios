@@ -232,7 +232,7 @@ void TaskControlBlock::detach_object(KernelObject *obj) noexcept {
 ///       returned to the free list and may be 0xDD-poisoned.  This routine only
 ///       ever unlinks (never releases) and stops the walk if it encounters a
 ///       poisoned block, so it can never double-free or follow a garbage chain.
-void TaskControlBlock::detach_all_objects() noexcept {
+void TaskControlBlock::detach_all_objects(bool keep_cspace) noexcept {
     for (uint32_t i = 0; i < CONFIG_MAX_PER_TASK_OBJECTS && task_obj_head_;
          ++i) {
         KernelObject *obj = task_obj_head_;
@@ -255,7 +255,8 @@ void TaskControlBlock::detach_all_objects() noexcept {
     task_obj_head_ = nullptr;
     task_obj_tail_ = nullptr;
     sporadic_server = nullptr;
-    cspace_ = nullptr;
+    if (!keep_cspace)
+        cspace_ = nullptr;
 }
 
 /// @brief Releases every node on this task's object list (teardown).

@@ -81,6 +81,11 @@ void reset_restart_count(const char *name);
 /// @brief Return a const reference to the i-th daemon entry.
 const DaemonEntry &get_entry(uint64_t index);
 
+/// @brief True when @p pid is a currently managed daemon task.
+/// Used by snapshot-restore to preserve daemon CSpaces (persistent
+/// system state holding grants): test fixtures must never break them.
+bool is_managed(uint64_t pid);
+
 /// @name Test-isolation helpers
 /// @brief Copy all daemon entries and count into @p entries_out / @p num_out.
 void capture_state(DaemonEntry *out_entries, uint64_t &num_out);

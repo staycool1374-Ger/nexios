@@ -964,7 +964,12 @@ struct TaskControlBlock {
     ///        pop-head iterations (runaway-link protection).  Used by
     ///        snapshot restore where blocks are reclaimed by the pool rewind,
     ///        never by release().
-    void detach_all_objects() noexcept;
+    /// @param keep_cspace When true, the task's CSpace pointer is preserved
+    ///        (issue #275): daemon CSpaces hold persistent system grants
+    ///        (ramdisk frames, watchdog supervision) created pre-snapshot,
+    ///        so rewinding never frees them and nulling would orphan live
+    ///        grants.  Test-created tasks must keep the default false.
+    void detach_all_objects(bool keep_cspace = false) noexcept;
 
     /// @brief Releases every node on this task's object list (teardown).
     ///        Runs the kind-specific hook (e.g. Scheduler::dec_sporadic_count)

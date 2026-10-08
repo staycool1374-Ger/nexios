@@ -250,6 +250,7 @@ void register_virtio_blk_req_tests();
 void register_ahci_deep_tests();
 void register_ahci_live_tests();
 void register_initrd_parser_tests();
+void register_ramdisk_tests();
 void register_vfs_procfs_tests();
 void register_vfs_tmpfs_corrupt_tests();
 void register_devfs_tests();
@@ -365,6 +366,7 @@ static void run_task_core_group() { register_task_tests(); }
 static void run_task_lifecycle_group() { register_task_lifecycle_tests(); }
 static void run_task_init_group() { register_init_tests(); }
 static void run_initrd_parser_group() { register_initrd_parser_tests(); }
+static void run_ramdisk_group() { register_ramdisk_tests(); }
 static void run_fpu_invariants_group() { register_fpu_inv_tests(); }
 static void run_syscall_core_group() { register_syscall_tests(); }
 static void run_syscall_fuzz_group() { register_syscall_fuzz_tests(); }
@@ -1086,6 +1088,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_vfs_initrd_fs_group();
          run_vfs_errors_group();
          run_initrd_parser_group();
+         run_ramdisk_group();
      }},
     {"servers",
      []() {

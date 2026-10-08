@@ -55,6 +55,10 @@ constexpr DmesgRecord kDmesgCatalog_DAEMON[] = {
      "Daemon restart limit reached, giving up"},
     {ErrorSubsystem::DAEMON, kDmesgBase_DAEMON + 8, LogSeverity::ERROR,
      "Daemon restart failed"},
+    {ErrorSubsystem::DAEMON, kDmesgBase_DAEMON + 9, LogSeverity::ERROR,
+     "Ramdisk carve failed"},
+    {ErrorSubsystem::DAEMON, kDmesgBase_DAEMON + 10, LogSeverity::WARN,
+     "Ramdisk grant skipped"},
 };
 
 /// @brief ELF loader records (canonical base kDmesgBase_ELF).

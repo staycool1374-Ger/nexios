@@ -26,6 +26,7 @@
 #include <kernel/elf/elf.hpp>
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/driver/iocd.hpp>
+#include <kernel/ramdisk/ramdiskd.hpp>
 #include <kernel/watchdog/watchdogd.hpp>
 #include <kernel/task/dmesg_task.hpp>
 #include <initrd/initrd.hpp>
@@ -82,6 +83,11 @@ constexpr TaskDef g_task_defs[] = {
     // user-app: generic userspace ELF placeholder — aperiodic (period 0)
     {"user-app", TaskType::USER_ELF, true, nullptr, "bin/user-app.c.elf", 2, 0, 0,
      0, 0, 0, nullptr, nullptr, nullptr, 1, 0, false},
+    // ramdiskd: block-storage server for the 16 MiB ramdisk (issue #275).
+    // Sporadic server SS(2,10,0) like vfsd; PIDs 1-5 above are unchanged.
+    {"ramdiskd", TaskType::SPORADIC_SERVER, true, nullptr, "bin/ramdiskd.c.elf",
+     20, 10, 0, 2, 10, 0, "ramdiskd", ramdiskd::set_ramdiskd_pid,
+     ramdiskd::get_ramdiskd_pid, 1, 0, false},
     // shell: interactive kernel debug shell.  Disabled in the table — the
     // real shell is created aperiodic by init_task_main at prio 2; values
     // kept here for documentation/validation parity.

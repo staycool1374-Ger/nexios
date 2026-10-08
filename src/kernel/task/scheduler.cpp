@@ -5310,7 +5310,11 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             // (bounded, never releases): the pool restore has already rewound
             // test-allocated blocks, so calling release() here would double-free.
             // Daemon ensure_running() recreates the SporadicServer if needed.
-            t->detach_all_objects();
+            // Issue #275: daemon CSpaces are persistent system state
+            // (pre-snapshot grants: ramdisk frames, watchdog supervision)
+            // — preserve the pointer, otherwise every restore orphans
+            // live grants and the next ensure mints an empty replacement.
+            t->detach_all_objects(daemon::is_managed(t->id));
             t->runq_next_ = saved[j].runq_next;
             t->runq_prev_ = saved[j].runq_prev;
             t->in_ready_queue_ = saved[j].in_ready_queue;

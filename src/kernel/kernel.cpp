@@ -53,6 +53,7 @@
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/watchdog/watchdogd.hpp>
+#include <kernel/ramdisk/ramdiskd.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/driver/iocd.hpp>
 #include <kernel/driver/ata_pio.hpp>
@@ -502,6 +503,34 @@ void init_task_main() {
                 grant.data_size = 16;
                 kernel::IPC::send(kernel::watchdogd::get_watchdogd_pid(),
                                   grant, 0);
+            }
+        }
+        // Issue #275: ramdisk storage grant — mint one FrameCap per
+        // 2 MiB segment into ramdiskd's CSpace and deliver the 8
+        // handles. Skipped degraded (no PID, carve failed, or grant
+        // refused); ramdiskd serves RAMDISK_ERR_NOGRANT until granted.
+        {
+            uint64_t handles[8] = {
+                static_cast<uint64_t>(-1), static_cast<uint64_t>(-1),
+                static_cast<uint64_t>(-1), static_cast<uint64_t>(-1),
+                static_cast<uint64_t>(-1), static_cast<uint64_t>(-1),
+                static_cast<uint64_t>(-1), static_cast<uint64_t>(-1)};
+            const uint64_t rd_pid = kernel::ramdiskd::get_ramdiskd_pid();
+            int64_t gr = kernel::ramdiskd::grant_storage(rd_pid, handles);
+            if (gr != kernel::ramdiskd::RAMDISK_OK || rd_pid == 0) {
+                kernel::Logger::warn("init: ramdisk grant skipped (%d)",
+                                     (int)gr);
+                kernel::log::dmesg_push_sev(
+                    kernel::log::ErrorSubsystem::DAEMON,
+                    kernel::log::kDmesgBase_DAEMON + 10,
+                    kernel::log::LogSeverity::WARN, "ramdisk grant", 0);
+            } else {
+                kernel::Message grant{};
+                grant.sender_id = 1;
+                grant.type = kernel::ramdiskd::RAMDISK_GRANT;
+                __builtin_memcpy(grant.data, handles, sizeof(handles));
+                grant.data_size = sizeof(handles);
+                kernel::IPC::send(rd_pid, grant, 0);
             }
         }
     }
@@ -1244,6 +1273,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::vfs::mount(kernel::vfs::dev_fs, "/dev");
     kernel::vfs::mount(kernel::vfs::proc_fs, "/proc");
     kernel::vfs::mount(kernel::vfs::tmpfs_fs, "/tmp");
+
+    // Issue #275: carve the 16 MiB ramdisk backing store here — after
+    // PMM/VMM init and the boot reservations above, before driver probes
+    // and DMA pools fragment the contiguous windows. Fail-closed
+    // degraded (boot continues; the grant below is skipped).
+    kernel::ramdiskd::boot_allocate();
 
     // Probe AHCI controller first, fall back to legacy ATA PIO
 #if defined(CONFIG_ARCH_X86_64)
