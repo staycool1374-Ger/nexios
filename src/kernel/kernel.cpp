@@ -77,6 +77,7 @@
 #include <kernel/vfs/devfs.hpp>
 #include <kernel/vfs/procfs.hpp>
 #include <kernel/vfs/tmpfs.hpp>
+#include <kernel/vfs/ramdisk_fs.hpp>
 #include <initrd/initrd.hpp>
 #include <services/terminal/framebuffer.hpp>
 #include <services/terminal/terminal.hpp>
@@ -531,6 +532,10 @@ void init_task_main() {
                 __builtin_memcpy(grant.data, handles, sizeof(handles));
                 grant.data_size = sizeof(handles);
                 kernel::IPC::send(rd_pid, grant, 0);
+                // Issue #314: mount the flat file store once the grant is
+                // delivered (best-effort; a failed mount degrades to raw
+                // block access, boot never blocks on it).
+                kernel::vfs::ramdisk_fs_try_mount();
             }
         }
     }

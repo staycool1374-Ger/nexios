@@ -22,6 +22,7 @@
 
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/tmpfs.hpp>
+#include <kernel/vfs/ramdisk_fs.hpp>
 #include <kernel/vfs/devfs.hpp>
 #include <kernel/vfs/procfs.hpp>
 #include <kernel/vfs/initrd_fs.hpp>
@@ -381,6 +382,10 @@ void reset_and_remount() {
     mount(dev_fs, "/dev");
     mount(proc_fs, "/proc");
     mount(tmpfs_fs, "/tmp");
+    // Issue #314: best-effort ramdisk mount (fail-closed when ungranted —
+    // boot and tests never block on it; absence just means /mnt/ramdisk
+    // does not resolve).
+    ramdisk_fs_try_mount();
 }
 
 /// @brief Find a mounted filesystem by name.
