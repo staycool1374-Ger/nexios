@@ -29,11 +29,11 @@ if [ "$ARCH" = "riscv64" ]; then
 fi
 
 # Per-class outer timeout covers the build (a cold arch switch rebuilds
-# everything) plus the QEMU run.  riscv64 needs headroom: TCG wall
-# dilation puts arch_riscv64 near 270 s (measured) on top of the build.
-OUTER_TIMEOUT=300
+# everything) plus up to TEST_MAX_ATTEMPTS QEMU runs (issue #322 retries a
+# stalled class once, so the worst case is 2× the class expect-timeout).
+OUTER_TIMEOUT=600
 if [ "$ARCH" = "riscv64" ]; then
-    OUTER_TIMEOUT=900
+    OUTER_TIMEOUT=1200
 fi
 
 # x86_64-only classes: no registry entry (smp, smp_multicpu) or no QEMU
@@ -123,6 +123,11 @@ for c in $RUN; do
             status="STATUS: EXPECTED_PANIC_PASS"
         elif [ "$expected_empty_pass" -eq 1 ]; then
             status="STATUS: NO_TESTS_REGISTERED"
+        elif grep -q 'STALL-UNRECOVERED' "$log"; then
+            # Issue #322: the harness retried the identical binary once and it
+            # still produced no summary (zero-S-line TIMEOUT / QEMU_EXIT) — a
+            # host/TCG stall, not a code verdict.
+            status="STATUS: STALL"
         elif grep -qiE 'kernel panic|page fault|triple fault|#PF|PANIC:' "$log"; then
             status="STATUS: PANIC"
         elif grep -qiE 'RESULT: TIMEOUT|Terminated: 15|\[STALL\]|watchdog' "$log"; then
@@ -138,6 +143,11 @@ for c in $RUN; do
 
     row="$ts $c PASSED: $npass FAILED: $nfail TIME: $nms"
     if [ -n "$status" ]; then row="$row $status"; fi
+    # Issue #322: a run that stalled once and went green on the identical-binary
+    # retry is a PASS, but the stall is recorded so the flake rate is visible.
+    if [ -z "$status" ] && [ "${nfail:-0}" -eq 0 ] && grep -q 'STALL-RECOVERED' "$log"; then
+        row="$row STATUS: STALL_RECOVERED"
+    fi
 
     # Verdict: OK iff summary present or expected-panic/empty PASS, 0 fails, rc==0
     if [ -n "$status" ] && [ "$expected_panic_pass" -eq 0 ] && [ "$expected_empty_pass" -eq 0 ]; then

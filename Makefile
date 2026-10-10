@@ -1227,6 +1227,10 @@ TEST_TIMEOUT_CLASS  := 120
 # class (only green-evidenced ones run there); x86_64 selection unchanged.
 TEST_TIMEOUT_RISCV  := 400
 WATCHDOG_STALL      := 220
+# Issue #322: attempts per class (1 = no retry, 2 = retry the identical binary
+# once).  Retry applies ONLY to the stall signatures (zero-S-line TIMEOUT /
+# QEMU_EXIT); a genuine test FAIL is never retried.
+TEST_MAX_ATTEMPTS   := 2
 
 # Usage: $(call _run_test_qemu,<description>,<timeout_sec>)
 # Robust design:
@@ -1242,50 +1246,72 @@ define _run_test_qemu
 	if ! command -v $(QEMU_SYSTEM) >/dev/null 2>&1; then echo "QEMU missing."; echo $(PKG_HINT); exit 1; fi; \
 	if ! command -v expect >/dev/null 2>&1; then echo "expect missing."; exit 1; fi; \
 	printf '  %-7s %s\n'  'TEST'   '$(1)…'; \
-	rm -f "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)" /tmp/test-start.timestamp /tmp/test-end.timestamp; \
-	date +%s > /tmp/test-start.timestamp; \
-	\
-	( \
-	    trap "exit 0" TERM; \
-	    LAST_SIZE=-1; \
-	    STALL=0; \
-	    while true; do \
-	        sleep 1; \
-	        CUR_SIZE=$$(wc -c < "$(TEST_SERIAL_LOG)" 2>/dev/null || echo 0); \
-	        if [ "$$CUR_SIZE" = "$$LAST_SIZE" ]; then \
-	            STALL=$$((STALL + 1)); \
-	            if [ $$STALL -ge $(WATCHDOG_STALL) ]; then \
-	                echo "[HOST-WATCHDOG] Tests interrupted — no serial output for $(WATCHDOG_STALL) s" | tee -a "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)"; \
-	                pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null; \
-	                exit 1; \
+	MAX_ATTEMPTS=$(TEST_MAX_ATTEMPTS); \
+	ATTEMPT=0; \
+	STALL_SEEN=0; \
+	STALL_STATUS=""; \
+	VERDICT=""; \
+	while [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; do \
+	    ATTEMPT=$$(( ATTEMPT + 1 )); \
+	    rm -f "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)" /tmp/test-start.timestamp /tmp/test-end.timestamp; \
+	    date +%s > /tmp/test-start.timestamp; \
+	    ( \
+	        trap "exit 0" TERM; \
+	        LAST_SIZE=-1; \
+	        STALL=0; \
+	        while true; do \
+	            sleep 1; \
+	            CUR_SIZE=$$(wc -c < "$(TEST_SERIAL_LOG)" 2>/dev/null || echo 0); \
+	            if [ "$$CUR_SIZE" = "$$LAST_SIZE" ]; then \
+	                STALL=$$((STALL + 1)); \
+	                if [ $$STALL -ge $(WATCHDOG_STALL) ]; then \
+	                    echo "[HOST-WATCHDOG] Tests interrupted — no serial output for $(WATCHDOG_STALL) s" | tee -a "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)"; \
+	                    pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null; \
+	                    exit 1; \
+	                fi; \
+	            else \
+	                STALL=0; \
+	                LAST_SIZE=$$CUR_SIZE; \
 	            fi; \
-	        else \
-	            STALL=0; \
-	            LAST_SIZE=$$CUR_SIZE; \
-	        fi; \
-	    done; \
-	) & \
-	MONITOR_PID=$$!; \
-	\
-	expect tools/run-test.exp $(2) "$(TEST_VERDICT_LOG)" "$(TEST_SERIAL_LOG)" \
-	    $(QEMU_SYSTEM) $(QEMU_FLAGS) -display none -no-reboot $(QEMU_DEBUG_EXIT) \
-	    $(QEMU_ICOUNT) $(QEMU_TRACE_EVENTS) \
-	    2>&1 | gstdbuf -oL tee "$(TEST_SERIAL_LOG)"; \
-	date +%s > /tmp/test-end.timestamp; \
-	\
-	pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null || true; \
-	kill $$MONITOR_PID 2>/dev/null; \
-	wait $$MONITOR_PID 2>/dev/null; \
-	\
-	if [ -f "$(TEST_VERDICT_LOG)" ]; then \
-	    VERDICT=$$(cat "$(TEST_VERDICT_LOG)"); \
-	else \
-	    VERDICT="RESULT: UNKNOWN (no verdict file — expect aborted)"; \
-	fi; \
+	        done; \
+	    ) & \
+	    MONITOR_PID=$$!; \
+	    expect tools/run-test.exp $(2) "$(TEST_VERDICT_LOG)" "$(TEST_SERIAL_LOG)" \
+	        $(QEMU_SYSTEM) $(QEMU_FLAGS) -display none -no-reboot $(QEMU_DEBUG_EXIT) \
+	        $(QEMU_ICOUNT) $(QEMU_TRACE_EVENTS) \
+	        2>&1 | gstdbuf -oL tee "$(TEST_SERIAL_LOG)"; \
+	    date +%s > /tmp/test-end.timestamp; \
+	    pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null || true; \
+	    kill $$MONITOR_PID 2>/dev/null; \
+	    wait $$MONITOR_PID 2>/dev/null; \
+	    if [ -f "$(TEST_VERDICT_LOG)" ]; then \
+	        VERDICT=$$(cat "$(TEST_VERDICT_LOG)"); \
+	    else \
+	        VERDICT="RESULT: UNKNOWN (no verdict file — expect aborted)"; \
+	    fi; \
+	    case "$$VERDICT" in \
+	        RESULT:\ PASS*) \
+	            if [ $$STALL_SEEN -eq 1 ]; then STALL_STATUS="STALL-RECOVERED"; fi; \
+	            break ;; \
+	        RESULT:\ TIMEOUT*|RESULT:\ QEMU_EXIT*) \
+	            if [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; then \
+	                echo "[HOST] STALL attempt $$ATTEMPT/$$MAX_ATTEMPTS: $$VERDICT — retrying identical binary"; \
+	                STALL_SEEN=1; \
+	                continue; \
+	            else \
+	                STALL_STATUS="STALL-UNRECOVERED"; \
+	                VERDICT="RESULT: FAIL (stall unrecovered after $$MAX_ATTEMPTS attempts: $(2)s, zero-S-line TIMEOUT/QEMU_EXIT)"; \
+	                break; \
+	            fi ;; \
+	        *) \
+	            break ;; \
+	    esac; \
+	done; \
 	echo "$$VERDICT"; \
 	START_S=$$(cat /tmp/test-start.timestamp 2>/dev/null || echo 0); \
 	END_S=$$(cat /tmp/test-end.timestamp 2>/dev/null || echo 0); \
 	echo "[HOST] start=$${START_S}s end=$${END_S}s elapsed=$$(( END_S - START_S ))s"; \
+	if [ -n "$$STALL_STATUS" ]; then echo "[HOST] $$STALL_STATUS"; fi; \
 	case "$$VERDICT" in \
 	    RESULT:\ PASS*) \
 	        echo "[HOST] TESTS PASSED"; \

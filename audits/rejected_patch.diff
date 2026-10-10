@@ -1,22 +1,35 @@
-diff --git a/src/kernel/task/deadline_list.cpp b/src/kernel/task/deadline_list.cpp
---- a/src/kernel/task/deadline_list.cpp
-+++ b/src/kernel/task/deadline_list.cpp
-@@ -71,7 +71,16 @@ void DeadlineList::remove(TaskControlBlock &t) noexcept {
-     }
- 
-     TaskControlBlock *cur = head_;
--    while (cur && cur != &t)
-+    // Bounded walk (issue #297, mirrors insert): insert() routes every call
-+    // through this scan first, so an unbounded walk here would hang before
-+    // insert's own trip-count guard on a cyclic list. Fail stop instead.
-+    size_t trips = 0;
-+    while (cur && cur != &t) {
-         cur = cur->dl_next_;
-+        if (++trips > size_) {
-+            ENSURE(false && "deadline list cycle detected");
-+            return;
-+        }
-+    }
-     if (!cur)
-         return;
+--- a/Makefile
++++ b/Makefile
+@@ -1244,6 +1244,7 @@
+ 	printf '  %-7s %s\n'  'TEST'   '$(1)…'; \
+ 	MAX_ATTEMPTS=2; \
+ 	ATTEMPT=0; \
++	STALL_SEEN=0; \
+ 	STALL_STATUS=""; \
+ 	VERDICT=""; \
+ 	while [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; do \
+@@ -1286,11 +1287,12 @@
+ 	    fi; \
+ 	    case "$$VERDICT" in \
+ 	        RESULT:\ PASS*) \
++	            if [ $$STALL_SEEN -eq 1 ]; then STALL_STATUS="STALL-RECOVERED"; fi; \
+ 	            break ;; \
+ 	        RESULT:\ TIMEOUT*|RESULT:\ QEMU_EXIT*) \
+ 	            if [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; then \
+ 	                echo "[HOST] STALL attempt $$ATTEMPT/$$MAX_ATTEMPTS: $$VERDICT — retrying identical binary"; \
+-	                STALL_STATUS="STALL-RECOVERED"; \
++	                STALL_SEEN=1; \
+ 	                continue; \
+ 	            else \
+ 	                STALL_STATUS="STALL-UNRECOVERED"; \
+--- a/scripts/run_all_classes.sh
++++ b/scripts/run_all_classes.sh
+@@ -145,7 +145,7 @@
+     if [ -n "$status" ]; then row="$row $status"; fi
+     # Issue #322: a run that stalled once and went green on the identical-binary
+     # retry is a PASS, but the stall is recorded so the flake rate is visible.
+-    if [ -z "$status" ] && grep -q 'STALL-RECOVERED' "$log"; then
++    if [ -z "$status" ] && [ "${nfail:-0}" -eq 0 ] && grep -q 'STALL-RECOVERED' "$log"; then
+         row="$row STATUS: STALL_RECOVERED"
+     fi
  
