@@ -46,6 +46,17 @@ namespace vfs {
 /// @return 0 on success (mounted or already mounted), VFS_INVALID else.
 int ramdisk_fs_try_mount();
 
+/// @brief Verify every live file's CRC32 against the blocks on ramdisk — the
+/// same per-file integrity check the boot cache-fill performs (issue #318).
+/// @return number of mismatches (0 = clean, or when the store is unavailable).
+int ramdisk_fs_verify_all();
+
+/// @brief Test seam (issue #318): fetch a live file's extent — start block,
+/// block count, and the stored CRC32.
+/// @return true when a live entry with @p name exists.
+bool ramdisk_fs_extent(const char *name, uint64_t &start_block,
+                       uint64_t &block_count, uint32_t &crc);
+
 extern Filesystem ramdisk_fs;
 
 } // namespace vfs

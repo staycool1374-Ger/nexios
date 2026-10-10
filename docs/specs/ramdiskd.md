@@ -45,6 +45,10 @@ exact-retypes each segment into the daemon CSpace (`READ|WRITE`) at grant
 maps each handle with `SYS_FRAME_MAP` into its 2 MiB windows. Daemon death
 frees frames via normal slot disposal; re-grant re-carves + re-mints on
 both restart paths. No new cap type, no new syscall, no new lock.
+**Carve scrub (issue #318):** `boot_allocate` zeroes each freshly carved
+segment (HHDM memset) so a never-staged block reads exactly zero — the
+pristine-zero contract for `ramdisk_fs`. Scrub happens at *carve*, not at
+grant (a grant-time scrub would wipe the store on every regrant).
 
 ## Boot / degraded / reboot
 

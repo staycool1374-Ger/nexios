@@ -49,6 +49,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/sync/mutex.hpp>
+#include <crc32.hpp>
 #include <logger.hpp>
 #include <string.hpp>
 
@@ -58,11 +59,15 @@ namespace vfs {
 // Geometry (all named per CODING_STYLE §10.5; consistent with
 // ramdiskd.hpp: 512 B blocks, 16 x 32 B chunks, 32768 blocks total).
 static constexpr uint64_t RDSB_MAGIC = 0x52445331464C4154ULL; // "RDS1FLAT"
-static constexpr uint64_t RDSB_VERSION = 1;
+// v2 (issue #318): the directory grew a per-file CRC32 + validity flags, and the
+// superblock carries a CRC32 over the whole directory region (metadata
+// integrity).  A v1 image is discarded fail-closed (no free list => not
+// resumable); see rd_ensure_cached.
+static constexpr uint64_t RDSB_VERSION = 2;
 static constexpr uint64_t RDBLK_SUPER = 0;
 static constexpr uint64_t RDBLK_DIR_START = 1;
-static constexpr uint64_t RDBLK_DIR_COUNT = 9;
-static constexpr uint64_t RDBLK_DATA_START = 10;
+static constexpr uint64_t RDBLK_DIR_COUNT = 10;
+static constexpr uint64_t RDBLK_DATA_START = 11;
 static constexpr uint64_t RDF_MAX_FILES = 50;
 static constexpr uint64_t RDF_NAME_LEN = 63; // +1 NUL in the 64 B field
 static constexpr uint64_t RDF_MAX_FILE_SIZE = 1ULL * 1024 * 1024; // 1 MiB
@@ -70,23 +75,34 @@ static constexpr uint64_t RD_MUTATE_RETRIES = 3;
 static constexpr uint64_t RD_CHUNK_DATA = 32;
 static constexpr uint64_t RD_CHUNKS_PER_BLOCK = 16;
 static constexpr uint64_t RD_BLOCK_SIZE = 512;
+static constexpr uint64_t RD_DIR_REGION_BYTES = RDBLK_DIR_COUNT * RD_BLOCK_SIZE;
 
-/// @brief On-disk directory entry (88 B; serialized contiguously across
-/// the dir region: entry i starts at byte i * 88).
+/// @brief Directory-entry validity flag (rd_dir[i].flags bit).
+static constexpr uint32_t RD_ENTRY_VALID = 1U;
+
+/// @brief On-disk directory entry (96 B; serialized contiguously across
+/// the dir region: entry i starts at byte i * 96).  `crc32` is the finalized
+/// CRC32 (src/lib/crc32.hpp) over the file's LIVE byte range only (block
+/// padding excluded); `flags` carries RD_ENTRY_VALID.  An entry is exposed
+/// only when VALID and its CRC verifies (fail-closed; issue #318).
 struct RdDirEntry {
     char name[64];          ///< NUL-terminated (name[0] == 0 => free slot).
     uint64_t size;          ///< Current file size in bytes.
     uint64_t start_block;   ///< First ramdisk data block of the extent.
     uint64_t block_count;   ///< Extent length in 512 B blocks.
+    uint32_t crc32;         ///< CRC32 of the live bytes (finalized).
+    uint32_t flags;         ///< RD_ENTRY_VALID etc.
 };
-static_assert(sizeof(RdDirEntry) == 88, "dir entry layout changed");
+static_assert(sizeof(RdDirEntry) == 96, "dir entry layout changed");
 
-/// @brief On-disk superblock (first 32 B of ramdisk block 0).
+/// @brief On-disk superblock (first 40 B of ramdisk block 0).
 struct RdSuper {
     uint64_t magic;
     uint64_t version;
     uint64_t file_count;
     uint64_t next_data_block;
+    uint32_t dir_crc32;     ///< CRC32 over the serialized dir region.
+    uint32_t reserved;      ///< padding (keeps 8-byte alignment).
 };
 
 /// @brief Per-open extent descriptor (vnode private_data, MemPool-owned).
@@ -106,17 +122,19 @@ static RdSuper rd_super{};
 static RdDirEntry rd_dir[RDF_MAX_FILES]{};
 static Vnode rd_root{};
 
+static_assert(sizeof(RdSuper) == 40, "superblock layout changed");
+
+// Forward declaration (definition below; used by the CRC helpers).
+static int rd_persist_slot(uint64_t slot);
+
 /// @brief One 512 B block transfer through ramdiskd (never under rd_lock).
 /// @return 0 on success, -1 on any failure (ungranted/range/IPC).
 static int rd_block_op(uint64_t block_no, uint8_t *buf512, bool is_write) {
     if (block_no >= ramdiskd::RAMDISK_BLOCKS)
         return -1;
     uint64_t pid = ramdiskd::get_ramdiskd_pid();
-    if (pid == 0) {
-        Logger::info("[TEMP-RDF] op blk=%u nogrant(pid0)",
-                     (unsigned)block_no);
+    if (pid == 0)
         return -1;
-    }
     auto *cur = Scheduler::current_task();
     if (cur == nullptr)
         return -1;
@@ -133,18 +151,12 @@ static int rd_block_op(uint64_t block_no, uint8_t *buf512, bool is_write) {
                              RD_CHUNK_DATA);
         req.data_size = is_write ? 56 : 24;
         Message reply{};
-        if (!IPC::send_sync(pid, req, reply)) {
-            Logger::info("[TEMP-RDF] op blk=%u chunk=%u sendfail",
-                         (unsigned)block_no, (unsigned)chunk);
+        if (!IPC::send_sync(pid, req, reply))
             return -1;
-        }
         int64_t result = 0;
         __builtin_memcpy(&result, reply.data, 8);
-        if (result != ramdiskd::RAMDISK_OK) {
-            Logger::info("[TEMP-RDF] op blk=%u chunk=%u result=%d",
-                         (unsigned)block_no, (unsigned)chunk, (int)result);
+        if (result != ramdiskd::RAMDISK_OK)
             return -1;
-        }
         if (!is_write)
             __builtin_memcpy(buf512 + chunk * RD_CHUNK_DATA, reply.data + 8,
                              RD_CHUNK_DATA);
@@ -175,21 +187,44 @@ static int rd_read_super(RdSuper &out) {
     return 0;
 }
 
-/// @brief Persist superblock + full dir region (never under rd_lock).
-static int rd_store_all(const RdSuper &sup, const RdDirEntry *dir) {
+/// @brief Serialize one 512 B dir-region block from the entry array.  Handles
+/// entries that straddle a block boundary (a 96 B entry does not divide 512):
+/// each block receives the portion [max(off,base), min(off+96,end)).
+static void rd_serialize_dir_block(const RdDirEntry *dir, uint64_t dir_blk,
+                                   uint8_t *blk) {
+    __builtin_memset(blk, 0, RD_BLOCK_SIZE);
+    const uint8_t *raw = reinterpret_cast<const uint8_t *>(dir);
+    uint64_t base = dir_blk * RD_BLOCK_SIZE;
+    uint64_t end = base + RD_BLOCK_SIZE;
+    for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
+        uint64_t off = i * sizeof(RdDirEntry);
+        uint64_t eend = off + sizeof(RdDirEntry);
+        if (eend <= base || off >= end)
+            continue;
+        uint64_t lo = off > base ? off : base;
+        uint64_t hi = eend < end ? eend : end;
+        __builtin_memcpy(blk + (lo - base), raw + lo, hi - lo);
+    }
+}
+
+/// @brief Persist superblock + full dir region (never under rd_lock).  The
+/// superblock's `dir_crc32` covers exactly the serialized dir-region bytes.
+static int rd_store_all(const RdSuper &sup_in, const RdDirEntry *dir) {
     uint8_t blk[RD_BLOCK_SIZE] = {};
+    CRC32::init();
+    uint32_t crc = CRC32::INITIAL;
+    for (uint64_t dir_blk = 0; dir_blk < RDBLK_DIR_COUNT; ++dir_blk) {
+        rd_serialize_dir_block(dir, dir_blk, blk);
+        crc = CRC32::update(crc, blk, RD_BLOCK_SIZE);
+    }
+    RdSuper sup = sup_in;
+    sup.dir_crc32 = CRC32::finalize(crc);
+    __builtin_memset(blk, 0, RD_BLOCK_SIZE);
     __builtin_memcpy(blk, &sup, sizeof(RdSuper));
     if (rd_block_op(RDBLK_SUPER, blk, true) < 0)
         return -1;
     for (uint64_t dir_blk = 0; dir_blk < RDBLK_DIR_COUNT; ++dir_blk) {
-        __builtin_memset(blk, 0, RD_BLOCK_SIZE);
-        uint64_t base = dir_blk * RD_BLOCK_SIZE;
-        for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
-            uint64_t off = i * sizeof(RdDirEntry);
-            if (off < base || off + sizeof(RdDirEntry) > base + RD_BLOCK_SIZE)
-                continue;
-            __builtin_memcpy(blk + (off - base), &dir[i], sizeof(RdDirEntry));
-        }
+        rd_serialize_dir_block(dir, dir_blk, blk);
         if (rd_block_op(RDBLK_DIR_START + dir_blk, blk, true) < 0)
             return -1;
     }
@@ -197,45 +232,103 @@ static int rd_store_all(const RdSuper &sup, const RdDirEntry *dir) {
 }
 
 /// @brief Load superblock + dir region into a caller buffer (no lock).
+/// @return 0 ok; -1 unformatted/bad magic/IO; -2 legacy version (fail
+///         closed — no free list means a v1 image is not resumable);
+///         -3 metadata-region CRC mismatch (directory corrupt).
 static int rd_load_all(RdSuper &sup, RdDirEntry *dir) {
     if (rd_read_super(sup) < 0)
         return -1;
-    if (sup.magic != RDSB_MAGIC || sup.version != RDSB_VERSION)
+    if (sup.magic != RDSB_MAGIC)
         return -1;
-    // Entries are serialized contiguously, so successive entries share
-    // blocks: keep the current block cached across iterations (each dir
-    // block is read once per fill, plus one re-read per straddle).
-    uint8_t blk[RD_BLOCK_SIZE] = {};
-    uint64_t have_blk = 0;
-    bool have_valid = false;
-    for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
-        uint64_t off = i * sizeof(RdDirEntry);
-        uint64_t first = RDBLK_DIR_START + off / RD_BLOCK_SIZE;
-        uint64_t foff = off % RD_BLOCK_SIZE;
-        uint64_t remain = sizeof(RdDirEntry);
-        uint64_t dst = 0;
-        // Entries may straddle block boundaries; assemble across blocks.
-        uint8_t entry_bytes[sizeof(RdDirEntry)] = {};
-        while (remain > 0) {
-            uint64_t take = RD_BLOCK_SIZE - foff;
-            if (take > remain)
-                take = remain;
-            if (!have_valid || have_blk != first) {
-                __builtin_memset(blk, 0, RD_BLOCK_SIZE);
-                if (rd_block_op(first, blk, false) < 0)
-                    return -1;
-                have_blk = first;
-                have_valid = true;
-            }
-            __builtin_memcpy(entry_bytes + dst, blk + foff, take);
-            dst += take;
-            remain -= take;
-            ++first;
-            foff = 0;
-        }
-        __builtin_memcpy(&dir[i], entry_bytes, sizeof(RdDirEntry));
+    if (sup.version != RDSB_VERSION)
+        return -2;
+    // Read the whole dir region in one pass and verify its CRC before
+    // trusting any entry (issue #318 metadata integrity).
+    uint8_t region[RD_DIR_REGION_BYTES] = {};
+    CRC32::init();
+    uint32_t crc = CRC32::INITIAL;
+    for (uint64_t dir_blk = 0; dir_blk < RDBLK_DIR_COUNT; ++dir_blk) {
+        if (rd_block_op(RDBLK_DIR_START + dir_blk,
+                        region + dir_blk * RD_BLOCK_SIZE, false) < 0)
+            return -1;
+        crc = CRC32::update(crc, region + dir_blk * RD_BLOCK_SIZE,
+                            RD_BLOCK_SIZE);
     }
+    if (CRC32::finalize(crc) != sup.dir_crc32)
+        return -3;
+    __builtin_memcpy(dir, region, RDF_MAX_FILES * sizeof(RdDirEntry));
     return 0;
+}
+
+/// @brief Compute the finalized CRC32 over a file's LIVE byte range (block
+/// padding excluded).  Never under rd_lock (does block IPC).
+/// @return 0 on success ( @p out filled), -1 on IO failure.
+static int rd_compute_crc(uint64_t start_block, uint64_t size, uint32_t &out) {
+    CRC32::init();
+    uint32_t crc = CRC32::INITIAL;
+    uint64_t blocks = (size + RD_BLOCK_SIZE - 1) / RD_BLOCK_SIZE;
+    uint8_t blk[RD_BLOCK_SIZE] = {};
+    for (uint64_t i = 0; i < blocks; ++i) {
+        if (rd_block_op_retry(start_block + i, blk, false) < 0)
+            return -1;
+        uint64_t off = i * RD_BLOCK_SIZE;
+        uint64_t n = size - off;
+        if (n > RD_BLOCK_SIZE)
+            n = RD_BLOCK_SIZE;
+        crc = CRC32::update(crc, blk, n);
+    }
+    out = CRC32::finalize(crc);
+    return 0;
+}
+
+/// @brief Verify every VALID entry's stored CRC against the blocks on ramdisk
+/// in a caller-provided entry array; clear VALID (fail-closed) on any mismatch.
+/// Called on the freshly loaded copy BEFORE it is published to the shared
+/// cache, so `rd_cached == true` always implies "every visible entry is
+/// CRC-verified" and a concurrent lookup can never observe an unverified
+/// (possibly corrupt) entry during the fill window (issue #318).  Never under
+/// rd_lock (does block IPC).
+static void rd_verify_entries(RdDirEntry *dir) {
+    for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
+        if (dir[i].name[0] == '\0' || !(dir[i].flags & RD_ENTRY_VALID))
+            continue;
+        uint32_t calc = 0;
+        bool ok = (rd_compute_crc(dir[i].start_block, dir[i].size, calc) == 0) &&
+                  (calc == dir[i].crc32);
+        if (!ok) {
+            dir[i].flags &= ~RD_ENTRY_VALID;
+            Logger::warn("ramdiskfs: CRC mismatch slot=%u (fail-closed)",
+                         (unsigned)i);
+        }
+    }
+}
+
+/// @brief Recompute + store a file's CRC, mark it VALID, persist the dir
+/// (close-flush; never under rd_lock).  Recompute-per-close, not a byte
+/// append: an overwrite at offset 0 makes incremental accumulation wrong.
+/// On IO failure the entry stays VALID-cleared (fail-closed).
+static void rd_flush_entry(uint64_t dir_index) {
+    RdDirEntry e{};
+    rd_lock.lock();
+    e = rd_dir[dir_index];
+    rd_lock.unlock();
+    if (e.name[0] == '\0')
+        return;
+    uint32_t calc = 0;
+    if (rd_compute_crc(e.start_block, e.size, calc) < 0)
+        return;
+    rd_lock.lock();
+    if (rd_dir[dir_index].name[0] != '\0' &&
+        rd_dir[dir_index].start_block == e.start_block &&
+        rd_dir[dir_index].size == e.size) {
+        rd_dir[dir_index].crc32 = calc;
+        rd_dir[dir_index].flags |= RD_ENTRY_VALID;
+    }
+    rd_lock.unlock();
+    for (uint64_t pt = 0; pt < RD_MUTATE_RETRIES; ++pt) {
+        if (rd_persist_slot(dir_index) == 0)
+            break;
+    }
 }
 
 /// @brief Ensure the in-memory cache is populated (no lock held on return).
@@ -255,9 +348,14 @@ static int rd_ensure_cached() {
         return 0;
     RdSuper sup{};
     RdDirEntry dir[RDF_MAX_FILES]{};
-    if (rd_load_all(sup, dir) < 0) {
-        // Ungranted, range error, or unformatted: install an empty view.
-        // Formatting happens lazily on first create (fail-closed: all
+    int loaded = rd_load_all(sup, dir);
+    if (loaded < 0) {
+        if (loaded == -2)
+            Logger::warn("ramdiskfs: legacy layout discarded (fail-closed)");
+        else if (loaded == -3)
+            Logger::warn("ramdiskfs: directory CRC mismatch (fail-closed)");
+        // Ungranted, range error, unformatted, or corrupt: install an empty
+        // view.  Formatting happens lazily on first create (fail-closed: all
         // lookups miss until then).
         rd_lock.lock();
         if (!rd_cached) {
@@ -272,6 +370,12 @@ static int rd_ensure_cached() {
         rd_lock.unlock();
         return 0;
     }
+    // Verify per-file CRCs on the local copy BEFORE publishing it (issue #318
+    // boot check): publishing rd_cached=true only after verification closes the
+    // fill/verify race that would otherwise expose an unverified entry to a
+    // concurrent lookup.  Concurrent cold callers each re-load + re-verify
+    // (bounded, idempotent) and install a fully verified view.
+    rd_verify_entries(dir);
     rd_lock.lock();
     if (!rd_cached) {
         rd_super = sup;
@@ -311,8 +415,6 @@ static bool rd_name_ok(const char *name) {
     return true;
 }
 
-static int rd_persist_slot(uint64_t slot);
-
 static int rd_file_open(Vnode &, uint64_t) {
     return 0;
 }
@@ -325,7 +427,8 @@ static void rd_file_close(Vnode &self) {
     auto *ext = static_cast<RdExtent *>(self.private_data);
     if (ext != nullptr && ext->dirty) {
         ext->dirty = false;
-        rd_persist_slot(ext->dir_index);
+        // Recompute + persist the entry CRC on close (issue #318).
+        rd_flush_entry(ext->dir_index);
     }
     if (self.private_data != nullptr)
         MemPool::free(self.private_data);
@@ -452,13 +555,17 @@ static int64_t rd_file_write(Vnode &self, const uint8_t *buffer,
             return VFS_INVALID;
         done += take;
     }
-    // Publish the new size in the cache (persisted on close).
+    // Publish the new size in the cache.  Any content write marks the entry
+    // in-flight (VALID cleared) until close recomputes + re-persists its CRC
+    // (issue #318); a torn/incomplete write is therefore never exposed.
     rd_lock.lock();
     if (needed > self.size)
         self.size = needed;
-    if (needed > rd_dir[dir_index].size) {
+    if (needed > rd_dir[dir_index].size)
         rd_dir[dir_index].size = needed;
+    if (count > 0) {
         ext->dirty = true;
+        rd_dir[dir_index].flags &= ~RD_ENTRY_VALID;
     }
     rd_lock.unlock();
     return static_cast<int64_t>(done);
@@ -491,6 +598,9 @@ static Vnode *rd_lookup(Vnode &self, const char *name) {
     }
     RdDirEntry entry = rd_dir[slot];
     rd_lock.unlock();
+    // Fail closed: only expose an entry whose CRC was verified (VALID).
+    if (!(entry.flags & RD_ENTRY_VALID))
+        return nullptr;
     auto *ext = static_cast<RdExtent *>(MemPool::alloc(sizeof(RdExtent)));
     if (ext == nullptr)
         return nullptr;
@@ -524,7 +634,8 @@ static int rd_readdir(Vnode &self, uint64_t &pos, Dirent &dent) {
     rd_lock.lock();
     uint64_t idx = 0;
     for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
-        if (rd_dir[i].name[0] == '\0')
+        if (rd_dir[i].name[0] == '\0' ||
+            !(rd_dir[i].flags & RD_ENTRY_VALID))
             continue;
         if (idx == pos) {
             uint64_t k = 0;
@@ -598,6 +709,10 @@ static int rd_create(Vnode &self, const char *name, uint16_t) {
         rd_dir[slot].size = 0;
         rd_dir[slot].start_block = rd_super.next_data_block;
         rd_dir[slot].block_count = 0;
+        // Empty file: CRC of zero bytes is 0 (finalize(INITIAL)); VALID so
+        // it is immediately resolvable (issue #318).
+        rd_dir[slot].crc32 = CRC32::finalize(CRC32::INITIAL);
+        rd_dir[slot].flags = RD_ENTRY_VALID;
         rd_super.file_count += 1;
         rd_lock.unlock();
         // Persist outside the lock (same content, bounded retries: the
@@ -710,6 +825,57 @@ static Vnode *rd_get_root() {
         inited = true;
     }
     return &rd_root;
+}
+
+/// @brief Verify every live file's CRC against ramdisk (test seam — the same
+/// per-file check the boot cache-fill runs).  @return mismatch count (0 clean;
+/// 0 also when the store is unavailable, which presents an empty view).
+int ramdisk_fs_verify_all() {
+    if (rd_ensure_cached() < 0)
+        return -1;
+    int mismatches = 0;
+    for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
+        RdDirEntry e{};
+        rd_lock.lock();
+        e = rd_dir[i];
+        rd_lock.unlock();
+        if (e.name[0] == '\0' || !(e.flags & RD_ENTRY_VALID))
+            continue;
+        uint32_t calc = 0;
+        if (rd_compute_crc(e.start_block, e.size, calc) < 0 ||
+            calc != e.crc32) {
+            ++mismatches;
+            // Fail closed: clear VALID in the cache so subsequent resolves
+            // refuse the entry (issue #318).  Persisted copy is untouched and
+            // re-verified on the next cache fill.
+            rd_lock.lock();
+            if (rd_dir[i].name[0] != '\0' &&
+                rd_dir[i].start_block == e.start_block &&
+                rd_dir[i].size == e.size)
+                rd_dir[i].flags &= ~RD_ENTRY_VALID;
+            rd_lock.unlock();
+        }
+    }
+    return mismatches;
+}
+
+/// @brief Test seam: fetch a file's extent (start block, block count, stored
+/// CRC).  @return true when a live entry with that name exists.
+bool ramdisk_fs_extent(const char *name, uint64_t &start_block,
+                       uint64_t &block_count, uint32_t &crc) {
+    if (name == nullptr || rd_ensure_cached() < 0)
+        return false;
+    rd_lock.lock();
+    int64_t slot = rd_find_cached(name);
+    if (slot < 0) {
+        rd_lock.unlock();
+        return false;
+    }
+    start_block = rd_dir[slot].start_block;
+    block_count = rd_dir[slot].block_count;
+    crc = rd_dir[slot].crc32;
+    rd_lock.unlock();
+    return true;
 }
 
 int ramdisk_fs_try_mount() {

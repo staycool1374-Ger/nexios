@@ -328,11 +328,44 @@ JARVIS_TEST(ramdisk_live_roundtrip, "PRE: ramdiskd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: A never-staged ramdisk block reads all zeros — the carve scrub
+// (issue #318) makes pristine regions deterministically zero (no stale-code
+// disclosure).
+// Input: 16-chunk read of block RAMDISK_BLOCKS-1 (segment 7, never staged).
+// Expect: Every reply byte is 0.
+// Depends: live ramdiskd task (PRE: ramdiskd), carve scrub,
+// kernel::IPC::send_sync.
+JARVIS_TEST(ramdisk_pristine_reads_zero, "PRE: ramdiskd | POST: none") {
+    const uint64_t daemon = ramdiskd::get_ramdiskd_pid();
+    JARVIS_ASSERT(daemon != 0);
+    const uint64_t me = Scheduler::current_task()->id;
+    const uint64_t block = ramdiskd::RAMDISK_BLOCKS - 1;
+    for (uint64_t chunk = 0;
+         chunk < ramdiskd::RAMDISK_CHUNKS_PER_BLOCK; ++chunk) {
+        Message req{};
+        req.type = ramdiskd::RAMDISK_READ_BLOCK;
+        __builtin_memcpy(req.data, &me, 8);
+        __builtin_memcpy(req.data + 8, &block, 8);
+        __builtin_memcpy(req.data + 16, &chunk, 8);
+        req.data_size = 24;
+        Message reply{};
+        JARVIS_ASSERT(IPC::send_sync(daemon, req, reply));
+        int64_t result = 0;
+        __builtin_memcpy(&result, reply.data, 8);
+        JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK, result);
+        for (uint64_t b = 0; b < ramdiskd::RAMDISK_CHUNK_DATA; ++b)
+            JARVIS_ASSERT_EQ(0ULL, static_cast<uint64_t>(reply.data[8 + b]));
+    }
+    JARVIS_TEST_PASS();
+}
+
 void register_ramdisk_tests() {
     Logger::info("Registering ramdisk tests");
 
     JARVIS_REGISTER_TEST(ramdisk_wire_bounds_reject);
     JARVIS_REGISTER_TEST(ramdisk_chunk_roundtrip);
+    JARVIS_REGISTER_TEST(ramdisk_pristine_reads_zero);
     JARVIS_REGISTER_TEST(ramdisk_grant_fail_closed);
     JARVIS_REGISTER_TEST(ramdiskd_pid_cell);
     JARVIS_REGISTER_TEST(ramdisk_live_roundtrip);

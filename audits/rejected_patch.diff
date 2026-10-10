@@ -1,35 +1,68 @@
---- a/Makefile
-+++ b/Makefile
-@@ -1244,6 +1244,7 @@
- 	printf '  %-7s %s\n'  'TEST'   '$(1)…'; \
- 	MAX_ATTEMPTS=2; \
- 	ATTEMPT=0; \
-+	STALL_SEEN=0; \
- 	STALL_STATUS=""; \
- 	VERDICT=""; \
- 	while [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; do \
-@@ -1286,11 +1287,12 @@
- 	    fi; \
- 	    case "$$VERDICT" in \
- 	        RESULT:\ PASS*) \
-+	            if [ $$STALL_SEEN -eq 1 ]; then STALL_STATUS="STALL-RECOVERED"; fi; \
- 	            break ;; \
- 	        RESULT:\ TIMEOUT*|RESULT:\ QEMU_EXIT*) \
- 	            if [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; then \
- 	                echo "[HOST] STALL attempt $$ATTEMPT/$$MAX_ATTEMPTS: $$VERDICT — retrying identical binary"; \
--	                STALL_STATUS="STALL-RECOVERED"; \
-+	                STALL_SEEN=1; \
- 	                continue; \
- 	            else \
- 	                STALL_STATUS="STALL-UNRECOVERED"; \
---- a/scripts/run_all_classes.sh
-+++ b/scripts/run_all_classes.sh
-@@ -145,7 +145,7 @@
-     if [ -n "$status" ]; then row="$row $status"; fi
-     # Issue #322: a run that stalled once and went green on the identical-binary
-     # retry is a PASS, but the stall is recorded so the flake rate is visible.
--    if [ -z "$status" ] && grep -q 'STALL-RECOVERED' "$log"; then
-+    if [ -z "$status" ] && [ "${nfail:-0}" -eq 0 ] && grep -q 'STALL-RECOVERED' "$log"; then
-         row="$row STATUS: STALL_RECOVERED"
-     fi
+--- a/src/kernel/vfs/ramdisk_fs.cpp
++++ b/src/kernel/vfs/ramdisk_fs.cpp
+@@ -279,28 +279,22 @@
+     return 0;
+ }
+ 
+-/// @brief Verify every cached VALID entry's stored CRC against the blocks on
+-/// ramdisk; clear VALID (fail-closed) on any mismatch.  Called once after a
+-/// fresh cache fill — the boot-time integrity check equivalent.  Never under
++/// @brief Verify every VALID entry's stored CRC against the blocks on ramdisk
++/// in a caller-provided entry array; clear VALID (fail-closed) on any mismatch.
++/// Called on the freshly loaded copy BEFORE it is published to the shared
++/// cache, so `rd_cached == true` always implies "every visible entry is
++/// CRC-verified" and a concurrent lookup can never observe an unverified
++/// (possibly corrupt) entry during the fill window (issue #318).  Never under
+ /// rd_lock (does block IPC).
+-static void rd_verify_cached_entries() {
++static void rd_verify_entries(RdDirEntry *dir) {
+     for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
+-        RdDirEntry e{};
+-        rd_lock.lock();
+-        e = rd_dir[i];
+-        rd_lock.unlock();
+-        if (e.name[0] == '\0' || !(e.flags & RD_ENTRY_VALID))
++        if (dir[i].name[0] == '\0' || !(dir[i].flags & RD_ENTRY_VALID))
+             continue;
+         uint32_t calc = 0;
+-        bool ok = (rd_compute_crc(e.start_block, e.size, calc) == 0) &&
+-                  (calc == e.crc32);
++        bool ok = (rd_compute_crc(dir[i].start_block, dir[i].size, calc) == 0) &&
++                  (calc == dir[i].crc32);
+         if (!ok) {
+-            rd_lock.lock();
+-            if (rd_dir[i].name[0] != '\0' &&
+-                rd_dir[i].start_block == e.start_block &&
+-                rd_dir[i].size == e.size)
+-                rd_dir[i].flags &= ~RD_ENTRY_VALID;
+-            rd_lock.unlock();
++            dir[i].flags &= ~RD_ENTRY_VALID;
+             Logger::warn("ramdiskfs: CRC mismatch slot=%u (fail-closed)",
+                          (unsigned)i);
+         }
+@@ -374,7 +368,12 @@
+         rd_lock.unlock();
+         return 0;
+     }
+-    bool filled = false;
++    // Verify per-file CRCs on the local copy BEFORE publishing it (issue #318
++    // boot check): publishing rd_cached=true only after verification closes the
++    // fill/verify race that would otherwise expose an unverified entry to a
++    // concurrent lookup.  Concurrent cold callers each re-load + re-verify
++    // (bounded, idempotent) and install a fully verified view.
++    rd_verify_entries(dir);
+     rd_lock.lock();
+     if (!rd_cached) {
+         rd_super = sup;
+@@ -382,11 +381,8 @@
+             rd_dir[i] = dir[i];
+         rd_cached_pid = live_pid;
+         rd_cached = true;
+-        filled = true;
+     }
+     rd_lock.unlock();
+-    if (filled)
+-        rd_verify_cached_entries(); // boot-equivalent per-file integrity check
+     return 0;
+ }
  

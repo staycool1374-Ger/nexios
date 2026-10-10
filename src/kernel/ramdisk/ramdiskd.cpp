@@ -28,6 +28,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/log/dmesg.hpp>
+#include <constants.hpp>
 #include <logger.hpp>
 
 namespace kernel {
@@ -73,6 +74,14 @@ bool boot_allocate() {
                                  i);
             return false;
         }
+        // Issue #318: scrub the freshly carved region so a never-staged block
+        // reads zero deterministically (no stale-code disclosure).  This is a
+        // HHDM write only — the pages stay owned by the creator (seg); no
+        // ownership class changes. Scrubbing at carve (not at grant) is
+        // mandatory: scrubbing at grant would wipe the store on every regrant.
+        __builtin_memset(
+            reinterpret_cast<void *>(arch::HHDM_OFFSET + seg->phys), 0,
+            seg->size);
         g_segments[i] = seg;
     }
     return true;

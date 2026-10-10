@@ -1,186 +1,775 @@
-diff --git a/Makefile b/Makefile
-index 661a8145c..7c70698fa 100644
---- a/Makefile
-+++ b/Makefile
-@@ -1227,6 +1227,10 @@ TEST_TIMEOUT_CLASS  := 120
- # class (only green-evidenced ones run there); x86_64 selection unchanged.
- TEST_TIMEOUT_RISCV  := 400
- WATCHDOG_STALL      := 220
-+# Issue #322: attempts per class (1 = no retry, 2 = retry the identical binary
-+# once).  Retry applies ONLY to the stall signatures (zero-S-line TIMEOUT /
-+# QEMU_EXIT); a genuine test FAIL is never retried.
-+TEST_MAX_ATTEMPTS   := 2
+diff --git a/docs/specs/ramdisk_fs.md b/docs/specs/ramdisk_fs.md
+index d502931e2..029bff3e8 100644
+--- a/docs/specs/ramdisk_fs.md
++++ b/docs/specs/ramdisk_fs.md
+@@ -16,13 +16,43 @@ same mount point, same `/mnt/ramdisk` path).
  
- # Usage: $(call _run_test_qemu,<description>,<timeout_sec>)
- # Robust design:
-@@ -1242,50 +1246,72 @@ define _run_test_qemu
- 	if ! command -v $(QEMU_SYSTEM) >/dev/null 2>&1; then echo "QEMU missing."; echo $(PKG_HINT); exit 1; fi; \
- 	if ! command -v expect >/dev/null 2>&1; then echo "expect missing."; exit 1; fi; \
- 	printf '  %-7s %s\n'  'TEST'   '$(1)…'; \
--	rm -f "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)" /tmp/test-start.timestamp /tmp/test-end.timestamp; \
--	date +%s > /tmp/test-start.timestamp; \
--	\
--	( \
--	    trap "exit 0" TERM; \
--	    LAST_SIZE=-1; \
--	    STALL=0; \
--	    while true; do \
--	        sleep 1; \
--	        CUR_SIZE=$$(wc -c < "$(TEST_SERIAL_LOG)" 2>/dev/null || echo 0); \
--	        if [ "$$CUR_SIZE" = "$$LAST_SIZE" ]; then \
--	            STALL=$$((STALL + 1)); \
--	            if [ $$STALL -ge $(WATCHDOG_STALL) ]; then \
--	                echo "[HOST-WATCHDOG] Tests interrupted — no serial output for $(WATCHDOG_STALL) s" | tee -a "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)"; \
--	                pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null; \
--	                exit 1; \
-+	MAX_ATTEMPTS=$(TEST_MAX_ATTEMPTS); \
-+	ATTEMPT=0; \
-+	STALL_SEEN=0; \
-+	STALL_STATUS=""; \
-+	VERDICT=""; \
-+	while [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; do \
-+	    ATTEMPT=$$(( ATTEMPT + 1 )); \
-+	    rm -f "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)" /tmp/test-start.timestamp /tmp/test-end.timestamp; \
-+	    date +%s > /tmp/test-start.timestamp; \
-+	    ( \
-+	        trap "exit 0" TERM; \
-+	        LAST_SIZE=-1; \
-+	        STALL=0; \
-+	        while true; do \
-+	            sleep 1; \
-+	            CUR_SIZE=$$(wc -c < "$(TEST_SERIAL_LOG)" 2>/dev/null || echo 0); \
-+	            if [ "$$CUR_SIZE" = "$$LAST_SIZE" ]; then \
-+	                STALL=$$((STALL + 1)); \
-+	                if [ $$STALL -ge $(WATCHDOG_STALL) ]; then \
-+	                    echo "[HOST-WATCHDOG] Tests interrupted — no serial output for $(WATCHDOG_STALL) s" | tee -a "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)"; \
-+	                    pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null; \
-+	                    exit 1; \
-+	                fi; \
-+	            else \
-+	                STALL=0; \
-+	                LAST_SIZE=$$CUR_SIZE; \
- 	            fi; \
--	        else \
--	            STALL=0; \
--	            LAST_SIZE=$$CUR_SIZE; \
--	        fi; \
--	    done; \
--	) & \
--	MONITOR_PID=$$!; \
--	\
--	expect tools/run-test.exp $(2) "$(TEST_VERDICT_LOG)" "$(TEST_SERIAL_LOG)" \
--	    $(QEMU_SYSTEM) $(QEMU_FLAGS) -display none -no-reboot $(QEMU_DEBUG_EXIT) \
--	    $(QEMU_ICOUNT) $(QEMU_TRACE_EVENTS) \
--	    2>&1 | gstdbuf -oL tee "$(TEST_SERIAL_LOG)"; \
--	date +%s > /tmp/test-end.timestamp; \
--	\
--	pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null || true; \
--	kill $$MONITOR_PID 2>/dev/null; \
--	wait $$MONITOR_PID 2>/dev/null; \
--	\
--	if [ -f "$(TEST_VERDICT_LOG)" ]; then \
--	    VERDICT=$$(cat "$(TEST_VERDICT_LOG)"); \
--	else \
--	    VERDICT="RESULT: UNKNOWN (no verdict file — expect aborted)"; \
--	fi; \
-+	        done; \
-+	    ) & \
-+	    MONITOR_PID=$$!; \
-+	    expect tools/run-test.exp $(2) "$(TEST_VERDICT_LOG)" "$(TEST_SERIAL_LOG)" \
-+	        $(QEMU_SYSTEM) $(QEMU_FLAGS) -display none -no-reboot $(QEMU_DEBUG_EXIT) \
-+	        $(QEMU_ICOUNT) $(QEMU_TRACE_EVENTS) \
-+	        2>&1 | gstdbuf -oL tee "$(TEST_SERIAL_LOG)"; \
-+	    date +%s > /tmp/test-end.timestamp; \
-+	    pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null || true; \
-+	    kill $$MONITOR_PID 2>/dev/null; \
-+	    wait $$MONITOR_PID 2>/dev/null; \
-+	    if [ -f "$(TEST_VERDICT_LOG)" ]; then \
-+	        VERDICT=$$(cat "$(TEST_VERDICT_LOG)"); \
-+	    else \
-+	        VERDICT="RESULT: UNKNOWN (no verdict file — expect aborted)"; \
-+	    fi; \
-+	    case "$$VERDICT" in \
-+	        RESULT:\ PASS*) \
-+	            if [ $$STALL_SEEN -eq 1 ]; then STALL_STATUS="STALL-RECOVERED"; fi; \
-+	            break ;; \
-+	        RESULT:\ TIMEOUT*|RESULT:\ QEMU_EXIT*) \
-+	            if [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; then \
-+	                echo "[HOST] STALL attempt $$ATTEMPT/$$MAX_ATTEMPTS: $$VERDICT — retrying identical binary"; \
-+	                STALL_SEEN=1; \
-+	                continue; \
-+	            else \
-+	                STALL_STATUS="STALL-UNRECOVERED"; \
-+	                VERDICT="RESULT: FAIL (stall unrecovered after $$MAX_ATTEMPTS attempts: $(2)s, zero-S-line TIMEOUT/QEMU_EXIT)"; \
-+	                break; \
-+	            fi ;; \
-+	        *) \
-+	            break ;; \
-+	    esac; \
-+	done; \
- 	echo "$$VERDICT"; \
- 	START_S=$$(cat /tmp/test-start.timestamp 2>/dev/null || echo 0); \
- 	END_S=$$(cat /tmp/test-end.timestamp 2>/dev/null || echo 0); \
- 	echo "[HOST] start=$${START_S}s end=$${END_S}s elapsed=$$(( END_S - START_S ))s"; \
-+	if [ -n "$$STALL_STATUS" ]; then echo "[HOST] $$STALL_STATUS"; fi; \
- 	case "$$VERDICT" in \
- 	    RESULT:\ PASS*) \
- 	        echo "[HOST] TESTS PASSED"; \
-diff --git a/scripts/run_all_classes.sh b/scripts/run_all_classes.sh
-index 622aef55d..800076339 100755
---- a/scripts/run_all_classes.sh
-+++ b/scripts/run_all_classes.sh
-@@ -29,11 +29,11 @@ if [ "$ARCH" = "riscv64" ]; then
- fi
+ | Region | Blocks | Content |
+ |---|---|---|
+-| Superblock | 0 | magic `RDS1FLAT`, version 1, file_count, next_data_block |
+-| Directory | 1–9 | 50 `RdDirEntry` (88 B each, serialized contiguously) |
+-| Data | 10+ | file extents (bump-allocated, 512 B units) |
++| Superblock | 0 | magic `RDS1FLAT`, version 2, file_count, next_data_block, dir_crc32 |
++| Directory | 1–10 | 50 `RdDirEntry` (96 B each, serialized contiguously; CRC32-protected) |
++| Data | 11+ | file extents (bump-allocated, 512 B units) |
  
- # Per-class outer timeout covers the build (a cold arch switch rebuilds
--# everything) plus the QEMU run.  riscv64 needs headroom: TCG wall
--# dilation puts arch_riscv64 near 270 s (measured) on top of the build.
--OUTER_TIMEOUT=300
-+# everything) plus up to TEST_MAX_ATTEMPTS QEMU runs (issue #322 retries a
-+# stalled class once, so the worst case is 2× the class expect-timeout).
-+OUTER_TIMEOUT=600
- if [ "$ARCH" = "riscv64" ]; then
--    OUTER_TIMEOUT=900
-+    OUTER_TIMEOUT=1200
- fi
+ `RdDirEntry`: name[64] (empty name = free slot), size, start_block,
+-block_count. Per-file cap 1 MiB. No free list (unlinked blocks leak until
+-reformat — documented non-goal), no journaling, no resize.
++block_count, crc32 (finalized CRC32 over the file's live bytes),
++flags (`RD_ENTRY_VALID`). Per-file cap 1 MiB. No free list (unlinked blocks
++leak until reformat — documented non-goal), no journaling, no resize.
++
++### 2.1 Integrity — metadata CRC32 + carve scrub (issue #318)
++
++- **Metadata region CRC.** The superblock's `dir_crc32` is the CRC32 over the
++  serialized directory region; `rd_load_all` recomputes and rejects the whole
++  image (`-3`) on mismatch — a corrupt directory is discarded fail-closed.
++- **Per-file data CRC.** `crc32` covers the file's live byte range only (block
++  padding excluded), computed at close (`rd_flush_entry`) via
++  `src/lib/crc32.hpp`, persisted with the entry. Any content write clears
++  `RD_ENTRY_VALID` (in-flight — a torn write is never exposed); close
++  recomputes and re-sets it.
++- **Verification.** After a fresh cache fill, `rd_verify_cached_entries()`
++  re-reads each `VALID` entry and clears `VALID` (fail-closed) on mismatch —
++  this is the boot-time integrity check. `rd_lookup`/`rd_readdir` expose only
++  `VALID` entries; `ramdisk_fs_verify_all()` is the test seam (returns the
++  mismatch count and fails the entry closed). Lazy (per cache fill, not a full
++  16 MiB mount scan) so boot stays free of hundreds of thousands of chunk
++  round-trips; corruption after a fill is caught by `ramdisk_fs_verify_all()`
++  or the next fill (daemon restart / remount).
++- **Pristine-zero contract.** The carve scrubs every segment to zero
++  (`ramdiskd::boot_allocate`, HHDM memset at carve — not at grant, else a
++  regrant would wipe the store). A never-staged block therefore reads exactly
++  zero deterministically (no stale-code disclosure). This also makes a
++  foreign-frame aliasing fault detectable: the content would not match the
++  stored CRC / the zero baseline.
++- **Legacy/version mismatch.** A non-v2 image is discarded fail-closed
++  (no free list ⇒ not resumable); the version bump is the migration story.
++- CRC is corruption/early-detection only — **not** security (no adversary, no
++  crypto).
  
- # x86_64-only classes: no registry entry (smp, smp_multicpu) or no QEMU
-@@ -123,6 +123,11 @@ for c in $RUN; do
-             status="STATUS: EXPECTED_PANIC_PASS"
-         elif [ "$expected_empty_pass" -eq 1 ]; then
-             status="STATUS: NO_TESTS_REGISTERED"
-+        elif grep -q 'STALL-UNRECOVERED' "$log"; then
-+            # Issue #322: the harness retried the identical binary once and it
-+            # still produced no summary (zero-S-line TIMEOUT / QEMU_EXIT) — a
-+            # host/TCG stall, not a code verdict.
-+            status="STATUS: STALL"
-         elif grep -qiE 'kernel panic|page fault|triple fault|#PF|PANIC:' "$log"; then
-             status="STATUS: PANIC"
-         elif grep -qiE 'RESULT: TIMEOUT|Terminated: 15|\[STALL\]|watchdog' "$log"; then
-@@ -138,6 +143,11 @@ for c in $RUN; do
+ ## 3. Concurrency (§11) and caching
  
-     row="$ts $c PASSED: $npass FAILED: $nfail TIME: $nms"
-     if [ -n "$status" ]; then row="$row $status"; fi
-+    # Issue #322: a run that stalled once and went green on the identical-binary
-+    # retry is a PASS, but the stall is recorded so the flake rate is visible.
-+    if [ -z "$status" ] && [ "${nfail:-0}" -eq 0 ] && grep -q 'STALL-RECOVERED' "$log"; then
-+        row="$row STATUS: STALL_RECOVERED"
-+    fi
+@@ -40,7 +70,7 @@ reformat — documented non-goal), no journaling, no resize.
  
-     # Verdict: OK iff summary present or expected-panic/empty PASS, 0 fails, rc==0
-     if [ -n "$status" ] && [ "$expected_panic_pass" -eq 0 ] && [ "$expected_empty_pass" -eq 0 ]; then
+ ## 4. Block layer
+ 
+-`read_block_full` / `write_block_full` loop the normative 16×32 B chunk
++`rd_block_op` / `rd_block_op_retry` loop the normative 16×32 B chunk
+ IPC (`sender_pid` + `block_no` + `chunk_idx` header, `RAMDISK_OK` checked
+ per chunk — same wire as `ramdisk_live_roundtrip`), with bounded retries
+ (cold lazy segment maps can fail transiently under TCG). Partial edge
+@@ -81,10 +111,13 @@ or shell changes needed. Raw `rx` block staging is untouched (the
+ 
+ ## 8. Verification
+ 
+-- Kernel: `test_ramdisk_fs` (6 tests in the `storage` aggregate):
++- Kernel: `test_ramdisk_fs` (7 tests in the `storage` aggregate):
+   mount presence, create/write/read/delete round-trip, bounds rejection,
+   partial-overwrite behavior, readdir listing, loadelf-from-ramdisk
+-  acceptance (`request_load` → OK + `request_cancel` → OK, no execution).
++  acceptance (`request_load` → OK + `request_cancel` → OK, no execution),
++  and CRC-detects-corruption (single-byte corruption → verify mismatch →
++  fail-closed resolve). `test_ramdisk` also adds `ramdisk_pristine_reads_zero`
++  (carve-scrub contract, issue #318).
+ - Live: shell file ops (`touch`/`echo >`/`cat`/`ls`/`rm`) + YMODEM
+   `rxfile` upload + `loadelf`/`runelf` from `/mnt/ramdisk`.
+ - Open follow-ups: #317 (send_sync reply contract), #318 (carve
+diff --git a/docs/specs/ramdiskd.md b/docs/specs/ramdiskd.md
+index bcc4eb398..6f508f03c 100644
+--- a/docs/specs/ramdiskd.md
++++ b/docs/specs/ramdiskd.md
+@@ -45,6 +45,10 @@ exact-retypes each segment into the daemon CSpace (`READ|WRITE`) at grant
+ maps each handle with `SYS_FRAME_MAP` into its 2 MiB windows. Daemon death
+ frees frames via normal slot disposal; re-grant re-carves + re-mints on
+ both restart paths. No new cap type, no new syscall, no new lock.
++**Carve scrub (issue #318):** `boot_allocate` zeroes each freshly carved
++segment (HHDM memset) so a never-staged block reads exactly zero — the
++pristine-zero contract for `ramdisk_fs`. Scrub happens at *carve*, not at
++grant (a grant-time scrub would wipe the store on every regrant).
+ 
+ ## Boot / degraded / reboot
+ 
+diff --git a/src/kernel/ramdisk/ramdiskd.cpp b/src/kernel/ramdisk/ramdiskd.cpp
+index 108b27f17..2c98c3fdc 100644
+--- a/src/kernel/ramdisk/ramdiskd.cpp
++++ b/src/kernel/ramdisk/ramdiskd.cpp
+@@ -28,6 +28,7 @@
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/log/dmesg.hpp>
++#include <constants.hpp>
+ #include <logger.hpp>
+ 
+ namespace kernel {
+@@ -73,6 +74,14 @@ bool boot_allocate() {
+                                  i);
+             return false;
+         }
++        // Issue #318: scrub the freshly carved region so a never-staged block
++        // reads zero deterministically (no stale-code disclosure).  This is a
++        // HHDM write only — the pages stay owned by the creator (seg); no
++        // ownership class changes. Scrubbing at carve (not at grant) is
++        // mandatory: scrubbing at grant would wipe the store on every regrant.
++        __builtin_memset(
++            reinterpret_cast<void *>(arch::HHDM_OFFSET + seg->phys), 0,
++            seg->size);
+         g_segments[i] = seg;
+     }
+     return true;
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index cde27fa08..1612ba5e4 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -281,7 +281,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
+     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
+     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
+-    {"storage",             160,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (6, #275) + ramdisk_fs (6, #314)
++    {"storage",             162,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption)
+     {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
+     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
+     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
+diff --git a/src/kernel/test/test_ramdisk.cpp b/src/kernel/test/test_ramdisk.cpp
+index 96cf1583b..6ca495e14 100644
+--- a/src/kernel/test/test_ramdisk.cpp
++++ b/src/kernel/test/test_ramdisk.cpp
+@@ -328,11 +328,44 @@ JARVIS_TEST(ramdisk_live_roundtrip, "PRE: ramdiskd | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: A never-staged ramdisk block reads all zeros — the carve scrub
++// (issue #318) makes pristine regions deterministically zero (no stale-code
++// disclosure).
++// Input: 16-chunk read of block RAMDISK_BLOCKS-1 (segment 7, never staged).
++// Expect: Every reply byte is 0.
++// Depends: live ramdiskd task (PRE: ramdiskd), carve scrub,
++// kernel::IPC::send_sync.
++JARVIS_TEST(ramdisk_pristine_reads_zero, "PRE: ramdiskd | POST: none") {
++    const uint64_t daemon = ramdiskd::get_ramdiskd_pid();
++    JARVIS_ASSERT(daemon != 0);
++    const uint64_t me = Scheduler::current_task()->id;
++    const uint64_t block = ramdiskd::RAMDISK_BLOCKS - 1;
++    for (uint64_t chunk = 0;
++         chunk < ramdiskd::RAMDISK_CHUNKS_PER_BLOCK; ++chunk) {
++        Message req{};
++        req.type = ramdiskd::RAMDISK_READ_BLOCK;
++        __builtin_memcpy(req.data, &me, 8);
++        __builtin_memcpy(req.data + 8, &block, 8);
++        __builtin_memcpy(req.data + 16, &chunk, 8);
++        req.data_size = 24;
++        Message reply{};
++        JARVIS_ASSERT(IPC::send_sync(daemon, req, reply));
++        int64_t result = 0;
++        __builtin_memcpy(&result, reply.data, 8);
++        JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK, result);
++        for (uint64_t b = 0; b < ramdiskd::RAMDISK_CHUNK_DATA; ++b)
++            JARVIS_ASSERT_EQ(0ULL, static_cast<uint64_t>(reply.data[8 + b]));
++    }
++    JARVIS_TEST_PASS();
++}
++
+ void register_ramdisk_tests() {
+     Logger::info("Registering ramdisk tests");
+ 
+     JARVIS_REGISTER_TEST(ramdisk_wire_bounds_reject);
+     JARVIS_REGISTER_TEST(ramdisk_chunk_roundtrip);
++    JARVIS_REGISTER_TEST(ramdisk_pristine_reads_zero);
+     JARVIS_REGISTER_TEST(ramdisk_grant_fail_closed);
+     JARVIS_REGISTER_TEST(ramdiskd_pid_cell);
+     JARVIS_REGISTER_TEST(ramdisk_live_roundtrip);
+diff --git a/src/kernel/test/test_ramdisk_fs.cpp b/src/kernel/test/test_ramdisk_fs.cpp
+index cee325d8f..a54c31fdf 100644
+--- a/src/kernel/test/test_ramdisk_fs.cpp
++++ b/src/kernel/test/test_ramdisk_fs.cpp
+@@ -34,6 +34,7 @@
+ #include <kernel/elf/elf_loader.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/test/test_isolate.hpp>
++#include <kernel/ipc/ipc.hpp>
+ #include <string.hpp>
+ 
+ using namespace kernel;
+@@ -265,6 +266,74 @@ JARVIS_TEST(ramdiskfs_readdir_lists_files, "PRE: ramdiskd | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: A staged file carries a stored CRC32 (issue #318) computed at
++// close; corrupting its backing block is detected by the integrity check and
++// the entry fails closed (no longer resolvable).
++// Input: create+write+close a file; corrupt one byte of its first backing
++// block via raw daemon block IPC; run the verify seam.
++// Expect: verify_all reports 1 mismatch; resolve() then returns nullptr.
++// Depends: ramdisk_fs CRC metadata, ramdisk_fs_verify_all / _extent.
++JARVIS_TEST(ramdiskfs_crc_detects_corruption, "PRE: ramdiskd | POST: none") {
++    kernel::test::mark_vfs_touched();
++    const char *path = "/mnt/ramdisk/rd_fs_crc.elf";
++    const char *base = "rd_fs_crc.elf"; // bare name for the extent seam
++    vfs::unlink(path);
++    JARVIS_ASSERT_EQ(0, vfs::create(path, 0));
++    Vnode *file = vfs::resolve(path);
++    JARVIS_ASSERT(file != nullptr);
++    uint8_t wbuf[600] = {};
++    for (uint64_t i = 0; i < sizeof(wbuf); ++i)
++        wbuf[i] = static_cast<uint8_t>((i * 7 + 3) & 0xFF);
++    JARVIS_ASSERT_EQ(static_cast<int64_t>(sizeof(wbuf)),
++                     file->ops->write(*file, wbuf, sizeof(wbuf), 0));
++    vfs::release(file); // close -> recompute + persist CRC, mark VALID
++    JARVIS_ASSERT_EQ(0, vfs::ramdisk_fs_verify_all());
++    uint64_t start = 0;
++    uint64_t blocks = 0;
++    uint32_t crc = 0;
++    JARVIS_ASSERT(vfs::ramdisk_fs_extent(base, start, blocks, crc));
++    const uint64_t daemon = ramdiskd::get_ramdiskd_pid();
++    JARVIS_ASSERT(daemon != 0);
++    const uint64_t me = Scheduler::current_task()->id;
++    const uint64_t chunk0 = 0;
++    uint8_t blk[ramdiskd::RAMDISK_CHUNK_DATA] = {};
++    {
++        Message req{};
++        req.type = ramdiskd::RAMDISK_READ_BLOCK;
++        __builtin_memcpy(req.data, &me, 8);
++        __builtin_memcpy(req.data + 8, &start, 8);
++        __builtin_memcpy(req.data + 16, &chunk0, 8);
++        req.data_size = 24;
++        Message reply{};
++        JARVIS_ASSERT(IPC::send_sync(daemon, req, reply));
++        int64_t r = 0;
++        __builtin_memcpy(&r, reply.data, 8);
++        JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK, r);
++        __builtin_memcpy(blk, reply.data + 8, ramdiskd::RAMDISK_CHUNK_DATA);
++    }
++    blk[0] ^= 0xFF; // corrupt one byte of the file's data
++    {
++        Message req{};
++        req.type = ramdiskd::RAMDISK_WRITE_BLOCK;
++        __builtin_memcpy(req.data, &me, 8);
++        __builtin_memcpy(req.data + 8, &start, 8);
++        __builtin_memcpy(req.data + 16, &chunk0, 8);
++        __builtin_memcpy(req.data + 24, blk, ramdiskd::RAMDISK_CHUNK_DATA);
++        req.data_size = 56;
++        Message reply{};
++        JARVIS_ASSERT(IPC::send_sync(daemon, req, reply));
++        int64_t r = 0;
++        __builtin_memcpy(&r, reply.data, 8);
++        JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK, r);
++    }
++    // Integrity check detects the corruption and fails the entry closed.
++    JARVIS_ASSERT_EQ(1, vfs::ramdisk_fs_verify_all());
++    JARVIS_ASSERT(vfs::resolve(path) == nullptr);
++    vfs::unlink(path);
++    JARVIS_TEST_PASS();
++}
++
+ void register_ramdisk_fs_tests() {
+     Logger::info("Registering ramdisk_fs tests");
+     JARVIS_REGISTER_TEST(ramdiskfs_mount_present);
+@@ -273,4 +342,5 @@ void register_ramdisk_fs_tests() {
+     JARVIS_REGISTER_TEST(ramdiskfs_overwrite_partial);
+     JARVIS_REGISTER_TEST(ramdiskfs_loadelf_from_ramdisk);
+     JARVIS_REGISTER_TEST(ramdiskfs_readdir_lists_files);
++    JARVIS_REGISTER_TEST(ramdiskfs_crc_detects_corruption);
+ }
+diff --git a/src/kernel/vfs/ramdisk_fs.cpp b/src/kernel/vfs/ramdisk_fs.cpp
+index 3d7cf3b7c..4ce97afdf 100644
+--- a/src/kernel/vfs/ramdisk_fs.cpp
++++ b/src/kernel/vfs/ramdisk_fs.cpp
+@@ -49,6 +49,7 @@
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/sync/mutex.hpp>
++#include <crc32.hpp>
+ #include <logger.hpp>
+ #include <string.hpp>
+ 
+@@ -58,11 +59,15 @@ namespace vfs {
+ // Geometry (all named per CODING_STYLE §10.5; consistent with
+ // ramdiskd.hpp: 512 B blocks, 16 x 32 B chunks, 32768 blocks total).
+ static constexpr uint64_t RDSB_MAGIC = 0x52445331464C4154ULL; // "RDS1FLAT"
+-static constexpr uint64_t RDSB_VERSION = 1;
++// v2 (issue #318): the directory grew a per-file CRC32 + validity flags, and the
++// superblock carries a CRC32 over the whole directory region (metadata
++// integrity).  A v1 image is discarded fail-closed (no free list => not
++// resumable); see rd_ensure_cached.
++static constexpr uint64_t RDSB_VERSION = 2;
+ static constexpr uint64_t RDBLK_SUPER = 0;
+ static constexpr uint64_t RDBLK_DIR_START = 1;
+-static constexpr uint64_t RDBLK_DIR_COUNT = 9;
+-static constexpr uint64_t RDBLK_DATA_START = 10;
++static constexpr uint64_t RDBLK_DIR_COUNT = 10;
++static constexpr uint64_t RDBLK_DATA_START = 11;
+ static constexpr uint64_t RDF_MAX_FILES = 50;
+ static constexpr uint64_t RDF_NAME_LEN = 63; // +1 NUL in the 64 B field
+ static constexpr uint64_t RDF_MAX_FILE_SIZE = 1ULL * 1024 * 1024; // 1 MiB
+@@ -70,23 +75,34 @@ static constexpr uint64_t RD_MUTATE_RETRIES = 3;
+ static constexpr uint64_t RD_CHUNK_DATA = 32;
+ static constexpr uint64_t RD_CHUNKS_PER_BLOCK = 16;
+ static constexpr uint64_t RD_BLOCK_SIZE = 512;
++static constexpr uint64_t RD_DIR_REGION_BYTES = RDBLK_DIR_COUNT * RD_BLOCK_SIZE;
+ 
+-/// @brief On-disk directory entry (88 B; serialized contiguously across
+-/// the dir region: entry i starts at byte i * 88).
++/// @brief Directory-entry validity flag (rd_dir[i].flags bit).
++static constexpr uint32_t RD_ENTRY_VALID = 1U;
++
++/// @brief On-disk directory entry (96 B; serialized contiguously across
++/// the dir region: entry i starts at byte i * 96).  `crc32` is the finalized
++/// CRC32 (src/lib/crc32.hpp) over the file's LIVE byte range only (block
++/// padding excluded); `flags` carries RD_ENTRY_VALID.  An entry is exposed
++/// only when VALID and its CRC verifies (fail-closed; issue #318).
+ struct RdDirEntry {
+     char name[64];          ///< NUL-terminated (name[0] == 0 => free slot).
+     uint64_t size;          ///< Current file size in bytes.
+     uint64_t start_block;   ///< First ramdisk data block of the extent.
+     uint64_t block_count;   ///< Extent length in 512 B blocks.
++    uint32_t crc32;         ///< CRC32 of the live bytes (finalized).
++    uint32_t flags;         ///< RD_ENTRY_VALID etc.
+ };
+-static_assert(sizeof(RdDirEntry) == 88, "dir entry layout changed");
++static_assert(sizeof(RdDirEntry) == 96, "dir entry layout changed");
+ 
+-/// @brief On-disk superblock (first 32 B of ramdisk block 0).
++/// @brief On-disk superblock (first 40 B of ramdisk block 0).
+ struct RdSuper {
+     uint64_t magic;
+     uint64_t version;
+     uint64_t file_count;
+     uint64_t next_data_block;
++    uint32_t dir_crc32;     ///< CRC32 over the serialized dir region.
++    uint32_t reserved;      ///< padding (keeps 8-byte alignment).
+ };
+ 
+ /// @brief Per-open extent descriptor (vnode private_data, MemPool-owned).
+@@ -106,17 +122,19 @@ static RdSuper rd_super{};
+ static RdDirEntry rd_dir[RDF_MAX_FILES]{};
+ static Vnode rd_root{};
+ 
++static_assert(sizeof(RdSuper) == 40, "superblock layout changed");
++
++// Forward declaration (definition below; used by the CRC helpers).
++static int rd_persist_slot(uint64_t slot);
++
+ /// @brief One 512 B block transfer through ramdiskd (never under rd_lock).
+ /// @return 0 on success, -1 on any failure (ungranted/range/IPC).
+ static int rd_block_op(uint64_t block_no, uint8_t *buf512, bool is_write) {
+     if (block_no >= ramdiskd::RAMDISK_BLOCKS)
+         return -1;
+     uint64_t pid = ramdiskd::get_ramdiskd_pid();
+-    if (pid == 0) {
+-        Logger::info("[TEMP-RDF] op blk=%u nogrant(pid0)",
+-                     (unsigned)block_no);
++    if (pid == 0)
+         return -1;
+-    }
+     auto *cur = Scheduler::current_task();
+     if (cur == nullptr)
+         return -1;
+@@ -133,18 +151,12 @@ static int rd_block_op(uint64_t block_no, uint8_t *buf512, bool is_write) {
+                              RD_CHUNK_DATA);
+         req.data_size = is_write ? 56 : 24;
+         Message reply{};
+-        if (!IPC::send_sync(pid, req, reply)) {
+-            Logger::info("[TEMP-RDF] op blk=%u chunk=%u sendfail",
+-                         (unsigned)block_no, (unsigned)chunk);
++        if (!IPC::send_sync(pid, req, reply))
+             return -1;
+-        }
+         int64_t result = 0;
+         __builtin_memcpy(&result, reply.data, 8);
+-        if (result != ramdiskd::RAMDISK_OK) {
+-            Logger::info("[TEMP-RDF] op blk=%u chunk=%u result=%d",
+-                         (unsigned)block_no, (unsigned)chunk, (int)result);
++        if (result != ramdiskd::RAMDISK_OK)
+             return -1;
+-        }
+         if (!is_write)
+             __builtin_memcpy(buf512 + chunk * RD_CHUNK_DATA, reply.data + 8,
+                              RD_CHUNK_DATA);
+@@ -175,21 +187,44 @@ static int rd_read_super(RdSuper &out) {
+     return 0;
+ }
+ 
+-/// @brief Persist superblock + full dir region (never under rd_lock).
+-static int rd_store_all(const RdSuper &sup, const RdDirEntry *dir) {
++/// @brief Serialize one 512 B dir-region block from the entry array.  Handles
++/// entries that straddle a block boundary (a 96 B entry does not divide 512):
++/// each block receives the portion [max(off,base), min(off+96,end)).
++static void rd_serialize_dir_block(const RdDirEntry *dir, uint64_t dir_blk,
++                                   uint8_t *blk) {
++    __builtin_memset(blk, 0, RD_BLOCK_SIZE);
++    const uint8_t *raw = reinterpret_cast<const uint8_t *>(dir);
++    uint64_t base = dir_blk * RD_BLOCK_SIZE;
++    uint64_t end = base + RD_BLOCK_SIZE;
++    for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
++        uint64_t off = i * sizeof(RdDirEntry);
++        uint64_t eend = off + sizeof(RdDirEntry);
++        if (eend <= base || off >= end)
++            continue;
++        uint64_t lo = off > base ? off : base;
++        uint64_t hi = eend < end ? eend : end;
++        __builtin_memcpy(blk + (lo - base), raw + lo, hi - lo);
++    }
++}
++
++/// @brief Persist superblock + full dir region (never under rd_lock).  The
++/// superblock's `dir_crc32` covers exactly the serialized dir-region bytes.
++static int rd_store_all(const RdSuper &sup_in, const RdDirEntry *dir) {
+     uint8_t blk[RD_BLOCK_SIZE] = {};
++    CRC32::init();
++    uint32_t crc = CRC32::INITIAL;
++    for (uint64_t dir_blk = 0; dir_blk < RDBLK_DIR_COUNT; ++dir_blk) {
++        rd_serialize_dir_block(dir, dir_blk, blk);
++        crc = CRC32::update(crc, blk, RD_BLOCK_SIZE);
++    }
++    RdSuper sup = sup_in;
++    sup.dir_crc32 = CRC32::finalize(crc);
++    __builtin_memset(blk, 0, RD_BLOCK_SIZE);
+     __builtin_memcpy(blk, &sup, sizeof(RdSuper));
+     if (rd_block_op(RDBLK_SUPER, blk, true) < 0)
+         return -1;
+     for (uint64_t dir_blk = 0; dir_blk < RDBLK_DIR_COUNT; ++dir_blk) {
+-        __builtin_memset(blk, 0, RD_BLOCK_SIZE);
+-        uint64_t base = dir_blk * RD_BLOCK_SIZE;
+-        for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
+-            uint64_t off = i * sizeof(RdDirEntry);
+-            if (off < base || off + sizeof(RdDirEntry) > base + RD_BLOCK_SIZE)
+-                continue;
+-            __builtin_memcpy(blk + (off - base), &dir[i], sizeof(RdDirEntry));
+-        }
++        rd_serialize_dir_block(dir, dir_blk, blk);
+         if (rd_block_op(RDBLK_DIR_START + dir_blk, blk, true) < 0)
+             return -1;
+     }
+@@ -197,45 +232,103 @@ static int rd_store_all(const RdSuper &sup, const RdDirEntry *dir) {
+ }
+ 
+ /// @brief Load superblock + dir region into a caller buffer (no lock).
++/// @return 0 ok; -1 unformatted/bad magic/IO; -2 legacy version (fail
++///         closed — no free list means a v1 image is not resumable);
++///         -3 metadata-region CRC mismatch (directory corrupt).
+ static int rd_load_all(RdSuper &sup, RdDirEntry *dir) {
+     if (rd_read_super(sup) < 0)
+         return -1;
+-    if (sup.magic != RDSB_MAGIC || sup.version != RDSB_VERSION)
++    if (sup.magic != RDSB_MAGIC)
+         return -1;
+-    // Entries are serialized contiguously, so successive entries share
+-    // blocks: keep the current block cached across iterations (each dir
+-    // block is read once per fill, plus one re-read per straddle).
++    if (sup.version != RDSB_VERSION)
++        return -2;
++    // Read the whole dir region in one pass and verify its CRC before
++    // trusting any entry (issue #318 metadata integrity).
++    uint8_t region[RD_DIR_REGION_BYTES] = {};
++    CRC32::init();
++    uint32_t crc = CRC32::INITIAL;
++    for (uint64_t dir_blk = 0; dir_blk < RDBLK_DIR_COUNT; ++dir_blk) {
++        if (rd_block_op(RDBLK_DIR_START + dir_blk,
++                        region + dir_blk * RD_BLOCK_SIZE, false) < 0)
++            return -1;
++        crc = CRC32::update(crc, region + dir_blk * RD_BLOCK_SIZE,
++                            RD_BLOCK_SIZE);
++    }
++    if (CRC32::finalize(crc) != sup.dir_crc32)
++        return -3;
++    __builtin_memcpy(dir, region, RDF_MAX_FILES * sizeof(RdDirEntry));
++    return 0;
++}
++
++/// @brief Compute the finalized CRC32 over a file's LIVE byte range (block
++/// padding excluded).  Never under rd_lock (does block IPC).
++/// @return 0 on success ( @p out filled), -1 on IO failure.
++static int rd_compute_crc(uint64_t start_block, uint64_t size, uint32_t &out) {
++    CRC32::init();
++    uint32_t crc = CRC32::INITIAL;
++    uint64_t blocks = (size + RD_BLOCK_SIZE - 1) / RD_BLOCK_SIZE;
+     uint8_t blk[RD_BLOCK_SIZE] = {};
+-    uint64_t have_blk = 0;
+-    bool have_valid = false;
++    for (uint64_t i = 0; i < blocks; ++i) {
++        if (rd_block_op_retry(start_block + i, blk, false) < 0)
++            return -1;
++        uint64_t off = i * RD_BLOCK_SIZE;
++        uint64_t n = size - off;
++        if (n > RD_BLOCK_SIZE)
++            n = RD_BLOCK_SIZE;
++        crc = CRC32::update(crc, blk, n);
++    }
++    out = CRC32::finalize(crc);
++    return 0;
++}
++
++/// @brief Verify every VALID entry's stored CRC against the blocks on ramdisk
++/// in a caller-provided entry array; clear VALID (fail-closed) on any mismatch.
++/// Called on the freshly loaded copy BEFORE it is published to the shared
++/// cache, so `rd_cached == true` always implies "every visible entry is
++/// CRC-verified" and a concurrent lookup can never observe an unverified
++/// (possibly corrupt) entry during the fill window (issue #318).  Never under
++/// rd_lock (does block IPC).
++static void rd_verify_entries(RdDirEntry *dir) {
+     for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
+-        uint64_t off = i * sizeof(RdDirEntry);
+-        uint64_t first = RDBLK_DIR_START + off / RD_BLOCK_SIZE;
+-        uint64_t foff = off % RD_BLOCK_SIZE;
+-        uint64_t remain = sizeof(RdDirEntry);
+-        uint64_t dst = 0;
+-        // Entries may straddle block boundaries; assemble across blocks.
+-        uint8_t entry_bytes[sizeof(RdDirEntry)] = {};
+-        while (remain > 0) {
+-            uint64_t take = RD_BLOCK_SIZE - foff;
+-            if (take > remain)
+-                take = remain;
+-            if (!have_valid || have_blk != first) {
+-                __builtin_memset(blk, 0, RD_BLOCK_SIZE);
+-                if (rd_block_op(first, blk, false) < 0)
+-                    return -1;
+-                have_blk = first;
+-                have_valid = true;
+-            }
+-            __builtin_memcpy(entry_bytes + dst, blk + foff, take);
+-            dst += take;
+-            remain -= take;
+-            ++first;
+-            foff = 0;
++        if (dir[i].name[0] == '\0' || !(dir[i].flags & RD_ENTRY_VALID))
++            continue;
++        uint32_t calc = 0;
++        bool ok = (rd_compute_crc(dir[i].start_block, dir[i].size, calc) == 0) &&
++                  (calc == dir[i].crc32);
++        if (!ok) {
++            dir[i].flags &= ~RD_ENTRY_VALID;
++            Logger::warn("ramdiskfs: CRC mismatch slot=%u (fail-closed)",
++                         (unsigned)i);
+         }
+-        __builtin_memcpy(&dir[i], entry_bytes, sizeof(RdDirEntry));
+     }
+-    return 0;
++}
++
++/// @brief Recompute + store a file's CRC, mark it VALID, persist the dir
++/// (close-flush; never under rd_lock).  Recompute-per-close, not a byte
++/// append: an overwrite at offset 0 makes incremental accumulation wrong.
++/// On IO failure the entry stays VALID-cleared (fail-closed).
++static void rd_flush_entry(uint64_t dir_index) {
++    RdDirEntry e{};
++    rd_lock.lock();
++    e = rd_dir[dir_index];
++    rd_lock.unlock();
++    if (e.name[0] == '\0')
++        return;
++    uint32_t calc = 0;
++    if (rd_compute_crc(e.start_block, e.size, calc) < 0)
++        return;
++    rd_lock.lock();
++    if (rd_dir[dir_index].name[0] != '\0' &&
++        rd_dir[dir_index].start_block == e.start_block &&
++        rd_dir[dir_index].size == e.size) {
++        rd_dir[dir_index].crc32 = calc;
++        rd_dir[dir_index].flags |= RD_ENTRY_VALID;
++    }
++    rd_lock.unlock();
++    for (uint64_t pt = 0; pt < RD_MUTATE_RETRIES; ++pt) {
++        if (rd_persist_slot(dir_index) == 0)
++            break;
++    }
+ }
+ 
+ /// @brief Ensure the in-memory cache is populated (no lock held on return).
+@@ -255,9 +348,14 @@ static int rd_ensure_cached() {
+         return 0;
+     RdSuper sup{};
+     RdDirEntry dir[RDF_MAX_FILES]{};
+-    if (rd_load_all(sup, dir) < 0) {
+-        // Ungranted, range error, or unformatted: install an empty view.
+-        // Formatting happens lazily on first create (fail-closed: all
++    int loaded = rd_load_all(sup, dir);
++    if (loaded < 0) {
++        if (loaded == -2)
++            Logger::warn("ramdiskfs: legacy layout discarded (fail-closed)");
++        else if (loaded == -3)
++            Logger::warn("ramdiskfs: directory CRC mismatch (fail-closed)");
++        // Ungranted, range error, unformatted, or corrupt: install an empty
++        // view.  Formatting happens lazily on first create (fail-closed: all
+         // lookups miss until then).
+         rd_lock.lock();
+         if (!rd_cached) {
+@@ -272,6 +370,12 @@ static int rd_ensure_cached() {
+         rd_lock.unlock();
+         return 0;
+     }
++    // Verify per-file CRCs on the local copy BEFORE publishing it (issue #318
++    // boot check): publishing rd_cached=true only after verification closes the
++    // fill/verify race that would otherwise expose an unverified entry to a
++    // concurrent lookup.  Concurrent cold callers each re-load + re-verify
++    // (bounded, idempotent) and install a fully verified view.
++    rd_verify_entries(dir);
+     rd_lock.lock();
+     if (!rd_cached) {
+         rd_super = sup;
+@@ -311,8 +415,6 @@ static bool rd_name_ok(const char *name) {
+     return true;
+ }
+ 
+-static int rd_persist_slot(uint64_t slot);
+-
+ static int rd_file_open(Vnode &, uint64_t) {
+     return 0;
+ }
+@@ -325,7 +427,8 @@ static void rd_file_close(Vnode &self) {
+     auto *ext = static_cast<RdExtent *>(self.private_data);
+     if (ext != nullptr && ext->dirty) {
+         ext->dirty = false;
+-        rd_persist_slot(ext->dir_index);
++        // Recompute + persist the entry CRC on close (issue #318).
++        rd_flush_entry(ext->dir_index);
+     }
+     if (self.private_data != nullptr)
+         MemPool::free(self.private_data);
+@@ -452,13 +555,17 @@ static int64_t rd_file_write(Vnode &self, const uint8_t *buffer,
+             return VFS_INVALID;
+         done += take;
+     }
+-    // Publish the new size in the cache (persisted on close).
++    // Publish the new size in the cache.  Any content write marks the entry
++    // in-flight (VALID cleared) until close recomputes + re-persists its CRC
++    // (issue #318); a torn/incomplete write is therefore never exposed.
+     rd_lock.lock();
+     if (needed > self.size)
+         self.size = needed;
+-    if (needed > rd_dir[dir_index].size) {
++    if (needed > rd_dir[dir_index].size)
+         rd_dir[dir_index].size = needed;
++    if (count > 0) {
+         ext->dirty = true;
++        rd_dir[dir_index].flags &= ~RD_ENTRY_VALID;
+     }
+     rd_lock.unlock();
+     return static_cast<int64_t>(done);
+@@ -491,6 +598,9 @@ static Vnode *rd_lookup(Vnode &self, const char *name) {
+     }
+     RdDirEntry entry = rd_dir[slot];
+     rd_lock.unlock();
++    // Fail closed: only expose an entry whose CRC was verified (VALID).
++    if (!(entry.flags & RD_ENTRY_VALID))
++        return nullptr;
+     auto *ext = static_cast<RdExtent *>(MemPool::alloc(sizeof(RdExtent)));
+     if (ext == nullptr)
+         return nullptr;
+@@ -524,7 +634,8 @@ static int rd_readdir(Vnode &self, uint64_t &pos, Dirent &dent) {
+     rd_lock.lock();
+     uint64_t idx = 0;
+     for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
+-        if (rd_dir[i].name[0] == '\0')
++        if (rd_dir[i].name[0] == '\0' ||
++            !(rd_dir[i].flags & RD_ENTRY_VALID))
+             continue;
+         if (idx == pos) {
+             uint64_t k = 0;
+@@ -598,6 +709,10 @@ static int rd_create(Vnode &self, const char *name, uint16_t) {
+         rd_dir[slot].size = 0;
+         rd_dir[slot].start_block = rd_super.next_data_block;
+         rd_dir[slot].block_count = 0;
++        // Empty file: CRC of zero bytes is 0 (finalize(INITIAL)); VALID so
++        // it is immediately resolvable (issue #318).
++        rd_dir[slot].crc32 = CRC32::finalize(CRC32::INITIAL);
++        rd_dir[slot].flags = RD_ENTRY_VALID;
+         rd_super.file_count += 1;
+         rd_lock.unlock();
+         // Persist outside the lock (same content, bounded retries: the
+@@ -712,6 +827,57 @@ static Vnode *rd_get_root() {
+     return &rd_root;
+ }
+ 
++/// @brief Verify every live file's CRC against ramdisk (test seam — the same
++/// per-file check the boot cache-fill runs).  @return mismatch count (0 clean;
++/// 0 also when the store is unavailable, which presents an empty view).
++int ramdisk_fs_verify_all() {
++    if (rd_ensure_cached() < 0)
++        return -1;
++    int mismatches = 0;
++    for (uint64_t i = 0; i < RDF_MAX_FILES; ++i) {
++        RdDirEntry e{};
++        rd_lock.lock();
++        e = rd_dir[i];
++        rd_lock.unlock();
++        if (e.name[0] == '\0' || !(e.flags & RD_ENTRY_VALID))
++            continue;
++        uint32_t calc = 0;
++        if (rd_compute_crc(e.start_block, e.size, calc) < 0 ||
++            calc != e.crc32) {
++            ++mismatches;
++            // Fail closed: clear VALID in the cache so subsequent resolves
++            // refuse the entry (issue #318).  Persisted copy is untouched and
++            // re-verified on the next cache fill.
++            rd_lock.lock();
++            if (rd_dir[i].name[0] != '\0' &&
++                rd_dir[i].start_block == e.start_block &&
++                rd_dir[i].size == e.size)
++                rd_dir[i].flags &= ~RD_ENTRY_VALID;
++            rd_lock.unlock();
++        }
++    }
++    return mismatches;
++}
++
++/// @brief Test seam: fetch a file's extent (start block, block count, stored
++/// CRC).  @return true when a live entry with that name exists.
++bool ramdisk_fs_extent(const char *name, uint64_t &start_block,
++                       uint64_t &block_count, uint32_t &crc) {
++    if (name == nullptr || rd_ensure_cached() < 0)
++        return false;
++    rd_lock.lock();
++    int64_t slot = rd_find_cached(name);
++    if (slot < 0) {
++        rd_lock.unlock();
++        return false;
++    }
++    start_block = rd_dir[slot].start_block;
++    block_count = rd_dir[slot].block_count;
++    crc = rd_dir[slot].crc32;
++    rd_lock.unlock();
++    return true;
++}
++
+ int ramdisk_fs_try_mount() {
+     // Grant check FIRST: an already-mounted store with a dead/cleared
+     // grant must report failure (fail-closed degraded), not success.
+diff --git a/src/kernel/vfs/ramdisk_fs.hpp b/src/kernel/vfs/ramdisk_fs.hpp
+index f7d907755..8c7e38816 100644
+--- a/src/kernel/vfs/ramdisk_fs.hpp
++++ b/src/kernel/vfs/ramdisk_fs.hpp
+@@ -46,6 +46,17 @@ namespace vfs {
+ /// @return 0 on success (mounted or already mounted), VFS_INVALID else.
+ int ramdisk_fs_try_mount();
+ 
++/// @brief Verify every live file's CRC32 against the blocks on ramdisk — the
++/// same per-file integrity check the boot cache-fill performs (issue #318).
++/// @return number of mismatches (0 = clean, or when the store is unavailable).
++int ramdisk_fs_verify_all();
++
++/// @brief Test seam (issue #318): fetch a live file's extent — start block,
++/// block count, and the stored CRC32.
++/// @return true when a live entry with @p name exists.
++bool ramdisk_fs_extent(const char *name, uint64_t &start_block,
++                       uint64_t &block_count, uint32_t &crc);
++
+ extern Filesystem ramdisk_fs;
+ 
+ } // namespace vfs
 diff --git a/test-history.txt b/test-history.txt
-index 378556adb..5c733a788 100644
+index 110ce9412..531da4a16 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -2869,3 +2869,10 @@ SUMMARY: total=20 ok=15 fail=5
- 2026-10-10 10:49:30 capability PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT
- 2026-10-10 10:51:30 capability PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT
- 2026-10-10 10:52:10 capability PASSED: 148 FAILED: 0 TIME: 17966ms
-+2026-10-10 11:20:12 storage PASSED: 160 FAILED: 0 TIME: 42148ms
-+2026-10-10 11:34:03 ipc PASSED: 86 FAILED: 0 TIME: 11263ms
-+2026-10-10 11:34:20 servers PASSED: 62 FAILED: 0 TIME: 7478ms
-+2026-10-10 12:02:10 storage PASSED: 160 FAILED: 0 TIME: 42090ms
-+2026-10-10 12:03:20 storage PASSED: 0 FAILED: 0 TIME: 2s STATUS: STALL
-+2026-10-10 12:20:00 storage PASSED: 0 FAILED: 0 TIME: 2s STATUS: STALL
-+2026-10-10 12:21:00 ipc PASSED: 86 FAILED: 0 TIME: 11955ms
+@@ -2882,3 +2882,9 @@ SUMMARY: total=20 ok=15 fail=5
+ 2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4044ms
+ 2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4247ms
+ 2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4197ms
++2026-10-10 13:30:00 storage PASSED: 0 FAILED: 0 TIME: 120s STATUS: STALL
++2026-10-10 13:36:00 storage PASSED: 161 FAILED: 1 TIME: 70000ms
++2026-10-10 13:45:00 storage PASSED: 162 FAILED: 0 TIME: 64776ms
++2026-10-10 14:05:00 storage PASSED: 162 FAILED: 0 TIME: 64564ms
++2026-10-10 14:20:00 storage PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT
++2026-10-10 14:22:00 storage PASSED: 162 FAILED: 0 TIME: 64763ms

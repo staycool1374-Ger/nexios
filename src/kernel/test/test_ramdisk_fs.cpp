@@ -34,6 +34,7 @@
 #include <kernel/elf/elf_loader.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/test/test_isolate.hpp>
+#include <kernel/ipc/ipc.hpp>
 #include <string.hpp>
 
 using namespace kernel;
@@ -265,6 +266,74 @@ JARVIS_TEST(ramdiskfs_readdir_lists_files, "PRE: ramdiskd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: A staged file carries a stored CRC32 (issue #318) computed at
+// close; corrupting its backing block is detected by the integrity check and
+// the entry fails closed (no longer resolvable).
+// Input: create+write+close a file; corrupt one byte of its first backing
+// block via raw daemon block IPC; run the verify seam.
+// Expect: verify_all reports 1 mismatch; resolve() then returns nullptr.
+// Depends: ramdisk_fs CRC metadata, ramdisk_fs_verify_all / _extent.
+JARVIS_TEST(ramdiskfs_crc_detects_corruption, "PRE: ramdiskd | POST: none") {
+    kernel::test::mark_vfs_touched();
+    const char *path = "/mnt/ramdisk/rd_fs_crc.elf";
+    const char *base = "rd_fs_crc.elf"; // bare name for the extent seam
+    vfs::unlink(path);
+    JARVIS_ASSERT_EQ(0, vfs::create(path, 0));
+    Vnode *file = vfs::resolve(path);
+    JARVIS_ASSERT(file != nullptr);
+    uint8_t wbuf[600] = {};
+    for (uint64_t i = 0; i < sizeof(wbuf); ++i)
+        wbuf[i] = static_cast<uint8_t>((i * 7 + 3) & 0xFF);
+    JARVIS_ASSERT_EQ(static_cast<int64_t>(sizeof(wbuf)),
+                     file->ops->write(*file, wbuf, sizeof(wbuf), 0));
+    vfs::release(file); // close -> recompute + persist CRC, mark VALID
+    JARVIS_ASSERT_EQ(0, vfs::ramdisk_fs_verify_all());
+    uint64_t start = 0;
+    uint64_t blocks = 0;
+    uint32_t crc = 0;
+    JARVIS_ASSERT(vfs::ramdisk_fs_extent(base, start, blocks, crc));
+    const uint64_t daemon = ramdiskd::get_ramdiskd_pid();
+    JARVIS_ASSERT(daemon != 0);
+    const uint64_t me = Scheduler::current_task()->id;
+    const uint64_t chunk0 = 0;
+    uint8_t blk[ramdiskd::RAMDISK_CHUNK_DATA] = {};
+    {
+        Message req{};
+        req.type = ramdiskd::RAMDISK_READ_BLOCK;
+        __builtin_memcpy(req.data, &me, 8);
+        __builtin_memcpy(req.data + 8, &start, 8);
+        __builtin_memcpy(req.data + 16, &chunk0, 8);
+        req.data_size = 24;
+        Message reply{};
+        JARVIS_ASSERT(IPC::send_sync(daemon, req, reply));
+        int64_t r = 0;
+        __builtin_memcpy(&r, reply.data, 8);
+        JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK, r);
+        __builtin_memcpy(blk, reply.data + 8, ramdiskd::RAMDISK_CHUNK_DATA);
+    }
+    blk[0] ^= 0xFF; // corrupt one byte of the file's data
+    {
+        Message req{};
+        req.type = ramdiskd::RAMDISK_WRITE_BLOCK;
+        __builtin_memcpy(req.data, &me, 8);
+        __builtin_memcpy(req.data + 8, &start, 8);
+        __builtin_memcpy(req.data + 16, &chunk0, 8);
+        __builtin_memcpy(req.data + 24, blk, ramdiskd::RAMDISK_CHUNK_DATA);
+        req.data_size = 56;
+        Message reply{};
+        JARVIS_ASSERT(IPC::send_sync(daemon, req, reply));
+        int64_t r = 0;
+        __builtin_memcpy(&r, reply.data, 8);
+        JARVIS_ASSERT_EQ(ramdiskd::RAMDISK_OK, r);
+    }
+    // Integrity check detects the corruption and fails the entry closed.
+    JARVIS_ASSERT_EQ(1, vfs::ramdisk_fs_verify_all());
+    JARVIS_ASSERT(vfs::resolve(path) == nullptr);
+    vfs::unlink(path);
+    JARVIS_TEST_PASS();
+}
+
 void register_ramdisk_fs_tests() {
     Logger::info("Registering ramdisk_fs tests");
     JARVIS_REGISTER_TEST(ramdiskfs_mount_present);
@@ -273,4 +342,5 @@ void register_ramdisk_fs_tests() {
     JARVIS_REGISTER_TEST(ramdiskfs_overwrite_partial);
     JARVIS_REGISTER_TEST(ramdiskfs_loadelf_from_ramdisk);
     JARVIS_REGISTER_TEST(ramdiskfs_readdir_lists_files);
+    JARVIS_REGISTER_TEST(ramdiskfs_crc_detects_corruption);
 }

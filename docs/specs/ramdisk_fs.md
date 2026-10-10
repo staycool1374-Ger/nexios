@@ -16,13 +16,43 @@ same mount point, same `/mnt/ramdisk` path).
 
 | Region | Blocks | Content |
 |---|---|---|
-| Superblock | 0 | magic `RDS1FLAT`, version 1, file_count, next_data_block |
-| Directory | 1–9 | 50 `RdDirEntry` (88 B each, serialized contiguously) |
-| Data | 10+ | file extents (bump-allocated, 512 B units) |
+| Superblock | 0 | magic `RDS1FLAT`, version 2, file_count, next_data_block, dir_crc32 |
+| Directory | 1–10 | 50 `RdDirEntry` (96 B each, serialized contiguously; CRC32-protected) |
+| Data | 11+ | file extents (bump-allocated, 512 B units) |
 
 `RdDirEntry`: name[64] (empty name = free slot), size, start_block,
-block_count. Per-file cap 1 MiB. No free list (unlinked blocks leak until
-reformat — documented non-goal), no journaling, no resize.
+block_count, crc32 (finalized CRC32 over the file's live bytes),
+flags (`RD_ENTRY_VALID`). Per-file cap 1 MiB. No free list (unlinked blocks
+leak until reformat — documented non-goal), no journaling, no resize.
+
+### 2.1 Integrity — metadata CRC32 + carve scrub (issue #318)
+
+- **Metadata region CRC.** The superblock's `dir_crc32` is the CRC32 over the
+  serialized directory region; `rd_load_all` recomputes and rejects the whole
+  image (`-3`) on mismatch — a corrupt directory is discarded fail-closed.
+- **Per-file data CRC.** `crc32` covers the file's live byte range only (block
+  padding excluded), computed at close (`rd_flush_entry`) via
+  `src/lib/crc32.hpp`, persisted with the entry. Any content write clears
+  `RD_ENTRY_VALID` (in-flight — a torn write is never exposed); close
+  recomputes and re-sets it.
+- **Verification.** After a fresh cache fill, `rd_verify_cached_entries()`
+  re-reads each `VALID` entry and clears `VALID` (fail-closed) on mismatch —
+  this is the boot-time integrity check. `rd_lookup`/`rd_readdir` expose only
+  `VALID` entries; `ramdisk_fs_verify_all()` is the test seam (returns the
+  mismatch count and fails the entry closed). Lazy (per cache fill, not a full
+  16 MiB mount scan) so boot stays free of hundreds of thousands of chunk
+  round-trips; corruption after a fill is caught by `ramdisk_fs_verify_all()`
+  or the next fill (daemon restart / remount).
+- **Pristine-zero contract.** The carve scrubs every segment to zero
+  (`ramdiskd::boot_allocate`, HHDM memset at carve — not at grant, else a
+  regrant would wipe the store). A never-staged block therefore reads exactly
+  zero deterministically (no stale-code disclosure). This also makes a
+  foreign-frame aliasing fault detectable: the content would not match the
+  stored CRC / the zero baseline.
+- **Legacy/version mismatch.** A non-v2 image is discarded fail-closed
+  (no free list ⇒ not resumable); the version bump is the migration story.
+- CRC is corruption/early-detection only — **not** security (no adversary, no
+  crypto).
 
 ## 3. Concurrency (§11) and caching
 
@@ -40,7 +70,7 @@ reformat — documented non-goal), no journaling, no resize.
 
 ## 4. Block layer
 
-`read_block_full` / `write_block_full` loop the normative 16×32 B chunk
+`rd_block_op` / `rd_block_op_retry` loop the normative 16×32 B chunk
 IPC (`sender_pid` + `block_no` + `chunk_idx` header, `RAMDISK_OK` checked
 per chunk — same wire as `ramdisk_live_roundtrip`), with bounded retries
 (cold lazy segment maps can fail transiently under TCG). Partial edge
@@ -81,10 +111,13 @@ or shell changes needed. Raw `rx` block staging is untouched (the
 
 ## 8. Verification
 
-- Kernel: `test_ramdisk_fs` (6 tests in the `storage` aggregate):
+- Kernel: `test_ramdisk_fs` (7 tests in the `storage` aggregate):
   mount presence, create/write/read/delete round-trip, bounds rejection,
   partial-overwrite behavior, readdir listing, loadelf-from-ramdisk
-  acceptance (`request_load` → OK + `request_cancel` → OK, no execution).
+  acceptance (`request_load` → OK + `request_cancel` → OK, no execution),
+  and CRC-detects-corruption (single-byte corruption → verify mismatch →
+  fail-closed resolve). `test_ramdisk` also adds `ramdisk_pristine_reads_zero`
+  (carve-scrub contract, issue #318).
 - Live: shell file ops (`touch`/`echo >`/`cat`/`ls`/`rm`) + YMODEM
   `rxfile` upload + `loadelf`/`runelf` from `/mnt/ramdisk`.
 - Open follow-ups: #317 (send_sync reply contract), #318 (carve
