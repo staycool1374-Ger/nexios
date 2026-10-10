@@ -1055,6 +1055,23 @@ void snapshot_restore(const char *test_name) {
     }
 #endif // CONFIG_ARCH_RISCV64 (Sv39 HHDM L1 restore)
 
+    // ---- Pin-holding capability registries (issue #320) ----
+    // These registries hold acquire() pins on KernelObject capabilities whose
+    // ref_count_ lives INSIDE the MemPool block.  Release the pins HERE, BEFORE
+    // the PMM/MemPool restore below byte-rewinds block data: releasing a pin
+    // AFTER the rewind drops the still-live pin (L) onto the baseline value
+    // (B=1) -> 0 and fires dispose() on a cap whose CSpace slot (restored from
+    // B) still points at it — the #320 free-list/0xDD-poison signature
+    // (cap::lookup finds the slot occupied/gen-matched, then acquire() fails).
+    // Live-first order: L -> L-1 here, then the restore re-applies B.
+    // Arch-neutral: these registries are arch-neutral (MmioUserMap/FrameUserMap
+    // were previously reset inside the x86-only block below only by grouping;
+    // PagerRegistry likewise).  Each snapshot_reset() releases its pins OUTSIDE
+    // its own lock, so a dispose -> invalidate_cap re-entry is safe.
+    cap::FrameUserMap::snapshot_reset();
+    cap::MmioUserMap::snapshot_reset();
+    kernel::ipc::PagerRegistry::snapshot_reset();
+
     // ---- PMM ----
     {
         __builtin_memcpy(PMM::bitmap_ptr(), g_snapshot + off_pmm_bitmap(),
@@ -1643,11 +1660,10 @@ void snapshot_restore(const char *test_name) {
         // test that granted ports can never leak a permissive bitmap or a
         // dangling owner across snapshot cycles.
         arch::iopb_snapshot_reset();
-        // Reset the user MMIO map registry (issue #8) so a test that mapped
-        // device pages can never leak a stale registry slot or VA across
-        // snapshot cycles.
-        cap::MmioUserMap::snapshot_reset();
-        cap::FrameUserMap::snapshot_reset();
+        // NOTE: MmioUserMap / FrameUserMap / PagerRegistry pin releases moved
+        // to the pre-MemPool-restore block above (issue #320) — a pin release
+        // after the MemPool refcount rewind is an over-release (premature
+        // dispose of a slot-referenced cap).
         // Reset the death-notify registry (issue #105 Part B) so a test that
         // registered death watches can never leak a stale watch across
         // snapshot cycles.
@@ -1657,10 +1673,6 @@ void snapshot_restore(const char *test_name) {
         // a queued stop, or a shadowed breakpoint into the next cycle.
         kernel::debug::debug_bindings_reset();
         kernel::debug::debug_snapshot_reset();
-        // Reset the pager registry (issue #107) so a test that registered a
-        // pager or left a fault pending can never leak a stale record across
-        // snapshot cycles.
-        kernel::ipc::PagerRegistry::snapshot_reset();
         // Reset the MSI-X per-(BDF, entry) claim registry (issue #10) so a
         // test that created an MsixCap never leaves a recycled (bdf, entry)
         // un-claimable in the next cycle.

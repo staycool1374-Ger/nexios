@@ -44,6 +44,11 @@
 #include <kernel/arch/timer.hpp>
 #include <constants.hpp>
 
+#if defined(CONFIG_DEBUG)
+extern "C" void debug_write(const char *s);
+extern "C" void debug_write_hex(uint64_t value);
+#endif
+
 namespace kernel::ipc {
 
 PagerRegistry::Slot PagerRegistry::s_slots_[PagerRegistry::kMaxClients];
@@ -404,8 +409,27 @@ void PagerRegistry::snapshot_reset() {
         kernel::test::ResourceTracker::instance().track_pager_fault_reset();
         kernel::test::ResourceTracker::instance().track_pager_mapping_reset();
     }
-    for (size_t i = 0; i < n; ++i)
+    for (size_t i = 0; i < n; ++i) {
+#if defined(CONFIG_DEBUG)
+        // Issue #320 detector (same ordering hazard as FrameUserMap): a
+        // committed-pin slot must observe refcount >= 2 on release; <= 1 means
+        // the MemPool baseline rewind already ran, so this release would
+        // dispose a FrameCap the restored CSpace still references.  Log-only;
+        // s_lock_ is NOT held here.
+        if (work[i].pin) {
+            const uint32_t rc_before = work[i].pin->refcount();
+            if (rc_before <= 1U) {
+                debug_write("[#320] PagerRegistry pin release would "
+                            "over-release (refcount=");
+                debug_write_hex(rc_before);
+                debug_write(") fc=0x");
+                debug_write_hex(reinterpret_cast<uint64_t>(work[i].pin));
+                debug_write("\n");
+            }
+        }
+#endif
         release_committed(work[i].va, work[i].pml4, work[i].pin);
+    }
 }
 
 size_t PagerRegistry::live_count() {

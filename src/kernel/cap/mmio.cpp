@@ -34,6 +34,11 @@
 #include <kernel/test/resource_tracker.hpp>
 #include <constants.hpp>
 
+#if defined(CONFIG_DEBUG)
+extern "C" void debug_write(const char *s);
+extern "C" void debug_write_hex(uint64_t value);
+#endif
+
 // Placement new (defined in lib/new.cpp, no <new> header in freestanding)
 inline void *operator new(unsigned long, void *placement) noexcept {
     return placement;
@@ -321,8 +326,24 @@ void MmioUserMap::snapshot_reset() {
             s_slots_[i].occupied = false;
         }
     }
-    for (size_t i = 0; i < n; ++i)
+    for (size_t i = 0; i < n; ++i) {
+#if defined(CONFIG_DEBUG)
+        // Issue #320 detector (same ordering hazard as FrameUserMap): a live
+        // slot pin must observe refcount >= 2; <= 1 means the MemPool baseline
+        // rewind already ran, so this release would dispose a cap the restored
+        // CSpace still references.  Log-only; s_lock_ is NOT held here.
+        const uint32_t rc_before = to_release[i]->refcount();
+        if (rc_before <= 1U) {
+            debug_write("[#320] MmioUserMap pin release would over-release "
+                        "(refcount=");
+            debug_write_hex(rc_before);
+            debug_write(") mmio=0x");
+            debug_write_hex(reinterpret_cast<uint64_t>(to_release[i]));
+            debug_write("\n");
+        }
+#endif
         to_release[i]->release();
+    }
 }
 
 

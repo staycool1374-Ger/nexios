@@ -32,6 +32,11 @@
 #include <kernel/test/resource_tracker.hpp>
 #include <constants.hpp>
 
+#if defined(CONFIG_DEBUG)
+extern "C" void debug_write(const char *s);
+extern "C" void debug_write_hex(uint64_t value);
+#endif
+
 // Placement new (defined in lib/new.cpp, no <new> header in freestanding)
 inline void *operator new(unsigned long, void *placement) noexcept {
     return placement;
@@ -280,8 +285,27 @@ void FrameUserMap::snapshot_reset() {
             s_slots_[i].occupied = false;
         }
     }
-    for (size_t i = 0; i < n; ++i)
+    for (size_t i = 0; i < n; ++i) {
+#if defined(CONFIG_DEBUG)
+        // Issue #320 detector: a live slot holds exactly one pin, so a
+        // well-formed release observes refcount >= 2 (this pin + the CSpace
+        // slot's reference).  refcount <= 1 means the pin was already dropped
+        // by the MemPool baseline rewind — releasing here would dispose a cap
+        // the restored CSpace still references (block freed + 0xDD-poisoned,
+        // so the next SYS_FRAME_MAP fails at acquire()).  Log-only, and s_lock_
+        // is NOT held on this path, so the system under test is not perturbed.
+        const uint32_t rc_before = to_release[i]->refcount();
+        if (rc_before <= 1U) {
+            debug_write("[#320] FrameUserMap pin release would over-release "
+                        "(refcount=");
+            debug_write_hex(rc_before);
+            debug_write(") fc=0x");
+            debug_write_hex(reinterpret_cast<uint64_t>(to_release[i]));
+            debug_write("\n");
+        }
+#endif
         to_release[i]->release();
+    }
 }
 
 size_t FrameUserMap::live_count() {
