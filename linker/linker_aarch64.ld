@@ -41,7 +41,9 @@ SECTIONS
     .boot_stack : ALIGN(4K)
     {
         _stack_start_low = .;
+        KEEP(*(.marker.stack.before))
         *(.boot_stack)
+        KEEP(*(.marker.stack.after))
         _stack_end_low = .;
     } :boot_data
 
