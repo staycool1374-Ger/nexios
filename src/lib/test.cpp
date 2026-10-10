@@ -388,6 +388,25 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
     }
     Registry::set_expected_count(expected);
 
+    // PfA-A: inject the test context and mark the suite active BEFORE the
+    // pre-suite window (ensure_monitor spawns the prio-127 deadline monitor at
+    // line ~394; snapshot_create follows).  is_test_active() gates the on_tick
+    // monitor-wake via harness_owns_lifecycle(): while it is false the monitor
+    // is woken every tick and can starve the prio-10 harness before it reaches
+    // set_test_active(true) — a self-sustaining pre-suite stall under load
+    // (issues #280/#299: init READY+enqueued but never dispatched; tick
+    // counters prove ticks/switch_to_task run).  Marking the suite active here
+    // closes that window so the captured baseline is also quiescent.  The
+    // per-snapshot_restore re-set below remains (harmless, defensive).
+    if (!g_test_context_injected) {
+        g_test_context = TestContext{};
+        Scheduler::set_test_context(&g_test_context);
+        g_test_context_injected = true;
+    }
+#if CONFIG_DEADLINE_MONITOR_TASK
+    Scheduler::set_test_active(true);
+#endif
+
     // Pre-condition: ensure deadline-monitor task exists before snapshot
     // sizing, so the monitor is counted in the task count from the start.
 #if CONFIG_DEADLINE_MONITOR_TASK
@@ -408,15 +427,6 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
     Logger::raw_write("[TEST_START] ns=");
     Logger::print_dec(start_ns);
     Logger::raw_write("\n");
-
-    // PfA-A: inject the test context for this cycle.  set_test_active() and
-    // the ISR-visible is_test_active() read through this context.
-    if (!g_test_context_injected) {
-        g_test_context = TestContext{};
-        Scheduler::set_test_context(&g_test_context);
-        g_test_context_injected = true;
-    }
-    Scheduler::set_test_active(true);
 
     for (size_t i = 0; i < n; ++i) {
         auto& tc = Registry::tests()[i];
@@ -470,13 +480,12 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
             test_buf[pos] = '\0';
             kernel::test::snapshot_restore(test_buf);
 #if CONFIG_DEADLINE_MONITOR_TASK
-            // snapshot_create() was called before set_test_active(true),
-            // so the snapshot has s_test_active_ == false.  Restore it
-            // to true to prevent the ISR from waking the deadline monitor
-            // during tests.
-#if CONFIG_DEADLINE_MONITOR_TASK
-    Scheduler::set_test_active(true);
-#endif
+            // Defensive re-assert: run_filtered now sets the test context and
+            // test_active BEFORE snapshot_create(), so the suite is already
+            // marked active across the restore.  Kept so a future reorder
+            // cannot silently re-open the pre-suite monitor-wake starvation
+            // (issues #280/#299).
+            Scheduler::set_test_active(true);
 #endif
         }
     }

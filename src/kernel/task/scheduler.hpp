@@ -550,6 +550,13 @@ class Scheduler {
     ///        woken by on_tick().  Only compiled when
     ///        CONFIG_DEADLINE_MONITOR_TASK > 0.
     static void monitor_task_entry() noexcept;
+#if defined(CONFIG_DEBUG)
+    /// @brief Issue #299/#280 diagnostic: dump the ready-queue view (highest
+    ///        priority, peek head + its state, per-task rq bucket/flag/physical
+    ///        membership) to the serial log.  Read-only; called from the
+    ///        stall-state beacon.
+    static void diag_ready_probe() noexcept;
+#endif
     /// @brief Framebuffer mirror of the reap `terminated` line (issue #269).
     ///        Public for the framebuffer render test; production callers
     ///        are the two reap_orphans log sites.

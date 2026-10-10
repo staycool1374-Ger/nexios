@@ -2048,6 +2048,14 @@ TestContext *Scheduler::test_context_ = nullptr;
 constinit TaskControlBlock *Scheduler::s_monitor_task_ = nullptr;
 bool Scheduler::s_scan_requested_ = false;
 #endif
+#if defined(CONFIG_DEBUG)
+// Issue #299/#280 stall diagnostics: count timer-tick dispatcher entries and
+// actual switch_to_task calls, to distinguish "ticks dead" (counters frozen)
+// from "ticks alive but switch not applied" (rms advances, switch does not).
+static uint64_t g_diag_rms_count = 0;
+static uint64_t g_diag_switch_count = 0;
+static uint64_t g_diag_tick_count = 0;
+#endif
 ReadyQueueManager Scheduler::ready_queues_[CONFIG_MAX_CPUS];
 DeadlineList Scheduler::deadline_list_;
 // Issue #242: breaker observation starts unwatched (STARVABLE_NONE) with a
@@ -2831,6 +2839,9 @@ void Scheduler::debugger_resume(TaskControlBlock &tgt) noexcept {
 }
 
 void Scheduler::on_tick() noexcept {
+#if defined(CONFIG_DEBUG)
+    ++g_diag_tick_count;
+#endif
     // Issue #25 C1: APs run dispatch-only ticks (spec §3.4.4).  The full
     // body below is BSP-only (unchanged); the AP skips accounting,
     // deadlines, watchdogs, zombies and sporadic (non-real-time in C1).
@@ -4068,6 +4079,9 @@ static uint16_t publish_pcid_for(TaskControlBlock &next) noexcept {
 
 static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                            sync::SpinLock *held_lock = nullptr) {
+#if defined(CONFIG_DEBUG)
+    ++g_diag_switch_count;
+#endif
     auto release_lock = [&]() {
         if (held_lock) {
             held_lock->unlock();
@@ -4585,6 +4599,9 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
 // ---------------------------------------------------------------------------
 
 void Scheduler::rate_monotonic_schedule() noexcept {
+#if defined(CONFIG_DEBUG)
+    ++g_diag_rms_count;
+#endif
     // Issue #26: RMS never raises TPR itself.  It tolerates preemption
     // only from strictly higher classes (the tick at 0xE0 is above every
     // raised class, INV-TPR5); the try_lock + skip discipline below is
@@ -5497,6 +5514,49 @@ void Scheduler::ensure_monitor() noexcept {
 }
 #endif // CONFIG_DEADLINE_MONITOR_TASK
 
+#if defined(CONFIG_DEBUG)
+void Scheduler::diag_ready_probe() noexcept {
+    // Lock contract: called only from the CONFIG_DEBUG stall beacon inside
+    // deadline_miss_handler, which itself runs in tick context (on_tick holds
+    // scheduler_lock_) or in the monitor's scan_deadlines (also holds it) — so
+    // the ready-queue read below is serialized against mutation.
+    // Issue #299/#280: ready-queue view at the stall.  peek_highest() returns
+    // the physical head of the highest non-empty priority queue WITHOUT
+    // checking state — so a physically-queued-but-BLOCKED current task is
+    // still "peeked", which makes reschedule() early-return (next==current)
+    // and never arm the deferred switch (the "save_rsp_to clean" spin).
+    uint64_t hi = rq_own().highest_ready_priority();
+    auto *peek = rq_own().peek_highest();
+    Logger::raw_write("[STALLDUMP] rq_hi=");
+    Logger::print_dec(hi);
+    Logger::raw_write(" peek=");
+    Logger::print_dec(peek ? peek->id : 0xFFFF);
+    Logger::raw_write(" peekst=");
+    Logger::print_dec(peek ? static_cast<uint64_t>(peek->state) : 0);
+    Logger::raw_write("\n");
+    for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
+        if (t->magic != TaskControlBlock::TCB_MAGIC)
+            continue;
+        uint64_t p = t->rq_priority_;
+        bool phys = (p <= CONFIG_PRIORITY_CEILING) &&
+                    rq_own().queue(p).contains(*t);
+        if (t->state == TaskState::READY || t->in_ready_queue_ || phys) {
+            Logger::raw_write("[STALLDUMP] rq id=");
+            Logger::print_dec(t->id);
+            Logger::raw_write(" p=");
+            Logger::print_dec(p);
+            Logger::raw_write(" inrq=");
+            Logger::print_dec(t->in_ready_queue_ ? 1 : 0);
+            Logger::raw_write(" phys=");
+            Logger::print_dec(phys ? 1 : 0);
+            Logger::raw_write(" state=");
+            Logger::print_dec(static_cast<uint64_t>(t->state));
+            Logger::raw_write("\n");
+        }
+    }
+}
+#endif // CONFIG_DEBUG
+
 // ---------------------------------------------------------------------------
 // Deadline-miss / WCET handlers (weak defaults)
 // ---------------------------------------------------------------------------
@@ -5506,6 +5566,74 @@ __attribute__((weak)) void
 deadline_miss_handler(TaskControlBlock &task,
                       uint64_t missed_by_ticks) noexcept {
     bool budget_exhausted = budget_exhausted_on_miss(task);
+
+#if defined(CONFIG_DEBUG)
+    // Issue #299/#280: one-shot stall-state beacon.  The pre-suite stall
+    // signature is a flood of "[DMD] Task 1 (init/reaper) missed deadline"
+    // with zero S: lines — i.e. ticks still run but the first test never
+    // starts.  Dump the full task set + monitor state once, from this
+    // tick context, so a stalled run leaves reopen-grade evidence in the
+    // serial log (no GDB attach needed).  Guarded so it fires at most once.
+    static uint64_t s_init_miss = 0;
+    if (task.id == 1) {
+        ++s_init_miss;
+        if (s_init_miss == 100) {
+        Logger::raw_write("[STALLDUMP] init miss=");
+        Logger::print_dec(s_init_miss);
+        Logger::raw_write(" ticks=");
+        Logger::print_dec(arch::Timer::ticks());
+        Logger::raw_write(" tick_ctr=");
+        Logger::print_dec(g_diag_tick_count);
+        Logger::raw_write(" rms=");
+        Logger::print_dec(g_diag_rms_count);
+        Logger::raw_write(" sw=");
+        Logger::print_dec(g_diag_switch_count);
+        Logger::raw_write("\n");
+        Logger::raw_write("[STALLDUMP] suite state:\n");
+        for (auto *t = Scheduler::all_tasks().first_ptr(); t;
+             t = Scheduler::all_tasks().next_ptr(t)) {
+            if (t->magic != TaskControlBlock::TCB_MAGIC)
+                continue;
+            Logger::raw_write("[STALLDUMP] id=");
+            Logger::print_dec(t->id);
+            Logger::raw_write(" prio=");
+            Logger::print_dec(t->priority);
+            Logger::raw_write(" eff=");
+            Logger::print_dec(Scheduler::effective_priority(t));
+            Logger::raw_write(" state=");
+            Logger::print_dec(static_cast<uint64_t>(t->state));
+            Logger::raw_write(" inrq=");
+            Logger::print_dec(t->in_ready_queue_ ? 1 : 0);
+            Logger::raw_write(" blkrecv=");
+            Logger::print_dec(t->blocked_in_recv ? 1 : 0);
+            Logger::raw_write(" name=");
+            Logger::raw_write(t->name);
+            Logger::raw_write("\n");
+        }
+#if CONFIG_DEADLINE_MONITOR_TASK
+        auto *m = Scheduler::get_monitor_task();
+        Logger::raw_write("[STALLDUMP] monitor=");
+        Logger::print_dec(m ? 1 : 0);
+        if (m) {
+            Logger::raw_write(" mstate=");
+            Logger::print_dec(static_cast<uint64_t>(m->state));
+            Logger::raw_write(" minrq=");
+            Logger::print_dec(m->in_ready_queue_ ? 1 : 0);
+        }
+        Logger::raw_write("\n");
+#endif
+        auto *cur = Scheduler::current_task();
+        Logger::raw_write("[STALLDUMP] current=");
+        Logger::print_dec(cur ? cur->id : 0xFFFF);
+        Logger::raw_write(" curstate=");
+        Logger::print_dec(cur ? static_cast<uint64_t>(cur->state) : 0);
+        Logger::raw_write(" curinrq=");
+        Logger::print_dec(cur && cur->in_ready_queue_ ? 1 : 0);
+        Logger::raw_write("\n");
+        Scheduler::diag_ready_probe();
+        }
+    }
+#endif
 
     // Issue #234: every deadline/budget event enters the dmesg ring (the
     // Logger lines above stay for the serial console). Severity ERROR: a

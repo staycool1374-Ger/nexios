@@ -15,9 +15,10 @@ protocol.  All file:line anchors verified against the current tree.
    ▼
  run_filtered(0, use_isolation=true)
    ├─ Registry::set_expected_count (PLANNED)
+   ├─ inject TestContext + set_test_active(true)  ← BEFORE the monitor/snapshot
+   │     (closes the pre-suite monitor-wake starvation window, #280/#299)
    ├─ Scheduler::ensure_monitor()
    ├─ snapshot_create()                    ← ONE full-kernel snapshot
-   ├─ set_test_active(true)
    ├─ loop per test:
    │    watchdog_arm(30000, name)
    │    run_one(tc, class, n, total)
