@@ -1,33 +1,12 @@
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -5606,16 +5606,18 @@
-             Logger::raw_write(t->name);
-             Logger::raw_write("\n");
-         }
-+#if CONFIG_DEADLINE_MONITOR_TASK
-         auto *m = Scheduler::get_monitor_task();
-         Logger::raw_write("[STALLDUMP] monitor=");
-         Logger::print_dec(m ? 1 : 0);
-         if (m) {
-             Logger::raw_write(" mstate=");
-             Logger::print_dec(static_cast<uint64_t>(m->state));
-             Logger::raw_write(" minrq=");
-             Logger::print_dec(m->in_ready_queue_ ? 1 : 0);
-         }
-         Logger::raw_write("\n");
-+#endif
-         auto *cur = Scheduler::current_task();
-         Logger::raw_write("[STALLDUMP] current=");
-         Logger::print_dec(cur ? cur->id : 0xFFFF);
 --- a/src/lib/test.cpp
 +++ b/src/lib/test.cpp
-@@ -403,7 +403,9 @@
-         Scheduler::set_test_context(&g_test_context);
-         g_test_context_injected = true;
-     }
-+#if CONFIG_DEADLINE_MONITOR_TASK
-     Scheduler::set_test_active(true);
-+#endif
+@@ -508,9 +508,7 @@
+     print_report(start_ns, end_ns);
  
-     // Pre-condition: ensure deadline-monitor task exists before snapshot
-     // sizing, so the monitor is counted in the task count from the start.
+-#if CONFIG_DEADLINE_MONITOR_TASK
+     Scheduler::set_test_active(false);
+-#endif
+ 
+     // Drain serial TX FIFO so the full test report is flushed to the
+     // expect script before QEMU exits (fixes BUGS.md #012).
+     {

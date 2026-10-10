@@ -289,6 +289,7 @@ JARVIS_TEST(timer_daemon_restart_not_triggered_on_active,
     JARVIS_TEST_PASS();
 }
 
+#if CONFIG_DEADLINE_MONITOR_TASK
 // Runmode: kernel
 // Testidea: A real task that genuinely overruns its deadline (busy-waits
 // past its 2-tick period in real time) is detected by the deadline scan.
@@ -497,6 +498,7 @@ JARVIS_TEST(timer_deadline_miss_skips_zero, "PRE: none | POST: none") {
     Scheduler::drain_zombie_list();
     JARVIS_TEST_PASS();
 }
+#endif // CONFIG_DEADLINE_MONITOR_TASK
 
 /// @brief Append a freshly created, add_task'd (parked + BLOCKED) task with
 ///        the given absolute deadline to a DeadlineList. Returns the task (or
@@ -743,10 +745,12 @@ void register_timing_tests() {
     JARVIS_REGISTER_TEST(timer_reap_orphans_periodic);
     JARVIS_REGISTER_TEST(timer_no_side_effects_on_idle);
     JARVIS_REGISTER_TEST(timer_daemon_restart_not_triggered_on_active);
+#if CONFIG_DEADLINE_MONITOR_TASK
     JARVIS_REGISTER_TEST(timer_deadline_miss_detection_fires);
     JARVIS_REGISTER_TEST(timer_deadline_miss_skips_future);
     JARVIS_REGISTER_TEST(timer_deadline_miss_only_once);
     JARVIS_REGISTER_TEST(timer_deadline_miss_skips_zero);
+#endif
     // Phase 7 (P7a): DeadlineList (sorted deadline queue) unit coverage.
     JARVIS_REGISTER_TEST(deadline_list_sorted_insert);
     JARVIS_REGISTER_TEST(deadline_list_pop_expired);

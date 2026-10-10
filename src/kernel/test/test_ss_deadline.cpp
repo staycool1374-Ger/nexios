@@ -39,6 +39,8 @@
 
 using namespace kernel;
 
+#if CONFIG_DEADLINE_MONITOR_TASK
+
 namespace {
 
 /// @brief Create a REAL kernel task with a SporadicServer, dispatch it, and
@@ -93,6 +95,8 @@ void release_task(TaskControlBlock *t) {
 }
 
 } // namespace
+
+#endif // CONFIG_DEADLINE_MONITOR_TASK
 
 // Runmode: kernel
 // Testidea: An SS task with exhausted budget that misses a REAL deadline must

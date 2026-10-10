@@ -37,6 +37,7 @@
 
 using namespace kernel;
 
+#if CONFIG_DEADLINE_MONITOR_TASK
 // Runmode: kernel
 // Testidea: Measure the worst-case execution time (WCET) of the deadline
 // miss-detection scan (Scheduler::scan_deadlines) as a function of the number
@@ -142,6 +143,7 @@ JARVIS_TEST(wcet_scan_deadlines, "PRE: none | POST: none") {
 
     JARVIS_TEST_PASS();
 }
+#endif // CONFIG_DEADLINE_MONITOR_TASK
 
 // Runmode: kernel
 // Testidea: Worst-case cost of Scheduler::balancer_tick (issue #62
@@ -209,6 +211,8 @@ JARVIS_TEST(wcet_balancer_tick_worst, "PRE: none | POST: none") {
 
 void register_wcet_scheduler_tests() {
     Logger::info("Registering WCET scheduler benchmark tests");
+#if CONFIG_DEADLINE_MONITOR_TASK
     JARVIS_REGISTER_TEST(wcet_scan_deadlines);
+#endif
     JARVIS_REGISTER_TEST(wcet_balancer_tick_worst);
 }

@@ -38,6 +38,8 @@
 
 using namespace kernel;
 
+#if CONFIG_DEADLINE_MONITOR_TASK
+
 /// @brief  Body shared by the "overrun then block" helpers: busy-wait past
 ///         the real deadline (2-tick period ⇒ 40 real ticks is ~20 periods
 ///         of genuine overrun), then block on the semaphore handed via
@@ -170,6 +172,7 @@ TEST_CLASS(DeadlineRearmOnPeriodRollover) {
 
     release_overrun_blocked(helper, gate);
 };
+#endif // CONFIG_DEADLINE_MONITOR_TASK
 
 #if CONFIG_DEADLINE_MONITOR_TASK
 // Runmode: kernel
@@ -214,10 +217,10 @@ TEST_CLASS(DeadlineMonitorDetectsMiss) {
 
 void register_deadline_miss_tests() {
     Logger::info("Registering deadline miss detection tests");
+#if CONFIG_DEADLINE_MONITOR_TASK
     REGISTER_CLASS(DeadlineMissWhileBlocked);
     REGISTER_CLASS(DeadlineMissWhileTerminatedSkipped);
     REGISTER_CLASS(DeadlineRearmOnPeriodRollover);
-#if CONFIG_DEADLINE_MONITOR_TASK
     REGISTER_CLASS(DeadlineMonitorTaskSpawned);
     REGISTER_CLASS(DeadlineMonitorDetectsMiss);
 #endif

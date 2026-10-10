@@ -1,287 +1,379 @@
-diff --git a/docs/specs/test-harness.md b/docs/specs/test-harness.md
-index f77b5f596..bcc5f2b5b 100644
---- a/docs/specs/test-harness.md
-+++ b/docs/specs/test-harness.md
-@@ -15,9 +15,10 @@ protocol.  All file:line anchors verified against the current tree.
-    ▼
-  run_filtered(0, use_isolation=true)
-    ├─ Registry::set_expected_count (PLANNED)
-+   ├─ inject TestContext + set_test_active(true)  ← BEFORE the monitor/snapshot
-+   │     (closes the pre-suite monitor-wake starvation window, #280/#299)
-    ├─ Scheduler::ensure_monitor()
-    ├─ snapshot_create()                    ← ONE full-kernel snapshot
--   ├─ set_test_active(true)
-    ├─ loop per test:
-    │    watchdog_arm(30000, name)
-    │    run_one(tc, class, n, total)
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 130f114da..8671b4dfb 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -2048,6 +2048,14 @@ TestContext *Scheduler::test_context_ = nullptr;
- constinit TaskControlBlock *Scheduler::s_monitor_task_ = nullptr;
- bool Scheduler::s_scan_requested_ = false;
- #endif
-+#if defined(CONFIG_DEBUG)
-+// Issue #299/#280 stall diagnostics: count timer-tick dispatcher entries and
-+// actual switch_to_task calls, to distinguish "ticks dead" (counters frozen)
-+// from "ticks alive but switch not applied" (rms advances, switch does not).
-+static uint64_t g_diag_rms_count = 0;
-+static uint64_t g_diag_switch_count = 0;
-+static uint64_t g_diag_tick_count = 0;
-+#endif
- ReadyQueueManager Scheduler::ready_queues_[CONFIG_MAX_CPUS];
- DeadlineList Scheduler::deadline_list_;
- // Issue #242: breaker observation starts unwatched (STARVABLE_NONE) with a
-@@ -2831,6 +2839,9 @@ void Scheduler::debugger_resume(TaskControlBlock &tgt) noexcept {
- }
- 
- void Scheduler::on_tick() noexcept {
-+#if defined(CONFIG_DEBUG)
-+    ++g_diag_tick_count;
-+#endif
-     // Issue #25 C1: APs run dispatch-only ticks (spec §3.4.4).  The full
-     // body below is BSP-only (unchanged); the AP skips accounting,
-     // deadlines, watchdogs, zombies and sporadic (non-real-time in C1).
-@@ -4068,6 +4079,9 @@ static uint16_t publish_pcid_for(TaskControlBlock &next) noexcept {
- 
- static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
-                            sync::SpinLock *held_lock = nullptr) {
-+#if defined(CONFIG_DEBUG)
-+    ++g_diag_switch_count;
-+#endif
-     auto release_lock = [&]() {
-         if (held_lock) {
-             held_lock->unlock();
-@@ -4585,6 +4599,9 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
- // ---------------------------------------------------------------------------
- 
- void Scheduler::rate_monotonic_schedule() noexcept {
-+#if defined(CONFIG_DEBUG)
-+    ++g_diag_rms_count;
-+#endif
-     // Issue #26: RMS never raises TPR itself.  It tolerates preemption
-     // only from strictly higher classes (the tick at 0xE0 is above every
-     // raised class, INV-TPR5); the try_lock + skip discipline below is
-@@ -5497,6 +5514,49 @@ void Scheduler::ensure_monitor() noexcept {
- }
- #endif // CONFIG_DEADLINE_MONITOR_TASK
- 
-+#if defined(CONFIG_DEBUG)
-+void Scheduler::diag_ready_probe() noexcept {
-+    // Lock contract: called only from the CONFIG_DEBUG stall beacon inside
-+    // deadline_miss_handler, which itself runs in tick context (on_tick holds
-+    // scheduler_lock_) or in the monitor's scan_deadlines (also holds it) — so
-+    // the ready-queue read below is serialized against mutation.
-+    // Issue #299/#280: ready-queue view at the stall.  peek_highest() returns
-+    // the physical head of the highest non-empty priority queue WITHOUT
-+    // checking state — so a physically-queued-but-BLOCKED current task is
-+    // still "peeked", which makes reschedule() early-return (next==current)
-+    // and never arm the deferred switch (the "save_rsp_to clean" spin).
-+    uint64_t hi = rq_own().highest_ready_priority();
-+    auto *peek = rq_own().peek_highest();
-+    Logger::raw_write("[STALLDUMP] rq_hi=");
-+    Logger::print_dec(hi);
-+    Logger::raw_write(" peek=");
-+    Logger::print_dec(peek ? peek->id : 0xFFFF);
-+    Logger::raw_write(" peekst=");
-+    Logger::print_dec(peek ? static_cast<uint64_t>(peek->state) : 0);
-+    Logger::raw_write("\n");
-+    for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
-+        if (t->magic != TaskControlBlock::TCB_MAGIC)
-+            continue;
-+        uint64_t p = t->rq_priority_;
-+        bool phys = (p <= CONFIG_PRIORITY_CEILING) &&
-+                    rq_own().queue(p).contains(*t);
-+        if (t->state == TaskState::READY || t->in_ready_queue_ || phys) {
-+            Logger::raw_write("[STALLDUMP] rq id=");
-+            Logger::print_dec(t->id);
-+            Logger::raw_write(" p=");
-+            Logger::print_dec(p);
-+            Logger::raw_write(" inrq=");
-+            Logger::print_dec(t->in_ready_queue_ ? 1 : 0);
-+            Logger::raw_write(" phys=");
-+            Logger::print_dec(phys ? 1 : 0);
-+            Logger::raw_write(" state=");
-+            Logger::print_dec(static_cast<uint64_t>(t->state));
-+            Logger::raw_write("\n");
-+        }
-+    }
-+}
-+#endif // CONFIG_DEBUG
-+
- // ---------------------------------------------------------------------------
- // Deadline-miss / WCET handlers (weak defaults)
- // ---------------------------------------------------------------------------
-@@ -5507,6 +5567,74 @@ deadline_miss_handler(TaskControlBlock &task,
-                       uint64_t missed_by_ticks) noexcept {
-     bool budget_exhausted = budget_exhausted_on_miss(task);
- 
-+#if defined(CONFIG_DEBUG)
-+    // Issue #299/#280: one-shot stall-state beacon.  The pre-suite stall
-+    // signature is a flood of "[DMD] Task 1 (init/reaper) missed deadline"
-+    // with zero S: lines — i.e. ticks still run but the first test never
-+    // starts.  Dump the full task set + monitor state once, from this
-+    // tick context, so a stalled run leaves reopen-grade evidence in the
-+    // serial log (no GDB attach needed).  Guarded so it fires at most once.
-+    static uint64_t s_init_miss = 0;
-+    if (task.id == 1) {
-+        ++s_init_miss;
-+        if (s_init_miss == 100) {
-+        Logger::raw_write("[STALLDUMP] init miss=");
-+        Logger::print_dec(s_init_miss);
-+        Logger::raw_write(" ticks=");
-+        Logger::print_dec(arch::Timer::ticks());
-+        Logger::raw_write(" tick_ctr=");
-+        Logger::print_dec(g_diag_tick_count);
-+        Logger::raw_write(" rms=");
-+        Logger::print_dec(g_diag_rms_count);
-+        Logger::raw_write(" sw=");
-+        Logger::print_dec(g_diag_switch_count);
-+        Logger::raw_write("\n");
-+        Logger::raw_write("[STALLDUMP] suite state:\n");
-+        for (auto *t = Scheduler::all_tasks().first_ptr(); t;
-+             t = Scheduler::all_tasks().next_ptr(t)) {
-+            if (t->magic != TaskControlBlock::TCB_MAGIC)
-+                continue;
-+            Logger::raw_write("[STALLDUMP] id=");
-+            Logger::print_dec(t->id);
-+            Logger::raw_write(" prio=");
-+            Logger::print_dec(t->priority);
-+            Logger::raw_write(" eff=");
-+            Logger::print_dec(Scheduler::effective_priority(t));
-+            Logger::raw_write(" state=");
-+            Logger::print_dec(static_cast<uint64_t>(t->state));
-+            Logger::raw_write(" inrq=");
-+            Logger::print_dec(t->in_ready_queue_ ? 1 : 0);
-+            Logger::raw_write(" blkrecv=");
-+            Logger::print_dec(t->blocked_in_recv ? 1 : 0);
-+            Logger::raw_write(" name=");
-+            Logger::raw_write(t->name);
-+            Logger::raw_write("\n");
-+        }
-+#if CONFIG_DEADLINE_MONITOR_TASK
-+        auto *m = Scheduler::get_monitor_task();
-+        Logger::raw_write("[STALLDUMP] monitor=");
-+        Logger::print_dec(m ? 1 : 0);
-+        if (m) {
-+            Logger::raw_write(" mstate=");
-+            Logger::print_dec(static_cast<uint64_t>(m->state));
-+            Logger::raw_write(" minrq=");
-+            Logger::print_dec(m->in_ready_queue_ ? 1 : 0);
-+        }
-+        Logger::raw_write("\n");
-+#endif
-+        auto *cur = Scheduler::current_task();
-+        Logger::raw_write("[STALLDUMP] current=");
-+        Logger::print_dec(cur ? cur->id : 0xFFFF);
-+        Logger::raw_write(" curstate=");
-+        Logger::print_dec(cur ? static_cast<uint64_t>(cur->state) : 0);
-+        Logger::raw_write(" curinrq=");
-+        Logger::print_dec(cur && cur->in_ready_queue_ ? 1 : 0);
-+        Logger::raw_write("\n");
-+        Scheduler::diag_ready_probe();
-+        }
-+    }
-+#endif
-+
-     // Issue #234: every deadline/budget event enters the dmesg ring (the
-     // Logger lines above stay for the serial console). Severity ERROR: a
-     // missed deadline is a fault whatever the configured response.
 diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index 0bad83791..dd49c362a 100644
+index dd49c362a..e270d7bde 100644
 --- a/src/kernel/task/scheduler.hpp
 +++ b/src/kernel/task/scheduler.hpp
-@@ -550,6 +550,13 @@ class Scheduler {
-     ///        woken by on_tick().  Only compiled when
-     ///        CONFIG_DEADLINE_MONITOR_TASK > 0.
-     static void monitor_task_entry() noexcept;
-+#if defined(CONFIG_DEBUG)
-+    /// @brief Issue #299/#280 diagnostic: dump the ready-queue view (highest
-+    ///        priority, peek head + its state, per-task rq bucket/flag/physical
-+    ///        membership) to the serial log.  Read-only; called from the
-+    ///        stall-state beacon.
-+    static void diag_ready_probe() noexcept;
+@@ -450,15 +450,6 @@ class Scheduler {
+     ///        forces a clean re-spawn.
+     static void reset_monitor_task() noexcept { s_monitor_task_ = nullptr; }
+ 
+-    /// @brief Verifies canary guards for a user task during context switch.
+-    ///        Called from scheduler hooks (isr_stubs.asm) when a user task
+-    ///        context is about to be restored.  Verifies the user segment
+-    ///        canaries are intact and reports trips in test mode or panics in
+-    ///        production.  Called from isr_stubs.asm via scheduler_on_context_switch.
+-    /// @param task    Task to verify (must be magic-valid).
+-    /// @param rip     Approximate fault RIP for the latch (0 in scheduler hooks).
+-    /// @return true if verified (or no user task / no canary check enabled).
+-    static bool canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t rip);
+     /// @brief Resets the scan-requested flag (used by snapshot_restore to
+     ///        clear stale flags).
+     static void reset_scan_requested() noexcept {
+@@ -468,6 +459,25 @@ class Scheduler {
+     static TaskControlBlock *get_monitor_task() noexcept {
+         return s_monitor_task_;
+     }
++    /// @brief Entry point for the deadline-monitor task (priority 127).
++    ///        Waits on an atomic handoff flag, calls scan_deadlines() when
++    ///        woken by on_tick().  Only compiled when
++    ///        CONFIG_DEADLINE_MONITOR_TASK > 0.
++    static void monitor_task_entry() noexcept;
++#endif // CONFIG_DEADLINE_MONITOR_TASK
++
++    // The following are NOT monitor-specific and are consumed outside any
++    // CONFIG_DEADLINE_MONITOR_TASK guard (issue #326): keep them unconditional
++    // so a MONITOR=0 build compiles.
++    /// @brief Verifies canary guards for a user task during context switch.
++    ///        Called from scheduler hooks (isr_stubs.asm) when a user task
++    ///        context is about to be restored.  Verifies the user segment
++    ///        canaries are intact and reports trips in test mode or panics in
++    ///        production.  Called from isr_stubs.asm via scheduler_on_context_switch.
++    /// @param task    Task to verify (must be magic-valid).
++    /// @param rip     Approximate fault RIP for the latch (0 in scheduler hooks).
++    /// @return true if verified (or no user task / no canary check enabled).
++    static bool canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t rip);
+     /// @brief Sets/clears the test-active flag.  When true, on_tick() skips
+     ///        the monitor-wake path to prevent spurious context switches.
+     ///        PfA-A: stored in the injected TestContext; no-op (false) when
+@@ -494,7 +504,6 @@ class Scheduler {
+     static bool in_test_harness() noexcept {
+         return is_test_active();
+     }
+-#endif
+     /// @brief Clears assembly-level context-switch globals
+     ///        (scheduler_save_rsp_to, scheduler_load_rsp_from, etc.).
+     ///        Safe to call multiple times.  Used after on_tick() in test
+@@ -545,11 +554,6 @@ class Scheduler {
+     ///        takes scheduler_lock_ for down-CPU targets); safe from
+     ///        IRQ-masked fault context.
+     static void wake_waiting_parent(TaskControlBlock &child) noexcept;
+-    /// @brief Entry point for the deadline-monitor task (priority 127).
+-    ///        Waits on an atomic handoff flag, calls scan_deadlines() when
+-    ///        woken by on_tick().  Only compiled when
+-    ///        CONFIG_DEADLINE_MONITOR_TASK > 0.
+-    static void monitor_task_entry() noexcept;
+ #if defined(CONFIG_DEBUG)
+     /// @brief Issue #299/#280 diagnostic: dump the ready-queue view (highest
+     ///        priority, peek head + its state, per-task rq bucket/flag/physical
+diff --git a/src/kernel/test/test_deadline_action.cpp b/src/kernel/test/test_deadline_action.cpp
+index f93047a24..c6fdc3afc 100644
+--- a/src/kernel/test/test_deadline_action.cpp
++++ b/src/kernel/test/test_deadline_action.cpp
+@@ -47,6 +47,8 @@
+ 
+ using namespace kernel;
+ 
++#if CONFIG_DEADLINE_MONITOR_TASK
++
+ namespace {
+ 
+ /// @brief Create a REAL task that genuinely overruns its 2-tick deadline
+@@ -212,7 +214,10 @@ TEST_CLASS(DeadlineActionPanics) {
+ };
+ #endif
+ 
++#endif // CONFIG_DEADLINE_MONITOR_TASK
++
+ void register_deadline_action_tests() {
++#if CONFIG_DEADLINE_MONITOR_TASK
+ #if CONFIG_DEADLINE_ACTION == 0
+     REGISTER_CLASS(DeadlineActionLogOnly);
+ #elif CONFIG_DEADLINE_ACTION == 1
+@@ -224,4 +229,5 @@ void register_deadline_action_tests() {
+ #elif CONFIG_DEADLINE_ACTION == 4
+     REGISTER_CLASS(DeadlineActionNotifyProbe);
+ #endif
++#endif // CONFIG_DEADLINE_MONITOR_TASK
+ }
+diff --git a/src/kernel/test/test_deadline_miss.cpp b/src/kernel/test/test_deadline_miss.cpp
+index 0cc70d759..5b91f1da1 100644
+--- a/src/kernel/test/test_deadline_miss.cpp
++++ b/src/kernel/test/test_deadline_miss.cpp
+@@ -38,6 +38,8 @@
+ 
+ using namespace kernel;
+ 
++#if CONFIG_DEADLINE_MONITOR_TASK
++
+ /// @brief  Body shared by the "overrun then block" helpers: busy-wait past
+ ///         the real deadline (2-tick period ⇒ 40 real ticks is ~20 periods
+ ///         of genuine overrun), then block on the semaphore handed via
+@@ -170,6 +172,7 @@ TEST_CLASS(DeadlineRearmOnPeriodRollover) {
+ 
+     release_overrun_blocked(helper, gate);
+ };
++#endif // CONFIG_DEADLINE_MONITOR_TASK
+ 
+ #if CONFIG_DEADLINE_MONITOR_TASK
+ // Runmode: kernel
+@@ -214,10 +217,10 @@ TEST_CLASS(DeadlineMonitorDetectsMiss) {
+ 
+ void register_deadline_miss_tests() {
+     Logger::info("Registering deadline miss detection tests");
++#if CONFIG_DEADLINE_MONITOR_TASK
+     REGISTER_CLASS(DeadlineMissWhileBlocked);
+     REGISTER_CLASS(DeadlineMissWhileTerminatedSkipped);
+     REGISTER_CLASS(DeadlineRearmOnPeriodRollover);
+-#if CONFIG_DEADLINE_MONITOR_TASK
+     REGISTER_CLASS(DeadlineMonitorTaskSpawned);
+     REGISTER_CLASS(DeadlineMonitorDetectsMiss);
+ #endif
+diff --git a/src/kernel/test/test_deadline_recovery.cpp b/src/kernel/test/test_deadline_recovery.cpp
+index 843b3c038..f8ec26e4d 100644
+--- a/src/kernel/test/test_deadline_recovery.cpp
++++ b/src/kernel/test/test_deadline_recovery.cpp
+@@ -39,6 +39,8 @@
+ 
+ using namespace kernel;
+ 
++#if CONFIG_DEADLINE_MONITOR_TASK
++
+ namespace {
+ 
+ /// @brief Create a REAL kernel task that GENUINELY overruns its 2-tick
+@@ -105,6 +107,8 @@ TaskControlBlock *spawn_blocked(sync::Semaphore &gate, uint64_t period) {
+ 
+ } // namespace
+ 
++#endif // CONFIG_DEADLINE_MONITOR_TASK
++
+ // Runmode: kernel
+ // Testidea: The KILL cleanup sequence (cleanup() + remove_task() + free)
+ // must safely release all task resources.  This is the same sequence that
+@@ -123,6 +127,7 @@ TEST_CLASS(DeadlineActionKillCleansUp) {
+     kernel::test::terminate_and_drain(*helper);
+ };
+ 
++#if CONFIG_DEADLINE_MONITOR_TASK
+ // Runmode: kernel
+ // Testidea: The detection scan walks ONLY live, registered tasks and
+ // completes without aborting.  A genuinely-overrun live task fires a miss; a
+@@ -275,11 +280,14 @@ TEST_CLASS(DeadlineActionNotifyMonitor) {
+     tctx->deadline_monitor_pid = 0;
+     release_overrun_blocked(helper, gate);
+ };
++#endif // CONFIG_DEADLINE_MONITOR_TASK
+ 
+ void register_deadline_recovery_tests() {
+     Logger::info("Registering deadline recovery tests");
+     REGISTER_CLASS(DeadlineActionKillCleansUp);
++#if CONFIG_DEADLINE_MONITOR_TASK
+     REGISTER_CLASS(DeadlineDetectionMagicCheck);
+     REGISTER_CLASS(DeadlineDetectionMcdcCoverage);
+     REGISTER_CLASS(DeadlineActionNotifyMonitor);
 +#endif
-     /// @brief Framebuffer mirror of the reap `terminated` line (issue #269).
-     ///        Public for the framebuffer render test; production callers
-     ///        are the two reap_orphans log sites.
+ }
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 1612ba5e4..af6744f39 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -186,7 +186,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+ #if CONFIG_DEADLINE_MONITOR_TASK
+     {"deadline_miss",         5,    0,       0      },  // + DeadlineMonitorTaskSpawned + DeadlineMonitorDetectsMiss
+ #else
+-    {"deadline_miss",         3,    0,       0      },  // DeadlineMissWhileBlocked + DeadlineMissWhileTerminatedSkipped + DeadlineRearmOnPeriodRollover
++    {"deadline_miss",         0,    0,       0      },  // all deadline_miss tests are monitor-dependent (#326): none register at MONITOR=0
+ #endif
+     {"deadline_recovery",     4,    0,       0      },  // DeadlineActionKillCleansUp + DeadlineDetectionMagicCheck + DeadlineDetectionMcdcCoverage + DeadlineActionNotifyMonitor
+     {"deadline_action",       1,    0,       0      },  // single action-dispatch test per build (CONFIG_DEADLINE_ACTION)
+diff --git a/src/kernel/test/test_sched_edf.cpp b/src/kernel/test/test_sched_edf.cpp
+index bd44cfec5..640ebd648 100644
+--- a/src/kernel/test/test_sched_edf.cpp
++++ b/src/kernel/test/test_sched_edf.cpp
+@@ -41,6 +41,7 @@ using namespace kernel;
+ 
+ namespace {
+ 
++#if CONFIG_DEADLINE_MONITOR_TASK
+ /// @brief Dispatch a task for real and wait for genuine termination.
+ static TaskControlBlock *run_edf_task(void (*entry)(), uint64_t prio,
+                                       uint64_t period) {
+@@ -52,6 +53,7 @@ static TaskControlBlock *run_edf_task(void (*entry)(), uint64_t prio,
+     kernel::test::wait_for_termination_safe(t);
+     return t;
+ }
++#endif // CONFIG_DEADLINE_MONITOR_TASK
+ 
+ static void release_edf_task(TaskControlBlock *t) {
+     if (t == nullptr)
+@@ -288,6 +290,7 @@ JARVIS_TEST(edf_exempt_daemon_stays_fixed, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++#if CONFIG_DEADLINE_MONITOR_TASK
+ // Runmode: kernel
+ // Testidea: a missed deadline recovers — no wedge, future periods run.
+ // Input: EDF task (period 2) genuinely overruns 40 ticks, blocks on a
+@@ -341,6 +344,7 @@ JARVIS_TEST(edf_missed_deadline_recovers, "PRE: none | POST: none") {
+     Scheduler::drain_zombie_list();
+     JARVIS_TEST_PASS();
+ }
++#endif // CONFIG_DEADLINE_MONITOR_TASK
+ 
+ void register_sched_edf_tests() {
+     Logger::info("Registering sched_edf tests");
+@@ -350,5 +354,7 @@ void register_sched_edf_tests() {
+     JARVIS_REGISTER_TEST(edf_preempts_fixed);
+     JARVIS_REGISTER_TEST(edf_equal_deadlines_no_thrash);
+     JARVIS_REGISTER_TEST(edf_exempt_daemon_stays_fixed);
++#if CONFIG_DEADLINE_MONITOR_TASK
+     JARVIS_REGISTER_TEST(edf_missed_deadline_recovers);
++#endif
+ }
+diff --git a/src/kernel/test/test_ss_deadline.cpp b/src/kernel/test/test_ss_deadline.cpp
+index 9be228ba8..ebcf8760a 100644
+--- a/src/kernel/test/test_ss_deadline.cpp
++++ b/src/kernel/test/test_ss_deadline.cpp
+@@ -39,6 +39,8 @@
+ 
+ using namespace kernel;
+ 
++#if CONFIG_DEADLINE_MONITOR_TASK
++
+ namespace {
+ 
+ /// @brief Create a REAL kernel task with a SporadicServer, dispatch it, and
+@@ -94,6 +96,8 @@ void release_task(TaskControlBlock *t) {
+ 
+ } // namespace
+ 
++#endif // CONFIG_DEADLINE_MONITOR_TASK
++
+ // Runmode: kernel
+ // Testidea: An SS task with exhausted budget that misses a REAL deadline must
+ // fire the deadline handler with EXHAUSTED context.  The dispatched lambda
+diff --git a/src/kernel/test/test_timing.cpp b/src/kernel/test/test_timing.cpp
+index e432065e0..8410bd4c9 100644
+--- a/src/kernel/test/test_timing.cpp
++++ b/src/kernel/test/test_timing.cpp
+@@ -289,6 +289,7 @@ JARVIS_TEST(timer_daemon_restart_not_triggered_on_active,
+     JARVIS_TEST_PASS();
+ }
+ 
++#if CONFIG_DEADLINE_MONITOR_TASK
+ // Runmode: kernel
+ // Testidea: A real task that genuinely overruns its deadline (busy-waits
+ // past its 2-tick period in real time) is detected by the deadline scan.
+@@ -497,6 +498,7 @@ JARVIS_TEST(timer_deadline_miss_skips_zero, "PRE: none | POST: none") {
+     Scheduler::drain_zombie_list();
+     JARVIS_TEST_PASS();
+ }
++#endif // CONFIG_DEADLINE_MONITOR_TASK
+ 
+ /// @brief Append a freshly created, add_task'd (parked + BLOCKED) task with
+ ///        the given absolute deadline to a DeadlineList. Returns the task (or
+@@ -743,10 +745,12 @@ void register_timing_tests() {
+     JARVIS_REGISTER_TEST(timer_reap_orphans_periodic);
+     JARVIS_REGISTER_TEST(timer_no_side_effects_on_idle);
+     JARVIS_REGISTER_TEST(timer_daemon_restart_not_triggered_on_active);
++#if CONFIG_DEADLINE_MONITOR_TASK
+     JARVIS_REGISTER_TEST(timer_deadline_miss_detection_fires);
+     JARVIS_REGISTER_TEST(timer_deadline_miss_skips_future);
+     JARVIS_REGISTER_TEST(timer_deadline_miss_only_once);
+     JARVIS_REGISTER_TEST(timer_deadline_miss_skips_zero);
++#endif
+     // Phase 7 (P7a): DeadlineList (sorted deadline queue) unit coverage.
+     JARVIS_REGISTER_TEST(deadline_list_sorted_insert);
+     JARVIS_REGISTER_TEST(deadline_list_pop_expired);
+diff --git a/src/kernel/test/test_wcet_overrun.cpp b/src/kernel/test/test_wcet_overrun.cpp
+index f12184e80..4d4ea7bd3 100644
+--- a/src/kernel/test/test_wcet_overrun.cpp
++++ b/src/kernel/test/test_wcet_overrun.cpp
+@@ -106,6 +106,7 @@ TEST_CLASS(WcetOverrunDetectionFires) {
+     Scheduler::drain_zombie_list();
+ };
+ 
++#if CONFIG_DEADLINE_MONITOR_TASK
+ // Runmode: kernel
+ // Testidea: A task that meets WCET (runs within its static budget) but whose
+ // real deadline passes while it is genuinely blocked must fire the DEADLINE
+@@ -153,9 +154,12 @@ TEST_CLASS(DeadlineMissWithinWcet) {
+     release_task(helper);
+     Scheduler::drain_zombie_list();
+ };
++#endif // CONFIG_DEADLINE_MONITOR_TASK
+ 
+ void register_wcet_overrun_tests() {
+     Logger::info("Registering WCET overrun detection tests");
+     REGISTER_CLASS(WcetOverrunDetectionFires);
++#if CONFIG_DEADLINE_MONITOR_TASK
+     REGISTER_CLASS(DeadlineMissWithinWcet);
++#endif
+ }
+diff --git a/src/kernel/test/test_wcet_scheduler.cpp b/src/kernel/test/test_wcet_scheduler.cpp
+index 198ec3233..95f2e5620 100644
+--- a/src/kernel/test/test_wcet_scheduler.cpp
++++ b/src/kernel/test/test_wcet_scheduler.cpp
+@@ -37,6 +37,7 @@
+ 
+ using namespace kernel;
+ 
++#if CONFIG_DEADLINE_MONITOR_TASK
+ // Runmode: kernel
+ // Testidea: Measure the worst-case execution time (WCET) of the deadline
+ // miss-detection scan (Scheduler::scan_deadlines) as a function of the number
+@@ -142,6 +143,7 @@ JARVIS_TEST(wcet_scan_deadlines, "PRE: none | POST: none") {
+ 
+     JARVIS_TEST_PASS();
+ }
++#endif // CONFIG_DEADLINE_MONITOR_TASK
+ 
+ // Runmode: kernel
+ // Testidea: Worst-case cost of Scheduler::balancer_tick (issue #62
+@@ -209,6 +211,8 @@ JARVIS_TEST(wcet_balancer_tick_worst, "PRE: none | POST: none") {
+ 
+ void register_wcet_scheduler_tests() {
+     Logger::info("Registering WCET scheduler benchmark tests");
++#if CONFIG_DEADLINE_MONITOR_TASK
+     JARVIS_REGISTER_TEST(wcet_scan_deadlines);
++#endif
+     JARVIS_REGISTER_TEST(wcet_balancer_tick_worst);
+ }
 diff --git a/src/lib/test.cpp b/src/lib/test.cpp
-index 13ec6850b..3d52c66e2 100644
+index 3d52c66e2..0013a84a8 100644
 --- a/src/lib/test.cpp
 +++ b/src/lib/test.cpp
-@@ -388,6 +388,25 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
+@@ -403,9 +403,7 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
+         Scheduler::set_test_context(&g_test_context);
+         g_test_context_injected = true;
      }
-     Registry::set_expected_count(expected);
+-#if CONFIG_DEADLINE_MONITOR_TASK
+     Scheduler::set_test_active(true);
+-#endif
  
-+    // PfA-A: inject the test context and mark the suite active BEFORE the
-+    // pre-suite window (ensure_monitor spawns the prio-127 deadline monitor at
-+    // line ~394; snapshot_create follows).  is_test_active() gates the on_tick
-+    // monitor-wake via harness_owns_lifecycle(): while it is false the monitor
-+    // is woken every tick and can starve the prio-10 harness before it reaches
-+    // set_test_active(true) — a self-sustaining pre-suite stall under load
-+    // (issues #280/#299: init READY+enqueued but never dispatched; tick
-+    // counters prove ticks/switch_to_task run).  Marking the suite active here
-+    // closes that window so the captured baseline is also quiescent.  The
-+    // per-snapshot_restore re-set below remains (harmless, defensive).
-+    if (!g_test_context_injected) {
-+        g_test_context = TestContext{};
-+        Scheduler::set_test_context(&g_test_context);
-+        g_test_context_injected = true;
-+    }
-+#if CONFIG_DEADLINE_MONITOR_TASK
-+    Scheduler::set_test_active(true);
-+#endif
-+
      // Pre-condition: ensure deadline-monitor task exists before snapshot
      // sizing, so the monitor is counted in the task count from the start.
- #if CONFIG_DEADLINE_MONITOR_TASK
-@@ -409,15 +428,6 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
-     Logger::print_dec(start_ns);
-     Logger::raw_write("\n");
- 
--    // PfA-A: inject the test context for this cycle.  set_test_active() and
--    // the ISR-visible is_test_active() read through this context.
--    if (!g_test_context_injected) {
--        g_test_context = TestContext{};
--        Scheduler::set_test_context(&g_test_context);
--        g_test_context_injected = true;
--    }
--    Scheduler::set_test_active(true);
--
-     for (size_t i = 0; i < n; ++i) {
-         auto& tc = Registry::tests()[i];
-         // Match: if required_flags is 0 (debug), run all non-user tests.
-@@ -470,13 +480,12 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
+@@ -479,14 +477,12 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
+             while (*s && pos < 126) test_buf[pos++] = *s++;
              test_buf[pos] = '\0';
              kernel::test::snapshot_restore(test_buf);
- #if CONFIG_DEADLINE_MONITOR_TASK
--            // snapshot_create() was called before set_test_active(true),
--            // so the snapshot has s_test_active_ == false.  Restore it
--            // to true to prevent the ISR from waking the deadline monitor
--            // during tests.
 -#if CONFIG_DEADLINE_MONITOR_TASK
--    Scheduler::set_test_active(true);
+             // Defensive re-assert: run_filtered now sets the test context and
+             // test_active BEFORE snapshot_create(), so the suite is already
+             // marked active across the restore.  Kept so a future reorder
+             // cannot silently re-open the pre-suite monitor-wake starvation
+             // (issues #280/#299).
+             Scheduler::set_test_active(true);
 -#endif
-+            // Defensive re-assert: run_filtered now sets the test context and
-+            // test_active BEFORE snapshot_create(), so the suite is already
-+            // marked active across the restore.  Kept so a future reorder
-+            // cannot silently re-open the pre-suite monitor-wake starvation
-+            // (issues #280/#299).
-+            Scheduler::set_test_active(true);
- #endif
          }
      }
-diff --git a/test-history.txt b/test-history.txt
-index 531da4a16..d3cef62a4 100644
---- a/test-history.txt
-+++ b/test-history.txt
-@@ -2888,3 +2888,8 @@ SUMMARY: total=20 ok=15 fail=5
- 2026-10-10 14:05:00 storage PASSED: 162 FAILED: 0 TIME: 64564ms
- 2026-10-10 14:20:00 storage PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT
- 2026-10-10 14:22:00 storage PASSED: 162 FAILED: 0 TIME: 64763ms
-+2026-10-10 15:10:00 storage PASSED: 162 FAILED: 0 TIME: 63329ms
-+2026-10-10 15:11:00 ipc PASSED: 86 FAILED: 0 TIME: 11748ms
-+2026-10-10 15:12:00 servers PASSED: 62 FAILED: 0 TIME: 32039ms
-+2026-10-10 15:13:00 capability PASSED: 148 FAILED: 0 TIME: 17346ms
-+2026-10-10 15:20:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4200ms
+ 
+@@ -511,9 +507,7 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
+ 
+     print_report(start_ns, end_ns);
+ 
+-#if CONFIG_DEADLINE_MONITOR_TASK
+     Scheduler::set_test_active(false);
+-#endif
+ 
+     // Drain serial TX FIFO so the full test report is flushed to the
+     // expect script before QEMU exits (fixes BUGS.md #012).

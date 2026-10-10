@@ -47,6 +47,8 @@
 
 using namespace kernel;
 
+#if CONFIG_DEADLINE_MONITOR_TASK
+
 namespace {
 
 /// @brief Create a REAL task that genuinely overruns its 2-tick deadline
@@ -212,7 +214,10 @@ TEST_CLASS(DeadlineActionPanics) {
 };
 #endif
 
+#endif // CONFIG_DEADLINE_MONITOR_TASK
+
 void register_deadline_action_tests() {
+#if CONFIG_DEADLINE_MONITOR_TASK
 #if CONFIG_DEADLINE_ACTION == 0
     REGISTER_CLASS(DeadlineActionLogOnly);
 #elif CONFIG_DEADLINE_ACTION == 1
@@ -224,4 +229,5 @@ void register_deadline_action_tests() {
 #elif CONFIG_DEADLINE_ACTION == 4
     REGISTER_CLASS(DeadlineActionNotifyProbe);
 #endif
+#endif // CONFIG_DEADLINE_MONITOR_TASK
 }

@@ -41,6 +41,7 @@ using namespace kernel;
 
 namespace {
 
+#if CONFIG_DEADLINE_MONITOR_TASK
 /// @brief Dispatch a task for real and wait for genuine termination.
 static TaskControlBlock *run_edf_task(void (*entry)(), uint64_t prio,
                                       uint64_t period) {
@@ -52,6 +53,7 @@ static TaskControlBlock *run_edf_task(void (*entry)(), uint64_t prio,
     kernel::test::wait_for_termination_safe(t);
     return t;
 }
+#endif // CONFIG_DEADLINE_MONITOR_TASK
 
 static void release_edf_task(TaskControlBlock *t) {
     if (t == nullptr)
@@ -288,6 +290,7 @@ JARVIS_TEST(edf_exempt_daemon_stays_fixed, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+#if CONFIG_DEADLINE_MONITOR_TASK
 // Runmode: kernel
 // Testidea: a missed deadline recovers — no wedge, future periods run.
 // Input: EDF task (period 2) genuinely overruns 40 ticks, blocks on a
@@ -341,6 +344,7 @@ JARVIS_TEST(edf_missed_deadline_recovers, "PRE: none | POST: none") {
     Scheduler::drain_zombie_list();
     JARVIS_TEST_PASS();
 }
+#endif // CONFIG_DEADLINE_MONITOR_TASK
 
 void register_sched_edf_tests() {
     Logger::info("Registering sched_edf tests");
@@ -350,5 +354,7 @@ void register_sched_edf_tests() {
     JARVIS_REGISTER_TEST(edf_preempts_fixed);
     JARVIS_REGISTER_TEST(edf_equal_deadlines_no_thrash);
     JARVIS_REGISTER_TEST(edf_exempt_daemon_stays_fixed);
+#if CONFIG_DEADLINE_MONITOR_TASK
     JARVIS_REGISTER_TEST(edf_missed_deadline_recovers);
+#endif
 }

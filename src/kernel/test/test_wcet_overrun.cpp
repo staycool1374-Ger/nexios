@@ -106,6 +106,7 @@ TEST_CLASS(WcetOverrunDetectionFires) {
     Scheduler::drain_zombie_list();
 };
 
+#if CONFIG_DEADLINE_MONITOR_TASK
 // Runmode: kernel
 // Testidea: A task that meets WCET (runs within its static budget) but whose
 // real deadline passes while it is genuinely blocked must fire the DEADLINE
@@ -153,9 +154,12 @@ TEST_CLASS(DeadlineMissWithinWcet) {
     release_task(helper);
     Scheduler::drain_zombie_list();
 };
+#endif // CONFIG_DEADLINE_MONITOR_TASK
 
 void register_wcet_overrun_tests() {
     Logger::info("Registering WCET overrun detection tests");
     REGISTER_CLASS(WcetOverrunDetectionFires);
+#if CONFIG_DEADLINE_MONITOR_TASK
     REGISTER_CLASS(DeadlineMissWithinWcet);
+#endif
 }

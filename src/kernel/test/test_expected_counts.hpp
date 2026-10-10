@@ -186,7 +186,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 #if CONFIG_DEADLINE_MONITOR_TASK
     {"deadline_miss",         5,    0,       0      },  // + DeadlineMonitorTaskSpawned + DeadlineMonitorDetectsMiss
 #else
-    {"deadline_miss",         3,    0,       0      },  // DeadlineMissWhileBlocked + DeadlineMissWhileTerminatedSkipped + DeadlineRearmOnPeriodRollover
+    {"deadline_miss",         0,    0,       0      },  // all deadline_miss tests are monitor-dependent (#326): none register at MONITOR=0
 #endif
     {"deadline_recovery",     4,    0,       0      },  // DeadlineActionKillCleansUp + DeadlineDetectionMagicCheck + DeadlineDetectionMcdcCoverage + DeadlineActionNotifyMonitor
     {"deadline_action",       1,    0,       0      },  // single action-dispatch test per build (CONFIG_DEADLINE_ACTION)

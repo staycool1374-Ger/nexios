@@ -450,15 +450,6 @@ class Scheduler {
     ///        forces a clean re-spawn.
     static void reset_monitor_task() noexcept { s_monitor_task_ = nullptr; }
 
-    /// @brief Verifies canary guards for a user task during context switch.
-    ///        Called from scheduler hooks (isr_stubs.asm) when a user task
-    ///        context is about to be restored.  Verifies the user segment
-    ///        canaries are intact and reports trips in test mode or panics in
-    ///        production.  Called from isr_stubs.asm via scheduler_on_context_switch.
-    /// @param task    Task to verify (must be magic-valid).
-    /// @param rip     Approximate fault RIP for the latch (0 in scheduler hooks).
-    /// @return true if verified (or no user task / no canary check enabled).
-    static bool canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t rip);
     /// @brief Resets the scan-requested flag (used by snapshot_restore to
     ///        clear stale flags).
     static void reset_scan_requested() noexcept {
@@ -468,6 +459,25 @@ class Scheduler {
     static TaskControlBlock *get_monitor_task() noexcept {
         return s_monitor_task_;
     }
+    /// @brief Entry point for the deadline-monitor task (priority 127).
+    ///        Waits on an atomic handoff flag, calls scan_deadlines() when
+    ///        woken by on_tick().  Only compiled when
+    ///        CONFIG_DEADLINE_MONITOR_TASK > 0.
+    static void monitor_task_entry() noexcept;
+#endif // CONFIG_DEADLINE_MONITOR_TASK
+
+    // The following are NOT monitor-specific and are consumed outside any
+    // CONFIG_DEADLINE_MONITOR_TASK guard (issue #326): keep them unconditional
+    // so a MONITOR=0 build compiles.
+    /// @brief Verifies canary guards for a user task during context switch.
+    ///        Called from scheduler hooks (isr_stubs.asm) when a user task
+    ///        context is about to be restored.  Verifies the user segment
+    ///        canaries are intact and reports trips in test mode or panics in
+    ///        production.  Called from isr_stubs.asm via scheduler_on_context_switch.
+    /// @param task    Task to verify (must be magic-valid).
+    /// @param rip     Approximate fault RIP for the latch (0 in scheduler hooks).
+    /// @return true if verified (or no user task / no canary check enabled).
+    static bool canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t rip);
     /// @brief Sets/clears the test-active flag.  When true, on_tick() skips
     ///        the monitor-wake path to prevent spurious context switches.
     ///        PfA-A: stored in the injected TestContext; no-op (false) when
@@ -494,7 +504,6 @@ class Scheduler {
     static bool in_test_harness() noexcept {
         return is_test_active();
     }
-#endif
     /// @brief Clears assembly-level context-switch globals
     ///        (scheduler_save_rsp_to, scheduler_load_rsp_from, etc.).
     ///        Safe to call multiple times.  Used after on_tick() in test
@@ -545,11 +554,6 @@ class Scheduler {
     ///        takes scheduler_lock_ for down-CPU targets); safe from
     ///        IRQ-masked fault context.
     static void wake_waiting_parent(TaskControlBlock &child) noexcept;
-    /// @brief Entry point for the deadline-monitor task (priority 127).
-    ///        Waits on an atomic handoff flag, calls scan_deadlines() when
-    ///        woken by on_tick().  Only compiled when
-    ///        CONFIG_DEADLINE_MONITOR_TASK > 0.
-    static void monitor_task_entry() noexcept;
 #if defined(CONFIG_DEBUG)
     /// @brief Issue #299/#280 diagnostic: dump the ready-queue view (highest
     ///        priority, peek head + its state, per-task rq bucket/flag/physical

@@ -39,6 +39,8 @@
 
 using namespace kernel;
 
+#if CONFIG_DEADLINE_MONITOR_TASK
+
 namespace {
 
 /// @brief Create a REAL kernel task that GENUINELY overruns its 2-tick
@@ -105,6 +107,8 @@ TaskControlBlock *spawn_blocked(sync::Semaphore &gate, uint64_t period) {
 
 } // namespace
 
+#endif // CONFIG_DEADLINE_MONITOR_TASK
+
 // Runmode: kernel
 // Testidea: The KILL cleanup sequence (cleanup() + remove_task() + free)
 // must safely release all task resources.  This is the same sequence that
@@ -123,6 +127,7 @@ TEST_CLASS(DeadlineActionKillCleansUp) {
     kernel::test::terminate_and_drain(*helper);
 };
 
+#if CONFIG_DEADLINE_MONITOR_TASK
 // Runmode: kernel
 // Testidea: The detection scan walks ONLY live, registered tasks and
 // completes without aborting.  A genuinely-overrun live task fires a miss; a
@@ -275,11 +280,14 @@ TEST_CLASS(DeadlineActionNotifyMonitor) {
     tctx->deadline_monitor_pid = 0;
     release_overrun_blocked(helper, gate);
 };
+#endif // CONFIG_DEADLINE_MONITOR_TASK
 
 void register_deadline_recovery_tests() {
     Logger::info("Registering deadline recovery tests");
     REGISTER_CLASS(DeadlineActionKillCleansUp);
+#if CONFIG_DEADLINE_MONITOR_TASK
     REGISTER_CLASS(DeadlineDetectionMagicCheck);
     REGISTER_CLASS(DeadlineDetectionMcdcCoverage);
     REGISTER_CLASS(DeadlineActionNotifyMonitor);
+#endif
 }

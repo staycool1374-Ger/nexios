@@ -403,9 +403,7 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
         Scheduler::set_test_context(&g_test_context);
         g_test_context_injected = true;
     }
-#if CONFIG_DEADLINE_MONITOR_TASK
     Scheduler::set_test_active(true);
-#endif
 
     // Pre-condition: ensure deadline-monitor task exists before snapshot
     // sizing, so the monitor is counted in the task count from the start.
@@ -479,14 +477,12 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
             while (*s && pos < 126) test_buf[pos++] = *s++;
             test_buf[pos] = '\0';
             kernel::test::snapshot_restore(test_buf);
-#if CONFIG_DEADLINE_MONITOR_TASK
             // Defensive re-assert: run_filtered now sets the test context and
             // test_active BEFORE snapshot_create(), so the suite is already
             // marked active across the restore.  Kept so a future reorder
             // cannot silently re-open the pre-suite monitor-wake starvation
             // (issues #280/#299).
             Scheduler::set_test_active(true);
-#endif
         }
     }
 
@@ -511,9 +507,7 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
 
     print_report(start_ns, end_ns);
 
-#if CONFIG_DEADLINE_MONITOR_TASK
     Scheduler::set_test_active(false);
-#endif
 
     // Drain serial TX FIFO so the full test report is flushed to the
     // expect script before QEMU exits (fixes BUGS.md #012).
