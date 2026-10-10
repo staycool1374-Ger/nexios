@@ -1,0 +1,4 @@
+loadelf /bin/xmodem.c.elf
+sleep 3
+runelf
+sleep 900

@@ -264,7 +264,7 @@ $(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c | $(PICOLIBC_SYSROOT)/lib/lib
 initrd/tests/test-config.txt:
 	@mkdir -p initrd/tests
 	@printf 'none\n' > $@
-$(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c userspace/nullderef.c userspace/prime.c
+$(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c userspace/nullderef.c userspace/prime.c tools/xmodem276.txt
 	@printf '  %-7s %s\n' 'CPIO' 'initrd.cpio'
 	@mkdir -p initrd_root/bin initrd_root/etc initrd_root/tmp initrd_root/tests
 	@printf 'tmpfs /tmp\n' > initrd_root/etc/fstab
@@ -276,7 +276,7 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c us
 	@cp userspace/hey.c userspace/nullderef.c userspace/prime.c initrd_root/
 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
 	@printf 'loadelf /bin/sh.c.elf\nsleep 3\nrunelf\nsleep 300\n' > initrd_root/tests/sh310.txt
-	@printf 'loadelf /bin/xmodem.c.elf\nsleep 3\nrunelf\nsleep 900\n' > initrd_root/tests/xmodem276.txt
+	cp tools/xmodem276.txt initrd_root/tests/xmodem276.txt
 	cd initrd_root && find . -print0 | cpio -o -H newc -0 --quiet > ../$@
 	@rm -rf initrd_root
 

@@ -38,7 +38,7 @@
 #define C_TRIES 10
 #define C_INTERVAL_S 3
 #define PKT_TIMEOUT_S 10
-#define OVERALL_CAP_S 600
+#define OVERALL_CAP_S 3600
 
 static unsigned char g_packet[PKT_MAX];
 static unsigned char g_staging[RAMDISK_BLOCK_SIZE];
@@ -236,6 +236,11 @@ static int read_bytes(unsigned char* out, unsigned int len,
 }
 
 /// @brief Write one 512 B block to ramdisk start_block+block_idx.
+/// NOTE (#315): the send_sync ABI has no reply-buffer slot — the kernel
+/// writes the reply payload back over the REQUEST buffer and in-tree
+/// libc drops its reply_buf arg (contract follow-up filed separately).
+/// Callers MUST read result/payload from req[] after the call
+/// (result req[0..8), payload req[8..40)) and req must stay >= 40 B.
 /// Returns 0 on success, ramdisk error (<0) or -9 on IPC failure.
 static int ramdisk_write_block(unsigned long start_block,
                                unsigned long block_idx,
@@ -244,7 +249,6 @@ static int ramdisk_write_block(unsigned long start_block,
     unsigned long chunk = 0;
     unsigned long me = (unsigned long)getpid();
     char req[56];
-    char reply[40];
     if (block_no >= RAMDISK_BLOCKS)
         return RAMDISK_ERR_RANGE;
     for (chunk = 0; chunk < RAMDISK_CHUNKS_PER_BLOCK; ++chunk) {
@@ -260,11 +264,11 @@ static int ramdisk_write_block(unsigned long start_block,
         for (i = 0; i < RAMDISK_CHUNK_DATA; ++i)
             req[24 + i] = (char)data[chunk * RAMDISK_CHUNK_DATA + i];
         r = ipc_send_sync(g_ramdisk_pid, RAMDISK_WRITE_BLOCK, req,
-                          sizeof(req), reply);
+                          sizeof(req), req);
         if (r < 0)
             return -9;
         for (k = 0; k < 8; ++k)
-            result |= ((long)(unsigned char)reply[k]) << (k * 8);
+            result |= ((long)(unsigned char)req[k]) << (k * 8);
         if (result != RAMDISK_OK)
             return (int)result;
     }
@@ -272,6 +276,9 @@ static int ramdisk_write_block(unsigned long start_block,
 }
 
 /// @brief Read one 512 B block from ramdisk into data. Same returns.
+/// Reply-over-request contract: see ramdisk_write_block (#315). The
+/// request length is sizeof(req) (not 24): the kernel copies up to 40
+/// reply bytes back, so the checked range must cover them.
 static int ramdisk_read_block(unsigned long start_block,
                               unsigned long block_idx,
                               unsigned char* data) {
@@ -279,7 +286,6 @@ static int ramdisk_read_block(unsigned long start_block,
     unsigned long chunk = 0;
     unsigned long me = (unsigned long)getpid();
     char req[56];
-    char reply[40];
     if (block_no >= RAMDISK_BLOCKS)
         return RAMDISK_ERR_RANGE;
     for (chunk = 0; chunk < RAMDISK_CHUNKS_PER_BLOCK; ++chunk) {
@@ -292,17 +298,17 @@ static int ramdisk_read_block(unsigned long start_block,
             req[8 + i] = (char)((block_no >> (i * 8)) & 0xFF);
             req[16 + i] = (char)((chunk >> (i * 8)) & 0xFF);
         }
-        r = ipc_send_sync(g_ramdisk_pid, RAMDISK_READ_BLOCK, req, 24,
-                          reply);
+        r = ipc_send_sync(g_ramdisk_pid, RAMDISK_READ_BLOCK, req,
+                          sizeof(req), req);
         if (r < 0)
             return -9;
         for (k = 0; k < 8; ++k)
-            result |= ((long)(unsigned char)reply[k]) << (k * 8);
+            result |= ((long)(unsigned char)req[k]) << (k * 8);
         if (result != RAMDISK_OK)
             return (int)result;
         for (k = 0; k < RAMDISK_CHUNK_DATA; ++k)
             data[chunk * RAMDISK_CHUNK_DATA + k] =
-                (unsigned char)reply[8 + k];
+                (unsigned char)req[8 + k];
     }
     return 0;
 }
@@ -494,6 +500,240 @@ abort:
     return -3;
 }
 
+/// @brief 64 KiB staging for rxfile (issue #314 file-ness bridge).
+/// YMODEM-declared sizes above this are refused (fail-closed).
+#define RXFILE_MAX_SIZE 65536
+#define RXFILE_NAME_LEN 63
+#define RXFILE_DIR "/mnt/ramdisk/"
+
+static unsigned char g_rxfile[RXFILE_MAX_SIZE];
+
+/// @brief Validate an upload filename (flat store: no separators).
+/// @return 1 valid, 0 invalid.
+static int rxfile_name_ok(const char* name) {
+    int len = 0;
+    if (!name || !name[0])
+        return 0;
+    while (name[len]) {
+        if (name[len] == '/')
+            return 0;
+        ++len;
+        if (len > RXFILE_NAME_LEN)
+            return 0;
+    }
+    return 1;
+}
+
+/// @brief YMODEM-to-file receive (issue #314): block-0 carries name +
+/// size; data packets stream into g_rxfile; on EOT the buffer is written
+/// to /mnt/ramdisk/<name> (unlink-first), closed, re-read and verified.
+/// Raw-mode only (SOH/STX packets); any failure unlinks the partial file
+/// (fail-closed, no torn file left behind). The verified name is copied
+/// to out_name (RXFILE_NAME_LEN+1). Returns staged bytes, or negative
+/// -reason on abort.
+static long rxfile_run(unsigned long cap_time, char *out_name) {
+    unsigned long expected = 1;
+    unsigned long total = 0;
+    unsigned long ysize = 0;
+    int retries = 0;
+    int c_tries = 0;
+    int start = 0;
+    char name[RXFILE_NAME_LEN + 1];
+    char path[13 + RXFILE_NAME_LEN + 1];
+    unsigned long ni = 0;
+    int fd = -1;
+    printf("READY\n");
+    while (c_tries < C_TRIES) {
+        serial_putc(CHR_C);
+        start = next_byte(x_now() + C_INTERVAL_S);
+        if (start == SOH || start == STX)
+            goto file_packet;
+        if (start == CAN)
+            return -2;
+        ++c_tries;
+    }
+    return -2;
+file_packet:
+    for (;;) {
+        unsigned long seq = 0;
+        int rc = 0;
+        unsigned int bi = 0;
+        if (x_now() > cap_time) {
+            printf("rxfile abort-cap total=%lu ysize=%lu now=%lu cap=%lu\n",
+                   total, ysize, x_now(), cap_time);
+            goto file_abort;
+        }
+        if (start < 0) {
+            start = next_byte(x_now() + PKT_TIMEOUT_S);
+            if (start < 0) {
+                if (++retries > MAX_RETRIES)
+                    goto file_abort;
+                serial_putc(NAK);
+                continue;
+            }
+        }
+        if (start == EOT) {
+            serial_putc(ACK);
+            break;
+        }
+        if (start == CAN)
+            return -2;
+        if (start != SOH && start != STX) {
+            if (++retries > MAX_RETRIES)
+                goto file_abort;
+            serial_putc(NAK);
+            start = -1;
+            continue;
+        }
+        rc = rx_packet_body(start, &seq, x_now() + PKT_TIMEOUT_S);
+        start = -1;
+        if (rc < 0) {
+            serial_putc(NAK);
+            if (++retries > MAX_RETRIES)
+                goto file_abort;
+            continue;
+        }
+        if (seq == 0 && expected == 1 && ysize == 0) {
+            // YMODEM block-0: name NUL size NUL (raw bytes, bounded scan).
+            unsigned int k = 0;
+            int ok = 0;
+            while (k < (unsigned int)rc && g_packet[k])
+                ++k;
+            if (k >= (unsigned int)rc || k > RXFILE_NAME_LEN) {
+                serial_putc(NAK);
+                if (++retries > MAX_RETRIES)
+                    goto file_abort;
+                continue;
+            }
+            for (ni = 0; ni <= k && ni < sizeof(name) - 1; ++ni)
+                name[ni] = (char)g_packet[ni];
+            name[ni] = '\0';
+            if (out_name != 0) {
+                unsigned int qi = 0;
+                while (name[qi] && qi < RXFILE_NAME_LEN) {
+                    out_name[qi] = name[qi];
+                    ++qi;
+                }
+                out_name[qi] = '\0';
+            }
+            ++k;
+            if (!rxfile_name_ok(name)) {
+                serial_putc(NAK);
+                if (++retries > MAX_RETRIES)
+                    goto file_abort;
+                continue;
+            }
+            ysize = x_atoul_bounded((const char*)(g_packet + k),
+                                    (unsigned int)rc - k, &ok);
+            if (!ok || ysize == 0 || ysize > RXFILE_MAX_SIZE) {
+                serial_putc(NAK);
+                if (++retries > MAX_RETRIES)
+                    goto file_abort;
+                continue;
+            }
+            serial_putc(ACK);
+            continue;
+        }
+        if (ysize == 0) {
+            // Raw (non-YMODEM) stream has no filename — refuse (use rx
+            // for raw block staging, rxfile is YMODEM-files only).
+            goto file_abort;
+        }
+        if (seq != (expected & 0xFF)) {
+            if (seq == ((expected - 1) & 0xFF)) {
+                serial_putc(ACK);
+                continue;
+            }
+            printf("rxfile abort-seq seq=%lu expected=%lu total=%lu\n", seq,
+                   expected, total);
+            goto file_abort;
+        }
+        for (bi = 0; bi < (unsigned int)rc; ++bi) {
+            if (total >= ysize)
+                break;
+            if (total >= RXFILE_MAX_SIZE)
+                goto file_abort;
+            g_rxfile[total++] = g_packet[bi];
+        }
+        serial_putc(ACK);
+        ++expected;
+        retries = 0;
+        if (total >= ysize) {
+            int e = next_byte(x_now() + PKT_TIMEOUT_S);
+            if (e == EOT)
+                serial_putc(ACK);
+            break;
+        }
+    }
+    if (total != ysize)
+        goto file_abort;
+    {
+        unsigned int pi = 0;
+        const char *prefix = RXFILE_DIR;
+        while (prefix[pi] && pi < sizeof(path) - 1) {
+            path[pi] = prefix[pi];
+            ++pi;
+        }
+        for (ni = 0; name[ni] && pi < sizeof(path) - 1; ++ni)
+            path[pi++] = name[ni];
+        path[pi] = '\0';
+        unlink(path);
+        fd = open(path, O_CREAT | O_WRONLY);
+        if (fd < 0)
+            goto file_abort;
+        {
+            unsigned long off = 0;
+            while (off < total) {
+                unsigned long take = total - off;
+                long w = 0;
+                if (take > 512)
+                    take = 512;
+                w = write(fd, (const char*)(g_rxfile + off), take);
+                if (w <= 0) {
+                    close(fd);
+                    unlink(path);
+                    return -3;
+                }
+                off += (unsigned long)w;
+            }
+        }
+        close(fd);
+        fd = open(path, O_RDONLY);
+        if (fd < 0) {
+            unlink(path);
+            return -3;
+        }
+        {
+            unsigned long off = 0;
+            char vbuf[512];
+            while (off < total) {
+                long r = read(fd, vbuf, 512);
+                unsigned long k = 0;
+                if (r <= 0) {
+                    close(fd);
+                    unlink(path);
+                    return -3;
+                }
+                for (k = 0; k < (unsigned long)r; ++k) {
+                    if (off + k >= total ||
+                        (unsigned char)vbuf[k] != g_rxfile[off + k]) {
+                        close(fd);
+                        unlink(path);
+                        return -3;
+                    }
+                }
+                off += (unsigned long)r;
+            }
+        }
+        close(fd);
+    }
+    return (long)total;
+file_abort:
+    serial_putc(CAN);
+    serial_putc(CAN);
+    return -3;
+}
+
 static int dump_run(unsigned long start_block, unsigned long nbytes) {
     unsigned long done = 0;
     static unsigned char blkbuf[RAMDISK_BLOCK_SIZE];
@@ -576,12 +816,13 @@ int main(void) {
     unsigned long start = 0;
     int is_rx = 0;
     int is_dump = 0;
+    int is_rxfile = 0;
     g_tty_fd = open("/dev/tty", O_RAWTTY);
     if (g_tty_fd < 0) {
         printf("xmodem: raw tty open failed\n");
         return 1;
     }
-    printf("xmodem receiver (uart|base64|hex), cmd (rx|dump|quit)\n");
+    printf("xmodem receiver (uart|base64|hex), cmd (rx|rxfile|dump|quit)\n");
     for (;;) {
         printf("mode: ");
         if (read_line(line, sizeof(line)) < 0)
@@ -603,8 +844,36 @@ int main(void) {
             return 0;
         is_rx = (x_strcmp(line, "rx") == 0);
         is_dump = (x_strcmp(line, "dump") == 0);
-        if (!is_rx && !is_dump) {
-            printf("usage: rx|dump|quit\n");
+        is_rxfile = (x_strcmp(line, "rxfile") == 0);
+        if (!is_rx && !is_dump && !is_rxfile) {
+            printf("usage: rx|rxfile|dump|quit\n");
+            continue;
+        }
+        if (is_rxfile) {
+            // YMODEM-to-file (issue #314): filename + size come from
+            // block-0; the file lands under /mnt/ramdisk/ (raw tty only
+            // — base64/hex file framing is a follow-up).
+            if (g_mode != 0) {
+                printf("rxfile needs uart mode\n");
+                continue;
+            }
+            {
+                char rname[RXFILE_NAME_LEN + 1];
+                long frc = 0;
+                unsigned int wi = 0;
+                rname[0] = '\0';
+                frc = rxfile_run(x_now() + OVERALL_CAP_S, rname);
+                if (frc < 0) {
+                    printf("abort %ld\n", frc);
+                    continue;
+                }
+                write(1, "done file=", 10);
+                while (rname[wi])
+                    write(1, &rname[wi++], 1);
+                write(1, " bytes=", 7);
+                print_u64((unsigned long)frc);
+                write(1, " verified\n", 10);
+            }
             continue;
         }
         printf("ramdisk pid: ");

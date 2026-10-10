@@ -30,6 +30,18 @@ enum {
 int printf(const char* fmt, ...);
 int sprintf(char* buf, const char* fmt, ...);
 int snprintf(char* buf, size_t n, const char* fmt, ...);
+/// @brief Bounded format into buf (issue #316 contract, verified by
+/// userspace/printf-probe.c vectors P01-P16 on target).
+/// Width contract (LP64, no exceptions): every conversion consumes EXACTLY
+/// its declared width — `l`-flagged (`%lu`/`%lx`/`%ld`) reads 8 bytes,
+/// unflagged (`%d`/`%u`/`%x`/`%c`) reads 4 bytes. Passing a 32-bit value
+/// to `%lu` (or vice versa) desyncs va_arg stepping and garbles that AND
+/// all following conversions. `ll` collapses to `l` (identical width on
+/// LP64); there is no `z` length (`%zu` falls through to literal
+/// passthrough).
+/// Cosmetic notes: field width/`0` flags are parsed but not applied;
+/// `%X` renders lowercase (same path as `%x`); `printf` truncates lines
+/// at 255 bytes (single 256 B stack buffer, one write() call).
 int vsnprintf(char* buf, size_t n, const char* fmt, va_list ap);
 int puts(const char* s);
 int putchar(int c);
