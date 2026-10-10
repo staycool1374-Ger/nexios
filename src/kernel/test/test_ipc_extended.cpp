@@ -35,6 +35,7 @@
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
+#include <kernel/test/test_isolate.hpp>
 
 using namespace kernel;
 
@@ -576,6 +577,21 @@ JARVIS_TEST(ipc_send_wakes_recv_waiter, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: The suite snapshot must be IPC-quiescent (issue #321).  A message
+// left in any task's inbox when snapshot_create() runs is captured inside the
+// TCB block and byte-restored on every snapshot_restore, replaying it on each
+// test boundary (duplicate IPC delivery).  The boot path settles all inboxes
+// before the snapshot, so no in-flight message is ever captured at baseline.
+// Input: snapshot_baseline_nonempty_inbox_count() (recorded at snapshot_create).
+// Expect: 0 — the captured baseline contains no queued message.
+// Depends: snapshot harness boot quiescence (kernel.cpp init_task_main settle).
+JARVIS_TEST(ipc_snapshot_baseline_inbox_quiescent, "PRE: none | POST: none") {
+    JARVIS_ASSERT_EQ(0ULL,
+                     kernel::test::snapshot_baseline_nonempty_inbox_count());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all extended IPC unit tests with the test framework.
 // Input: None
 // Expect: All IPC extended tests registered via JARVIS_REGISTER_TEST
@@ -593,4 +609,5 @@ void register_ipc_extended_tests() {
     JARVIS_REGISTER_TEST(ipc_priority_inheritance_send);
     JARVIS_REGISTER_TEST(ipc_send_no_wake_non_ipc_waiter);
     JARVIS_REGISTER_TEST(ipc_send_wakes_recv_waiter);
+    JARVIS_REGISTER_TEST(ipc_snapshot_baseline_inbox_quiescent);
 }

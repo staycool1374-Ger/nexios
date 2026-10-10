@@ -108,6 +108,17 @@ remaining ticks, TaskContext incl. rsp, kstack base/top, RQ pointers +
 BufferPool state · ResourceCounters · user pages (canaries `nu`/`nu_copy`) ·
 kernel PML4[0..255] · kernel stacks · PtPoolSnapshot · HHDM PD (undo huge splits).
 
+The per-task `MessageQueue` is embedded in each TCB block and is therefore
+captured/restored with it (byte-exact).  **IPC-quiescence precondition
+(issue #321):** every task's inbox MUST be empty when `snapshot_create()` runs —
+a message left in flight is captured and resurrected by every
+`snapshot_restore` (duplicate IPC delivery).  The boot path settles all inboxes
+before the suite snapshot (`kernel.cpp` `init_task_main`); the invariant is
+asserted by `ipc_snapshot_baseline_inbox_quiescent`.  Note: on the current tree
+the settle is PREVENTIVE — the boot grant is already consumed before the
+snapshot (daemons prio 20 > init 10), so it does not reproduce a live defect;
+the guard keeps it that way.
+
 ### 2.3 Restore order (binding)
 ```
 1  canary check (nu region) + PTE-walk dump if corrupt
@@ -117,6 +128,10 @@ kernel PML4[0..255] · kernel stacks · PtPoolSnapshot · HHDM PD (undo huge spl
 5  scheduler_corruption_count → record_failure
 6  ResourceTracker::check(baseline) then restore(baseline)
 7  HHDM PD restore (only if hhdm_modified; guard pdpt[0]==0x5000; free split PT)
+7b pin-holding capability registries: FrameUserMap/MmioUserMap/PagerRegistry
+   snapshot_reset() — release registry pins BEFORE the PMM/MemPool rewind
+   below (a post-rewind release over-releases → premature dispose of a
+   slot-referenced cap; issue #320)
 8  PMM bitmap + owner + free count
 9  PtPoolSnapshot restore
 10 PMM::rebuild_free_list()

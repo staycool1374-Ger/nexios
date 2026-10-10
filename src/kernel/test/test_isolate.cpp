@@ -113,6 +113,18 @@ static size_t g_snapshot_guard_pages = 0;
 // the canary VA differs from this, the PTE was remapped (mechanism 1).
 static uint64_t g_snapshot_buf_frame = 0;
 
+/// @brief Issue #321: number of tasks whose inbox was NON-EMPTY at the last
+///        snapshot_create().  The suite boot path settles every inbox before
+///        the snapshot (IPC-quiescence), so this is expected to be 0; a
+///        non-zero value means an in-flight message was captured and will be
+///        replayed on every snapshot_restore (duplicate IPC delivery).
+static uint64_t g_baseline_nonempty_inbox_count = 0;
+
+/// @brief Issue #321 test accessor: inboxes non-empty at the last snapshot.
+uint64_t snapshot_baseline_nonempty_inbox_count() {
+    return g_baseline_nonempty_inbox_count;
+}
+
 void mark_vfs_touched() {
     kernel::gs::mark_vfs_touched(true);
 }
@@ -441,6 +453,38 @@ bool snapshot_create() {
             t->state != TaskState::REAPED)
             MemPool::pin_block(t);
     }
+
+#if defined(CONFIG_DEBUG)
+    // Issue #321 diagnostic: report any task whose message inbox is NON-EMPTY
+    // at snapshot time.  Sampled immediately BEFORE the MemPool byte-capture
+    // below; the whole of snapshot_create() runs under the top-level
+    // arch::IrqGuard, so the scan and the capture are atomic on the BSP (no
+    // task can push/consume between them).  A queued message is captured
+    // inside the task's TCB block and byte-restored on every snapshot_restore,
+    // so it would be resurrected on each test boundary (duplicate IPC
+    // delivery).  The suite boot path settles all inboxes before the snapshot
+    // (kernel.cpp init_task_main), so this MUST stay 0; a non-zero value means
+    // a message is in flight at the baseline and will be replayed.  Log-only
+    // here; the invariant is asserted by ipc_snapshot_baseline_inbox_quiescent.
+    g_baseline_nonempty_inbox_count = 0;
+    for (auto *t = Scheduler::all_tasks().first_ptr(); t;
+         t = Scheduler::all_tasks().next_ptr(t)) {
+        if (t->magic != TaskControlBlock::TCB_MAGIC)
+            continue;
+        if (t->msg_queue.count != 0) {
+            ++g_baseline_nonempty_inbox_count;
+            Logger::raw_write("[SNAP:IPC] non-empty inbox at snapshot id=");
+            Logger::print_dec(t->id);
+            Logger::raw_write(" count=");
+            Logger::print_dec(t->msg_queue.count);
+            Logger::raw_write(" head=");
+            Logger::print_dec(t->msg_queue.head);
+            Logger::raw_write(" tail=");
+            Logger::print_dec(t->msg_queue.tail);
+            Logger::raw_write("\n");
+        }
+    }
+#endif
 
     // ---- MemPool ----
     {
@@ -1243,6 +1287,35 @@ void snapshot_restore(const char *test_name) {
         for (size_t i = 0; i < MemPool::pool_count(); ++i)
             MemPool::restore_pool_meta(i, meta[i]);
     }
+
+#if defined(CONFIG_DEBUG)
+    // Issue #321 diagnostic: after the byte-exact MemPool restore, report any
+    // baseline task whose inbox is non-empty — the resurrected in-flight
+    // message that the daemon will re-receive this test.  Log-only.
+    {
+        uint64_t nonempty = 0;
+        for (auto *t = Scheduler::all_tasks().first_ptr(); t;
+             t = Scheduler::all_tasks().next_ptr(t)) {
+            if (t->magic != TaskControlBlock::TCB_MAGIC)
+                continue;
+            if (t->msg_queue.count != 0) {
+                ++nonempty;
+                Logger::raw_write("[SNAP:IPC:RESTORE] inbox id=");
+                Logger::print_dec(t->id);
+                Logger::raw_write(" count=");
+                Logger::print_dec(t->msg_queue.count);
+                Logger::raw_write(" test=");
+                Logger::raw_write(test_name ? test_name : "?");
+                Logger::raw_write("\n");
+            }
+        }
+        if (nonempty != 0) {
+            Logger::raw_write("[SNAP:IPC:RESTORE] non-empty inboxes=");
+            Logger::print_dec(nonempty);
+            Logger::raw_write("\n");
+        }
+    }
+#endif
 
     // ---- Scheduler ----
     // Quiesce across the scheduler window (flag + cancel all arms): the

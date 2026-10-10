@@ -139,7 +139,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
     {"ipc_timeout",           7,    0,       0      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
-    {"ipc_extended",          11,   0,       0      },  // size limits, mid-queue removal, timeout, inversion + 2 arrival-wake gate tests (issue #208)
+    {"ipc_extended",          12,   0,       0      },  // size limits, mid-queue removal, timeout, inversion + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321)
     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
     {"ipc_robustness",       11,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A) + 4 send_sync reply-matching regressions (issue #296; mid-wait DestDeath skipped, see test)
     {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
@@ -277,7 +277,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // Structural/semantic aggregates (issue #173).  Values are filled
     // from measured `dump-counts` output; 0 disables validation.
     {"core",                474,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294)
-    {"ipc",                 81,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208)
+    {"ipc",                 86,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321). Row was stale at 81 (pre-existing +4 drift from earlier ipc_* additions); reconciled to the observed 86.
     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)

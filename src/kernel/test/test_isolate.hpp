@@ -43,6 +43,13 @@ bool snapshot_canary_corrupted();
 ///        invocation where snapshot/restore is disabled.
 bool snapshot_is_active();
 
+/// @brief Issue #321: number of tasks whose message inbox was NON-EMPTY at the
+///        last snapshot_create().  The suite boot path settles every inbox
+///        before the snapshot (IPC-quiescence), so this is expected to be 0;
+///        a non-zero value means an in-flight message was captured and will be
+///        replayed on every snapshot_restore (duplicate IPC delivery).
+uint64_t snapshot_baseline_nonempty_inbox_count();
+
 /// @brief Terminate old daemon tasks and reload them from initrd.
 ///        Call AFTER snapshot_restore + snapshot_destroy to replace
 ///        corrupted page tables with fresh ones from initrd.

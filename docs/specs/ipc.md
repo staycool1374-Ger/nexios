@@ -22,6 +22,14 @@ rows of `specs/scheduler.md`.  Audit fix status is code-verified where marked.
   (VULN-IPC-02).  Lock ordering: `scheduler_lock_` first, then the queue lock.
 - `is_full()` reads must be `is_full_locked()` (acquire the lock) to avoid a
   TOCTOU with a concurrent `push` (VULN-IPC-02).
+- **Exactly-once across test-snapshot restore (issue #321):** the suite
+  isolation snapshot captures each task's embedded `MessageQueue` byte-exact
+  (`test_isolate.cpp` MemPool capture).  To keep delivery exactly-once the
+  baseline MUST be IPC-quiescent — every inbox empty when `snapshot_create()`
+  runs — otherwise the restored queue resurrects the in-flight message on every
+  `snapshot_restore`.  The boot path settles all inboxes before the snapshot
+  (`kernel.cpp` `init_task_main`); the invariant is asserted by
+  `ipc_snapshot_baseline_inbox_quiescent`.
 
 ### 1.1 Send-path rollback (VULN-IPC-01) [IMPLEMENTED]
 When `IPC::send()` blocks while interrupts are disabled, `block_sender()` has

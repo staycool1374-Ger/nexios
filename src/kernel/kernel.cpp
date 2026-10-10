@@ -553,6 +553,47 @@ void init_task_main() {
         if (auto *self = kernel::Scheduler::current_task()) {
             kernel::Scheduler::set_priority(*self, 10);
         }
+        // Issue #321: the suite snapshot must be IPC-quiescent.  The boot
+        // grants (ramdisk storage above; watchdog supervision earlier) are
+        // delivered just before the suite starts; if a recipient has not yet
+        // consumed its grant, snapshot_create() would capture that message
+        // inside the receiver's embedded MessageQueue, and the byte-exact
+        // MemPool restore would then REPLAY it on every snapshot_restore
+        // (duplicate IPC delivery — a correctness landmine for any
+        // non-idempotent receiver).  This is a PREVENTIVE structural guarantee
+        // (the current tree already settles by scheduling luck; see #321):
+        // wait, bounded, until EVERY baseline task's inbox is empty and our
+        // own ack inbox is drained, so the captured baseline is empty by
+        // construction.  Debug builds only — release runs the suite without
+        // snapshot isolation (use_isolation=false), so it needs no settle.
+#if defined(CONFIG_DEBUG)
+        if (!degraded) {
+            const uint64_t settle_deadline = arch::Timer::ticks() + 500;
+            while (arch::Timer::ticks() < settle_deadline) {
+                // Drop our own inbox (daemon-ready / grant-ack messages).
+                kernel::Message drain{};
+                while (kernel::IPC::recv(drain)) {
+                }
+                // Re-resolve the whole task set each pass (no raw TCB pointer
+                // is held across the hlt scheduling point).
+                bool quiescent = true;
+                for (auto *t = kernel::Scheduler::all_tasks().first_ptr(); t;
+                     t = kernel::Scheduler::all_tasks().next_ptr(t)) {
+                    if (t->magic != kernel::TaskControlBlock::TCB_MAGIC)
+                        continue;
+                    if (!t->msg_queue.is_empty()) {
+                        quiescent = false;
+                        break;
+                    }
+                }
+                if (quiescent)
+                    break;
+                // Yield so the higher-priority daemons (prio 20 > init 10)
+                // can run and consume their grants.
+                arch::hlt();
+            }
+        }
+#endif
 #ifdef CONFIG_DEBUG
         kernel::Logger::info("[TEST] Registry tests=%u classes=%u",
                              (unsigned)kernel::test::Registry::count(),
