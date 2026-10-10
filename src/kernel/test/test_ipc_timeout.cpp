@@ -121,12 +121,33 @@ void to_dummy_fire(void *context) {
     (void)context;
 }
 
+/// @brief Assert a receiver's OWN bounded-recv arm was reclaimed.
+///
+/// The BSP TimerWheel is SHARED with production daemons: watchdogd (issue
+/// #277) runs a bounded receive (`recv timeout=10`) in a service loop and
+/// legitimately arms the wheel every ~10 ticks, so a global
+/// `live_count(0)==0` assertion races that daemon.  Assert the per-owner
+/// invariant instead: the task's arm flag is cleared AND its captured arm
+/// receipt is no longer live in the wheel (closed by construction: a
+/// skipped/corrupted cancel leaves the slot armed with the matching
+/// generation → still detected).
+/// @note Read the task fields BEFORE terminate_and_drain* (which frees the
+///       TCB); a zombie is not auto-reaped under tests.
+void to_assert_recv_arm_reclaimed(TaskControlBlock &task) {
+    const uint64_t armed =
+        __atomic_load_n(&task.recv_timeout_armed, __ATOMIC_ACQUIRE) ? 1ULL
+                                                                    : 0ULL;
+    JARVIS_ASSERT_EQ(0ULL, armed);
+    JARVIS_ASSERT(!time::TimerWheel::is_live(task.recv_timeout_handle));
+}
+
 } // namespace
 
 // Runmode: kernel
 // Testidea: fast-path message returns without arming the wheel.
 // Input: Dispatched task self-sends, RECV_FAST(timeout=10) with queued msg
-// Expect: returns msg type immediately, wheel live_count stays 0
+// Expect: returns msg type immediately, receiver's own arm reclaimed
+//         (flag cleared, handle not live)
 // Depends: sys_recv_fast fast path, IPC::recv_wait_arm
 JARVIS_TEST(recv_timeout_fastpath_no_arm, "PRE: none | POST: none") {
     ToRecvCtx recv_ctx{};
@@ -166,7 +187,7 @@ JARVIS_TEST(recv_timeout_fastpath_no_arm, "PRE: none | POST: none") {
     kernel::test::wait_for_termination_safe(receiver);
     Scheduler::set_current(*original);
     JARVIS_ASSERT_EQ(41ULL, recv_ctx.result);
-    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
+    to_assert_recv_arm_reclaimed(*receiver);
     kernel::test::terminate_and_drain(*receiver);
     JARVIS_TEST_PASS();
 }
@@ -174,13 +195,12 @@ JARVIS_TEST(recv_timeout_fastpath_no_arm, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: empty queue with timeout returns -1 and reclaims the slot.
 // Input: Dispatched task RECV_FAST(timeout=5) on empty queue, no sender
-// Expect: returns -1, wheel live_count back to 0, flags cleared
+// Expect: returns -1, receiver's own arm reclaimed (flags cleared)
 // Depends: wheel expiry, tick-tail apply, resume recheck
 JARVIS_TEST(recv_timeout_fires_minus_one, "PRE: none | POST: none") {
     ToRecvCtx recv_ctx{};
     recv_ctx.result = 0;
     recv_ctx.timeout_ticks = 5;
-    uint64_t armed_after = 0;
     auto *receiver = to_spawn_receiver(recv_ctx);
     JARVIS_ASSERT(receiver != nullptr);
     {
@@ -193,9 +213,7 @@ JARVIS_TEST(recv_timeout_fires_minus_one, "PRE: none | POST: none") {
     kernel::test::wait_for_termination_safe(receiver);
     Scheduler::set_current(*original);
     JARVIS_ASSERT_EQ(0xFFFFFFFFFFFFFFFFULL, recv_ctx.result);
-    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
-    armed_after = receiver->recv_timeout_armed ? 1ULL : 0ULL;
-    JARVIS_ASSERT_EQ(0ULL, armed_after);
+    to_assert_recv_arm_reclaimed(*receiver);
     kernel::test::terminate_and_drain(*receiver);
     JARVIS_TEST_PASS();
 }
@@ -203,7 +221,8 @@ JARVIS_TEST(recv_timeout_fires_minus_one, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: message arriving before timeout returns the message, not -1.
 // Input: Receiver RECV_FAST(timeout=100); sender delivers after short spin
-// Expect: receiver returns msg type, armed timer cancelled (live 0)
+// Expect: receiver returns msg type, armed timer cancelled (per-owner
+//         handle not live)
 // Depends: sender wake path, resume cancel, msg-wins recheck
 JARVIS_TEST(recv_timeout_msg_wins, "PRE: none | POST: none") {
     ToRecvCtx recv_ctx{};
@@ -231,7 +250,7 @@ JARVIS_TEST(recv_timeout_msg_wins, "PRE: none | POST: none") {
     Scheduler::set_current(*original);
     JARVIS_ASSERT_EQ(77ULL, recv_ctx.result);
     JARVIS_ASSERT_EQ(0ULL, send_ctx.result);
-    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
+    to_assert_recv_arm_reclaimed(*receiver);
     kernel::test::terminate_and_drain2(sender, receiver);
     JARVIS_TEST_PASS();
 }
@@ -239,7 +258,7 @@ JARVIS_TEST(recv_timeout_msg_wins, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: timeout 0 still blocks forever until a send wakes it.
 // Input: Receiver RECV_FAST(timeout=0); sender delivers after short spin
-// Expect: receiver returns msg type, wheel never armed (live 0 throughout)
+// Expect: receiver returns msg type, wheel never armed (flag stays clear)
 // Depends: 0=forever legacy contract preservation
 JARVIS_TEST(recv_timeout_forever_wakes_on_send, "PRE: none | POST: none") {
     ToRecvCtx recv_ctx{};
@@ -266,7 +285,8 @@ JARVIS_TEST(recv_timeout_forever_wakes_on_send, "PRE: none | POST: none") {
     kernel::test::wait_for_termination_safe(receiver);
     Scheduler::set_current(*original);
     JARVIS_ASSERT_EQ(78ULL, recv_ctx.result);
-    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
+    JARVIS_ASSERT(
+        !__atomic_load_n(&receiver->recv_timeout_armed, __ATOMIC_ACQUIRE));
     kernel::test::terminate_and_drain2(sender, receiver);
     JARVIS_TEST_PASS();
 }
@@ -274,7 +294,7 @@ JARVIS_TEST(recv_timeout_forever_wakes_on_send, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: killing a BLOCKED armed waiter is crash-free and leak-free.
 // Input: Receiver RECV_FAST(timeout=30000) blocks; terminate it; run ticks
-// Expect: no crash, wheel live_count back to 0 (cleanup cancelled)
+// Expect: no crash, receiver's arm reclaimed (cleanup cancelled)
 // Depends: TaskControlBlock::cleanup cancel, snapshot_reset
 JARVIS_TEST(recv_timeout_kill_while_armed, "PRE: none | POST: none") {
     ToRecvCtx recv_ctx{};
@@ -293,21 +313,23 @@ JARVIS_TEST(recv_timeout_kill_while_armed, "PRE: none | POST: none") {
     bool saw_armed = false;
     for (uint64_t spin = 0; spin < 10000000ULL; ++spin) {
         if (receiver->state == TaskState::BLOCKED &&
-            receiver->recv_timeout_armed &&
-            time::TimerWheel::live_count(0) == 1) {
+            __atomic_load_n(&receiver->recv_timeout_armed, __ATOMIC_ACQUIRE) &&
+            time::TimerWheel::is_live(receiver->recv_timeout_handle)) {
             saw_armed = true;
             break;
         }
         arch::pause();
     }
     JARVIS_ASSERT(saw_armed);
+    // Capture the arm receipt BEFORE the drain frees the TCB.
+    const time::TimerWheel::Handle armed_handle = receiver->recv_timeout_handle;
     kernel::test::terminate_and_drain(*receiver);
     // Let stray ticks run: nothing may fire and nothing may leak.
     const uint64_t tick_start = arch::Timer::ticks();
     while (arch::Timer::ticks() - tick_start < 3) {
         arch::pause();
     }
-    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
+    JARVIS_ASSERT(!time::TimerWheel::is_live(armed_handle));
     Scheduler::set_current(*original);
     JARVIS_TEST_PASS();
 }
@@ -318,6 +340,7 @@ JARVIS_TEST(recv_timeout_kill_while_armed, "PRE: none | POST: none") {
 //        tick past expiry
 // Expect: no timed_out set, no wake, no crash
 // Depends: IPC::recv_timeout_fire generation validation
+// NOTE: daemon-free (no task yield) → the global wheel count is valid here.
 JARVIS_TEST(recv_timeout_stale_fire_noop, "PRE: none | POST: none") {
     time::TimerWheel::snapshot_reset();
     auto *self = Scheduler::current_task();
@@ -347,6 +370,9 @@ JARVIS_TEST(recv_timeout_stale_fire_noop, "PRE: none | POST: none") {
 // Input: Fill all 64 wheel slots, RECV_FAST(timeout=5) on empty queue
 // Expect: returns -1 via fallback path, no crash, slots drained after
 // Depends: arm()==false fallback, coarse deadline poll
+// NOTE: the 64 slots are filled synchronously (no yield) before any task
+//       runs, so the global count is valid; a daemon arm while the wheel is
+//       full simply falls back (arm()==false).
 JARVIS_TEST(recv_timeout_full_wheel_fallback, "PRE: none | POST: none") {
     time::TimerWheel::snapshot_reset();
     const uint64_t now_ns = arch::Timer::ns_monotonic();

@@ -195,6 +195,16 @@ uint32_t TimerWheel::live_count(uint32_t cpu) noexcept {
     return wheels_[cpu].live_count;
 }
 
+bool TimerWheel::is_live(const Handle& handle) noexcept {
+    if (handle.cpu >= CONFIG_MAX_CPUS || handle.slot >= kMaxTimersPerCpu) {
+        return false;
+    }
+    sync::IrqSpinLockGuard guard(lock_);
+    ensure_init_locked();
+    const Slot& slot = wheels_[handle.cpu].slots[handle.slot];
+    return slot.armed && slot.generation == handle.generation;
+}
+
 void TimerWheel::snapshot_reset() noexcept {
     sync::IrqSpinLockGuard guard(lock_);
     ensure_init_locked();

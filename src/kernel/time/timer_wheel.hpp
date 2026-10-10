@@ -90,6 +90,13 @@ class TimerWheel {
     /// @param cpu CPU index.
     /// @return Live count (0 on invalid cpu).
     static uint32_t live_count(uint32_t cpu) noexcept;
+    /// @brief Is an arm receipt still live (introspection/test only)?
+    /// Mirrors cancel()'s validation: true iff the slot is armed with the
+    /// same generation.  A stale handle (cancelled slot, a slot reused with
+    /// a bumped generation, or an out-of-range handle) reads false.
+    /// @param handle Receipt from arm().
+    /// @return true when the slot is still armed with that generation.
+    static bool is_live(const Handle& handle) noexcept;
     /// @brief Disarm everything, invalidate all handles (test isolation).
     /// Bumps every generation so pre-reset handles fail closed.
     static void snapshot_reset() noexcept;

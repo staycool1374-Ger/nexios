@@ -160,4 +160,12 @@ orphan re-enqueue; `4bf751b4` — owner-resolution self-switch no-op;
   `IpcPriorityOrderedWake` (ipc_robustness class).
 - **`sys_receive` bounded/timeout variant** (VULN-W3 in `specs/boundary.md`) —
   uses the discarded `arg3` slot as `timeout_ticks`; verification status
-  unconfirmed.
+  unconfirmed.  **Reclaim contract (issue #298):** a bounded receive arms the
+  shared BSP `TimerWheel` and MUST cancel its own arm on every exit
+  (`IPC::recv_wait_cancel`).  Because the wheel is shared with production
+  daemons — `watchdogd` runs a bounded receive (`timeout=10`) in a service
+  loop and legitimately arms it (issue #277) — tests that run concurrently
+  with such a daemon assert the **per-owner** invariant
+  (`task.recv_timeout_armed` clear AND `TimerWheel::is_live(handle)` false);
+  a global `live_count(0)` is asserted only in daemon-free tests
+  (`test_timer_wheel`, the stale-fire/full-wheel cases).
