@@ -36,6 +36,8 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/test/test_isolate.hpp>
+#include <kernel/elf/elf.hpp>
+#include <initrd/initrd.hpp>
 
 using namespace kernel;
 
@@ -592,12 +594,68 @@ JARVIS_TEST(ipc_snapshot_baseline_inbox_quiescent, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: ipc_send_sync (issue #317 option b) writes the reply PAYLOAD to
+//           the caller's reply_buf, returns the reply TYPE, and does NOT
+//           overwrite the request buffer (the old reply-over-request path).
+// Input: userspace/bin/ipcsync-probe.c.elf sends to PID 1; the harness (this
+//        test) replies (type 0x77, 8-byte 0xA0.. payload).
+// Expect: the probe exits 0 (its own reply_buf/payload/req-intact checks hold).
+// Depends: SYS_SEND_SYNC 5th-arg (a4) plumbing, ipc_send_sync, initrd.
+JARVIS_TEST(ipc_send_sync_reply_buffer, "PRE: none | POST: none") {
+    initrd::InitrdFile f = initrd::find("bin/ipcsync-probe.c.elf");
+    JARVIS_ASSERT(f.data != nullptr);
+    auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
+    JARVIS_ASSERT(kernel::elf::validate_header(hdr));
+    auto *t = kernel::elf::load(hdr, f.data, f.size);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+
+    bool replied = false;
+    for (int i = 0; i < 400000 && !replied; ++i) {
+        Message msg;
+        if (IPC::recv(msg) && msg.type == 0x55ULL) {
+            Message reply{};
+            reply.sender_id = Scheduler::current_task()->id;
+            reply.type = 0x77ULL;
+            reply.priority = 0;
+            reply.data_size = 8;
+            for (uint64_t b = 0; b < 8; ++b)
+                reply.data[b] = static_cast<uint8_t>(0xA0 + b);
+            replied = IPC::send(msg.sender_id, reply);
+        }
+        __atomic_store_n(&kernel::Scheduler::SwSlots::need_resched(), true,
+                         __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+    JARVIS_ASSERT(replied);
+
+    for (int i = 0; i < 400000; ++i) {
+        if (!TaskControlBlock::is_valid(t) ||
+            t->state == TaskState::TERMINATED ||
+            t->state == TaskState::REAPED)
+            break;
+        __atomic_store_n(&kernel::Scheduler::SwSlots::need_resched(), true,
+                         __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+    JARVIS_ASSERT(TaskControlBlock::is_valid(t));
+    JARVIS_ASSERT_EQ(0ULL, t->exit_code); // 0 => probe's contract checks held
+    // The probe exited via sys_exit (switch_away_from_terminating does NOT
+    // release_zombie), so it is NOT on the zombie list — terminate explicitly
+    // to release it, then reap (cleanup() frees its Notify/EventGroup/FDs).
+    Scheduler::terminate(*t, t->exit_code);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all extended IPC unit tests with the test framework.
 // Input: None
 // Expect: All IPC extended tests registered via JARVIS_REGISTER_TEST
 // Depends: kernel test framework
 void register_ipc_extended_tests() {
     Logger::info("Registering IPC extended tests");
+    JARVIS_REGISTER_TEST(ipc_send_sync_reply_buffer);
     JARVIS_REGISTER_TEST(ipc_send_data_size_exceeds_max);
     JARVIS_REGISTER_TEST(ipc_send_data_size_zero);
     JARVIS_REGISTER_TEST(ipc_queue_remove_from_mid);

@@ -28,6 +28,14 @@ extern "C" {
 
 int ipc_send(unsigned long dest, unsigned long type, const void* data, unsigned long size, unsigned long flags);
 int ipc_recv(void* buf, unsigned long max_size);
+/// @brief Send a message and block until the reply arrives.
+///        Contract (issue #317 option b): the reply PAYLOAD is written to
+///        @p reply_buf (a real destination), NOT over @p data.  @p reply_buf
+///        must be at least @p size bytes (the reply is bounded by the request
+///        size); pass NULL for no reply payload.  The return value is the
+///        reply message TYPE (negative on failure), not a result code.
+///        (Historically the kernel wrote the reply over @p data and dropped
+///        @p reply_buf — threaded through the 5th argument register now.)
 int ipc_send_sync(unsigned long dest, unsigned long type, const void* data, unsigned long size, void* reply_buf);
 
 int ipc_notify(unsigned long task_id, unsigned long value);

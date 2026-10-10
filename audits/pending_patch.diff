@@ -1,14 +1,347 @@
-diff --git a/linker/linker_aarch64.ld b/linker/linker_aarch64.ld
-index 47bd13142..77883a1a6 100644
---- a/linker/linker_aarch64.ld
-+++ b/linker/linker_aarch64.ld
-@@ -41,7 +41,9 @@ SECTIONS
-     .boot_stack : ALIGN(4K)
-     {
-         _stack_start_low = .;
-+        KEEP(*(.marker.stack.before))
-         *(.boot_stack)
-+        KEEP(*(.marker.stack.after))
-         _stack_end_low = .;
-     } :boot_data
+diff --git a/docs/specs/ipc.md b/docs/specs/ipc.md
+index 671cf64c1..8014e982e 100644
+--- a/docs/specs/ipc.md
++++ b/docs/specs/ipc.md
+@@ -69,6 +69,18 @@ Entry guard: `ENSURE(task.blocked_on_queue == &q)`.
+   no block); dest death with nothing matching returns `false` with the
+   queue intact; spurious wakeups on non-matching arrivals re-block.
+ - **Spin-wait:** the reply wait is a `hlt()` loop (not a bare pause-spin).
++- **Userspace reply buffer (issue #317 option b, IMPLEMENTED):** the
++  `SYS_SEND_SYNC` syscall threads a real reply-buffer address through the 5th
++  argument register — x86_64 `rdi` (frame[5]), aarch64 `x4` (frame[4]),
++  riscv64 `a4` (frame[13]); no entry-stub change (the register is already in
++  the trap frame the handler receives). The kernel writes the reply PAYLOAD
++  into that buffer (bounded by the REQUEST size; a non-null `reply_buf` must
++  be ≥ the request size, NULL = no reply payload) and returns the reply TYPE.
++  It **no longer** writes the reply over the request buffer — the old
++  unclamped `copy_size = reply.data_size` overwrite is gone. In-tree libc
++  `ipc_send_sync` passes `reply_buf` via `__syscall5r`; callers that pass the
++  request buffer as `reply_buf` (xmodem/ramdisk) keep the same-buffer
++  behaviour unchanged.
  
+ ```
+  loop: matching reply (sender==dest) queued? ── yes ──▶ pop, success
+diff --git a/src/kernel/syscall/syscall_handlers_ipc.cpp b/src/kernel/syscall/syscall_handlers_ipc.cpp
+index 4b397b12b..17f38e342 100644
+--- a/src/kernel/syscall/syscall_handlers_ipc.cpp
++++ b/src/kernel/syscall/syscall_handlers_ipc.cpp
+@@ -149,8 +149,25 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
+     return msg.type;
+ }
+ 
++/// @brief Issue #317 (option b): read the 5th syscall argument (a4) from the
++///        trap frame.  The 4-arg ABI leaves one dedicated register free for
++///        all defined syscalls: x86_64 rdi (frame index 5), aarch64 x4 (index
++///        4), riscv64 a4 (index 13 = OFF_A4 104 / 8).  No entry-stub change:
++///        the register is already in the frame handed to the handler.
++static inline uint64_t syscall_arg4(const uint64_t *regs) noexcept {
++#if defined(CONFIG_ARCH_X86_64)
++    return regs ? regs[5] : 0; // rdi
++#elif defined(CONFIG_ARCH_AARCH64)
++    return regs ? regs[4] : 0; // x4
++#elif defined(CONFIG_ARCH_RISCV64)
++    return regs ? regs[13] : 0; // a4
++#else
++    return 0;
++#endif
++}
++
+ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+-                                uint64_t arg3, uint64_t *) {
++                                uint64_t arg3, uint64_t *regs) {
+     uint64_t dest_id = arg0;
+     uint64_t type = arg2;
+     uint64_t data_size = arg3 < IPC_MAX_MSG_SIZE ? arg3 : IPC_MAX_MSG_SIZE;
+@@ -158,8 +175,6 @@ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+     auto data = checked(reinterpret_cast<const uint8_t *>(arg1), data_size);
+     if (!data.valid())
+         return static_cast<uint64_t>(-1);
+-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+-    auto data_rw = checked(reinterpret_cast<uint8_t *>(arg1), data_size);
+     Message msg{};
+     auto *cur = syscall_task();
+     if (!cur)
+@@ -172,11 +187,27 @@ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+     Message reply{};
+     if (!IPC::send_sync(dest_id, msg, reply))
+         return static_cast<uint64_t>(-1);
+-    uint64_t copy_size = reply.data_size;
+-    if (copy_size > IPC_MAX_MSG_SIZE)
+-        copy_size = IPC_MAX_MSG_SIZE;
+-    for (size_t i = 0; i < copy_size; ++i)
+-        data_rw.write(reply.data[i], i);
++    // Issue #317 option (b): the reply payload is written to the caller's
++    // REPLY BUFFER (5th arg / free register), NOT over the request buffer.
++    // reply_buf == 0 => the caller requested no reply payload.  The reply is
++    // bounded by the REQUEST size: reply_buf must be at least `data_size`
++    // bytes (the same capacity the request check enforces) — this also fixes
++    // the old unclamped `copy_size = reply.data_size` (a responder could once
++    // write up to IPC_MAX_MSG_SIZE into a smaller request buffer).
++    uint64_t reply_buf = syscall_arg4(regs);
++    if (reply_buf != 0 && data_size != 0) {
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto reply_out =
++            checked(reinterpret_cast<uint8_t *>(reply_buf), data_size);
++        if (!reply_out.valid())
++            return static_cast<uint64_t>(-1);
++        uint64_t copy_size = reply.data_size;
++        if (copy_size > data_size)
++            copy_size = data_size;
++        for (size_t i = 0; i < copy_size; ++i)
++            if (!reply_out.write(reply.data[i], i))
++                return static_cast<uint64_t>(-1); // unmapped reply_buf: fail closed
++    }
+     return reply.type;
+ }
+ 
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index af6744f39..8f7dc8854 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -139,7 +139,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
+     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
+     {"ipc_timeout",           7,    0,       0      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
+-    {"ipc_extended",          12,   0,       0      },  // size limits, mid-queue removal, timeout, inversion + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321)
++    {"ipc_extended",          13,   0,       0      },  // size limits, mid-queue removal, timeout, inversion + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317)
+     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
+     {"ipc_robustness",       11,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A) + 4 send_sync reply-matching regressions (issue #296; mid-wait DestDeath skipped, see test)
+     {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
+@@ -277,7 +277,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // Structural/semantic aggregates (issue #173).  Values are filled
+     // from measured `dump-counts` output; 0 disables validation.
+     {"core",                474,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294)
+-    {"ipc",                 86,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321). Row was stale at 81 (pre-existing +4 drift from earlier ipc_* additions); reconciled to the observed 86.
++    {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
+     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
+     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
+     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
+diff --git a/src/kernel/test/test_ipc_extended.cpp b/src/kernel/test/test_ipc_extended.cpp
+index 9452ff325..ed312a20c 100644
+--- a/src/kernel/test/test_ipc_extended.cpp
++++ b/src/kernel/test/test_ipc_extended.cpp
+@@ -36,6 +36,8 @@
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/test/test_sched_helpers.hpp>
+ #include <kernel/test/test_isolate.hpp>
++#include <kernel/elf/elf.hpp>
++#include <initrd/initrd.hpp>
+ 
+ using namespace kernel;
+ 
+@@ -591,6 +593,61 @@ JARVIS_TEST(ipc_snapshot_baseline_inbox_quiescent, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: ipc_send_sync (issue #317 option b) writes the reply PAYLOAD to
++//           the caller's reply_buf, returns the reply TYPE, and does NOT
++//           overwrite the request buffer (the old reply-over-request path).
++// Input: userspace/bin/ipcsync-probe.c.elf sends to PID 1; the harness (this
++//        test) replies (type 0x77, 8-byte 0xA0.. payload).
++// Expect: the probe exits 0 (its own reply_buf/payload/req-intact checks hold).
++// Depends: SYS_SEND_SYNC 5th-arg (a4) plumbing, ipc_send_sync, initrd.
++JARVIS_TEST(ipc_send_sync_reply_buffer, "PRE: none | POST: none") {
++    initrd::InitrdFile f = initrd::find("bin/ipcsync-probe.c.elf");
++    JARVIS_ASSERT(f.data != nullptr);
++    auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
++    JARVIS_ASSERT(kernel::elf::validate_header(hdr));
++    auto *t = kernel::elf::load(hdr, f.data, f.size);
++    JARVIS_ASSERT(t != nullptr);
++    Scheduler::add_task(*t);
++
++    bool replied = false;
++    for (int i = 0; i < 400000 && !replied; ++i) {
++        Message msg;
++        if (IPC::recv(msg) && msg.type == 0x55ULL) {
++            Message reply{};
++            reply.sender_id = Scheduler::current_task()->id;
++            reply.type = 0x77ULL;
++            reply.priority = 0;
++            reply.data_size = 8;
++            for (uint64_t b = 0; b < 8; ++b)
++                reply.data[b] = static_cast<uint8_t>(0xA0 + b);
++            replied = IPC::send(msg.sender_id, reply);
++        }
++        __atomic_store_n(&kernel::Scheduler::SwSlots::need_resched(), true,
++                         __ATOMIC_RELEASE);
++        arch::hlt();
++    }
++    JARVIS_ASSERT(replied);
++
++    for (int i = 0; i < 400000; ++i) {
++        if (!TaskControlBlock::is_valid(t) ||
++            t->state == TaskState::TERMINATED ||
++            t->state == TaskState::REAPED)
++            break;
++        __atomic_store_n(&kernel::Scheduler::SwSlots::need_resched(), true,
++                         __ATOMIC_RELEASE);
++        arch::hlt();
++    }
++    JARVIS_ASSERT(TaskControlBlock::is_valid(t));
++    JARVIS_ASSERT_EQ(0ULL, t->exit_code); // 0 => probe's contract checks held
++    // The probe exited via sys_exit (switch_away_from_terminating does NOT
++    // release_zombie), so it is NOT on the zombie list — terminate explicitly
++    // to release it, then reap (cleanup() frees its Notify/EventGroup/FDs).
++    Scheduler::terminate(*t, t->exit_code);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
+ // Runmode: kernel
+ // Testidea: Registers all extended IPC unit tests with the test framework.
+ // Input: None
+@@ -598,6 +655,7 @@ JARVIS_TEST(ipc_snapshot_baseline_inbox_quiescent, "PRE: none | POST: none") {
+ // Depends: kernel test framework
+ void register_ipc_extended_tests() {
+     Logger::info("Registering IPC extended tests");
++    JARVIS_REGISTER_TEST(ipc_send_sync_reply_buffer);
+     JARVIS_REGISTER_TEST(ipc_send_data_size_exceeds_max);
+     JARVIS_REGISTER_TEST(ipc_send_data_size_zero);
+     JARVIS_REGISTER_TEST(ipc_queue_remove_from_mid);
+diff --git a/src/libc/ipc.c b/src/libc/ipc.c
+index aacf2cff4..63bafd457 100644
+--- a/src/libc/ipc.c
++++ b/src/libc/ipc.c
+@@ -10,7 +10,10 @@ int ipc_recv(void* buf, size_t max_size) {
+ }
+ 
+ int ipc_send_sync(unsigned long dest, unsigned long type, const void* data, size_t size, void* reply_buf) {
+-    return (int)__syscall5(3, (long)dest, (long)data, (long)type, (long)size);
++    // Issue #317 option (b): the reply buffer address is threaded through the
++    // 5th argument register (reply is written THERE, not over the request).
++    return (int)__syscall5r(3, (long)dest, (long)data, (long)type, (long)size,
++                            (long)reply_buf);
+ }
+ 
+ int ipc_notify(unsigned long task_id, unsigned long value) {
+diff --git a/src/libc/ipc.h b/src/libc/ipc.h
+index 82710ea4d..5f324639c 100644
+--- a/src/libc/ipc.h
++++ b/src/libc/ipc.h
+@@ -28,6 +28,14 @@ extern "C" {
+ 
+ int ipc_send(unsigned long dest, unsigned long type, const void* data, unsigned long size, unsigned long flags);
+ int ipc_recv(void* buf, unsigned long max_size);
++/// @brief Send a message and block until the reply arrives.
++///        Contract (issue #317 option b): the reply PAYLOAD is written to
++///        @p reply_buf (a real destination), NOT over @p data.  @p reply_buf
++///        must be at least @p size bytes (the reply is bounded by the request
++///        size); pass NULL for no reply payload.  The return value is the
++///        reply message TYPE (negative on failure), not a result code.
++///        (Historically the kernel wrote the reply over @p data and dropped
++///        @p reply_buf — threaded through the 5th argument register now.)
+ int ipc_send_sync(unsigned long dest, unsigned long type, const void* data, unsigned long size, void* reply_buf);
+ 
+ int ipc_notify(unsigned long task_id, unsigned long value);
+diff --git a/src/libc/syscall.h b/src/libc/syscall.h
+index b98f4db52..58bcaa691 100644
+--- a/src/libc/syscall.h
++++ b/src/libc/syscall.h
+@@ -156,6 +156,54 @@ static inline long __syscall5(long num, long a0, long a1, long a2, long a3) {
+     return ret;
+ }
+ 
++// Issue #317 (option b): 5th syscall argument rides a dedicated free register
++// — x86_64 rdi (regs[5]); aarch64 x4 (regs[4]); riscv64 a4 (regs[13]).  The
++// kernel handler reads it from the trap frame (no entry-stub change).  Used by
++// ipc_send_sync to thread a real reply buffer address.
++static inline long __syscall5r(long num, long a0, long a1, long a2, long a3,
++                               long a4) {
++    long ret;
++#if defined(__x86_64__)
++    asm volatile(
++        "int $0x80"
++        : "=a"(ret)
++        : "a"(num), "b"(a0), "c"(a1), "d"(a2), "S"(a3), "D"(a4)
++        : "memory", "cc"
++    );
++#elif defined(__aarch64__)
++    register long x8 asm("x8") = num;
++    register long x0 asm("x0") = a0;
++    register long x1 asm("x1") = a1;
++    register long x2 asm("x2") = a2;
++    register long x3 asm("x3") = a3;
++    register long x4 asm("x4") = a4;
++    asm volatile(
++        "svc #0"
++        : "+r"(x0)
++        : "r"(x8), "r"(x1), "r"(x2), "r"(x3), "r"(x4)
++        : "memory"
++    );
++    ret = x0;
++#elif defined(__riscv) && __riscv_xlen == 64
++    register long a7 asm("a7") = num;
++    register long a0_reg asm("a0") = a0;
++    register long a1_reg asm("a1") = a1;
++    register long a2_reg asm("a2") = a2;
++    register long a3_reg asm("a3") = a3;
++    register long a4_reg asm("a4") = a4;
++    asm volatile(
++        "ecall"
++        : "+r"(a0_reg)
++        : "r"(a7), "r"(a1_reg), "r"(a2_reg), "r"(a3_reg), "r"(a4_reg)
++        : "memory"
++    );
++    ret = a0_reg;
++#else
++#  error "Unsupported architecture for __syscall5r"
++#endif
++    return ret;
++}
++
+ static inline long sys_alarm(unsigned int seconds) {
+     return __syscall5(SYS_ALARM, seconds, 0, 0, 0);
+ }
+diff --git a/userspace/ipcsync-probe.c b/userspace/ipcsync-probe.c
+new file mode 100644
+index 000000000..735924816
+--- /dev/null
++++ b/userspace/ipcsync-probe.c
+@@ -0,0 +1,46 @@
++/*
++ * NexIOS RTOS — ipc_send_sync reply-buffer contract probe (issue #317 option b)
++ *
++ * Sends one request to PID 1 (the test harness, which acts as the responder)
++ * with a DISTINCT reply buffer and asserts:
++ *   (a) the reply TYPE is returned by ipc_send_sync;
++ *   (b) the reply PAYLOAD lands in the caller's reply_buf;
++ *   (c) the REQUEST buffer is NOT overwritten by the reply.
++ * Exit 0 = contract holds; 3/4/5 = the corresponding failure.
++ */
++
++#include <stdint.h>
++#include <unistd.h>
++#include <string.h>
++#include <ipc.h>
++
++#define REQ_TYPE 0x55u
++#define REP_TYPE 0x77u
++#define REQ_LEN 40u
++#define REP_LEN 8u
++
++int main(void) {
++    unsigned char req[REQ_LEN];
++    unsigned char reply[REQ_LEN];
++    unsigned int i;
++
++    for (i = 0; i < REQ_LEN; ++i)
++        req[i] = (unsigned char)(0x10 + i);
++    memset(reply, 0xEE, sizeof(reply));
++
++    int r = ipc_send_sync(1, REQ_TYPE, req, REQ_LEN, reply);
++    if (r != (int)REP_TYPE)
++        _exit(3);
++
++    /* (b) reply payload in reply_buf */
++    for (i = 0; i < REP_LEN; ++i)
++        if (reply[i] != (unsigned char)(0xA0 + i))
++            _exit(4);
++
++    /* (c) request buffer intact (reply must NOT overwrite it) */
++    for (i = 0; i < REQ_LEN; ++i)
++        if (req[i] != (unsigned char)(0x10 + i))
++            _exit(5);
++
++    _exit(0);
++}

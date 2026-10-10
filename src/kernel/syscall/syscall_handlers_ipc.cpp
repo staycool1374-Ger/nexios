@@ -149,8 +149,25 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
     return msg.type;
 }
 
+/// @brief Issue #317 (option b): read the 5th syscall argument (a4) from the
+///        trap frame.  The 4-arg ABI leaves one dedicated register free for
+///        all defined syscalls: x86_64 rdi (frame index 5), aarch64 x4 (index
+///        4), riscv64 a4 (index 13 = OFF_A4 104 / 8).  No entry-stub change:
+///        the register is already in the frame handed to the handler.
+static inline uint64_t syscall_arg4(const uint64_t *regs) noexcept {
+#if defined(CONFIG_ARCH_X86_64)
+    return regs ? regs[5] : 0; // rdi
+#elif defined(CONFIG_ARCH_AARCH64)
+    return regs ? regs[4] : 0; // x4
+#elif defined(CONFIG_ARCH_RISCV64)
+    return regs ? regs[13] : 0; // a4
+#else
+    return 0;
+#endif
+}
+
 uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-                                uint64_t arg3, uint64_t *) {
+                                uint64_t arg3, uint64_t *regs) {
     uint64_t dest_id = arg0;
     uint64_t type = arg2;
     uint64_t data_size = arg3 < IPC_MAX_MSG_SIZE ? arg3 : IPC_MAX_MSG_SIZE;
@@ -158,8 +175,6 @@ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     auto data = checked(reinterpret_cast<const uint8_t *>(arg1), data_size);
     if (!data.valid())
         return static_cast<uint64_t>(-1);
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto data_rw = checked(reinterpret_cast<uint8_t *>(arg1), data_size);
     Message msg{};
     auto *cur = syscall_task();
     if (!cur)
@@ -172,11 +187,27 @@ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     Message reply{};
     if (!IPC::send_sync(dest_id, msg, reply))
         return static_cast<uint64_t>(-1);
-    uint64_t copy_size = reply.data_size;
-    if (copy_size > IPC_MAX_MSG_SIZE)
-        copy_size = IPC_MAX_MSG_SIZE;
-    for (size_t i = 0; i < copy_size; ++i)
-        data_rw.write(reply.data[i], i);
+    // Issue #317 option (b): the reply payload is written to the caller's
+    // REPLY BUFFER (5th arg / free register), NOT over the request buffer.
+    // reply_buf == 0 => the caller requested no reply payload.  The reply is
+    // bounded by the REQUEST size: reply_buf must be at least `data_size`
+    // bytes (the same capacity the request check enforces) — this also fixes
+    // the old unclamped `copy_size = reply.data_size` (a responder could once
+    // write up to IPC_MAX_MSG_SIZE into a smaller request buffer).
+    uint64_t reply_buf = syscall_arg4(regs);
+    if (reply_buf != 0 && data_size != 0) {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto reply_out =
+            checked(reinterpret_cast<uint8_t *>(reply_buf), data_size);
+        if (!reply_out.valid())
+            return static_cast<uint64_t>(-1);
+        uint64_t copy_size = reply.data_size;
+        if (copy_size > data_size)
+            copy_size = data_size;
+        for (size_t i = 0; i < copy_size; ++i)
+            if (!reply_out.write(reply.data[i], i))
+                return static_cast<uint64_t>(-1); // unmapped reply_buf: fail closed
+    }
     return reply.type;
 }
 

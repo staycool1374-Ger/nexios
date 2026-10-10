@@ -69,6 +69,18 @@ Entry guard: `ENSURE(task.blocked_on_queue == &q)`.
   no block); dest death with nothing matching returns `false` with the
   queue intact; spurious wakeups on non-matching arrivals re-block.
 - **Spin-wait:** the reply wait is a `hlt()` loop (not a bare pause-spin).
+- **Userspace reply buffer (issue #317 option b, IMPLEMENTED):** the
+  `SYS_SEND_SYNC` syscall threads a real reply-buffer address through the 5th
+  argument register — x86_64 `rdi` (frame[5]), aarch64 `x4` (frame[4]),
+  riscv64 `a4` (frame[13]); no entry-stub change (the register is already in
+  the trap frame the handler receives). The kernel writes the reply PAYLOAD
+  into that buffer (bounded by the REQUEST size; a non-null `reply_buf` must
+  be ≥ the request size, NULL = no reply payload) and returns the reply TYPE.
+  It **no longer** writes the reply over the request buffer — the old
+  unclamped `copy_size = reply.data_size` overwrite is gone. In-tree libc
+  `ipc_send_sync` passes `reply_buf` via `__syscall5r`; callers that pass the
+  request buffer as `reply_buf` (xmodem/ramdisk) keep the same-buffer
+  behaviour unchanged.
 
 ```
  loop: matching reply (sender==dest) queued? ── yes ──▶ pop, success

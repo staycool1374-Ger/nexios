@@ -156,6 +156,54 @@ static inline long __syscall5(long num, long a0, long a1, long a2, long a3) {
     return ret;
 }
 
+// Issue #317 (option b): 5th syscall argument rides a dedicated free register
+// — x86_64 rdi (regs[5]); aarch64 x4 (regs[4]); riscv64 a4 (regs[13]).  The
+// kernel handler reads it from the trap frame (no entry-stub change).  Used by
+// ipc_send_sync to thread a real reply buffer address.
+static inline long __syscall5r(long num, long a0, long a1, long a2, long a3,
+                               long a4) {
+    long ret;
+#if defined(__x86_64__)
+    asm volatile(
+        "int $0x80"
+        : "=a"(ret)
+        : "a"(num), "b"(a0), "c"(a1), "d"(a2), "S"(a3), "D"(a4)
+        : "memory", "cc"
+    );
+#elif defined(__aarch64__)
+    register long x8 asm("x8") = num;
+    register long x0 asm("x0") = a0;
+    register long x1 asm("x1") = a1;
+    register long x2 asm("x2") = a2;
+    register long x3 asm("x3") = a3;
+    register long x4 asm("x4") = a4;
+    asm volatile(
+        "svc #0"
+        : "+r"(x0)
+        : "r"(x8), "r"(x1), "r"(x2), "r"(x3), "r"(x4)
+        : "memory"
+    );
+    ret = x0;
+#elif defined(__riscv) && __riscv_xlen == 64
+    register long a7 asm("a7") = num;
+    register long a0_reg asm("a0") = a0;
+    register long a1_reg asm("a1") = a1;
+    register long a2_reg asm("a2") = a2;
+    register long a3_reg asm("a3") = a3;
+    register long a4_reg asm("a4") = a4;
+    asm volatile(
+        "ecall"
+        : "+r"(a0_reg)
+        : "r"(a7), "r"(a1_reg), "r"(a2_reg), "r"(a3_reg), "r"(a4_reg)
+        : "memory"
+    );
+    ret = a0_reg;
+#else
+#  error "Unsupported architecture for __syscall5r"
+#endif
+    return ret;
+}
+
 static inline long sys_alarm(unsigned int seconds) {
     return __syscall5(SYS_ALARM, seconds, 0, 0, 0);
 }
