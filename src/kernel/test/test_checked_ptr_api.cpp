@@ -390,11 +390,13 @@ JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
 // Input: Dispatched kernel task arms g_user_access_recover_ip, plants a
 //        frame marker, and calls handle_interrupt_c(0xFF) synchronously.
 //        0xFF (spurious) runs the full dispatch tail incl. EOI but no
-//        scheduler tick: a 0xE0/tick or direct on_tick() variant wedges
-//        the kernel when driven synchronously from a non-harness task
-//        (filed kernel bug — task-context on_tick + termination race),
-//        so the gate is pinned on the spurious vector instead. The
-//        vector-14 consume side is pinned by the real-#PF test above.
+//        scheduler tick.  The gate is pinned on the spurious vector (the
+//        vector-14 consume side is pinned by the real-#PF test above).
+//        Historical note (issue #300, RESOLVED): a 0xE0/tick or direct
+//        on_tick() variant once wedged the kernel when driven synchronously
+//        from a non-harness task; both now pass (variant A fixed by the
+//        vector==14 gate above, variant B by the H2/deferred-switch
+//        hardening).
 // Expect: Recovery still armed, frame marker intact. Pre-fix both are
 //         clobbered (clean FAIL, no wedge).
 // Depends: handle_interrupt_c vector gate (kernel.cpp:2168).
