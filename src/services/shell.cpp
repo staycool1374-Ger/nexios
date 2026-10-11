@@ -2723,7 +2723,9 @@ void Shell::cmd_runelf(int argc, const char** argv) {
     // the issue contract (prio 2 user band, period/deadline 100); FIXED
     // keeps it in bitmap RMS dispatch (AUTO + finite deadline would enter
     // EDF dispatch — deadline-timing exposure a run-once demo must not
-    // take; EDF user tasks are a follow-up).
+    // take; EDF user tasks are a follow-up).  Children forked from this
+    // user task are aperiodic (TaskControlBlock::clone user-parent rule,
+    // issue #312) so admission cannot deny the fork.
     kernel::Scheduler::set_priority(*task, 2);
     task->period_ticks = 100;
     task->deadline_ticks = arch::Timer::ticks() + 100;

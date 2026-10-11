@@ -155,7 +155,16 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
   semantics — `admission_boot_selftest()` (CONFIG_ADMISSION_SELFTEST,
   after Scheduler::init) pins admit-math/WCET/budget/miss-action-range
   through read-only probes (zero alloc, zero table mutation), and the
-  `sched_admission_verify` class covers the end-to-end journeys. |
+  `sched_admission_verify` class covers the end-to-end journeys.
+  Issue #312 addendum (**fork inheritance rule, no gate change**): a child
+  forked from a **user** parent (`parent->is_user_`) is aperiodic
+  (`period_ticks=0`, `deadline_ticks=0`, `remaining_ticks=0`
+  in `TaskControlBlock::clone`) and therefore admission-exempt (I-4) — a
+  runelf-launched user process must be able to spawn children (otherwise
+  the parent's own implicit-100 % periodic window makes
+  `1.0 + 1.0 = 2.0 > bound(2)=0.828`).  A child forked from a **kernel**
+  parent inherits the parent's periodic window exactly as before, so the
+  `admission_fork_denied_no_leak` overfull-fork contract is preserved. |
 | I-9 | Monitor `dequeue+BLOCKED` and on_tick `READY+enqueue_ready` are mutually exclusive under `scheduler_lock_` (no INV-5 violation) |
 | I-10 | No dangling monitor pointer (cleanup clear + magic check + direct-scan test hook) |
 

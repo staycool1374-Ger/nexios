@@ -270,7 +270,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
     {"task_metering",         7,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21)
     {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
-    {"sched_admission",       7,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny (issue #20)
+    {"sched_admission",       8,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny/fork-user-parent-admitted (issues #20, #312)
     {"sched_admission_verify", 7,   0,       0      },  // admission journeys: taskdefs-budgets/defer-retry/mode-parity/bg-guard/percpu-epsilon/budget-roundtrip/boot-parity (issue #24)
     {"aperiodic_servers",     7,    0,       0      },  // DS/BG modes: idle-preserve/topup/bursts/bg-priority/no-edf/admission-budgets/compat-default (issue #22)
 

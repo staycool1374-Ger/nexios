@@ -1454,8 +1454,17 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->base_priority = parent->base_priority;
     tcb->cpu_affinity = parent->cpu_affinity; // issue #25 C1: inherit mask
     tcb->tls_base_ = parent->tls_base_; // issue #74: clone inherits TLS base
-    tcb->period_ticks = parent->period_ticks;
-    tcb->deadline_ticks = parent->deadline_ticks;
+    // Issue #312: a child forked from a USER parent is best-effort/aperiodic
+    // — it must not inherit the parent's periodic window.  runelf stamps the
+    // parent period_ticks 100 with no WCET, so an implicit-100% periodic
+    // child would be rejected by the Liu-Leyland admission gate
+    // (1.0 + 1.0 = 2.0 > bound(2) = 0.828).  A child forked from a KERNEL
+    // parent inherits as today, preserving the admission_fork_denied_no_leak
+    // contract (kernel forker).  deadline_ticks == 0 makes the child
+    // admission-exempt (admission_exempted, I-4).
+    const bool is_user_parent = parent->is_user_;
+    tcb->period_ticks = is_user_parent ? 0 : parent->period_ticks;
+    tcb->deadline_ticks = is_user_parent ? 0 : parent->deadline_ticks;
     tcb->executed_ticks = 0;
     tcb->exec_ns_total = 0;
     tcb->exec_period_ns = 0;
@@ -1472,7 +1481,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->edf_prev_ = nullptr;
     tcb->in_edf_queue_ = false;
     tcb->ready_deferred_ = false;
-    tcb->remaining_ticks = parent->remaining_ticks;
+    tcb->remaining_ticks = is_user_parent ? 0 : parent->remaining_ticks;
     tcb->exit_code = 0;
     tcb->waiting_child_pid = 0;
     tcb->waiting_child_status = nullptr;
@@ -1557,7 +1566,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     // Route through kslot for guard page below kernel stack.
     // v0.4.0 MP-1 prerequisite: use the is_user_ flag, not `page_table_ != 0`
     // (every task now owns a private kernel-half PML4).
-    bool is_user_task = parent->is_user_;
+    bool is_user_task = is_user_parent;
     tcb->is_user_ = is_user_task;
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
     // Issue #156: fork gets a FRESH PCID (never the parent's — the child

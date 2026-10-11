@@ -232,6 +232,63 @@ JARVIS_TEST(admission_exemptions_untracked, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: a child forked from a USER parent is aperiodic/admission-exempt,
+//           so a runelf-launched user process can spawn children (issue #312).
+// Input: user parent (period 100, no WCET => implicit 100% periodic); clone().
+// Expect: child period/deadline/remaining == 0; admission_exempted true;
+//         add_task_err(child) == SCHED_ERR_OK.
+// Depends: TaskControlBlock::clone user-parent rule (issue #312)
+JARVIS_TEST(admission_fork_from_user_parent_admitted, "PRE: none | POST: none") {
+    static volatile uint64_t g_child_period = ~0ULL;
+    static volatile uint64_t g_child_deadline = ~0ULL;
+    static volatile uint64_t g_child_remaining = ~0ULL;
+    static volatile uint64_t g_child_exempt = 0;
+    static volatile uint64_t g_child_admit = 0;
+    g_child_exempt = 0;
+    g_child_admit = 0;
+    auto *parent = TaskControlBlock::create(
+        []() {
+            uint64_t regs[37] = {};
+            test::make_synthetic_clone_frame(regs);
+            auto *child = TaskControlBlock::clone(regs);
+            if (child == nullptr)
+                return;
+            g_child_period = child->period_ticks;
+            g_child_deadline = child->deadline_ticks;
+            g_child_remaining = child->remaining_ticks;
+            g_child_exempt =
+                Scheduler::admission_exempted(*child) ? 1ULL : 0ULL;
+            // Prove admission literally: register under IRQ-off (no dispatch),
+            // capture the verdict, then roll back so nothing stays queued.
+            {
+                arch::IrqGuard ig;
+                errors::SchedulerError adm = Scheduler::add_task_err(*child);
+                g_child_admit =
+                    (adm == errors::SCHED_ERR_OK) ? 1ULL : 0ULL;
+                if (adm == errors::SCHED_ERR_OK)
+                    Scheduler::remove_task(*child);
+            }
+            child->cleanup();
+            delete child;
+        },
+        11, 100);
+    JARVIS_ASSERT(parent != nullptr);
+    parent->is_user_ = true; // simulate a runelf-launched user parent
+    parent->user_stack_ = 0x80000000;
+    parent->user_stack_size_ = 32_KiB;
+    Scheduler::add_task(*parent);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(parent);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_EQ(0ULL, g_child_period);
+    JARVIS_ASSERT_EQ(0ULL, g_child_deadline);
+    JARVIS_ASSERT_EQ(0ULL, g_child_remaining);
+    JARVIS_ASSERT_EQ(1ULL, g_child_exempt);
+    JARVIS_ASSERT_EQ(1ULL, g_child_admit);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: fork under an overfull system fails closed with no leak.
 // Input: dispatched forker(p100,w5) + fill A(p100,w60) = 65%; the forked
 // child (implicit 100%) would total 165 > bound(3) = 72.
@@ -274,4 +331,5 @@ void register_sched_admission_tests() {
     JARVIS_REGISTER_TEST(admission_memory_budget_denied_at_create);
     JARVIS_REGISTER_TEST(admission_exemptions_untracked);
     JARVIS_REGISTER_TEST(admission_fork_denied_no_leak);
+    JARVIS_REGISTER_TEST(admission_fork_from_user_parent_admitted);
 }
