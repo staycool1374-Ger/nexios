@@ -80,6 +80,13 @@ public:
     /// @return Pointer to the Terminal instance.
     static Terminal* instance() { return instance_; }
 
+    /// @brief Text width in columns (issue #286 80-col discipline).
+    /// @return Framebuffer-derived columns, or 0 when uninitialised.
+    static uint32_t cols() { return instance_ ? instance_->cols_ : 0; }
+    /// @brief Text height in rows (status bar excluded).
+    /// @return Framebuffer-derived rows, or 0 when uninitialised.
+    static uint32_t rows() { return instance_ ? instance_->rows_ : 0; }
+
     /// @brief Number of pixel rows reserved for the persistent status bar at the bottom.
     static constexpr uint32_t STATUS_BAR_ROWS = 2;
     /// @brief Draws or updates the persistent status bar at the bottom of the screen.

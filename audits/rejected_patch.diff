@@ -1,17 +1,28 @@
---- a/src/kernel/test/test_elf_loader.cpp
-+++ b/src/kernel/test/test_elf_loader.cpp
-@@ -656,8 +656,13 @@
-         arch::hlt();
-     }
-     JARVIS_ASSERT(TaskControlBlock::is_valid(t));
-+    // The task must have RUN to completion: is_valid() alone also holds for a
-+    // READY task that was never scheduled (zero-initialized exit_code == 0),
-+    // which would let this test pass vacuously.  Require TERMINATED so the
-+    // envp read is proven to have executed.
-+    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
-     // exit 0 = envp read succeeded; a user-mode fault would leave a non-zero
--    // exit_code (signal) or a wedged task (assert above fails).
-+    // exit_code (signal).
-     JARVIS_ASSERT_EQ(0ULL, t->exit_code);
-     Scheduler::terminate(*t, t->exit_code);
-     Scheduler::drain_zombie_list();
+diff --git a/src/lib/fmt/term_fmt.cpp b/src/lib/fmt/term_fmt.cpp
+--- a/src/lib/fmt/term_fmt.cpp
++++ b/src/lib/fmt/term_fmt.cpp
+@@ -106,7 +106,8 @@ int mini_vsnprintf(char *out, size_t cap, const char *fmt, VaList args) {
+             if (fmt[i] == 'l')
+                 ++i; // ll collapses to l (LP64 identical widths)
+         } else if (fmt[i] == 'z') {
+             wide = true; // size_t is 64-bit LP64 (libc delta documented)
++            ++i;
+         } else if (fmt[i] == 'h') {
+             ++i;
+             if (fmt[i] == 'h')
+diff --git a/src/kernel/test/test_lib.cpp b/src/kernel/test/test_lib.cpp
+--- a/src/kernel/test/test_lib.cpp
++++ b/src/kernel/test/test_lib.cpp
+@@ -125,6 +125,12 @@ JARVIS_TEST(lib_term_fmt_basic, "PRE: none | POST: none") {
+     JARVIS_ASSERT_EQ(10, fmt::mini_snprintf(buf, sizeof(buf),
+                                             "id=%lld x=%lx", -7LL,
+                                             255UL));
+     JARVIS_ASSERT(memcmp(buf, "id=-7 x=ff", 11) == 0);
++    JARVIS_ASSERT_EQ(20, fmt::mini_snprintf(buf, sizeof(buf), "%zu",
++                                            18446744073709551615ULL));
++    JARVIS_ASSERT(memcmp(buf, "18446744073709551615", 21) == 0);
++    JARVIS_ASSERT_EQ(3, fmt::mini_snprintf(buf, sizeof(buf), "%zd",
++                                           (long long)-42));
++    JARVIS_ASSERT(memcmp(buf, "-42", 4) == 0);
+     JARVIS_TEST_PASS();
+ }

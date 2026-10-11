@@ -25,6 +25,7 @@
 #include <error.hpp>
 #include <version.hpp>
 #include <crc32.hpp>
+#include <lib/fmt/term_fmt.hpp>
 #include "../../../userspace/xmodem_crc.h"
 #include <fdt/fdt.h>
 #include <fdt/libfdt.h>
@@ -618,6 +619,139 @@ JARVIS_TEST(lib_fdt_static_bad_header, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: Unified formatter golden vectors (issue #286) — every frozen
+// conversion incl. LP64 widths, flags, width, %s precision, INT_MIN, and
+// the needed-length return (vsnprintf-compatible).
+// Input: Fixed format/arg pairs into a 64 B buffer.
+// Expect: Exact bytes incl. `0`-pad, left-align, `%X`-lowercase quirk,
+// `ll`-collapse, and INT64_MIN/ULL-max renders.
+// Depends: fmt::mini_snprintf
+JARVIS_TEST(lib_term_fmt_basic, "PRE: none | POST: none") {
+    char buf[64] = {};
+    JARVIS_ASSERT_EQ(2, fmt::mini_snprintf(buf, sizeof(buf), "%d", 42));
+    JARVIS_ASSERT(memcmp(buf, "42", 3) == 0);
+    JARVIS_ASSERT_EQ(11, fmt::mini_snprintf(buf, sizeof(buf), "%d",
+                                            -2147483648));
+    JARVIS_ASSERT(memcmp(buf, "-2147483648", 12) == 0);
+    JARVIS_ASSERT_EQ(20, fmt::mini_snprintf(buf, sizeof(buf), "%llu",
+                                            18446744073709551615ULL));
+    JARVIS_ASSERT(memcmp(buf, "18446744073709551615", 21) == 0);
+    JARVIS_ASSERT_EQ(8, fmt::mini_snprintf(buf, sizeof(buf), "%08d", 42));
+    JARVIS_ASSERT(memcmp(buf, "00000042", 9) == 0);
+    JARVIS_ASSERT_EQ(6, fmt::mini_snprintf(buf, sizeof(buf), "%-5d|", 42));
+    JARVIS_ASSERT(memcmp(buf, "42   |", 7) == 0);
+    JARVIS_ASSERT_EQ(8, fmt::mini_snprintf(buf, sizeof(buf), "%x",
+                                            0xdeadbeefU));
+    JARVIS_ASSERT(memcmp(buf, "deadbeef", 9) == 0);
+    JARVIS_ASSERT_EQ(8, fmt::mini_snprintf(buf, sizeof(buf), "%X",
+                                            0xDEADBEEFU));
+    JARVIS_ASSERT(memcmp(buf, "deadbeef", 9) == 0);
+    JARVIS_ASSERT_EQ(3, fmt::mini_snprintf(buf, sizeof(buf), "%.3s",
+                                            "abcdef"));
+    JARVIS_ASSERT(memcmp(buf, "abc", 4) == 0);
+    JARVIS_ASSERT_EQ(6, fmt::mini_snprintf(buf, sizeof(buf), "%5.2s|",
+                                            "abcdef"));
+    JARVIS_ASSERT(memcmp(buf, "   ab|", 7) == 0);
+    JARVIS_ASSERT_EQ(1, fmt::mini_snprintf(buf, sizeof(buf), "%%"));
+    JARVIS_ASSERT(memcmp(buf, "%", 2) == 0);
+    JARVIS_ASSERT_EQ(2, fmt::mini_snprintf(buf, sizeof(buf), "%q"));
+    JARVIS_ASSERT(memcmp(buf, "%q", 3) == 0);
+    JARVIS_ASSERT_EQ(10, fmt::mini_snprintf(buf, sizeof(buf),
+                                            "id=%lld x=%lx", -7LL,
+                                            255UL));
+    JARVIS_ASSERT(memcmp(buf, "id=-7 x=ff", 11) == 0);
+    JARVIS_ASSERT_EQ(20, fmt::mini_snprintf(buf, sizeof(buf), "%zu",
+                                            18446744073709551615ULL));
+    JARVIS_ASSERT(memcmp(buf, "18446744073709551615", 21) == 0);
+    JARVIS_ASSERT_EQ(3, fmt::mini_snprintf(buf, sizeof(buf), "%zd",
+                                           (long long)-42));
+    JARVIS_ASSERT(memcmp(buf, "-42", 4) == 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Formatter truncation discipline (issue #286) — cap 0/1/small
+// buffers NUL-terminate (when cap > 0), leave cap-0 buffers untouched,
+// and still return the full needed length.
+// Input: Oversized renders into 5/1/0-capacity buffers.
+// Expect: Truncated bytes + NUL, sentinel intact at cap 0, exact needs.
+// Depends: fmt::mini_snprintf
+JARVIS_TEST(lib_term_fmt_truncation, "PRE: none | POST: none") {
+    char buf[8] = {};
+    JARVIS_ASSERT_EQ(5, fmt::mini_snprintf(buf, 5, "%d", 12345));
+    JARVIS_ASSERT(memcmp(buf, "1234", 5) == 0);
+    JARVIS_ASSERT_EQ(5, fmt::mini_snprintf(buf, 1, "%d", 12345));
+    JARVIS_ASSERT(buf[0] == '\0');
+    char sentinel[4] = {'A', 'B', 'C', 'D'};
+    JARVIS_ASSERT_EQ(5, fmt::mini_snprintf(sentinel, 0, "%d", 12345));
+    JARVIS_ASSERT(sentinel[0] == 'A' && sentinel[3] == 'D');
+    JARVIS_ASSERT_EQ(0, fmt::mini_snprintf(buf, sizeof(buf), ""));
+    JARVIS_ASSERT(buf[0] == '\0');
+    JARVIS_TEST_PASS();
+}
+
+namespace {
+// Capture sink for table-helper tests (bounded static buffer).
+char g_emit_buf[128];
+size_t g_emit_pos = 0;
+void test_emit(char c) {
+    if (g_emit_pos + 1 < sizeof(g_emit_buf))
+        g_emit_buf[g_emit_pos++] = c;
+    g_emit_buf[g_emit_pos] = '\0';
+}
+void emit_reset() {
+    g_emit_pos = 0;
+    g_emit_buf[0] = '\0';
+}
+} // namespace
+
+// Runmode: kernel
+// Testidea: Table helpers hold the 80-col discipline (issue #286) —
+// fields pad/truncate to width, separators clamp at exactly 80.
+// Input: emit_field/emit_separator into the capture sink.
+// Expect: Right/left pads exact, overlong text cut, 100-wide clamped.
+// Depends: fmt::emit_field, fmt::emit_separator
+JARVIS_TEST(lib_term_fmt_table_80col, "PRE: none | POST: none") {
+    emit_reset();
+    fmt::emit_field(test_emit, "hi", 5, true);
+    JARVIS_ASSERT(memcmp(g_emit_buf, "   hi", 6) == 0);
+    emit_reset();
+    fmt::emit_field(test_emit, "hi", 5, false);
+    JARVIS_ASSERT(memcmp(g_emit_buf, "hi   ", 6) == 0);
+    emit_reset();
+    fmt::emit_field(test_emit, "abcdef", 3, false);
+    JARVIS_ASSERT(memcmp(g_emit_buf, "abc", 4) == 0);
+    emit_reset();
+    fmt::emit_separator(test_emit, '-', 100);
+    JARVIS_ASSERT_EQ(static_cast<size_t>(80), g_emit_pos);
+    JARVIS_ASSERT(g_emit_buf[0] == '-' && g_emit_buf[79] == '-');
+    emit_reset();
+    fmt::emit_separator(test_emit, '-', 10);
+    JARVIS_ASSERT_EQ(static_cast<size_t>(10), g_emit_pos);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Redraw gate fires at most once per interval (issue #286
+// buffers discipline) on a caller-provided monotonic clock.
+// Input: frame_due at crafted timestamps incl. 64-bit wrap.
+// Expect: First fire at interval, suppression inside, fire after.
+// Depends: fmt::frame_due
+JARVIS_TEST(lib_term_fmt_redraw_discipline, "PRE: none | POST: none") {
+    unsigned long last = 0;
+    JARVIS_ASSERT(!fmt::frame_due(0, last, 250));
+    JARVIS_ASSERT_EQ(0UL, last);
+    JARVIS_ASSERT(fmt::frame_due(250, last, 250));
+    JARVIS_ASSERT_EQ(250UL, last);
+    JARVIS_ASSERT(!fmt::frame_due(300, last, 250));
+    JARVIS_ASSERT(fmt::frame_due(500, last, 250));
+    JARVIS_ASSERT_EQ(500UL, last);
+    unsigned long wrapped = 0xFFFFFF00UL;
+    JARVIS_ASSERT(fmt::frame_due(100, wrapped, 250));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Register all lib subsystem tests (string, utils, ErrorOr,
 // version) with the test framework.
 // Depends: string, utils, error, version
@@ -652,4 +786,9 @@ void register_lib_tests() {
     JARVIS_REGISTER_TEST(lib_fdt_static_header_and_reserve);
     JARVIS_REGISTER_TEST(lib_fdt_static_tree_walk);
     JARVIS_REGISTER_TEST(lib_fdt_static_bad_header);
+
+    JARVIS_REGISTER_TEST(lib_term_fmt_basic);
+    JARVIS_REGISTER_TEST(lib_term_fmt_truncation);
+    JARVIS_REGISTER_TEST(lib_term_fmt_table_80col);
+    JARVIS_REGISTER_TEST(lib_term_fmt_redraw_discipline);
 }

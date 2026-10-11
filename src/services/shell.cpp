@@ -19,6 +19,7 @@
 #include <services/shell.hpp>
 #include <services/terminal/terminal.hpp>
 #include <services/terminal/framebuffer.hpp>
+#include <lib/fmt/term_fmt.hpp>
 #include <services/program.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -949,62 +950,42 @@ void Shell::cmd_tasks(int, const char**) {
 // ──────────────────────────────────────────────
 namespace {
 // Fixed-width field printer (same contract as cmd_tasks' local field()).
+// Unified core (issue #286): identical output via fmt::emit_field.
 void top_field(const char *s, int width, bool right) {
-    int len = 0;
-    while (s[len] && len < width)
-        ++len;
-    if (right) {
-        for (int i = len; i < width; ++i)
-            Terminal::putchar(' ');
-    }
-    for (int i = 0; i < len; ++i)
-        Terminal::putchar(s[i]);
-    if (!right) {
-        for (int i = len; i < width; ++i)
-            Terminal::putchar(' ');
-    }
+    size_t w = (width < 0) ? 0 : static_cast<size_t>(width);
+    fmt::emit_field(Terminal::putchar, s, w, right);
     Terminal::putchar(' ');
 }
 
+// 80-col discipline (issue #286): NAME is the flexible column of the
+// task table (fixed columns sum to 65; full row is 77). Identity (11)
+// on unknown (0) or wide (>= 77) terminals, shrink-only below that.
+size_t top_name_width() {
+    const uint32_t cols = Terminal::cols();
+    if (cols == 0 || cols >= 77)
+        return 11;
+    if (cols > 66)
+        return static_cast<size_t>(cols - 66);
+    return 0;
+}
+
 // Scratch decimal renderer (single-threaded shell: one shared buffer).
+// Unified core (issue #286): identical output via fmt::mini_snprintf.
 const char *top_num(uint64_t v) {
     static char numbuf[24];
-    char rev[24];
-    int r = 0;
-    if (v == 0)
-        rev[r++] = '0';
-    while (v > 0 && r < 23) {
-        rev[r++] = static_cast<char>('0' + (v % 10));
-        v /= 10;
-    }
-    int p = 0;
-    while (r > 0)
-        numbuf[p++] = rev[--r];
-    numbuf[p] = '\0';
+    fmt::mini_snprintf(numbuf, sizeof(numbuf), "%llu", v);
     return numbuf;
 }
 
 // Per-mille (0..1000) as "d.d" percent, e.g. 312 -> "31.2".
+// Unified core (issue #286): identical output via fmt::mini_snprintf.
 const char *top_pct1(uint64_t per_mille) {
     static char pctbuf[16];
     if (per_mille > 1000)
         per_mille = 1000;
     uint64_t whole = per_mille / 10;
     uint64_t frac = per_mille % 10;
-    int p = 0;
-    char rev[8];
-    int r = 0;
-    if (whole == 0)
-        rev[r++] = '0';
-    while (whole > 0 && r < 7) {
-        rev[r++] = static_cast<char>('0' + (whole % 10));
-        whole /= 10;
-    }
-    while (r > 0)
-        pctbuf[p++] = rev[--r];
-    pctbuf[p++] = '.';
-    pctbuf[p++] = static_cast<char>('0' + frac);
-    pctbuf[p] = '\0';
+    fmt::mini_snprintf(pctbuf, sizeof(pctbuf), "%llu.%llu", whole, frac);
     return pctbuf;
 }
 
@@ -1549,9 +1530,10 @@ void top_render_frame(uint64_t delay_secs) {
     print_uint(ncpus == 0 ? 0 : tot_user / ncpus);
     Terminal::write("%\n\n");
 
-    // Task table.
+    // Task table (issue #286: NAME is the flexible 80-col column).
+    const int name_w = static_cast<int>(top_name_width());
     top_field("PID", 5, true);
-    top_field("NAME", 11, false);
+    top_field("NAME", name_w, false);
     top_field("STATE", 8, false);
     top_field("CPU", 4, true);
     top_field("AFFIN", 4, false);
@@ -1562,10 +1544,16 @@ void top_render_frame(uint64_t delay_secs) {
     top_field("CPU%", 5, true);
     top_field("PD_USE%", 7, true);
     Terminal::write("\n");
-    for (uint64_t i = 0; i < nrows; ++i) {
+    // Screen buffer discipline (issue #286): bound rendered task rows
+    // by the terminal height when known (no-op at 0 or ample rows).
+    uint64_t max_rows = nrows;
+    const uint32_t term_rows = Terminal::rows();
+    if (term_rows != 0 && max_rows > term_rows)
+        max_rows = term_rows;
+    for (uint64_t i = 0; i < max_rows; ++i) {
         auto *t = rows[i].task;
         top_field(top_num(t->id), 5, true);
-        top_field(t->name, 11, false);
+        top_field(t->name, name_w, false);
         top_field(state_name(t->state), 8, false);
         uint64_t cpu =
             __atomic_load_n(&t->running_on_cpu, __ATOMIC_ACQUIRE);

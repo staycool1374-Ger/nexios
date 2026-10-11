@@ -42,6 +42,11 @@ int snprintf(char* buf, size_t n, const char* fmt, ...);
 /// Cosmetic notes: field width/`0` flags are parsed but not applied;
 /// `%X` renders lowercase (same path as `%x`); `printf` truncates lines
 /// at 255 bytes (single 256 B stack buffer, one write() call).
+/// Shared contract (issue #286, `src/lib/fmt/term_fmt.hpp`): the RING-0
+/// `fmt::mini_vsnprintf` implements this same conversion set with two
+/// documented deltas — field width/`0` ARE applied there, and `%z` is
+/// accepted as 64-bit (falls through to literal passthrough here).
+/// LP64 widths, `ll`-collapses-`l`, `%X`-lowercase match on both sides.
 int vsnprintf(char* buf, size_t n, const char* fmt, va_list ap);
 int puts(const char* s);
 int putchar(int c);
