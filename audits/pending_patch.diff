@@ -1,354 +1,84 @@
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 15532aaea..72d45c250 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -405,11 +405,25 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
-         str_pos += total_string_len(envp);
-         copy_strings(str_pos, argv);
-     }
-+    // Issue #335: the strings above live at pre-align `sp`; the pointer
-+    // fill below must address them there, not at the aligned `sp`
-+    // (which sits up to 15 bytes lower — every stored pointer would
-+    // otherwise dangle into the pad gap).
-+    uint8_t *str_base = sp;
+diff --git a/userspace/sh.c b/userspace/sh.c
+index 9d9c77d7a..5f153eca8 100644
+--- a/userspace/sh.c
++++ b/userspace/sh.c
+@@ -3,6 +3,7 @@
+ #include <string.h>
+ #include <stdlib.h>
+ #include <syscall.h>
++#include <time.h>
  
-     uint64_t align = reinterpret_cast<uint64_t>(sp) & 0xF;
-     if (align)
-         sp -= (16 - align);
+ #define MAX_ARGS 16
+ #define MAX_CMDS 8
+@@ -18,6 +19,9 @@
+ #define MAX_PATH_DIRS 16
+ #define MAX_DIR_SEG 64
+ #define EXEC_PATH_LEN 256
++/// @brief `/bin` ELF suffix probed after the exact name (issue #310).
++#define ELF_SUFFIX_LEN 6
++static const char kElfSuffix[ELF_SUFFIX_LEN + 1] = ".c.elf";
  
-+
-+    // Issue #334: string slots must hold USER addresses. `str_pos`
-+    // below walks the kernel (HHDM) mapping; user code dereferencing a
-+    // kernel-half address faults. Translate by the same bias as
-+    // `user_rsp` (null slots stay exactly NULL — runelf empty args
-+    // byte-identical).
-+    const uint64_t kern_to_user = mem::STACK_VADDR + arch::PAGE_SIZE +
-+                                  mem::STACK_SIZE -
-+                                  reinterpret_cast<uint64_t>(stack_top);
-     int envc = count_strings(envp);
-     uint64_t *ptr = reinterpret_cast<uint64_t *>(sp);
+ static char line[LINE_BUF];
+ static int last_status = 0;
+@@ -110,11 +114,21 @@ static void print_prompt(void) {
+     printf("sh$ ");
+ }
  
-@@ -418,11 +432,12 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
-     }
-     uint64_t *envp_start = ptr;
-     if (envp) {
--        uint8_t *str_pos = sp;
-+        uint8_t *str_pos = str_base;
-         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_envp);
-         arch::stac();
-         for (int i = 0; i < envc; ++i) {
--            envp_start[i] = reinterpret_cast<uint64_t>(str_pos);
-+            envp_start[i] =
-+                reinterpret_cast<uint64_t>(str_pos) + kern_to_user;
-             str_pos += strlen(envp[i]) + 1;
++/// @brief read_line retries empty polls: tty_read is EAGAIN-style (issue
++/// #310 E2E — a single empty poll used to kill the shell on any input
++/// gap). Interactive prompts wait indefinitely like the kernel shell
++/// (xmodem read_line pattern); a dead tty spins cheap 1 ms naps.
+ static int read_line(void) {
+     int i = 0;
+     char c;
++    struct timespec nap;
++    nap.tv_sec = 0;
++    nap.tv_nsec = 1000000;
+     while (i < LINE_BUF - 1) {
+-        if (read(0, &c, 1) != 1) return -1;
++        if (read(0, &c, 1) != 1) {
++            nanosleep(&nap, 0);
++            continue;
++        }
+         if (c == '\n') break;
+         if (c == '\r') break;
+         if (c == '\b' || c == 127) {
+@@ -189,9 +203,11 @@ static int parse_line(struct Command cmds[], int* ncmds) {    int i = 0;
+ }
+ 
+ /// @brief Resolve a command name via PATH into `out` (issue #310).
+-/// Names containing '/' are copied verbatim (bounded); bare names try
+-/// each colon-separated PATH dir (`dir + "/" + name`, empty dir means
+-/// root), probing with open()+close. Fail-closed: -1 when nothing fits
++/// Names containing '/' are copied verbatim (bounded, no suffix try);
++/// bare names try each colon-separated PATH dir in order, per segment
++/// first the exact `dir + "/" + name`, then `dir + "/" + name + ".c.elf"`
++/// (`/bin` holds suffixed ELFs, so `cat` finds `/bin/cat.c.elf`),
++/// probing with open()+close. Fail-closed: -1 when nothing fits
+ /// or resolves — the caller prints `not found` and exits 127.
+ static int resolve_path(const char *cmd, char *out, int out_len) {
+     if (!cmd || !cmd[0] || !out || out_len <= 0)
+@@ -244,6 +260,23 @@ static int resolve_path(const char *cmd, char *out, int out_len) {
+             close(fd);
+             return 0;
          }
-         arch::clac();
-@@ -434,11 +449,12 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
-     }
-     uint64_t *argv_start = ptr;
-     if (argv) {
--        uint8_t *str_pos = sp + total_string_len(envp);
-+        uint8_t *str_pos = str_base + total_string_len(envp);
-         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_argv);
-         arch::stac();
-         for (int i = 0; i < argc; ++i) {
--            argv_start[i] = reinterpret_cast<uint64_t>(str_pos);
-+            argv_start[i] =
-+                reinterpret_cast<uint64_t>(str_pos) + kern_to_user;
-             str_pos += strlen(argv[i]) + 1;
-         }
-         arch::clac();
-@@ -559,6 +575,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
-     tcb->executed_ticks = 0;
-     tcb->exec_ns_total = 0;
-     tcb->exec_period_ns = 0;
-+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
-     tcb->exec_stamp_ns = 0;
-     tcb->wcet_observed_ns = 0; // issue #283 (see TaskControlBlock::create)
-     tcb->mem_alloc_ops_ = 0;   // issue #284 (see TaskControlBlock::create)
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 8671b4dfb..24fa4c2ac 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -3375,6 +3375,9 @@ void Scheduler::on_tick() noexcept {
-                     // Issue #21: new period, fresh budget clock (this
-                     // tick was already billed into the old period above).
-                     task->exec_period_ns = 0;
-+                    // Issue #331: stamp the new window phase (the
-+                    // blocked-branch advance below measures from here).
-+                    task->exec_window_start_tick = current_tick;
-                     // Issue #19: the absolute deadline moved — re-sort a
-                     // queued EDF task so dispatch order tracks it.
-                     edf_resort(*task);
-@@ -3391,6 +3394,30 @@ void Scheduler::on_tick() noexcept {
-                 }
-             }
- 
-+            // Issue #331: advance the PD_USE window for periodic tasks
-+            // that are neither RUNNING nor READY (e.g. BLOCKED in
-+            // sys_receive): their window never reloads above, so
-+            // exec_period_ns would accumulate lifetime exec and read
-+            // 100% forever. Observability only — no remaining_ticks /
-+            // deadline / EDF / queue changes (dispatch frozen).
-+            if (task->state != TaskState::RUNNING &&
-+                task->state != TaskState::READY &&
-+                task->period_ticks > 0 &&
-+                task->period_ticks != TaskControlBlock::NO_PERIOD) {
-+                const uint64_t elapsed =
-+                    current_tick - task->exec_window_start_tick;
-+                if (elapsed >= task->period_ticks) {
-+                    // Sample-then-reset (#154 binding): the monotonic-max
-+                    // WCET seam must see the closing window first.
-+                    (void)idle_note_exec_sample(*task);
-+                    task->exec_period_ns = 0;
-+                    idle_note_period_reload(*task);
-+                    task->exec_window_start_tick +=
-+                        (elapsed / task->period_ticks) *
-+                        task->period_ticks;
-+                }
++        // Suffix fallback (same segment, bounded): `cat` finds
++        // `/bin/cat.c.elf`. Skipped when it cannot fit.
++        if (seglen + 1 + cmdlen + ELF_SUFFIX_LEN + 1 <= out_len) {
++            int j = 0;
++            for (int i = 0; i < seglen; ++i)
++                out[j++] = path[segstart + i];
++            out[j++] = '/';
++            for (int i = 0; i < cmdlen; ++i)
++                out[j++] = cmd[i];
++            for (int i = 0; i <= ELF_SUFFIX_LEN; ++i)
++                out[j++] = kElfSuffix[i];
++            fd = open(out, 0);
++            if (fd >= 0) {
++                close(fd);
++                return 0;
 +            }
-+
- #if CONFIG_WCET_OVERRUN_DETECTION
-             // Issue #154: a starved READY task must never trip the
-             // overrun latch — only execution counts toward WCET.
-@@ -5212,6 +5239,7 @@ void Scheduler::capture_task_fields(TaskFields *out) {
-         out[idx].deadline_miss_count = t->deadline_miss_count;
-         out[idx].executed_ticks = t->executed_ticks;
-         out[idx].remaining_ticks = t->remaining_ticks;
-+        out[idx].exec_window_start_tick = t->exec_window_start_tick;
-         out[idx].exit_code = t->exit_code;
-         out[idx].context = t->context;
-         out[idx].kernel_stack = reinterpret_cast<uint64_t>(t->kernel_stack);
-@@ -5292,6 +5320,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
-             t->deadline_miss_count = saved[j].deadline_miss_count;
-             t->executed_ticks = saved[j].executed_ticks;
-             t->remaining_ticks = saved[j].remaining_ticks;
-+            t->exec_window_start_tick = saved[j].exec_window_start_tick;
-             t->exit_code = saved[j].exit_code;
-             t->context = saved[j].context;
-             // Direction 1: keep the harness's ACTIVE context.rsp (see above).
-diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index e270d7bde..bde35ebfa 100644
---- a/src/kernel/task/scheduler.hpp
-+++ b/src/kernel/task/scheduler.hpp
-@@ -716,6 +716,9 @@ class Scheduler {
-         uint64_t deadline_miss_count;
-         uint64_t executed_ticks;
-         uint64_t remaining_ticks;
-+        /// @brief PD_USE window phase (issue #331): rewinds with the
-+        /// snapshot so the window stays consistent with rewound ticks().
-+        uint64_t exec_window_start_tick;
-         uint64_t exit_code;
-         TaskContext context;       ///< Full register context (critical: rsp)
-         uint64_t kernel_stack;     ///< Kernel stack base pointer
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index ba9686195..1ced88970 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -1001,6 +1001,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
-     tcb->executed_ticks = 0;
-     tcb->exec_ns_total = 0;
-     tcb->exec_period_ns = 0;
-+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
-     tcb->exec_stamp_ns = 0;
-     tcb->sched_policy = SchedPolicy::AUTO; // issue #19: memset already zero
-     tcb->edf_exempt = false;               // (AUTO=0); explicit for clarity
-@@ -1248,6 +1249,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
-     tcb->executed_ticks = 0;
-     tcb->exec_ns_total = 0;
-     tcb->exec_period_ns = 0;
-+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
-     tcb->exec_stamp_ns = 0;
-     tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (AUTO=0; explicit)
-     tcb->edf_exempt = false;
-@@ -1468,6 +1470,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     tcb->executed_ticks = 0;
-     tcb->exec_ns_total = 0;
-     tcb->exec_period_ns = 0;
-+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331 fresh
-     tcb->exec_stamp_ns = 0;
-     tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (clone starts AUTO;
-     tcb->edf_exempt = false;               // no policy inheritance)
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index 96a7ca194..7027c742b 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -277,7 +277,8 @@ struct TaskControlBlock {
-            base_priority(0), period_ticks(0), deadline_ticks(0),
-            deadline_missed(false), deadline_miss_count(0), executed_ticks(0),
-            remaining_ticks(0), exec_ns_total(0), exec_period_ns(0),
--           exec_stamp_ns(0), sched_policy(SchedPolicy::AUTO),
-+           exec_window_start_tick(0), exec_stamp_ns(0),
-+           sched_policy(SchedPolicy::AUTO),
-            edf_exempt(false), edf_next_(nullptr), edf_prev_(nullptr),
-            in_edf_queue_(false), wcet_ticks(0), wcet_overrun_fired(false),
-           wcet_observed_ns(0),
-@@ -364,6 +365,12 @@ struct TaskControlBlock {
-     /// @brief Current-period executed time in ns, saturating; reset at
-     ///        each period reload (issue #21).
-     uint64_t exec_period_ns;
-+    /// @brief Tick-domain start of the current PD_USE window (issue #331).
-+    ///        Stamped on every RUNNING/READY reload and advanced for
-+    ///        non-runnable periodic tasks so a blocked task's window
-+    ///        still advances (zero in-window exec then reads 0%).
-+    ///        Observability only — dispatch never reads it.
-+    uint64_t exec_window_start_tick;
-     /// @brief ns_monotonic() sample at the last charge point; the next
-     ///        charge bills (now - stamp) (issue #21).
-     uint64_t exec_stamp_ns;
-diff --git a/src/kernel/test/test_task_metering.cpp b/src/kernel/test/test_task_metering.cpp
-index ca6675e3d..33d778dfa 100644
---- a/src/kernel/test/test_task_metering.cpp
-+++ b/src/kernel/test/test_task_metering.cpp
-@@ -36,6 +36,7 @@
- #include <kernel/memory/pmm.hpp>
- #include <kernel/memory/vmm.hpp>
- #include <kernel/nexios_config.h>
-+#include <kernel/sync/semaphore.hpp>
- #include "test_sched_helpers.hpp"
- 
- using namespace kernel;
-@@ -398,6 +399,113 @@ JARVIS_TEST(meter_terminate_charges_final_quantum, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+namespace {
-+// Blocked-window fixtures (issue #331): a periodic task accrues exec,
-+// then parks on the gate across whole period windows.
-+sync::Semaphore g_window_gate;
-+volatile bool g_window_ran = false;
-+
-+void window_block_entry() {
-+    auto *self = Scheduler::current_task();
-+    while (self->executed_ticks < 2)
-+        arch::pause();
-+    g_window_ran = true;
-+    g_window_gate.wait(); // BLOCKED across windows; drained at teardown
-+}
-+
-+/// @brief Bounded tick wait (pause-spin like top_next_tick).
-+void window_wait_ticks(uint64_t n) {
-+    const uint64_t t0 = arch::Timer::ticks();
-+    for (uint64_t i = 0; i < 20000000; ++i) {
-+        if (arch::Timer::ticks() - t0 >= n)
-+            break;
-+        arch::pause();
-+    }
-+}
-+} // namespace
-+
-+// Runmode: kernel
-+// Testidea: A periodic task that goes BLOCKED across whole period windows
-+// reads zero in-window exec (issue #331 owner semantics: zero in-window
-+// exec must read 0%, never lifetime exec ÷ one period).
-+// Input: Periodic task (period 10) runs 2 ticks, blocks on a gate;
-+//        harness waits 25 ticks while it stays BLOCKED.
-+// Expect: exec_period_ns > 0 before the wait (ran this window),
-+//         == 0 after 2.5 windows elapse with no execution.
-+// Depends: Scheduler::on_tick blocked-branch window advance (#331)
-+JARVIS_TEST(meter_blocked_window_resets_to_zero,
-+            "PRE: none | POST: none") {
-+    g_window_gate.init(0, 1);
-+    g_window_ran = false;
-+    auto *t = TaskControlBlock::create(window_block_entry, 11, 10);
-+    JARVIS_ASSERT(t != nullptr);
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*t);
-+    }
-+    for (uint64_t i = 0; i < 10000000; ++i) {
-+        if (g_window_ran)
-+            break;
-+        arch::pause();
-+    }
-+    JARVIS_ASSERT(g_window_ran);
-+    for (uint64_t i = 0; i < 10000000; ++i) {
-+        if (t->state == TaskState::BLOCKED)
-+            break;
-+        arch::pause();
-+    }
-+    JARVIS_ASSERT(t->state == TaskState::BLOCKED);
-+    JARVIS_ASSERT(t->exec_period_ns > 0);
-+    window_wait_ticks(25);
-+    JARVIS_ASSERT(t->state == TaskState::BLOCKED);
-+    JARVIS_ASSERT_EQ(0ULL, t->exec_period_ns);
-+    kernel::test::terminate_and_drain(*t);
-+    release_meter_task(t);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: The blocked-branch window advance is sample-then-reset — the
-+// monotonic WCET max (#154 binding) keeps the pre-block peak even after
-+// the window zeroes (issue #331 S1 guard).
-+// Input: Periodic task (period 10, WCET 5 ticks) runs 3 ticks, blocks
-+//        across 2.5 windows.
-+// Expect: exec_period_ns == 0 after the wait, but wcet_observed_ns still
-+//         holds the ~3-tick peak (never zeroed before capture).
-+// Depends: idle_note_exec_sample monotonic-max seam (issue #154)
-+JARVIS_TEST(meter_blocked_window_sample_keeps_wcet,
-+            "PRE: none | POST: none") {
-+    g_window_gate.init(0, 1);
-+    g_window_ran = false;
-+    auto *t = TaskControlBlock::create(window_block_entry, 11, 10);
-+    JARVIS_ASSERT(t != nullptr);
-+    t->wcet_ticks = 5;
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*t);
-+    }
-+    for (uint64_t i = 0; i < 10000000; ++i) {
-+        if (g_window_ran)
-+            break;
-+        arch::pause();
-+    }
-+    JARVIS_ASSERT(g_window_ran);
-+    for (uint64_t i = 0; i < 10000000; ++i) {
-+        if (t->state == TaskState::BLOCKED)
-+            break;
-+        arch::pause();
-+    }
-+    JARVIS_ASSERT(t->state == TaskState::BLOCKED);
-+    window_wait_ticks(25);
-+    JARVIS_ASSERT_EQ(0ULL, t->exec_period_ns);
-+    JARVIS_ASSERT(t->wcet_observed_ns > 0);
-+    kernel::test::terminate_and_drain(*t);
-+    release_meter_task(t);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
- void register_task_metering_tests() {
-     Logger::info("Registering task_metering tests");
-     JARVIS_REGISTER_TEST(meter_switch_delta_accumulates);
-@@ -407,4 +515,6 @@ void register_task_metering_tests() {
-     JARVIS_REGISTER_TEST(meter_times_other_pid_and_esrch);
-     JARVIS_REGISTER_TEST(meter_times_null_buffer_fail_closed);
-     JARVIS_REGISTER_TEST(meter_terminate_charges_final_quantum);
-+    JARVIS_REGISTER_TEST(meter_blocked_window_resets_to_zero);
-+    JARVIS_REGISTER_TEST(meter_blocked_window_sample_keeps_wcet);
- }
-diff --git a/test-history.txt b/test-history.txt
-index c88042080..988702737 100644
---- a/test-history.txt
-+++ b/test-history.txt
-@@ -2917,3 +2917,18 @@ SUMMARY: total=20 ok=15 fail=5
- 2026-10-11 19:05:30 shell_commands PASSED: 34 FAILED: 0 TIME: 4373ms
- 2026-10-11 19:09:00 core PASSED: 542 FAILED: 0 TIME: 83709ms
- 2026-10-11 19:12:00 basic_lib PASSED: 26 FAILED: 0 TIME: 3029ms
-+2026-10-11 19:20:00 task_metering PASSED: 9 FAILED: 0 TIME: 1080ms
-+2026-10-11 19:32:00 deadline PASSED: 142 FAILED: 0 TIME: 51276ms
-+2026-10-11 21:10:00 servers_vfsd_auth PASSED: 25 FAILED: 0 TIME: 2989ms
-+2026-10-11 21:12:00 servers PASSED: 64 FAILED: 0 TIME: 7495ms
-+2026-10-11 21:20:00 storage PASSED: 164 FAILED: 0 TIME: 63268ms
-+2026-10-11 21:28:00 servers_vfsd_auth PASSED: 25 FAILED: 0 TIME: 3094ms
-+2026-10-11 21:32:00 servers PASSED: 64 FAILED: 0 TIME: 34324ms
-+2026-10-11 21:38:00 storage PASSED: 164 FAILED: 0 TIME: 66444ms
-+2026-10-11 23:05:00 elf_loader PASSED: 15 FAILED: 0 TIME: 2121ms
-+2026-10-11 23:08:00 proc_elf PASSED: 92 FAILED: 0 TIME: 13233ms STATUS: STALL-RECOVERED
-+2026-10-12 00:05:00 elf_loader PASSED: 15 FAILED: 0 TIME: 2001ms
-+2026-10-12 01:25:00 elf_loader PASSED: 15 FAILED: 0 TIME: 2005ms
-+2026-10-12 01:27:00 servers_vfsd_auth PASSED: 25 FAILED: 0 TIME: 3070ms
-+2026-10-12 01:29:00 proc_elf PASSED: 92 FAILED: 0 TIME: 13951ms
-+2026-10-12 01:31:00 task_metering PASSED: 9 FAILED: 0 TIME: 6697ms
++        }
+         if (last)
+             break;
+     }

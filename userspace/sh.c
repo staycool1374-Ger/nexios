@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <syscall.h>
+#include <time.h>
 
 #define MAX_ARGS 16
 #define MAX_CMDS 8
@@ -18,6 +19,9 @@
 #define MAX_PATH_DIRS 16
 #define MAX_DIR_SEG 64
 #define EXEC_PATH_LEN 256
+/// @brief `/bin` ELF suffix probed after the exact name (issue #310).
+#define ELF_SUFFIX_LEN 6
+static const char kElfSuffix[ELF_SUFFIX_LEN + 1] = ".c.elf";
 
 static char line[LINE_BUF];
 static int last_status = 0;
@@ -110,11 +114,21 @@ static void print_prompt(void) {
     printf("sh$ ");
 }
 
+/// @brief read_line retries empty polls: tty_read is EAGAIN-style (issue
+/// #310 E2E — a single empty poll used to kill the shell on any input
+/// gap). Interactive prompts wait indefinitely like the kernel shell
+/// (xmodem read_line pattern); a dead tty spins cheap 1 ms naps.
 static int read_line(void) {
     int i = 0;
     char c;
+    struct timespec nap;
+    nap.tv_sec = 0;
+    nap.tv_nsec = 1000000;
     while (i < LINE_BUF - 1) {
-        if (read(0, &c, 1) != 1) return -1;
+        if (read(0, &c, 1) != 1) {
+            nanosleep(&nap, 0);
+            continue;
+        }
         if (c == '\n') break;
         if (c == '\r') break;
         if (c == '\b' || c == 127) {
@@ -189,9 +203,11 @@ static int parse_line(struct Command cmds[], int* ncmds) {    int i = 0;
 }
 
 /// @brief Resolve a command name via PATH into `out` (issue #310).
-/// Names containing '/' are copied verbatim (bounded); bare names try
-/// each colon-separated PATH dir (`dir + "/" + name`, empty dir means
-/// root), probing with open()+close. Fail-closed: -1 when nothing fits
+/// Names containing '/' are copied verbatim (bounded, no suffix try);
+/// bare names try each colon-separated PATH dir in order, per segment
+/// first the exact `dir + "/" + name`, then `dir + "/" + name + ".c.elf"`
+/// (`/bin` holds suffixed ELFs, so `cat` finds `/bin/cat.c.elf`),
+/// probing with open()+close. Fail-closed: -1 when nothing fits
 /// or resolves — the caller prints `not found` and exits 127.
 static int resolve_path(const char *cmd, char *out, int out_len) {
     if (!cmd || !cmd[0] || !out || out_len <= 0)
@@ -243,6 +259,23 @@ static int resolve_path(const char *cmd, char *out, int out_len) {
         if (fd >= 0) {
             close(fd);
             return 0;
+        }
+        // Suffix fallback (same segment, bounded): `cat` finds
+        // `/bin/cat.c.elf`. Skipped when it cannot fit.
+        if (seglen + 1 + cmdlen + ELF_SUFFIX_LEN + 1 <= out_len) {
+            int j = 0;
+            for (int i = 0; i < seglen; ++i)
+                out[j++] = path[segstart + i];
+            out[j++] = '/';
+            for (int i = 0; i < cmdlen; ++i)
+                out[j++] = cmd[i];
+            for (int i = 0; i <= ELF_SUFFIX_LEN; ++i)
+                out[j++] = kElfSuffix[i];
+            fd = open(out, 0);
+            if (fd >= 0) {
+                close(fd);
+                return 0;
+            }
         }
         if (last)
             break;
