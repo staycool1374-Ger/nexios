@@ -45,6 +45,7 @@
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/ramdisk/ramdiskd.hpp>
 #include <kernel/ipc/ipc.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -885,8 +886,13 @@ int ramdisk_fs_try_mount() {
         return VFS_INVALID;
     if (find_fs("ramdiskfs") != nullptr)
         return 0;
-    if (mount(ramdisk_fs, "/mnt/ramdisk") != 0)
+    if (mount(ramdisk_fs, "/mnt/ramdisk") != 0) {
+        Logger::warn("ramdiskfs: mount failed (fail-closed)");
+        log::dmesg_push_sev(log::ErrorSubsystem::DAEMON,
+                            log::kDmesgBase_DAEMON + 11,
+                            log::LogSeverity::ERROR, "ramdisk mount", 0);
         return VFS_INVALID;
+    }
     return 0;
 }
 

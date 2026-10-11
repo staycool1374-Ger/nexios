@@ -59,6 +59,8 @@ constexpr DmesgRecord kDmesgCatalog_DAEMON[] = {
      "Ramdisk carve failed"},
     {ErrorSubsystem::DAEMON, kDmesgBase_DAEMON + 10, LogSeverity::WARN,
      "Ramdisk grant skipped"},
+    {ErrorSubsystem::DAEMON, kDmesgBase_DAEMON + 11, LogSeverity::ERROR,
+     "Ramdisk mount failed"},
 };
 
 /// @brief ELF loader records (canonical base kDmesgBase_ELF).
