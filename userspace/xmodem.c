@@ -380,6 +380,14 @@ static int stage_flush(unsigned long start_block, unsigned long total) {
 
 /// @brief Run the receive session into ramdisk at start_block.
 /// Returns bytes written, or negative -reason on abort.
+/// @brief Sparse transfer progress for rx_run (issue #313): after every
+/// 16 staged 512 B blocks (8 KiB) one line `\n[rx n=<done> total=<size>]\n`
+/// is written (lowercase, digits only — emits no ACK/NAK/CAN/EOT/'C' byte,
+/// so host ACK-wait filters stay aligned). Total is the YMODEM block-0
+/// size when present, else 0 (pure XMODEM, size known at EOT only).
+/// Write failure is ignored and never aborts the transfer.
+#define RX_PROGRESS_BLOCKS 16
+static void print_u64(unsigned long v);
 static long rx_run(unsigned long start_block, unsigned long cap_time) {
     unsigned long expected = 1;
     unsigned long total = 0;
@@ -388,6 +396,7 @@ static long rx_run(unsigned long start_block, unsigned long cap_time) {
     unsigned long retries = 0;
     int c_tries = 0;
     int start = 0;
+    unsigned long reported = 0;
     printf("READY\n");
     while (c_tries < C_TRIES) {
         serial_putc(CHR_C);
@@ -487,6 +496,18 @@ packet:
         serial_putc(ACK);
         ++expected;
         retries = 0;
+        {
+            unsigned long blk = total / (RX_PROGRESS_BLOCKS *
+                                         RAMDISK_BLOCK_SIZE);
+            if (total > 0 && blk > reported) {
+                reported = blk;
+                write(1, "\n[rx n=", 7);
+                print_u64(total);
+                write(1, " total=", 7);
+                print_u64(have_ysize ? ysize : 0);
+                write(1, "]\n", 2);
+            }
+        }
     }
     {
         int f = stage_flush(start_block, total);

@@ -48,3 +48,40 @@ golden byte-compare all framings + NAK-recovery + NOGRANT).
 
 YMODEM-G, sender role, checksum fallback, multi-file batch, `loadelf`
 from ramdisk (needs VFS + quiescence), atomicity/resize/zero-copy.
+
+## Operator upload (`tools/upload-ramdisk.py`, issue #313)
+
+One command wrapping the proven `tools/verify-276.py` driver:
+
+```
+tools/upload-ramdisk.py FILE --start-block 100 [--pid N] [--port 4465]
+                             [--packet soh|stx] [--framing auto|raw|base64|hex]
+```
+
+- Attaches to a running target (boots nothing itself); discovers the
+  ramdiskd pid from `tasks` unless `--pid` is given; drives the receiver
+  via `source /tests/xmodem276.txt` + the `mode:/cmd:/pid:/block:`
+  answers (`rx` path only).
+- Framing `auto` (default): file bytes are scanned once — any `0x0A`
+  or `0x09` selects `base64`, else `raw`. Framing is transport-only:
+  the receiver decodes it before staging, so the stored bytes are
+  always the raw file bytes and `done bytes=` equals the file size
+  (`--framing` overrides; `hex` also accepted).
+- `--start-block` is required (no silent default: a wrong block
+  overwrites live ramdisk data). Pick a region known free (e.g. 100
+  in the verify-276 layout); capacity beyond the 16 MiB store is
+  refused before dialling. Empty files are refused (the receiver
+  NAKs zero-size YMODEM).
+- Progress, both ends: host prints one updating `\r` line
+  (`[up sent/total pct% rate ETA naks spill]`) plus a final
+  `upload done bytes=.. blocks=.. framing=.. naks=.. spill=..` line
+  verified against the receiver's `done bytes=`; the receiver prints
+  `[rx n=<done> total=<size>]` every 16 blocks (`total=0` for
+  pure-XMODEM senders without block-0). Good output shows steady
+  `\r` updates and zero unexpected resends; a `CAN-abort` with no
+  `done` line means the receiver refused (grant/pid/block — check
+  the serial log; the receiver writes nothing further after abort).
+- Exit codes: `0` ok, `1` dialogue/handshake failure, `2`
+  usage/byte-count mismatch, `3` receiver CAN-abort, `4`
+  timeout/retry-exhausted. `--selftest` runs the host-side checks
+  without a target.

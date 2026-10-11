@@ -105,7 +105,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"vfs_tmpfs_corrupt",      7,   0,       0      },  // tmpfs corrupt/timeout analogue (issue #114): duplicates, missing unlink, non-empty dir, oversize, stale recycle, fragmentation, concurrent
     {"vfs_devfs",             10,   0,       0      },  // devfs device nodes (issue #124): root stable/reject/readdir/lookup + null, console, tty, kbd, random op contracts + init
     {"vfs_procfs_ops",         6,   0,       0      },  // procfs per-node op contracts (issue #124): root byte-op rejection, meminfo/pci readonly, self dir, pid dir, pid stat
-    {"vfs_initrd_fs",          7,   0,       0      },  // initrd filesystem vnodes (issue #124): root dir/fail-closed lseek/readdir, lookup build, file readonly/lseek/close
+    {"vfs_initrd_fs",          9,   0,       0      },  // initrd filesystem vnodes (issue #124 + #329): root dir/fail-closed lseek/readdir, lookup build, file readonly/lseek/close, root tops-only + subdir dedup
     {"vfs_errors",             6,   0,       0      },  // VfsError *_err API (issue #124): fdtable codes, resolve, find_fs, mount, mkdir/create/unlink, init/set_root
     {"hal_rtc_datetime",       6,   0,       0      },  // RTC date arithmetic (issue #116): tm mapping, composition, stability, BCD edges/roundtrip/contract
     {"hal_keyboard_decode",   10,   0,       0      },  // keyboard decode (issue #110): tables, shift/ctrl/alt, break, unknown, control keys, caps XOR, read, flush

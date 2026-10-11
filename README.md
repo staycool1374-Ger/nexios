@@ -154,3 +154,28 @@ docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.
   make run-release-mode arm    # Boots AArch64 target in QEMU
   make run-release-mode riscv  # Boots RISC-V 64 target in QEMU
   ```
+
+#### Upload files into ramdisk (XMODEM)
+
+One command streams a host file into the running ramdiskd, with progress
+on both ends (host `\r` line + receiver `[rx n=..]` lines). Needs a
+running target on TCP serial — the proven path is q35+OVMF without the
+IDE drive (see `docs/specs/xmodem.md`):
+
+```bash
+# 1. Boot with TCP serial, then start the receiver once:
+qemu-system-x86_64 -cdrom debug/nexios-rtos.iso -m 256M \
+  -serial tcp:127.0.0.1:4465,server,nowait -machine q35 -cpu max \
+  -drive if=pflash,format=raw,readonly=on,file=<edk2-x86_64-code.fd> \
+  -display none
+# (in the shell over that serial:) source /tests/xmodem276.txt
+
+# 2. Upload (framing auto-selects raw vs base64; --start-block required):
+tools/upload-ramdisk.py myfile.bin --start-block 1000
+# upload done bytes=20480 blocks=40 framing=raw naks=0 spill=55 time=127.0s
+```
+
+Exit codes: `0` ok, `1` dialogue/handshake, `2` usage/count mismatch,
+`3` receiver abort (nothing written), `4` timeout. `--selftest` checks
+the host logic without a target. Details: `docs/specs/xmodem.md`
+(operator section) and issue #313.

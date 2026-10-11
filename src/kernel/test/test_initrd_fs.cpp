@@ -186,12 +186,14 @@ JARVIS_TEST(initrd_fs_root_lseek_fails_closed, "PRE: iocd | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: initrd root readdir mirrors the archive enumeration verbatim —
-// the archive-stored names are copied into the dirent with the fixed inode
-// number 2, and enumeration stops (VFS_INVALID) once the archive is drained.
+// Testidea: initrd root readdir lists Linux-like top-level entries — the
+// cpio "./" prefix is stripped, so archive names become bare dirent names
+// with the fixed inode number 2, and enumeration stops (VFS_INVALID) once
+// the archive is drained. Changed for issue #329: the old verbatim
+// "./alpha" copy dumped full archive paths instead of current-dir entries.
 // Input: Synthetic archive with "./alpha" and "./beta" plus a trailer;
 //        three successive readdir calls from pos 0.
-// Expect: First two calls return 0 with names "./alpha"/"./beta" and
+// Expect: First two calls return 0 with names "alpha"/"beta" and
 //         d_ino 2; the third returns VFS_INVALID.
 // Depends: vfs::initrd_fs, initrd::readdir
 JARVIS_TEST(initrd_fs_root_readdir_lists_archive,
@@ -215,8 +217,8 @@ JARVIS_TEST(initrd_fs_root_readdir_lists_archive,
 
     JARVIS_ASSERT_EQ(0, first_ret);
     JARVIS_ASSERT_EQ(0, second_ret);
-    JARVIS_ASSERT(memcmp(first.d_name, "./alpha", 8) == 0);
-    JARVIS_ASSERT(memcmp(second.d_name, "./beta", 7) == 0);
+    JARVIS_ASSERT(memcmp(first.d_name, "alpha", 6) == 0);
+    JARVIS_ASSERT(memcmp(second.d_name, "beta", 5) == 0);
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(2), first.d_ino);
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(2), second.d_ino);
     JARVIS_ASSERT_EQ(static_cast<int>(vfs::VFS_INVALID), third_ret);
@@ -427,11 +429,90 @@ JARVIS_TEST(initrd_fs_file_close_releases_blocks, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Root readdir is Linux-like for nested archives — only
+// top-level components are listed and repeat prefixes collapse (issue #329).
+// Input: Synthetic archive with "./bin/sh", "./bin/ls", "./etc/fstab";
+//        full readdir walk from pos 0.
+// Expect: Exactly two entries "bin" and "etc" (bin once), no '/' or '.'
+//         in any name, d_ino 2, then VFS_INVALID; pos advanced past all
+//         three raw entries.
+// Depends: vfs::initrd_fs, initrd::readdir
+JARVIS_TEST(initrd_fs_root_readdir_lists_tops_only,
+            "PRE: iocd | POST: none") {
+    CpioWriter writer;
+    writer.add("./bin/sh", "SH", 2, 0100644);
+    writer.add("./bin/ls", "LS", 2, 0100644);
+    writer.add("./etc/fstab", "FS", 2, 0100644);
+    writer.add_trailer();
+    install_synth(writer);
+
+    vfs::Vnode *root = vfs::initrd_fs.get_root();
+    vfs::Dirent got[4] = {};
+    int rets[4] = {};
+    uint64_t pos = 0;
+    for (int i = 0; i < 4; ++i)
+        rets[i] = root->ops->readdir(*root, pos, got[i]);
+    uint64_t advanced = pos;
+    restore_boot_initrd();
+
+    JARVIS_ASSERT_EQ(0, rets[0]);
+    JARVIS_ASSERT_EQ(0, rets[1]);
+    JARVIS_ASSERT_EQ(static_cast<int>(vfs::VFS_INVALID), rets[2]);
+    JARVIS_ASSERT(memcmp(got[0].d_name, "bin", 4) == 0);
+    JARVIS_ASSERT(memcmp(got[1].d_name, "etc", 4) == 0);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2), got[0].d_ino);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2), got[1].d_ino);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(3), advanced);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Subdir readdir collapses deeper nesting to immediate children
+// with dedup (issue #329 follow-through for initrd_dir_readdir).
+// Input: Synthetic archive with "./bin/a/x", "./bin/a/y", "./bin/sh";
+//        lookup("bin") then full readdir walk.
+// Expect: Exactly two entries "a" and "sh" (a once), then VFS_INVALID;
+//         dir vnode released via ops->close() (ResourceTracker-clean).
+// Depends: vfs::initrd_fs, initrd::readdir, MemPool
+JARVIS_TEST(initrd_fs_subdir_readdir_dedups_children,
+            "PRE: iocd | POST: none") {
+    CpioWriter writer;
+    writer.add("./bin/a/x", "X", 1, 0100644);
+    writer.add("./bin/a/y", "Y", 1, 0100644);
+    writer.add("./bin/sh", "SH", 2, 0100644);
+    writer.add_trailer();
+    install_synth(writer);
+
+    vfs::Vnode *root = vfs::initrd_fs.get_root();
+    vfs::Vnode *dir = root->ops->lookup(*root, "bin");
+    vfs::Dirent got[4] = {};
+    int rets[4] = {0, 0, 0, 0};
+    uint64_t pos = 0;
+    bool have_dir = (dir != nullptr);
+    if (have_dir) {
+        for (int i = 0; i < 4; ++i)
+            rets[i] = dir->ops->readdir(*dir, pos, got[i]);
+        dir->ops->close(*dir);
+    }
+    restore_boot_initrd();
+
+    JARVIS_ASSERT(have_dir);
+    JARVIS_ASSERT_EQ(0, rets[0]);
+    JARVIS_ASSERT_EQ(0, rets[1]);
+    JARVIS_ASSERT_EQ(static_cast<int>(vfs::VFS_INVALID), rets[2]);
+    JARVIS_ASSERT(memcmp(got[0].d_name, "a", 2) == 0);
+    JARVIS_ASSERT(memcmp(got[1].d_name, "sh", 3) == 0);
+    JARVIS_TEST_PASS();
+}
+
 void register_initrd_fs_tests() {
     Logger::info("Registering initrd fs tests");
     JARVIS_REGISTER_TEST(initrd_fs_root_directory_contract);
     JARVIS_REGISTER_TEST(initrd_fs_root_lseek_fails_closed);
     JARVIS_REGISTER_TEST(initrd_fs_root_readdir_lists_archive);
+    JARVIS_REGISTER_TEST(initrd_fs_root_readdir_lists_tops_only);
+    JARVIS_REGISTER_TEST(initrd_fs_subdir_readdir_dedups_children);
     JARVIS_REGISTER_TEST(initrd_fs_lookup_builds_file_vnode);
     JARVIS_REGISTER_TEST(initrd_fs_file_readonly_contract);
     JARVIS_REGISTER_TEST(initrd_fs_file_lseek_modes);

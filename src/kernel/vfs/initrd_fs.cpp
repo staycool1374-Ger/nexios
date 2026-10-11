@@ -192,6 +192,92 @@ static const char *initrd_strip_dot(const char *name) {
     return name;
 }
 
+/// @brief Capacity of a normalized archive-name scratch buffer.
+static constexpr size_t INITRD_MAX_NORM = 256;
+
+/// @brief Fetch the raw archive name at `idx` into `out` (NUL-terminated).
+/// @return True when an entry exists at `idx`.
+static bool initrd_fetch_raw_name(uint64_t idx, char *out, size_t cap) {
+    uint64_t cursor = idx;
+    initrd::InitrdEntry entry = {};
+    if (!initrd::readdir(&cursor, &entry))
+        return false;
+    size_t i = 0;
+    while (i + 1 < cap && entry.name[i]) {
+        out[i] = entry.name[i];
+        ++i;
+    }
+    out[i] = '\0';
+    return true;
+}
+
+/// @brief Normalize a raw cpio name: strip all leading "./" and '/'
+/// repetitions, then strip trailing '/' runs (unless empty).
+/// @return Length of the normalized name (excluding NUL).
+static size_t initrd_normalize_name(const char *raw, char *out, size_t cap) {
+    size_t pos = 0;
+    while (raw[pos] == '.' && raw[pos + 1] == '/')
+        pos += 2;
+    while (raw[pos] == '/')
+        ++pos;
+    size_t len = 0;
+    while (raw[pos] && len + 1 < cap) {
+        out[len] = raw[pos];
+        ++len;
+        ++pos;
+    }
+    out[len] = '\0';
+    while (len > 0 && out[len - 1] == '/') {
+        --len;
+        out[len] = '\0';
+    }
+    return len;
+}
+
+/// @brief Compare the first '/'-delimited components of `a` and `b` exactly.
+/// Both inputs must already be normalized (no leading/trailing slashes).
+static bool initrd_same_top(const char *a, const char *b) {
+    size_t i = 0;
+    while (true) {
+        const bool end_a = (a[i] == '\0' || a[i] == '/');
+        const bool end_b = (b[i] == '\0' || b[i] == '/');
+        if (end_a && end_b)
+            return true;
+        if (end_a || end_b || a[i] != b[i])
+            return false;
+        ++i;
+    }
+}
+
+/// @brief Check whether the top component `top` was already emitted by an
+/// earlier archive index (dedup scan over [0, `before`)).
+/// @return True when a duplicate exists.
+static bool initrd_top_seen_before(const char *top, uint64_t before) {
+    char raw[INITRD_MAX_NORM] = {};
+    char norm[INITRD_MAX_NORM] = {};
+    for (uint64_t j = 0; j < before && j < INITRD_MAX_SCAN; ++j) {
+        if (!initrd_fetch_raw_name(j, raw, sizeof(raw)))
+            break;
+        if (initrd_normalize_name(raw, norm, sizeof(norm)) == 0)
+            continue;
+        if (norm[0] == '.' && norm[1] == '\0')
+            continue;
+        if (initrd_same_top(norm, top))
+            return true;
+    }
+    return false;
+}
+
+/// @brief Copy the first component of normalized `norm` into `dent_name`.
+static void initrd_copy_top(const char *norm, char *dent_name, size_t cap) {
+    size_t k = 0;
+    while (norm[k] && norm[k] != '/' && k + 1 < cap) {
+        dent_name[k] = norm[k];
+        ++k;
+    }
+    dent_name[k] = '\0';
+}
+
 /// @brief Probe the archive for subdirectory evidence under `name`.
 /// A bounded readdir walk classifies `name` as an explicit directory
 /// entry ("./<name>" with is_dir) or as an implied parent ("./<name>/..."
@@ -269,39 +355,88 @@ static int initrd_dir_ioctl(Vnode &, uint64_t, kernel::CheckedPtr<uint8_t>) {
 }
 
 /// @brief Read a directory entry from an initrd subdirectory.
-/// Lists immediate children ("./<subdir>/<child>" with no further '/').
+/// Lists immediate children ("<subdir>/<child>"); deeper entries collapse
+/// to their first component below the subdir and repeat prefixes are
+/// emitted once (Linux-like, deduped).
 static int initrd_dir_readdir(Vnode &self, uint64_t &pos, Dirent &dent) {
     auto *dinfo = static_cast<InitrdDirNode *>(self.private_data);
     if (!dinfo || dinfo->subdir[0] == '\0')
         return VFS_INVALID;
-    size_t sublen = 0;
-    while (sublen < INITRD_MAX_SUBDIR && dinfo->subdir[sublen])
-        ++sublen;
-    initrd::InitrdEntry entry = {};
+    char dir_norm[INITRD_MAX_SUBDIR] = {};
+    if (initrd_normalize_name(dinfo->subdir, dir_norm, sizeof(dir_norm)) == 0)
+        return VFS_INVALID;
+    size_t dirlen = 0;
+    while (dirlen < sizeof(dir_norm) && dir_norm[dirlen])
+        ++dirlen;
+    char raw[INITRD_MAX_NORM] = {};
+    char norm[INITRD_MAX_NORM] = {};
+    char child[INITRD_MAX_NORM] = {};
+    char prev_raw[INITRD_MAX_NORM] = {};
+    char prev_norm[INITRD_MAX_NORM] = {};
+    uint64_t cur = pos;
     for (uint64_t scanned = 0; scanned < INITRD_MAX_SCAN; ++scanned) {
-        if (!initrd::readdir(&pos, &entry))
+        if (cur < pos)
             break;
-        const char *stripped = initrd_strip_dot(entry.name);
-        size_t i = 0;
-        while (i < sublen && dinfo->subdir[i] == stripped[i])
-            ++i;
-        if (i != sublen || stripped[i] != '/')
+        if (!initrd_fetch_raw_name(cur, raw, sizeof(raw)))
+            break;
+        ++cur;
+        if (initrd_normalize_name(raw, norm, sizeof(norm)) == 0)
             continue;
-        const char *child = stripped + i + 1;
-        if (child[0] == '\0')
+        size_t i = 0;
+        while (i < dirlen && dir_norm[i] == norm[i])
+            ++i;
+        if (i != dirlen || norm[i] != '/')
+            continue;
+        const char *rest = norm + i + 1;
+        if (rest[0] == '\0' || rest[0] == '/')
             continue;
         size_t j = 0;
-        while (child[j] && child[j] != '/')
+        while (rest[j] && rest[j] != '/' && j + 1 < sizeof(child)) {
+            child[j] = rest[j];
             ++j;
-        if (child[j] != '\0')
-            continue;
-        size_t k = 0;
-        while (k < j && k < 63) {
-            dent.d_name[k] = child[k];
-            ++k;
         }
-        dent.d_name[k] = '\0';
+        child[j] = '\0';
+        if (child[0] == '\0')
+            continue;
+        if (child[0] == '.' && child[1] == '\0')
+            continue;
+        if (child[0] == '.' && child[1] == '.' && child[2] == '\0')
+            continue;
+        bool dup = false;
+        for (uint64_t k = 0; k < cur - 1 && k < INITRD_MAX_SCAN; ++k) {
+            if (!initrd_fetch_raw_name(k, prev_raw, sizeof(prev_raw)))
+                break;
+            if (initrd_normalize_name(prev_raw, prev_norm,
+                                      sizeof(prev_norm)) == 0)
+                continue;
+            size_t m = 0;
+            while (m < dirlen && dir_norm[m] == prev_norm[m])
+                ++m;
+            if (m != dirlen || prev_norm[m] != '/')
+                continue;
+            const char *prev_rest = prev_norm + m + 1;
+            if (prev_rest[0] == '\0' || prev_rest[0] == '/')
+                continue;
+            size_t n = 0;
+            while (child[n] && prev_rest[n] == child[n])
+                ++n;
+            const bool prev_end =
+                (prev_rest[n] == '\0' || prev_rest[n] == '/');
+            if (child[n] == '\0' && prev_end) {
+                dup = true;
+                break;
+            }
+        }
+        if (dup)
+            continue;
+        size_t c = 0;
+        while (child[c] && c + 1 < sizeof(dent.d_name)) {
+            dent.d_name[c] = child[c];
+            ++c;
+        }
+        dent.d_name[c] = '\0';
         dent.d_ino = 2;
+        pos = cur;
         return 0;
     }
     return VFS_INVALID;
@@ -417,18 +552,39 @@ static int initrd_root_ioctl(Vnode &, uint64_t, kernel::CheckedPtr<uint8_t>) {
 }
 
 /// @brief Read a directory entry from initrd root.
+/// Lists top-level components only ("bin" for "./bin/sh"), deduped and
+/// without any cpio prefix (Linux-like). Repeat prefixes from nested
+/// entries are emitted once; deeper structure is reached via subdir walks.
 static int initrd_root_readdir(Vnode &, uint64_t &pos, Dirent &dent) {
-    initrd::InitrdEntry entry = {};
-    if (!initrd::readdir(&pos, &entry))
-        return VFS_INVALID;
-    size_t idx = 0;
-    while (entry.name[idx] && idx < 63) {
-        dent.d_name[idx] = entry.name[idx];
-        ++idx;
+    char raw[INITRD_MAX_NORM] = {};
+    char norm[INITRD_MAX_NORM] = {};
+    uint64_t cur = pos;
+    for (uint64_t scanned = 0; scanned < INITRD_MAX_SCAN; ++scanned) {
+        if (cur < pos)
+            break;
+        if (!initrd_fetch_raw_name(cur, raw, sizeof(raw)))
+            break;
+        ++cur;
+        if (initrd_normalize_name(raw, norm, sizeof(norm)) == 0)
+            continue;
+        if (norm[0] == '.' && norm[1] == '\0')
+            continue;
+        char top[INITRD_MAX_NORM] = {};
+        initrd_copy_top(norm, top, sizeof(top));
+        if (top[0] == '\0')
+            continue;
+        if (top[0] == '.' && top[1] == '\0')
+            continue;
+        if (top[0] == '.' && top[1] == '.' && top[2] == '\0')
+            continue;
+        if (initrd_top_seen_before(top, cur - 1))
+            continue;
+        initrd_copy_top(norm, dent.d_name, sizeof(dent.d_name));
+        dent.d_ino = 2;
+        pos = cur;
+        return 0;
     }
-    dent.d_name[idx] = '\0';
-    dent.d_ino = 2;
-    return 0;
+    return VFS_INVALID;
 }
 
 /// @brief Look up a file by name in the initrd root directory.
