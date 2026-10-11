@@ -1001,6 +1001,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     tcb->executed_ticks = 0;
     tcb->exec_ns_total = 0;
     tcb->exec_period_ns = 0;
+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
     tcb->exec_stamp_ns = 0;
     tcb->sched_policy = SchedPolicy::AUTO; // issue #19: memset already zero
     tcb->edf_exempt = false;               // (AUTO=0); explicit for clarity
@@ -1248,6 +1249,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     tcb->executed_ticks = 0;
     tcb->exec_ns_total = 0;
     tcb->exec_period_ns = 0;
+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
     tcb->exec_stamp_ns = 0;
     tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (AUTO=0; explicit)
     tcb->edf_exempt = false;
@@ -1468,6 +1470,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->executed_ticks = 0;
     tcb->exec_ns_total = 0;
     tcb->exec_period_ns = 0;
+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331 fresh
     tcb->exec_stamp_ns = 0;
     tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (clone starts AUTO;
     tcb->edf_exempt = false;               // no policy inheritance)

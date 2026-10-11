@@ -1,286 +1,354 @@
-diff --git a/docs/specs/vfs.md b/docs/specs/vfs.md
-index dcb651d6b..f6aaf7283 100644
---- a/docs/specs/vfs.md
-+++ b/docs/specs/vfs.md
-@@ -124,8 +124,18 @@ vn  = resolve(path);                // 1. resolve FIRST
- ino = vn->ino;
- vfsd_authorize(op, pid, path, ino); // 2. blocking IPC (CPU yields to vfsd)
- vn2 = resolve(path);                // 3. re-resolve
--return vn2 && vn2 == vn && vn2->ino == ino;   // 4. identity = pointer + ino
-+return vnode_identity_match(vn, vn2, ino);   // 4. identity below
- ```
-+- **Identity** (`vfs::vnode_identity_match`, issue #332): strict fast
-+  path (same object + same ino, e.g. tmpfs stable entries) OR
-+  immutable-equivalence (same ops table + same ino/size/mode, gated on
-+  the filesystem-declared `VnodeOps::readonly` marker — initrd
-+  file/dir/root tables only; per-lookup vnodes over a read-only image
-+  with uniform ino 1/2, replacement across the yield impossible). The
-+  gate is deliberately not ops-shape: mutability may live on a sibling
-+  table (fat32 file tables carry no mutators yet the image is writable),
-+  so only an explicit readonly declaration admits equivalence; fat32
-+  still fails re-validation and is tracked separately.
- - Longest-prefix mount selection for absolute paths; relative paths start at
-   `cwd_vnode`; `..` at a mount root climbs by re-resolving the mount point's
-   parent.  Mount-point shadowing: a path component equal to a mount point's
-diff --git a/src/kernel/syscall/syscall_handlers_fs.cpp b/src/kernel/syscall/syscall_handlers_fs.cpp
-index 07771ce69..d848287c9 100644
---- a/src/kernel/syscall/syscall_handlers_fs.cpp
-+++ b/src/kernel/syscall/syscall_handlers_fs.cpp
-@@ -165,7 +165,8 @@ static bool resolve_then_authorize(uint64_t op_type, uint64_t pid,
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 15532aaea..72d45c250 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -405,11 +405,25 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
+         str_pos += total_string_len(envp);
+         copy_strings(str_pos, argv);
      }
-     vfs::Vnode *vn2 = vfs::resolve(path);
-     // Compare BEFORE releasing (vn may be freed by the release below).
--    bool ok = (vn2 && vn2 == vn && vn2->ino == ino);
-+    // Identity covers per-lookup vnodes over read-only images (#332).
-+    bool ok = vfs::vnode_identity_match(vn, vn2, ino);
-     vfs::release(vn);
-     if (!ok) {
-         vfs::release(vn2);
-@@ -194,7 +195,7 @@ static bool resolve_parent_then_authorize(uint64_t op_type, uint64_t pid,
-     const char *name2 = nullptr;
-     vfs::Vnode *parent2 = vfs::resolve_parent(path, name2);
-     // Compare BEFORE releasing (parent may be freed by the release below).
--    bool ok = (parent2 && parent2 == parent && parent2->ino == ino && name2 &&
-+    bool ok = (vfs::vnode_identity_match(parent, parent2, ino) && name2 &&
-                *name2 != '\0');
-     vfs::release(parent);
-     if (!ok) {
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 72a88b5de..82e71168b 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -153,7 +153,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
++    // Issue #335: the strings above live at pre-align `sp`; the pointer
++    // fill below must address them there, not at the aligned `sp`
++    // (which sits up to 15 bytes lower — every stored pointer would
++    // otherwise dangle into the pad gap).
++    uint8_t *str_base = sp;
  
-     // servers
-     {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
--    {"servers_vfsd_auth",     23,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176)
-+    {"servers_vfsd_auth",     25,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176) + initrd-open/identity-gate (#332)
-     {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
-     {"servers_daemon_restart", 2,    0,       0      },  // unknown-daemon rejection + terminate/ensure resurrect cycle (issue #135); crash test stays #if 0-disabled
-     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
-@@ -268,7 +268,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
-     {"hrt_monotonic",         5,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16)
-     {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
--    {"task_metering",         7,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21)
-+    {"task_metering",         9,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21) + blocked-window reset/wcet-keep (#331)
-     {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
-     {"sched_admission",       8,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny/fork-user-parent-admitted (issues #20, #312)
-     {"sched_admission_verify", 7,   0,       0      },  // admission journeys: taskdefs-budgets/defer-retry/mode-parity/bg-guard/percpu-epsilon/budget-roundtrip/boot-parity (issue #24)
-@@ -282,12 +282,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
-     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
-     {"storage",             162,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption)
--    {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
-+    {"servers",             64,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332)
-     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
-     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
-     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
-     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
--    {"deadline",            139,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277)
-+    {"deadline",            141,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331)
-     {"ui",                  73,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
-     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
-     {"random",              17,   0,       0      },  // random_* (issue #173)
-diff --git a/src/kernel/test/test_vfsd_auth.cpp b/src/kernel/test/test_vfsd_auth.cpp
-index 872c6d343..360ee2fe9 100644
---- a/src/kernel/test/test_vfsd_auth.cpp
-+++ b/src/kernel/test/test_vfsd_auth.cpp
-@@ -975,6 +975,110 @@ JARVIS_TEST(vfsd_lseek_bogus_whence, "PRE: vfsd, iocd | POST: none") {
+     uint64_t align = reinterpret_cast<uint64_t>(sp) & 0xF;
+     if (align)
+         sp -= (16 - align);
+ 
++
++    // Issue #334: string slots must hold USER addresses. `str_pos`
++    // below walks the kernel (HHDM) mapping; user code dereferencing a
++    // kernel-half address faults. Translate by the same bias as
++    // `user_rsp` (null slots stay exactly NULL — runelf empty args
++    // byte-identical).
++    const uint64_t kern_to_user = mem::STACK_VADDR + arch::PAGE_SIZE +
++                                  mem::STACK_SIZE -
++                                  reinterpret_cast<uint64_t>(stack_top);
+     int envc = count_strings(envp);
+     uint64_t *ptr = reinterpret_cast<uint64_t *>(sp);
+ 
+@@ -418,11 +432,12 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
+     }
+     uint64_t *envp_start = ptr;
+     if (envp) {
+-        uint8_t *str_pos = sp;
++        uint8_t *str_pos = str_base;
+         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_envp);
+         arch::stac();
+         for (int i = 0; i < envc; ++i) {
+-            envp_start[i] = reinterpret_cast<uint64_t>(str_pos);
++            envp_start[i] =
++                reinterpret_cast<uint64_t>(str_pos) + kern_to_user;
+             str_pos += strlen(envp[i]) + 1;
+         }
+         arch::clac();
+@@ -434,11 +449,12 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
+     }
+     uint64_t *argv_start = ptr;
+     if (argv) {
+-        uint8_t *str_pos = sp + total_string_len(envp);
++        uint8_t *str_pos = str_base + total_string_len(envp);
+         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_argv);
+         arch::stac();
+         for (int i = 0; i < argc; ++i) {
+-            argv_start[i] = reinterpret_cast<uint64_t>(str_pos);
++            argv_start[i] =
++                reinterpret_cast<uint64_t>(str_pos) + kern_to_user;
+             str_pos += strlen(argv[i]) + 1;
+         }
+         arch::clac();
+@@ -559,6 +575,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
+     tcb->executed_ticks = 0;
+     tcb->exec_ns_total = 0;
+     tcb->exec_period_ns = 0;
++    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
+     tcb->exec_stamp_ns = 0;
+     tcb->wcet_observed_ns = 0; // issue #283 (see TaskControlBlock::create)
+     tcb->mem_alloc_ops_ = 0;   // issue #284 (see TaskControlBlock::create)
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index 8671b4dfb..24fa4c2ac 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -3375,6 +3375,9 @@ void Scheduler::on_tick() noexcept {
+                     // Issue #21: new period, fresh budget clock (this
+                     // tick was already billed into the old period above).
+                     task->exec_period_ns = 0;
++                    // Issue #331: stamp the new window phase (the
++                    // blocked-branch advance below measures from here).
++                    task->exec_window_start_tick = current_tick;
+                     // Issue #19: the absolute deadline moved — re-sort a
+                     // queued EDF task so dispatch order tracks it.
+                     edf_resort(*task);
+@@ -3391,6 +3394,30 @@ void Scheduler::on_tick() noexcept {
+                 }
+             }
+ 
++            // Issue #331: advance the PD_USE window for periodic tasks
++            // that are neither RUNNING nor READY (e.g. BLOCKED in
++            // sys_receive): their window never reloads above, so
++            // exec_period_ns would accumulate lifetime exec and read
++            // 100% forever. Observability only — no remaining_ticks /
++            // deadline / EDF / queue changes (dispatch frozen).
++            if (task->state != TaskState::RUNNING &&
++                task->state != TaskState::READY &&
++                task->period_ticks > 0 &&
++                task->period_ticks != TaskControlBlock::NO_PERIOD) {
++                const uint64_t elapsed =
++                    current_tick - task->exec_window_start_tick;
++                if (elapsed >= task->period_ticks) {
++                    // Sample-then-reset (#154 binding): the monotonic-max
++                    // WCET seam must see the closing window first.
++                    (void)idle_note_exec_sample(*task);
++                    task->exec_period_ns = 0;
++                    idle_note_period_reload(*task);
++                    task->exec_window_start_tick +=
++                        (elapsed / task->period_ticks) *
++                        task->period_ticks;
++                }
++            }
++
+ #if CONFIG_WCET_OVERRUN_DETECTION
+             // Issue #154: a starved READY task must never trip the
+             // overrun latch — only execution counts toward WCET.
+@@ -5212,6 +5239,7 @@ void Scheduler::capture_task_fields(TaskFields *out) {
+         out[idx].deadline_miss_count = t->deadline_miss_count;
+         out[idx].executed_ticks = t->executed_ticks;
+         out[idx].remaining_ticks = t->remaining_ticks;
++        out[idx].exec_window_start_tick = t->exec_window_start_tick;
+         out[idx].exit_code = t->exit_code;
+         out[idx].context = t->context;
+         out[idx].kernel_stack = reinterpret_cast<uint64_t>(t->kernel_stack);
+@@ -5292,6 +5320,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
+             t->deadline_miss_count = saved[j].deadline_miss_count;
+             t->executed_ticks = saved[j].executed_ticks;
+             t->remaining_ticks = saved[j].remaining_ticks;
++            t->exec_window_start_tick = saved[j].exec_window_start_tick;
+             t->exit_code = saved[j].exit_code;
+             t->context = saved[j].context;
+             // Direction 1: keep the harness's ACTIVE context.rsp (see above).
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index e270d7bde..bde35ebfa 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -716,6 +716,9 @@ class Scheduler {
+         uint64_t deadline_miss_count;
+         uint64_t executed_ticks;
+         uint64_t remaining_ticks;
++        /// @brief PD_USE window phase (issue #331): rewinds with the
++        /// snapshot so the window stays consistent with rewound ticks().
++        uint64_t exec_window_start_tick;
+         uint64_t exit_code;
+         TaskContext context;       ///< Full register context (critical: rsp)
+         uint64_t kernel_stack;     ///< Kernel stack base pointer
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index ba9686195..1ced88970 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -1001,6 +1001,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
+     tcb->executed_ticks = 0;
+     tcb->exec_ns_total = 0;
+     tcb->exec_period_ns = 0;
++    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
+     tcb->exec_stamp_ns = 0;
+     tcb->sched_policy = SchedPolicy::AUTO; // issue #19: memset already zero
+     tcb->edf_exempt = false;               // (AUTO=0); explicit for clarity
+@@ -1248,6 +1249,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
+     tcb->executed_ticks = 0;
+     tcb->exec_ns_total = 0;
+     tcb->exec_period_ns = 0;
++    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
+     tcb->exec_stamp_ns = 0;
+     tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (AUTO=0; explicit)
+     tcb->edf_exempt = false;
+@@ -1468,6 +1470,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+     tcb->executed_ticks = 0;
+     tcb->exec_ns_total = 0;
+     tcb->exec_period_ns = 0;
++    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331 fresh
+     tcb->exec_stamp_ns = 0;
+     tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (clone starts AUTO;
+     tcb->edf_exempt = false;               // no policy inheritance)
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 96a7ca194..7027c742b 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -277,7 +277,8 @@ struct TaskControlBlock {
+            base_priority(0), period_ticks(0), deadline_ticks(0),
+            deadline_missed(false), deadline_miss_count(0), executed_ticks(0),
+            remaining_ticks(0), exec_ns_total(0), exec_period_ns(0),
+-           exec_stamp_ns(0), sched_policy(SchedPolicy::AUTO),
++           exec_window_start_tick(0), exec_stamp_ns(0),
++           sched_policy(SchedPolicy::AUTO),
+            edf_exempt(false), edf_next_(nullptr), edf_prev_(nullptr),
+            in_edf_queue_(false), wcet_ticks(0), wcet_overrun_fired(false),
+           wcet_observed_ns(0),
+@@ -364,6 +365,12 @@ struct TaskControlBlock {
+     /// @brief Current-period executed time in ns, saturating; reset at
+     ///        each period reload (issue #21).
+     uint64_t exec_period_ns;
++    /// @brief Tick-domain start of the current PD_USE window (issue #331).
++    ///        Stamped on every RUNNING/READY reload and advanced for
++    ///        non-runnable periodic tasks so a blocked task's window
++    ///        still advances (zero in-window exec then reads 0%).
++    ///        Observability only — dispatch never reads it.
++    uint64_t exec_window_start_tick;
+     /// @brief ns_monotonic() sample at the last charge point; the next
+     ///        charge bills (now - stamp) (issue #21).
+     uint64_t exec_stamp_ns;
+diff --git a/src/kernel/test/test_task_metering.cpp b/src/kernel/test/test_task_metering.cpp
+index ca6675e3d..33d778dfa 100644
+--- a/src/kernel/test/test_task_metering.cpp
++++ b/src/kernel/test/test_task_metering.cpp
+@@ -36,6 +36,7 @@
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/nexios_config.h>
++#include <kernel/sync/semaphore.hpp>
+ #include "test_sched_helpers.hpp"
+ 
+ using namespace kernel;
+@@ -398,6 +399,113 @@ JARVIS_TEST(meter_terminate_charges_final_quantum, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
  }
  
-+// Runmode: kernel
-+// Testidea: sys_open succeeds on initrd files (issue #332) — initrd
-+// allocates a fresh vnode per lookup, so the strict pointer check can
-+// never pass; the immutable-ops identity must accept it.
-+// Input: Dispatched kernel task OPENs+CLOSEs /hey.c.elf (root ELF the
-+//        image build always installs).
-+// Expect: fd >= 0, close == 0. Fails pre-fix (pointer mismatch → -1).
-+// Depends: kernel::Syscall, initrd root image, vnode_identity_match
-+JARVIS_TEST(vfsd_initrd_open_succeeds, "PRE: vfsd, iocd | POST: none") {
-+    static uint64_t g_fd = 0;
-+    static uint64_t g_close = 0;
++namespace {
++// Blocked-window fixtures (issue #331): a periodic task accrues exec,
++// then parks on the gate across whole period windows.
++sync::Semaphore g_window_gate;
++volatile bool g_window_ran = false;
 +
-+    auto *t = TaskControlBlock::create(
-+        []() {
-+            const char *path = "/hey.c.elf";
-+            g_fd = Syscall::handle(
-+                static_cast<uint64_t>(SyscallNumber::OPEN),
-+                reinterpret_cast<uint64_t>(path), 0, 0, 0, nullptr);
-+            if (static_cast<int64_t>(g_fd) < 0)
-+                return;
-+            g_close = Syscall::handle(
-+                static_cast<uint64_t>(SyscallNumber::CLOSE), g_fd, 0, 0, 0,
-+                nullptr);
-+        },
-+        11, 10);
-+    JARVIS_ASSERT(t != nullptr);
-+    Scheduler::add_task(*t);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
-+    JARVIS_ASSERT(static_cast<int64_t>(g_fd) >= 0);
-+    JARVIS_ASSERT_EQ(0ULL, g_close);
-+    release_task(t);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
++void window_block_entry() {
++    auto *self = Scheduler::current_task();
++    while (self->executed_ticks < 2)
++        arch::pause();
++    g_window_ran = true;
++    g_window_gate.wait(); // BLOCKED across windows; drained at teardown
 +}
 +
-+namespace {
-+// Predicate-level fixtures (issue #332 negative controls): vnode pairs
-+// with equal ino/size/mode at distinct addresses. Only the
-+// readonly-declared table may match — a mutator-free but writable table
-+// (fat32_file_ops shape: no mutators, readonly false) must still deny,
-+// because mutability may live on a sibling table.
-+vfs::VnodeOps g_imm_ops = {};
-+vfs::VnodeOps g_mut_ops = {};
-+vfs::VnodeOps g_plain_ops = {};
-+int stub_mkdir(vfs::Vnode &, const char *, uint16_t) {
-+    return 0;
++/// @brief Bounded tick wait (pause-spin like top_next_tick).
++void window_wait_ticks(uint64_t n) {
++    const uint64_t t0 = arch::Timer::ticks();
++    for (uint64_t i = 0; i < 20000000; ++i) {
++        if (arch::Timer::ticks() - t0 >= n)
++            break;
++        arch::pause();
++    }
 +}
 +} // namespace
 +
 +// Runmode: kernel
-+// Testidea: The widened identity still denies mutable-ops vnodes (issue
-+// #332 TOCTOU guard) — equal fields at distinct addresses must deny
-+// when any namespace mutator exists, accept when none do.
-+// Input: Stack vnode pairs (mutable vs immutable ops tables).
-+// Expect: mutable denies, immutable accepts, same-pointer accepts,
-+//         null denies. No syscalls, no locks.
-+// Depends: vfs::vnode_identity_match
-+JARVIS_TEST(vfsd_identity_mutable_denied, "PRE: none | POST: none") {
-+    g_mut_ops.mkdir = stub_mkdir;
-+    g_imm_ops.readonly = true;
-+    vfs::Vnode imm_a{};
-+    imm_a.ops = &g_imm_ops;
-+    imm_a.ino = 1;
-+    imm_a.size = 10;
-+    imm_a.mode = vfs::S_IFREG;
-+    vfs::Vnode imm_b{};
-+    imm_b.ops = &g_imm_ops;
-+    imm_b.ino = 1;
-+    imm_b.size = 10;
-+    imm_b.mode = vfs::S_IFREG;
-+    JARVIS_ASSERT(vfs::vnode_identity_match(&imm_a, &imm_b, 1));
-+    JARVIS_ASSERT(vfs::vnode_identity_match(&imm_a, &imm_a, 1));
-+    vfs::Vnode mut_a{};
-+    mut_a.ops = &g_mut_ops;
-+    mut_a.ino = 1;
-+    mut_a.size = 10;
-+    mut_a.mode = vfs::S_IFREG;
-+    vfs::Vnode mut_b{};
-+    mut_b.ops = &g_mut_ops;
-+    mut_b.ino = 1;
-+    mut_b.size = 10;
-+    mut_b.mode = vfs::S_IFREG;
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(&mut_a, &mut_b, 1));
-+    // fat32_file_ops shape (no mutators, writable image, readonly
-+    // false): must deny — ops-shape alone never admits (audit S1).
-+    vfs::Vnode plain_a{};
-+    plain_a.ops = &g_plain_ops;
-+    plain_a.ino = 1;
-+    plain_a.size = 10;
-+    plain_a.mode = vfs::S_IFREG;
-+    vfs::Vnode plain_b{};
-+    plain_b.ops = &g_plain_ops;
-+    plain_b.ino = 1;
-+    plain_b.size = 10;
-+    plain_b.mode = vfs::S_IFREG;
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(&plain_a, &plain_b, 1));
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(nullptr, &imm_a, 1));
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(&imm_a, nullptr, 1));
-+    imm_b.size = 11;
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(&imm_a, &imm_b, 1));
++// Testidea: A periodic task that goes BLOCKED across whole period windows
++// reads zero in-window exec (issue #331 owner semantics: zero in-window
++// exec must read 0%, never lifetime exec ÷ one period).
++// Input: Periodic task (period 10) runs 2 ticks, blocks on a gate;
++//        harness waits 25 ticks while it stays BLOCKED.
++// Expect: exec_period_ns > 0 before the wait (ran this window),
++//         == 0 after 2.5 windows elapse with no execution.
++// Depends: Scheduler::on_tick blocked-branch window advance (#331)
++JARVIS_TEST(meter_blocked_window_resets_to_zero,
++            "PRE: none | POST: none") {
++    g_window_gate.init(0, 1);
++    g_window_ran = false;
++    auto *t = TaskControlBlock::create(window_block_entry, 11, 10);
++    JARVIS_ASSERT(t != nullptr);
++    {
++        arch::IrqGuard guard;
++        Scheduler::add_task(*t);
++    }
++    for (uint64_t i = 0; i < 10000000; ++i) {
++        if (g_window_ran)
++            break;
++        arch::pause();
++    }
++    JARVIS_ASSERT(g_window_ran);
++    for (uint64_t i = 0; i < 10000000; ++i) {
++        if (t->state == TaskState::BLOCKED)
++            break;
++        arch::pause();
++    }
++    JARVIS_ASSERT(t->state == TaskState::BLOCKED);
++    JARVIS_ASSERT(t->exec_period_ns > 0);
++    window_wait_ticks(25);
++    JARVIS_ASSERT(t->state == TaskState::BLOCKED);
++    JARVIS_ASSERT_EQ(0ULL, t->exec_period_ns);
++    kernel::test::terminate_and_drain(*t);
++    release_meter_task(t);
++    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
- // Runmode: kernel
- // Testidea: Registers all VFS authorization tests with the test framework.
- // Input: None
-@@ -1005,6 +1109,8 @@ void register_vfsd_authorization_tests() {
-     JARVIS_REGISTER_TEST(vfsd_stat_delivers);
-     JARVIS_REGISTER_TEST(vfsd_readdir_delivers);
-     JARVIS_REGISTER_TEST(vfsd_lseek_bogus_whence);
-+    JARVIS_REGISTER_TEST(vfsd_initrd_open_succeeds);
-+    JARVIS_REGISTER_TEST(vfsd_identity_mutable_denied);
- }
- #ifndef __clang__
- #pragma GCC diagnostic pop
-diff --git a/src/kernel/vfs/initrd_fs.cpp b/src/kernel/vfs/initrd_fs.cpp
-index 5958d2107..0ac0d8c4a 100644
---- a/src/kernel/vfs/initrd_fs.cpp
-+++ b/src/kernel/vfs/initrd_fs.cpp
-@@ -140,6 +140,7 @@ static const VnodeOps initrd_file_ops = {
-     nullptr,
-     nullptr,
-     nullptr, // create
-+    true,    // readonly: immutable image (issue #332 TOCTOU identity)
- };
- 
- // ── subdirectory support (issue #274) ──
-@@ -482,6 +483,7 @@ static const VnodeOps initrd_dir_ops = {
-     nullptr,
-     nullptr,
-     nullptr, // create
-+    true,    // readonly: immutable image (issue #332 TOCTOU identity)
- };
- 
- /// @brief Build a subdirectory vnode for the cpio-relative `subdir`.
-@@ -619,6 +621,7 @@ static const VnodeOps initrd_root_ops = {
-     nullptr,
-     nullptr,
-     nullptr, // create
-+    true,    // readonly: immutable image (issue #332 TOCTOU identity)
- };
- 
- /// @brief Get the initrd root vnode (lazily initialised).
-diff --git a/src/kernel/vfs/vfs.hpp b/src/kernel/vfs/vfs.hpp
-index 728efb21f..e6c5d5e3a 100644
---- a/src/kernel/vfs/vfs.hpp
-+++ b/src/kernel/vfs/vfs.hpp
-@@ -97,6 +97,14 @@ struct VnodeOps {
-     int (*unlink)(Vnode &self, const char *name); ///< Remove entry.
-     int (*create)(Vnode &self, const char *name,
-                   uint16_t mode); ///< Create file.
-+    /// @brief Read-only filesystem marker (issue #332): true only for
-+    /// tables over an immutable image (initrd). Lets the TOCTOU
-+    /// re-resolve accept same-object re-resolves that allocate fresh
-+    /// vnodes per lookup. Defaults false (strict pointer identity);
-+    /// writable fses must NEVER set it, even on tables without
-+    /// namespace mutators (e.g. fat32_file_ops — mutability lives on
-+    /// the sibling dir table, so ops-shape alone cannot prove it).
-+    bool readonly = false;
- };
- 
- struct Vnode {
-@@ -204,6 +212,30 @@ VfsError resolve_err(const char *path, Vnode *&out_vnode);
- /// @return The parent vnode (OWNED — release via `vfs::release()`), or
- ///         nullptr if not found.
- Vnode *resolve_parent(const char *path, const char *&out_name);
-+/// @brief Re-resolve identity for TOCTOU closure (issue #332, spec §4).
-+/// Strict fast path (same object + same ino, e.g. tmpfs stable entries)
-+/// OR immutable-equivalence: same ops table, same ino/size/mode, gated
-+/// on the filesystem-declared `VnodeOps::readonly` marker (initrd tables
-+/// only — per-lookup vnodes over a read-only image, where replacement
-+/// across the authorize yield is impossible). The gate is deliberately
-+/// NOT ops-shape: mutability may live on a sibling table (fat32 file
-+/// tables carry no mutators yet the image is writable), so only an
-+/// explicit readonly declaration admits equivalence. Fail-closed (any
-+/// null/mismatch denies). Pure comparisons, no locks, no syscalls.
-+inline bool vnode_identity_match(const Vnode *before, const Vnode *after,
-+                                 uint64_t ino_before) noexcept {
-+    if (before == nullptr || after == nullptr)
-+        return false;
-+    if (after == before && after->ino == ino_before)
-+        return true;
-+    const VnodeOps *ops = before->ops;
-+    if (ops == nullptr || ops != after->ops)
-+        return false;
-+    if (!ops->readonly)
-+        return false;
-+    return after->ino == ino_before && after->ino == before->ino &&
-+           after->size == before->size && after->mode == before->mode;
++// Runmode: kernel
++// Testidea: The blocked-branch window advance is sample-then-reset — the
++// monotonic WCET max (#154 binding) keeps the pre-block peak even after
++// the window zeroes (issue #331 S1 guard).
++// Input: Periodic task (period 10, WCET 5 ticks) runs 3 ticks, blocks
++//        across 2.5 windows.
++// Expect: exec_period_ns == 0 after the wait, but wcet_observed_ns still
++//         holds the ~3-tick peak (never zeroed before capture).
++// Depends: idle_note_exec_sample monotonic-max seam (issue #154)
++JARVIS_TEST(meter_blocked_window_sample_keeps_wcet,
++            "PRE: none | POST: none") {
++    g_window_gate.init(0, 1);
++    g_window_ran = false;
++    auto *t = TaskControlBlock::create(window_block_entry, 11, 10);
++    JARVIS_ASSERT(t != nullptr);
++    t->wcet_ticks = 5;
++    {
++        arch::IrqGuard guard;
++        Scheduler::add_task(*t);
++    }
++    for (uint64_t i = 0; i < 10000000; ++i) {
++        if (g_window_ran)
++            break;
++        arch::pause();
++    }
++    JARVIS_ASSERT(g_window_ran);
++    for (uint64_t i = 0; i < 10000000; ++i) {
++        if (t->state == TaskState::BLOCKED)
++            break;
++        arch::pause();
++    }
++    JARVIS_ASSERT(t->state == TaskState::BLOCKED);
++    window_wait_ticks(25);
++    JARVIS_ASSERT_EQ(0ULL, t->exec_period_ns);
++    JARVIS_ASSERT(t->wcet_observed_ns > 0);
++    kernel::test::terminate_and_drain(*t);
++    release_meter_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
 +}
- /// @brief Mount a filesystem at a given mount point.
- /// @return 0 on success, or VFS_INVALID on failure.
- int mount(Filesystem &filesystem, const char *mount_point);
++
+ void register_task_metering_tests() {
+     Logger::info("Registering task_metering tests");
+     JARVIS_REGISTER_TEST(meter_switch_delta_accumulates);
+@@ -407,4 +515,6 @@ void register_task_metering_tests() {
+     JARVIS_REGISTER_TEST(meter_times_other_pid_and_esrch);
+     JARVIS_REGISTER_TEST(meter_times_null_buffer_fail_closed);
+     JARVIS_REGISTER_TEST(meter_terminate_charges_final_quantum);
++    JARVIS_REGISTER_TEST(meter_blocked_window_resets_to_zero);
++    JARVIS_REGISTER_TEST(meter_blocked_window_sample_keeps_wcet);
+ }
+diff --git a/test-history.txt b/test-history.txt
+index c88042080..988702737 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -2917,3 +2917,18 @@ SUMMARY: total=20 ok=15 fail=5
+ 2026-10-11 19:05:30 shell_commands PASSED: 34 FAILED: 0 TIME: 4373ms
+ 2026-10-11 19:09:00 core PASSED: 542 FAILED: 0 TIME: 83709ms
+ 2026-10-11 19:12:00 basic_lib PASSED: 26 FAILED: 0 TIME: 3029ms
++2026-10-11 19:20:00 task_metering PASSED: 9 FAILED: 0 TIME: 1080ms
++2026-10-11 19:32:00 deadline PASSED: 142 FAILED: 0 TIME: 51276ms
++2026-10-11 21:10:00 servers_vfsd_auth PASSED: 25 FAILED: 0 TIME: 2989ms
++2026-10-11 21:12:00 servers PASSED: 64 FAILED: 0 TIME: 7495ms
++2026-10-11 21:20:00 storage PASSED: 164 FAILED: 0 TIME: 63268ms
++2026-10-11 21:28:00 servers_vfsd_auth PASSED: 25 FAILED: 0 TIME: 3094ms
++2026-10-11 21:32:00 servers PASSED: 64 FAILED: 0 TIME: 34324ms
++2026-10-11 21:38:00 storage PASSED: 164 FAILED: 0 TIME: 66444ms
++2026-10-11 23:05:00 elf_loader PASSED: 15 FAILED: 0 TIME: 2121ms
++2026-10-11 23:08:00 proc_elf PASSED: 92 FAILED: 0 TIME: 13233ms STATUS: STALL-RECOVERED
++2026-10-12 00:05:00 elf_loader PASSED: 15 FAILED: 0 TIME: 2001ms
++2026-10-12 01:25:00 elf_loader PASSED: 15 FAILED: 0 TIME: 2005ms
++2026-10-12 01:27:00 servers_vfsd_auth PASSED: 25 FAILED: 0 TIME: 3070ms
++2026-10-12 01:29:00 proc_elf PASSED: 92 FAILED: 0 TIME: 13951ms
++2026-10-12 01:31:00 task_metering PASSED: 9 FAILED: 0 TIME: 6697ms

@@ -277,7 +277,8 @@ struct TaskControlBlock {
            base_priority(0), period_ticks(0), deadline_ticks(0),
            deadline_missed(false), deadline_miss_count(0), executed_ticks(0),
            remaining_ticks(0), exec_ns_total(0), exec_period_ns(0),
-           exec_stamp_ns(0), sched_policy(SchedPolicy::AUTO),
+           exec_window_start_tick(0), exec_stamp_ns(0),
+           sched_policy(SchedPolicy::AUTO),
            edf_exempt(false), edf_next_(nullptr), edf_prev_(nullptr),
            in_edf_queue_(false), wcet_ticks(0), wcet_overrun_fired(false),
           wcet_observed_ns(0),
@@ -364,6 +365,12 @@ struct TaskControlBlock {
     /// @brief Current-period executed time in ns, saturating; reset at
     ///        each period reload (issue #21).
     uint64_t exec_period_ns;
+    /// @brief Tick-domain start of the current PD_USE window (issue #331).
+    ///        Stamped on every RUNNING/READY reload and advanced for
+    ///        non-runnable periodic tasks so a blocked task's window
+    ///        still advances (zero in-window exec then reads 0%).
+    ///        Observability only — dispatch never reads it.
+    uint64_t exec_window_start_tick;
     /// @brief ns_monotonic() sample at the last charge point; the next
     ///        charge bills (now - stamp) (issue #21).
     uint64_t exec_stamp_ns;

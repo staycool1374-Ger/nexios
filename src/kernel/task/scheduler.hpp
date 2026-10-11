@@ -716,6 +716,9 @@ class Scheduler {
         uint64_t deadline_miss_count;
         uint64_t executed_ticks;
         uint64_t remaining_ticks;
+        /// @brief PD_USE window phase (issue #331): rewinds with the
+        /// snapshot so the window stays consistent with rewound ticks().
+        uint64_t exec_window_start_tick;
         uint64_t exit_code;
         TaskContext context;       ///< Full register context (critical: rsp)
         uint64_t kernel_stack;     ///< Kernel stack base pointer

@@ -3375,6 +3375,9 @@ void Scheduler::on_tick() noexcept {
                     // Issue #21: new period, fresh budget clock (this
                     // tick was already billed into the old period above).
                     task->exec_period_ns = 0;
+                    // Issue #331: stamp the new window phase (the
+                    // blocked-branch advance below measures from here).
+                    task->exec_window_start_tick = current_tick;
                     // Issue #19: the absolute deadline moved — re-sort a
                     // queued EDF task so dispatch order tracks it.
                     edf_resort(*task);
@@ -3388,6 +3391,30 @@ void Scheduler::on_tick() noexcept {
                     task->wcet_overrun_fired = false;
 #endif
 #endif
+                }
+            }
+
+            // Issue #331: advance the PD_USE window for periodic tasks
+            // that are neither RUNNING nor READY (e.g. BLOCKED in
+            // sys_receive): their window never reloads above, so
+            // exec_period_ns would accumulate lifetime exec and read
+            // 100% forever. Observability only — no remaining_ticks /
+            // deadline / EDF / queue changes (dispatch frozen).
+            if (task->state != TaskState::RUNNING &&
+                task->state != TaskState::READY &&
+                task->period_ticks > 0 &&
+                task->period_ticks != TaskControlBlock::NO_PERIOD) {
+                const uint64_t elapsed =
+                    current_tick - task->exec_window_start_tick;
+                if (elapsed >= task->period_ticks) {
+                    // Sample-then-reset (#154 binding): the monotonic-max
+                    // WCET seam must see the closing window first.
+                    (void)idle_note_exec_sample(*task);
+                    task->exec_period_ns = 0;
+                    idle_note_period_reload(*task);
+                    task->exec_window_start_tick +=
+                        (elapsed / task->period_ticks) *
+                        task->period_ticks;
                 }
             }
 
@@ -5212,6 +5239,7 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].deadline_miss_count = t->deadline_miss_count;
         out[idx].executed_ticks = t->executed_ticks;
         out[idx].remaining_ticks = t->remaining_ticks;
+        out[idx].exec_window_start_tick = t->exec_window_start_tick;
         out[idx].exit_code = t->exit_code;
         out[idx].context = t->context;
         out[idx].kernel_stack = reinterpret_cast<uint64_t>(t->kernel_stack);
@@ -5292,6 +5320,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->deadline_miss_count = saved[j].deadline_miss_count;
             t->executed_ticks = saved[j].executed_ticks;
             t->remaining_ticks = saved[j].remaining_ticks;
+            t->exec_window_start_tick = saved[j].exec_window_start_tick;
             t->exit_code = saved[j].exit_code;
             t->context = saved[j].context;
             // Direction 1: keep the harness's ACTIVE context.rsp (see above).

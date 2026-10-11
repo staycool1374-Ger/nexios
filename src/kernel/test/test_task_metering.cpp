@@ -36,6 +36,7 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/nexios_config.h>
+#include <kernel/sync/semaphore.hpp>
 #include "test_sched_helpers.hpp"
 
 using namespace kernel;
@@ -398,6 +399,113 @@ JARVIS_TEST(meter_terminate_charges_final_quantum, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+namespace {
+// Blocked-window fixtures (issue #331): a periodic task accrues exec,
+// then parks on the gate across whole period windows.
+sync::Semaphore g_window_gate;
+volatile bool g_window_ran = false;
+
+void window_block_entry() {
+    auto *self = Scheduler::current_task();
+    while (self->executed_ticks < 2)
+        arch::pause();
+    g_window_ran = true;
+    g_window_gate.wait(); // BLOCKED across windows; drained at teardown
+}
+
+/// @brief Bounded tick wait (pause-spin like top_next_tick).
+void window_wait_ticks(uint64_t n) {
+    const uint64_t t0 = arch::Timer::ticks();
+    for (uint64_t i = 0; i < 20000000; ++i) {
+        if (arch::Timer::ticks() - t0 >= n)
+            break;
+        arch::pause();
+    }
+}
+} // namespace
+
+// Runmode: kernel
+// Testidea: A periodic task that goes BLOCKED across whole period windows
+// reads zero in-window exec (issue #331 owner semantics: zero in-window
+// exec must read 0%, never lifetime exec ÷ one period).
+// Input: Periodic task (period 10) runs 2 ticks, blocks on a gate;
+//        harness waits 25 ticks while it stays BLOCKED.
+// Expect: exec_period_ns > 0 before the wait (ran this window),
+//         == 0 after 2.5 windows elapse with no execution.
+// Depends: Scheduler::on_tick blocked-branch window advance (#331)
+JARVIS_TEST(meter_blocked_window_resets_to_zero,
+            "PRE: none | POST: none") {
+    g_window_gate.init(0, 1);
+    g_window_ran = false;
+    auto *t = TaskControlBlock::create(window_block_entry, 11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*t);
+    }
+    for (uint64_t i = 0; i < 10000000; ++i) {
+        if (g_window_ran)
+            break;
+        arch::pause();
+    }
+    JARVIS_ASSERT(g_window_ran);
+    for (uint64_t i = 0; i < 10000000; ++i) {
+        if (t->state == TaskState::BLOCKED)
+            break;
+        arch::pause();
+    }
+    JARVIS_ASSERT(t->state == TaskState::BLOCKED);
+    JARVIS_ASSERT(t->exec_period_ns > 0);
+    window_wait_ticks(25);
+    JARVIS_ASSERT(t->state == TaskState::BLOCKED);
+    JARVIS_ASSERT_EQ(0ULL, t->exec_period_ns);
+    kernel::test::terminate_and_drain(*t);
+    release_meter_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The blocked-branch window advance is sample-then-reset — the
+// monotonic WCET max (#154 binding) keeps the pre-block peak even after
+// the window zeroes (issue #331 S1 guard).
+// Input: Periodic task (period 10, WCET 5 ticks) runs 3 ticks, blocks
+//        across 2.5 windows.
+// Expect: exec_period_ns == 0 after the wait, but wcet_observed_ns still
+//         holds the ~3-tick peak (never zeroed before capture).
+// Depends: idle_note_exec_sample monotonic-max seam (issue #154)
+JARVIS_TEST(meter_blocked_window_sample_keeps_wcet,
+            "PRE: none | POST: none") {
+    g_window_gate.init(0, 1);
+    g_window_ran = false;
+    auto *t = TaskControlBlock::create(window_block_entry, 11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->wcet_ticks = 5;
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*t);
+    }
+    for (uint64_t i = 0; i < 10000000; ++i) {
+        if (g_window_ran)
+            break;
+        arch::pause();
+    }
+    JARVIS_ASSERT(g_window_ran);
+    for (uint64_t i = 0; i < 10000000; ++i) {
+        if (t->state == TaskState::BLOCKED)
+            break;
+        arch::pause();
+    }
+    JARVIS_ASSERT(t->state == TaskState::BLOCKED);
+    window_wait_ticks(25);
+    JARVIS_ASSERT_EQ(0ULL, t->exec_period_ns);
+    JARVIS_ASSERT(t->wcet_observed_ns > 0);
+    kernel::test::terminate_and_drain(*t);
+    release_meter_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
 void register_task_metering_tests() {
     Logger::info("Registering task_metering tests");
     JARVIS_REGISTER_TEST(meter_switch_delta_accumulates);
@@ -407,4 +515,6 @@ void register_task_metering_tests() {
     JARVIS_REGISTER_TEST(meter_times_other_pid_and_esrch);
     JARVIS_REGISTER_TEST(meter_times_null_buffer_fail_closed);
     JARVIS_REGISTER_TEST(meter_terminate_charges_final_quantum);
+    JARVIS_REGISTER_TEST(meter_blocked_window_resets_to_zero);
+    JARVIS_REGISTER_TEST(meter_blocked_window_sample_keeps_wcet);
 }

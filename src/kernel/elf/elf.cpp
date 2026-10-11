@@ -405,11 +405,25 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
         str_pos += total_string_len(envp);
         copy_strings(str_pos, argv);
     }
+    // Issue #335: the strings above live at pre-align `sp`; the pointer
+    // fill below must address them there, not at the aligned `sp`
+    // (which sits up to 15 bytes lower — every stored pointer would
+    // otherwise dangle into the pad gap).
+    uint8_t *str_base = sp;
 
     uint64_t align = reinterpret_cast<uint64_t>(sp) & 0xF;
     if (align)
         sp -= (16 - align);
 
+
+    // Issue #334: string slots must hold USER addresses. `str_pos`
+    // below walks the kernel (HHDM) mapping; user code dereferencing a
+    // kernel-half address faults. Translate by the same bias as
+    // `user_rsp` (null slots stay exactly NULL — runelf empty args
+    // byte-identical).
+    const uint64_t kern_to_user = mem::STACK_VADDR + arch::PAGE_SIZE +
+                                  mem::STACK_SIZE -
+                                  reinterpret_cast<uint64_t>(stack_top);
     int envc = count_strings(envp);
     uint64_t *ptr = reinterpret_cast<uint64_t *>(sp);
 
@@ -418,11 +432,12 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
     }
     uint64_t *envp_start = ptr;
     if (envp) {
-        uint8_t *str_pos = sp;
+        uint8_t *str_pos = str_base;
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_envp);
         arch::stac();
         for (int i = 0; i < envc; ++i) {
-            envp_start[i] = reinterpret_cast<uint64_t>(str_pos);
+            envp_start[i] =
+                reinterpret_cast<uint64_t>(str_pos) + kern_to_user;
             str_pos += strlen(envp[i]) + 1;
         }
         arch::clac();
@@ -434,11 +449,12 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
     }
     uint64_t *argv_start = ptr;
     if (argv) {
-        uint8_t *str_pos = sp + total_string_len(envp);
+        uint8_t *str_pos = str_base + total_string_len(envp);
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_argv);
         arch::stac();
         for (int i = 0; i < argc; ++i) {
-            argv_start[i] = reinterpret_cast<uint64_t>(str_pos);
+            argv_start[i] =
+                reinterpret_cast<uint64_t>(str_pos) + kern_to_user;
             str_pos += strlen(argv[i]) + 1;
         }
         arch::clac();
@@ -559,6 +575,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     tcb->executed_ticks = 0;
     tcb->exec_ns_total = 0;
     tcb->exec_period_ns = 0;
+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
     tcb->exec_stamp_ns = 0;
     tcb->wcet_observed_ns = 0; // issue #283 (see TaskControlBlock::create)
     tcb->mem_alloc_ops_ = 0;   // issue #284 (see TaskControlBlock::create)
