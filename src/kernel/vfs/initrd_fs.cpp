@@ -140,6 +140,7 @@ static const VnodeOps initrd_file_ops = {
     nullptr,
     nullptr,
     nullptr, // create
+    true,    // readonly: immutable image (issue #332 TOCTOU identity)
 };
 
 // ── subdirectory support (issue #274) ──
@@ -482,6 +483,7 @@ static const VnodeOps initrd_dir_ops = {
     nullptr,
     nullptr,
     nullptr, // create
+    true,    // readonly: immutable image (issue #332 TOCTOU identity)
 };
 
 /// @brief Build a subdirectory vnode for the cpio-relative `subdir`.
@@ -619,6 +621,7 @@ static const VnodeOps initrd_root_ops = {
     nullptr,
     nullptr,
     nullptr, // create
+    true,    // readonly: immutable image (issue #332 TOCTOU identity)
 };
 
 /// @brief Get the initrd root vnode (lazily initialised).

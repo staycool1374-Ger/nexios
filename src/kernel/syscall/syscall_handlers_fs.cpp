@@ -165,7 +165,8 @@ static bool resolve_then_authorize(uint64_t op_type, uint64_t pid,
     }
     vfs::Vnode *vn2 = vfs::resolve(path);
     // Compare BEFORE releasing (vn may be freed by the release below).
-    bool ok = (vn2 && vn2 == vn && vn2->ino == ino);
+    // Identity covers per-lookup vnodes over read-only images (#332).
+    bool ok = vfs::vnode_identity_match(vn, vn2, ino);
     vfs::release(vn);
     if (!ok) {
         vfs::release(vn2);
@@ -194,7 +195,7 @@ static bool resolve_parent_then_authorize(uint64_t op_type, uint64_t pid,
     const char *name2 = nullptr;
     vfs::Vnode *parent2 = vfs::resolve_parent(path, name2);
     // Compare BEFORE releasing (parent may be freed by the release below).
-    bool ok = (parent2 && parent2 == parent && parent2->ino == ino && name2 &&
+    bool ok = (vfs::vnode_identity_match(parent, parent2, ino) && name2 &&
                *name2 != '\0');
     vfs::release(parent);
     if (!ok) {

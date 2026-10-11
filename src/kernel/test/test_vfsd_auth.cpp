@@ -976,6 +976,110 @@ JARVIS_TEST(vfsd_lseek_bogus_whence, "PRE: vfsd, iocd | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: sys_open succeeds on initrd files (issue #332) — initrd
+// allocates a fresh vnode per lookup, so the strict pointer check can
+// never pass; the immutable-ops identity must accept it.
+// Input: Dispatched kernel task OPENs+CLOSEs /hey.c.elf (root ELF the
+//        image build always installs).
+// Expect: fd >= 0, close == 0. Fails pre-fix (pointer mismatch → -1).
+// Depends: kernel::Syscall, initrd root image, vnode_identity_match
+JARVIS_TEST(vfsd_initrd_open_succeeds, "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_fd = 0;
+    static uint64_t g_close = 0;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            const char *path = "/hey.c.elf";
+            g_fd = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::OPEN),
+                reinterpret_cast<uint64_t>(path), 0, 0, 0, nullptr);
+            if (static_cast<int64_t>(g_fd) < 0)
+                return;
+            g_close = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::CLOSE), g_fd, 0, 0, 0,
+                nullptr);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT(static_cast<int64_t>(g_fd) >= 0);
+    JARVIS_ASSERT_EQ(0ULL, g_close);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+namespace {
+// Predicate-level fixtures (issue #332 negative controls): vnode pairs
+// with equal ino/size/mode at distinct addresses. Only the
+// readonly-declared table may match — a mutator-free but writable table
+// (fat32_file_ops shape: no mutators, readonly false) must still deny,
+// because mutability may live on a sibling table.
+vfs::VnodeOps g_imm_ops = {};
+vfs::VnodeOps g_mut_ops = {};
+vfs::VnodeOps g_plain_ops = {};
+int stub_mkdir(vfs::Vnode &, const char *, uint16_t) {
+    return 0;
+}
+} // namespace
+
+// Runmode: kernel
+// Testidea: The widened identity still denies mutable-ops vnodes (issue
+// #332 TOCTOU guard) — equal fields at distinct addresses must deny
+// when any namespace mutator exists, accept when none do.
+// Input: Stack vnode pairs (mutable vs immutable ops tables).
+// Expect: mutable denies, immutable accepts, same-pointer accepts,
+//         null denies. No syscalls, no locks.
+// Depends: vfs::vnode_identity_match
+JARVIS_TEST(vfsd_identity_mutable_denied, "PRE: none | POST: none") {
+    g_mut_ops.mkdir = stub_mkdir;
+    g_imm_ops.readonly = true;
+    vfs::Vnode imm_a{};
+    imm_a.ops = &g_imm_ops;
+    imm_a.ino = 1;
+    imm_a.size = 10;
+    imm_a.mode = vfs::S_IFREG;
+    vfs::Vnode imm_b{};
+    imm_b.ops = &g_imm_ops;
+    imm_b.ino = 1;
+    imm_b.size = 10;
+    imm_b.mode = vfs::S_IFREG;
+    JARVIS_ASSERT(vfs::vnode_identity_match(&imm_a, &imm_b, 1));
+    JARVIS_ASSERT(vfs::vnode_identity_match(&imm_a, &imm_a, 1));
+    vfs::Vnode mut_a{};
+    mut_a.ops = &g_mut_ops;
+    mut_a.ino = 1;
+    mut_a.size = 10;
+    mut_a.mode = vfs::S_IFREG;
+    vfs::Vnode mut_b{};
+    mut_b.ops = &g_mut_ops;
+    mut_b.ino = 1;
+    mut_b.size = 10;
+    mut_b.mode = vfs::S_IFREG;
+    JARVIS_ASSERT(!vfs::vnode_identity_match(&mut_a, &mut_b, 1));
+    // fat32_file_ops shape (no mutators, writable image, readonly
+    // false): must deny — ops-shape alone never admits (audit S1).
+    vfs::Vnode plain_a{};
+    plain_a.ops = &g_plain_ops;
+    plain_a.ino = 1;
+    plain_a.size = 10;
+    plain_a.mode = vfs::S_IFREG;
+    vfs::Vnode plain_b{};
+    plain_b.ops = &g_plain_ops;
+    plain_b.ino = 1;
+    plain_b.size = 10;
+    plain_b.mode = vfs::S_IFREG;
+    JARVIS_ASSERT(!vfs::vnode_identity_match(&plain_a, &plain_b, 1));
+    JARVIS_ASSERT(!vfs::vnode_identity_match(nullptr, &imm_a, 1));
+    JARVIS_ASSERT(!vfs::vnode_identity_match(&imm_a, nullptr, 1));
+    imm_b.size = 11;
+    JARVIS_ASSERT(!vfs::vnode_identity_match(&imm_a, &imm_b, 1));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all VFS authorization tests with the test framework.
 // Input: None
 // Expect: All vfsd_* authorization tests registered via JARVIS_REGISTER_TEST
@@ -1005,6 +1109,8 @@ void register_vfsd_authorization_tests() {
     JARVIS_REGISTER_TEST(vfsd_stat_delivers);
     JARVIS_REGISTER_TEST(vfsd_readdir_delivers);
     JARVIS_REGISTER_TEST(vfsd_lseek_bogus_whence);
+    JARVIS_REGISTER_TEST(vfsd_initrd_open_succeeds);
+    JARVIS_REGISTER_TEST(vfsd_identity_mutable_denied);
 }
 #ifndef __clang__
 #pragma GCC diagnostic pop

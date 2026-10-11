@@ -124,8 +124,18 @@ vn  = resolve(path);                // 1. resolve FIRST
 ino = vn->ino;
 vfsd_authorize(op, pid, path, ino); // 2. blocking IPC (CPU yields to vfsd)
 vn2 = resolve(path);                // 3. re-resolve
-return vn2 && vn2 == vn && vn2->ino == ino;   // 4. identity = pointer + ino
+return vnode_identity_match(vn, vn2, ino);   // 4. identity below
 ```
+- **Identity** (`vfs::vnode_identity_match`, issue #332): strict fast
+  path (same object + same ino, e.g. tmpfs stable entries) OR
+  immutable-equivalence (same ops table + same ino/size/mode, gated on
+  the filesystem-declared `VnodeOps::readonly` marker — initrd
+  file/dir/root tables only; per-lookup vnodes over a read-only image
+  with uniform ino 1/2, replacement across the yield impossible). The
+  gate is deliberately not ops-shape: mutability may live on a sibling
+  table (fat32 file tables carry no mutators yet the image is writable),
+  so only an explicit readonly declaration admits equivalence; fat32
+  still fails re-validation and is tracked separately.
 - Longest-prefix mount selection for absolute paths; relative paths start at
   `cwd_vnode`; `..` at a mount root climbs by re-resolving the mount point's
   parent.  Mount-point shadowing: a path component equal to a mount point's

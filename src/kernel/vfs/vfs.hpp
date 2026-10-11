@@ -97,6 +97,14 @@ struct VnodeOps {
     int (*unlink)(Vnode &self, const char *name); ///< Remove entry.
     int (*create)(Vnode &self, const char *name,
                   uint16_t mode); ///< Create file.
+    /// @brief Read-only filesystem marker (issue #332): true only for
+    /// tables over an immutable image (initrd). Lets the TOCTOU
+    /// re-resolve accept same-object re-resolves that allocate fresh
+    /// vnodes per lookup. Defaults false (strict pointer identity);
+    /// writable fses must NEVER set it, even on tables without
+    /// namespace mutators (e.g. fat32_file_ops — mutability lives on
+    /// the sibling dir table, so ops-shape alone cannot prove it).
+    bool readonly = false;
 };
 
 struct Vnode {
@@ -204,6 +212,30 @@ VfsError resolve_err(const char *path, Vnode *&out_vnode);
 /// @return The parent vnode (OWNED — release via `vfs::release()`), or
 ///         nullptr if not found.
 Vnode *resolve_parent(const char *path, const char *&out_name);
+/// @brief Re-resolve identity for TOCTOU closure (issue #332, spec §4).
+/// Strict fast path (same object + same ino, e.g. tmpfs stable entries)
+/// OR immutable-equivalence: same ops table, same ino/size/mode, gated
+/// on the filesystem-declared `VnodeOps::readonly` marker (initrd tables
+/// only — per-lookup vnodes over a read-only image, where replacement
+/// across the authorize yield is impossible). The gate is deliberately
+/// NOT ops-shape: mutability may live on a sibling table (fat32 file
+/// tables carry no mutators yet the image is writable), so only an
+/// explicit readonly declaration admits equivalence. Fail-closed (any
+/// null/mismatch denies). Pure comparisons, no locks, no syscalls.
+inline bool vnode_identity_match(const Vnode *before, const Vnode *after,
+                                 uint64_t ino_before) noexcept {
+    if (before == nullptr || after == nullptr)
+        return false;
+    if (after == before && after->ino == ino_before)
+        return true;
+    const VnodeOps *ops = before->ops;
+    if (ops == nullptr || ops != after->ops)
+        return false;
+    if (!ops->readonly)
+        return false;
+    return after->ino == ino_before && after->ino == before->ino &&
+           after->size == before->size && after->mode == before->mode;
+}
 /// @brief Mount a filesystem at a given mount point.
 /// @return 0 on success, or VFS_INVALID on failure.
 int mount(Filesystem &filesystem, const char *mount_point);
