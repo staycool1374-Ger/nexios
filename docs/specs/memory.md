@@ -87,6 +87,13 @@ The guard-page approach was adopted; software canaries are a secondary layer
 `create_user()` maps the user stack at `STACK_VADDR + PAGE_SIZE`, leaving
 `STACK_VADDR` unmapped → guard page below every user stack.
 
+**Issue #311 — top-of-stack reservation:** the user-stack "after" canary is
+written at `STACK_VADDR + PAGE_SIZE + STACK_SIZE - 8` (the top qword).  The
+initial process argument layout (`argc`/`argv`/`envp`) built by
+`setup_user_stack` grows DOWN from that same top, so it must reserve those 8
+bytes (`sp = stack_top - 8`) or the canary clobbers the highest slot — the
+`envp[0]` NULL terminator — making a 3-argument `main` walk a bogus pointer.
+
 ## 4. MemPool Contract
 
 - **VULN-001 FIXED [IMPLEMENTED]:** `freed_bitmap`/`pinned_bitmap` widened from

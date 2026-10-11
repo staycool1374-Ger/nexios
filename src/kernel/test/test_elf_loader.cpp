@@ -35,6 +35,8 @@
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/test/resource_tracker.hpp>
+#include <initrd/initrd.hpp>
+#include <kernel/arch/io.hpp>
 #include <string.hpp>
 
 using namespace kernel;
@@ -622,6 +624,52 @@ JARVIS_TEST(loader_fault_dump_gated, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: a runelf-loaded ELF (EMPTY env) whose main takes the 3rd (envp)
+//           argument reads the crt0-derived envp without faulting (#311).
+// Input: userspace/bin/envprobe.c.elf — main(argc,argv,envp) reads envp;
+//        elf::load + dispatch.
+// Expect: exit 0 (envp is a valid NULL-terminated empty array).
+// Depends: elf::load -> finalize_loaded_task -> setup_user_stack(empty env)
+//          vs crt0.S x86_64 entry (rdx = rsp+16+argc*8).
+JARVIS_TEST(loader_runelf_3arg_main_envp, "PRE: none | POST: none") {
+#if !defined(CONFIG_ARCH_X86_64)
+    // crt0 on aarch64/riscv passes only the stack pointer to main, so a
+    // 3-argument main is unsupported there (tracked separately).  x86_64 is
+    // the execute-test gate.
+    JARVIS_TEST_PASS();
+#else
+    initrd::InitrdFile f = initrd::find("bin/envprobe.c.elf");
+    JARVIS_ASSERT(f.data != nullptr);
+    auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
+    JARVIS_ASSERT(kernel::elf::validate_header(hdr));
+    auto *t = kernel::elf::load(hdr, f.data, f.size);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    for (int i = 0; i < 400000; ++i) {
+        if (!TaskControlBlock::is_valid(t) ||
+            t->state == TaskState::TERMINATED ||
+            t->state == TaskState::REAPED)
+            break;
+        __atomic_store_n(&kernel::Scheduler::SwSlots::need_resched(), true,
+                         __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+    JARVIS_ASSERT(TaskControlBlock::is_valid(t));
+    // The task must have RUN to completion: is_valid() alone also holds for a
+    // READY task that was never scheduled (zero-initialized exit_code == 0),
+    // which would let this test pass vacuously.  Require TERMINATED so the
+    // envp read is proven to have executed.
+    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
+    // exit 0 = envp read succeeded; a user-mode fault would leave a non-zero
+    // exit_code (signal).
+    JARVIS_ASSERT_EQ(0ULL, t->exit_code);
+    Scheduler::terminate(*t, t->exit_code);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+#endif
+}
+
 void register_elf_loader_tests() {
     Logger::info("Registering background ELF loader tests");
     JARVIS_REGISTER_TEST(loader_load_success);
@@ -638,4 +686,5 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(loader_clean_verified);  // #46 clean verify
     JARVIS_REGISTER_TEST(loader_phoff_shifted_baseline); // #46 S2 pin
     JARVIS_REGISTER_TEST(loader_fault_dump_gated); // #270 quiet default
+    JARVIS_REGISTER_TEST(loader_runelf_3arg_main_envp); // #311 3-arg main/envp
 }

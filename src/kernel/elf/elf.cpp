@@ -391,7 +391,13 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     uint8_t *stack_top = reinterpret_cast<uint8_t *>(stack_base);
 
-    uint8_t *sp = stack_top;
+    // Issue #311: reserve the top 8 bytes for the user-stack "after" canary
+    // (canary_install_user_segments writes it at
+    // STACK_VADDR+PAGE_SIZE+STACK_SIZE-8, i.e. stack_top-8).  The argument
+    // layout is built downward from here, so without the reservation the
+    // canary would clobber the highest slot — the envp[0] NULL terminator —
+    // and a 3-argument main (which reads envp) would walk a bogus pointer.
+    uint8_t *sp = stack_top - 8;
     sp -= str_total;
     if (str_total > 0) {
         uint8_t *str_pos = sp;

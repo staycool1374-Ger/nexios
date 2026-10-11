@@ -1,166 +1,155 @@
-diff --git a/docs/specs/deadline.md b/docs/specs/deadline.md
-index e7b9e1015..f669af44c 100644
---- a/docs/specs/deadline.md
-+++ b/docs/specs/deadline.md
-@@ -155,7 +155,16 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
-   semantics — `admission_boot_selftest()` (CONFIG_ADMISSION_SELFTEST,
-   after Scheduler::init) pins admit-math/WCET/budget/miss-action-range
-   through read-only probes (zero alloc, zero table mutation), and the
--  `sched_admission_verify` class covers the end-to-end journeys. |
-+  `sched_admission_verify` class covers the end-to-end journeys.
-+  Issue #312 addendum (**fork inheritance rule, no gate change**): a child
-+  forked from a **user** parent (`parent->is_user_`) is aperiodic
-+  (`period_ticks=0`, `deadline_ticks=0`, `remaining_ticks=0`
-+  in `TaskControlBlock::clone`) and therefore admission-exempt (I-4) — a
-+  runelf-launched user process must be able to spawn children (otherwise
-+  the parent's own implicit-100 % periodic window makes
-+  `1.0 + 1.0 = 2.0 > bound(2)=0.828`).  A child forked from a **kernel**
-+  parent inherits the parent's periodic window exactly as before, so the
-+  `admission_fork_denied_no_leak` overfull-fork contract is preserved. |
- | I-9 | Monitor `dequeue+BLOCKED` and on_tick `READY+enqueue_ready` are mutually exclusive under `scheduler_lock_` (no INV-5 violation) |
- | I-10 | No dangling monitor pointer (cleanup clear + magic check + direct-scan test hook) |
+diff --git a/docs/specs/memory.md b/docs/specs/memory.md
+index 28412b0c2..a969a560c 100644
+--- a/docs/specs/memory.md
++++ b/docs/specs/memory.md
+@@ -87,6 +87,13 @@ The guard-page approach was adopted; software canaries are a secondary layer
+ `create_user()` maps the user stack at `STACK_VADDR + PAGE_SIZE`, leaving
+ `STACK_VADDR` unmapped → guard page below every user stack.
  
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 8cc07db0e..ba9686195 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -1454,8 +1454,17 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     tcb->base_priority = parent->base_priority;
-     tcb->cpu_affinity = parent->cpu_affinity; // issue #25 C1: inherit mask
-     tcb->tls_base_ = parent->tls_base_; // issue #74: clone inherits TLS base
--    tcb->period_ticks = parent->period_ticks;
--    tcb->deadline_ticks = parent->deadline_ticks;
-+    // Issue #312: a child forked from a USER parent is best-effort/aperiodic
-+    // — it must not inherit the parent's periodic window.  runelf stamps the
-+    // parent period_ticks 100 with no WCET, so an implicit-100% periodic
-+    // child would be rejected by the Liu-Leyland admission gate
-+    // (1.0 + 1.0 = 2.0 > bound(2) = 0.828).  A child forked from a KERNEL
-+    // parent inherits as today, preserving the admission_fork_denied_no_leak
-+    // contract (kernel forker).  deadline_ticks == 0 makes the child
-+    // admission-exempt (admission_exempted, I-4).
-+    const bool is_user_parent = parent->is_user_;
-+    tcb->period_ticks = is_user_parent ? 0 : parent->period_ticks;
-+    tcb->deadline_ticks = is_user_parent ? 0 : parent->deadline_ticks;
-     tcb->executed_ticks = 0;
-     tcb->exec_ns_total = 0;
-     tcb->exec_period_ns = 0;
-@@ -1472,7 +1481,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     tcb->edf_prev_ = nullptr;
-     tcb->in_edf_queue_ = false;
-     tcb->ready_deferred_ = false;
--    tcb->remaining_ticks = parent->remaining_ticks;
-+    tcb->remaining_ticks = is_user_parent ? 0 : parent->remaining_ticks;
-     tcb->exit_code = 0;
-     tcb->waiting_child_pid = 0;
-     tcb->waiting_child_status = nullptr;
-@@ -1557,7 +1566,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     // Route through kslot for guard page below kernel stack.
-     // v0.4.0 MP-1 prerequisite: use the is_user_ flag, not `page_table_ != 0`
-     // (every task now owns a private kernel-half PML4).
--    bool is_user_task = parent->is_user_;
-+    bool is_user_task = is_user_parent;
-     tcb->is_user_ = is_user_task;
- #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-     // Issue #156: fork gets a FRESH PCID (never the parent's — the child
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 8f7dc8854..7f98f6bc7 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -270,7 +270,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
-     {"task_metering",         7,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21)
-     {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
--    {"sched_admission",       7,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny (issue #20)
-+    {"sched_admission",       8,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny/fork-user-parent-admitted (issues #20, #312)
-     {"sched_admission_verify", 7,   0,       0      },  // admission journeys: taskdefs-budgets/defer-retry/mode-parity/bg-guard/percpu-epsilon/budget-roundtrip/boot-parity (issue #24)
-     {"aperiodic_servers",     7,    0,       0      },  // DS/BG modes: idle-preserve/topup/bursts/bg-priority/no-edf/admission-budgets/compat-default (issue #22)
++**Issue #311 — top-of-stack reservation:** the user-stack "after" canary is
++written at `STACK_VADDR + PAGE_SIZE + STACK_SIZE - 8` (the top qword).  The
++initial process argument layout (`argc`/`argv`/`envp`) built by
++`setup_user_stack` grows DOWN from that same top, so it must reserve those 8
++bytes (`sp = stack_top - 8`) or the canary clobbers the highest slot — the
++`envp[0]` NULL terminator — making a 3-argument `main` walk a bogus pointer.
++
+ ## 4. MemPool Contract
  
-diff --git a/src/kernel/test/test_sched_admission.cpp b/src/kernel/test/test_sched_admission.cpp
-index da88e47d8..22c1532dc 100644
---- a/src/kernel/test/test_sched_admission.cpp
-+++ b/src/kernel/test/test_sched_admission.cpp
-@@ -231,6 +231,63 @@ JARVIS_TEST(admission_exemptions_untracked, "PRE: none | POST: none") {
+ - **VULN-001 FIXED [IMPLEMENTED]:** `freed_bitmap`/`pinned_bitmap` widened from
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 8d595c322..15532aaea 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -391,7 +391,13 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     uint8_t *stack_top = reinterpret_cast<uint8_t *>(stack_base);
+ 
+-    uint8_t *sp = stack_top;
++    // Issue #311: reserve the top 8 bytes for the user-stack "after" canary
++    // (canary_install_user_segments writes it at
++    // STACK_VADDR+PAGE_SIZE+STACK_SIZE-8, i.e. stack_top-8).  The argument
++    // layout is built downward from here, so without the reservation the
++    // canary would clobber the highest slot — the envp[0] NULL terminator —
++    // and a 3-argument main (which reads envp) would walk a bogus pointer.
++    uint8_t *sp = stack_top - 8;
+     sp -= str_total;
+     if (str_total > 0) {
+         uint8_t *str_pos = sp;
+diff --git a/src/kernel/test/test_elf_loader.cpp b/src/kernel/test/test_elf_loader.cpp
+index 2105114d7..8f57097ff 100644
+--- a/src/kernel/test/test_elf_loader.cpp
++++ b/src/kernel/test/test_elf_loader.cpp
+@@ -35,6 +35,8 @@
+ #include <kernel/test/test_isolate.hpp>
+ #include <kernel/test/test_sched_helpers.hpp>
+ #include <kernel/test/resource_tracker.hpp>
++#include <initrd/initrd.hpp>
++#include <kernel/arch/io.hpp>
+ #include <string.hpp>
+ 
+ using namespace kernel;
+@@ -622,6 +624,52 @@ JARVIS_TEST(loader_fault_dump_gated, "PRE: vfsd, iocd | POST: none") {
      JARVIS_TEST_PASS();
  }
  
 +// Runmode: kernel
-+// Testidea: a child forked from a USER parent is aperiodic/admission-exempt,
-+//           so a runelf-launched user process can spawn children (issue #312).
-+// Input: user parent (period 100, no WCET => implicit 100% periodic); clone().
-+// Expect: child period/deadline/remaining == 0; admission_exempted true;
-+//         add_task_err(child) == SCHED_ERR_OK.
-+// Depends: TaskControlBlock::clone user-parent rule (issue #312)
-+JARVIS_TEST(admission_fork_from_user_parent_admitted, "PRE: none | POST: none") {
-+    static volatile uint64_t g_child_period = ~0ULL;
-+    static volatile uint64_t g_child_deadline = ~0ULL;
-+    static volatile uint64_t g_child_remaining = ~0ULL;
-+    static volatile uint64_t g_child_exempt = 0;
-+    static volatile uint64_t g_child_admit = 0;
-+    g_child_exempt = 0;
-+    g_child_admit = 0;
-+    auto *parent = TaskControlBlock::create(
-+        []() {
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
-+            auto *child = TaskControlBlock::clone(regs);
-+            if (child == nullptr)
-+                return;
-+            g_child_period = child->period_ticks;
-+            g_child_deadline = child->deadline_ticks;
-+            g_child_remaining = child->remaining_ticks;
-+            g_child_exempt =
-+                Scheduler::admission_exempted(*child) ? 1ULL : 0ULL;
-+            // Prove admission literally: register under IRQ-off (no dispatch),
-+            // capture the verdict, then roll back so nothing stays queued.
-+            {
-+                arch::IrqGuard ig;
-+                errors::SchedulerError adm = Scheduler::add_task_err(*child);
-+                g_child_admit =
-+                    (adm == errors::SCHED_ERR_OK) ? 1ULL : 0ULL;
-+                if (adm == errors::SCHED_ERR_OK)
-+                    Scheduler::remove_task(*child);
-+            }
-+            child->cleanup();
-+            delete child;
-+        },
-+        11, 100);
-+    JARVIS_ASSERT(parent != nullptr);
-+    parent->is_user_ = true; // simulate a runelf-launched user parent
-+    parent->user_stack_ = 0x80000000;
-+    parent->user_stack_size_ = 32_KiB;
-+    Scheduler::add_task(*parent);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(parent);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT_EQ(0ULL, g_child_period);
-+    JARVIS_ASSERT_EQ(0ULL, g_child_deadline);
-+    JARVIS_ASSERT_EQ(0ULL, g_child_remaining);
-+    JARVIS_ASSERT_EQ(1ULL, g_child_exempt);
-+    JARVIS_ASSERT_EQ(1ULL, g_child_admit);
++// Testidea: a runelf-loaded ELF (EMPTY env) whose main takes the 3rd (envp)
++//           argument reads the crt0-derived envp without faulting (#311).
++// Input: userspace/bin/envprobe.c.elf — main(argc,argv,envp) reads envp;
++//        elf::load + dispatch.
++// Expect: exit 0 (envp is a valid NULL-terminated empty array).
++// Depends: elf::load -> finalize_loaded_task -> setup_user_stack(empty env)
++//          vs crt0.S x86_64 entry (rdx = rsp+16+argc*8).
++JARVIS_TEST(loader_runelf_3arg_main_envp, "PRE: none | POST: none") {
++#if !defined(CONFIG_ARCH_X86_64)
++    // crt0 on aarch64/riscv passes only the stack pointer to main, so a
++    // 3-argument main is unsupported there (tracked separately).  x86_64 is
++    // the execute-test gate.
 +    JARVIS_TEST_PASS();
++#else
++    initrd::InitrdFile f = initrd::find("bin/envprobe.c.elf");
++    JARVIS_ASSERT(f.data != nullptr);
++    auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
++    JARVIS_ASSERT(kernel::elf::validate_header(hdr));
++    auto *t = kernel::elf::load(hdr, f.data, f.size);
++    JARVIS_ASSERT(t != nullptr);
++    Scheduler::add_task(*t);
++    for (int i = 0; i < 400000; ++i) {
++        if (!TaskControlBlock::is_valid(t) ||
++            t->state == TaskState::TERMINATED ||
++            t->state == TaskState::REAPED)
++            break;
++        __atomic_store_n(&kernel::Scheduler::SwSlots::need_resched(), true,
++                         __ATOMIC_RELEASE);
++        arch::hlt();
++    }
++    JARVIS_ASSERT(TaskControlBlock::is_valid(t));
++    // The task must have RUN to completion: is_valid() alone also holds for a
++    // READY task that was never scheduled (zero-initialized exit_code == 0),
++    // which would let this test pass vacuously.  Require TERMINATED so the
++    // envp read is proven to have executed.
++    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
++    // exit 0 = envp read succeeded; a user-mode fault would leave a non-zero
++    // exit_code (signal).
++    JARVIS_ASSERT_EQ(0ULL, t->exit_code);
++    Scheduler::terminate(*t, t->exit_code);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++#endif
 +}
 +
- // Runmode: kernel
- // Testidea: fork under an overfull system fails closed with no leak.
- // Input: dispatched forker(p100,w5) + fill A(p100,w60) = 65%; the forked
-@@ -274,4 +331,5 @@ void register_sched_admission_tests() {
-     JARVIS_REGISTER_TEST(admission_memory_budget_denied_at_create);
-     JARVIS_REGISTER_TEST(admission_exemptions_untracked);
-     JARVIS_REGISTER_TEST(admission_fork_denied_no_leak);
-+    JARVIS_REGISTER_TEST(admission_fork_from_user_parent_admitted);
+ void register_elf_loader_tests() {
+     Logger::info("Registering background ELF loader tests");
+     JARVIS_REGISTER_TEST(loader_load_success);
+@@ -638,4 +686,5 @@ void register_elf_loader_tests() {
+     JARVIS_REGISTER_TEST(loader_clean_verified);  // #46 clean verify
+     JARVIS_REGISTER_TEST(loader_phoff_shifted_baseline); // #46 S2 pin
+     JARVIS_REGISTER_TEST(loader_fault_dump_gated); // #270 quiet default
++    JARVIS_REGISTER_TEST(loader_runelf_3arg_main_envp); // #311 3-arg main/envp
  }
-diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index 9f093ca6a..6e5c686a0 100644
---- a/src/services/shell.cpp
-+++ b/src/services/shell.cpp
-@@ -2723,7 +2723,9 @@ void Shell::cmd_runelf(int argc, const char** argv) {
-     // the issue contract (prio 2 user band, period/deadline 100); FIXED
-     // keeps it in bitmap RMS dispatch (AUTO + finite deadline would enter
-     // EDF dispatch — deadline-timing exposure a run-once demo must not
--    // take; EDF user tasks are a follow-up).
-+    // take; EDF user tasks are a follow-up).  Children forked from this
-+    // user task are aperiodic (TaskControlBlock::clone user-parent rule,
-+    // issue #312) so admission cannot deny the fork.
-     kernel::Scheduler::set_priority(*task, 2);
-     task->period_ticks = 100;
-     task->deadline_ticks = arch::Timer::ticks() + 100;
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 7f98f6bc7..60f12dbe3 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -74,7 +74,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // process
+     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
+     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
+-    {"elf_loader",            14,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate)
++    {"elf_loader",            15,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp)
+     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)
+     {"process_signals",       8,    0,       0      },  // signal delivery/handling
+     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
+diff --git a/userspace/envprobe.c b/userspace/envprobe.c
+new file mode 100644
+index 000000000..902a51cfe
+--- /dev/null
++++ b/userspace/envprobe.c
+@@ -0,0 +1,27 @@
++/*
++ * NexIOS RTOS — runelf 3-arg main / envp probe (issue #311)
++ *
++ * A runelf-loaded ELF is launched with an EMPTY environment.  This probe has a
++ * 3-argument main, so crt0 derives `envp = rsp + 16 + argc*8` and the probe
++ * reads it — the exact pattern that faulted with an instant #GP in issue #311
++ * (the stack "after" canary overwrote the envp[0] NULL terminator).
++ * Exit codes:
++ *   0 = envp read OK (NULL-terminated empty array, or a NULL envp pointer)
++ *   2 = envp[0] non-NULL (unexpected for a runelf load)
++ * A user-mode fault kills the task instead of returning (exit_code != 0).
++ */
++
++#include <stdint.h>
++#include <unistd.h>
++
++int main(int argc, char **argv, char **envp) {
++    (void)argc;
++    (void)argv;
++    if (envp == 0)
++        _exit(0);
++    if (envp[0] != 0)
++        _exit(2);
++    for (int i = 0; envp[i]; ++i)
++        (void)envp[i][0];
++    _exit(0);
++}

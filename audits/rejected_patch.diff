@@ -1,12 +1,17 @@
---- a/src/lib/test.cpp
-+++ b/src/lib/test.cpp
-@@ -508,9 +508,7 @@
-     print_report(start_ns, end_ns);
- 
--#if CONFIG_DEADLINE_MONITOR_TASK
-     Scheduler::set_test_active(false);
--#endif
- 
-     // Drain serial TX FIFO so the full test report is flushed to the
-     // expect script before QEMU exits (fixes BUGS.md #012).
-     {
+--- a/src/kernel/test/test_elf_loader.cpp
++++ b/src/kernel/test/test_elf_loader.cpp
+@@ -656,8 +656,13 @@
+         arch::hlt();
+     }
+     JARVIS_ASSERT(TaskControlBlock::is_valid(t));
++    // The task must have RUN to completion: is_valid() alone also holds for a
++    // READY task that was never scheduled (zero-initialized exit_code == 0),
++    // which would let this test pass vacuously.  Require TERMINATED so the
++    // envp read is proven to have executed.
++    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
+     // exit 0 = envp read succeeded; a user-mode fault would leave a non-zero
+-    // exit_code (signal) or a wedged task (assert above fails).
++    // exit_code (signal).
+     JARVIS_ASSERT_EQ(0ULL, t->exit_code);
+     Scheduler::terminate(*t, t->exit_code);
+     Scheduler::drain_zombie_list();
