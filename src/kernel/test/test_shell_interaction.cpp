@@ -189,7 +189,7 @@ JARVIS_TEST(shell_execute_serial, "PRE: vfsd, iocd | POST: none") {
     JARVIS_ASSERT(ok);
     JARVIS_ASSERT(serial_contains(buf1, "BEFORE"));
     JARVIS_ASSERT(serial_contains(buf2, "AFTER"));
-    JARVIS_ASSERT(serial_contains(buf1, "Unbekannt"));
+    JARVIS_ASSERT(serial_contains(buf1, "Unknown"));
 }
 
 JARVIS_TEST(shell_help_command, "PRE: vfsd, iocd | POST: none") {
@@ -219,7 +219,9 @@ JARVIS_TEST(shell_help_command, "PRE: vfsd, iocd | POST: none") {
     JARVIS_ASSERT(ok);
     JARVIS_ASSERT(serial_contains(buf1, "BEFORE"));
     JARVIS_ASSERT(serial_contains(buf2, "AFTER"));
-    JARVIS_ASSERT(serial_contains(buf1, "Verfueg"));
+    // Loopback FIFO window: buf1 holds BEFORE(6) + CRLF(2) + the first
+    // 8 header chars only — assert that prefix (as "Verfueg" did).
+    JARVIS_ASSERT(serial_contains(buf1, "Availab"));
 }
 
 JARVIS_TEST(shell_echo_command, "PRE: vfsd, iocd | POST: none") {

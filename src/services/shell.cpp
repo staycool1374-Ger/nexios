@@ -424,11 +424,11 @@ int Shell::parse_and_exec(const char* line) {
     }
 
     Terminal::set_fg(COLOR_ERROR);
-    Terminal::write("Unbekannter Befehl: ");
+    Terminal::write("Unknown command: ");
     Terminal::write(argv[0]);
     Terminal::write("\n");
     Terminal::set_fg(COLOR_DEFAULT);
-    Terminal::write("Verfuegbar: help\n");
+    Terminal::write("Available: help\n");
 
     delete[] buf;
     return 1;
@@ -682,7 +682,7 @@ void Shell::shell_task_main() {
 }
 
 void Shell::cmd_help(int, const char**) {
-    Terminal::write("\nVerfuegbare Befehle:\n");
+    Terminal::write("\nAvailable commands:\n");
     for (size_t i = 0; i < num_commands_; ++i) {
         Terminal::write("  ");
         Terminal::set_fg(COLOR_DIR);
@@ -1711,9 +1711,9 @@ void Shell::cmd_meminfo(int, const char**) {
         }
     };
 
-    Terminal::write("Gesamt: "); print_size(total); Terminal::putchar('\n');
-    Terminal::write("Belegt: "); print_size(used); Terminal::putchar('\n');
-    Terminal::write("Frei:   "); print_size(free); Terminal::putchar('\n');
+    Terminal::write("Total: "); print_size(total); Terminal::putchar('\n');
+    Terminal::write("Used: "); print_size(used); Terminal::putchar('\n');
+    Terminal::write("Free:   "); print_size(free); Terminal::putchar('\n');
 
     // Page-table pool
     uint64_t pt_start = kernel::PMM::pool_start();
@@ -2281,20 +2281,20 @@ void Shell::cmd_modprobe(int argc, const char** argv) {
     }
     if (kernel::DriverRegistry::load(argv[1])) {
         auto* drv = kernel::DriverRegistry::find(argv[1]);
-        Terminal::write("Driver geladen: ");
+        Terminal::write("Driver loaded: ");
         Terminal::set_fg(COLOR_GREEN);
         Terminal::write(drv ? drv->name : argv[1]);
         Terminal::set_fg(COLOR_DEFAULT);
         Terminal::putchar('\n');
     } else {
-        shell_error_path("Fehler", argv[1], "Treiber nicht gefunden oder Init fehlgeschlagen");
+        shell_error_path("Error", argv[1], "Driver not found or init failed");
     }
 }
 
 void Shell::cmd_modlist(int, const char**) {
     size_t count = kernel::DriverRegistry::count();
-    Terminal::write("Verfuegbare Treiber:\n");
-    if (count == 0) { Terminal::write("  (keine)\n"); return; }
+    Terminal::write("Available drivers:\n");
+    if (count == 0) { Terminal::write("  (none)\n"); return; }
     for (size_t i = 0; i < count; ++i) {
         auto* drv = kernel::DriverRegistry::get(i);
         if (!drv) continue;
@@ -2308,9 +2308,9 @@ void Shell::cmd_modlist(int, const char**) {
         Terminal::write(drv->description);
         Terminal::write(" [");
         switch (drv->state) {
-        case kernel::DriverState::LOADED:   Terminal::set_fg(COLOR_GREEN); Terminal::write("geladen"); break;
-        case kernel::DriverState::UNLOADED: Terminal::set_fg(COLOR_YELLOW); Terminal::write("verfuegbar"); break;
-        case kernel::DriverState::ERROR:    Terminal::set_fg(COLOR_RED); Terminal::write("fehler"); break;
+        case kernel::DriverState::LOADED:   Terminal::set_fg(COLOR_GREEN); Terminal::write("loaded"); break;
+        case kernel::DriverState::UNLOADED: Terminal::set_fg(COLOR_YELLOW); Terminal::write("available"); break;
+        case kernel::DriverState::ERROR:    Terminal::set_fg(COLOR_RED); Terminal::write("error"); break;
         }
         Terminal::set_fg(COLOR_DEFAULT);
         Terminal::write("]\n");
@@ -2330,7 +2330,7 @@ void Shell::cmd_reboot(int, const char**) {
 void Shell::cmd_run(int argc, const char** argv) {
     if (argc < 2) {
         Terminal::write("Usage: run <program> [&]\n");
-        Terminal::write("Verfuegbare Programme:\n");
+        Terminal::write("Available programs:\n");
         for (size_t i = 0; i < ProgramRegistry::count(); ++i) {
             auto* prog = ProgramRegistry::get(i);
             if (prog) {
@@ -2352,7 +2352,7 @@ void Shell::cmd_run(int argc, const char** argv) {
 
     auto* prog = ProgramRegistry::find(argv[1]);
     if (!prog) {
-        Terminal::write("Programm nicht gefunden: ");
+        Terminal::write("Program not found: ");
         Terminal::write(argv[1]);
         Terminal::putchar('\n');
         return;
@@ -2401,7 +2401,7 @@ void Shell::cmd_run(int argc, const char** argv) {
 }
 
 void Shell::cmd_listprog(int, const char**) {
-    Terminal::write("Registrierte Programme:\n");
+    Terminal::write("Registered programs:\n");
     for (size_t i = 0; i < ProgramRegistry::count(); ++i) {
         auto* prog = ProgramRegistry::get(i);
         if (prog) {
@@ -2415,7 +2415,7 @@ void Shell::cmd_listprog(int, const char**) {
         }
     }
     if (ProgramRegistry::count() == 0) {
-        Terminal::write("  (keine)\n");
+        Terminal::write("  (none)\n");
     }
 }
 

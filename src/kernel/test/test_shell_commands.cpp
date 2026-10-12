@@ -162,7 +162,7 @@ JARVIS_TEST(shell_capture_observes_command_output,
     char out[k_capture_size];
     run_shell("echo zz-capture-marker", out, sizeof(out));
     bool saw_marker = has(out, "zz-capture-marker");
-    bool rejected = has(out, "Unbekannter Befehl");
+    bool rejected = has(out, "Unknown command");
 
     JARVIS_ASSERT(live);
     JARVIS_ASSERT(saw_marker);
@@ -172,11 +172,11 @@ JARVIS_TEST(shell_capture_observes_command_output,
 
 // Runmode: kernel
 // Testidea: `listprog` walks the program registry with count()/get() and
-// prints "(keine)" when it is empty; the registry API itself is fail-closed
+// prints "(none)" when it is empty; the registry API itself is fail-closed
 // (out-of-range get and unknown find both return nullptr).
 // Input: Shell::execute("listprog"); ProgramRegistry::count()/get(count())/
 //        find("no-such-program").
-// Expect: Output has the "Registrierte Programme" header; get(count()) and
+// Expect: Output has the "Registered programs" header; get(count()) and
 //         find() of an unknown name are nullptr.
 // Depends: service::Shell, service::ProgramRegistry
 JARVIS_TEST(shell_listprog_walks_program_registry,
@@ -190,8 +190,8 @@ JARVIS_TEST(shell_listprog_walks_program_registry,
     const service::ProgramRegistry::Program *missing =
         service::ProgramRegistry::find("no-such-program-xyz");
 
-    bool header_ok = has(out, "Registrierte Programme");
-    bool empty_listed = registered != 0 || has(out, "(keine)");
+    bool header_ok = has(out, "Registered programs");
+    bool empty_listed = registered != 0 || has(out, "(none)");
 
     JARVIS_ASSERT(header_ok);
     JARVIS_ASSERT(empty_listed);
@@ -217,7 +217,7 @@ JARVIS_TEST(shell_run_unknown_program_and_usage,
     char usage[k_capture_size];
     run_shell("run", usage, sizeof(usage));
     bool usage_ok = has(usage, "Usage: run");
-    bool lists_ok = has(usage, "Verfuegbare Programme");
+    bool lists_ok = has(usage, "Available programs");
 
     JARVIS_ASSERT(named);
     JARVIS_ASSERT(usage_ok);
@@ -540,12 +540,12 @@ JARVIS_TEST(shell_test_operator_forms, "PRE: vfsd, iocd | POST: none") {
     char negated[k_capture_size];
     run_shell("test ! abc = xyz", negated, sizeof(negated));
 
-    JARVIS_ASSERT(!has(eq, "Unbekannter Befehl"));
-    JARVIS_ASSERT(!has(lt, "Unbekannter Befehl"));
-    JARVIS_ASSERT(!has(isdir, "Unbekannter Befehl"));
-    JARVIS_ASSERT(!has(isfile, "Unbekannter Befehl"));
-    JARVIS_ASSERT(!has(empty, "Unbekannter Befehl"));
-    JARVIS_ASSERT(!has(negated, "Unbekannter Befehl"));
+    JARVIS_ASSERT(!has(eq, "Unknown command"));
+    JARVIS_ASSERT(!has(lt, "Unknown command"));
+    JARVIS_ASSERT(!has(isdir, "Unknown command"));
+    JARVIS_ASSERT(!has(isfile, "Unknown command"));
+    JARVIS_ASSERT(!has(empty, "Unknown command"));
+    JARVIS_ASSERT(!has(negated, "Unknown command"));
     JARVIS_TEST_PASS();
 }
 
@@ -767,7 +767,7 @@ JARVIS_TEST(shell_filesystem_builtin_cycle, "PRE: vfsd, iocd | POST: none") {
 // when no load is in flight.
 // Input: Shell::execute("modlist"), ("modprobe zz-no-such-driver"),
 //        ("cancel-load").
-// Expect: "Verfuegbare Treiber" header; the unknown driver is reported as
+// Expect: "Available drivers" header; the unknown driver is reported as
 //         not found; cancel-load reports "not loading".
 // Depends: service::Shell, kernel::DriverRegistry, kernel::elf::ElfLoader
 JARVIS_TEST(shell_driver_and_loader_commands,
@@ -781,8 +781,8 @@ JARVIS_TEST(shell_driver_and_loader_commands,
     char cancel[k_capture_size];
     run_shell("cancel-load", cancel, sizeof(cancel));
 
-    JARVIS_ASSERT(has(modlist, "Verfuegbare Treiber"));
-    JARVIS_ASSERT(has(modprobe, "nicht gefunden"));
+    JARVIS_ASSERT(has(modlist, "Available drivers"));
+    JARVIS_ASSERT(has(modprobe, "not found"));
     JARVIS_ASSERT(has(cancel, "not loading"));
     JARVIS_TEST_PASS();
 }
@@ -830,7 +830,7 @@ JARVIS_TEST(shell_lspci_lists_device_tree, "PRE: vfsd, iocd | POST: none") {
 
     JARVIS_ASSERT(out[0] != '\0');
     JARVIS_ASSERT(has(out, "PCI"));
-    JARVIS_ASSERT(!has(out, "Unbekannter Befehl"));
+    JARVIS_ASSERT(!has(out, "Unknown command"));
     JARVIS_TEST_PASS();
 }
 
@@ -847,7 +847,7 @@ JARVIS_TEST(shell_ifconfig_reports_interface_state,
     run_shell("ifconfig", out, sizeof(out));
 
     JARVIS_ASSERT(out[0] != '\0');
-    JARVIS_ASSERT(!has(out, "Unbekannter Befehl"));
+    JARVIS_ASSERT(!has(out, "Unknown command"));
     JARVIS_TEST_PASS();
 }
 
@@ -893,7 +893,7 @@ JARVIS_TEST(shell_missing_operand_usage_contract,
 // Input: Shell::execute("source /no-such-script-zz"), ("source /"),
 //        ("zzz-totally-unknown-command").
 // Expect: Both source forms report "cannot read"; the unknown command prints
-//         "Unbekannter Befehl" followed by the offending name.
+//         "Unknown command" followed by the offending name.
 // Depends: service::Shell, vfs::resolve
 JARVIS_TEST(shell_source_rejects_unreadable_targets,
             "PRE: vfsd, iocd | POST: none") {
@@ -908,7 +908,7 @@ JARVIS_TEST(shell_source_rejects_unreadable_targets,
 
     JARVIS_ASSERT(has(missing, "cannot read"));
     JARVIS_ASSERT(has(directory, "cannot read"));
-    JARVIS_ASSERT(has(unknown, "Unbekannter Befehl"));
+    JARVIS_ASSERT(has(unknown, "Unknown command"));
     JARVIS_ASSERT(has(unknown, "zzz-totally-unknown-command"));
     JARVIS_TEST_PASS();
 }
@@ -936,9 +936,9 @@ JARVIS_TEST(shell_version_meminfo_and_vfs_error,
     run_shell("mkdir /no-such-parent-zz/child", vfs_error, sizeof(vfs_error));
 
     JARVIS_ASSERT(version[0] != '\0');
-    JARVIS_ASSERT(!has(version, "Unbekannter Befehl"));
+    JARVIS_ASSERT(!has(version, "Unknown command"));
     JARVIS_ASSERT(meminfo[0] != '\0');
-    JARVIS_ASSERT(!has(meminfo, "Unbekannter Befehl"));
+    JARVIS_ASSERT(!has(meminfo, "Unknown command"));
     JARVIS_ASSERT(has(vfs_error, "mkdir"));
     JARVIS_ASSERT(has(vfs_error, "not found"));
     JARVIS_TEST_PASS();
