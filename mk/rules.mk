@@ -275,6 +275,8 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c us
 	@printf '# Init script\n' >> initrd_root/etc/rc
 	@if [ ! -z "$(INITRD_ROOT_ELF)" ]; then cp $(INITRD_ROOT_ELF) initrd_root/; fi
 	@if [ ! -z "$(INITRD_BIN_ELF)" ]; then cp $(INITRD_BIN_ELF) initrd_root/bin/; fi
+	@if [ -f build/user/rust-hello.elf ]; then cp build/user/rust-hello.elf initrd_root/bin/; fi # issue #336 (absent without toolchain: ships smaller initrd, never fails)
+	@if [ -f user/rust-hello/src/main.rs ]; then mkdir -p initrd_root/rust-hello/src && cp user/rust-hello/Cargo.toml user/rust-hello/Cargo.lock user/rust-hello/rust-toolchain.toml initrd_root/rust-hello/ && cp user/rust-hello/src/main.rs initrd_root/rust-hello/src/ && cp rust-targets/x86_64-nexios.json initrd_root/rust-hello/; fi # issue #336
 	@if [ -f userspace/picolibc/libc_verify.c.elf ]; then cp userspace/picolibc/libc_verify.c.elf initrd_root/; fi
 	@cp userspace/hey.c userspace/nullderef.c userspace/prime.c initrd_root/
 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
