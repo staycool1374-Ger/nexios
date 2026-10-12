@@ -27,6 +27,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // configuration
     {"configuration_build",  10,    0,       0      },  // buildsystem + compile-time config sanity (v0.3.7)
+    {"release_build",         2,    0,       0      },  // actual -O2/-g/no-NDEBUG contract, TF_RELEASE (#303)
 
     // data_structures
     {"data_structures_spsc",  8,    0,       0      },  // SPSC queue primitives
@@ -163,6 +164,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"memory_mempool",        5,    0,       0      },  // MemPool allocator tests + err/pin/Pool helpers (issue #143)
     {"memory_slab",           5,    0,       0      },  // Slab reclaim tests
     {"memory_safety",        11,    0,       0      },  // MemPool/PMM invariants + MP-2 red zones + MP-3 canaries
+    {"stack_cookie",          4,    0,       0      },  // MP-3 contract pins: SSP-off, derivation, pure verify, kstack round-trip (#303)
+    {"pointer_isolation",     4,    0,       0      },  // kernel-leak rejection at every entry + count edges + factory (#303)
     {"memory_determinism",    4,    0,       0      },  // PMM exhaustion + no-dynamic-alloc neutral cycles (v0.3.8)
     {"memory_checked_ptr",    4,    0,       0      },  // Checked pointer + signal frame tests
     {"memory_resource_exhaustion", 5, 0,      0      },  // FdTable, TaskLimit, MaxBuffers, MempoolFrag, PmmExhaustion
@@ -259,6 +262,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // bench
     {"bench_ipc",             7,    0,       0      },  // IPC throughput (TF_BENCH)
+    {"bench_ipc_throughput",  4,    0,       0      },  // msgs/s + size/depth sweeps + peer crossing, TF_BENCH (#303)
+    {"bench_context_switch",  1,    0,       0      },  // task<->task p99 distribution, TF_BENCH (#303)
     {"bench_syscall",         3,    0,       0      },  // syscall latency (TF_BENCH)
     {"bench_irq",             3,    0,       0      },  // IRQ latency histogram (TF_BENCH)
     {"bench_jitter",          2,    0,       0      },  // schedule-to-schedule jitter
@@ -266,6 +271,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // hrt — hard real-time measurement under QEMU -icount (issue #101)
     {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
+    {"stress_24h",            2,    0,       0      },  // soak driver SHORT horizon + liveness (#303)
     {"hrt_monotonic",         5,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16)
     {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
     {"task_metering",         9,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21) + blocked-window reset/wcet-keep (#331)
@@ -276,22 +282,27 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // Structural/semantic aggregates (issue #173).  Values are filled
     // from measured `dump-counts` output; 0 disables validation.
-    {"core",                478,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286)
+    {"core",                552,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 4 pointer_isolation + 2 release_build (issue #303) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
-    {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
+    {"proc_elf",            111,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 6 pre-existing aggregate drift at HEAD
     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
+    {"libc_stdio",            5,    0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (#303, x86_64-only)
+    {"libc_malloc",           5,    0,       0      },  // malloc0/align/calloc/realloc+OOM/cycle-no-leak (#303, x86_64-only)
+    {"libc_string",           3,    0,       0      },  // ring3 exact+sweep + kernel api sweep (#303)
+    {"libc_syscall",          4,    0,       0      },  // image size + getpid + write-cross + no-corruption (#303, x86_64-only)
+    {"cross_boundary",        2,    0,       0      },  // ring3 vfsd chain + iocd register/forward (#303, x86_64-only)
     {"storage",             166,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333)
     {"servers",             66,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333)
     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
-    {"deadline",            141,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331)
+    {"deadline",            144,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 pre-existing aggregate drift at HEAD
     {"ui",                  73,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
     {"random",              17,   0,       0      },  // random_* (issue #173)
-    {"bench",               22,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173)
+    {"bench",               27,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303)
     {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls, rescued (issue #61, wired up #173)
     {"tls",                 12,   12,      12     },  // TLS_SET + publish/apply (issue #74)
 };

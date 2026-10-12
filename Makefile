@@ -540,6 +540,10 @@ check-style:
 	    exit 1; \
 	fi
 
+doxygen-check:
+	@printf '  %-7s %s\n' 'DOXY' 'Counting Doxygen warnings (ratchet)…'
+	@python3 tools/check_doxygen.py
+
 check-config:
 	@printf '  %-7s %s\n' 'CONFIG' 'Validating kernel configuration…'
 	@ARCH=$(ARCH) python3 tools/check-config.py; \

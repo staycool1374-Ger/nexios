@@ -1,0 +1,3 @@
+539
+# Doxygen "warning:" count measured 2026-10-12 at fb3aefa46 (issue #303 M8).
+# Ratchet: lower when warnings are fixed; never raise without review.

@@ -287,6 +287,18 @@ static void run_testrunner_group() {
     register_external_test_classes();
     register_expected_panic_tests();
 }
+void register_stack_cookie_tests();
+void register_pointer_isolation_tests();
+void register_ipc_throughput_tests();
+void register_cs_bench_tests();
+void register_libc_stdio_tests();
+void register_libc_malloc_tests();
+void register_libc_string_tests();
+void register_libc_syscall_tests();
+void register_cross_boundary_tests();
+void register_stress_24h_tests();
+void register_release_build_tests();
+
 static void run_basic_lib_group() { register_lib_tests(); }
 static void run_basic_atomic_group() { register_atomic_tests(); }
 static void run_configuration_build_group() {
@@ -573,6 +585,21 @@ static void run_debug_core_group() { register_debug_tests(); }
 static void run_debug_gcov_group() { register_gcov_tests(); }
 static void run_arch_cross_group() { register_cross_arch_tests(); }
 static void run_bench_ipc_group() { register_ipc_benchmark_tests(); }
+
+// ---- Phase 6 (issue #303) groups ----
+static void run_stack_cookie_group() { register_stack_cookie_tests(); }
+static void run_pointer_isolation_group() {
+    register_pointer_isolation_tests();
+}
+static void run_ipc_throughput_group() { register_ipc_throughput_tests(); }
+static void run_cs_bench_group() { register_cs_bench_tests(); }
+static void run_libc_stdio_group() { register_libc_stdio_tests(); }
+static void run_libc_malloc_group() { register_libc_malloc_tests(); }
+static void run_libc_string_group() { register_libc_string_tests(); }
+static void run_libc_syscall_group() { register_libc_syscall_tests(); }
+static void run_cross_boundary_group() { register_cross_boundary_tests(); }
+static void run_stress_24h_group() { register_stress_24h_tests(); }
+static void run_release_build_group() { register_release_build_tests(); }
 static void run_bench_syscall_group() {
     register_bench_syscall_latency_tests();
 }
@@ -615,6 +642,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
 
     // -- configuration: build-system + compile-time config sanity --
     {"configuration_build", []() { run_configuration_build_group(); }},
+    // -- Phase 6 (issue #303): actual release contract --
+    {"release_build", []() { run_release_build_group(); }},
 
     // -- data_structures: container primitives consumed by other subsystems --
     {"data_structures_spsc", []() { run_data_structures_spsc_group(); }},
@@ -700,6 +729,12 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"process_elf", []() { run_process_elf_group(); }},
     {"elf_loader", []() { run_elf_loader_group(); }},
     {"libc_verify", []() { run_libc_verify_group(); }},
+    // -- Phase 6 (issue #303): libc + cross-boundary --
+    {"libc_stdio", []() { run_libc_stdio_group(); }},
+    {"libc_malloc", []() { run_libc_malloc_group(); }},
+    {"libc_string", []() { run_libc_string_group(); }},
+    {"libc_syscall", []() { run_libc_syscall_group(); }},
+    {"cross_boundary", []() { run_cross_boundary_group(); }},
     {"elf_shared", []() { run_elf_shared_group(); }},
     {"process_signals", []() { run_process_signals_group(); }},
     {"process_rlimit", []() { run_process_rlimit_group(); }},
@@ -802,6 +837,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
      []() { run_synchronization_err_api_group(); }},
     {"memory_checked_ptr_api",
      []() { run_memory_checked_ptr_api_group(); }},
+    // -- Phase 6 (issue #303): canary + isolation pins --
+    {"stack_cookie", []() { run_stack_cookie_group(); }},
+    {"pointer_isolation", []() { run_pointer_isolation_group(); }},
     {"memory_integrity", []() { run_memory_integrity_group(); }},
     {"memory_resource_exhaustion",
      []() { run_memory_resource_exhaustion_group(); }},
@@ -931,6 +969,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
 
     // -- bench: timing-sensitive benchmarks, run last --
     {"bench_ipc", []() { run_bench_ipc_group(); }},
+    // -- Phase 6 (issue #303): throughput + ctx-switch distributions --
+    {"bench_ipc_throughput", []() { run_ipc_throughput_group(); }},
+    {"bench_context_switch", []() { run_cs_bench_group(); }},
     {"bench_syscall", []() { run_bench_syscall_group(); }},
     {"bench_irq", []() { run_bench_irq_group(); }},
     {"bench_jitter", []() { run_bench_jitter_group(); }},
@@ -941,6 +982,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // runs cleanly inside aggregates without -icount.  Class-scoped icount
     // in the Makefile gives it hard deterministic timing when run standalone.
     {"stress_hrt", []() { run_stress_hrt_group(); }},
+    // -- Phase 6 (issue #303): soak driver (SHORT horizon in CI) --
+    {"stress_24h", []() { run_stress_24h_group(); }},
     {"hrt_monotonic", []() { run_hrt_monotonic_group(); }},
     {"timer_wheel", []() { run_timer_wheel_group(); }},
     {"posix_time", []() { run_posix_time_group(); }},
@@ -975,6 +1018,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_basic_lib_group();
          run_basic_atomic_group();
          run_configuration_build_group();
+         run_release_build_group(); // issue #303 (TF_RELEASE: also release)
          run_data_structures_spsc_group();
          run_data_structures_buffer_pool_group();
          run_data_structures_buffer_pool_deterministic_group();
@@ -1010,6 +1054,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_memory_determinism_group();
          run_memory_checked_ptr_group();
          run_memory_checked_ptr_api_group();
+         run_stack_cookie_group();      // issue #303
+         run_pointer_isolation_group(); // issue #303
          run_memory_integrity_group();
          run_memory_resource_exhaustion_group();
          run_memory_stack_alloc_group();
@@ -1075,6 +1121,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
           run_pt_merge_group();
           run_process_secure_exec_group();
           run_libc_verify_group();
+         run_libc_stdio_group();   // issue #303
+         run_libc_malloc_group();  // issue #303
+         run_libc_string_group();  // issue #303
+         run_libc_syscall_group(); // issue #303
+         run_cross_boundary_group(); // issue #303
      }},
     {"storage",
      []() {
@@ -1189,6 +1240,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_task_metering_group();
          run_hrt_monotonic_group();
          run_stress_hrt_group();
+         run_stress_24h_group(); // issue #303 (SHORT horizon in CI)
      }},
     {"ui",
      []() {
@@ -1221,6 +1273,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"bench",
      []() {
          run_bench_ipc_group();
+         run_ipc_throughput_group(); // issue #303
+         run_cs_bench_group();       // issue #303
          run_bench_syscall_group();
          run_bench_irq_group();
          run_bench_jitter_group();
