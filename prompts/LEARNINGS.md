@@ -8,6 +8,7 @@
 
 ## Active cautions (curated digest — read at session start; cap ~12 lines)
 
+- User-range byte math: guard `count <= LIMIT / sizeof(T)` BEFORE multiplying — `count*sizeof` wraps to 0 and passes the `size==0` early-true; fix every site sharing the idiom, and bump both fine + aggregate count rows (#337).
 - TCBs are memset-zeroed, never ctor-built: set every non-zero sentinel at all 4 memset sites (create/create_user/clone/elf finalize) plus a mechanical defense that never trusts the value (see #3).
 - Release the primitive lock BEFORE reschedule; every BLOCKED leaves the ready queue (INV-2); waits are bounded or scheduler-mediated; test bridge sequences guard add_task too (§11, #208).
 - Test waits use need_resched + hlt (wait_for_termination_safe); BLOCKED + dequeue_ready; bare pause-spins starve ticks under TCG. Rendezvous tests must wake on message arrivals, never on third-party timing (tick-dependent peers/killers hang under load); cyclic-capable walks get trip-count fail-stops, inserts unlink-first.
@@ -44,6 +45,12 @@
 ```
 
 ## Entries
+
+### #337 — CheckedPtr count*sizeof overflow rejection
+
+- **Learned:** (1) `count * sizeof(T)` in wrapping uint64 arithmetic can yield 0, and `is_user_range(addr, 0)` early-returns true — so `valid()` accepted an effectively unbounded range. The `count <= LIMIT / sizeof(T)` guard form is constexpr-friendly, freestanding-safe, and keeps `valid()` range-only (the 1 TiB in-range pin still passes). (2) The same wrapping idiom existed in `safe_copy_from_user`/`safe_copy_to_user` — fix every site sharing the idiom, not just the reported one. (3) The `core` aggregate embeds the pointer_isolation group, so enabling one test needs both the fine-row (4→5) and the aggregate (552→553) bump; the `core` run validates both.
+- **Adapted:** `count_fits_user_limit<T>` helper + fail-closed guards at all 3 sites (`checked_ptr.hpp`); regression enabled (`#if 1`) + registered; count rows bumped; SIL 3 APPROVED zero findings; issue evidence comment posted.
+- **Style re-surface:** §5 fail-closed on reachable input (return false, never ENSURE); §10.5 named bounds (`USER_SPACE_LIMIT`); aggregate/member count-row parity.
 
 ### #45 — deterministic boot, final increment (real WCET asserts)
 
