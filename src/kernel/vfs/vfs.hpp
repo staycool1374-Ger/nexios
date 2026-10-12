@@ -105,6 +105,16 @@ struct VnodeOps {
     /// namespace mutators (e.g. fat32_file_ops — mutability lives on
     /// the sibling dir table, so ops-shape alone cannot prove it).
     bool readonly = false;
+    /// @brief Stable-ino filesystem marker (issue #333): true only for
+    /// tables whose lookup assigns a computed key that is stable across
+    /// independent resolves of the same object (fat32: parent-dir first
+    /// cluster + dir-entry slot index; remove marks free without
+    /// compacting). Lets the TOCTOU re-resolve accept same-object
+    /// re-resolves that allocate fresh vnodes per lookup on a WRITABLE
+    /// image. Gated additionally on ino/size/mode equality plus nonzero
+    /// ino (root keeps ino 0 and always matches via the strict pointer
+    /// path). Defaults false (strict pointer identity).
+    bool stable_ino = false;
 };
 
 struct Vnode {
@@ -212,15 +222,20 @@ VfsError resolve_err(const char *path, Vnode *&out_vnode);
 /// @return The parent vnode (OWNED — release via `vfs::release()`), or
 ///         nullptr if not found.
 Vnode *resolve_parent(const char *path, const char *&out_name);
-/// @brief Re-resolve identity for TOCTOU closure (issue #332, spec §4).
-/// Strict fast path (same object + same ino, e.g. tmpfs stable entries)
-/// OR immutable-equivalence: same ops table, same ino/size/mode, gated
-/// on the filesystem-declared `VnodeOps::readonly` marker (initrd tables
-/// only — per-lookup vnodes over a read-only image, where replacement
-/// across the authorize yield is impossible). The gate is deliberately
-/// NOT ops-shape: mutability may live on a sibling table (fat32 file
-/// tables carry no mutators yet the image is writable), so only an
-/// explicit readonly declaration admits equivalence. Fail-closed (any
+/// @brief Re-resolve identity for TOCTOU closure (issues #332/#333,
+/// spec §4). Strict fast path (same object + same ino, e.g. tmpfs
+/// stable entries) OR immutable-equivalence: same ops table, same
+/// ino/size/mode, gated on the filesystem-declared `VnodeOps::readonly`
+/// marker (initrd tables only — per-lookup vnodes over a read-only
+/// image, where replacement across the authorize yield is impossible)
+/// OR stable-ino equivalence: same ops table, same nonzero
+/// ino/size/mode, gated on the filesystem-declared
+/// `VnodeOps::stable_ino` marker (fat32 tables only — lookup assigns a
+/// computed slot key that survives independent re-resolves; slot reuse
+/// after unlink is narrowed by the size+mode co-check). Both gates are
+/// deliberately NOT ops-shape: mutability may live on a sibling table
+/// (fat32 file tables carry no mutators yet the image is writable), so
+/// only an explicit declaration admits equivalence. Fail-closed (any
 /// null/mismatch denies). Pure comparisons, no locks, no syscalls.
 inline bool vnode_identity_match(const Vnode *before, const Vnode *after,
                                  uint64_t ino_before) noexcept {
@@ -231,10 +246,14 @@ inline bool vnode_identity_match(const Vnode *before, const Vnode *after,
     const VnodeOps *ops = before->ops;
     if (ops == nullptr || ops != after->ops)
         return false;
-    if (!ops->readonly)
-        return false;
-    return after->ino == ino_before && after->ino == before->ino &&
-           after->size == before->size && after->mode == before->mode;
+    if (ops->readonly)
+        return after->ino == ino_before && after->ino == before->ino &&
+               after->size == before->size && after->mode == before->mode;
+    if (ops->stable_ino && ino_before != 0 &&
+        after->ino == ino_before && after->ino == before->ino &&
+        after->size == before->size && after->mode == before->mode)
+        return true;
+    return false;
 }
 /// @brief Mount a filesystem at a given mount point.
 /// @return 0 on success, or VFS_INVALID on failure.

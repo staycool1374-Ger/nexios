@@ -38,6 +38,11 @@
 #include <kernel/task/task.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/vfsd.hpp>
+#include <kernel/vfs/fat32.hpp>
+#include <kernel/vfs/fat32_fs.hpp>
+#include <kernel/core/global_state.hpp>
+#include <kernel/driver/block_device.hpp>
+#include <kernel/memory/mempool.hpp>
 #include "test_sched_helpers.hpp"
 
 using namespace kernel;
@@ -1012,17 +1017,18 @@ JARVIS_TEST(vfsd_initrd_open_succeeds, "PRE: vfsd, iocd | POST: none") {
 }
 
 namespace {
-// Predicate-level fixtures (issue #332 negative controls): vnode pairs
-// with equal ino/size/mode at distinct addresses. Only the
-// readonly-declared table may match — a mutator-free but writable table
-// (fat32_file_ops shape: no mutators, readonly false) must still deny,
-// because mutability may live on a sibling table.
-vfs::VnodeOps g_imm_ops = {};
-vfs::VnodeOps g_mut_ops = {};
-vfs::VnodeOps g_plain_ops = {};
-int stub_mkdir(vfs::Vnode &, const char *, uint16_t) {
-    return 0;
-}
+ // Predicate-level fixtures (issue #332 negative controls): vnode pairs
+ // with equal ino/size/mode at distinct addresses. Only the
+ // readonly-declared table may match — a mutator-free but writable table
+ // (fat32_file_ops shape: no mutators, readonly false) must still deny,
+ // because mutability may live on a sibling table.
+ vfs::VnodeOps g_imm_ops = {};
+ vfs::VnodeOps g_mut_ops = {};
+ vfs::VnodeOps g_plain_ops = {};
+ vfs::VnodeOps g_stable_ops = {};
+ int stub_mkdir(vfs::Vnode &, const char *, uint16_t) {
+     return 0;
+ }
 } // namespace
 
 // Runmode: kernel
@@ -1080,6 +1086,107 @@ JARVIS_TEST(vfsd_identity_mutable_denied, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: The stable-ino gate (issue #333) accepts same-key fresh
+// vnodes on a declared table and still denies every drift shape.
+// Input: Stack vnode pairs over a stable_ino-declared table.
+// Expect: equal nonzero key accepts (both orders); size/mode drift,
+//         stale ino, zero ino, ops mismatch, null deny.
+// Depends: vfs::vnode_identity_match
+JARVIS_TEST(vfsd_identity_stable_accepted, "PRE: none | POST: none") {
+    g_stable_ops.stable_ino = true;
+    vfs::Vnode a{};
+    a.ops = &g_stable_ops;
+    a.ino = 0x00020005ULL;
+    a.size = 14;
+    a.mode = vfs::S_IFREG;
+    vfs::Vnode b{};
+    b.ops = &g_stable_ops;
+    b.ino = 0x00020005ULL;
+    b.size = 14;
+    b.mode = vfs::S_IFREG;
+    JARVIS_ASSERT(vfs::vnode_identity_match(&a, &b, 0x00020005ULL));
+    JARVIS_ASSERT(vfs::vnode_identity_match(&b, &a, 0x00020005ULL));
+    vfs::Vnode size_drift = b;
+    size_drift.size = 15;
+    JARVIS_ASSERT(!vfs::vnode_identity_match(&a, &size_drift, a.ino));
+    vfs::Vnode mode_drift = b;
+    mode_drift.mode = vfs::S_IFDIR;
+    JARVIS_ASSERT(!vfs::vnode_identity_match(&a, &mode_drift, a.ino));
+    JARVIS_ASSERT(!vfs::vnode_identity_match(&a, &b, 0x00020006ULL));
+    vfs::Vnode zero_a{};
+    zero_a.ops = &g_stable_ops;
+    zero_a.ino = 0;
+    vfs::Vnode zero_b{};
+    zero_b.ops = &g_stable_ops;
+    zero_b.ino = 0;
+    JARVIS_ASSERT(!vfs::vnode_identity_match(&zero_a, &zero_b, 0));
+    vfs::Vnode other_ops = b;
+    other_ops.ops = &g_plain_ops;
+    JARVIS_ASSERT(!vfs::vnode_identity_match(&a, &other_ops, a.ino));
+    JARVIS_ASSERT(!vfs::vnode_identity_match(nullptr, &b, b.ino));
+    JARVIS_ASSERT(!vfs::vnode_identity_match(&a, nullptr, a.ino));
+    JARVIS_TEST_PASS();
+}
+
+namespace {
+// E2E fixture (issue #333): the shared read-only fat32 test image,
+// mounted at /mnt for one OPEN round-trip. reset_and_remount clears
+// the mount between tests, so no teardown is needed.
+extern "C" uint8_t _binary_build_fat32_img_start[];
+extern "C" uint8_t _binary_build_fat32_img_end[];
+void setup_fat32_mnt() {
+    if (!kernel::gs::get_fat32_partition()) {
+        uint64_t bytes = static_cast<uint64_t>(
+            _binary_build_fat32_img_end - _binary_build_fat32_img_start);
+        auto *dev = new kernel::block::MockBlockDevice(
+            _binary_build_fat32_img_start, bytes / kernel::fat32::SECTOR_SIZE,
+            true);
+        auto *partition = new kernel::fat32::Fat32Partition(*dev);
+        if (partition && partition->mount())
+            kernel::gs::try_set_fat32_partition(partition);
+    }
+    kernel::vfs::mount_fat32("/mnt");
+}
+} // namespace
+
+// Runmode: kernel
+// Testidea: sys_open on a fat32 path survives the TOCTOU re-resolve
+// (issue #333) — both resolves allocate fresh vnodes, so only the
+// stable-ino gate can accept; pre-fix this returned -1.
+// Input: Dispatched kernel task OPENs+CLOSEs /mnt/HELLO.TXT (image
+//        file the build always installs).
+// Expect: fd >= 0, close == 0. Fails pre-fix (identity mismatch → -1).
+// Depends: kernel::Syscall, fat32 image, mount, vnode_identity_match
+JARVIS_TEST(vfsd_fat32_open_succeeds, "PRE: vfsd, iocd | POST: none") {
+    setup_fat32_mnt();
+    static uint64_t g_fd = 0;
+    static uint64_t g_close = 0;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            const char *path = "/mnt/HELLO.TXT";
+            g_fd = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::OPEN),
+                reinterpret_cast<uint64_t>(path), 0, 0, 0, nullptr);
+            if (static_cast<int64_t>(g_fd) < 0)
+                return;
+            g_close = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::CLOSE), g_fd, 0, 0, 0,
+                nullptr);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT(static_cast<int64_t>(g_fd) >= 0);
+    JARVIS_ASSERT_EQ(0ULL, g_close);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all VFS authorization tests with the test framework.
 // Input: None
 // Expect: All vfsd_* authorization tests registered via JARVIS_REGISTER_TEST
@@ -1111,6 +1218,8 @@ void register_vfsd_authorization_tests() {
     JARVIS_REGISTER_TEST(vfsd_lseek_bogus_whence);
     JARVIS_REGISTER_TEST(vfsd_initrd_open_succeeds);
     JARVIS_REGISTER_TEST(vfsd_identity_mutable_denied);
+    JARVIS_REGISTER_TEST(vfsd_identity_stable_accepted);
+    JARVIS_REGISTER_TEST(vfsd_fat32_open_succeeds);
 }
 #ifndef __clang__
 #pragma GCC diagnostic pop

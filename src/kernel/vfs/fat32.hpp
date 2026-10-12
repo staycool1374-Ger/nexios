@@ -182,6 +182,17 @@ bool read_dir_entry(Fat32Partition &fs, uint32_t cluster, uint64_t &pos,
 bool lookup_in_dir(Fat32Partition &fs, uint32_t dir_cluster, const char *name,
                    DirEntry &entry);
 
+/// @brief Look up a name, also reporting the on-disk slot index.
+/// Same as lookup_in_dir, but stores the 0-based directory-entry slot
+/// of the match in out_index (issue #333: stable identity key input).
+/// Slots are never compacted (remove marks 0xE5), so the index is
+/// stable until an unlink+reuse cycle recycles the slot.
+/// @param[out] out_index Slot index of the matched entry (valid iff
+///             the return value is true).
+/// @return true if found, false if not found or error.
+bool lookup_in_dir_at(Fat32Partition &fs, uint32_t dir_cluster,
+                      const char *name, DirEntry &entry, uint64_t &out_index);
+
 /// @brief Read data from a file (cluster chain).
 /// @param fs        Mounted partition.
 /// @param cluster   First cluster of the file.

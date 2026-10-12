@@ -43,6 +43,21 @@ static Vnode *fat32_file_lookup(Vnode &, const char *);
 static int fat32_dir_mkdir(Vnode &self, const char *name, uint16_t mode);
 static int fat32_dir_unlink(Vnode &self, const char *name);
 
+/// @brief Stable identity key for a directory slot (issue #333).
+/// (parent-dir first cluster << 32) | 0-based dir-entry slot index.
+/// FAT32 data clusters start at 2 (0/1 reserved), so the key is never
+/// 0/1 — the vnode_identity_match stable path rejects those sentinels
+/// and the static root keeps ino 0. remove_dir_entry marks slots free
+/// (0xE5) without compacting, so the index — and the key — survives
+/// unlink until a later entry reuses the slot (documented residual,
+/// narrowed by the size+mode co-check in vnode_identity_match).
+/// Slot totals are bounded (≤256-cluster chains), so the index always
+/// fits the low 32 bits; masked defensively.
+static uint64_t fat32_stable_ino(uint32_t parent_cluster, uint64_t dir_index) {
+    return (static_cast<uint64_t>(parent_cluster) << 32) |
+           (dir_index & 0xFFFFFFFFULL);
+}
+
 // Convert a path name to the 8.3 short name format string produced by
 // format_short_name (strip trailing spaces, add '.' before extension).
 // This ensures lookups match the name actually stored on disk.
@@ -160,6 +175,8 @@ static const VnodeOps fat32_file_ops = {
     fat32_file_lseek,  fat32_file_fstat, fat32_file_ioctl, fat32_file_readdir,
     fat32_file_lookup, nullptr,          nullptr,
     nullptr, // create
+    false, // readonly: writable image — never declare (issue #332)
+    true,  // stable_ino: computed slot key admits re-resolve (issue #333)
 };
 
 // -------------------------------------------------------------------
@@ -247,7 +264,8 @@ static int fat32_dir_readdir(Vnode &self, uint64_t &pos, Dirent &dent) {
         ++idx;
     }
     dent.d_name[idx] = '\0';
-    dent.d_ino = 1;
+    // read_dir_entry leaves pos one past the returned slot.
+    dent.d_ino = fat32_stable_ino(data->cluster, pos - 1);
     return 0;
 }
 
@@ -256,6 +274,8 @@ static const VnodeOps fat32_dir_ops = {
     fat32_dir_lseek,  fat32_dir_fstat, fat32_dir_ioctl,  fat32_dir_readdir,
     fat32_dir_lookup, fat32_dir_mkdir, fat32_dir_unlink,
     nullptr, // create
+    false, // readonly: writable image — never declare (issue #332)
+    true,  // stable_ino: computed slot key admits re-resolve (issue #333)
 };
 
 // -------------------------------------------------------------------
@@ -392,7 +412,9 @@ static Vnode *fat32_dir_lookup(Vnode &self, const char *name) {
     to_short_name_str(name, short_name, sizeof(short_name));
 
     fat32::DirEntry entry = {};
-    if (!fat32::lookup_in_dir(*data->fs, data->cluster, short_name, entry))
+    uint64_t dir_index = 0;
+    if (!fat32::lookup_in_dir_at(*data->fs, data->cluster, short_name, entry,
+                                 dir_index))
         return nullptr;
 
     auto *vdata =
@@ -412,7 +434,7 @@ static Vnode *fat32_dir_lookup(Vnode &self, const char *name) {
 
     test::ResourceTracker::instance().track_vnode_add();
     vnode->ops = entry.is_directory ? &fat32_dir_ops : &fat32_file_ops;
-    vnode->ino = 1;
+    vnode->ino = fat32_stable_ino(data->cluster, dir_index);
     vnode->size = entry.size;
     vnode->mode = entry.is_directory ? S_IFDIR : S_IFREG;
     vnode->private_data = vdata;

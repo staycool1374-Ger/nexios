@@ -360,10 +360,22 @@ bool read_dir_entry(Fat32Partition &fs, uint32_t dir_cluster, uint64_t &pos,
 /// @return true if found.
 bool lookup_in_dir(Fat32Partition &fs, uint32_t dir_cluster, const char *name,
                    DirEntry &entry) {
+    uint64_t ignored_index = 0;
+    return lookup_in_dir_at(fs, dir_cluster, name, entry, ignored_index);
+}
+
+/// @brief Look up a name, reporting the matched on-disk slot index.
+/// read_dir_entry leaves pos one past the returned slot (it increments
+/// before every true return, including via the skip-recursion), so the
+/// matched slot is pos - 1. pos > 0 whenever we return true.
+bool lookup_in_dir_at(Fat32Partition &fs, uint32_t dir_cluster,
+                      const char *name, DirEntry &entry, uint64_t &out_index) {
     uint64_t pos = 0;
     while (read_dir_entry(fs, dir_cluster, pos, entry)) {
-        if (entry.valid && strcmp(entry.name, name) == 0)
+        if (entry.valid && strcmp(entry.name, name) == 0) {
+            out_index = pos - 1;
             return true;
+        }
     }
     return false;
 }

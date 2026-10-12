@@ -428,6 +428,83 @@ JARVIS_TEST(vfs_fat32_unlink_frees_clusters, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: FAT32 lookups assign a stable identity key (issue #333) —
+// two independent lookups of the same name yield distinct vnodes with
+// equal nonzero ino, distinct files differ, subdir children cannot
+// collide with root entries (parent cluster in the key), root keeps 0.
+// Input: ops->lookup on the shared read-only image.
+// Expect: ino equality per object, inequality across objects, match()
+//         accepts the same-object pair (the sys_open re-resolve case).
+// Depends: kernel::vfs::VnodeOps::stable_ino, vnode_identity_match
+JARVIS_TEST(vfs_fat32_stable_ino, "PRE: vfsd, iocd | POST: none") {
+    setup_fat32_fs();
+    Vnode *root = fat32_fs.get_root();
+    JARVIS_ASSERT(root != nullptr);
+
+    Vnode *a = root->ops->lookup(*root, "HELLO.TXT");
+    Vnode *b = root->ops->lookup(*root, "HELLO.TXT");
+    JARVIS_ASSERT(a != nullptr && b != nullptr);
+    JARVIS_ASSERT(a != b); // fresh vnode per lookup (the #333 premise)
+    JARVIS_ASSERT(a->ino != 0 && a->ino == b->ino);
+    JARVIS_ASSERT(a->ops == b->ops);
+    JARVIS_ASSERT(vnode_identity_match(a, b, a->ino));
+
+    Vnode *other = root->ops->lookup(*root, "MULTI.TXT");
+    JARVIS_ASSERT(other != nullptr);
+    JARVIS_ASSERT(other->ino != 0 && other->ino != a->ino);
+    JARVIS_ASSERT(!vnode_identity_match(a, other, a->ino));
+
+    Vnode *sub = root->ops->lookup(*root, "SUBDIR");
+    JARVIS_ASSERT(sub != nullptr);
+    Vnode *nested = sub->ops->lookup(*sub, "FILE.TXT");
+    JARVIS_ASSERT(nested != nullptr);
+    JARVIS_ASSERT(nested->ino != 0 && nested->ino != a->ino &&
+                  nested->ino != sub->ino);
+
+    nested->ops->close(*nested);
+    sub->ops->close(*sub);
+    other->ops->close(*other);
+    b->ops->close(*b);
+    a->ops->close(*a);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The stable-ino gate still denies drift (issue #333 TOCTOU
+// residual: unlink+slot-reuse by a different object must fail the
+// re-resolve) — size/mode/stale-ino divergence denies at distinct
+// addresses even with stable_ino declared.
+// Input: Stack-copied vnode pairs derived from a real lookup.
+// Expect: size drift, mode drift, stale ino, ops mismatch deny.
+// Depends: vnode_identity_match
+JARVIS_TEST(vfs_fat32_identity_reject_drift, "PRE: vfsd, iocd | POST: none") {
+    setup_fat32_fs();
+    Vnode *root = fat32_fs.get_root();
+    JARVIS_ASSERT(root != nullptr);
+
+    Vnode *a = root->ops->lookup(*root, "HELLO.TXT");
+    Vnode *b = root->ops->lookup(*root, "HELLO.TXT");
+    JARVIS_ASSERT(a != nullptr && b != nullptr);
+    JARVIS_ASSERT(vnode_identity_match(a, b, a->ino));
+
+    Vnode size_drift = *b;
+    size_drift.size = b->size + 1;
+    JARVIS_ASSERT(!vnode_identity_match(a, &size_drift, a->ino));
+
+    Vnode mode_drift = *b;
+    mode_drift.mode = vfs::S_IFDIR;
+    JARVIS_ASSERT(!vnode_identity_match(a, &mode_drift, a->ino));
+
+    JARVIS_ASSERT(!vnode_identity_match(a, b, a->ino + 1)); // stale ino
+    JARVIS_ASSERT(!vnode_identity_match(a, root, a->ino));  // ops mismatch
+    JARVIS_ASSERT(!vnode_identity_match(a, nullptr, a->ino));
+
+    b->ops->close(*b);
+    a->ops->close(*a);
+    JARVIS_TEST_PASS();
+}
+
 void register_vfs_fat32_tests() {
     Logger::info("Registering VFS FAT32 tests");
 
@@ -446,6 +523,8 @@ void register_vfs_fat32_tests() {
     JARVIS_REGISTER_TEST(vfs_fat32_rmdir_empty);
     JARVIS_REGISTER_TEST(vfs_fat32_rmdir_nonempty_fails);
     JARVIS_REGISTER_TEST(vfs_fat32_unlink_frees_clusters);
+    JARVIS_REGISTER_RELEASE_TEST(vfs_fat32_stable_ino);
+    JARVIS_REGISTER_RELEASE_TEST(vfs_fat32_identity_reject_drift);
 }
 #ifndef __clang__
 #pragma GCC diagnostic pop

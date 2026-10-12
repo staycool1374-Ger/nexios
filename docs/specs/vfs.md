@@ -126,16 +126,21 @@ vfsd_authorize(op, pid, path, ino); // 2. blocking IPC (CPU yields to vfsd)
 vn2 = resolve(path);                // 3. re-resolve
 return vnode_identity_match(vn, vn2, ino);   // 4. identity below
 ```
-- **Identity** (`vfs::vnode_identity_match`, issue #332): strict fast
-  path (same object + same ino, e.g. tmpfs stable entries) OR
+- **Identity** (`vfs::vnode_identity_match`, issues #332/#333): strict
+  fast path (same object + same ino, e.g. tmpfs stable entries) OR
   immutable-equivalence (same ops table + same ino/size/mode, gated on
   the filesystem-declared `VnodeOps::readonly` marker — initrd
   file/dir/root tables only; per-lookup vnodes over a read-only image
-  with uniform ino 1/2, replacement across the yield impossible). The
-  gate is deliberately not ops-shape: mutability may live on a sibling
-  table (fat32 file tables carry no mutators yet the image is writable),
-  so only an explicit readonly declaration admits equivalence; fat32
-  still fails re-validation and is tracked separately.
+  with uniform ino 1/2, replacement across the yield impossible) OR
+  stable-ino equivalence (same ops table + same nonzero ino/size/mode,
+  gated on the filesystem-declared `VnodeOps::stable_ino` marker —
+  fat32 file/dir tables only; lookup assigns a computed
+  parent-cluster+slot-index key that survives independent re-resolves;
+  unlink+slot-reuse by a different object is narrowed by the size+mode
+  co-check). Both gates are deliberately not ops-shape: mutability may
+  live on a sibling table (fat32 file tables carry no mutators yet the
+  image is writable), so only an explicit declaration admits
+  equivalence.
 - Longest-prefix mount selection for absolute paths; relative paths start at
   `cwd_vnode`; `..` at a mount root climbs by re-resolving the mount point's
   parent.  Mount-point shadowing: a path component equal to a mount point's
@@ -190,7 +195,7 @@ vnode_ref_dec(vn):  return __atomic_fetch_sub(&vn->refcount, 1, ACQ_REL) == 1;  
 | devfs | static char devices at `/dev` (tty/null/console/kbd/random) | never freed; `open` stores flags in `private_data` |
 | procfs | dynamic pseudo-fs at `/proc` (meminfo/self/pci/PID-dirs) | pid-dirs allocated on lookup, freed by `pid_dir_close`; static nodes reused |
 | tmpfs | in-memory tree at `/tmp`, files = 16 contiguous PMM pages (64 KiB) | `tmpfs_lock` global; `unlink` refuses non-empty dirs; lazy page alloc on first write |
-| fat32 | on-disk via BlockDevice, 8.3 names, cluster chain | read-only file data; root vnode static, re-init on partition change; EOF ≥ 0x0FFFFFF8 |
+| fat32 | on-disk via BlockDevice, 8.3 names, cluster chain | read-only file data; root vnode static, re-init on partition change; EOF ≥ 0x0FFFFFF8; stable slot ino (parent-cluster+index), `stable_ino` tables |
 | pipe | anon FIFO: 4 KiB ring, shared `PipeBuffer` (refcount 2) | buffer freed at shared refcount→0; read blocks on `data_avail` |
 
 ## 9. Test-Isolation Contract

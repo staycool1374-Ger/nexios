@@ -149,11 +149,11 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"vfs_tmpfs",            10,    0,       0      },  // tmpfs(6) + invalid_mount(2) + mount_unmount_failure(2)
     {"vfs_fstab",             5,    0,       0      },  // fstab parsing
     {"vfs_fat32",            40,    0,       0      },  // FAT32 fs unit tests
-    {"vfs_fat32_integration", 14,    0,       0      },  // VFS-on-FAT32
+    {"vfs_fat32_integration", 16,    0,       0      },  // VFS-on-FAT32 + 2 stable-ino identity pins (#333)
 
     // servers
     {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
-    {"servers_vfsd_auth",     25,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176) + initrd-open/identity-gate (#332)
+    {"servers_vfsd_auth",     27,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176) + initrd-open/identity-gate (#332) + stable-ino gate/fat32-open (#333)
     {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
     {"servers_daemon_restart", 2,    0,       0      },  // unknown-daemon rejection + terminate/ensure resurrect cycle (issue #135); crash test stays #if 0-disabled
     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
@@ -281,8 +281,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
-    {"storage",             162,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption)
-    {"servers",             64,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332)
+    {"storage",             166,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333)
+    {"servers",             66,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333)
     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
