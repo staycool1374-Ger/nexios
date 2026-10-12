@@ -18,6 +18,7 @@ var searchData=
   ['lock_5ferr_15',['lock_err',['../classkernel_1_1sync_1_1_mutex.html#a89da4d0ccfbb1d4c3eacc4e1b10302ad',1,'kernel::sync::Mutex']]],
   ['lookup_16',['lookup',['../namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8',1,'kernel::cap']]],
   ['lookup_5fin_5fdir_17',['lookup_in_dir',['../namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c',1,'kernel::fat32']]],
-  ['lookup_5fseverity_18',['lookup_severity',['../namespacekernel_1_1log_1_1catalog.html#a230b4bee0d20f0f61d72282162565f07',1,'kernel::log::catalog']]],
-  ['lseek_19',['lseek',['../unistd_8c.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c'],['../unistd_8h.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c']]]
+  ['lookup_5fin_5fdir_5fat_18',['lookup_in_dir_at',['../namespacekernel_1_1fat32.html#ae93a85e2f3b7cee00022a3e34747d9ac',1,'kernel::fat32']]],
+  ['lookup_5fseverity_19',['lookup_severity',['../namespacekernel_1_1log_1_1catalog.html#a230b4bee0d20f0f61d72282162565f07',1,'kernel::log::catalog']]],
+  ['lseek_20',['lseek',['../unistd_8c.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c'],['../unistd_8h.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c']]]
 ];

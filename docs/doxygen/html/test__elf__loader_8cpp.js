@@ -13,6 +13,7 @@ var test__elf__loader_8cpp =
     [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a076afde2c26d60a1158e30ce10038d62", null ],
     [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a9cfebe8ae2791bef69f166daf4d5c752", null ],
     [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a0b6637958e004fff733a70aede8448ba", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a9927a9e977144cf8885f4f84cf44beb2", null ],
     [ "JARVIS_TEST", "test__elf__loader_8cpp.html#af5716838a21042b8593906302d474502", null ],
     [ "register_elf_loader_tests", "test__elf__loader_8cpp.html#a0338f2914f09b1a403ce2f2f2ef9f97c", null ]
 ];

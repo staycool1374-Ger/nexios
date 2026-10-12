@@ -1,5 +1,51 @@
 # Completed Roadmap Items
 
+## v0.5.3 — User Space Enhancements (RELEASED 2026-10-12)
+
+**Purpose:** Bring microkernel user-space services to production
+(ramdiskd block service, initrd /bin + usable sh, watchdogd
+supervision, host upload tooling) and harden the loader/IPC/memory
+crossings found by Phase 6 system-integration testing. Milestone
+"v0.5.3 User space enhancements": 0 open issues at release.
+
+- **ramdiskd microkernel service** (#275: 8×2 MiB segmented store,
+  chunked 16×32 B IPC wire with packed pid, lazy mapping, daemon
+  CSpace preservation across snapshot-restore; #314 ramdisk_fs
+  mount/file ops + loadelf/runelf; #313 host upload script; #318
+  carve scrub + CRC32 integrity; #315 single-buffer IPC contract;
+  #316 %lu width contract).
+- **Initrd /bin + usable shell** (#274 hierarchical dir vnodes;
+  #310 sh PATH resolver + parent-side export + exec envp
+  passthrough; #287 English strings; #286 unified terminal core;
+  #329 initrd ls listing; #273 Rust no_std hello-world ELF).
+- **Loader/IPC/memory hardening** (#311 runelf envp canary
+  reservation + envprobe; #312 fork admission scoped to user
+  parents; #317 send_sync reply_buf ABI threading; #337
+  CheckedPtr count-overflow guard; #332/#333 stable fat32/initrd
+  identity for TOCTOU re-resolve; #330 ramdisk mount-failure
+  logging).
+- **Harness + build hardening** (#299/#280 monitor-wake starvation
+  fix; #320 registry-pin release ordering; #321 IPC-quiescence
+  settle; #322 TCG-stall retry + STALL verdict; #326 MONITOR=0
+  hygiene; #301 aarch64 stack markers; #302/#300 closures;
+  #267 deterministic pre-dispatch cancel).
+- **Phase 6 system-integration coverage** (#303: 10 modules,
+  36 tests — cross-boundary, 24h stress, IPC throughput, CS bench,
+  stack cookies, pointer isolation, release build, libc
+  stdio/malloc/string/syscall).
+
+Gates at completion (2026-10-12): debug test-full **20/20
+(1768/1768)** (core 553, ipc 87, capability 148, proc_elf 111,
+storage 166, servers 66, drivers 107, hal 122, smp 81,
+smp_multicpu 18, deadline 144, ui 73, logging_debug 36, random 17,
+bench 27, task_tcb_log 1, ahci_live 5, iommu_live 6;
+task_fpu/testrunner specials), release test-full **18/18 + 2
+skips (89/89)**, `make build` Errors 0. Full-suite TCG stalls
+(proc_elf STALL-RECOVERED, smp STALL) + one deadline tick-race
+FAIL (edf_exempt_daemon_stays_fixed, unmasked-tick window between
+add_task and the in_ready_queue_ assert) all cleared by
+identical-binary standalone reruns with 0 failures.
+
 ## v0.5.2 — User-ELF Bring-up to Run (RELEASED 2026-10-07)
 
 **Purpose:** Run general ELFs as strictly periodic user tasks (runelf

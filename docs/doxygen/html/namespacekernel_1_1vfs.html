@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -125,6 +125,8 @@ Data Structures</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Device directory entry linking a name to a vnode.  <a href="structkernel_1_1vfs_1_1_dev_entry.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Fat32VnodeData" id="r_Fat32VnodeData"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_fat32_vnode_data.html">Fat32VnodeData</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-vnode private data for FAT32 vnodes.  <a href="structkernel_1_1vfs_1_1_fat32_vnode_data.html#details">More...</a><br /></td></tr>
+<tr class="memitem:InitrdDirNode" id="r_InitrdDirNode"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_initrd_dir_node.html">InitrdDirNode</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-vnode private data for initrd subdirectory vnodes.  <a href="structkernel_1_1vfs_1_1_initrd_dir_node.html#details">More...</a><br /></td></tr>
 <tr class="memitem:InitrdFileNode" id="r_InitrdFileNode"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_initrd_file_node.html">InitrdFileNode</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-vnode private data for initrd file vnodes.  <a href="structkernel_1_1vfs_1_1_initrd_file_node.html#details">More...</a><br /></td></tr>
 <tr class="memitem:MemInfoVnode" id="r_MemInfoVnode"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_mem_info_vnode.html">MemInfoVnode</a></td></tr>
@@ -139,6 +141,12 @@ Data Structures</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Vnode representing a process's watchdog file.  <a href="structkernel_1_1vfs_1_1_pid_watchdog_vnode.html#details">More...</a><br /></td></tr>
 <tr class="memitem:PipeBuffer" id="r_PipeBuffer"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html">PipeBuffer</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ring buffer shared between the read and write ends of a pipe.  <a href="structkernel_1_1vfs_1_1_pipe_buffer.html#details">More...</a><br /></td></tr>
+<tr class="memitem:RdDirEntry" id="r_RdDirEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_rd_dir_entry.html">RdDirEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">On-disk directory entry (96 B; serialized contiguously across the dir region: entry i starts at byte i * 96). <span class="tt"><a class="el" href="structkernel_1_1vfs_1_1_rd_dir_entry.html#a486aa145b9233dcb9424dbaee514fb32" title="CRC32 of the live bytes (finalized).">crc32</a></span> is the finalized <a class="el" href="classkernel_1_1_c_r_c32.html">CRC32</a> (<a class="el" href="crc32_8hpp.html">src/lib/crc32.hpp</a>) over the file's LIVE byte range only (block padding excluded); <span class="tt"><a class="el" href="structkernel_1_1vfs_1_1_rd_dir_entry.html#a6be712e0603491f186923aa10ceb9175" title="RD_ENTRY_VALID etc.">flags</a></span> carries RD_ENTRY_VALID. An entry is exposed only when VALID and its CRC verifies (fail-closed; issue #318).  <a href="structkernel_1_1vfs_1_1_rd_dir_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:RdExtent" id="r_RdExtent"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_rd_extent.html">RdExtent</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-open extent descriptor (vnode private_data, MemPool-owned).  <a href="structkernel_1_1vfs_1_1_rd_extent.html#details">More...</a><br /></td></tr>
+<tr class="memitem:RdSuper" id="r_RdSuper"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_rd_super.html">RdSuper</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">On-disk superblock (first 40 B of ramdisk block 0).  <a href="structkernel_1_1vfs_1_1_rd_super.html#details">More...</a><br /></td></tr>
 <tr class="memitem:TmpfsEntry" id="r_TmpfsEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfs_1_1_tmpfs_entry.html">TmpfsEntry</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A directory entry in tmpfs (linked-list node).  <a href="structkernel_1_1vfs_1_1_tmpfs_entry.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
@@ -150,6 +158,11 @@ Functions</h2></td></tr>
 <tr class="memdesc:a739270d15fe1ac6f5a0e21d0c2e20123"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mount the FAT32 filesystem at the given mount point.  <br /></td></tr>
 <tr class="memitem:a63004773b8b1cae833b25ae477c4b956" id="r_a63004773b8b1cae833b25ae477c4b956"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a63004773b8b1cae833b25ae477c4b956">create_pipe</a> (int fds[2])</td></tr>
 <tr class="memdesc:a63004773b8b1cae833b25ae477c4b956"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a pair of connected pipe file descriptors.  <br /></td></tr>
+<tr class="memitem:adfef1f0d08b703f47ea256474baf1d7a" id="r_adfef1f0d08b703f47ea256474baf1d7a"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#adfef1f0d08b703f47ea256474baf1d7a">ramdisk_fs_verify_all</a> ()</td></tr>
+<tr class="memdesc:adfef1f0d08b703f47ea256474baf1d7a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verify every live file's CRC against ramdisk (test seam — the same per-file check the boot cache-fill runs).  <br /></td></tr>
+<tr class="memitem:aa66799fc199574092ebec434d2b6607b" id="r_aa66799fc199574092ebec434d2b6607b"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa66799fc199574092ebec434d2b6607b">ramdisk_fs_extent</a> (const char *name, uint64_t &amp;start_block, uint64_t &amp;block_count, uint32_t &amp;crc)</td></tr>
+<tr class="memdesc:aa66799fc199574092ebec434d2b6607b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam: fetch a file's extent (start block, block count, stored CRC).  <br /></td></tr>
+<tr class="memitem:acb7b7264f275dc4b5139c6739c46f1f0" id="r_acb7b7264f275dc4b5139c6739c46f1f0"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#acb7b7264f275dc4b5139c6739c46f1f0">ramdisk_fs_try_mount</a> ()</td></tr>
 <tr class="memitem:ad97a3b4278a3acc170ad8a0f457bc350" id="r_ad97a3b4278a3acc170ad8a0f457bc350"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad97a3b4278a3acc170ad8a0f457bc350">tmpfs_reset_root</a> ()</td></tr>
 <tr class="memdesc:ad97a3b4278a3acc170ad8a0f457bc350"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset the tmpfs root directory (clear children).  <br /></td></tr>
 <tr class="memitem:a77a7697a28bd742b781febc6ff88efe9" id="r_a77a7697a28bd742b781febc6ff88efe9"><td class="memItemLeft">Vnode *&#160;</td><td class="memItemRight"><a class="el" href="#a77a7697a28bd742b781febc6ff88efe9">get_root_vnode</a> ()</td></tr>
@@ -197,6 +210,7 @@ Variables</h2></td></tr>
 <tr class="memitem:adb50110880ce45345185d1204eaf4fef" id="r_adb50110880ce45345185d1204eaf4fef"><td class="memItemLeft">Filesystem&#160;</td><td class="memItemRight"><a class="el" href="#adb50110880ce45345185d1204eaf4fef">fat32_fs</a></td></tr>
 <tr class="memitem:a7ef3281549b66c34c3500a7b5156718b" id="r_a7ef3281549b66c34c3500a7b5156718b"><td class="memItemLeft">Filesystem&#160;</td><td class="memItemRight"><a class="el" href="#a7ef3281549b66c34c3500a7b5156718b">initrd_fs</a></td></tr>
 <tr class="memitem:a8049afbb25873d95c723f015f6c61856" id="r_a8049afbb25873d95c723f015f6c61856"><td class="memItemLeft">Filesystem&#160;</td><td class="memItemRight"><a class="el" href="#a8049afbb25873d95c723f015f6c61856">proc_fs</a></td></tr>
+<tr class="memitem:a9cbd594b0a8bec4a9857e01f0b325803" id="r_a9cbd594b0a8bec4a9857e01f0b325803"><td class="memItemLeft">Filesystem&#160;</td><td class="memItemRight"><a class="el" href="#a9cbd594b0a8bec4a9857e01f0b325803">ramdisk_fs</a></td></tr>
 <tr class="memitem:a2b378cb7928ca3f7781737c9987aa29d" id="r_a2b378cb7928ca3f7781737c9987aa29d"><td class="memItemLeft">Filesystem&#160;</td><td class="memItemRight"><a class="el" href="#a2b378cb7928ca3f7781737c9987aa29d">tmpfs_fs</a></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
@@ -290,7 +304,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_a63004773b8b1cae833b25ae477c4b956_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_a63004773b8b1cae833b25ae477c4b956_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<map name="anamespacekernel_1_1vfs_a63004773b8b1cae833b25ae477c4b956_cgraph" id="anamespacekernel_1_1vfs_a63004773b8b1cae833b25ae477c4b956_cgraph">
+<area shape="rect" title=" " alt="" coords="5,47,163,73"/>
+<area shape="rect" href="classkernel_1_1Scheduler.html#ac094d7e0ec9c48c58637e36fce587be2" title="Returns the currently running task." alt="" coords="229,5,359,48"/>
+<area shape="poly" title=" " alt="" coords="162,45,216,38,211,40,164,50"/>
+<area shape="rect" href="classkernel_1_1sync_1_1Semaphore.html#a40efc024fad57141f0c9d9c7c69d0b63" title=" " alt="" coords="211,72,377,115"/>
+<area shape="poly" title=" " alt="" coords="163,70,198,77,192,78,163,75"/>
+</map>
 </div>
 
 </div>
@@ -369,7 +389,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_a32714102a524a6f980eac4fd048b3604_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_a32714102a524a6f980eac4fd048b3604_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -457,7 +477,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_a0411923a55f520a77d6497349fd7acf6_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_a0411923a55f520a77d6497349fd7acf6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -487,7 +507,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_a4e062ba9d7ffaca41f17dce1644388a8_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_a4e062ba9d7ffaca41f17dce1644388a8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -517,7 +537,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_aebf94bc8bbd1d4da9adf682e10e082de_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_aebf94bc8bbd1d4da9adf682e10e082de_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -567,8 +587,85 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1vfs_a739270d15fe1ac6f5a0e21d0c2e20123_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_a739270d15fe1ac6f5a0e21d0c2e20123_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
+
+</div>
+</div>
+<a id="aa66799fc199574092ebec434d2b6607b" name="aa66799fc199574092ebec434d2b6607b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa66799fc199574092ebec434d2b6607b">&#9670;&#160;</a></span>ramdisk_fs_extent()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::vfs::ramdisk_fs_extent </td>
+          <td>(</td>
+          <td class="paramtype">const char *</td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>start_block</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>block_count</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint32_t &amp;</td>          <td class="paramname"><span class="paramname"><em>crc</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Test seam: fetch a file's extent (start block, block count, stored CRC). </p>
+<dl class="section return"><dt>Returns</dt><dd>true when a live entry with that name exists. </dd></dl>
+
+</div>
+</div>
+<a id="acb7b7264f275dc4b5139c6739c46f1f0" name="acb7b7264f275dc4b5139c6739c46f1f0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acb7b7264f275dc4b5139c6739c46f1f0">&#9670;&#160;</a></span>ramdisk_fs_try_mount()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int kernel::vfs::ramdisk_fs_try_mount </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1vfs_acb7b7264f275dc4b5139c6739c46f1f0_cgraph.png" border="0" usemap="#anamespacekernel_1_1vfs_acb7b7264f275dc4b5139c6739c46f1f0_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 7 -->
 </div>
+
+</div>
+</div>
+<a id="adfef1f0d08b703f47ea256474baf1d7a" name="adfef1f0d08b703f47ea256474baf1d7a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adfef1f0d08b703f47ea256474baf1d7a">&#9670;&#160;</a></span>ramdisk_fs_verify_all()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int kernel::vfs::ramdisk_fs_verify_all </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Verify every live file's CRC against ramdisk (test seam — the same per-file check the boot cache-fill runs). </p>
+<dl class="section return"><dt>Returns</dt><dd>mismatch count (0 clean; 0 also when the store is unavailable, which presents an empty view). </dd></dl>
 
 </div>
 </div>
@@ -877,6 +974,24 @@ Here is the call graph for this function:</div>
 <b>Initial value:</b><div class="fragment"><div class="line">                   = {</div>
 <div class="line">    <span class="stringliteral">&quot;procfs&quot;</span>,</div>
 <div class="line">    proc_get_root,</div>
+<div class="line">}</div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a9cbd594b0a8bec4a9857e01f0b325803" name="a9cbd594b0a8bec4a9857e01f0b325803"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9cbd594b0a8bec4a9857e01f0b325803">&#9670;&#160;</a></span>ramdisk_fs</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">Filesystem kernel::vfs::ramdisk_fs</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Initial value:</b><div class="fragment"><div class="line">                      = {</div>
+<div class="line">    <span class="stringliteral">&quot;ramdiskfs&quot;</span>,</div>
+<div class="line">    rd_get_root,</div>
 <div class="line">}</div>
 </div><!-- fragment -->
 </div>

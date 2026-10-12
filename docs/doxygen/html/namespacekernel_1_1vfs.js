@@ -2,6 +2,7 @@ var namespacekernel_1_1vfs =
 [
     [ "DevEntry", "structkernel_1_1vfs_1_1_dev_entry.html", "structkernel_1_1vfs_1_1_dev_entry" ],
     [ "Fat32VnodeData", "structkernel_1_1vfs_1_1_fat32_vnode_data.html", "structkernel_1_1vfs_1_1_fat32_vnode_data" ],
+    [ "InitrdDirNode", "structkernel_1_1vfs_1_1_initrd_dir_node.html", "structkernel_1_1vfs_1_1_initrd_dir_node" ],
     [ "InitrdFileNode", "structkernel_1_1vfs_1_1_initrd_file_node.html", "structkernel_1_1vfs_1_1_initrd_file_node" ],
     [ "MemInfoVnode", "structkernel_1_1vfs_1_1_mem_info_vnode.html", "structkernel_1_1vfs_1_1_mem_info_vnode" ],
     [ "PciVnode", "structkernel_1_1vfs_1_1_pci_vnode.html", "structkernel_1_1vfs_1_1_pci_vnode" ],
@@ -9,6 +10,9 @@ var namespacekernel_1_1vfs =
     [ "PidStatVnode", "structkernel_1_1vfs_1_1_pid_stat_vnode.html", "structkernel_1_1vfs_1_1_pid_stat_vnode" ],
     [ "PidWatchdogVnode", "structkernel_1_1vfs_1_1_pid_watchdog_vnode.html", "structkernel_1_1vfs_1_1_pid_watchdog_vnode" ],
     [ "PipeBuffer", "structkernel_1_1vfs_1_1_pipe_buffer.html", "structkernel_1_1vfs_1_1_pipe_buffer" ],
+    [ "RdDirEntry", "structkernel_1_1vfs_1_1_rd_dir_entry.html", "structkernel_1_1vfs_1_1_rd_dir_entry" ],
+    [ "RdExtent", "structkernel_1_1vfs_1_1_rd_extent.html", "structkernel_1_1vfs_1_1_rd_extent" ],
+    [ "RdSuper", "structkernel_1_1vfs_1_1_rd_super.html", "structkernel_1_1vfs_1_1_rd_super" ],
     [ "TmpfsEntry", "structkernel_1_1vfs_1_1_tmpfs_entry.html", "structkernel_1_1vfs_1_1_tmpfs_entry" ],
     [ "create", "namespacekernel_1_1vfs.html#a94bddce0efe1b0b6a3dade264883f7ce", null ],
     [ "create_err", "namespacekernel_1_1vfs.html#a19093f8bf45bac4a87dc6818084e3843", null ],
@@ -24,6 +28,9 @@ var namespacekernel_1_1vfs =
     [ "mount", "namespacekernel_1_1vfs.html#aebf94bc8bbd1d4da9adf682e10e082de", null ],
     [ "mount_err", "namespacekernel_1_1vfs.html#ad4618eec85ebd8a3d27bfc4d974d7591", null ],
     [ "mount_fat32", "namespacekernel_1_1vfs.html#a739270d15fe1ac6f5a0e21d0c2e20123", null ],
+    [ "ramdisk_fs_extent", "namespacekernel_1_1vfs.html#aa66799fc199574092ebec434d2b6607b", null ],
+    [ "ramdisk_fs_try_mount", "namespacekernel_1_1vfs.html#acb7b7264f275dc4b5139c6739c46f1f0", null ],
+    [ "ramdisk_fs_verify_all", "namespacekernel_1_1vfs.html#adfef1f0d08b703f47ea256474baf1d7a", null ],
     [ "reset_and_remount", "namespacekernel_1_1vfs.html#aaf0cf262c173f6848095480880c1cbc9", null ],
     [ "resolve", "namespacekernel_1_1vfs.html#a11645e6a37081ee178777f682740736d", null ],
     [ "resolve_err", "namespacekernel_1_1vfs.html#ad31548f035d75326ab34f5fd3fce896a", null ],
@@ -37,5 +44,6 @@ var namespacekernel_1_1vfs =
     [ "fat32_fs", "namespacekernel_1_1vfs.html#adb50110880ce45345185d1204eaf4fef", null ],
     [ "initrd_fs", "namespacekernel_1_1vfs.html#a7ef3281549b66c34c3500a7b5156718b", null ],
     [ "proc_fs", "namespacekernel_1_1vfs.html#a8049afbb25873d95c723f015f6c61856", null ],
+    [ "ramdisk_fs", "namespacekernel_1_1vfs.html#a9cbd594b0a8bec4a9857e01f0b325803", null ],
     [ "tmpfs_fs", "namespacekernel_1_1vfs.html#a2b378cb7928ca3f7781737c9987aa29d", null ]
 ];

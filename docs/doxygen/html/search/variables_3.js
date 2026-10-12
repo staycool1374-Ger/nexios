@@ -43,7 +43,7 @@ var searchData=
   ['cpu_5faffinity_40',['cpu_affinity',['../structkernel_1_1_scheduler_1_1_task_fields.html#a3749b14b62fad5b1f55b4281964ad10a',1,'kernel::Scheduler::TaskFields::cpu_affinity'],['../structkernel_1_1_task_control_block.html#ae7e7414b45ffceadb5ddc9ec9042362e',1,'kernel::TaskControlBlock::cpu_affinity']]],
   ['cpu_5fpct_41',['cpu_pct',['../structservice_1_1_top_row.html#a4bb0223ba46269334a24514f4ab9866e',1,'service::TopRow']]],
   ['cpu_5fplacement_5fnone_42',['CPU_PLACEMENT_NONE',['../structkernel_1_1_task_control_block.html#af9b6e1cb499efc21547dbb310650d620',1,'kernel::TaskControlBlock']]],
-  ['crc32_43',['crc32',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#a6389ebdbd180c4ce63e9c7c2ff0582d6',1,'kernel::test::PtPoolSnapshot']]],
+  ['crc32_43',['crc32',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#a6389ebdbd180c4ce63e9c7c2ff0582d6',1,'kernel::test::PtPoolSnapshot::crc32'],['../structkernel_1_1vfs_1_1_rd_dir_entry.html#a486aa145b9233dcb9424dbaee514fb32',1,'kernel::vfs::RdDirEntry::crc32']]],
   ['cspace_5f_44',['cspace_',['../structkernel_1_1_task_control_block.html#a138884aab599a1d369124c0e16a5c930',1,'kernel::TaskControlBlock']]],
   ['cspace_5fid_45',['cspace_id',['../classkernel_1_1cap_1_1_c_node.html#a87d7d8fcc86582a72ba8a9d6a0312c55',1,'kernel::cap::CNode']]],
   ['cur_5f_46',['cur_',['../structkernel_1_1_scheduler_1_1_task_iter.html#abb34ad4da599739fa2f81796987defed',1,'kernel::Scheduler::TaskIter']]],

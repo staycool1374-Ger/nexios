@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -177,8 +177,8 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:a02ff34baa1b5cff517d8d0263f906a38"><td class="mdescLeft">&#160;</td><td class="mdescRight">Attaches <code class="param">obj</code> to this task's intrusive object list. The task takes ownership of exactly one reference (refcount == 1 at attach). O(1), head insert.  <br /></td></tr>
 <tr class="memitem:ace1c87fa76b4e7545a78703fc32f598d" id="r_ace1c87fa76b4e7545a78703fc32f598d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ace1c87fa76b4e7545a78703fc32f598d">detach_object</a> (<a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> *obj) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ace1c87fa76b4e7545a78703fc32f598d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unlinks <code class="param">obj</code> from this task's object list WITHOUT releasing it. O(1). Used when ownership transfers or when snapshot restore must drop links without freeing (the pool restore has already rewound the block).  <br /></td></tr>
-<tr class="memitem:a2253e45004a974042ea8badc8f83c835" id="r_a2253e45004a974042ea8badc8f83c835"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2253e45004a974042ea8badc8f83c835">detach_all_objects</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:a2253e45004a974042ea8badc8f83c835"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unlinks every node from this task's object list WITHOUT releasing any of them. Bounded by CONFIG_MAX_PER_TASK_OBJECTS pop-head iterations (runaway-link protection). Used by snapshot restore where blocks are reclaimed by the pool rewind, never by release().  <br /></td></tr>
+<tr class="memitem:a2bd5299b5e323853e9079f629a348578" id="r_a2bd5299b5e323853e9079f629a348578"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2bd5299b5e323853e9079f629a348578">detach_all_objects</a> (bool keep_cspace=<a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a2bd5299b5e323853e9079f629a348578"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unlinks every node from this task's object list WITHOUT releasing any of them. Bounded by CONFIG_MAX_PER_TASK_OBJECTS pop-head iterations (runaway-link protection). Used by snapshot restore where blocks are reclaimed by the pool rewind, never by release().  <br /></td></tr>
 <tr class="memitem:a56a69234e3f9c078f2eab4f896ef2e7c" id="r_a56a69234e3f9c078f2eab4f896ef2e7c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a56a69234e3f9c078f2eab4f896ef2e7c">release_all_objects</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a56a69234e3f9c078f2eab4f896ef2e7c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Releases every node on this task's object list (teardown). Runs the kind-specific hook (e.g. <a class="el" href="classkernel_1_1_scheduler.html#a3b8de3815e34ac1f72bc2645849662e4" title="Decrements the sporadic server task counter (called from cleanup).">Scheduler::dec_sporadic_count</a>) then drops the ownership reference, freeing pool-backed blocks. Called exactly once from <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a>.  <br /></td></tr>
 <tr class="memitem:a5c8c3da12f183005dbfe5563e39cb39c" id="r_a5c8c3da12f183005dbfe5563e39cb39c"><td class="memItemLeft"><a class="el" href="classkernel_1_1task_1_1_sporadic_server.html">task::SporadicServer</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a5c8c3da12f183005dbfe5563e39cb39c">get_sporadic_server</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
@@ -243,6 +243,8 @@ Data Fields</h2></td></tr>
 <tr class="memdesc:a55b4a2a65fcb561074a4a9327991d9fc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lifetime executed time in ns, saturating at UINT64_MAX (issue #21 — feeds admission, WCET validation, SYS_TIMES).  <br /></td></tr>
 <tr class="memitem:ada9256c9da13f7f417a054a94e169023" id="r_ada9256c9da13f7f417a054a94e169023"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ada9256c9da13f7f417a054a94e169023">exec_period_ns</a></td></tr>
 <tr class="memdesc:ada9256c9da13f7f417a054a94e169023"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current-period executed time in ns, saturating; reset at each period reload (issue #21).  <br /></td></tr>
+<tr class="memitem:a59f3a22635c0e24337af41c1bb955470" id="r_a59f3a22635c0e24337af41c1bb955470"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a59f3a22635c0e24337af41c1bb955470">exec_window_start_tick</a></td></tr>
+<tr class="memdesc:a59f3a22635c0e24337af41c1bb955470"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tick-domain start of the current PD_USE window (issue #331). Stamped on every RUNNING/READY reload and advanced for non-runnable periodic tasks so a blocked task's window still advances (zero in-window exec then reads 0%). Observability only — dispatch never reads it.  <br /></td></tr>
 <tr class="memitem:aac2a9d30486ca530a5590a1d564f20a0" id="r_aac2a9d30486ca530a5590a1d564f20a0"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aac2a9d30486ca530a5590a1d564f20a0">exec_stamp_ns</a></td></tr>
 <tr class="memdesc:aac2a9d30486ca530a5590a1d564f20a0"><td class="mdescLeft">&#160;</td><td class="mdescRight">ns_monotonic() sample at the last charge point; the next charge bills (now - stamp) (issue #21).  <br /></td></tr>
 <tr class="memitem:af926084a10e17db27e4b1494479bcae5" id="r_af926084a10e17db27e4b1494479bcae5"><td class="memItemLeft"><a class="el" href="namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fdd">SchedPolicy</a>&#160;</td><td class="memItemRight"><a class="el" href="#af926084a10e17db27e4b1494479bcae5">sched_policy</a></td></tr>
@@ -1016,8 +1018,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a2253e45004a974042ea8badc8f83c835" name="a2253e45004a974042ea8badc8f83c835"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2253e45004a974042ea8badc8f83c835">&#9670;&#160;</a></span>detach_all_objects()</h2>
+<a id="a2bd5299b5e323853e9079f629a348578" name="a2bd5299b5e323853e9079f629a348578"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2bd5299b5e323853e9079f629a348578">&#9670;&#160;</a></span>detach_all_objects()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1028,7 +1030,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::TaskControlBlock::detach_all_objects </td>
           <td>(</td>
-          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>keep_cspace</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1041,6 +1043,12 @@ Here is the call graph for this function:</div>
 
 <p>Unlinks every node from this task's object list WITHOUT releasing any of them. Bounded by CONFIG_MAX_PER_TASK_OBJECTS pop-head iterations (runaway-link protection). Used by snapshot restore where blocks are reclaimed by the pool rewind, never by release(). </p>
 <p>Unlinks every node from this task's object list WITHOUT releasing any of them. Bounded by CONFIG_MAX_PER_TASK_OBJECTS.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">keep_cspace</td><td>When true, the task's CSpace pointer is preserved (issue #275): daemon CSpaces hold persistent system grants (ramdisk frames, watchdog supervision) created pre-snapshot, so rewinding never frees them and nulling would orphan live grants. Test-created tasks must keep the default false.</td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="section note"><dt>Note</dt><dd>Snapshot-restore path: the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> restore (pool rewind) runs BEFORE this in snapshot_restore(), so blocks freed during the test have been returned to the free list and may be 0xDD-poisoned. This routine only ever unlinks (never releases) and stops the walk if it encounters a poisoned block, so it can never double-free or follow a garbage chain. </dd></dl>
 
 </div>
@@ -2233,6 +2241,22 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>ns_monotonic() sample at the last charge point; the next charge bills (now - stamp) (issue #21). </p>
+
+</div>
+</div>
+<a id="a59f3a22635c0e24337af41c1bb955470" name="a59f3a22635c0e24337af41c1bb955470"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a59f3a22635c0e24337af41c1bb955470">&#9670;&#160;</a></span>exec_window_start_tick</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::TaskControlBlock::exec_window_start_tick</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Tick-domain start of the current PD_USE window (issue #331). Stamped on every RUNNING/READY reload and advanced for non-runnable periodic tasks so a blocked task's window still advances (zero in-window exec then reads 0%). Observability only — dispatch never reads it. </p>
 
 </div>
 </div>

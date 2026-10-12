@@ -43,6 +43,7 @@ var searchData=
   ['logseverity_40',['LogSeverity',['../namespacekernel_1_1log.html#a3715d6ea36d8e40a6fb2320b3a4eacfc',1,'kernel::log']]],
   ['lookup_41',['lookup',['../namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8',1,'kernel::cap']]],
   ['lookup_5fin_5fdir_42',['lookup_in_dir',['../namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c',1,'kernel::fat32']]],
-  ['lookup_5fseverity_43',['lookup_severity',['../namespacekernel_1_1log_1_1catalog.html#a230b4bee0d20f0f61d72282162565f07',1,'kernel::log::catalog']]],
-  ['lseek_44',['lseek',['../unistd_8c.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c'],['../unistd_8h.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c']]]
+  ['lookup_5fin_5fdir_5fat_43',['lookup_in_dir_at',['../namespacekernel_1_1fat32.html#ae93a85e2f3b7cee00022a3e34747d9ac',1,'kernel::fat32']]],
+  ['lookup_5fseverity_44',['lookup_severity',['../namespacekernel_1_1log_1_1catalog.html#a230b4bee0d20f0f61d72282162565f07',1,'kernel::log::catalog']]],
+  ['lseek_45',['lseek',['../unistd_8c.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c'],['../unistd_8h.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c']]]
 ];

@@ -7,5 +7,7 @@ var test__initrd__fs_8cpp =
     [ "JARVIS_TEST", "test__initrd__fs_8cpp.html#ac72365e9315f82ee6c1c558836eb5ff0", null ],
     [ "JARVIS_TEST", "test__initrd__fs_8cpp.html#ad4747c33853713722685da4bb4b8b248", null ],
     [ "JARVIS_TEST", "test__initrd__fs_8cpp.html#a7835833f8af45947aa898c64da016f22", null ],
+    [ "JARVIS_TEST", "test__initrd__fs_8cpp.html#a6dae3ee9476a2564aeefac53db68c706", null ],
+    [ "JARVIS_TEST", "test__initrd__fs_8cpp.html#abfb8d745a8ac6cd3feb1967dc141cf5e", null ],
     [ "register_initrd_fs_tests", "test__initrd__fs_8cpp.html#a3d2e8cc6e0557511ba2ec18473b2ced2", null ]
 ];

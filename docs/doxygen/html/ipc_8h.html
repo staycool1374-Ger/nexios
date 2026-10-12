@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -151,6 +151,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a5a145f49def13d89e4e9a25bbf9ec6fc" id="r_a5a145f49def13d89e4e9a25bbf9ec6fc"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a5a145f49def13d89e4e9a25bbf9ec6fc">ipc_send</a> (unsigned long dest, unsigned long type, const void *data, unsigned long size, unsigned long flags)</td></tr>
 <tr class="memitem:a0cca21bedca5bd88af724b3ef7c4743c" id="r_a0cca21bedca5bd88af724b3ef7c4743c"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a0cca21bedca5bd88af724b3ef7c4743c">ipc_recv</a> (void *buf, unsigned long max_size)</td></tr>
 <tr class="memitem:a2643638ff4615adc2ee69d92e943a380" id="r_a2643638ff4615adc2ee69d92e943a380"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a2643638ff4615adc2ee69d92e943a380">ipc_send_sync</a> (unsigned long dest, unsigned long type, const void *data, unsigned long size, void *reply_buf)</td></tr>
+<tr class="memdesc:a2643638ff4615adc2ee69d92e943a380"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send a message and block until the reply arrives. Contract (issue #317 option b): the reply PAYLOAD is written to <code class="param">reply_buf</code> (a real destination), NOT over <code class="param">data</code>. <code class="param">reply_buf</code> must be at least <code class="param">size</code> bytes (the reply is bounded by the request size); pass NULL for no reply payload. The return value is the reply message TYPE (negative on failure), not a result code. (Historically the kernel wrote the reply over <code class="param">data</code> and dropped <code class="param">reply_buf</code> — threaded through the 5th argument register now.).  <br /></td></tr>
 <tr class="memitem:a0fabf5b2df08812f02879ca6ca1481af" id="r_a0fabf5b2df08812f02879ca6ca1481af"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a0fabf5b2df08812f02879ca6ca1481af">ipc_notify</a> (unsigned long task_id, unsigned long value)</td></tr>
 <tr class="memitem:a0e63f8802e8304facfa02d732312de48" id="r_a0e63f8802e8304facfa02d732312de48"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a0e63f8802e8304facfa02d732312de48">ipc_notify_wait</a> (unsigned long *value)</td></tr>
 <tr class="memitem:a22d0bba541e34ff15b2b7d98d48078d6" id="r_a22d0bba541e34ff15b2b7d98d48078d6"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a22d0bba541e34ff15b2b7d98d48078d6">ipc_event_set</a> (unsigned long task_id, unsigned long bits)</td></tr>
@@ -342,6 +343,8 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Send a message and block until the reply arrives. Contract (issue #317 option b): the reply PAYLOAD is written to <code class="param">reply_buf</code> (a real destination), NOT over <code class="param">data</code>. <code class="param">reply_buf</code> must be at least <code class="param">size</code> bytes (the reply is bounded by the request size); pass NULL for no reply payload. The return value is the reply message TYPE (negative on failure), not a result code. (Historically the kernel wrote the reply over <code class="param">data</code> and dropped <code class="param">reply_buf</code> — threaded through the 5th argument register now.). </p>
 
 </div>
 </div>

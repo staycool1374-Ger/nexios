@@ -12,6 +12,8 @@ var dir_a74448e09a2c209561f74c876dd35689 =
     [ "pipe.hpp", "pipe_8hpp.html", null ],
     [ "procfs.cpp", "procfs_8cpp.html", "procfs_8cpp" ],
     [ "procfs.hpp", "procfs_8hpp.html", null ],
+    [ "ramdisk_fs.cpp", "ramdisk__fs_8cpp.html", "ramdisk__fs_8cpp" ],
+    [ "ramdisk_fs.hpp", "ramdisk__fs_8hpp.html", null ],
     [ "tmpfs.cpp", "tmpfs_8cpp.html", "tmpfs_8cpp" ],
     [ "tmpfs.hpp", "tmpfs_8hpp.html", null ],
     [ "vfs.cpp", "vfs_8cpp.html", "vfs_8cpp" ],

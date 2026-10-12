@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -161,6 +161,8 @@ Functions</h2></td></tr>
 <tr class="memitem:a22a1e73ffb69f6fd807228fc5756b380" id="r_a22a1e73ffb69f6fd807228fc5756b380"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a22a1e73ffb69f6fd807228fc5756b380">expected_for_class</a> (const char *name)</td></tr>
 <tr class="memitem:ad187fb124266bd89f9f48be1d22ba617" id="r_ad187fb124266bd89f9f48be1d22ba617"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad187fb124266bd89f9f48be1d22ba617">validate_class_count</a> (const char *name, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> actual_count)</td></tr>
 <tr class="memitem:aebdef3f581d2b87696f34fa1a77a20d5" id="r_aebdef3f581d2b87696f34fa1a77a20d5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aebdef3f581d2b87696f34fa1a77a20d5">validate_all_consistency</a> ()</td></tr>
+<tr class="memitem:a5b3535e82c3addd6add37813cde03fe0" id="r_a5b3535e82c3addd6add37813cde03fe0"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5b3535e82c3addd6add37813cde03fe0">snapshot_baseline_nonempty_inbox_count</a> ()</td></tr>
+<tr class="memdesc:a5b3535e82c3addd6add37813cde03fe0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Issue #321 test accessor: inboxes non-empty at the last snapshot.  <br /></td></tr>
 <tr class="memitem:ac3dcbb860f4f6469142dd4dd33b78398" id="r_ac3dcbb860f4f6469142dd4dd33b78398"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac3dcbb860f4f6469142dd4dd33b78398">mark_vfs_touched</a> ()</td></tr>
 <tr class="memdesc:ac3dcbb860f4f6469142dd4dd33b78398"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks whether any VFS syscall was invoked during the current test. <a class="el" href="#aa2a58a012f3f56d28d6e0df037fd66a6">snapshot_restore()</a> checks this flag to decide whether daemon tasks need a full reload (VFS touched) or can be left running (VFS not touched). Read/write via <a class="el" href="namespacekernel_1_1gs.html#a26b3222119b54a05a88b1bb89400d361" title="True when the VFS was touched (test_isolate marker).">kernel::gs::get_vfs_touched()</a> / <a class="el" href="#ac3dcbb860f4f6469142dd4dd33b78398" title="Tracks whether any VFS syscall was invoked during the current test. snapshot_restore() checks this fl...">mark_vfs_touched()</a>.  <br /></td></tr>
 <tr class="memitem:abec3b271acc661cda69074923732b6d4" id="r_abec3b271acc661cda69074923732b6d4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abec3b271acc661cda69074923732b6d4">snapshot_is_active</a> ()</td></tr>
@@ -809,7 +811,36 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a47e1961f61dd3427ce55333d8828a5de_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a47e1961f61dd3427ce55333d8828a5de_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<map name="anamespacekernel_1_1test_a47e1961f61dd3427ce55333d8828a5de_cgraph" id="anamespacekernel_1_1test_a47e1961f61dd3427ce55333d8828a5de_cgraph">
+<area shape="rect" title=" " alt="" coords="5,215,138,241"/>
+<area shape="rect" href="classkernel_1_1test_1_1Registry.html#ae1c6719a50dda5616660226460c8fbdf" title=" " alt="" coords="186,5,329,48"/>
+<area shape="poly" title=" " alt="" coords="77,213,117,145,148,103,184,65,200,55,196,59,187,69,152,107,122,148,82,216"/>
+<area shape="rect" href="classkernel_1_1test_1_1Registry.html#a67e0bf935731e851c5130bab1b6c1861" title=" " alt="" coords="377,56,520,99"/>
+<area shape="poly" title=" " alt="" coords="79,213,120,160,150,131,184,108,228,91,273,80,363,73,359,76,274,85,229,96,187,113,153,136,124,164,84,216"/>
+<area shape="rect" href="classkernel_1_1Logger.html#ac55cd7a631b4e76a2293edf8b8bb0bd4" title=" " alt="" coords="191,240,324,267"/>
+<area shape="poly" title=" " alt="" coords="137,234,179,241,174,244,139,240"/>
+<area shape="rect" href="namespacekernel_1_1test.html#afe67f03cec26eaf04ba601e548d6761d" title=" " alt="" coords="198,123,317,165"/>
+<area shape="poly" title=" " alt="" coords="101,212,196,170,193,174,105,216"/>
+<area shape="rect" href="classkernel_1_1Logger.html#ad4ae5d24650cf692a9d70d545eaa1867" title=" " alt="" coords="382,189,515,232"/>
+<area shape="poly" title=" " alt="" coords="137,222,369,212,366,217,139,228"/>
+<area shape="rect" href="classkernel_1_1test_1_1Registry.html#a3706a331b1f53a82cec9a9020a1efdc4" title=" " alt="" coords="186,291,329,333"/>
+<area shape="poly" title=" " alt="" coords="103,239,197,282,192,285,103,245"/>
+<area shape="rect" href="classkernel_1_1test_1_1Registry.html#a290fced036e79169734ae8b01c424f83" title=" " alt="" coords="186,357,329,400"/>
+<area shape="poly" title=" " alt="" coords="84,239,127,289,156,317,187,343,194,349,189,349,184,347,152,321,123,293,83,245"/>
+<area shape="rect" href="classkernel_1_1Logger.html#a789c5af9e2c7393712ff3bfdae709afa" title=" " alt="" coords="188,424,327,451"/>
+<area shape="poly" title=" " alt="" coords="78,239,94,275,116,320,148,368,187,410,194,417,188,415,184,414,143,371,112,323,89,277,77,244"/>
+<area shape="rect" href="classkernel_1_1Logger.html#a12794441edd7245c8a81bfe5b9a6dd14" title=" " alt="" coords="377,340,520,367"/>
+<area shape="poly" title=" " alt="" coords="302,265,330,276,377,302,419,331,413,331,374,307,328,281,302,270"/>
+<area shape="rect" href="classkernel_1_1Logger.html#ad2aea07eb751fad2fb738fe4123c7e7b" title=" " alt="" coords="568,315,733,341"/>
+<area shape="poly" title=" " alt="" coords="520,342,555,340,550,341,521,347"/>
+<area shape="rect" href="classkernel_1_1Logger.html#ae7f9fd488685463ec9810c40d6f907c7" title=" " alt="" coords="568,365,733,392"/>
+<area shape="poly" title=" " alt="" coords="521,360,555,366,550,366,521,365"/>
+<area shape="poly" title=" " alt="" coords="316,121,373,103,369,106,319,126"/>
+<area shape="rect" href="classkernel_1_1test_1_1Registry.html#ad30c0be8d7ba6161c038aa562c3ac885" title=" " alt="" coords="377,123,520,165"/>
+<area shape="poly" title=" " alt="" coords="316,141,364,143,359,145,318,147"/>
+<area shape="poly" title=" " alt="" coords="317,162,374,183,369,184,318,167"/>
+<area shape="poly" title=" " alt="" coords="299,421,328,410,406,375,411,374,330,414,301,426"/>
+</map>
 </div>
 
 </div>
@@ -834,7 +865,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ad8af3e26f5e10cffe7d3eecf79016c1d_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ad8af3e26f5e10cffe7d3eecf79016c1d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -859,7 +890,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a3e91e9cb699a855fe92a5294e1f9463b_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a3e91e9cb699a855fe92a5294e1f9463b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -884,7 +915,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ae1b9042f585e1bfaf6898aed96a403de_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ae1b9042f585e1bfaf6898aed96a403de_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -911,7 +942,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a9096f1bb9a2e4b1541226759b08c1ae5_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a9096f1bb9a2e4b1541226759b08c1ae5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -934,7 +965,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a1b7421d43e0e94ec4c1f0005f25222e2_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a1b7421d43e0e94ec4c1f0005f25222e2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -957,7 +988,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ae3930997b95bec7a00f32aecd001850a_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ae3930997b95bec7a00f32aecd001850a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 15 -->
 </div>
 
 </div>
@@ -980,7 +1011,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a1c32eb5484b7cdcad0ae45d94849f02b_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a1c32eb5484b7cdcad0ae45d94849f02b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -1003,7 +1034,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ac69baaa93109936ecff8ff06f6fb827a_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ac69baaa93109936ecff8ff06f6fb827a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -1026,7 +1057,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ac6959c848d7b1df0ba4eea129c708171_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ac6959c848d7b1df0ba4eea129c708171_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -1049,7 +1080,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a2be813db3ba66a8c409d2c8c8e2d69da_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a2be813db3ba66a8c409d2c8c8e2d69da_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -1074,7 +1105,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ac77ca03eec1fc93ea4a740b9566588d7_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ac77ca03eec1fc93ea4a740b9566588d7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 21 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -1097,8 +1128,28 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a1becd6394583e37ae0142fa07904cb67_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a1becd6394583e37ae0142fa07904cb67_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 22 -->
+<!-- MAP 21 -->
 </div>
+
+</div>
+</div>
+<a id="a5b3535e82c3addd6add37813cde03fe0" name="a5b3535e82c3addd6add37813cde03fe0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5b3535e82c3addd6add37813cde03fe0">&#9670;&#160;</a></span>snapshot_baseline_nonempty_inbox_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::test::snapshot_baseline_nonempty_inbox_count </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Issue #321 test accessor: inboxes non-empty at the last snapshot. </p>
+<p>Issue #321: number of tasks whose message inbox was NON-EMPTY at the last <a class="el" href="#a5b61544ff1676d3f6d4a777c3211be31">snapshot_create()</a>. The suite boot path settles every inbox before the snapshot (IPC-quiescence), so this is expected to be 0; a non-zero value means an in-flight message was captured and will be replayed on every snapshot_restore (duplicate IPC delivery). </p>
 
 </div>
 </div>
@@ -1139,7 +1190,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a5b61544ff1676d3f6d4a777c3211be31_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a5b61544ff1676d3f6d4a777c3211be31_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 23 -->
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -1162,7 +1213,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ae4288686f519dcd0faacfe54ae2f1bff_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ae4288686f519dcd0faacfe54ae2f1bff_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 24 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -1232,7 +1283,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a93254b4e527b1ef044a6f9fb022f1123_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a93254b4e527b1ef044a6f9fb022f1123_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 25 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -1269,7 +1320,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a89714861e1c19a6975ca08da1f2b2cc6_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a89714861e1c19a6975ca08da1f2b2cc6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 26 -->
+<!-- MAP 25 -->
 </div>
 
 </div>
@@ -1311,7 +1362,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_aed16b217483080d1d9bfec6f56472775_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_aed16b217483080d1d9bfec6f56472775_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 27 -->
+<!-- MAP 26 -->
 </div>
 
 </div>
@@ -1344,7 +1395,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a0ac2a4e8b9b409a3f6023d7b1705ca0c_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a0ac2a4e8b9b409a3f6023d7b1705ca0c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 28 -->
+<!-- MAP 27 -->
 </div>
 
 </div>
@@ -1370,7 +1421,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a2116b98892188c36c2a9b053bdca9df5_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a2116b98892188c36c2a9b053bdca9df5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 29 -->
+<!-- MAP 28 -->
 </div>
 
 </div>
@@ -1401,7 +1452,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_aebdef3f581d2b87696f34fa1a77a20d5_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_aebdef3f581d2b87696f34fa1a77a20d5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 30 -->
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -1436,7 +1487,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ad187fb124266bd89f9f48be1d22ba617_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ad187fb124266bd89f9f48be1d22ba617_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 31 -->
+<!-- MAP 30 -->
 </div>
 
 </div>
@@ -1469,7 +1520,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a5fe8e4fe371af9ccda6c34673f1d6133_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a5fe8e4fe371af9ccda6c34673f1d6133_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 32 -->
+<!-- MAP 31 -->
 </div>
 
 </div>
@@ -1498,7 +1549,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a3682848fa74834ef280e24ea7c67ff5e_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a3682848fa74834ef280e24ea7c67ff5e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 33 -->
+<!-- MAP 32 -->
 </div>
 
 </div>
@@ -1523,7 +1574,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_abfb7a4e797c8023392967822f5451ab1_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_abfb7a4e797c8023392967822f5451ab1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 34 -->
+<!-- MAP 33 -->
 </div>
 
 </div>
@@ -1563,7 +1614,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a6dbac4eb3cd0354a626677222a8c6a35_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a6dbac4eb3cd0354a626677222a8c6a35_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 35 -->
+<!-- MAP 34 -->
 </div>
 
 </div>
@@ -1596,7 +1647,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a5734651fc6722563ecb7a1893ea19b81_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a5734651fc6722563ecb7a1893ea19b81_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 36 -->
+<!-- MAP 35 -->
 </div>
 
 </div>
@@ -1630,7 +1681,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a6cdcc19c8e326942d1c980c8c62894f0_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a6cdcc19c8e326942d1c980c8c62894f0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 37 -->
+<!-- MAP 36 -->
 </div>
 
 </div>

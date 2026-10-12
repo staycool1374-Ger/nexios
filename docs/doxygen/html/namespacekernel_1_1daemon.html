@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -143,6 +143,7 @@ Functions</h2></td></tr>
 <tr class="memdesc:aadff7e665c02eef5c3cf2d52db58b8bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset a daemon's restart count and PID so it can be restarted.  <br /></td></tr>
 <tr class="memitem:a978776a5839d1f7bbac1e5a22572afca" id="r_a978776a5839d1f7bbac1e5a22572afca"><td class="memItemLeft">const DaemonEntry &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a978776a5839d1f7bbac1e5a22572afca">get_entry</a> (uint64_t index)</td></tr>
 <tr class="memdesc:a978776a5839d1f7bbac1e5a22572afca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a const reference to the i-th daemon entry.  <br /></td></tr>
+<tr class="memitem:ae3e4188f4434a72f6d12df9d801e03b1" id="r_ae3e4188f4434a72f6d12df9d801e03b1"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae3e4188f4434a72f6d12df9d801e03b1">is_managed</a> (uint64_t pid)</td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="ae09ac16adefc443c674743c771bf7df9" name="ae09ac16adefc443c674743c771bf7df9"></a>
@@ -248,6 +249,23 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialize the daemon manager — clear all entries and reset count. </p>
+
+</div>
+</div>
+<a id="ae3e4188f4434a72f6d12df9d801e03b1" name="ae3e4188f4434a72f6d12df9d801e03b1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae3e4188f4434a72f6d12df9d801e03b1">&#9670;&#160;</a></span>is_managed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::daemon::is_managed </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pid</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>

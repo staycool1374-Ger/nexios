@@ -118,6 +118,7 @@ var annotated_dup =
       [ "vfs", "namespacekernel_1_1vfs.html", [
         [ "DevEntry", "structkernel_1_1vfs_1_1_dev_entry.html", "structkernel_1_1vfs_1_1_dev_entry" ],
         [ "Fat32VnodeData", "structkernel_1_1vfs_1_1_fat32_vnode_data.html", "structkernel_1_1vfs_1_1_fat32_vnode_data" ],
+        [ "InitrdDirNode", "structkernel_1_1vfs_1_1_initrd_dir_node.html", "structkernel_1_1vfs_1_1_initrd_dir_node" ],
         [ "InitrdFileNode", "structkernel_1_1vfs_1_1_initrd_file_node.html", "structkernel_1_1vfs_1_1_initrd_file_node" ],
         [ "MemInfoVnode", "structkernel_1_1vfs_1_1_mem_info_vnode.html", "structkernel_1_1vfs_1_1_mem_info_vnode" ],
         [ "PciVnode", "structkernel_1_1vfs_1_1_pci_vnode.html", "structkernel_1_1vfs_1_1_pci_vnode" ],
@@ -125,6 +126,9 @@ var annotated_dup =
         [ "PidStatVnode", "structkernel_1_1vfs_1_1_pid_stat_vnode.html", "structkernel_1_1vfs_1_1_pid_stat_vnode" ],
         [ "PidWatchdogVnode", "structkernel_1_1vfs_1_1_pid_watchdog_vnode.html", "structkernel_1_1vfs_1_1_pid_watchdog_vnode" ],
         [ "PipeBuffer", "structkernel_1_1vfs_1_1_pipe_buffer.html", "structkernel_1_1vfs_1_1_pipe_buffer" ],
+        [ "RdDirEntry", "structkernel_1_1vfs_1_1_rd_dir_entry.html", "structkernel_1_1vfs_1_1_rd_dir_entry" ],
+        [ "RdExtent", "structkernel_1_1vfs_1_1_rd_extent.html", "structkernel_1_1vfs_1_1_rd_extent" ],
+        [ "RdSuper", "structkernel_1_1vfs_1_1_rd_super.html", "structkernel_1_1vfs_1_1_rd_super" ],
         [ "TmpfsEntry", "structkernel_1_1vfs_1_1_tmpfs_entry.html", "structkernel_1_1vfs_1_1_tmpfs_entry" ]
       ] ],
       [ "AllTasksRegistry", "classkernel_1_1_all_tasks_registry.html", "classkernel_1_1_all_tasks_registry" ],
@@ -204,7 +208,6 @@ var annotated_dup =
     [ "SPSCRing", "class_s_p_s_c_ring.html", "class_s_p_s_c_ring" ],
     [ "stat", "structstat.html", "structstat" ],
     [ "TaskDeleter", "struct_task_deleter.html", "struct_task_deleter" ],
-    [ "TestMeta", "struct_test_meta.html", "struct_test_meta" ],
     [ "TestStruct", "struct_test_struct.html", "struct_test_struct" ],
     [ "timespec", "structtimespec.html", "structtimespec" ],
     [ "Timeval", "struct_timeval.html", "struct_timeval" ],

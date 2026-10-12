@@ -52,13 +52,16 @@
 ## v0.5.2 — User-ELF Bring-up to Run (RELEASED 2026-10-07, see ROADMAP_done.md)
 - Milestone v0.5.2 (milestone 14): 0 open issues (stragglers moved: #169 → v0.9.0, #280 → v0.5.3). NOTE: §v0.5.2–§v0.6.0 below carry stale pre-release numbering (generated 2026-09-17) — pending owner regeneration.
 
-## v0.5.2 — Userspace Subsystems (NEW, OPEN)- #162 [open] Demand paging / CoW subsystem — fault classifier, per-VMA policy, CoW refcounts, pager integration.
+## v0.5.3 — User Space Enhancements (RELEASED 2026-10-12, see ROADMAP_done.md)
+- Milestone "v0.5.3 User space enhancements": 0 open issues at release (all closed: ramdiskd #275, initrd /bin #274, sh PATH/export #310, runelf envp #311 + fork #312, send_sync contract #317, CheckedPtr overflow #337, harness hardening #299/#320/#321/#322, watchdogd #277, XMODEM #276, Rust hello #273, Phase 6 integration coverage #303).
+
+## v0.6.0 — Userspace Subsystems (NEW, OPEN)- #162 [open] Demand paging / CoW subsystem — fault classifier, per-VMA policy, CoW refcounts, pager integration.
 - #163 [open] Stack unwinding in user-space — frame-pointer walk, crash/profiler integration.
 - #164 [open] POSIX signals: sigaction/sigreturn — disposition table, delivery, restore.
 - #165 [open] tmpfs enhancement — large files, fsync semantics, lookup cache, fewer fixed limits.
 - #166 [open] Mounting dynamically loaded drivers — ELF load, cap-gated bind, registry lifecycle.
 
-## v0.5.3 — Hardware Isolation (NEW, OPEN)
+## v0.6.1 — Hardware Isolation (NEW, OPEN)
 - #167 [open] Symmetrical core isolation / CPU pinning — isolated RT cores, mandatory pinning, IRQ/balancer exclusion (wired into #23).
 - #168 [open] SMMUv3 Stage-2 translation — STE/CD programming, CMDQ invalidations, IORT discovery, QEMU virt integration.
 

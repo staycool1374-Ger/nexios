@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -155,8 +155,8 @@ Macros</h2></td></tr>
 <tr class="memitem:a97a6a193c23a6c013f125d670fca1547" id="r_a97a6a193c23a6c013f125d670fca1547"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a97a6a193c23a6c013f125d670fca1547">JARVIS_ASSERT_HEX_EQ</a>(expected,  actual)</td></tr>
 <tr class="memitem:a49403c168ea4b3a44b7cebd4eb5178b8" id="r_a49403c168ea4b3a44b7cebd4eb5178b8"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a49403c168ea4b3a44b7cebd4eb5178b8">JARVIS_ASSERT_EQ</a>(expected,  actual)</td></tr>
 <tr class="memitem:adecb4ba72098ef39a0f4f24b829f807c" id="r_adecb4ba72098ef39a0f4f24b829f807c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adecb4ba72098ef39a0f4f24b829f807c">JARVIS_TEST_PASS</a>()</td></tr>
-<tr class="memitem:a94a59c91c6346de8eeff27bab97b2f51" id="r_a94a59c91c6346de8eeff27bab97b2f51"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a94a59c91c6346de8eeff27bab97b2f51">JARVIS_FAIL</a>(fmt, ...)</td></tr>
-<tr class="memitem:aa489f4f0e59be8f90da251140ac3f61d" id="r_aa489f4f0e59be8f90da251140ac3f61d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa489f4f0e59be8f90da251140ac3f61d">JARVIS_ASSERT_FMT</a>(cond,  fmt, ...)</td></tr>
+<tr class="memitem:a94a59c91c6346de8eeff27bab97b2f51" id="r_a94a59c91c6346de8eeff27bab97b2f51"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a94a59c91c6346de8eeff27bab97b2f51">JARVIS_FAIL</a>(<a class="el" href="namespacefmt.html">fmt</a>, ...)</td></tr>
+<tr class="memitem:aa489f4f0e59be8f90da251140ac3f61d" id="r_aa489f4f0e59be8f90da251140ac3f61d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa489f4f0e59be8f90da251140ac3f61d">JARVIS_ASSERT_FMT</a>(cond,  <a class="el" href="namespacefmt.html">fmt</a>, ...)</td></tr>
 <tr class="memitem:a374771e8d81b5baa372492a3979e5f73" id="r_a374771e8d81b5baa372492a3979e5f73"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a>(name,  flags_)</td></tr>
 <tr class="memitem:ac06709245437cdd63dee99d87fbd39c2" id="r_ac06709245437cdd63dee99d87fbd39c2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac06709245437cdd63dee99d87fbd39c2">JARVIS_REGISTER_TEST</a>(name)</td></tr>
 <tr class="memitem:ace88e8d25337f01fa0b540f62b0889e7" id="r_ace88e8d25337f01fa0b540f62b0889e7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ace88e8d25337f01fa0b540f62b0889e7">JARVIS_REGISTER_RELEASE_TEST</a>(name)</td></tr>
@@ -306,7 +306,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>fmt</em></span>, </td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="namespacefmt.html">fmt</a></em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -318,11 +318,12 @@ Functions</h2></td></tr>
 <b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">do</span> {                                                                       \</div>
 <div class="line">    if (!(cond)) {                                                         \</div>
 <div class="line">        kernel::test::Registry::record_failure_fmt(                        \</div>
-<div class="line">            __FILE__, __LINE__, fmt, ##__VA_ARGS__);                       \</div>
+<div class="line">            __FILE__, __LINE__, <a class="code hl_namespace" href="namespacefmt.html">fmt</a>, ##__VA_ARGS__);                       \</div>
 <div class="line">        <span class="keywordflow">return</span>;                                                            \</div>
 <div class="line">    }                                                                      \</div>
 <div class="line">    kernel::test::Registry::record_success();                              \</div>
 <div class="line">} <span class="keywordflow">while</span> (0)</div>
+<div class="ttc" id="anamespacefmt_html"><div class="ttname"><a href="namespacefmt.html">fmt</a></div><div class="ttdef"><b>Definition</b> term_fmt.cpp:5</div></div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -367,7 +368,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define JARVIS_FAIL</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>fmt</em></span>, </td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="namespacefmt.html">fmt</a></em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -378,7 +379,7 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 <b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">do</span> {                                                                       \</div>
 <div class="line">    kernel::test::Registry::record_failure_fmt(                            \</div>
-<div class="line">        __FILE__, __LINE__, fmt, ##__VA_ARGS__);                           \</div>
+<div class="line">        __FILE__, __LINE__, <a class="code hl_namespace" href="namespacefmt.html">fmt</a>, ##__VA_ARGS__);                           \</div>
 <div class="line">    <span class="keywordflow">return</span>;                                                                \</div>
 <div class="line">} <span class="keywordflow">while</span> (0)</div>
 </div><!-- fragment -->
