@@ -1,525 +1,76 @@
-diff --git a/docs/specs/vfs.md b/docs/specs/vfs.md
-index f6aaf7283..9a167f82d 100644
---- a/docs/specs/vfs.md
-+++ b/docs/specs/vfs.md
-@@ -126,16 +126,21 @@ vfsd_authorize(op, pid, path, ino); // 2. blocking IPC (CPU yields to vfsd)
- vn2 = resolve(path);                // 3. re-resolve
- return vnode_identity_match(vn, vn2, ino);   // 4. identity below
- ```
--- **Identity** (`vfs::vnode_identity_match`, issue #332): strict fast
--  path (same object + same ino, e.g. tmpfs stable entries) OR
-+- **Identity** (`vfs::vnode_identity_match`, issues #332/#333): strict
-+  fast path (same object + same ino, e.g. tmpfs stable entries) OR
-   immutable-equivalence (same ops table + same ino/size/mode, gated on
-   the filesystem-declared `VnodeOps::readonly` marker — initrd
-   file/dir/root tables only; per-lookup vnodes over a read-only image
--  with uniform ino 1/2, replacement across the yield impossible). The
--  gate is deliberately not ops-shape: mutability may live on a sibling
--  table (fat32 file tables carry no mutators yet the image is writable),
--  so only an explicit readonly declaration admits equivalence; fat32
--  still fails re-validation and is tracked separately.
-+  with uniform ino 1/2, replacement across the yield impossible) OR
-+  stable-ino equivalence (same ops table + same nonzero ino/size/mode,
-+  gated on the filesystem-declared `VnodeOps::stable_ino` marker —
-+  fat32 file/dir tables only; lookup assigns a computed
-+  parent-cluster+slot-index key that survives independent re-resolves;
-+  unlink+slot-reuse by a different object is narrowed by the size+mode
-+  co-check). Both gates are deliberately not ops-shape: mutability may
-+  live on a sibling table (fat32 file tables carry no mutators yet the
-+  image is writable), so only an explicit declaration admits
-+  equivalence.
- - Longest-prefix mount selection for absolute paths; relative paths start at
-   `cwd_vnode`; `..` at a mount root climbs by re-resolving the mount point's
-   parent.  Mount-point shadowing: a path component equal to a mount point's
-@@ -190,7 +195,7 @@ vnode_ref_dec(vn):  return __atomic_fetch_sub(&vn->refcount, 1, ACQ_REL) == 1;
- | devfs | static char devices at `/dev` (tty/null/console/kbd/random) | never freed; `open` stores flags in `private_data` |
- | procfs | dynamic pseudo-fs at `/proc` (meminfo/self/pci/PID-dirs) | pid-dirs allocated on lookup, freed by `pid_dir_close`; static nodes reused |
- | tmpfs | in-memory tree at `/tmp`, files = 16 contiguous PMM pages (64 KiB) | `tmpfs_lock` global; `unlink` refuses non-empty dirs; lazy page alloc on first write |
--| fat32 | on-disk via BlockDevice, 8.3 names, cluster chain | read-only file data; root vnode static, re-init on partition change; EOF ≥ 0x0FFFFFF8 |
-+| fat32 | on-disk via BlockDevice, 8.3 names, cluster chain | read-only file data; root vnode static, re-init on partition change; EOF ≥ 0x0FFFFFF8; stable slot ino (parent-cluster+index), `stable_ino` tables |
- | pipe | anon FIFO: 4 KiB ring, shared `PipeBuffer` (refcount 2) | buffer freed at shared refcount→0; read blocks on `data_avail` |
- 
- ## 9. Test-Isolation Contract
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 82e71168b..307c9d9d5 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -149,11 +149,11 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"vfs_tmpfs",            10,    0,       0      },  // tmpfs(6) + invalid_mount(2) + mount_unmount_failure(2)
-     {"vfs_fstab",             5,    0,       0      },  // fstab parsing
-     {"vfs_fat32",            40,    0,       0      },  // FAT32 fs unit tests
--    {"vfs_fat32_integration", 14,    0,       0      },  // VFS-on-FAT32
-+    {"vfs_fat32_integration", 16,    0,       0      },  // VFS-on-FAT32 + 2 stable-ino identity pins (#333)
- 
-     // servers
-     {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
--    {"servers_vfsd_auth",     25,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176) + initrd-open/identity-gate (#332)
-+    {"servers_vfsd_auth",     27,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176) + initrd-open/identity-gate (#332) + stable-ino gate/fat32-open (#333)
-     {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
-     {"servers_daemon_restart", 2,    0,       0      },  // unknown-daemon rejection + terminate/ensure resurrect cycle (issue #135); crash test stays #if 0-disabled
-     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
-@@ -281,8 +281,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
-     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
-     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
--    {"storage",             162,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption)
--    {"servers",             64,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332)
-+    {"storage",             166,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333)
-+    {"servers",             66,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333)
-     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
-     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
-     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
-diff --git a/src/kernel/test/test_vfs_fat32.cpp b/src/kernel/test/test_vfs_fat32.cpp
-index 4fcb20caa..d9f0d6a47 100644
---- a/src/kernel/test/test_vfs_fat32.cpp
-+++ b/src/kernel/test/test_vfs_fat32.cpp
-@@ -428,6 +428,83 @@ JARVIS_TEST(vfs_fat32_unlink_frees_clusters, "PRE: vfsd, iocd | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Runmode: kernel
-+// Testidea: FAT32 lookups assign a stable identity key (issue #333) —
-+// two independent lookups of the same name yield distinct vnodes with
-+// equal nonzero ino, distinct files differ, subdir children cannot
-+// collide with root entries (parent cluster in the key), root keeps 0.
-+// Input: ops->lookup on the shared read-only image.
-+// Expect: ino equality per object, inequality across objects, match()
-+//         accepts the same-object pair (the sys_open re-resolve case).
-+// Depends: kernel::vfs::VnodeOps::stable_ino, vnode_identity_match
-+JARVIS_TEST(vfs_fat32_stable_ino, "PRE: vfsd, iocd | POST: none") {
-+    setup_fat32_fs();
-+    Vnode *root = fat32_fs.get_root();
-+    JARVIS_ASSERT(root != nullptr);
-+
-+    Vnode *a = root->ops->lookup(*root, "HELLO.TXT");
-+    Vnode *b = root->ops->lookup(*root, "HELLO.TXT");
-+    JARVIS_ASSERT(a != nullptr && b != nullptr);
-+    JARVIS_ASSERT(a != b); // fresh vnode per lookup (the #333 premise)
-+    JARVIS_ASSERT(a->ino != 0 && a->ino == b->ino);
-+    JARVIS_ASSERT(a->ops == b->ops);
-+    JARVIS_ASSERT(vnode_identity_match(a, b, a->ino));
-+
-+    Vnode *other = root->ops->lookup(*root, "MULTI.TXT");
-+    JARVIS_ASSERT(other != nullptr);
-+    JARVIS_ASSERT(other->ino != 0 && other->ino != a->ino);
-+    JARVIS_ASSERT(!vnode_identity_match(a, other, a->ino));
-+
-+    Vnode *sub = root->ops->lookup(*root, "SUBDIR");
-+    JARVIS_ASSERT(sub != nullptr);
-+    Vnode *nested = sub->ops->lookup(*sub, "FILE.TXT");
-+    JARVIS_ASSERT(nested != nullptr);
-+    JARVIS_ASSERT(nested->ino != 0 && nested->ino != a->ino &&
-+                  nested->ino != sub->ino);
-+
-+    nested->ops->close(*nested);
-+    sub->ops->close(*sub);
-+    other->ops->close(*other);
-+    b->ops->close(*b);
-+    a->ops->close(*a);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: The stable-ino gate still denies drift (issue #333 TOCTOU
-+// residual: unlink+slot-reuse by a different object must fail the
-+// re-resolve) — size/mode/stale-ino divergence denies at distinct
-+// addresses even with stable_ino declared.
-+// Input: Stack-copied vnode pairs derived from a real lookup.
-+// Expect: size drift, mode drift, stale ino, ops mismatch deny.
-+// Depends: vnode_identity_match
-+JARVIS_TEST(vfs_fat32_identity_reject_drift, "PRE: vfsd, iocd | POST: none") {
-+    setup_fat32_fs();
-+    Vnode *root = fat32_fs.get_root();
-+    JARVIS_ASSERT(root != nullptr);
-+
-+    Vnode *a = root->ops->lookup(*root, "HELLO.TXT");
-+    Vnode *b = root->ops->lookup(*root, "HELLO.TXT");
-+    JARVIS_ASSERT(a != nullptr && b != nullptr);
-+    JARVIS_ASSERT(vnode_identity_match(a, b, a->ino));
-+
-+    Vnode size_drift = *b;
-+    size_drift.size = b->size + 1;
-+    JARVIS_ASSERT(!vnode_identity_match(a, &size_drift, a->ino));
-+
-+    Vnode mode_drift = *b;
-+    mode_drift.mode = vfs::S_IFDIR;
-+    JARVIS_ASSERT(!vnode_identity_match(a, &mode_drift, a->ino));
-+
-+    JARVIS_ASSERT(!vnode_identity_match(a, b, a->ino + 1)); // stale ino
-+    JARVIS_ASSERT(!vnode_identity_match(a, root, a->ino));  // ops mismatch
-+    JARVIS_ASSERT(!vnode_identity_match(a, nullptr, a->ino));
-+
-+    b->ops->close(*b);
-+    a->ops->close(*a);
-+    JARVIS_TEST_PASS();
-+}
-+
- void register_vfs_fat32_tests() {
-     Logger::info("Registering VFS FAT32 tests");
- 
-@@ -446,6 +523,8 @@ void register_vfs_fat32_tests() {
-     JARVIS_REGISTER_TEST(vfs_fat32_rmdir_empty);
-     JARVIS_REGISTER_TEST(vfs_fat32_rmdir_nonempty_fails);
-     JARVIS_REGISTER_TEST(vfs_fat32_unlink_frees_clusters);
-+    JARVIS_REGISTER_RELEASE_TEST(vfs_fat32_stable_ino);
-+    JARVIS_REGISTER_RELEASE_TEST(vfs_fat32_identity_reject_drift);
- }
- #ifndef __clang__
- #pragma GCC diagnostic pop
-diff --git a/src/kernel/test/test_vfsd_auth.cpp b/src/kernel/test/test_vfsd_auth.cpp
-index 360ee2fe9..51a09ed65 100644
---- a/src/kernel/test/test_vfsd_auth.cpp
-+++ b/src/kernel/test/test_vfsd_auth.cpp
-@@ -38,6 +38,11 @@
- #include <kernel/task/task.hpp>
- #include <kernel/vfs/vfs.hpp>
- #include <kernel/vfs/vfsd.hpp>
-+#include <kernel/vfs/fat32.hpp>
-+#include <kernel/vfs/fat32_fs.hpp>
-+#include <kernel/core/global_state.hpp>
-+#include <kernel/driver/block_device.hpp>
-+#include <kernel/memory/mempool.hpp>
- #include "test_sched_helpers.hpp"
+diff --git a/src/kernel/test/test_elf_loader.cpp b/src/kernel/test/test_elf_loader.cpp
+index 8f57097ff..698198014 100644
+--- a/src/kernel/test/test_elf_loader.cpp
++++ b/src/kernel/test/test_elf_loader.cpp
+@@ -37,6 +37,7 @@
+ #include <kernel/test/resource_tracker.hpp>
+ #include <initrd/initrd.hpp>
+ #include <kernel/arch/io.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
+ #include <string.hpp>
  
  using namespace kernel;
-@@ -1012,17 +1017,18 @@ JARVIS_TEST(vfsd_initrd_open_succeeds, "PRE: vfsd, iocd | POST: none") {
+@@ -187,13 +188,25 @@ JARVIS_TEST(loader_initrd_request_no_vnode_leak, "PRE: vfsd, iocd | POST: none")
  }
- 
- namespace {
--// Predicate-level fixtures (issue #332 negative controls): vnode pairs
--// with equal ino/size/mode at distinct addresses. Only the
--// readonly-declared table may match — a mutator-free but writable table
--// (fat32_file_ops shape: no mutators, readonly false) must still deny,
--// because mutability may live on a sibling table.
--vfs::VnodeOps g_imm_ops = {};
--vfs::VnodeOps g_mut_ops = {};
--vfs::VnodeOps g_plain_ops = {};
--int stub_mkdir(vfs::Vnode &, const char *, uint16_t) {
--    return 0;
--}
-+ // Predicate-level fixtures (issue #332 negative controls): vnode pairs
-+ // with equal ino/size/mode at distinct addresses. Only the
-+ // readonly-declared table may match — a mutator-free but writable table
-+ // (fat32_file_ops shape: no mutators, readonly false) must still deny,
-+ // because mutability may live on a sibling table.
-+ vfs::VnodeOps g_imm_ops = {};
-+ vfs::VnodeOps g_mut_ops = {};
-+ vfs::VnodeOps g_plain_ops = {};
-+ vfs::VnodeOps g_stable_ops = {};
-+ int stub_mkdir(vfs::Vnode &, const char *, uint16_t) {
-+     return 0;
-+ }
- } // namespace
  
  // Runmode: kernel
-@@ -1079,6 +1085,107 @@ JARVIS_TEST(vfsd_identity_mutable_denied, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
+-// Testidea: cancel mid-load reclaims all partial state (zero delta) and the
+-// loader returns to IDLE.  An 8-page load is started; cancel is requested
+-// after yielding a couple of times (cancel can land mid-chunk).
++// Testidea: cancel reclaims all partial state (zero delta) and the loader
++// returns to IDLE with no retained image.  The cancel is issued
++// pre-first-dispatch with the timer tick masked (issue #267): reschedule()
++// only arms need_resched — the switch happens on the next tick — so any
++// unmasked gap lets the loader run whole slices, and an 8-page load fits
++// in few slices (1/6 runs completed inside 3 harness yields; polling for
++// COPYING_SEGMENTS does not fix it since fast runs jump VALIDATING→DONE
++// between two polls).  With the tick masked the loader cannot be
++// dispatched at all (UP: no tick, no switch; the harness blocks on
++// nothing in this scope), so observing VALIDATING proves zero loader
++// progress and the cancel is provably pre-completion.  No retries, no
++// NOT_LOADING tolerance.
++// Coverage note: this pins the cancel CONTRACT (CANCELED → cleanup →
++// IDLE + null take + zero delta), deterministically at the VALIDATING
++// checkpoint; the per-chunk checkpoint location is timing-dependent and
++// cannot be targeted without a kernel seam.
+ JARVIS_TEST(loader_cancel_mid_load, "PRE: vfsd, iocd | POST: none") {
+     elf::ElfLoader::reset();
+-    // Build a multi-page ELF (8 PT_LOAD pages) so the loader yields several
+-    // times before completing.
++    // Build a multi-page ELF (8 PT_LOAD pages).
+     constexpr size_t kPages = 8;
+     uint8_t img[8192];
+     elf::ELF64Header hdr{};
+@@ -210,15 +223,25 @@ JARVIS_TEST(loader_cancel_mid_load, "PRE: vfsd, iocd | POST: none") {
+                                   sizeof(elf::ELF64Header) + sizeof(elf::ELF64ProgramHeader) + kPages * 0x1000);
+     JARVIS_ASSERT(written != 0);
  
-+// Runmode: kernel
-+// Testidea: The stable-ino gate (issue #333) accepts same-key fresh
-+// vnodes on a declared table and still denies every drift shape.
-+// Input: Stack vnode pairs over a stable_ino-declared table.
-+// Expect: equal nonzero key accepts (both orders); size/mode drift,
-+//         stale ino, zero ino, ops mismatch, null deny.
-+// Depends: vfs::vnode_identity_match
-+JARVIS_TEST(vfsd_identity_stable_accepted, "PRE: none | POST: none") {
-+    g_stable_ops.stable_ino = true;
-+    vfs::Vnode a{};
-+    a.ops = &g_stable_ops;
-+    a.ino = 0x00020005ULL;
-+    a.size = 14;
-+    a.mode = vfs::S_IFREG;
-+    vfs::Vnode b{};
-+    b.ops = &g_stable_ops;
-+    b.ino = 0x00020005ULL;
-+    b.size = 14;
-+    b.mode = vfs::S_IFREG;
-+    JARVIS_ASSERT(vfs::vnode_identity_match(&a, &b, 0x00020005ULL));
-+    JARVIS_ASSERT(vfs::vnode_identity_match(&b, &a, 0x00020005ULL));
-+    vfs::Vnode size_drift = b;
-+    size_drift.size = 15;
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(&a, &size_drift, a.ino));
-+    vfs::Vnode mode_drift = b;
-+    mode_drift.mode = vfs::S_IFDIR;
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(&a, &mode_drift, a.ino));
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(&a, &b, 0x00020006ULL));
-+    vfs::Vnode zero_a{};
-+    zero_a.ops = &g_stable_ops;
-+    zero_a.ino = 0;
-+    vfs::Vnode zero_b{};
-+    zero_b.ops = &g_stable_ops;
-+    zero_b.ino = 0;
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(&zero_a, &zero_b, 0));
-+    vfs::Vnode other_ops = b;
-+    other_ops.ops = &g_plain_ops;
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(&a, &other_ops, a.ino));
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(nullptr, &b, b.ino));
-+    JARVIS_ASSERT(!vfs::vnode_identity_match(&a, nullptr, a.ino));
-+    JARVIS_TEST_PASS();
-+}
-+
-+namespace {
-+// E2E fixture (issue #333): the shared read-only fat32 test image,
-+// mounted at /mnt for one OPEN round-trip. reset_and_remount clears
-+// the mount between tests, so no teardown is needed.
-+extern "C" uint8_t _binary_build_fat32_img_start[];
-+extern "C" uint8_t _binary_build_fat32_img_end[];
-+void setup_fat32_mnt() {
-+    if (!kernel::gs::get_fat32_partition()) {
-+        uint64_t bytes = static_cast<uint64_t>(
-+            _binary_build_fat32_img_end - _binary_build_fat32_img_start);
-+        auto *dev = new kernel::block::MockBlockDevice(
-+            _binary_build_fat32_img_start, bytes / kernel::fat32::SECTOR_SIZE,
-+            true);
-+        auto *partition = new kernel::fat32::Fat32Partition(*dev);
-+        if (partition && partition->mount())
-+            kernel::gs::try_set_fat32_partition(partition);
+-    auto result = elf::ElfLoader::request_load("/tmp/loadmulti.elf");
+-    JARVIS_ASSERT(result == elf::LoadResult::OK);
+-    // Yield a few times so the loader makes progress, then cancel.
+-    for (int i = 0; i < 3; ++i)
+-        Scheduler::reschedule();
+-    result = elf::ElfLoader::request_cancel();
+-    JARVIS_ASSERT(result == elf::LoadResult::OK);
++    {
++        // Masking across request_load is safe HERE only: the harness is a
++        // kernel task, so vfsd_authorize bypasses IPC (syscall_handlers_fs),
++        // and the /tmp path resolves synchronously under spinlocks — nothing
++        // in this scope waits on a tick (any future blocking added here would
++        // hang loudly, never pass silently).  IrqGuard→lock_ nest order
++        // matches task_main.
++        arch::IrqGuard irq_guard{};
++        auto result = elf::ElfLoader::request_load("/tmp/loadmulti.elf");
++        JARVIS_ASSERT(result == elf::LoadResult::OK);
++        // Loader frozen since before it became runnable: still VALIDATING.
++        JARVIS_ASSERT(elf::ElfLoader::state() ==
++                      elf::LoadState::VALIDATING);
++        result = elf::ElfLoader::request_cancel();
++        JARVIS_ASSERT(result == elf::LoadResult::OK);
 +    }
-+    kernel::vfs::mount_fat32("/mnt");
-+}
-+} // namespace
-+
-+// Runmode: kernel
-+// Testidea: sys_open on a fat32 path survives the TOCTOU re-resolve
-+// (issue #333) — both resolves allocate fresh vnodes, so only the
-+// stable-ino gate can accept; pre-fix this returned -1.
-+// Input: Dispatched kernel task OPENs+CLOSEs /mnt/HELLO.TXT (image
-+//        file the build always installs).
-+// Expect: fd >= 0, close == 0. Fails pre-fix (identity mismatch → -1).
-+// Depends: kernel::Syscall, fat32 image, mount, vnode_identity_match
-+JARVIS_TEST(vfsd_fat32_open_succeeds, "PRE: vfsd, iocd | POST: none") {
-+    setup_fat32_mnt();
-+    static uint64_t g_fd = 0;
-+    static uint64_t g_close = 0;
-+
-+    auto *t = TaskControlBlock::create(
-+        []() {
-+            const char *path = "/mnt/HELLO.TXT";
-+            g_fd = Syscall::handle(
-+                static_cast<uint64_t>(SyscallNumber::OPEN),
-+                reinterpret_cast<uint64_t>(path), 0, 0, 0, nullptr);
-+            if (static_cast<int64_t>(g_fd) < 0)
-+                return;
-+            g_close = Syscall::handle(
-+                static_cast<uint64_t>(SyscallNumber::CLOSE), g_fd, 0, 0, 0,
-+                nullptr);
-+        },
-+        11, 10);
-+    JARVIS_ASSERT(t != nullptr);
-+    Scheduler::add_task(*t);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
-+    JARVIS_ASSERT(static_cast<int64_t>(g_fd) >= 0);
-+    JARVIS_ASSERT_EQ(0ULL, g_close);
-+    release_task(t);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
- // Runmode: kernel
- // Testidea: Registers all VFS authorization tests with the test framework.
- // Input: None
-@@ -1111,6 +1218,8 @@ void register_vfsd_authorization_tests() {
-     JARVIS_REGISTER_TEST(vfsd_lseek_bogus_whence);
-     JARVIS_REGISTER_TEST(vfsd_initrd_open_succeeds);
-     JARVIS_REGISTER_TEST(vfsd_identity_mutable_denied);
-+    JARVIS_REGISTER_TEST(vfsd_identity_stable_accepted);
-+    JARVIS_REGISTER_TEST(vfsd_fat32_open_succeeds);
- }
- #ifndef __clang__
- #pragma GCC diagnostic pop
-diff --git a/src/kernel/vfs/fat32.cpp b/src/kernel/vfs/fat32.cpp
-index 44dec0808..123283468 100644
---- a/src/kernel/vfs/fat32.cpp
-+++ b/src/kernel/vfs/fat32.cpp
-@@ -360,10 +360,22 @@ bool read_dir_entry(Fat32Partition &fs, uint32_t dir_cluster, uint64_t &pos,
- /// @return true if found.
- bool lookup_in_dir(Fat32Partition &fs, uint32_t dir_cluster, const char *name,
-                    DirEntry &entry) {
-+    uint64_t ignored_index = 0;
-+    return lookup_in_dir_at(fs, dir_cluster, name, entry, ignored_index);
-+}
-+
-+/// @brief Look up a name, reporting the matched on-disk slot index.
-+/// read_dir_entry leaves pos one past the returned slot (it increments
-+/// before every true return, including via the skip-recursion), so the
-+/// matched slot is pos - 1. pos > 0 whenever we return true.
-+bool lookup_in_dir_at(Fat32Partition &fs, uint32_t dir_cluster,
-+                      const char *name, DirEntry &entry, uint64_t &out_index) {
-     uint64_t pos = 0;
-     while (read_dir_entry(fs, dir_cluster, pos, entry)) {
--        if (entry.valid && strcmp(entry.name, name) == 0)
-+        if (entry.valid && strcmp(entry.name, name) == 0) {
-+            out_index = pos - 1;
-             return true;
-+        }
-     }
-     return false;
- }
-diff --git a/src/kernel/vfs/fat32.hpp b/src/kernel/vfs/fat32.hpp
-index 1a20ff44f..d189bdd70 100644
---- a/src/kernel/vfs/fat32.hpp
-+++ b/src/kernel/vfs/fat32.hpp
-@@ -182,6 +182,17 @@ bool read_dir_entry(Fat32Partition &fs, uint32_t cluster, uint64_t &pos,
- bool lookup_in_dir(Fat32Partition &fs, uint32_t dir_cluster, const char *name,
-                    DirEntry &entry);
+     elf::ElfLoader::wait_loader_idle();
  
-+/// @brief Look up a name, also reporting the on-disk slot index.
-+/// Same as lookup_in_dir, but stores the 0-based directory-entry slot
-+/// of the match in out_index (issue #333: stable identity key input).
-+/// Slots are never compacted (remove marks 0xE5), so the index is
-+/// stable until an unlink+reuse cycle recycles the slot.
-+/// @param[out] out_index Slot index of the matched entry (valid iff
-+///             the return value is true).
-+/// @return true if found, false if not found or error.
-+bool lookup_in_dir_at(Fat32Partition &fs, uint32_t dir_cluster,
-+                      const char *name, DirEntry &entry, uint64_t &out_index);
-+
- /// @brief Read data from a file (cluster chain).
- /// @param fs        Mounted partition.
- /// @param cluster   First cluster of the file.
-diff --git a/src/kernel/vfs/fat32_fs.cpp b/src/kernel/vfs/fat32_fs.cpp
-index 20dc9d848..6e368a8d8 100644
---- a/src/kernel/vfs/fat32_fs.cpp
-+++ b/src/kernel/vfs/fat32_fs.cpp
-@@ -43,6 +43,21 @@ static Vnode *fat32_file_lookup(Vnode &, const char *);
- static int fat32_dir_mkdir(Vnode &self, const char *name, uint16_t mode);
- static int fat32_dir_unlink(Vnode &self, const char *name);
- 
-+/// @brief Stable identity key for a directory slot (issue #333).
-+/// (parent-dir first cluster << 32) | 0-based dir-entry slot index.
-+/// FAT32 data clusters start at 2 (0/1 reserved), so the key is never
-+/// 0/1 — the vnode_identity_match stable path rejects those sentinels
-+/// and the static root keeps ino 0. remove_dir_entry marks slots free
-+/// (0xE5) without compacting, so the index — and the key — survives
-+/// unlink until a later entry reuses the slot (documented residual,
-+/// narrowed by the size+mode co-check in vnode_identity_match).
-+/// Slot totals are bounded (≤256-cluster chains), so the index always
-+/// fits the low 32 bits; masked defensively.
-+static uint64_t fat32_stable_ino(uint32_t parent_cluster, uint64_t dir_index) {
-+    return (static_cast<uint64_t>(parent_cluster) << 32) |
-+           (dir_index & 0xFFFFFFFFULL);
-+}
-+
- // Convert a path name to the 8.3 short name format string produced by
- // format_short_name (strip trailing spaces, add '.' before extension).
- // This ensures lookups match the name actually stored on disk.
-@@ -160,6 +175,8 @@ static const VnodeOps fat32_file_ops = {
-     fat32_file_lseek,  fat32_file_fstat, fat32_file_ioctl, fat32_file_readdir,
-     fat32_file_lookup, nullptr,          nullptr,
-     nullptr, // create
-+    false, // readonly: writable image — never declare (issue #332)
-+    true,  // stable_ino: computed slot key admits re-resolve (issue #333)
- };
- 
- // -------------------------------------------------------------------
-@@ -247,7 +264,8 @@ static int fat32_dir_readdir(Vnode &self, uint64_t &pos, Dirent &dent) {
-         ++idx;
-     }
-     dent.d_name[idx] = '\0';
--    dent.d_ino = 1;
-+    // read_dir_entry leaves pos one past the returned slot.
-+    dent.d_ino = fat32_stable_ino(data->cluster, pos - 1);
-     return 0;
- }
- 
-@@ -256,6 +274,8 @@ static const VnodeOps fat32_dir_ops = {
-     fat32_dir_lseek,  fat32_dir_fstat, fat32_dir_ioctl,  fat32_dir_readdir,
-     fat32_dir_lookup, fat32_dir_mkdir, fat32_dir_unlink,
-     nullptr, // create
-+    false, // readonly: writable image — never declare (issue #332)
-+    true,  // stable_ino: computed slot key admits re-resolve (issue #333)
- };
- 
- // -------------------------------------------------------------------
-@@ -392,7 +412,9 @@ static Vnode *fat32_dir_lookup(Vnode &self, const char *name) {
-     to_short_name_str(name, short_name, sizeof(short_name));
- 
-     fat32::DirEntry entry = {};
--    if (!fat32::lookup_in_dir(*data->fs, data->cluster, short_name, entry))
-+    uint64_t dir_index = 0;
-+    if (!fat32::lookup_in_dir_at(*data->fs, data->cluster, short_name, entry,
-+                                 dir_index))
-         return nullptr;
- 
-     auto *vdata =
-@@ -412,7 +434,7 @@ static Vnode *fat32_dir_lookup(Vnode &self, const char *name) {
- 
-     test::ResourceTracker::instance().track_vnode_add();
-     vnode->ops = entry.is_directory ? &fat32_dir_ops : &fat32_file_ops;
--    vnode->ino = 1;
-+    vnode->ino = fat32_stable_ino(data->cluster, dir_index);
-     vnode->size = entry.size;
-     vnode->mode = entry.is_directory ? S_IFDIR : S_IFREG;
-     vnode->private_data = vdata;
-diff --git a/src/kernel/vfs/vfs.hpp b/src/kernel/vfs/vfs.hpp
-index e6c5d5e3a..0a6874117 100644
---- a/src/kernel/vfs/vfs.hpp
-+++ b/src/kernel/vfs/vfs.hpp
-@@ -105,6 +105,16 @@ struct VnodeOps {
-     /// namespace mutators (e.g. fat32_file_ops — mutability lives on
-     /// the sibling dir table, so ops-shape alone cannot prove it).
-     bool readonly = false;
-+    /// @brief Stable-ino filesystem marker (issue #333): true only for
-+    /// tables whose lookup assigns a computed key that is stable across
-+    /// independent resolves of the same object (fat32: parent-dir first
-+    /// cluster + dir-entry slot index; remove marks free without
-+    /// compacting). Lets the TOCTOU re-resolve accept same-object
-+    /// re-resolves that allocate fresh vnodes per lookup on a WRITABLE
-+    /// image. Gated additionally on ino/size/mode equality plus nonzero
-+    /// ino (root keeps ino 0 and always matches via the strict pointer
-+    /// path). Defaults false (strict pointer identity).
-+    bool stable_ino = false;
- };
- 
- struct Vnode {
-@@ -212,15 +222,20 @@ VfsError resolve_err(const char *path, Vnode *&out_vnode);
- /// @return The parent vnode (OWNED — release via `vfs::release()`), or
- ///         nullptr if not found.
- Vnode *resolve_parent(const char *path, const char *&out_name);
--/// @brief Re-resolve identity for TOCTOU closure (issue #332, spec §4).
--/// Strict fast path (same object + same ino, e.g. tmpfs stable entries)
--/// OR immutable-equivalence: same ops table, same ino/size/mode, gated
--/// on the filesystem-declared `VnodeOps::readonly` marker (initrd tables
--/// only — per-lookup vnodes over a read-only image, where replacement
--/// across the authorize yield is impossible). The gate is deliberately
--/// NOT ops-shape: mutability may live on a sibling table (fat32 file
--/// tables carry no mutators yet the image is writable), so only an
--/// explicit readonly declaration admits equivalence. Fail-closed (any
-+/// @brief Re-resolve identity for TOCTOU closure (issues #332/#333,
-+/// spec §4). Strict fast path (same object + same ino, e.g. tmpfs
-+/// stable entries) OR immutable-equivalence: same ops table, same
-+/// ino/size/mode, gated on the filesystem-declared `VnodeOps::readonly`
-+/// marker (initrd tables only — per-lookup vnodes over a read-only
-+/// image, where replacement across the authorize yield is impossible)
-+/// OR stable-ino equivalence: same ops table, same nonzero
-+/// ino/size/mode, gated on the filesystem-declared
-+/// `VnodeOps::stable_ino` marker (fat32 tables only — lookup assigns a
-+/// computed slot key that survives independent re-resolves; slot reuse
-+/// after unlink is narrowed by the size+mode co-check). Both gates are
-+/// deliberately NOT ops-shape: mutability may live on a sibling table
-+/// (fat32 file tables carry no mutators yet the image is writable), so
-+/// only an explicit declaration admits equivalence. Fail-closed (any
- /// null/mismatch denies). Pure comparisons, no locks, no syscalls.
- inline bool vnode_identity_match(const Vnode *before, const Vnode *after,
-                                  uint64_t ino_before) noexcept {
-@@ -231,10 +246,14 @@ inline bool vnode_identity_match(const Vnode *before, const Vnode *after,
-     const VnodeOps *ops = before->ops;
-     if (ops == nullptr || ops != after->ops)
-         return false;
--    if (!ops->readonly)
--        return false;
--    return after->ino == ino_before && after->ino == before->ino &&
--           after->size == before->size && after->mode == before->mode;
-+    if (ops->readonly)
-+        return after->ino == ino_before && after->ino == before->ino &&
-+               after->size == before->size && after->mode == before->mode;
-+    if (ops->stable_ino && ino_before != 0 &&
-+        after->ino == ino_before && after->ino == before->ino &&
-+        after->size == before->size && after->mode == before->mode)
-+        return true;
-+    return false;
- }
- /// @brief Mount a filesystem at a given mount point.
- /// @return 0 on success, or VFS_INVALID on failure.
++    JARVIS_ASSERT(elf::ElfLoader::state() == elf::LoadState::IDLE);
+     JARVIS_ASSERT(elf::ElfLoader::take_completed() == nullptr);
+     cleanup_file("/tmp/loadmulti.elf");
+     JARVIS_TEST_PASS();

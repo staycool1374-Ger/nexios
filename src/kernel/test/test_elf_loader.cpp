@@ -37,6 +37,7 @@
 #include <kernel/test/resource_tracker.hpp>
 #include <initrd/initrd.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include <string.hpp>
 
 using namespace kernel;
@@ -187,13 +188,25 @@ JARVIS_TEST(loader_initrd_request_no_vnode_leak, "PRE: vfsd, iocd | POST: none")
 }
 
 // Runmode: kernel
-// Testidea: cancel mid-load reclaims all partial state (zero delta) and the
-// loader returns to IDLE.  An 8-page load is started; cancel is requested
-// after yielding a couple of times (cancel can land mid-chunk).
+// Testidea: cancel reclaims all partial state (zero delta) and the loader
+// returns to IDLE with no retained image.  The cancel is issued
+// pre-first-dispatch with the timer tick masked (issue #267): reschedule()
+// only arms need_resched — the switch happens on the next tick — so any
+// unmasked gap lets the loader run whole slices, and an 8-page load fits
+// in few slices (1/6 runs completed inside 3 harness yields; polling for
+// COPYING_SEGMENTS does not fix it since fast runs jump VALIDATING→DONE
+// between two polls).  With the tick masked the loader cannot be
+// dispatched at all (UP: no tick, no switch; the harness blocks on
+// nothing in this scope), so observing VALIDATING proves zero loader
+// progress and the cancel is provably pre-completion.  No retries, no
+// NOT_LOADING tolerance.
+// Coverage note: this pins the cancel CONTRACT (CANCELED → cleanup →
+// IDLE + null take + zero delta), deterministically at the VALIDATING
+// checkpoint; the per-chunk checkpoint location is timing-dependent and
+// cannot be targeted without a kernel seam.
 JARVIS_TEST(loader_cancel_mid_load, "PRE: vfsd, iocd | POST: none") {
     elf::ElfLoader::reset();
-    // Build a multi-page ELF (8 PT_LOAD pages) so the loader yields several
-    // times before completing.
+    // Build a multi-page ELF (8 PT_LOAD pages).
     constexpr size_t kPages = 8;
     uint8_t img[8192];
     elf::ELF64Header hdr{};
@@ -210,15 +223,25 @@ JARVIS_TEST(loader_cancel_mid_load, "PRE: vfsd, iocd | POST: none") {
                                   sizeof(elf::ELF64Header) + sizeof(elf::ELF64ProgramHeader) + kPages * 0x1000);
     JARVIS_ASSERT(written != 0);
 
-    auto result = elf::ElfLoader::request_load("/tmp/loadmulti.elf");
-    JARVIS_ASSERT(result == elf::LoadResult::OK);
-    // Yield a few times so the loader makes progress, then cancel.
-    for (int i = 0; i < 3; ++i)
-        Scheduler::reschedule();
-    result = elf::ElfLoader::request_cancel();
-    JARVIS_ASSERT(result == elf::LoadResult::OK);
+    {
+        // Masking across request_load is safe HERE only: the harness is a
+        // kernel task, so vfsd_authorize bypasses IPC (syscall_handlers_fs),
+        // and the /tmp path resolves synchronously under spinlocks — nothing
+        // in this scope waits on a tick (any future blocking added here would
+        // hang loudly, never pass silently).  IrqGuard→lock_ nest order
+        // matches task_main.
+        arch::IrqGuard irq_guard{};
+        auto result = elf::ElfLoader::request_load("/tmp/loadmulti.elf");
+        JARVIS_ASSERT(result == elf::LoadResult::OK);
+        // Loader frozen since before it became runnable: still VALIDATING.
+        JARVIS_ASSERT(elf::ElfLoader::state() ==
+                      elf::LoadState::VALIDATING);
+        result = elf::ElfLoader::request_cancel();
+        JARVIS_ASSERT(result == elf::LoadResult::OK);
+    }
     elf::ElfLoader::wait_loader_idle();
 
+    JARVIS_ASSERT(elf::ElfLoader::state() == elf::LoadState::IDLE);
     JARVIS_ASSERT(elf::ElfLoader::take_completed() == nullptr);
     cleanup_file("/tmp/loadmulti.elf");
     JARVIS_TEST_PASS();
