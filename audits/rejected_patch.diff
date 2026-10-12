@@ -1,210 +1,62 @@
-diff --git a/docs/specs/vfs.md b/docs/specs/vfs.md
---- a/docs/specs/vfs.md
-+++ b/docs/specs/vfs.md
-@@ -122,16 +122,7 @@
- vn  = resolve(path);                // 1. resolve FIRST
- ino = vn->ino;
- vfsd_authorize(op, pid, path, ino); // 2. blocking IPC (CPU yields to vfsd)
- vn2 = resolve(path);                // 3. re-resolve
--return vnode_identity_match(vn, vn2, ino);   // 4. identity below
-+return vn2 && vn2 == vn && vn2->ino == ino;   // 4. identity = pointer + ino
- ```
--- **Identity** (`vfs::vnode_identity_match`, issue #332): strict fast
--  path (same object + same ino, e.g. tmpfs stable entries) OR
--  immutable-equivalence (same ops table + same ino/size/mode, gated on
--  the ops table having no namespace mutators — `mkdir`/`unlink`/`create`
--  all nullptr). The gate covers per-lookup vnodes over read-only images
--  (initrd file/dir/root tables: uniform ino 1/2, replacement across the
--  yield impossible). Writable fses keep the strict check. fat32
--  (per-lookup alloc + real `mkdir`/`unlink`) still fails re-validation
--  and is tracked separately.
- - Longest-prefix mount selection for absolute paths; relative paths start at
-diff --git a/src/kernel/syscall/syscall_handlers_fs.cpp b/src/kernel/syscall/syscall_handlers_fs.cpp
---- a/src/kernel/syscall/syscall_handlers_fs.cpp
-+++ b/src/kernel/syscall/syscall_handlers_fs.cpp
-@@ -161,12 +161,11 @@
-     uint64_t ino = vn->ino;
-     if (!vfsd_authorize(op_type, pid, path, ino)) {
-         vfs::release(vn); // issue #268
-         return false;
-     }
-     vfs::Vnode *vn2 = vfs::resolve(path);
-     // Compare BEFORE releasing (vn may be freed by the release below).
--    // Identity covers per-lookup vnodes over read-only images (#332).
--    bool ok = vfs::vnode_identity_match(vn, vn2, ino);
-+    bool ok = (vn2 && vn2 == vn && vn2->ino == ino);
-     vfs::release(vn);
-     if (!ok) {
-         vfs::release(vn2);
-@@ -190,10 +189,10 @@
-     uint64_t ino = parent->ino;
-     if (!vfsd_authorize(op_type, pid, path, ino)) {
-         vfs::release(parent);
-         return false;
-     }
-     const char *name2 = nullptr;
-     vfs::Vnode *parent2 = vfs::resolve_parent(path, name2);
-     // Compare BEFORE releasing (parent may be freed by the release below).
--    bool ok = (vfs::vnode_identity_match(parent, parent2, ino) && name2 &&
-+    bool ok = (parent2 && parent2 == parent && parent2->ino == ino && name2 &&
-                *name2 != '\0');
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -154,6 +154,6 @@
-     // servers
-     {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
--    {"servers_vfsd_auth",     25,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176) + initrd-open/identity-gate (#332)
-+    {"servers_vfsd_auth",     23,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176)
-     {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
-     {"servers_daemon_restart", 2,    0,       0      },  // unknown-daemon rejection + terminate/ensure resurrect cycle (issue #135); crash test stays #if 0-disabled
-     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -283,7 +283,7 @@
-     {"proc_elf",            86,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin
-     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
-     {"storage",             162,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption)
--    {"servers",             64,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332)
-+    {"servers",             62,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332
-     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
-     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
-     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
-diff --git a/src/kernel/test/test_vfsd_auth.cpp b/src/kernel/test/test_vfsd_auth.cpp
---- a/src/kernel/test/test_vfsd_auth.cpp
-+++ b/src/kernel/test/test_vfsd_auth.cpp
-@@ -975,91 +975,4 @@
-     JARVIS_TEST_PASS();
- }
-
--// Runmode: kernel
--// Testidea: sys_open succeeds on initrd files (issue #332) — initrd
--// allocates a fresh vnode per lookup, so the strict pointer check can
--// never pass; the immutable-ops identity must accept it.
--// Input: Dispatched kernel task OPENs+CLOSEs /hey.c.elf (root ELF the
--//        image build always installs).
--// Expect: fd >= 0, close == 0. Fails pre-fix (pointer mismatch → -1).
--// Depends: kernel::Syscall, initrd root image, vnode_identity_match
--JARVIS_TEST(vfsd_initrd_open_succeeds, "PRE: vfsd, iocd | POST: none") {
--    static uint64_t g_fd = 0;
--    static uint64_t g_close = 0;
--
--    auto *t = TaskControlBlock::create(
--        []() {
--            const char *path = "/hey.c.elf";
--            g_fd = Syscall::handle(
--                static_cast<uint64_t>(SyscallNumber::OPEN),
--                reinterpret_cast<uint64_t>(path), 0, 0, 0, nullptr);
--            if (static_cast<int64_t>(g_fd) < 0)
--                return;
--            g_close = Syscall::handle(
--                static_cast<uint64_t>(SyscallNumber::CLOSE), g_fd, 0, 0, 0,
--                nullptr);
--        },
--        11, 10);
--    JARVIS_ASSERT(t != nullptr);
--    Scheduler::add_task(*t);
--    Scheduler::reschedule();
--    kernel::test::wait_for_termination_safe(t);
--    JARVIS_ASSERT(static_cast<int64_t>(g_fd) >= 0);
--    JARVIS_ASSERT_EQ(0ULL, g_close);
--    release_task(t);
--    Scheduler::drain_zombie_list();
--    JARVIS_TEST_PASS();
--}
--
--namespace {
--// Predicate-level fixtures (issue #332 negative control): two vnode
--// pairs with equal ino/size/mode at distinct addresses; only the
--// mutator-free ops pair may match.
--vfs::VnodeOps g_imm_ops = {};
--vfs::VnodeOps g_mut_ops = {};
--int stub_mkdir(vfs::Vnode &, const char *, uint16_t) {
--    return 0;
--}
--} // namespace
--
--// Runmode: kernel
--// Testidea: The widened identity still denies mutable-ops vnodes (issue
--// #332 TOCTOU guard) — equal fields at distinct addresses must deny
--// when any namespace mutator exists, accept when none do.
--// Input: Stack vnode pairs (mutable vs immutable ops tables).
--// Expect: mutable denies, immutable accepts, same-pointer accepts,
--//         null denies. No syscalls, no locks.
--// Depends: vfs::vnode_identity_match
--JARVIS_TEST(vfsd_identity_mutable_denied, "PRE: none | POST: none") {
--    g_mut_ops.mkdir = stub_mkdir;
--    vfs::Vnode imm_a{};
--    imm_a.ops = &g_imm_ops;
--    imm_a.ino = 1;
--    imm_a.size = 10;
--    imm_a.mode = vfs::S_IFREG;
--    vfs::Vnode imm_b{};
--    imm_b.ops = &g_imm_ops;
--    imm_b.ino = 1;
--    imm_b.size = 10;
--    imm_b.mode = vfs::S_IFREG;
--    JARVIS_ASSERT(vfs::vnode_identity_match(&imm_a, &imm_b, 1));
--    JARVIS_ASSERT(vfs::vnode_identity_match(&imm_a, &imm_a, 1));
--    vfs::Vnode mut_a{};
--    mut_a.ops = &g_mut_ops;
--    mut_a.ino = 1;
--    mut_a.size = 10;
--    mut_a.mode = vfs::S_IFREG;
--    vfs::Vnode mut_b{};
--    mut_b.ops = &g_mut_ops;
--    mut_b.ino = 1;
--    mut_b.size = 10;
--    mut_b.mode = vfs::S_IFREG;
--    JARVIS_ASSERT(!vfs::vnode_identity_match(&mut_a, &mut_b, 1));
--    JARVIS_ASSERT(!vfs::vnode_identity_match(nullptr, &imm_a, 1));
--    JARVIS_ASSERT(!vfs::vnode_identity_match(&imm_a, nullptr, 1));
--    imm_b.size = 11;
--    JARVIS_ASSERT(!vfs::vnode_identity_match(&imm_a, &imm_b, 1));
--    JARVIS_TEST_PASS();
--}
--
- // Runmode: kernel
- // Testidea: Registers all VFS authorization tests with the test framework.
-diff --git a/src/kernel/test/test_vfsd_auth.cpp b/src/kernel/test/test_vfsd_auth.cpp
---- a/src/kernel/test/test_vfsd_auth.cpp
-+++ b/src/kernel/test/test_vfsd_auth.cpp
-@@ -1092,6 +1005,4 @@
-     JARVIS_REGISTER_TEST(vfsd_stat_delivers);
-     JARVIS_REGISTER_TEST(vfsd_readdir_delivers);
-     JARVIS_REGISTER_TEST(vfsd_lseek_bogus_whence);
--    JARVIS_REGISTER_TEST(vfsd_initrd_open_succeeds);
--    JARVIS_REGISTER_TEST(vfsd_identity_mutable_denied);
- }
-diff --git a/src/kernel/vfs/vfs.hpp b/src/kernel/vfs/vfs.hpp
---- a/src/kernel/vfs/vfs.hpp
-+++ b/src/kernel/vfs/vfs.hpp
-@@ -204,27 +204,4 @@
- /// @return The parent vnode (OWNED — release via `vfs::release()`), or
- ///         nullptr if not found.
- Vnode *resolve_parent(const char *path, const char *&out_name);
--/// @brief Re-resolve identity for TOCTOU closure (issue #332, spec §4).
--/// Strict fast path (same object + same ino, e.g. tmpfs stable entries)
--/// OR immutable-equivalence: same ops table, same ino/size/mode, gated
--/// on the ops table having no namespace mutators (mkdir/unlink/create
--/// all nullptr — e.g. initrd per-lookup vnodes over a read-only image,
--/// where replacement across the authorize yield is impossible).
--/// Writable fses keep the strict check; fail-closed (any null/mismatch
--/// denies). Pure comparisons, no locks, no syscalls.
--inline bool vnode_identity_match(const Vnode *before, const Vnode *after,
--                                 uint64_t ino_before) noexcept {
--    if (before == nullptr || after == nullptr)
--        return false;
--    if (after == before && after->ino == ino_before)
--        return true;
--    const VnodeOps *ops = before->ops;
--    if (ops == nullptr || ops != after->ops)
--        return false;
--    if (ops->mkdir != nullptr || ops->unlink != nullptr ||
--        ops->create != nullptr)
--        return false;
--    return after->ino == ino_before && after->ino == before->ino &&
--           after->size == before->size && after->mode == before->mode;
--}
- /// @brief Mount a filesystem at a given mount point.
+--- a/Makefile
++++ b/Makefile
+@@ -1426,7 +1426,10 @@
+ # Pinned nightly + rust-src live project-local under build/ (rust-toolchain
+ # pin in user/rust-hello/rust-toolchain.toml); the rule hard-sets
+ # RUSTUP_HOME/CARGO_HOME/PATH so it never depends on the dev machine's
+-# toolchain. First build after a clean needs network (toolchain + core
++# toolchain. One-time bootstrap (rustup-init into build/, see
++# docs/specs/rust-userspace.md section 2) is NOT performed by this rule;
++# the recipe fails closed with the bootstrap pointer when
++# build/cargo/bin/cargo is absent. First build after a clean needs network (toolchain + core
+ # build-deps fetch, pinned by user/rust-hello/Cargo.lock via --locked);
+ # later builds are served from the cargo cache. x86_64-only: other
+ # arches print a skip and succeed (never error).
+@@ -1443,6 +1446,10 @@
+ $(RUST_ELF):
+ 	@printf '  %-7s %s\n' 'RUST' '$@'
+ 	@mkdir -p build/user $(RUST_TARGET_DIR)
++	@if [ ! -x "$(RUST_CARGO_HOME)/bin/cargo" ]; then \
++		echo 'RUST toolchain not bootstrapped: run the one-time rustup-init command in docs/specs/rust-userspace.md section 2, then retry.'; \
++		exit 1; \
++	fi
+ 	RUSTUP_HOME=$(RUSTUP_HOME_DIR) CARGO_HOME=$(RUST_CARGO_HOME) \
+ 	PATH=$(RUST_CARGO_HOME)/bin:$(PATH) \
+ 	RUSTFLAGS="-C link-arg=-z -C link-arg=max-page-size=0x1000" \
+--- a/docs/specs/rust-userspace.md
++++ b/docs/specs/rust-userspace.md
+@@ -21,6 +21,23 @@
+   network (toolchain + core build-deps fetch, pinned by
+   `user/rust-hello/Cargo.lock` via `--locked`); later builds are served
+   from the cargo cache.
++- One-time bootstrap (the `user-rust-hello` rule does NOT perform it;
++  without it `build/cargo/bin/cargo` is absent and the rule fails):
++  ```bash
++  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
++    RUSTUP_HOME=$PWD/build/rustup CARGO_HOME=$PWD/build/cargo sh -s -- \
++    -y --no-modify-path --no-update-default-toolchain
++  RUSTUP_HOME=$PWD/build/rustup CARGO_HOME=$PWD/build/cargo \
++    PATH=$PWD/build/cargo/bin:$PATH \
++    rustup toolchain install nightly-2026-10-12 --component rust-src
++  RUSTUP_HOME=$PWD/build/rustup CARGO_HOME=$PWD/build/cargo \
++    PATH=$PWD/build/cargo/bin:$PATH \
++    rustup default nightly-2026-10-12
++  ```
++  The explicit `default` matters: the recipe invokes cargo from the repo
++  root via `--manifest-path`, and rustup discovers `rust-toolchain.toml`
++  from the working directory — not the manifest path — so the crate pin
++  alone does not select the nightly.
+ - `make user-rust-hello ARCH=aarch64` (or riscv64) prints a skip and
+   succeeds — Rust is x86_64-only. WARNING: switching `ARCH` wipes
+   `build/` entirely (arch-change clean), including the Rust toolchain —
+@@ -31,7 +48,9 @@
+ Derived field-for-field from `x86_64-unknown-none`; deltas: non-PIE
+ static `ET_EXEC` (`position-independent-executables false`,
+ `relocation-model static`, `code-model small`, `dynamic-linking false`),
+-`exe-suffix .elf`, `panic-strategy abort`, `os none` (+ empty env).
++`exe-suffix .elf`, `panic-strategy abort`. (`os`/`env`/`vendor` are
++intentionally omitted: nightly-2026-10-12 accepts the file without them
++and the E2E build proves it; do not re-add without re-running the build.)
+ Keeps `rust-lld`, soft-float/no-SSE features, `disable-redzone`,
+ `singlethread`. Two nightly-JSON gotchas baked in: `target-pointer-width`
+ is a NUMBER (string rejected), and `eh-frame`/`stack-protector` are not

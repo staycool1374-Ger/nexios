@@ -105,7 +105,10 @@ OBJ             := $(SRC_CXX:src/%.cpp=build/%.o) $(SRC_ASM:src/%.asm=build/%.o)
 ifneq ($(EXTERNAL_TEST_DIR),)
 OBJ             += $(EXTERNAL_OBJ)
 endif
-DEPFILES        := $(shell find build -name '*.d' 2>/dev/null)
+# Issue #273: exclude the project-local Rust toolchain/registry homes —
+# rustup ships a bash_completion.d DIRECTORY matching '*.d', and -include
+# of a directory is a fatal error. Cargo build products stay included.
+DEPFILES        := $(shell find build -name '*.d' -not -path 'build/rustup/*' -not -path 'build/cargo/*' 2>/dev/null)
 -include $(DEPFILES)
 
 # ------------------------------------------------------------------------------

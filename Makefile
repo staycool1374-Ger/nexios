@@ -1422,6 +1422,56 @@ picolibc-clean:
 	rm -rf build/picolibc
 
 # ------------------------------------------------------------------------------
+# Rust user ELF (issue #273): statically-linked no_std hello-world.
+# Pinned nightly + rust-src live project-local under build/ (rust-toolchain
+# pin in user/rust-hello/rust-toolchain.toml); the rule hard-sets
+# RUSTUP_HOME/CARGO_HOME/PATH so it never depends on the dev machine's
+# toolchain. One-time bootstrap (rustup-init into build/, see
+# docs/specs/rust-userspace.md section 2) is NOT performed by this rule;
+# the recipe fails closed with the bootstrap pointer when
+# build/cargo/bin/cargo is absent. First build after a clean needs network (toolchain + core
+# build-deps fetch, pinned by user/rust-hello/Cargo.lock via --locked);
+# later builds are served from the cargo cache. x86_64-only: other
+# arches print a skip and succeed (never error).
+# ------------------------------------------------------------------------------
+ifeq ($(ARCH),x86_64)
+RUSTUP_HOME_DIR := $(CURDIR)/build/rustup
+RUST_CARGO_HOME := $(CURDIR)/build/cargo
+RUST_TARGET_DIR := $(CURDIR)/build/rust-target
+RUST_ELF        := build/user/rust-hello.elf
+
+.PHONY: user-rust-hello
+user-rust-hello: $(RUST_ELF)
+
+$(RUST_ELF):
+	@printf '  %-7s %s\n' 'RUST' '$@'
+	@mkdir -p build/user $(RUST_TARGET_DIR)
+	@if [ ! -x "$(RUST_CARGO_HOME)/bin/cargo" ]; then \
+		echo 'RUST toolchain not bootstrapped: run the one-time rustup-init command in docs/specs/rust-userspace.md section 2, then retry.'; \
+		exit 1; \
+	fi
+	RUSTUP_HOME=$(RUSTUP_HOME_DIR) CARGO_HOME=$(RUST_CARGO_HOME) \
+	PATH=$(RUST_CARGO_HOME)/bin:$(PATH) \
+	RUSTFLAGS="-C link-arg=-z -C link-arg=max-page-size=0x1000" \
+	$(RUST_CARGO_HOME)/bin/cargo build \
+	    --manifest-path $(CURDIR)/user/rust-hello/Cargo.toml \
+	    --target $(CURDIR)/rust-targets/x86_64-nexios.json \
+	    -Z build-std=core -Z json-target-spec --release \
+	    --target-dir $(RUST_TARGET_DIR) --locked
+	cp $(RUST_TARGET_DIR)/x86_64-nexios/release/rust-hello.elf $@
+
+rust-clean:
+	rm -rf build/rustup build/cargo build/rust-target build/user
+else
+.PHONY: user-rust-hello
+user-rust-hello:
+	@printf '  %-7s %s\n' 'RUST' 'skip (x86_64-only, ARCH=$(ARCH))'
+
+rust-clean:
+	@true
+endif
+
+# ------------------------------------------------------------------------------
 # Utility targets
 # ------------------------------------------------------------------------------
 symbols: $(KERNEL)

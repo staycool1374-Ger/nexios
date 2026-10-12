@@ -1,0 +1,15 @@
+[package]
+name = "rust-hello"
+version = "0.1.0"
+edition = "2021"
+
+# No dependencies: core-only (build-std compiles core for the target).
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = "z"
+strip = true
+lto = true
