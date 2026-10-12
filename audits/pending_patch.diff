@@ -1,23 +1,92 @@
-diff --git a/mk/rules.mk b/mk/rules.mk
-index 3f3fd15c4..d38a44ab6 100644
---- a/mk/rules.mk
-+++ b/mk/rules.mk
-@@ -275,6 +275,8 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt userspace/hey.c us
- 	@printf '# Init script\n' >> initrd_root/etc/rc
- 	@if [ ! -z "$(INITRD_ROOT_ELF)" ]; then cp $(INITRD_ROOT_ELF) initrd_root/; fi
- 	@if [ ! -z "$(INITRD_BIN_ELF)" ]; then cp $(INITRD_BIN_ELF) initrd_root/bin/; fi
-+	@if [ -f build/user/rust-hello.elf ]; then cp build/user/rust-hello.elf initrd_root/bin/; fi # issue #336 (absent without toolchain: ships smaller initrd, never fails)
-+	@if [ -f user/rust-hello/src/main.rs ]; then mkdir -p initrd_root/rust-hello/src && cp user/rust-hello/Cargo.toml user/rust-hello/Cargo.lock user/rust-hello/rust-toolchain.toml initrd_root/rust-hello/ && cp user/rust-hello/src/main.rs initrd_root/rust-hello/src/ && cp rust-targets/x86_64-nexios.json initrd_root/rust-hello/; fi # issue #336
- 	@if [ -f userspace/picolibc/libc_verify.c.elf ]; then cp userspace/picolibc/libc_verify.c.elf initrd_root/; fi
- 	@cp userspace/hey.c userspace/nullderef.c userspace/prime.c initrd_root/
- 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
-diff --git a/test-history.txt b/test-history.txt
-index ecad018f2..61938fe37 100644
---- a/test-history.txt
-+++ b/test-history.txt
-@@ -2949,3 +2949,5 @@ SUMMARY: total=20 ok=15 fail=5
- 2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1944ms
- 2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 2001ms
- 2026-10-12 16:26:39 vfs_initrd_fs PASSED: 9 FAILED: 0 TIME: 4460ms
-+2026-10-12 16:47:54 storage PASSED: 166 FAILED: 0 TIME: 414557ms
-+2026-10-12 16:47:54 ui PASSED: 73 FAILED: 0 TIME: 14589ms
+diff --git a/src/kernel/memory/checked_ptr.hpp b/src/kernel/memory/checked_ptr.hpp
+index a956da777..8c1c86d84 100644
+--- a/src/kernel/memory/checked_ptr.hpp
++++ b/src/kernel/memory/checked_ptr.hpp
+@@ -55,6 +55,17 @@ extern "C" constinit uint64_t g_user_access_recover_ip;
+         }                                                                    \
+     } while (0)
+ 
++/// @brief Check if an element count fits the user range without overflow.
++/// @return False when count * sizeof(T) would wrap or exceed the user
++///         half (issue #337); the multiplication below is then safe.
++/// @note Reachable exhaustion (hostile/huge counts) fails closed with
++///       false — never ENSURE (see CODING_STYLE.md §5).
++template <typename T>
++    requires kernel::TriviallyCopiable<T>
++static inline constexpr bool count_fits_user_limit(uint64_t count) {
++    return count <= (USER_SPACE_LIMIT / sizeof(T));
++}
++
+ /// @brief Check if a memory range lies entirely within user space.
+ /// @return true if the range is valid user-space memory.
+ // NOLINTBEGIN(performance-no-int-to-ptr,bugprone-narrowing-conversions)
+@@ -97,6 +108,8 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
+     /// @brief Check if the pointer is valid (non-null, within user space).
+     /// @note Zero-size operations with null pointer are valid (no-op).
+     bool valid() const {
++        if (!count_fits_user_limit<T>(count_))
++            return false;
+         if (count_ == 0)
+             return true;
+         if (addr_ == 0)
+@@ -294,6 +307,8 @@ recover_str:
+ template <kernel::TriviallyCopiable T>
+ static inline bool safe_copy_from_user(T *dst, const T *src,
+                                        uint64_t count) {
++    if (!count_fits_user_limit<T>(count))
++        return false;
+     if (!is_user_range(src, count * sizeof(T)))
+         return false;
+     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_from);
+@@ -318,6 +333,8 @@ recover_from:
+ template <kernel::TriviallyCopiable T>
+ static inline bool safe_copy_to_user(T *dst, const T *src,
+                                      uint64_t count) {
++    if (!count_fits_user_limit<T>(count))
++        return false;
+     if (!is_user_range(dst, count * sizeof(T)))
+         return false;
+     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_to);
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 8ba4e7a96..a39164c0a 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -165,7 +165,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"memory_slab",           5,    0,       0      },  // Slab reclaim tests
+     {"memory_safety",        11,    0,       0      },  // MemPool/PMM invariants + MP-2 red zones + MP-3 canaries
+     {"stack_cookie",          4,    0,       0      },  // MP-3 contract pins: SSP-off, derivation, pure verify, kstack round-trip (#303)
+-    {"pointer_isolation",     4,    0,       0      },  // kernel-leak rejection at every entry + count edges + factory (#303)
++    {"pointer_isolation",     5,    0,       0      },  // kernel-leak rejection at every entry + count edges + count overflow (#337) + factory (#303)
+     {"memory_determinism",    4,    0,       0      },  // PMM exhaustion + no-dynamic-alloc neutral cycles (v0.3.8)
+     {"memory_checked_ptr",    4,    0,       0      },  // Checked pointer + signal frame tests
+     {"memory_resource_exhaustion", 5, 0,      0      },  // FdTable, TaskLimit, MaxBuffers, MempoolFrag, PmmExhaustion
+@@ -282,7 +282,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+ 
+     // Structural/semantic aggregates (issue #173).  Values are filled
+     // from measured `dump-counts` output; 0 disables validation.
+-    {"core",                552,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 4 pointer_isolation + 2 release_build (issue #303) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
++    {"core",                553,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
+     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
+     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
+     {"proc_elf",            111,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 6 pre-existing aggregate drift at HEAD
+diff --git a/src/kernel/test/test_pointer_isolation.cpp b/src/kernel/test/test_pointer_isolation.cpp
+index bf6c9e504..d2c964016 100644
+--- a/src/kernel/test/test_pointer_isolation.cpp
++++ b/src/kernel/test/test_pointer_isolation.cpp
+@@ -134,7 +134,7 @@ JARVIS_TEST(pointer_isolation_count_edges, "PRE: none | POST: none") {
+ // Depends: CheckedPtr::valid byte-size arithmetic
+ // Disabled regression for the filed count*sizeof overflow issue:
+ // enable when the primitive rejects overflowing counts.
+-#if 0
++#if 1
+ JARVIS_TEST(pointer_isolation_count_overflow_rejected,
+             "PRE: none | POST: none") {
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+@@ -223,6 +223,7 @@ void register_pointer_isolation_tests() {
+     Logger::info("Registering pointer-isolation tests");
+     JARVIS_REGISTER_TEST(pointer_isolation_kernel_leak_rejected_at_every_entry);
+     JARVIS_REGISTER_TEST(pointer_isolation_count_edges);
++    JARVIS_REGISTER_TEST(pointer_isolation_count_overflow_rejected);
+     JARVIS_REGISTER_TEST(pointer_isolation_factory_and_fail_closed_elements);
+     JARVIS_REGISTER_TEST(pointer_isolation_string_path_rejects_kernel);
+ }
