@@ -26,6 +26,7 @@
 
 #include <kernel/arch/x86_64/hal/smp.hpp>
 
+#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
 #include <kernel/arch/x86_64/hal/apic.hpp>
 #include <kernel/arch/x86_64/hal/percpu.hpp>
 #include <kernel/arch/x86_64/hal/io_impl.hpp>
@@ -352,6 +353,15 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
         pcide = arch::CR4_PCIDE;
 #endif
     arch::write_cr4(cr4 | (1ULL << 9) | (1ULL << 10) | pcide); // OSFXSR|OSXMMEXCPT
+#if defined(CONFIG_ARCH_X86_64)
+    // Issue #338: mirror BSP's CR4.FSGSBASE probe so AP userspace reads
+    // its TP identically (BSP probed support at boot; has_fsgsbase() is
+    // pure CPUID, safe to re-evaluate here).
+    if (arch::has_fsgsbase()) {
+        uint64_t cr4b = arch::read_cr4();
+        arch::write_cr4(cr4b | arch::CR4_FSGSBASE);
+    }
+#endif
 
     // Start-gate: spin parked (IF=0, Phase-B behavior) until the BSP
     // publishes scheduler_ready after reboot_from_table() finishes

@@ -74,6 +74,9 @@ inline void write_cr4(uint64_t v) {
 }
 /// @brief CR4.PCIDE bit (17): process-context identifiers (issue #156).
 inline constexpr uint64_t CR4_PCIDE = 1ULL << 17;
+/// @brief CR4.FSGSBASE bit (16): userspace RDFSBASE/WRFSBASE
+/// (issue #338 — thread-local errno reads its TP from Ring 3).
+inline constexpr uint64_t CR4_FSGSBASE = 1ULL << 16;
 
 /// @brief INVPCID invalidation types (issue #157, Intel SDM Vol 2B).
 enum class InvpcidType : uint32_t {

@@ -126,21 +126,25 @@ JARVIS_TEST(stack_cookie_canary_values_are_segment_derived,
     for (uint64_t seg = 0; seg < TaskControlBlock::CANARY_SEGMENTS; ++seg) {
         if ((t->canary_installed & (1u << seg)) == 0)
             continue;
-        uint64_t before = 0;
-        uint64_t after = 0;
-        JARVIS_ASSERT_FMT(read_live_u64(t->canary_before[seg],
-                                        t->page_table_, before),
-                          "canary_before[%lu] unreadable", seg);
-        JARVIS_ASSERT_FMT(read_live_u64(t->canary_after[seg],
-                                        t->page_table_, after),
-                          "canary_after[%lu] unreadable", seg);
-        uint64_t expected = TaskControlBlock::CANARY_MAGIC ^ (seg + 1);
-        JARVIS_ASSERT_FMT(before == expected,
-                          "before[%lu] 0x%lx != derived 0x%lx", seg, before,
-                          expected);
-        JARVIS_ASSERT_FMT(after == expected,
-                          "after[%lu] 0x%lx != derived 0x%lx", seg, after,
-                          expected);
+        // Zero slots are not installed (DATA has an after-canary only by
+        // design — its segment start is payload, not padding) and are
+        // skipped by canary_verify_user_segments itself; asserting them
+        // here made the test flip with any userspace layout change
+        // (issue #338: crt0 growth added RW padding). Mirror the kernel
+        // invariant instead of over-constraining it.
+        const uint64_t slots[2] = {t->canary_before[seg],
+                                   t->canary_after[seg]};
+        for (int k = 0; k < 2; ++k) {
+            if (slots[k] == 0)
+                continue;
+            uint64_t live = 0;
+            JARVIS_ASSERT_FMT(read_live_u64(slots[k], t->page_table_, live),
+                              "canary[%lu][%d] unreadable", seg, k);
+            uint64_t expected = TaskControlBlock::CANARY_MAGIC ^ (seg + 1);
+            JARVIS_ASSERT_FMT(live == expected,
+                              "canary[%lu][%d] 0x%lx != derived 0x%lx", seg,
+                              k, live, expected);
+        }
     }
     JARVIS_TEST_PASS();
 }

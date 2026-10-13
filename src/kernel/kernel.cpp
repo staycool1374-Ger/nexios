@@ -1005,6 +1005,20 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         debug_write("[BOOT] PCID not supported by CPU — leaving off\n");
     }
 #endif
+#if defined(CONFIG_ARCH_X86_64)
+    // Issue #338: FSGSBASE (CR4 bit 16) — userspace RDFSBASE so Ring-3
+    // libc reads its thread-local block (errno) without a syscall.
+    // BSP-only probe here; APs mirror it in ap_main (smp.cpp).  Same
+    // CPU floor as the SMEP-era features above; without it the libc
+    // errno path faults (#UD), so an unsupported CPU cannot run
+    // userspace (loud by design — like SMAP-off above, but fatal).
+    if (arch::has_fsgsbase()) {
+        cr4 |= arch::CR4_FSGSBASE;
+        debug_write("[BOOT] FSGSBASE enabled\n");
+    } else {
+        debug_write("[BOOT] FSGSBASE not supported by CPU — no userspace\n");
+    }
+#endif
     arch::write_cr4(cr4);
 
 #endif
