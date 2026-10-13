@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #271 P0 — VMM RO primitive + load application done (issue stays open for P1-P3)
+
+- **Learned:** (1) aarch64 EL0-RO = AP_USER|AP_RO (both bits) — clearing AP_USER gives no-EL0-access, not RO; verify encodings against the file's own constants, not memory. (2) Namespace-brace accounting: a leftover `} // namespace` silently closed `namespace kernel` — 12 cascade errors from one brace; always re-check block balance after restructuring edits. (3) Test out-param contracts: conditional-write out-params must be documented + never asserted on the negative path (second vacuous-assert catch this session). (4) Big features land phased (P0→P3) with the issue open and R-ticks pending — planner delegation first when no planner type exists (general subagent + schema).
+- **Adapted:** RO primitive + inspector + range helper, both load paths, pin test both paths; elf_loader 16/16; APPROVED; pushed.
+- **Style re-surface:** shared primitive for identical perms (first run included); trailing TLB flush at every map site.
+
 ### #339 — in-tree strtok/strtok_r done (wave 3: 2/4)
 
 - **Learned:** (1) `src/libc` C files NEVER link into the kernel (kernel tests exercise `src/lib/string.hpp`) — a kernel unit test for libc would be undeclared AND unlinked; Ring-3 probe is the only honest vehicle. Check link topology before choosing test placement. (2) Suite-fail triage: tlb p99 assert + ioapic-setup stall + deadline outer TIMEOUT all cleared on identical-binary rerun = timer-sensitive cluster under back-to-back load, not regressions. (3) The stall-between-RUN_PRE-and-first-assert shape points at framework/setup, not the test body (which was 20ms-bounded).
