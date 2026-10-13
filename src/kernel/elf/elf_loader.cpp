@@ -578,6 +578,49 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
 #pragma GCC diagnostic pop
     tcb->magic = TaskControlBlock::TCB_MAGIC;
     tcb->id = Scheduler::alloc_id();
+    // Minimal common init (IPC queues, fd table, cwd) — mirrors create()
+    {
+        // fd_table + cwd
+        for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
+            tcb->fd_table.fds[i].used = false;
+            tcb->fd_table.fds[i].vnode = nullptr;
+            tcb->fd_table.fds[i].offset = 0;
+            tcb->fd_table.fds[i].flags = 0;
+        }
+        tcb->cwd[0] = '/'; tcb->cwd[1] = '\0';
+        tcb->cwd_vnode = vfs::get_root_vnode();
+        if (tcb->cwd_vnode) vfs::vnode_ref_inc(tcb->cwd_vnode);
+        tcb->msg_queue.init();
+        tcb->msg_queue.owner = tcb;
+        kernel::test::ResourceTracker::instance().track_msg_queue_add();
+        tcb->notify.init();
+        kernel::test::ResourceTracker::instance().track_notify_add();
+        tcb->event_group.init();
+        kernel::test::ResourceTracker::instance().track_event_group_add();
+        tcb->blocked_next = nullptr; tcb->blocked_prev = nullptr;
+        tcb->blocked_on_queue = nullptr;
+    }
+    // Kernel stack (like clone fallback: HHDM-mapped, no kslot guard for rerun — bounded)
+    {
+        size_t kpages = (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
+        uint64_t kphys = PMM::alloc_contiguous(kpages);
+        if (!kphys) {
+            VMM::free_user_pages(pml4);
+            PMM::free_page(pml4);
+            tcb->msg_queue.~MessageQueue(); kernel::test::ResourceTracker::instance().track_msg_queue_remove();
+            tcb->notify.~Notify(); kernel::test::ResourceTracker::instance().track_notify_remove();
+            tcb->event_group.~EventGroup(); kernel::test::ResourceTracker::instance().track_event_group_remove();
+            if (tcb->cwd_vnode) vfs::vnode_ref_dec(tcb->cwd_vnode);
+            kernel::MemPool::free(tcb);
+            if (reason) *reason = kRebuild;
+            return nullptr;
+        }
+        tcb->stack_phys_ = kphys;
+        uint64_t kvirt = arch::HHDM_OFFSET + kphys;
+        tcb->kernel_stack = reinterpret_cast<uint8_t*>(kvirt);
+        tcb->kernel_stack_top = kvirt + TaskControlBlock::STACK_SIZE;
+        tcb->kstack_slot_va_ = 0; tcb->kstack_slot_size_ = 0;
+    }
     tcb->page_table_ = pml4;
     tcb->is_user_ = true;
     tcb->user_stack_ = ustack_phys;
