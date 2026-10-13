@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #339 — in-tree strtok/strtok_r done (wave 3: 2/4)
+
+- **Learned:** (1) `src/libc` C files NEVER link into the kernel (kernel tests exercise `src/lib/string.hpp`) — a kernel unit test for libc would be undeclared AND unlinked; Ring-3 probe is the only honest vehicle. Check link topology before choosing test placement. (2) Suite-fail triage: tlb p99 assert + ioapic-setup stall + deadline outer TIMEOUT all cleared on identical-binary rerun = timer-sensitive cluster under back-to-back load, not regressions. (3) The stall-between-RUN_PRE-and-first-assert shape points at framework/setup, not the test body (which was 20ms-bounded).
+- **Adapted:** strtok + decls, probe block, tls asserts (no new tests/counts); full debug 18/20 + smp/deadline reruns green; APPROVED; pushed, issue closed. scanf/fprintf stay picolibc-only per issue.
+- **Style re-surface:** fail-closed NULL inputs; document thread-unsafety where it exists.
+
 ### #338 — thread-local errno via TP cell done (wave 3: 1/4)
 
 - **Learned:** (1) No shared-VM threads exist (clone always deep-copies) + x86 Ring-3 cannot rdfsbase without CR4.FSGSBASE — both found by reading before designing; the design fell out (PCID/SMAP probe pattern). (2) Kernel-side translation impossibility arguments cut both ways: document WHY the layer was chosen. (3) crt0 changes move EVERY userspace image: layout-sensitive tests (stack_cookie DATA-padding assumption) flip — the test mirrored the kernel's own skip-zero invariant instead of over-constraining. (4) Full-suite STALLs (hal/smp/testrunner) all cleared standalone — pressure flakes; always rerun before bisecting. (5) Tracked .elf rebuilds must be committed (libc_verify.c.elf); ignored ones (vfsd, errno_probe) rebuild via make. (6) Second owner-commit race handled by clean rebase, never force-push.
