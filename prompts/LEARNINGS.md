@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #258 — IPC+caps H1–H8 verification pass (audit-mature subsystem)
+
+- **Learned:** (1) A subsystem can complete H1–H8 with a near-empty diff: prior audit cycles (v0.4.9, #296–#298, #321) had already produced WHY-dense code, zero seams, named sentinels — the honest deliverable is verification + keeps, not churn (same precedent as #227 zero-change audits). (2) H6 must respect layering: int index-or-−1/count/handle-0 internals (cap slots, buffer handles) must NOT be migrated to the syscall ABI enum — slot-0 and count-0 are valid data, and the ABI contract (`encode_user_handle` −1) is documented at its single definition point. Inventory return-shape by TYPE (int/uint64_t/bool/size_t) before judging any literal. (3) `buffer_pool` is not a test class (zero tests registered → QEMU_EXIT) — the pool tests live in `data_structures_buffer_pool`; a wrong class name burns two watchdog timeouts, so verify class names in test_registry.cpp first.
+- **Adapted:** 4 dup-`#pragma once` removals; H4 shm div-by-zero filed as #343 (S1 forbids fixing in cleanup); evidence on #258; SIL 3 APPROVED zero findings.
+- **Style re-surface:** §10.5 named sentinels already in place (LIST_EMPTY/BUF_INVALID_*); keep ABI vocabulary at the boundary, internal conventions inside.
+
 ### #257 — syscall H1–H8 pure refactor (first v0.5.4 cleanup part)
 
 - **Learned:** (1) Raw `-1/0` ABI returns migrate safely in two classes: failure-`-1` → a value-kept all-ones enumerator (`SYS_ERR_GENERIC_FAIL`), status-`0` → `SYS_ERR_OK` — but pid wildcards (`waitpid -1`), UINT64_MAX saturation, byte/record counts, and int-typed VFS-op zeros must be inventoried FIRST (grep by syntactic shape, judge each) or a mechanical replaceAll corrupts sentinels. (2) H2-vs-S1 collisions (canary-latch failure policy, `mark_vfs_touched` with test-side readers) resolve to KEEP + WHY-comment + report — never refactor the seam under a pure-refactor gate. (3) A stall cluster (suite-first-class TIMEOUTs + one standalone hang at a spinner test) under sustained host load convicts environmental via stash control (clean 553/553) + identical-binary green, even when the hang shape matches a known bug's hang — check `pmset -g therm` + desktop hogs (aerial video decode) before bisecting; the suite's later classes going green in the same run further exonerates the diff.
