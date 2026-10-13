@@ -147,14 +147,20 @@ inline bool shm_ring_push(SharedRingHeader *header, uint8_t *data_base,
 
 /// @brief Consumer pop: copy the element at the tail into @p dst.
 ///        Returns false when empty or not initialised.  Tail is published with
-///        release after the payload read (SPSC protocol).
+///        release after the payload read (SPSC protocol).  A zero
+///        capacity/element_size (hostile or corrupt peer header) fails closed
+///        before the tail/element_size division (issue #343) — mirrors
+///        shm_ring_has_space.
 inline bool shm_ring_pop(SharedRingHeader *header, uint8_t *data_base,
                          uint8_t *dst) {
     if (!header || !data_base || !dst)
         return false;
     if (!shm_ring_has_data(header))
         return false;
+    uint64_t cap = __atomic_load_n(&header->capacity, __ATOMIC_ACQUIRE);
     uint64_t esz = __atomic_load_n(&header->element_size, __ATOMIC_ACQUIRE);
+    if (cap == 0 || esz == 0)
+        return false;
     uint64_t t = __atomic_load_n(&header->tail, __ATOMIC_RELAXED);
     const uint8_t *src = shm_ring_elem(header, data_base, t / esz);
     for (uint64_t i = 0; i < esz; ++i)

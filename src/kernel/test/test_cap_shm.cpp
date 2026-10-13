@@ -505,6 +505,37 @@ JARVIS_TEST(frame_create_rejected, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: shm_ring_pop over a hostile header with element_size == 0 and
+//           head != tail must fail closed (return false), not divide by
+//           zero (issue #343).  Push over the same header is already
+//           guarded via shm_ring_has_space — pinned here too.
+// Input: Stack header (magic set, capacity valid, element_size 0,
+//        head 8, tail 0); stack data/dst buffers.
+// Expect: has_data true (head != tail), pop false, push false, tail
+//         unmoved.
+// Depends: shm_ring_pop zero-guard, shm_ring_has_space zero-guard
+JARVIS_TEST(shm_ring_zero_esz_pop_rejected, "PRE: none | POST: none") {
+    kernel::shm::SharedRingHeader hdr{};
+    __atomic_store_n(&hdr.magic, kernel::shm::SHM_RING_MAGIC,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&hdr.version, kernel::shm::SHM_RING_VERSION,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&hdr.capacity, 4096, __ATOMIC_RELAXED);
+    __atomic_store_n(&hdr.element_size, 0, __ATOMIC_RELAXED);
+    __atomic_store_n(&hdr.head, 8, __ATOMIC_RELAXED);
+    __atomic_store_n(&hdr.tail, 0, __ATOMIC_RELAXED);
+    uint8_t data[64] = {};
+    uint8_t dst[64] = {};
+    uint8_t src[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    JARVIS_ASSERT(kernel::shm::shm_ring_has_data(&hdr));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_pop(&hdr, data, dst));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_push(&hdr, data, src));
+    JARVIS_ASSERT_EQ(0ULL,
+                     __atomic_load_n(&hdr.tail, __ATOMIC_RELAXED));
+    JARVIS_TEST_PASS();
+}
+
 void register_cap_shm_tests() {
     Logger::info("Registering cap_shm tests");
     JARVIS_REGISTER_TEST(frame_user_map_unmap_roundtrip);
@@ -513,4 +544,5 @@ void register_cap_shm_tests() {
     JARVIS_REGISTER_TEST(shm_ring_task_death_drain);
     JARVIS_REGISTER_TEST(shm_ring_revocation_cleanup);
     JARVIS_REGISTER_TEST(frame_create_rejected);
+    JARVIS_REGISTER_TEST(shm_ring_zero_esz_pop_rejected);
 }
