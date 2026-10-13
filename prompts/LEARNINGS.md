@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #259 — interrupts/arch/HAL/timers H1–H8 verification pass
+
+- **Learned:** (1) Audit-mature areas complete H1–H8 with micro-diffs — the review itself is the deliverable; forcing churn would manufacture risk. (2) Suite-first-class core TIMEOUTs are a harness-budget artifact (LTO relink + 129-file TIDY consume the 250 s expect budget before the guest runs), NOT kernel hangs — proven by identical-ISO standalone greens; read `/tmp/jarvis_classruns/<class>.log` head (build lines) vs tail (guest lines) to distinguish build-eaten-budget from guest-hang. (3) Arch-guarded test classes register zero tests off-target (expected-empty, like task_fpu) — verify guards in test_registry.cpp instead of burning watchdog timeouts; aarch64 link is pre-broken (relocation truncated, stash-convicted) — evidence belongs on #327, never inline-fixed under a hygiene gate.
+- **Adapted:** 18 dup-`#pragma once` removals (guard-count verified 1/file); evidence on #259 + #327; SIL 3 APPROVED zero findings.
+- **Style re-surface:** arch-guard byte-identical discipline; asm read-only (briefing §9); H11.3 bounded-or-mediated for every loop.
+
 ### #258 — IPC+caps H1–H8 verification pass (audit-mature subsystem)
 
 - **Learned:** (1) A subsystem can complete H1–H8 with a near-empty diff: prior audit cycles (v0.4.9, #296–#298, #321) had already produced WHY-dense code, zero seams, named sentinels — the honest deliverable is verification + keeps, not churn (same precedent as #227 zero-change audits). (2) H6 must respect layering: int index-or-−1/count/handle-0 internals (cap slots, buffer handles) must NOT be migrated to the syscall ABI enum — slot-0 and count-0 are valid data, and the ABI contract (`encode_user_handle` −1) is documented at its single definition point. Inventory return-shape by TYPE (int/uint64_t/bool/size_t) before judging any literal. (3) `buffer_pool` is not a test class (zero tests registered → QEMU_EXIT) — the pool tests live in `data_structures_buffer_pool`; a wrong class name burns two watchdog timeouts, so verify class names in test_registry.cpp first.
