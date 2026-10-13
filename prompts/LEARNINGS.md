@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #262 — VFS+daemons+ELF H1–H8 verification pass (9/9 #253 parts done)
+
+- **Learned:** (1) Audit handoffs must match the patch pathspec exactly — citing already-committed files (net.cpp under #260) in a new audit prompt earns a valid S3; generate the patch FIRST, then describe it from `git diff --stat`, never from memory. (2) S4 taxonomy verification = grep raw −1 INSIDE VfsError-typed returns (none found) + confirm boundary enums are actually referenced (vfs.cpp/fat32_fs.cpp use VFS_ERR_*) — internal int conventions with interface docs are compliant, not gaps. (3) History hygiene: awk-captured values carry `\r` from QEMU output — strip before appending, and never invent TIME values; re-run small classes to measure honestly.
+- **Adapted:** 14 dup guards; evidence on #262; SIL 3 APPROVED (1 S3 handoff note). All 9 #253 parts complete (#254–#262); #253 itself left open for owner close.
+- **Style re-surface:** TOCTOU/snapshot-order/CRC paths frozen by explicit verification, not just intent.
+
 ### #261 — drivers+IOMMU H1–H8 verification pass (8/9 #253 parts done)
 
 - **Learned:** (1) Push can be rejected mid-cycle by an owner commit — `git fetch` + inspect first: a README-only fixup rebases cleanly under an untouched scope; never force-push. Record the rebase + new hash on the issue thread (audit reports reference patch content, which is unchanged, but hashes move). (2) Issue class names rot (`ahci_deep` → `drivers_ahci_deep`) — same registry-verification lesson as #258/#260, now third occurrence: treat every issue-quoted class name as unverified until grepped. (3) Driver poll loops already carry their M-1 tick-deadline bounds with rationale — H11.3 verification is read-and-confirm, not rewrite.
