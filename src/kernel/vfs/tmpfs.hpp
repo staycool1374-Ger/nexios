@@ -21,8 +21,6 @@
 /// @file tmpfs.hpp
 /// @brief In-memory temporary filesystem (tmpfs) declaration.
 
-#pragma once
-
 #include <kernel/vfs/vfs.hpp>
 
 namespace kernel {

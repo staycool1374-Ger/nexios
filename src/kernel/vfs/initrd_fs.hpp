@@ -21,8 +21,6 @@
 /// @file initrd_fs.hpp
 /// @brief Initial ramdisk filesystem (initrd) declaration.
 
-#pragma once
-
 #include <kernel/vfs/vfs.hpp>
 
 namespace kernel {

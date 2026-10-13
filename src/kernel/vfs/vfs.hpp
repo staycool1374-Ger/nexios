@@ -21,8 +21,6 @@
 /// @file vfs.hpp
 /// @brief Core VFS types, structures, and public API declarations.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/vfs/vfs_errors.hpp>

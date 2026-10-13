@@ -1,151 +1,182 @@
-diff --git a/src/kernel/driver/ahci.cpp b/src/kernel/driver/ahci.cpp
-index 77204400a..d3d2905d7 100644
---- a/src/kernel/driver/ahci.cpp
-+++ b/src/kernel/driver/ahci.cpp
-@@ -113,7 +113,8 @@ AhciDriver::~AhciDriver() {
-         port_write(p, PORT_IS, 0xFFFFFFFF); // ack any pending status
-     }
- 
--    // Stop ports and free memory
-+    // Stop ports and free memory — quiesce DMA first so no in-flight
-+    // command writes into pages after they are freed.
-     for (uint8_t p = 0; p < port_count_; ++p) {
-         port_write(p, PORT_CMD, 0);
-         for (uint8_t s = 0; s < AHCI_MAX_CMDS; ++s) {
-@@ -170,7 +171,8 @@ bool AhciDriver::port_wait_ready(uint8_t port, uint64_t timeout_us) {
- }
- 
- bool AhciDriver::port_init(uint8_t port) {
--    // Check port status
-+    // An offline port has no device — skip init instead of programming
-+    // command tables nobody will complete.
-     uint32_t ssts = port_read(port, PORT_SSTS);
-     uint8_t det = ssts & SSTS_DET_MASK;
-     if (det != SSTS_DET_ONLINE) {
-@@ -418,7 +420,8 @@ bool AhciDriver::start_cmd(uint8_t port, uint8_t slot, uint8_t ata_cmd,
-     ch->ctbau =
-         static_cast<uint32_t>((ct_phys_[port][slot] >> 32) & 0xFFFFFFFF);
- 
--    // Ensure writes are visible before issuing command
-+    // Fence: command-table writes must be visible to the HBA before the
-+    // CI doorbell — otherwise it DMAs stale descriptors.
-     kernel::atomic_fence();
- 
-     // Issue command
-diff --git a/src/kernel/driver/ahci.hpp b/src/kernel/driver/ahci.hpp
-index 3604c512a..fffffe10c 100644
---- a/src/kernel/driver/ahci.hpp
-+++ b/src/kernel/driver/ahci.hpp
+diff --git a/src/kernel/daemon/daemon_mgr.hpp b/src/kernel/daemon/daemon_mgr.hpp
+index e6d207fe2..8f9694b0e 100644
+--- a/src/kernel/daemon/daemon_mgr.hpp
++++ b/src/kernel/daemon/daemon_mgr.hpp
 @@ -22,8 +22,6 @@
- /// @brief AHCI/SATA driver — extends BlockDevice with DMA and NCQ support.
- ///        Uses ahci_protocol.hpp for register layouts and DmaBuffer for data.
+ /// @brief Daemon lifecycle manager — registration, spawning, death
+ /// notification, and restart.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ namespace kernel {
+diff --git a/src/kernel/elf/elf.hpp b/src/kernel/elf/elf.hpp
+index 1889a6a41..91777b546 100644
+--- a/src/kernel/elf/elf.hpp
++++ b/src/kernel/elf/elf.hpp
+@@ -21,8 +21,6 @@
+ /// @file elf.hpp
+ /// @brief ELF64 binary loader — validate, load, exec, shared-object support.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/elf/elf_shared.hpp>
+diff --git a/src/kernel/elf/elf_shared.hpp b/src/kernel/elf/elf_shared.hpp
+index 8b8801d83..e14424721 100644
+--- a/src/kernel/elf/elf_shared.hpp
++++ b/src/kernel/elf/elf_shared.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Shared-object / dynamic linking structures (issue #95).
+ ///        DT_NEEDED resolution, GOT/PLT fixups, relocation handling.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/sync/spinlock.hpp>
+ 
+diff --git a/src/kernel/vfs/devfs.hpp b/src/kernel/vfs/devfs.hpp
+index a864ae10f..322fa0383 100644
+--- a/src/kernel/vfs/devfs.hpp
++++ b/src/kernel/vfs/devfs.hpp
+@@ -21,8 +21,6 @@
+ /// @file devfs.hpp
+ /// @brief Device filesystem (devfs) declaration.
+ 
+-#pragma once
+-
+ #include <kernel/vfs/vfs.hpp>
+ 
+ namespace kernel {
+diff --git a/src/kernel/vfs/fat32.hpp b/src/kernel/vfs/fat32.hpp
+index d189bdd70..db2e90a08 100644
+--- a/src/kernel/vfs/fat32.hpp
++++ b/src/kernel/vfs/fat32.hpp
+@@ -21,8 +21,6 @@
+ /// @file fat32.hpp
+ /// @brief FAT32 on-disk structures, partition class, and directory helpers.
  
 -#pragma once
 -
  #include <types.hpp>
  #include <kernel/driver/block_device.hpp>
- #include <kernel/driver/ahci_protocol.hpp>
-diff --git a/src/kernel/driver/ahci_protocol.hpp b/src/kernel/driver/ahci_protocol.hpp
-index 00ebfec53..912356be0 100644
---- a/src/kernel/driver/ahci_protocol.hpp
-+++ b/src/kernel/driver/ahci_protocol.hpp
-@@ -23,8 +23,6 @@
- ///        Shared between kernel-mode driver and userspace (ring-3) driver
- ///        server. No kernel dependencies — standalone portable header.
  
--#pragma once
--
- #include <types.hpp>
- 
- namespace kernel::ahci {
-diff --git a/src/kernel/driver/ata_pio.hpp b/src/kernel/driver/ata_pio.hpp
-index d8f26c239..383c5429b 100644
---- a/src/kernel/driver/ata_pio.hpp
-+++ b/src/kernel/driver/ata_pio.hpp
+diff --git a/src/kernel/vfs/fat32_fs.hpp b/src/kernel/vfs/fat32_fs.hpp
+index a2f6d6e48..f16469b57 100644
+--- a/src/kernel/vfs/fat32_fs.hpp
++++ b/src/kernel/vfs/fat32_fs.hpp
 @@ -21,8 +21,6 @@
- /// @file ata_pio.hpp
- /// @brief ATA PIO driver for legacy IDE controllers.
+ /// @file fat32_fs.hpp
+ /// @brief FAT32 VFS filesystem integration (mount, root vnode).
  
 -#pragma once
 -
- #include <kernel/driver/block_device.hpp>
+ #include <kernel/vfs/vfs.hpp>
+ #include <kernel/vfs/fat32.hpp>
+ 
+diff --git a/src/kernel/vfs/initrd_fs.hpp b/src/kernel/vfs/initrd_fs.hpp
+index 5ac8d2181..e8cede29d 100644
+--- a/src/kernel/vfs/initrd_fs.hpp
++++ b/src/kernel/vfs/initrd_fs.hpp
+@@ -21,8 +21,6 @@
+ /// @file initrd_fs.hpp
+ /// @brief Initial ramdisk filesystem (initrd) declaration.
+ 
+-#pragma once
+-
+ #include <kernel/vfs/vfs.hpp>
  
  namespace kernel {
-diff --git a/src/kernel/driver/block_device.hpp b/src/kernel/driver/block_device.hpp
-index f2c6f1ac8..fc375a210 100644
---- a/src/kernel/driver/block_device.hpp
-+++ b/src/kernel/driver/block_device.hpp
+diff --git a/src/kernel/vfs/pipe.hpp b/src/kernel/vfs/pipe.hpp
+index 50db1e6ed..2ba91a1bd 100644
+--- a/src/kernel/vfs/pipe.hpp
++++ b/src/kernel/vfs/pipe.hpp
 @@ -21,8 +21,6 @@
- /// @file block_device.hpp
- /// @brief Abstract block device interface and mock device.
- 
--#pragma once
--
- #include <types.hpp>
- 
- namespace kernel {
-diff --git a/src/kernel/driver/dma.hpp b/src/kernel/driver/dma.hpp
-index 9b73fd51d..4e4cae3db 100644
---- a/src/kernel/driver/dma.hpp
-+++ b/src/kernel/driver/dma.hpp
-@@ -24,8 +24,6 @@
- ///        and portable DMA channel abstraction for kernel and userspace
- ///        drivers.
- 
--#pragma once
--
- #include <types.hpp>
- #include <constants.hpp>
- #include <kernel/arch/pci.hpp>
-diff --git a/src/kernel/driver/driver.hpp b/src/kernel/driver/driver.hpp
-index 628586826..a20cd8ba4 100644
---- a/src/kernel/driver/driver.hpp
-+++ b/src/kernel/driver/driver.hpp
-@@ -21,8 +21,6 @@
- /// @file driver.hpp
- /// @brief Driver registry and module management layer.
+ /// @file pipe.hpp
+ /// @brief Pipe (anonymous FIFO) creation API.
  
 -#pragma once
 -
  #include <types.hpp>
  
  namespace kernel {
-diff --git a/src/kernel/driver/iocd.hpp b/src/kernel/driver/iocd.hpp
-index 6e149d238..b33e7e23f 100644
---- a/src/kernel/driver/iocd.hpp
-+++ b/src/kernel/driver/iocd.hpp
+diff --git a/src/kernel/vfs/procfs.hpp b/src/kernel/vfs/procfs.hpp
+index a93799272..686ba909c 100644
+--- a/src/kernel/vfs/procfs.hpp
++++ b/src/kernel/vfs/procfs.hpp
 @@ -21,8 +21,6 @@
- /// @file iocd.hpp
- /// @brief I/O Controller Daemon IPC interface and message types.
+ /// @file procfs.hpp
+ /// @brief Process filesystem (procfs) declaration.
+ 
+-#pragma once
+-
+ #include <kernel/vfs/vfs.hpp>
+ 
+ namespace kernel {
+diff --git a/src/kernel/vfs/ramdisk_fs.hpp b/src/kernel/vfs/ramdisk_fs.hpp
+index 8c7e38816..47026a786 100644
+--- a/src/kernel/vfs/ramdisk_fs.hpp
++++ b/src/kernel/vfs/ramdisk_fs.hpp
+@@ -32,8 +32,6 @@
+ /// Integrity verification is client-side re-read (no stored checksum in
+ /// v1; bit-rot detection is out of scope — see docs/specs/ramdisk_fs.md).
+ 
+-#pragma once
+-
+ #include <kernel/vfs/vfs.hpp>
+ 
+ namespace kernel {
+diff --git a/src/kernel/vfs/tmpfs.hpp b/src/kernel/vfs/tmpfs.hpp
+index b4c3aa2f4..f91fedec8 100644
+--- a/src/kernel/vfs/tmpfs.hpp
++++ b/src/kernel/vfs/tmpfs.hpp
+@@ -21,8 +21,6 @@
+ /// @file tmpfs.hpp
+ /// @brief In-memory temporary filesystem (tmpfs) declaration.
+ 
+-#pragma once
+-
+ #include <kernel/vfs/vfs.hpp>
+ 
+ namespace kernel {
+diff --git a/src/kernel/vfs/vfs.hpp b/src/kernel/vfs/vfs.hpp
+index 0a6874117..41a26f81c 100644
+--- a/src/kernel/vfs/vfs.hpp
++++ b/src/kernel/vfs/vfs.hpp
+@@ -21,8 +21,6 @@
+ /// @file vfs.hpp
+ /// @brief Core VFS types, structures, and public API declarations.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/memory/checked_ptr.hpp>
+ #include <kernel/vfs/vfs_errors.hpp>
+diff --git a/src/kernel/vfs/vfs_errors.hpp b/src/kernel/vfs/vfs_errors.hpp
+index 633135b83..857d338d9 100644
+--- a/src/kernel/vfs/vfs_errors.hpp
++++ b/src/kernel/vfs/vfs_errors.hpp
+@@ -21,8 +21,6 @@
+ /// @file vfs_errors.hpp
+ /// @brief VFS error code definitions and error-string conversion.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <assert.hpp>
+ 
+diff --git a/src/kernel/vfs/vfsd.hpp b/src/kernel/vfs/vfsd.hpp
+index cd35073fd..9162ded50 100644
+--- a/src/kernel/vfs/vfsd.hpp
++++ b/src/kernel/vfs/vfsd.hpp
+@@ -21,8 +21,6 @@
+ /// @file vfsd.hpp
+ /// @brief VFS daemon IPC message types and PID tracking.
  
 -#pragma once
 -
  #include <types.hpp>
  
  namespace kernel {
-diff --git a/src/kernel/driver/virtio_blk.hpp b/src/kernel/driver/virtio_blk.hpp
-index 1b76a2769..ca35d1b33 100644
---- a/src/kernel/driver/virtio_blk.hpp
-+++ b/src/kernel/driver/virtio_blk.hpp
-@@ -21,8 +21,6 @@
- /// @file virtio_blk.hpp
- /// @brief Virtio block driver — modern (Virtio 1.0) PCI transport.
- 
--#pragma once
--
- #include <types.hpp>
- #include <kernel/arch/virtio.hpp>
- #include <kernel/driver/block_device.hpp>
-diff --git a/src/kernel/driver/virtio_net.hpp b/src/kernel/driver/virtio_net.hpp
-index 5e594ba97..b85eec427 100644
---- a/src/kernel/driver/virtio_net.hpp
-+++ b/src/kernel/driver/virtio_net.hpp
-@@ -21,8 +21,6 @@
- /// @file virtio_net.hpp
- /// @brief Virtio-net NIC driver — modern (Virtio 1.0) PCI transport.
- 
--#pragma once
--
- #include <types.hpp>
- #include <kernel/arch/virtio.hpp>
- #include <kernel/net/net.hpp>

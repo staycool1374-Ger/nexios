@@ -21,8 +21,6 @@
 /// @file vfsd.hpp
 /// @brief VFS daemon IPC message types and PID tracking.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {

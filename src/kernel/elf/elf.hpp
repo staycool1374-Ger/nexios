@@ -21,8 +21,6 @@
 /// @file elf.hpp
 /// @brief ELF64 binary loader — validate, load, exec, shared-object support.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/elf/elf_shared.hpp>

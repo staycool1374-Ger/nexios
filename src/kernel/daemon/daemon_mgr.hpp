@@ -22,8 +22,6 @@
 /// @brief Daemon lifecycle manager — registration, spawning, death
 /// notification, and restart.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {
