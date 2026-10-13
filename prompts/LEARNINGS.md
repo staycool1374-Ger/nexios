@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #260 — core/libs/services H1–H8 verification pass (last of the ordered sequence)
+
+- **Learned:** (1) "build" is not a test class (like buffer_pool) — verify every class name in test_registry.cpp before running; the issue's class list can be stale. (2) libc/services keep C/POSIX idioms by design: converting userspace −1/errno to kernel enums would BREAK the userspace ABI — H6 layering is a correctness rule, not just style. Vendored third-party loops (libfdt) are out of scope entirely. (3) Load-induced timing FAILs (tlb p99 bound, zombie-ordering) clear on identical-binary rerun like stalls do — record the failing assert + rerun tally as evidence, same standard; nondeterministic hang POINTS across attempts (34/94/0) are the signature of sickness, not code. (4) Tight poll loops self-inflict load (opencode + Terminal rendering topped ps) — back off polling when the host is sick.
+- **Adapted:** 8 dup guards + 2 WHY upgrades; evidence on #260; SIL 3 APPROVED zero findings. Ordered sequence #257→#260 complete (7/9 #253 parts done with prior #254–#256; remaining #261/#262 out of the ordered scope).
+- **Style re-surface:** user-task fault model ≠ kernel fault model (no ENSURE/locks imported to services); dmesg ring is infra (H7 applies to users, not the ring).
+
 ### #259 — interrupts/arch/HAL/timers H1–H8 verification pass
 
 - **Learned:** (1) Audit-mature areas complete H1–H8 with micro-diffs — the review itself is the deliverable; forcing churn would manufacture risk. (2) Suite-first-class core TIMEOUTs are a harness-budget artifact (LTO relink + 129-file TIDY consume the 250 s expect budget before the guest runs), NOT kernel hangs — proven by identical-ISO standalone greens; read `/tmp/jarvis_classruns/<class>.log` head (build lines) vs tail (guest lines) to distinguish build-eaten-budget from guest-hang. (3) Arch-guarded test classes register zero tests off-target (expected-empty, like task_fpu) — verify guards in test_registry.cpp instead of burning watchdog timeouts; aarch64 link is pre-broken (relocation truncated, stash-convicted) — evidence belongs on #327, never inline-fixed under a hygiene gate.
