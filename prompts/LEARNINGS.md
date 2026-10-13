@@ -46,6 +46,12 @@
 
 ## Entries
 
+### Wave 1 verification (#331, #334, #335) — owner-fixed, verified + closed
+
+- **Learned:** (1) Before `issue_write update`, ALWAYS `issue_read get` the full body first — I reconstructed #334/#335 bodies from truncated excerpts and dropped the reporter's fix-hypothesis tails. Closed issues keep evidence comments, but the original text is unrecoverable. (2) `proc_elf` stalls at `loader_fault_dump_gated` (fault-dispatch, zero S-lines) with zero source delta between pass/stall/pass runs = H2 deferred-switch race family flake, not a regression; identical-binary rerun is the correct first move (passed 112/112 on 3rd run). (3) Owner batch-fix commits (`19d55cea1` for 3 issues) shift the role to verify-at-HEAD + close: elf_loader 15/15, task_metering 9/9, deadline 144/144, proc_elf 112/112.
+- **Adapted:** all three closed completed with HEAD gate evidence; stall rows recorded with STATUS: TIMEOUT (mandatory history includes abnormal runs).
+- **Style re-surface:** test-history rows required for EVERY run including stalls (PASSED: 0 FAILED: 0 + STATUS).
+
 ### Wave 0 (#342, #343, #341) — gate hygiene + fail-closeds done
 
 - **Learned:** (1) `make execute-test dump-counts` is broken on x86_64 (mux chardev vs mon:stdio sed — filed #344); capture TCOUNT from stdout instead. (2) A "flag mismatch" fix can hide a second gate: #341's translation was correct but unobservable until the vfsd daemon's create-deny was found by reading — always trace the FULL path (stub→syscall→daemon→backend) before claiming E2E. Kernel-side translation was impossible (bit 0x200 ambiguous across libcs) — translate at the single owner above the boundary. (3) Daemon fd-table calls (fstat) can never succeed for user fds — authorization-only handlers are the correct shape (mirrors read/write). (4) Ring-3 probes that create files are safe under test_isolate (tmpfs reset between tests) but MUST unlink in-test; place early-print markers (512 B capture cap).
