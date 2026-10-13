@@ -232,10 +232,13 @@ uint64_t Syscall::sys_open(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     }
     if (arg1 & vfs::O_CREAT) {
         // Target does not exist yet — authorize + create in the parent dir.
+        // Create-intent op (issue #341): the daemon cannot approve this
+        // under VFS_OPEN (its open of a missing path always fails), so
+        // the O_CREAT branch authorizes as VFS_OPEN_CREATE (sole caller).
         const char *name = nullptr;
         vfs::Vnode *parent = nullptr;
-        if (resolve_parent_then_authorize(vfsd::VFS_OPEN, pid, path, name,
-                                          parent)) {
+        if (resolve_parent_then_authorize(vfsd::VFS_OPEN_CREATE, pid, path,
+                                          name, parent)) {
             if (parent->ops && parent->ops->create &&
                 parent->ops->create(*parent, name, vfs::S_IFREG) == 0) {
                 vfs::Vnode *created = vfs::resolve(path);

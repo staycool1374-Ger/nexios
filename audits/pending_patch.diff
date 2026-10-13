@@ -1,107 +1,318 @@
-diff --git a/src/kernel/ipc/shm_ring.hpp b/src/kernel/ipc/shm_ring.hpp
-index 4797efe21..1b2e63224 100644
---- a/src/kernel/ipc/shm_ring.hpp
-+++ b/src/kernel/ipc/shm_ring.hpp
-@@ -147,14 +147,20 @@ inline bool shm_ring_push(SharedRingHeader *header, uint8_t *data_base,
- 
- /// @brief Consumer pop: copy the element at the tail into @p dst.
- ///        Returns false when empty or not initialised.  Tail is published with
--///        release after the payload read (SPSC protocol).
-+///        release after the payload read (SPSC protocol).  A zero
-+///        capacity/element_size (hostile or corrupt peer header) fails closed
-+///        before the tail/element_size division (issue #343) — mirrors
-+///        shm_ring_has_space.
- inline bool shm_ring_pop(SharedRingHeader *header, uint8_t *data_base,
-                          uint8_t *dst) {
-     if (!header || !data_base || !dst)
-         return false;
-     if (!shm_ring_has_data(header))
-         return false;
-+    uint64_t cap = __atomic_load_n(&header->capacity, __ATOMIC_ACQUIRE);
-     uint64_t esz = __atomic_load_n(&header->element_size, __ATOMIC_ACQUIRE);
-+    if (cap == 0 || esz == 0)
-+        return false;
-     uint64_t t = __atomic_load_n(&header->tail, __ATOMIC_RELAXED);
-     const uint8_t *src = shm_ring_elem(header, data_base, t / esz);
-     for (uint64_t i = 0; i < esz; ++i)
-diff --git a/src/kernel/test/test_cap_shm.cpp b/src/kernel/test/test_cap_shm.cpp
-index 28c70009e..9066e04c1 100644
---- a/src/kernel/test/test_cap_shm.cpp
-+++ b/src/kernel/test/test_cap_shm.cpp
-@@ -505,6 +505,37 @@ JARVIS_TEST(frame_create_rejected, "PRE: none | POST: none") {
+diff --git a/src/kernel/syscall/syscall_handlers_fs.cpp b/src/kernel/syscall/syscall_handlers_fs.cpp
+index f2df44652..8d1c714d5 100644
+--- a/src/kernel/syscall/syscall_handlers_fs.cpp
++++ b/src/kernel/syscall/syscall_handlers_fs.cpp
+@@ -232,10 +232,13 @@ uint64_t Syscall::sys_open(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
+     }
+     if (arg1 & vfs::O_CREAT) {
+         // Target does not exist yet — authorize + create in the parent dir.
++        // Create-intent op (issue #341): the daemon cannot approve this
++        // under VFS_OPEN (its open of a missing path always fails), so
++        // the O_CREAT branch authorizes as VFS_OPEN_CREATE (sole caller).
+         const char *name = nullptr;
+         vfs::Vnode *parent = nullptr;
+-        if (resolve_parent_then_authorize(vfsd::VFS_OPEN, pid, path, name,
+-                                          parent)) {
++        if (resolve_parent_then_authorize(vfsd::VFS_OPEN_CREATE, pid, path,
++                                          name, parent)) {
+             if (parent->ops && parent->ops->create &&
+                 parent->ops->create(*parent, name, vfs::S_IFREG) == 0) {
+                 vfs::Vnode *created = vfs::resolve(path);
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index a4fa1627b..8a4254584 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -285,8 +285,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"core",                553,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
+     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
+     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
+-    {"proc_elf",            111,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 6 pre-existing aggregate drift at HEAD
+-    {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
++    {"proc_elf",            112,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 6 pre-existing aggregate drift at HEAD
++    {"libc_verify",          8,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77) + Ring-3 create/trunc flag-translation probe (#341)
+     {"libc_stdio",            5,    0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (#303, x86_64-only)
+     {"libc_malloc",           5,    0,       0      },  // malloc0/align/calloc/realloc+OOM/cycle-no-leak (#303, x86_64-only)
+     {"libc_string",           3,    0,       0      },  // ring3 exact+sweep + kernel api sweep (#303)
+diff --git a/src/kernel/test/test_libc_verify.cpp b/src/kernel/test/test_libc_verify.cpp
+index 249730bba..39a518870 100644
+--- a/src/kernel/test/test_libc_verify.cpp
++++ b/src/kernel/test/test_libc_verify.cpp
+@@ -422,6 +422,49 @@ JARVIS_TEST(libc_verify_scanf_read, "PRE: vfsd | POST: none") {
      JARVIS_TEST_PASS();
  }
  
 +// Runmode: kernel
-+// Testidea: shm_ring_pop over a hostile header with element_size == 0 and
-+//           head != tail must fail closed (return false), not divide by
-+//           zero (issue #343).  Push over the same header is already
-+//           guarded via shm_ring_has_space — pinned here too.
-+// Input: Stack header (magic set, capacity valid, element_size 0,
-+//        head 8, tail 0); stack data/dst buffers.
-+// Expect: has_data true (head != tail), pop false, push false, tail
-+//         unmoved.
-+// Depends: shm_ring_pop zero-guard, shm_ring_has_space zero-guard
-+JARVIS_TEST(shm_ring_zero_esz_pop_rejected, "PRE: none | POST: none") {
-+    kernel::shm::SharedRingHeader hdr{};
-+    __atomic_store_n(&hdr.magic, kernel::shm::SHM_RING_MAGIC,
-+                     __ATOMIC_RELAXED);
-+    __atomic_store_n(&hdr.version, kernel::shm::SHM_RING_VERSION,
-+                     __ATOMIC_RELAXED);
-+    __atomic_store_n(&hdr.capacity, 4096, __ATOMIC_RELAXED);
-+    __atomic_store_n(&hdr.element_size, 0, __ATOMIC_RELAXED);
-+    __atomic_store_n(&hdr.head, 8, __ATOMIC_RELAXED);
-+    __atomic_store_n(&hdr.tail, 0, __ATOMIC_RELAXED);
-+    uint8_t data[64] = {};
-+    uint8_t dst[64] = {};
-+    uint8_t src[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-+    JARVIS_ASSERT(kernel::shm::shm_ring_has_data(&hdr));
-+    JARVIS_ASSERT(!kernel::shm::shm_ring_pop(&hdr, data, dst));
-+    JARVIS_ASSERT(!kernel::shm::shm_ring_push(&hdr, data, src));
-+    JARVIS_ASSERT_EQ(0ULL,
-+                     __atomic_load_n(&hdr.tail, __ATOMIC_RELAXED));
++// Testidea: Issue #341 — picolibc O_CREAT/O_TRUNC translate to kernel VFS
++//           flags in picolib_stubs _open (kernel-side translation is
++//           impossible: bit 0x200 is O_CREAT to in-tree callers but
++//           O_TRUNC to picolibc callers).
++// Input: Same dispatch; parse created/trunc_full/trunc_empty markers;
++//        resolve both probe files kernel-side and check exact content.
++// Expect: created 1 1 (Ring-3 O_CREAT created the file, 16 B written);
++//        trunc_full 1 (O_TRUNC on the non-empty file refused — no
++//        kernel truncate primitive); trunc_empty 1 (O_TRUNC on the
++//        empty file is a no-op success); kernel-side content exact.
++// Depends: picolib_stubs _open flag translation (issue #341)
++JARVIS_TEST(libc_verify_ring3_create_trunc, "PRE: vfsd | POST: none") {
++    constexpr const char *kCreated = "/tmp/libc_created.txt";
++    constexpr const char *kEmpty = "/tmp/libc_empty.txt";
++    kernel::test::mark_vfs_touched();
++    vfs::unlink(kCreated); // stale cleanup from an aborted run
++    vfs::unlink(kEmpty);
++    VerifyOutcome o = run_verify_program();
++    JARVIS_ASSERT(o.joined);
++    JARVIS_ASSERT(serial_contains(o.capture, "LIBC_VERIFY: created 1 1"));
++    JARVIS_ASSERT(serial_contains(o.capture, "LIBC_VERIFY: trunc_full 1"));
++    JARVIS_ASSERT(
++        serial_contains(o.capture, "LIBC_VERIFY: trunc_empty 1"));
++    // Kernel-side proof: the Ring-3-created file exists with exact content.
++    static const char kExpect[] = "created-by-ring3";
++    char got[16]{};
++    {
++        vfs::Vnode *f = vfs::resolve(kCreated);
++        JARVIS_ASSERT(f != nullptr && f->ops != nullptr &&
++                      f->ops->read != nullptr);
++        int64_t rd = f->ops->read(*f, reinterpret_cast<uint8_t *>(got),
++                                  sizeof(got), 0);
++        JARVIS_ASSERT(rd == 16);
++    }
++    for (size_t i = 0; i < sizeof(got); ++i)
++        JARVIS_ASSERT(got[i] == kExpect[i]);
++    kernel::test::mark_vfs_touched();
++    vfs::unlink(kCreated);
++    vfs::unlink(kEmpty);
 +    JARVIS_TEST_PASS();
 +}
 +
- void register_cap_shm_tests() {
-     Logger::info("Registering cap_shm tests");
-     JARVIS_REGISTER_TEST(frame_user_map_unmap_roundtrip);
-@@ -513,4 +544,5 @@ void register_cap_shm_tests() {
-     JARVIS_REGISTER_TEST(shm_ring_task_death_drain);
-     JARVIS_REGISTER_TEST(shm_ring_revocation_cleanup);
-     JARVIS_REGISTER_TEST(frame_create_rejected);
-+    JARVIS_REGISTER_TEST(shm_ring_zero_esz_pop_rejected);
+ // Runmode: kernel
+ // Testidea: The program runs to clean EXIT(0) with zero resource delta.
+ // Input: Same dispatch; observe exit code (fault-death also yields
+@@ -499,6 +542,7 @@ void register_libc_verify_tests() {
+     JARVIS_REGISTER_TEST(libc_verify_malloc_growth);
+     JARVIS_REGISTER_TEST(libc_verify_malloc_reuse);
+     JARVIS_REGISTER_TEST(libc_verify_scanf_read);
++    JARVIS_REGISTER_TEST(libc_verify_ring3_create_trunc); // issue #341
+     JARVIS_REGISTER_TEST(libc_verify_exit_clean_zero_delta);
+     JARVIS_REGISTER_TEST(libc_verify_wired_activation); // issue #77
+     JARVIS_REGISTER_TEST(libc_verify_wired_denied);      // issue #77
+diff --git a/src/kernel/vfs/vfsd.hpp b/src/kernel/vfs/vfsd.hpp
+index 9162ded50..d2d422466 100644
+--- a/src/kernel/vfs/vfsd.hpp
++++ b/src/kernel/vfs/vfsd.hpp
+@@ -42,6 +42,11 @@ static constexpr uint64_t VFS_READDIR = 109;
+ static constexpr uint64_t VFS_MKDIR = 110;
+ static constexpr uint64_t VFS_UNLINK = 111;
+ static constexpr uint64_t VFS_RMDIR = 112;
++// Issue #341: create-intent open. The kernel's sys_open O_CREAT branch is
++// the ONLY caller that authorizes a not-yet-existing path; it uses this
++// op (never VFS_OPEN) so the daemon can tell creation apart from plain
++// open. Any future VFS_OPEN caller on a missing path must use this op.
++static constexpr uint64_t VFS_OPEN_CREATE = 113;
+ 
+ struct Msg {
+     uint64_t sender_id; ///< Task ID of the sender.
+diff --git a/src/libc/picolib_stubs.c b/src/libc/picolib_stubs.c
+index a078e7309..3b81acfa9 100644
+--- a/src/libc/picolib_stubs.c
++++ b/src/libc/picolib_stubs.c
+@@ -58,9 +58,47 @@ off_t _lseek(int fd, off_t offset, int whence) {
+                                      (long)whence, 0));
  }
-\ No newline at end of file
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 8ef00b394..a4fa1627b 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -97,7 +97,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery (0.4.2 issue #10)
-     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
-     {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
--    {"cap_shm",               6,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup + frame_create validation (#134)
-+    {"cap_shm",               7,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup + frame_create validation (#134) + zero-esz pop/push rejection (#343)
-     {"cap_death",             9,    0,       0      },  // async task-death notifications (issue #105 Part B): roundtrip, crash reason, fan-in, after-death, supervisor-drain, full, exactly-once, unwatch, nonblock
-     {"cap_pager",             15,   0,       0      },  // external pager protocol (issue #107 + dispatch rejects #134): authority, recv, classification, recover-IP, roundtrip, map-after-timeout, abort-poison, timeout, dead-drain, client-death, revoke, deadlock-out, smap/canary + recv-empty/abort-unregister dispatch
-     {"ipc_fastpath",          14,   0,       0      },  // in-register IPC fastpath (issue #11): mask membership, ABI layout, pop_clamped parity, oversize-reject, roundtrip, recv-oversized-stays, send_sync-oversized-reply, full-queue-block, empty-block, send_sync roundtrip, authority, no-user-deref canary, latency, hybrid queue
-@@ -284,7 +284,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     // from measured `dump-counts` output; 0 disables validation.
-     {"core",                553,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
-     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
--    {"capability",          148,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342)
-+    {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
-     {"proc_elf",            111,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 6 pre-existing aggregate drift at HEAD
-     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
-     {"libc_stdio",            5,    0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (#303, x86_64-only)
+ 
++/* Newlib/picolibc open-flag values (sysroot sys/_default_fcntl.h):
++ * _FCREAT 0x40, _FTRUNC 0x200. Kernel VFS OpenFlags (vfs.hpp):
++ * O_CREAT 0x200, no O_TRUNC.Bits 0-1 (access mode) match. */
++#define PICOLIBC_O_CREAT 0x40
++#define PICOLIBC_O_TRUNC 0x200
++#define KERNEL_O_CREAT 0x200
++
++int _fstat(int fd, struct stat *buf); // defined below; _open needs it
++
+ int _open(const char *path, int flags, int mode) {
+     (void)mode; // kernel OPEN takes path+flags only
+-    return (int)map_err(__syscall5(SYS_OPEN, (long)path, (long)flags, 0, 0));
++    // Issue #341: translate here — the single picolibc→kernel owner.
++    // Kernel-side translation is impossible: bit 0x200 means O_CREAT
++    // to in-tree callers (kernel values) but O_TRUNC to picolibc
++    // callers, so the kernel cannot disambiguate by value.
++    int kflags = flags & 0x3;
++    const int want_creat = (flags & PICOLIBC_O_CREAT) != 0;
++    const int want_trunc = (flags & PICOLIBC_O_TRUNC) != 0;
++    if (want_creat)
++        kflags |= KERNEL_O_CREAT;
++    // _FTRUNC aliases kernel O_CREAT and must never pass through
++    // (it would create instead of truncating). Anything else passes
++    // through unchanged (pre-existing behavior for EXCL/APPEND/etc,
++    // which the kernel neither maps nor honors).
++    kflags |= (flags & ~(0x3 | PICOLIBC_O_CREAT | PICOLIBC_O_TRUNC));
++    int fd = (int)map_err(__syscall5(SYS_OPEN, (long)path, (long)kflags,
++                                     0, 0));
++    if (fd < 0 || !want_trunc)
++        return fd;
++    // O_TRUNC: the kernel has no truncate primitive. A new or empty
++    // file is already truncated — succeed. A non-empty existing file
++    // cannot be truncated: close and fail ENOSYS (honest, not silent).
++    // An unstatable file proceeds (pre-existing behavior; truncation
++    // need unproven rather than assumed impossible).
++    struct stat st;
++    if (_fstat(fd, &st) == 0 && st.st_size > 0) {
++        _close(fd);
++        errno = ENOSYS;
++        return -1;
++    }
++    return fd;
+ }
+ 
+ int _fstat(int fd, struct stat *buf) {
 diff --git a/test-history.txt b/test-history.txt
-index 9737001d5..8848b6936 100644
+index 8848b6936..4f180cece 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -3332,3 +3332,5 @@ SUMMARY: total=18 ok=18 fail=0
- 2026-10-13 12:24:10 capability PASSED: 148 FAILED: 0 TIME: 17528ms
- 2026-10-13 12:27:33 safe PASSED: 147 FAILED: 0 TIME: 21248ms
+@@ -3334,3 +3334,9 @@ SUMMARY: total=18 ok=18 fail=0
  2026-10-13 12:29:05 smp_sched PASSED: 13 FAILED: 0 TIME: 1625ms
-+2026-10-13 12:41:20 cap_shm PASSED: 7 FAILED: 0 TIME: 891ms
-+2026-10-13 12:44:02 capability PASSED: 149 FAILED: 0 TIME: 18060ms
+ 2026-10-13 12:41:20 cap_shm PASSED: 7 FAILED: 0 TIME: 891ms
+ 2026-10-13 12:44:02 capability PASSED: 149 FAILED: 0 TIME: 18060ms
++2026-10-13 13:05:44 libc_verify PASSED: 8 FAILED: 0 TIME: 21002ms
++2026-10-13 13:08:12 servers_vfsd_auth PASSED: 27 FAILED: 0 TIME: 3429ms
++2026-10-13 13:12:30 proc_elf PASSED: 112 FAILED: 0 TIME: 63653ms
++2026-10-13 13:16:05 servers PASSED: 66 FAILED: 0 TIME: 34846ms
++2026-10-13 13:18:22 syscall_core PASSED: 33 FAILED: 0 TIME: 3940ms
++2026-10-13 13:22:10 storage PASSED: 166 FAILED: 0 TIME: 63639ms
+diff --git a/userspace/picolibc/libc_verify.c b/userspace/picolibc/libc_verify.c
+index 82b390203..f1b195328 100644
+--- a/userspace/picolibc/libc_verify.c
++++ b/userspace/picolibc/libc_verify.c
+@@ -15,7 +15,14 @@
+  * NOTE (verified ABI wart, #303 M1/M9): picolibc O_CREAT (0x40) does NOT
+  * equal kernel VFS O_CREAT (0x200), so this program never creates files
+  * itself — every /tmp path it opens is pre-created by the kernel test
+- * and opened O_RDONLY/O_WRONLY only (both match the kernel values). */
++ * and opened O_RDONLY/O_WRONLY only (both match the kernel values).
++ *
++ * Issue #341 extends this: the #341 probe block below (placed right
++ * after the #75 scanf block so its markers land inside the kernel
++ * test's 512 B stdout capture) exercises the picolibc→kernel flag
++ * translation in picolib_stubs _open — Ring-3 file creation, O_TRUNC
++ * on an empty file (no-op success), and O_TRUNC refusal on a
++ * non-empty file (no kernel truncate primitive). */
+ 
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -52,6 +59,34 @@ int main(void) {
+     else
+         printf("LIBC_VERIFY: scanf FAIL\n");
+ 
++    /* ---- #341: Ring-3 file creation + O_TRUNC semantics ---- */
++    {
++        int cfd = open("/tmp/libc_created.txt", O_WRONLY | O_CREAT);
++        int wrok = 0;
++        if (cfd >= 0) {
++            const char *msg = "created-by-ring3";
++            long w = write(cfd, msg, strlen(msg));
++            wrok = (w == (long)strlen(msg)) ? 1 : 0;
++            close(cfd);
++        }
++        printf("LIBC_VERIFY: created %d %d\n", (cfd >= 0) ? 1 : 0, wrok);
++        /* Non-empty file + O_TRUNC must fail (no kernel truncate
++         * primitive) — proves the 0x200 bit is translated, not passed
++         * through as a bogus kernel O_CREAT. */
++        int efd = open("/tmp/libc_created.txt", O_WRONLY | O_TRUNC);
++        printf("LIBC_VERIFY: trunc_full %d\n", (efd < 0) ? 1 : 0);
++        if (efd >= 0)
++            close(efd);
++        /* Empty file + O_TRUNC is a no-op and must succeed. */
++        int zfd0 = open("/tmp/libc_empty.txt", O_WRONLY | O_CREAT);
++        if (zfd0 >= 0)
++            close(zfd0);
++        int zfd = open("/tmp/libc_empty.txt", O_WRONLY | O_TRUNC);
++        printf("LIBC_VERIFY: trunc_empty %d\n", (zfd >= 0) ? 1 : 0);
++        if (zfd >= 0)
++            close(zfd);
++    }
++
+     /* ---- #303 M9: format specifiers ---- */
+     printf("LIBC_VERIFY: fmt %d %x %s %c %p\n", -42, 0xabcd, "hi", 'Q',
+            (void *)0x400000);
+diff --git a/userspace/picolibc/libc_verify.c.elf b/userspace/picolibc/libc_verify.c.elf
+index b79dd1c5f..60b732845 100755
+Binary files a/userspace/picolibc/libc_verify.c.elf and b/userspace/picolibc/libc_verify.c.elf differ
+diff --git a/userspace/vfsd.c b/userspace/vfsd.c
+index 595ce0020..fb55df176 100644
+--- a/userspace/vfsd.c
++++ b/userspace/vfsd.c
+@@ -17,6 +17,7 @@
+ #define VFS_CHDIR    107
+ #define VFS_GETCWD   108
+ #define VFS_READDIR  109
++#define VFS_OPEN_CREATE 113 // issue #341: create-intent open (kernel O_CREAT branch only)
+ 
+ struct VfsdMsg {
+     uint64_t sender_id;
+@@ -37,12 +38,35 @@ struct VfsdReply {
+ static uint64_t g_my_id = 0;
+ 
+ static int vfsd_handle_open(struct VfsdMsg* msg, struct VfsdReply* reply) {
+-    int fd = open(msg->path, (int)msg->arg0);
+-    reply->result = fd >= 0 ? fd : -1;
++    int fd = open(msg->path, (int)msg->arg0);    reply->result = fd >= 0 ? fd : -1;
+     if (fd >= 0) close(fd);
+     return 0;
+ }
+ 
++static int vfsd_handle_open_create(struct VfsdMsg* msg,
++                                     struct VfsdReply* reply) {
++    /* Issue #341: authorize Ring-3 file creation. Authorization-only —
++     * the kernel performs the single create after approval (mirrors
++     * the read/write handlers, which also never mutate). Scratch
++     * policy: creation is allowed only for a bare leaf directly under
++     * /tmp/ (no subdirectories, no dotfiles — covers ".", ".." and
++     * hidden names). A plain VFS_OPEN of a missing path stays denied
++     * (vfsd_handle_open fails its own open), so creation is reachable
++     * only through this create-intent op. */
++    const char *p = msg->path;
++    if (p[0] != '/' || p[1] != 't' || p[2] != 'm' || p[3] != 'p' ||
++        p[4] != '/')
++        { reply->result = -1; return 0; }
++    if (p[5] == '\0' || p[5] == '.')
++        { reply->result = -1; return 0; }
++    for (int i = 6; p[i] != '\0'; ++i) {
++        if (p[i] == '/')
++            { reply->result = -1; return 0; }
++    }
++    reply->result = 0;
++    return 0;
++}
++
+ static int vfsd_handle_close(struct VfsdMsg* msg, struct VfsdReply* reply) {
+     int fd = (int)msg->arg0;
+     reply->result = close(fd) >= 0 ? 0 : -1;
+@@ -61,14 +85,13 @@ static int vfsd_handle_stat(struct VfsdMsg* msg, struct VfsdReply* reply) {
+ }
+ 
+ static int vfsd_handle_fstat(struct VfsdMsg* msg, struct VfsdReply* reply) {
+-    int fd = (int)msg->arg0;
+-    struct stat st;
+-    int r = fstat(fd, &st);
+-    reply->result = r >= 0 ? 0 : -1;
+-    if (r >= 0) {
+-        reply->data0 = st.st_size;
+-        reply->data1 = st.st_mode;
+-    }
++    (void)msg;
++    /* Authorization-only: the kernel stats the caller's own vnode after
++     * approval (mirrors the read/write handlers). A daemon-table fstat
++     * of the caller's fd could never succeed, so the old call always
++     * denied — including legitimate Ring-3 fstat (issue #341: the
++     * picolibc _open O_TRUNC path needs it). */
++    reply->result = 0;
+     return 0;
+ }
+ 
+@@ -124,6 +147,7 @@ static int vfsd_dispatch(struct VfsdMsg* msg, struct VfsdReply* reply) {
+         case VFS_CHDIR:   return vfsd_handle_chdir(msg, reply);
+         case VFS_GETCWD:  return vfsd_handle_getcwd(msg, reply);
+         case VFS_READDIR: return vfsd_handle_readdir(msg, reply);
++        case VFS_OPEN_CREATE: return vfsd_handle_open_create(msg, reply);
+         default:
+             reply->result = -1;
+             return -1;

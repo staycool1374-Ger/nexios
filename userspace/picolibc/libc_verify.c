@@ -15,7 +15,14 @@
  * NOTE (verified ABI wart, #303 M1/M9): picolibc O_CREAT (0x40) does NOT
  * equal kernel VFS O_CREAT (0x200), so this program never creates files
  * itself — every /tmp path it opens is pre-created by the kernel test
- * and opened O_RDONLY/O_WRONLY only (both match the kernel values). */
+ * and opened O_RDONLY/O_WRONLY only (both match the kernel values).
+ *
+ * Issue #341 extends this: the #341 probe block below (placed right
+ * after the #75 scanf block so its markers land inside the kernel
+ * test's 512 B stdout capture) exercises the picolibc→kernel flag
+ * translation in picolib_stubs _open — Ring-3 file creation, O_TRUNC
+ * on an empty file (no-op success), and O_TRUNC refusal on a
+ * non-empty file (no kernel truncate primitive). */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,6 +58,34 @@ int main(void) {
         printf("LIBC_VERIFY: scanf %d\n", v);
     else
         printf("LIBC_VERIFY: scanf FAIL\n");
+
+    /* ---- #341: Ring-3 file creation + O_TRUNC semantics ---- */
+    {
+        int cfd = open("/tmp/libc_created.txt", O_WRONLY | O_CREAT);
+        int wrok = 0;
+        if (cfd >= 0) {
+            const char *msg = "created-by-ring3";
+            long w = write(cfd, msg, strlen(msg));
+            wrok = (w == (long)strlen(msg)) ? 1 : 0;
+            close(cfd);
+        }
+        printf("LIBC_VERIFY: created %d %d\n", (cfd >= 0) ? 1 : 0, wrok);
+        /* Non-empty file + O_TRUNC must fail (no kernel truncate
+         * primitive) — proves the 0x200 bit is translated, not passed
+         * through as a bogus kernel O_CREAT. */
+        int efd = open("/tmp/libc_created.txt", O_WRONLY | O_TRUNC);
+        printf("LIBC_VERIFY: trunc_full %d\n", (efd < 0) ? 1 : 0);
+        if (efd >= 0)
+            close(efd);
+        /* Empty file + O_TRUNC is a no-op and must succeed. */
+        int zfd0 = open("/tmp/libc_empty.txt", O_WRONLY | O_CREAT);
+        if (zfd0 >= 0)
+            close(zfd0);
+        int zfd = open("/tmp/libc_empty.txt", O_WRONLY | O_TRUNC);
+        printf("LIBC_VERIFY: trunc_empty %d\n", (zfd >= 0) ? 1 : 0);
+        if (zfd >= 0)
+            close(zfd);
+    }
 
     /* ---- #303 M9: format specifiers ---- */
     printf("LIBC_VERIFY: fmt %d %x %s %c %p\n", -42, 0xabcd, "hi", 'Q',

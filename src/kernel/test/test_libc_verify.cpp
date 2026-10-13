@@ -423,6 +423,49 @@ JARVIS_TEST(libc_verify_scanf_read, "PRE: vfsd | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: Issue #341 — picolibc O_CREAT/O_TRUNC translate to kernel VFS
+//           flags in picolib_stubs _open (kernel-side translation is
+//           impossible: bit 0x200 is O_CREAT to in-tree callers but
+//           O_TRUNC to picolibc callers).
+// Input: Same dispatch; parse created/trunc_full/trunc_empty markers;
+//        resolve both probe files kernel-side and check exact content.
+// Expect: created 1 1 (Ring-3 O_CREAT created the file, 16 B written);
+//        trunc_full 1 (O_TRUNC on the non-empty file refused — no
+//        kernel truncate primitive); trunc_empty 1 (O_TRUNC on the
+//        empty file is a no-op success); kernel-side content exact.
+// Depends: picolib_stubs _open flag translation (issue #341)
+JARVIS_TEST(libc_verify_ring3_create_trunc, "PRE: vfsd | POST: none") {
+    constexpr const char *kCreated = "/tmp/libc_created.txt";
+    constexpr const char *kEmpty = "/tmp/libc_empty.txt";
+    kernel::test::mark_vfs_touched();
+    vfs::unlink(kCreated); // stale cleanup from an aborted run
+    vfs::unlink(kEmpty);
+    VerifyOutcome o = run_verify_program();
+    JARVIS_ASSERT(o.joined);
+    JARVIS_ASSERT(serial_contains(o.capture, "LIBC_VERIFY: created 1 1"));
+    JARVIS_ASSERT(serial_contains(o.capture, "LIBC_VERIFY: trunc_full 1"));
+    JARVIS_ASSERT(
+        serial_contains(o.capture, "LIBC_VERIFY: trunc_empty 1"));
+    // Kernel-side proof: the Ring-3-created file exists with exact content.
+    static const char kExpect[] = "created-by-ring3";
+    char got[16]{};
+    {
+        vfs::Vnode *f = vfs::resolve(kCreated);
+        JARVIS_ASSERT(f != nullptr && f->ops != nullptr &&
+                      f->ops->read != nullptr);
+        int64_t rd = f->ops->read(*f, reinterpret_cast<uint8_t *>(got),
+                                  sizeof(got), 0);
+        JARVIS_ASSERT(rd == 16);
+    }
+    for (size_t i = 0; i < sizeof(got); ++i)
+        JARVIS_ASSERT(got[i] == kExpect[i]);
+    kernel::test::mark_vfs_touched();
+    vfs::unlink(kCreated);
+    vfs::unlink(kEmpty);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: The program runs to clean EXIT(0) with zero resource delta.
 // Input: Same dispatch; observe exit code (fault-death also yields
 //        TERMINATED but nonzero — the code makes vacuous passes
@@ -499,6 +542,7 @@ void register_libc_verify_tests() {
     JARVIS_REGISTER_TEST(libc_verify_malloc_growth);
     JARVIS_REGISTER_TEST(libc_verify_malloc_reuse);
     JARVIS_REGISTER_TEST(libc_verify_scanf_read);
+    JARVIS_REGISTER_TEST(libc_verify_ring3_create_trunc); // issue #341
     JARVIS_REGISTER_TEST(libc_verify_exit_clean_zero_delta);
     JARVIS_REGISTER_TEST(libc_verify_wired_activation); // issue #77
     JARVIS_REGISTER_TEST(libc_verify_wired_denied);      // issue #77

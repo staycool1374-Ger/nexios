@@ -58,9 +58,47 @@ off_t _lseek(int fd, off_t offset, int whence) {
                                      (long)whence, 0));
 }
 
+/* Newlib/picolibc open-flag values (sysroot sys/_default_fcntl.h):
+ * _FCREAT 0x40, _FTRUNC 0x200. Kernel VFS OpenFlags (vfs.hpp):
+ * O_CREAT 0x200, no O_TRUNC.Bits 0-1 (access mode) match. */
+#define PICOLIBC_O_CREAT 0x40
+#define PICOLIBC_O_TRUNC 0x200
+#define KERNEL_O_CREAT 0x200
+
+int _fstat(int fd, struct stat *buf); // defined below; _open needs it
+
 int _open(const char *path, int flags, int mode) {
     (void)mode; // kernel OPEN takes path+flags only
-    return (int)map_err(__syscall5(SYS_OPEN, (long)path, (long)flags, 0, 0));
+    // Issue #341: translate here — the single picolibc→kernel owner.
+    // Kernel-side translation is impossible: bit 0x200 means O_CREAT
+    // to in-tree callers (kernel values) but O_TRUNC to picolibc
+    // callers, so the kernel cannot disambiguate by value.
+    int kflags = flags & 0x3;
+    const int want_creat = (flags & PICOLIBC_O_CREAT) != 0;
+    const int want_trunc = (flags & PICOLIBC_O_TRUNC) != 0;
+    if (want_creat)
+        kflags |= KERNEL_O_CREAT;
+    // _FTRUNC aliases kernel O_CREAT and must never pass through
+    // (it would create instead of truncating). Anything else passes
+    // through unchanged (pre-existing behavior for EXCL/APPEND/etc,
+    // which the kernel neither maps nor honors).
+    kflags |= (flags & ~(0x3 | PICOLIBC_O_CREAT | PICOLIBC_O_TRUNC));
+    int fd = (int)map_err(__syscall5(SYS_OPEN, (long)path, (long)kflags,
+                                     0, 0));
+    if (fd < 0 || !want_trunc)
+        return fd;
+    // O_TRUNC: the kernel has no truncate primitive. A new or empty
+    // file is already truncated — succeed. A non-empty existing file
+    // cannot be truncated: close and fail ENOSYS (honest, not silent).
+    // An unstatable file proceeds (pre-existing behavior; truncation
+    // need unproven rather than assumed impossible).
+    struct stat st;
+    if (_fstat(fd, &st) == 0 && st.st_size > 0) {
+        _close(fd);
+        errno = ENOSYS;
+        return -1;
+    }
+    return fd;
 }
 
 int _fstat(int fd, struct stat *buf) {
