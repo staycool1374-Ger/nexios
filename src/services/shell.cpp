@@ -2726,8 +2726,14 @@ void Shell::cmd_runelf(int argc, const char** argv) {
     kernel::TaskControlBlock* task =
         kernel::elf::ElfLoader::take_completed();
     if (!task) {
-        shell_error("runelf", "no elf loaded");
-        return;
+        // Issue #271 P2: second runelf without loadelf — build from
+        // retention when CLEAN/0/static/IDLE, else refuse with reason.
+        const char *rr = nullptr;
+        task = kernel::elf::ElfLoader::try_rerun(&rr);
+        if (!task) {
+            shell_error("runelf", rr ? rr : "no elf loaded");
+            return;
+        }
     }
     if (debug) {
         // Issue #231 (§9.3): shell-as-launcher claim needs parenthood

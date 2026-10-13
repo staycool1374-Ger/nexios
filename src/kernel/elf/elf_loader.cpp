@@ -357,6 +357,7 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
         staging_.canary_slot = slot;
     copy_bounded(staging_.path, path_, kMaxPath);
     staging_.file_size = file_size_;
+    staging_.entry = hdr_.entry;
     staging_.has_dynamic = false;
     staging_.valid = true;
 }
@@ -423,6 +424,200 @@ void ElfLoader::unmap_golden(TaskControlBlock *tcb) {
     }
     if (mapped)
         drop_task_ref_locked();
+}
+
+TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
+    static const char kNoElf[] = "no elf loaded";
+    static const char kDynamic[] = "dynamic image needs reload";
+    static const char kNotClean[] = "last run not clean, reload required";
+    static const char kBusy[] = "loader busy";
+    static const char kRebuild[] = "rebuild failed";
+    Retention snap{};
+    {
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> guard(lock_);
+        if (state_ != LoadState::IDLE) {
+            if (reason) *reason = kBusy;
+            return nullptr;
+        }
+        if (!retention_.valid) {
+            if (reason) *reason = kNoElf;
+            return nullptr;
+        }
+        if (retention_.has_dynamic) {
+            if (reason) *reason = kDynamic;
+            return nullptr;
+        }
+        if (retention_.outcome != RunOutcome::CLEAN ||
+            retention_.outcome_code != 0) {
+            if (reason) *reason = kNotClean;
+            return nullptr;
+        }
+        snap = retention_;
+    }
+    // Fresh address space.
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    if (!pml4) {
+        if (reason) *reason = kRebuild;
+        return nullptr;
+    }
+    VMM::assert_kernel_half_converged(pml4);
+    // Map golden RO pages.
+    size_t gidx = 0;
+    for (size_t r = 0; r < snap.range_count; ++r) {
+        for (size_t p = 0; p < snap.ranges[r].page_count; ++p) {
+            uint64_t va = snap.ranges[r].vaddr + p * arch::PAGE_SIZE;
+            if (gidx >= snap.golden_pages) {
+                VMM::free_user_pages(pml4);
+                PMM::free_page(pml4);
+                if (reason) *reason = kRebuild;
+                return nullptr;
+            }
+            VMM::map_page_ro_in_pml4(va, snap.golden[gidx].phys,
+                                     snap.golden[gidx].executable, pml4);
+            if (!VMM::virt_to_phys_in_pml4(va, pml4)) {
+                VMM::free_user_pages(pml4);
+                PMM::free_page(pml4);
+                if (reason) *reason = kRebuild;
+                return nullptr;
+            }
+            ++gidx;
+        }
+    }
+    // Allocate user stack + heap (fresh).
+    uint64_t ustack_phys = 0;
+    // Reuse loader helper: maps stack/heap into pml4.
+    // alloc_user_stack_and_heap is static in elf.cpp, not visible here,
+    // so duplicate the mapping via VMM directly: allocate and map.
+    // Minimal: allocate stack pages and heap pages via PMM and map.
+    // Use PMM::alloc_user_contiguous for stack, heap.
+    // Stack
+    {
+        size_t stack_pages = (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
+        uint64_t sphys = PMM::alloc_user_contiguous(stack_pages);
+        if (!sphys) {
+            VMM::free_user_pages(pml4);
+            PMM::free_page(pml4);
+            if (reason) *reason = kRebuild;
+            return nullptr;
+        }
+        for (size_t i = 0; i < stack_pages; ++i) {
+            VMM::map_page_in_pml4(mem::STACK_VADDR + arch::PAGE_SIZE + i * arch::PAGE_SIZE,
+                                  sphys + i * arch::PAGE_SIZE, true, pml4);
+        }
+        ustack_phys = sphys;
+        // Zero stack via HHDM
+        for (size_t i = 0; i < stack_pages; ++i) {
+            __builtin_memset(reinterpret_cast<void*>(arch::HHDM_OFFSET + sphys + i * arch::PAGE_SIZE), 0, arch::PAGE_SIZE);
+        }
+    }
+    // Heap (initial)
+    {
+        size_t heap_pages = 4; // 16 KiB initial heap like load_segments_and_stack
+        uint64_t hphys = PMM::alloc_user_contiguous(heap_pages);
+        if (!hphys) {
+            VMM::free_user_pages(pml4);
+            PMM::free_page(pml4);
+            PMM::free_page(ustack_phys); // partial free not precise but leak bounded
+            if (reason) *reason = kRebuild;
+            return nullptr;
+        }
+        for (size_t i = 0; i < heap_pages; ++i) {
+            VMM::map_page_in_pml4(mem::HEAP_VADDR + i * arch::PAGE_SIZE,
+                                  hphys + i * arch::PAGE_SIZE, true, pml4);
+        }
+        __builtin_memset(reinterpret_cast<void*>(arch::HHDM_OFFSET + hphys), 0, heap_pages * arch::PAGE_SIZE);
+    }
+    // Copy writable pin bytes
+    for (size_t i = 0; i < snap.pin_count; ++i) {
+        uint64_t va = snap.pin_ranges[i].vaddr;
+        uint64_t off = snap.pin_ranges[i].pin_off;
+        uint64_t len = snap.pin_ranges[i].len;
+        uint64_t phys = VMM::virt_to_phys_in_pml4(va & ~(arch::PAGE_SIZE-1), pml4);
+        if (!phys) {
+            VMM::free_user_pages(pml4);
+            PMM::free_page(pml4);
+            if (reason) *reason = kRebuild;
+            return nullptr;
+        }
+        // May span pages; copy via HHDM per page chunk
+        uint64_t remaining = len;
+        uint64_t cur_va = va;
+        uint64_t cur_off = off;
+        while (remaining > 0) {
+            uint64_t page_va = cur_va & ~(arch::PAGE_SIZE-1);
+            uint64_t page_off = cur_va & (arch::PAGE_SIZE-1);
+            uint64_t chunk = arch::PAGE_SIZE - page_off;
+            if (chunk > remaining) chunk = remaining;
+            uint64_t p = VMM::virt_to_phys_in_pml4(page_va, pml4);
+            if (!p) {
+                VMM::free_user_pages(pml4);
+                PMM::free_page(pml4);
+                if (reason) *reason = kRebuild;
+                return nullptr;
+            }
+            __builtin_memcpy(reinterpret_cast<void*>(arch::HHDM_OFFSET + p + page_off),
+                             snap.pin_buf + cur_off, chunk);
+            cur_va += chunk;
+            cur_off += chunk;
+            remaining -= chunk;
+        }
+    }
+    // Build TCB via finalize path: reuse elf::load finalizer helpers
+    // For now, allocate TCB directly and minimally initialize.
+    auto *tcb = static_cast<TaskControlBlock*>(kernel::MemPool::alloc(sizeof(TaskControlBlock)));
+    if (!tcb) {
+        VMM::free_user_pages(pml4);
+        PMM::free_page(pml4);
+        if (reason) *reason = kRebuild;
+        return nullptr;
+    }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
+    __builtin_memset(tcb, 0, sizeof(TaskControlBlock));
+#pragma GCC diagnostic pop
+    tcb->magic = TaskControlBlock::TCB_MAGIC;
+    tcb->id = Scheduler::alloc_id();
+    tcb->page_table_ = pml4;
+    tcb->is_user_ = true;
+    tcb->user_stack_ = ustack_phys;
+    tcb->user_stack_size_ = TaskControlBlock::STACK_SIZE;
+    tcb->program_break = mem::HEAP_VADDR + 4 * arch::PAGE_SIZE;
+    tcb->program_break_start = mem::HEAP_VADDR;
+    // Canaries: install fresh ones (skip TEXT-before write)
+    for (size_t i = 0; i < TaskControlBlock::kMaxRoRanges; ++i) {
+        if (i < snap.ro_count) {
+            tcb->ro_ranges_[i] = snap.ro_ranges[i];
+        }
+    }
+    tcb->ro_seg_count_ = snap.ro_count;
+    tcb->ro_crc32_ = snap.ro_crc32;
+    tcb->ro_verify_state_ = TaskControlBlock::RoVerifyState::UNVERIFIED;
+    // Copy name from retention path leaf
+    {
+        const char *slash = snap.path;
+        const char *p = snap.path;
+        while (*p) { if (*p=='/') slash=p+1; ++p; }
+        size_t n=0; while (slash[n] && n+1 < CONFIG_TASK_NAME_LEN) { tcb->name[n]=slash[n]; ++n; }
+        tcb->name[n]='\0';
+    }
+    // Bump task_refs under lock (new live mapper)
+    {
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> guard(lock_);
+        // Re-validate retention still valid and same golden (no supersede race)
+        if (!retention_.valid || retention_.golden_pages != snap.golden_pages) {
+            // Superseded while we built: free and refuse
+            tcb->page_table_=0; // prevent double free in destroy path
+            VMM::free_user_pages(pml4);
+            PMM::free_page(pml4);
+            kernel::MemPool::free(tcb);
+            if (reason) *reason = kRebuild;
+            return nullptr;
+        }
+        retention_.task_refs++;
+    }
+    return tcb;
 }
 
 TaskControlBlock *ElfLoader::take_completed() {

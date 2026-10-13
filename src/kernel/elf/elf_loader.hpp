@@ -161,6 +161,16 @@ class ElfLoader {
     ///        IRQ-masked; bounded; never reschedule inside.
     static void abandon_retention();
 
+    /// @brief Try to build a rerun TCB from retention (issue #271 P2).
+    /// Checks IDLE + valid + static + CLEAN/0; on success returns a
+    /// fresh TCB (caller owns it, must set settled params before
+    /// add_task like take_completed). On failure returns nullptr and
+    /// sets *reason to a static message (no elf loaded / dynamic /
+    /// not clean / busy / rebuild failed). IRQ-masked for the gate;
+    /// allocations/mappings run unlocked (may reschedule only via
+    /// explicit reschedule points outside the lock).
+    static TaskControlBlock *try_rerun(const char **reason);
+
     /// @brief Unmap every retained-golden page from @p tcb's table and
     ///        drop that task's set ref (issue #271 P1). Never frees here:
     ///        pages are freed only when retention refs == 0 AND task
@@ -251,6 +261,7 @@ class ElfLoader {
         bool valid = false;
         char path[kMaxPath] = {};
         uint64_t file_size = 0;
+        uint64_t entry = 0;
         bool has_dynamic = false;
         GoldenPage golden[kMaxGoldenPages] = {};
         size_t golden_pages = 0;
