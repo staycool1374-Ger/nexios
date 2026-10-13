@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #261 — drivers+IOMMU H1–H8 verification pass (8/9 #253 parts done)
+
+- **Learned:** (1) Push can be rejected mid-cycle by an owner commit — `git fetch` + inspect first: a README-only fixup rebases cleanly under an untouched scope; never force-push. Record the rebase + new hash on the issue thread (audit reports reference patch content, which is unchanged, but hashes move). (2) Issue class names rot (`ahci_deep` → `drivers_ahci_deep`) — same registry-verification lesson as #258/#260, now third occurrence: treat every issue-quoted class name as unverified until grepped. (3) Driver poll loops already carry their M-1 tick-deadline bounds with rationale — H11.3 verification is read-and-confirm, not rewrite.
+- **Adapted:** 9 dup guards + 3 ahci WHY upgrades; evidence + correction comments on #261; SIL 3 APPROVED zero findings.
+- **Style re-surface:** probe-rollback order frozen (S2); ISR completion no-block/no-alloc; MMIO-KVA-only discipline untouched.
+
 ### #260 — core/libs/services H1–H8 verification pass (last of the ordered sequence)
 
 - **Learned:** (1) "build" is not a test class (like buffer_pool) — verify every class name in test_registry.cpp before running; the issue's class list can be stale. (2) libc/services keep C/POSIX idioms by design: converting userspace −1/errno to kernel enums would BREAK the userspace ABI — H6 layering is a correctness rule, not just style. Vendored third-party loops (libfdt) are out of scope entirely. (3) Load-induced timing FAILs (tlb p99 bound, zombie-ordering) clear on identical-binary rerun like stalls do — record the failing assert + rerun tally as evidence, same standard; nondeterministic hang POINTS across attempts (34/94/0) are the signature of sickness, not code. (4) Tight poll loops self-inflict load (opencode + Terminal rendering topped ps) — back off polling when the host is sick.
