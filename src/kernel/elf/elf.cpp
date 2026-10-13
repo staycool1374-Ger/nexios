@@ -286,6 +286,16 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
             memset(reinterpret_cast<void *>(zero_offset), 0,
                    phdr->memsz - phdr->filesz);
         }
+
+        // Issue #271 P0: read-only segments map PTE-read-only through
+        // the shared primitive (first run included — otherwise the
+        // live task holds a writable alias to retained bytes).
+        // Content flowed via HHDM (perm-independent); canary install
+        // later uses HHDM phys too.
+        if (!(phdr->flags & PF_W)) {
+            VMM::remap_range_ro_in_pml4(pml4, vaddr_base, region_size,
+                                        (phdr->flags & PF_X) != 0);
+        }
     }
     } // if (hdr)
 

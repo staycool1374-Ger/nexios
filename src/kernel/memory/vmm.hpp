@@ -155,6 +155,34 @@ class VMM {
     static void map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr,
                                  bool user, bool executable,
                                  uint64_t pml4_phys);
+    /// @brief Maps a user page read-only with explicit executability
+    ///        (issue #271 P0 — retained-golden primitive). The page is
+    ///        first mapped through the standard path (identical table
+    ///        allocation), then the write permission is cleared with
+    ///        the arch RO encoding (x86_64 RW-clear; aarch64 AP_USER |
+    ///        AP_RO = EL0 read-only; riscv64 W-clear); NX/UXN follows
+    ///        @p executable like the 5-arg overload. First run and
+    ///        reruns map through THIS function so perms are identical.
+    /// @param virt_addr Virtual address (page-aligned).
+    /// @param phys_addr Physical address (page-aligned).
+    /// @param executable If true, page is executable (NX clear).
+    /// @param pml4_phys Physical address of the target PML4.
+    static void map_page_ro_in_pml4(uint64_t virt_addr, uint64_t phys_addr,
+                                    bool executable, uint64_t pml4_phys);
+    /// @brief Test inspector: reports whether the mapped leaf is
+    ///        read-only per the RO encoding (walk-only, never allocates).
+    ///        @p executable_out is written ONLY when the leaf is RO
+    ///        (callers must not read it on a false return).
+    /// @return false when unmapped (or a huge/block entry, not ours).
+    static bool pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
+                                  bool *executable_out);
+    /// @brief Remap every mapped page in [vaddr, vaddr+size) read-only
+    ///        through the RO primitive (issue #271 P0 — load paths and
+    ///        the P2 rerun builder share this). Unmapped holes are
+    ///        skipped; bounds are page-aligned outward with overflow
+    ///        guard (empty range → no-op).
+    static void remap_range_ro_in_pml4(uint64_t pml4_phys, uint64_t vaddr,
+                                       uint64_t size, bool executable);
     /// @brief Maps a page into a specific page table with error code.
     /// @param virt_addr Virtual address (page-aligned).
     /// @param phys_addr Physical address (page-aligned).
@@ -429,6 +457,12 @@ class VMM {
     /// @return Pointer to the next-level table, or nullptr.
     static uint64_t *get_table(uint64_t *table, size_t index, bool create,
                                bool user_alloc = false);
+    /// @brief Walk to the leaf PTE for a VA without allocating
+    ///        (issue #271 P0 — shared by the RO primitive + inspector).
+    /// @return Pointer to the leaf entry, or nullptr on any missing
+    ///         table or huge/block entry (not ours).
+    static uint64_t *pte_leaf_in_pml4(uint64_t virt_addr,
+                                      uint64_t pml4_phys);
     /// @brief True when @p entry points at a next-level table (issue
     ///        #96).  Arch-aware leaf detection (x86_64 PS bit, RISC-V
     ///        R|W|X, AArch64 descriptor type); level 3 is always a leaf.

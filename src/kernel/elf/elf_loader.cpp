@@ -752,6 +752,13 @@ void ElfLoader::run_load() {
             __builtin_memset(page, 0, kChunkSize);
             if (copy_len > 0)
                 __builtin_memcpy(page + dst_off, chunk_buf_, copy_len);
+            // Issue #271 P0: read-only segment pages map PTE-read-only
+            // through the shared primitive (content flowed via HHDM,
+            // perm-independent; canary install later uses HHDM phys).
+            if (!(phdr->flags & PF_W)) {
+                VMM::map_page_ro_in_pml4(vaddr, phys,
+                                         (phdr->flags & PF_X) != 0, pml4_);
+            }
 
             ++page_in_seg_;
             if (cancel_pending(gen)) {

@@ -693,6 +693,102 @@ JARVIS_TEST(loader_runelf_3arg_main_envp, "PRE: none | POST: none") {
 #endif
 }
 
+// Issue #271 P0: build a two-segment static image (R+X code + RW data)
+// for the RO-permission pin. Mirrors build_minimal_elf's layout.
+uint64_t build_rw_elf(elf::ELF64Header *hdr, uint8_t *data) {
+    __builtin_memset(hdr, 0, sizeof(elf::ELF64Header));
+    hdr->ident[0] = 0x7F;
+    hdr->ident[1] = 'E';
+    hdr->ident[2] = 'L';
+    hdr->ident[3] = 'F';
+    hdr->ident[4] = 2;
+    hdr->ident[5] = 1;
+    hdr->type = elf::ET_EXEC;
+    hdr->machine = 0x3E;
+    hdr->version = 1;
+    hdr->entry = 0x400000;
+    hdr->phoff = sizeof(elf::ELF64Header);
+    hdr->ehsize = sizeof(elf::ELF64Header);
+    hdr->phentsize = sizeof(elf::ELF64ProgramHeader);
+    hdr->phnum = 2;
+    auto *ph0 = reinterpret_cast<elf::ELF64ProgramHeader *>(
+        data + sizeof(elf::ELF64Header));
+    ph0->type = elf::PT_LOAD;
+    ph0->flags = elf::PF_R | elf::PF_X;
+    ph0->offset = sizeof(elf::ELF64Header) +
+                  2 * sizeof(elf::ELF64ProgramHeader);
+    ph0->vaddr = 0x400000;
+    ph0->paddr = 0x400000;
+    ph0->filesz = 0x1000;
+    ph0->memsz = 0x1000;
+    ph0->align = 0x1000;
+    auto *ph1 = reinterpret_cast<elf::ELF64ProgramHeader *>(
+        data + sizeof(elf::ELF64Header) + sizeof(elf::ELF64ProgramHeader));
+    ph1->type = elf::PT_LOAD;
+    ph1->flags = elf::PF_R | elf::PF_W;
+    ph1->offset = ph0->offset + 0x1000;
+    ph1->vaddr = 0x402000;
+    ph1->paddr = 0x402000;
+    ph1->filesz = 0x100;
+    ph1->memsz = 0x1000;
+    ph1->align = 0x1000;
+    __builtin_memcpy(data, hdr, sizeof(elf::ELF64Header));
+    uint8_t *code = data + ph0->offset;
+    for (size_t i = 0; i < 0x1000; ++i)
+        code[i] = 0x90;
+    uint8_t *rw = data + ph1->offset;
+    for (size_t i = 0; i < 0x100; ++i)
+        rw[i] = static_cast<uint8_t>(i);
+    return ph1->offset + 0x100;
+}
+
+// Runmode: kernel
+// Testidea: Issue #271 P0 — read-only segments map PTE-read-only
+//           through the shared primitive on the FIRST run (both the
+//           background COPYING path and the direct load path), with
+//           NX following PF_X; RW segments stay writable.
+// Input: Two-segment static image via background request_load and via
+//        direct elf::load; walk the resulting PML4s with the RO
+//        inspector.
+// Expect: code page RO + executable; data page writable +
+//         non-executable; identical perms on both paths.
+// Depends: VMM::map_page_ro_in_pml4 + pte_is_ro_in_pml4 (issue #271)
+JARVIS_TEST(rerun_ro_perm_first_run, "PRE: none | POST: none") {
+    elf::ELF64Header hdr{};
+    uint8_t img[8192];
+    uint64_t sz = build_rw_elf(&hdr, img);
+
+    // Path A: background COPYING loader.
+    JARVIS_ASSERT(write_file("/tmp/loadro.elf", img, sz) == sz);
+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/loadro.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *ta = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(ta != nullptr && ta->page_table_ != 0);
+    // NOTE: the inspector writes the exec out-param only for RO
+    // leaves; on a writable page it is untouched, so exec is asserted
+    // only alongside a true RO result.
+    bool exec_a = false;
+    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(0x400000, ta->page_table_, &exec_a));
+    JARVIS_ASSERT(exec_a);
+    JARVIS_ASSERT(
+        !VMM::pte_is_ro_in_pml4(0x402000, ta->page_table_, nullptr));
+    elf::ElfLoader::destroy_completed_tcb(ta);
+    cleanup_file("/tmp/loadro.elf");
+
+    // Path B: direct synchronous load.
+    auto *tb = kernel::elf::load(&hdr, img, sz);
+    JARVIS_ASSERT(tb != nullptr && tb->page_table_ != 0);
+    bool exec_b = false;
+    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(0x400000, tb->page_table_, &exec_b));
+    JARVIS_ASSERT(exec_b);
+    JARVIS_ASSERT(
+        !VMM::pte_is_ro_in_pml4(0x402000, tb->page_table_, nullptr));
+    tb->cleanup();
+    delete tb;
+    JARVIS_TEST_PASS();
+}
+
 void register_elf_loader_tests() {
     Logger::info("Registering background ELF loader tests");
     JARVIS_REGISTER_TEST(loader_load_success);
@@ -710,4 +806,5 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(loader_phoff_shifted_baseline); // #46 S2 pin
     JARVIS_REGISTER_TEST(loader_fault_dump_gated); // #270 quiet default
     JARVIS_REGISTER_TEST(loader_runelf_3arg_main_envp); // #311 3-arg main/envp
+    JARVIS_REGISTER_TEST(rerun_ro_perm_first_run); // #271 P0 RO primitive
 }

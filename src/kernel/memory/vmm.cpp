@@ -832,6 +832,136 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     arch::ArchPageTable::tlb_flush(virt_addr);
 }
 
+uint64_t *VMM::pte_leaf_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+    // Walk-only leaf lookup (private helper for the RO primitive +
+    // inspector; mirrors the unmap walks with create=false).
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                             (pml4_phys & ~0xFFFULL));
+#if defined(CONFIG_ARCH_RISCV64)
+    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
+    if (top[l0_idx] & (VMM::PAGE_READ | VMM::PAGE_WRITE | VMM::PAGE_EXEC))
+        return nullptr;
+    auto *l1 = VMM::get_table(top, l0_idx, false);
+    if (!l1)
+        return nullptr;
+    if (l1[l1_idx] & (VMM::PAGE_READ | VMM::PAGE_WRITE | VMM::PAGE_EXEC))
+        return nullptr;
+    auto *l2 = VMM::get_table(l1, l1_idx, false);
+    if (!l2)
+        return nullptr;
+    if ((l2[l2_idx] & VMM::PAGE_PRESENT) == 0)
+        return nullptr;
+    if ((l2[l2_idx] &
+         (VMM::PAGE_READ | VMM::PAGE_WRITE | VMM::PAGE_EXEC)) == 0)
+        return nullptr; // table pointer, not a leaf
+    return &l2[l2_idx];
+#else
+    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
+    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
+    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
+    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
+    auto *pdpt = VMM::get_table(top, pml4_idx, false);
+    if (!pdpt)
+        return nullptr;
+    auto *pd = VMM::get_table(pdpt, pdpt_idx, false);
+    if (!pd)
+        return nullptr;
+#if defined(CONFIG_ARCH_AARCH64)
+    if ((pd[pd_idx] & (VMM::PAGE_PRESENT | VMM::PAGE_TABLE)) ==
+        VMM::PAGE_PRESENT)
+        return nullptr; // Block entry: not ours.
+#else
+    if (pd[pd_idx] & VMM::PAGE_HUGE)
+        return nullptr; // Huge entry: not ours.
+#endif
+    auto *pt = VMM::get_table(pd, pd_idx, false);
+    if (!pt)
+        return nullptr;
+    if ((pt[pt_idx] & VMM::PAGE_PRESENT) == 0)
+        return nullptr;
+    return &pt[pt_idx];
+#endif
+}
+
+// Issue #271 P0: shared read-only user-map primitive. Map RW first
+// (identical table allocation to every other user map), then clear the
+// write permission with the arch RO encoding. Tables under construction
+// are never live, so no TLB window exists; the trailing flush mirrors
+// every other map site (harmless when not current, required on remap).
+void VMM::map_page_ro_in_pml4(uint64_t virt_addr, uint64_t phys_addr,
+                              bool executable, uint64_t pml4_phys) {
+    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0 ||
+        (phys_addr & (arch::PAGE_SIZE - 1)) != 0) {
+        return;
+    }
+    map_page_in_pml4(virt_addr, phys_addr, true, executable, pml4_phys);
+    uint64_t *leaf = pte_leaf_in_pml4(virt_addr, pml4_phys);
+    if (!leaf)
+        return;
+#if defined(CONFIG_ARCH_AARCH64)
+    // AP[1:0] in bits[7:6]: 01 = EL1-RW/EL0-RW, 11 = EL1-RO/EL0-RO.
+    // Keep EL0 accessibility, add read-only (UXN/PXN already set by
+    // the 5-arg map per @p executable).
+    *leaf |= PAGE_AP_RO;
+#elif defined(CONFIG_ARCH_RISCV64)
+    // Sv39: R stays, W clears (R-only is a valid leaf encoding).
+    *leaf &= ~PAGE_WRITE;
+#else
+    *leaf &= ~PAGE_WRITE;
+    if (!executable)
+        *leaf |= (1ULL << 63); // NX (already set by 5-arg map; idempotent)
+#endif
+    arch::ArchPageTable::tlb_flush(virt_addr);
+}
+
+bool VMM::pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
+                            bool *executable_out) {
+    uint64_t *leaf = pte_leaf_in_pml4(virt_addr, pml4_phys);
+    if (!leaf)
+        return false;
+    const uint64_t e = *leaf;
+#if defined(CONFIG_ARCH_AARCH64)
+    const bool ro =
+        (e & (PAGE_AP_USER | PAGE_AP_RO)) == (PAGE_AP_USER | PAGE_AP_RO);
+    if (executable_out)
+        *executable_out = (e & PAGE_UXN) == 0;
+    return ro;
+#elif defined(CONFIG_ARCH_RISCV64)
+    const bool ro =
+        (e & PAGE_READ) && !(e & PAGE_WRITE);
+    if (executable_out)
+        *executable_out = (e & PAGE_EXEC) != 0;
+    return ro;
+#else
+    const bool ro = (e & PAGE_PRESENT) && !(e & PAGE_WRITE);
+    if (executable_out)
+        *executable_out = (e & (1ULL << 63)) == 0;
+    return ro;
+#endif
+}
+
+void VMM::remap_range_ro_in_pml4(uint64_t pml4_phys, uint64_t vaddr,
+                                 uint64_t size, bool executable) {
+    if (size == 0)
+        return;
+    const uint64_t mask = arch::PAGE_SIZE - 1;
+    uint64_t base = vaddr & ~mask;
+    if (vaddr + size < vaddr)
+        return; // overflow: no-op
+    uint64_t end = (vaddr + size + mask) & ~mask;
+    if (end <= base)
+        return;
+    for (uint64_t va = base; va < end; va += arch::PAGE_SIZE) {
+        uint64_t phys = virt_to_phys_in_pml4(va, pml4_phys);
+        if (!phys)
+            continue; // unmapped hole: skip
+        map_page_ro_in_pml4(va, phys, executable, pml4_phys);
+    }
+}
+
 void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0) {
         return;
