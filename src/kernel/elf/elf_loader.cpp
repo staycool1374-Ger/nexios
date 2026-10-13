@@ -84,6 +84,8 @@ uint8_t ElfLoader::chunk_buf_[ElfLoader::kChunkSize] = {};
 TaskControlBlock *ElfLoader::loader_tcb_ = nullptr;
 TaskControlBlock *ElfLoader::completed_tcb_ = nullptr;
 uint64_t ElfLoader::completed_entry_ = 0;
+ElfLoader::Retention ElfLoader::retention_ = {};
+ElfLoader::Retention ElfLoader::staging_ = {};
 char ElfLoader::msg_buf_[16][160] = {};
 uint32_t ElfLoader::msg_idx_ = 0;
 DepResolveContext ElfLoader::dep_ctx_ = {};
@@ -140,6 +142,7 @@ LoadResult ElfLoader::request_load(const char *path) {
         cur->fd_table.free(probe);
     }
 
+    arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(lock_);
     if (state_ != LoadState::IDLE)
         return LoadResult::ALREADY_LOADING;
@@ -155,6 +158,9 @@ LoadResult ElfLoader::request_load(const char *path) {
         completed_tcb_ = nullptr;
         completed_entry_ = 0;
     }
+    // Untaken completion gone: its staging goes with it (post-take
+    // retention is untouched — completed_tcb_ is null after take).
+    staging_ = Retention{};
     file_size_ = fsize;
 
     copy_bounded(path_, path, kMaxPath);
@@ -195,13 +201,242 @@ LoadState ElfLoader::state() {
 
 const char *ElfLoader::current_path() { return path_; }
 
+namespace {
+
+// PF_X covering a VA in packed phdrs (loader layout: table at
+// sizeof(ELF64Header) regardless of file phoff). False when no PT_LOAD
+// covers the page (then the page is not a golden candidate anyway).
+bool exec_for_va(const uint8_t *phdr_image, uint16_t phnum, uint64_t phentsize,
+                 uint64_t va) {
+    for (uint16_t i = 0; i < phnum; ++i) {
+        auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+            phdr_image + sizeof(ELF64Header) + (uint64_t)i * phentsize);
+        if (!phdr || phdr->type != PT_LOAD)
+            continue;
+        uint64_t base = phdr->vaddr & ~(arch::PAGE_SIZE - 1);
+        uint64_t top = phdr->vaddr + phdr->memsz;
+        if (va >= base && va < top)
+            return (phdr->flags & PF_X) != 0;
+    }
+    return false;
+}
+
+// Copy a VA range out of a user table via HHDM. False on any hole
+// (fail closed — the range is only complete when fully mapped).
+bool copy_user_range(uint64_t pml4, uint64_t vaddr, uint64_t len,
+                     uint8_t *out) {
+    uint64_t off = 0;
+    while (off < len) {
+        uint64_t va = vaddr + off;
+        uint64_t page_off = va & (arch::PAGE_SIZE - 1);
+        uint64_t chunk = arch::PAGE_SIZE - page_off;
+        if (chunk > len - off)
+            chunk = len - off;
+        uint64_t phys =
+            VMM::virt_to_phys_in_pml4(va & ~(arch::PAGE_SIZE - 1), pml4);
+        if (!phys)
+            return false;
+        __builtin_memcpy(
+            out + off,
+            reinterpret_cast<const void *>(arch::HHDM_OFFSET + phys +
+                                           page_off),
+            chunk);
+        off += chunk;
+    }
+    return true;
+}
+
+} // namespace
+
+// Abandon retention: clear refs + pin. Golden phys are freed ONLY when
+// no live mapper holds them (task_refs == 0); a live mapper's teardown
+// frees them through its normal path later. Never negative.
+void ElfLoader::abandon_retention_locked() {
+    if (!retention_.valid)
+        return;
+    if (retention_.task_refs == 0) {
+        for (size_t i = 0; i < retention_.golden_pages; ++i) {
+            if (retention_.golden[i].phys)
+                PMM::free_page(retention_.golden[i].phys);
+        }
+    }
+    retention_ = Retention{};
+}
+
+// Fill staging from a just-completed load (all loader state is this
+// load's here). Ineligible (dynamic / over caps / walk hole) leaves
+// staging invalid — silent by design (has_retained() == false tells;
+// the rerun path reports). Bounded: no reschedule inside.
+void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
+    staging_ = Retention{};
+    if (!tcb || !tcb->page_table_)
+        return;
+    bool has_dynamic = false;
+    for (uint16_t i = 0; i < hdr_.phnum; ++i) {
+        auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+            phdr_image_ + sizeof(ELF64Header) +
+            (uint64_t)i * hdr_.phentsize);
+        if (phdr && phdr->type == PT_DYNAMIC) {
+            has_dynamic = true;
+            break;
+        }
+    }
+    if (has_dynamic)
+        return; // excluded entirely: no pin, no golden, no refs
+    TaskControlBlock::RoRange ros[TaskControlBlock::kMaxRoRanges] = {};
+    uint64_t n = collect_ro_ranges(phdr_image_, sizeof(ELF64Header),
+                                   hdr_.phnum, hdr_.phentsize, file_size_,
+                                   ros, TaskControlBlock::kMaxRoRanges);
+    if (n == (uint64_t)-1 || n > TaskControlBlock::kMaxRoRanges)
+        return;
+    // Golden walk: every mapped page covering the RO ranges.
+    size_t gp = 0;
+    size_t rp = 0;
+    for (uint64_t r = 0; r < n; ++r) {
+        uint64_t base = ros[r].vaddr & ~(arch::PAGE_SIZE - 1);
+        uint64_t top = ros[r].vaddr + ros[r].len;
+        uint64_t end = (top + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
+        if (rp >= kMaxGoldenRanges)
+            return;
+        staging_.ranges[rp].vaddr = base;
+        staging_.ranges[rp].page_count = 0;
+        for (uint64_t va = base; va < end; va += arch::PAGE_SIZE) {
+            if (gp >= kMaxGoldenPages)
+                return;
+            uint64_t phys =
+                VMM::virt_to_phys_in_pml4(va, tcb->page_table_);
+            if (!phys)
+                return; // hole: fail closed (cannot happen post-load)
+            staging_.golden[gp].phys = phys;
+            staging_.golden[gp].executable =
+                exec_for_va(phdr_image_, hdr_.phnum, hdr_.phentsize, va);
+            ++gp;
+            ++staging_.ranges[rp].page_count;
+        }
+        ++rp;
+    }
+    staging_.golden_pages = gp;
+    staging_.range_count = rp;
+    // Writable pin: RW file bytes only (never BSS tails), bounded.
+    size_t pin_off = 0;
+    size_t pr = 0;
+    for (uint16_t i = 0; i < hdr_.phnum; ++i) {
+        auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+            phdr_image_ + sizeof(ELF64Header) +
+            (uint64_t)i * hdr_.phentsize);
+        if (!phdr || phdr->type != PT_LOAD || !(phdr->flags & PF_W))
+            continue;
+        if (phdr->filesz == 0)
+            continue;
+        if (pin_off + phdr->filesz > kMaxRerunWritableBytes)
+            return;
+        if (pr >= kMaxPinRanges)
+            return;
+        if (!copy_user_range(tcb->page_table_, phdr->vaddr, phdr->filesz,
+                             staging_.pin_buf + pin_off))
+            return;
+        staging_.pin_ranges[pr].vaddr = phdr->vaddr;
+        staging_.pin_ranges[pr].pin_off = pin_off;
+        staging_.pin_ranges[pr].len = phdr->filesz;
+        ++pr;
+        pin_off += phdr->filesz;
+    }
+    staging_.pin_len = pin_off;
+    staging_.pin_count = pr;
+    // Retained #46 original (compare, never re-adopt) + canary slot.
+    staging_.ro_crc32 = tcb->ro_crc32_;
+    size_t rc = tcb->ro_seg_count_ < TaskControlBlock::kMaxRoRanges
+                    ? (size_t)tcb->ro_seg_count_
+                    : TaskControlBlock::kMaxRoRanges;
+    for (size_t i = 0; i < rc; ++i)
+        staging_.ro_ranges[i] = tcb->ro_ranges_[i];
+    staging_.ro_count = rc;
+    uint64_t slot = 0;
+    if (text_canary_slot(phdr_image_, sizeof(ELF64Header), hdr_.phnum,
+                         hdr_.phentsize, file_size_, &slot))
+        staging_.canary_slot = slot;
+    copy_bounded(staging_.path, path_, kMaxPath);
+    staging_.file_size = file_size_;
+    staging_.has_dynamic = false;
+    staging_.valid = true;
+}
+
+// Move staging into retention (newest take wins). Abandon-first covers
+// ineligible staging too (a new take supersedes unconditionally).
+void ElfLoader::adopt_staging_locked() {
+    abandon_retention_locked();
+    if (!staging_.valid) {
+        staging_ = Retention{};
+        return;
+    }
+    retention_ = staging_;
+    retention_.task_refs = 1; // taken TCB maps the set
+    retention_.retained = true;
+    retention_.outcome = RunOutcome::UNKNOWN;
+    retention_.outcome_code = 0;
+    retention_.outcome_task = 0;
+    staging_ = Retention{};
+}
+
+// Drop one task ref; free golden phys at zero/zero (nobody owns them:
+// retention dropped while task refs remain means a live mapper owns
+// them through its own teardown later).
+void ElfLoader::drop_task_ref_locked() {
+    if (!retention_.valid || retention_.task_refs == 0)
+        return;
+    --retention_.task_refs;
+    if (retention_.task_refs == 0 && !retention_.retained) {
+        for (size_t i = 0; i < retention_.golden_pages; ++i) {
+            if (retention_.golden[i].phys)
+                PMM::free_page(retention_.golden[i].phys);
+        }
+        retention_ = Retention{};
+    }
+}
+
+void ElfLoader::unmap_golden(TaskControlBlock *tcb) {
+    if (!tcb || !tcb->page_table_)
+        return;
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (!retention_.valid || retention_.task_refs == 0)
+        return;
+    // Walk retained ranges over this table; unmap pages whose phys
+    // matches the retained slot (a non-mapper's table never matches).
+    // Fork children deep-copy (private phys), so they never match and
+    // never disturb the count — no clone hook needed.
+    size_t idx = 0;
+    bool mapped = false;
+    for (size_t r = 0; r < retention_.range_count; ++r) {
+        for (size_t p = 0; p < retention_.ranges[r].page_count; ++p) {
+            uint64_t va =
+                retention_.ranges[r].vaddr + p * arch::PAGE_SIZE;
+            uint64_t phys =
+                VMM::virt_to_phys_in_pml4(va, tcb->page_table_);
+            if (phys != 0 && idx < retention_.golden_pages &&
+                phys == retention_.golden[idx].phys) {
+                VMM::unmap_page_in_pml4(va, tcb->page_table_);
+                mapped = true;
+            }
+            ++idx;
+        }
+    }
+    if (mapped)
+        drop_task_ref_locked();
+}
+
 TaskControlBlock *ElfLoader::take_completed() {
+    arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(lock_);
     auto *t = completed_tcb_;
     completed_tcb_ = nullptr;
     // completed_entry_ intentionally NOT cleared: it stays latched to
     // the taken TCB until the next load/release/reset (the shell reads
     // it after take_completed for the entry breakpoint).
+    // Issue #271 P1: move staging into retention (newest take wins,
+    // even when the new load is ineligible — abandon covers that).
+    if (t != nullptr)
+        adopt_staging_locked();
     return t;
 }
 
@@ -211,11 +446,62 @@ uint64_t ElfLoader::completed_entry() noexcept {
 }
 
 void ElfLoader::release_completed() {
+    arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(lock_);
     if (completed_tcb_) {
         destroy_completed_tcb(completed_tcb_);
         completed_tcb_ = nullptr;
         completed_entry_ = 0;
+    }
+    // Untaken completion gone: its staging goes with it. Post-take
+    // retention is untouched (completed_tcb_ is null after take).
+    staging_ = Retention{};
+}
+
+void ElfLoader::abandon_retention() {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    abandon_retention_locked();
+    staging_ = Retention{};
+}
+
+bool ElfLoader::has_retained() {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    return retention_.valid;
+}
+
+ElfLoader::RunOutcome ElfLoader::retained_outcome() {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (!retention_.valid)
+        return RunOutcome::UNKNOWN;
+    return retention_.outcome;
+}
+
+void ElfLoader::note_launched(uint64_t task_id) {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (!retention_.valid)
+        return;
+    retention_.outcome = RunOutcome::UNKNOWN;
+    retention_.outcome_code = 0;
+    retention_.outcome_task = task_id;
+}
+
+void ElfLoader::note_task_end(uint64_t task_id, bool clean, uint64_t code) {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (!retention_.valid)
+        return;
+    if (retention_.outcome_task != task_id)
+        return; // never launched (or a different task): stay UNKNOWN
+    if (clean) {
+        retention_.outcome = RunOutcome::CLEAN;
+        retention_.outcome_code = code;
+    } else {
+        retention_.outcome = RunOutcome::FAULTED;
+        retention_.outcome_code = code;
     }
 }
 
@@ -240,9 +526,11 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
         // Issue #95: release shared libs (unmap shared RO + drop
         // refcounts) BEFORE the blind free_user_pages below.
         kernel::elf::release_task_libs(tcb);
-        // free_user_pages reclaims ALL user pages in the PML4 — including the
-        // user stack and heap (mapped there by alloc_user_stack_and_heap).  Do
-        // NOT free tcb->user_stack_ separately (double-free).
+        // Issue #271 P1: the never-scheduled path has no task teardown
+        // that could have freed golden pages (cleanup() owns that for
+        // scheduled paths). The untaken completion's golden refs are
+        // request_load's destroy (above); this path never touches
+        // retention (vanilla two-step destroy).
         VMM::free_user_pages(tcb->page_table_);
         PMM::free_page(tcb->page_table_);
         tcb->page_table_ = 0;
@@ -285,6 +573,7 @@ void ElfLoader::reset() {
         request_cancel();
         wait_loader_idle();
     }
+    arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(lock_);
     if (completed_tcb_) {
         // Issue #77 step 3: a completed TCB was built by
@@ -296,6 +585,10 @@ void ElfLoader::reset() {
         completed_tcb_ = nullptr;
         completed_entry_ = 0;
     }
+    // Issue #271 P1: reset abandons retention (live-map guard inside:
+    // pages mapped by a live run are NOT freed) and drops staging.
+    abandon_retention_locked();
+    staging_ = Retention{};
     cancel_requested_ = false;
 }
 
@@ -1010,6 +1303,14 @@ void ElfLoader::run_load() {
     // Issue #231: latch the entry VA with the retained completion so a
     // later load cannot move it under the TCB the shell is about to take.
     completed_entry_ = hdr_.entry;
+    // Issue #271 P1: stage rerun retention from this load (loader state
+    // is this load's here; take moves it). Scoped lock: bounded walks
+    // only, never reschedule (run_load is otherwise lock-free).
+    {
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> stage_guard(lock_);
+        fill_staging_locked(tcb);
+    }
     // Ownership transfer complete: the TCB holds refcounts (released
     // at task death); drop the request-local records + retained buffers
     // WITHOUT releasing (that would steal the task's references).

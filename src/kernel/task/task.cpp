@@ -26,6 +26,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/time/posix_time.hpp>
 #include <kernel/elf/elf_shared.hpp>
+#include <kernel/elf/elf_loader.hpp>
 #include <kernel/task/tcb_write_log.hpp>
 #include <kernel/task/sporadic_server.hpp>
 #include <kernel/debug/dump.hpp>
@@ -2130,6 +2131,10 @@ void TaskControlBlock::cleanup() noexcept {
         // free_user_pages() skips kernel-owned table/data pages via
         // PMM::is_user_page, so a partially deep-copied address space (OOM
         // during clone) is fully reclaimed here — no leak.
+        // Issue #271 P1: unmap retained golden pages first so the blind
+        // free below skips them (pages owned by mapping tasks, retention
+        // decides frees at zero/zero).
+        kernel::elf::ElfLoader::unmap_golden(this);
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
         // Issue #156: release the PCID before the address space goes
         // away (keyed on the live TCB, never after free; 0 is a no-op

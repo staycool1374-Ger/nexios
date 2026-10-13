@@ -789,6 +789,102 @@ JARVIS_TEST(rerun_ro_perm_first_run, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Issue #271 P1: retention + outcome tracking: take moves staging
+// (newest take wins), abandon frees only at zero/zero, lifecycle
+// reset/release drop both retention and staging. Static, one set.
+JARVIS_TEST(rerun_retention_lifecycle, "PRE: none | POST: none") {
+    // Genuine missing file (never planted): must fail before any
+    // retained-image mutation — a bad new path never destroys a good
+    // retained set (fail-before-free).
+    elf::ElfLoader::reset();
+
+    uint8_t img[8192];
+    elf::ELF64Header hdr0{};
+    uint64_t sz0 = build_minimal_elf(&hdr0, img);
+    JARVIS_ASSERT(write_file("/tmp/retain0.elf", img, sz0) == sz0);
+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/retain0.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *t0 = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t0 != nullptr);
+    JARVIS_ASSERT(elf::ElfLoader::has_retained());
+    JARVIS_ASSERT(
+        elf::ElfLoader::retained_outcome() ==
+        elf::ElfLoader::RunOutcome::UNKNOWN);
+
+    // Bad load must NOT destroy retained set (validates fail-before-free).
+    auto bad = elf::ElfLoader::request_load("/tmp/retain-missing-never.elf");
+    JARVIS_ASSERT(bad == elf::LoadResult::FILE_NOT_FOUND);
+    JARVIS_ASSERT(elf::ElfLoader::has_retained());
+
+    // Second take overwrites (newest wins) — t0 freed, second adopted.
+    uint8_t img1[8192];
+    elf::ELF64Header hdr1{};
+    uint64_t sz1 = build_minimal_elf(&hdr1, img1);
+    JARVIS_ASSERT(write_file("/tmp/retain1.elf", img1, sz1) == sz1);
+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/retain1.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *t1 = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t1 != nullptr);
+    JARVIS_ASSERT(elf::ElfLoader::has_retained());
+    elf::ElfLoader::destroy_completed_tcb(t0);
+
+    // Outcome tracking is per-retention (reset on new adoption).
+    JARVIS_ASSERT(
+        elf::ElfLoader::retained_outcome() ==
+        elf::ElfLoader::RunOutcome::UNKNOWN);
+    elf::ElfLoader::note_launched(t1->id);
+    elf::ElfLoader::note_task_end(t1->id, true, 0);
+    JARVIS_ASSERT(
+        elf::ElfLoader::retained_outcome() ==
+        elf::ElfLoader::RunOutcome::CLEAN);
+    elf::ElfLoader::note_task_end(0xDEADULL, true, 0); // unknown id ignored
+    JARVIS_ASSERT(
+        elf::ElfLoader::retained_outcome() ==
+        elf::ElfLoader::RunOutcome::CLEAN);
+
+    // reset/release abandon (and the live-map guard keeps a live
+    // mapper's pages alive if one exists — t1 is untaken here, not
+    // live, so its golden pages are reclaimable through this path).
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT(!elf::ElfLoader::has_retained());
+    elf::ElfLoader::destroy_completed_tcb(t1);
+    cleanup_file("/tmp/retain0.elf");
+    cleanup_file("/tmp/retain1.elf");
+    JARVIS_TEST_PASS();
+}
+
+// Issue #271 P1: balance cannot regress through retained-set
+// lifecycle: every PMM page the retained path pins is reclaimed by
+// reset (no leak, no double-free) with ResourceTracker flat.
+JARVIS_TEST(rerun_golden_balance, "PRE: none | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t sz = build_minimal_elf(&hdr, img);
+    JARVIS_ASSERT(write_file("/tmp/balance.elf", img, sz) == sz);
+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/balance.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(elf::ElfLoader::has_retained());
+    elf::ElfLoader::note_launched(t->id);
+    // Simulate the P2 path that has not landed: task owns its PML4
+    // user pages + one task ref on the golden set; teardown is
+    // t->cleanup() (unmaps golden + drops that task's ref), not loader
+    // destroy (which would not touch retention).
+    t->cleanup();
+    delete t;
+    elf::ElfLoader::reset();
+    // Isolation owns the delta: a non-zero ResourceTracker across
+    // take→launch→death→reset would fail the *next* test's baseline
+    // comparison (suite-wide guard).
+    cleanup_file("/tmp/balance.elf");
+    JARVIS_TEST_PASS();
+}
+
 void register_elf_loader_tests() {
     Logger::info("Registering background ELF loader tests");
     JARVIS_REGISTER_TEST(loader_load_success);
@@ -807,4 +903,6 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(loader_fault_dump_gated); // #270 quiet default
     JARVIS_REGISTER_TEST(loader_runelf_3arg_main_envp); // #311 3-arg main/envp
     JARVIS_REGISTER_TEST(rerun_ro_perm_first_run); // #271 P0 RO primitive
+    JARVIS_REGISTER_TEST(rerun_retention_lifecycle); // #271 P1 staging/adopt
+    JARVIS_REGISTER_TEST(rerun_golden_balance); // #271 P1 balance
 }

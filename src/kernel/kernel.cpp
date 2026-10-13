@@ -1965,6 +1965,11 @@ const char *task_fault_cause(uint64_t vector) {
 
 void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
                           uint64_t code_or_sig, uint64_t vector) {
+    // Issue #271 P1: outcome tracking for rerun retention (runs before
+    // the reporting gate below — tracking is not reporting). sys_exit
+    // arrives clean=true+code; fault paths clean=false+sig; paths that
+    // never report (integrity kills) stay UNKNOWN by design.
+    kernel::elf::ElfLoader::note_task_end(task.id, clean, code_or_sig);
     // User tasks outside test mode only: kernel-task churn (daemons,
     // reapers, test fixtures by the hundreds) would flood the console.
     if (!task.is_user_ || kernel::Scheduler::is_test_active())

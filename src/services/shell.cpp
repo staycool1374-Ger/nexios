@@ -2818,6 +2818,12 @@ void Shell::cmd_runelf(int argc, const char** argv) {
     if (admit != kernel::errors::SCHED_ERR_OK) {
         if (debug)
             kernel::debug::debug_launch_undo(*task, dbg_handle);
+        // Issue #271 P1: the taken TCB's add failed — its take already
+        // adopted retention (task_refs=1). Without this the golden phys
+        // are freed under the TCB but retained stale in retention
+        // (UAF on next use / leak on abandon). Drop the never-added
+        // ref: free at zero/zero, otherwise the live mapper keeps it.
+        kernel::elf::ElfLoader::abandon_retention();
         kernel::elf::ElfLoader::destroy_completed_tcb(task);
         kernel::Logger::warn("runelf: admission denied: %s",
                              kernel::errors::error_string(admit));
@@ -2829,6 +2835,11 @@ void Shell::cmd_runelf(int argc, const char** argv) {
         shell_error("runelf", "admission denied");
         return;
     }
+    // Issue #271 P1: arm outcome tracking for this launch. Arming after
+    // admission (add_task) guarantees we never track a never-added TCB
+    // (an aborted launch must not shadow the prior CLEAN outcome: P2
+    // rerun gate checks CLEAN + code 0).
+    kernel::elf::ElfLoader::note_launched(task->id);
 
     Terminal::set_fg(COLOR_GREEN);
     Terminal::write("Started task #");
