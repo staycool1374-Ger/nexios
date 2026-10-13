@@ -22,8 +22,6 @@
 /// @brief ICMP (Internet Control Message Protocol) — echo request/reply types
 /// and checksum.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace net {

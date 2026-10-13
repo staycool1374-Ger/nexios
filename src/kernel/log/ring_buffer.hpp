@@ -21,8 +21,6 @@
 /// @file ring_buffer.hpp
 /// @brief Lock-free SPSC character ring buffer for kernel console (g_klog).
 
-#pragma once
-
 #include <types.hpp>
 #include <lib/atomic.hpp>
 

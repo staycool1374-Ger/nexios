@@ -114,7 +114,8 @@ void net_handle_frame(const uint8_t *data, size_t len, Nic &nic) {
         uint16_t oper = __builtin_bswap16(arp->oper);
 
         if (oper == ARP_OPER_REQUEST) {
-            // Check if the target IP is ours
+            // Only answer requests targeting our own IP — never proxy
+            // for foreign addresses (a mute host leaks no presence).
             if (arp->tpa == nic.ip.as_u32()) {
                 // Send ARP reply
                 uint8_t reply_buf[sizeof(EtherHeader) + sizeof(ArpHeader)];
@@ -191,7 +192,8 @@ void net_handle_frame(const uint8_t *data, size_t len, Nic &nic) {
 
 /// @brief Resolve an IPv4 address to a MAC via ARP (with retries and cache).
 bool net_arp_resolve(Nic &nic, uint32_t target_ip, MacAddr &out_mac) {
-    // Check cache first
+    // Cache first: a resolve is a broadcast round-trip, so a hit avoids
+    // stalling the caller on the wire.
     if (g_arp_cache.lookup(target_ip, out_mac))
         return true;
 
