@@ -21,8 +21,6 @@
 /// @file iocd.hpp
 /// @brief I/O Controller Daemon IPC interface and message types.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {

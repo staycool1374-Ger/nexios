@@ -21,8 +21,6 @@
 /// @file block_device.hpp
 /// @brief Abstract block device interface and mock device.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {

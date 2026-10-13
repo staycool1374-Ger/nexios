@@ -22,8 +22,6 @@
 /// @brief AHCI/SATA driver — extends BlockDevice with DMA and NCQ support.
 ///        Uses ahci_protocol.hpp for register layouts and DmaBuffer for data.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/driver/block_device.hpp>
 #include <kernel/driver/ahci_protocol.hpp>

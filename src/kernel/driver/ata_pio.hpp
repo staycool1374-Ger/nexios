@@ -21,8 +21,6 @@
 /// @file ata_pio.hpp
 /// @brief ATA PIO driver for legacy IDE controllers.
 
-#pragma once
-
 #include <kernel/driver/block_device.hpp>
 
 namespace kernel {

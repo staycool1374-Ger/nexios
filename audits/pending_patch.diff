@@ -1,128 +1,151 @@
-diff --git a/src/kernel/debug/dump.hpp b/src/kernel/debug/dump.hpp
-index 23e321ba9..273eeb6e4 100644
---- a/src/kernel/debug/dump.hpp
-+++ b/src/kernel/debug/dump.hpp
-@@ -24,8 +24,6 @@
- ///        output. Output goes to serial via
- ///        Logger::raw_write/print_hex/print_dec.
+diff --git a/src/kernel/driver/ahci.cpp b/src/kernel/driver/ahci.cpp
+index 77204400a..d3d2905d7 100644
+--- a/src/kernel/driver/ahci.cpp
++++ b/src/kernel/driver/ahci.cpp
+@@ -113,7 +113,8 @@ AhciDriver::~AhciDriver() {
+         port_write(p, PORT_IS, 0xFFFFFFFF); // ack any pending status
+     }
+ 
+-    // Stop ports and free memory
++    // Stop ports and free memory — quiesce DMA first so no in-flight
++    // command writes into pages after they are freed.
+     for (uint8_t p = 0; p < port_count_; ++p) {
+         port_write(p, PORT_CMD, 0);
+         for (uint8_t s = 0; s < AHCI_MAX_CMDS; ++s) {
+@@ -170,7 +171,8 @@ bool AhciDriver::port_wait_ready(uint8_t port, uint64_t timeout_us) {
+ }
+ 
+ bool AhciDriver::port_init(uint8_t port) {
+-    // Check port status
++    // An offline port has no device — skip init instead of programming
++    // command tables nobody will complete.
+     uint32_t ssts = port_read(port, PORT_SSTS);
+     uint8_t det = ssts & SSTS_DET_MASK;
+     if (det != SSTS_DET_ONLINE) {
+@@ -418,7 +420,8 @@ bool AhciDriver::start_cmd(uint8_t port, uint8_t slot, uint8_t ata_cmd,
+     ch->ctbau =
+         static_cast<uint32_t>((ct_phys_[port][slot] >> 32) & 0xFFFFFFFF);
+ 
+-    // Ensure writes are visible before issuing command
++    // Fence: command-table writes must be visible to the HBA before the
++    // CI doorbell — otherwise it DMAs stale descriptors.
+     kernel::atomic_fence();
+ 
+     // Issue command
+diff --git a/src/kernel/driver/ahci.hpp b/src/kernel/driver/ahci.hpp
+index 3604c512a..fffffe10c 100644
+--- a/src/kernel/driver/ahci.hpp
++++ b/src/kernel/driver/ahci.hpp
+@@ -22,8 +22,6 @@
+ /// @brief AHCI/SATA driver — extends BlockDevice with DMA and NCQ support.
+ ///        Uses ahci_protocol.hpp for register layouts and DmaBuffer for data.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/driver/block_device.hpp>
+ #include <kernel/driver/ahci_protocol.hpp>
+diff --git a/src/kernel/driver/ahci_protocol.hpp b/src/kernel/driver/ahci_protocol.hpp
+index 00ebfec53..912356be0 100644
+--- a/src/kernel/driver/ahci_protocol.hpp
++++ b/src/kernel/driver/ahci_protocol.hpp
+@@ -23,8 +23,6 @@
+ ///        Shared between kernel-mode driver and userspace (ring-3) driver
+ ///        server. No kernel dependencies — standalone portable header.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ namespace kernel::ahci {
+diff --git a/src/kernel/driver/ata_pio.hpp b/src/kernel/driver/ata_pio.hpp
+index d8f26c239..383c5429b 100644
+--- a/src/kernel/driver/ata_pio.hpp
++++ b/src/kernel/driver/ata_pio.hpp
+@@ -21,8 +21,6 @@
+ /// @file ata_pio.hpp
+ /// @brief ATA PIO driver for legacy IDE controllers.
+ 
+-#pragma once
+-
+ #include <kernel/driver/block_device.hpp>
+ 
+ namespace kernel {
+diff --git a/src/kernel/driver/block_device.hpp b/src/kernel/driver/block_device.hpp
+index f2c6f1ac8..fc375a210 100644
+--- a/src/kernel/driver/block_device.hpp
++++ b/src/kernel/driver/block_device.hpp
+@@ -21,8 +21,6 @@
+ /// @file block_device.hpp
+ /// @brief Abstract block device interface and mock device.
  
 -#pragma once
 -
  #include <types.hpp>
  
  namespace kernel {
-diff --git a/src/kernel/log/ring_buffer.hpp b/src/kernel/log/ring_buffer.hpp
-index fb61250ac..f726e5dd5 100644
---- a/src/kernel/log/ring_buffer.hpp
-+++ b/src/kernel/log/ring_buffer.hpp
+diff --git a/src/kernel/driver/dma.hpp b/src/kernel/driver/dma.hpp
+index 9b73fd51d..4e4cae3db 100644
+--- a/src/kernel/driver/dma.hpp
++++ b/src/kernel/driver/dma.hpp
+@@ -24,8 +24,6 @@
+ ///        and portable DMA channel abstraction for kernel and userspace
+ ///        drivers.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <constants.hpp>
+ #include <kernel/arch/pci.hpp>
+diff --git a/src/kernel/driver/driver.hpp b/src/kernel/driver/driver.hpp
+index 628586826..a20cd8ba4 100644
+--- a/src/kernel/driver/driver.hpp
++++ b/src/kernel/driver/driver.hpp
 @@ -21,8 +21,6 @@
- /// @file ring_buffer.hpp
- /// @brief Lock-free SPSC character ring buffer for kernel console (g_klog).
+ /// @file driver.hpp
+ /// @brief Driver registry and module management layer.
  
 -#pragma once
 -
  #include <types.hpp>
- #include <lib/atomic.hpp>
  
-diff --git a/src/kernel/net/arp.hpp b/src/kernel/net/arp.hpp
-index c40f3c7e2..522518349 100644
---- a/src/kernel/net/arp.hpp
-+++ b/src/kernel/net/arp.hpp
+ namespace kernel {
+diff --git a/src/kernel/driver/iocd.hpp b/src/kernel/driver/iocd.hpp
+index 6e149d238..b33e7e23f 100644
+--- a/src/kernel/driver/iocd.hpp
++++ b/src/kernel/driver/iocd.hpp
 @@ -21,8 +21,6 @@
- /// @file arp.hpp
- /// @brief ARP (Address Resolution Protocol) — IPv4 → MAC resolution.
+ /// @file iocd.hpp
+ /// @brief I/O Controller Daemon IPC interface and message types.
  
 -#pragma once
 -
  #include <types.hpp>
- #include <kernel/net/ether.hpp>
  
-diff --git a/src/kernel/net/ether.hpp b/src/kernel/net/ether.hpp
-index 2aa7b330d..e7a0089b4 100644
---- a/src/kernel/net/ether.hpp
-+++ b/src/kernel/net/ether.hpp
+ namespace kernel {
+diff --git a/src/kernel/driver/virtio_blk.hpp b/src/kernel/driver/virtio_blk.hpp
+index 1b76a2769..ca35d1b33 100644
+--- a/src/kernel/driver/virtio_blk.hpp
++++ b/src/kernel/driver/virtio_blk.hpp
 @@ -21,8 +21,6 @@
- /// @file ether.hpp
- /// @brief Ethernet frame types and constants.
+ /// @file virtio_blk.hpp
+ /// @brief Virtio block driver — modern (Virtio 1.0) PCI transport.
  
 -#pragma once
 -
  #include <types.hpp>
- 
- namespace net {
-diff --git a/src/kernel/net/icmp.hpp b/src/kernel/net/icmp.hpp
-index 175e8b604..64f5cdf4f 100644
---- a/src/kernel/net/icmp.hpp
-+++ b/src/kernel/net/icmp.hpp
-@@ -22,8 +22,6 @@
- /// @brief ICMP (Internet Control Message Protocol) — echo request/reply types
- /// and checksum.
- 
--#pragma once
--
- #include <types.hpp>
- 
- namespace net {
-diff --git a/src/kernel/net/ipv4.hpp b/src/kernel/net/ipv4.hpp
-index 15a07e194..cd305ccd6 100644
---- a/src/kernel/net/ipv4.hpp
-+++ b/src/kernel/net/ipv4.hpp
+ #include <kernel/arch/virtio.hpp>
+ #include <kernel/driver/block_device.hpp>
+diff --git a/src/kernel/driver/virtio_net.hpp b/src/kernel/driver/virtio_net.hpp
+index 5e594ba97..b85eec427 100644
+--- a/src/kernel/driver/virtio_net.hpp
++++ b/src/kernel/driver/virtio_net.hpp
 @@ -21,8 +21,6 @@
- /// @file ipv4.hpp
- /// @brief IPv4 protocol types and helpers.
+ /// @file virtio_net.hpp
+ /// @brief Virtio-net NIC driver — modern (Virtio 1.0) PCI transport.
  
 -#pragma once
 -
  #include <types.hpp>
- 
- namespace net {
-diff --git a/src/kernel/net/net.cpp b/src/kernel/net/net.cpp
-index b43e15663..ac2e67b95 100644
---- a/src/kernel/net/net.cpp
-+++ b/src/kernel/net/net.cpp
-@@ -114,7 +114,8 @@ void net_handle_frame(const uint8_t *data, size_t len, Nic &nic) {
-         uint16_t oper = __builtin_bswap16(arp->oper);
- 
-         if (oper == ARP_OPER_REQUEST) {
--            // Check if the target IP is ours
-+            // Only answer requests targeting our own IP — never proxy
-+            // for foreign addresses (a mute host leaks no presence).
-             if (arp->tpa == nic.ip.as_u32()) {
-                 // Send ARP reply
-                 uint8_t reply_buf[sizeof(EtherHeader) + sizeof(ArpHeader)];
-@@ -191,7 +192,8 @@ void net_handle_frame(const uint8_t *data, size_t len, Nic &nic) {
- 
- /// @brief Resolve an IPv4 address to a MAC via ARP (with retries and cache).
- bool net_arp_resolve(Nic &nic, uint32_t target_ip, MacAddr &out_mac) {
--    // Check cache first
-+    // Cache first: a resolve is a broadcast round-trip, so a hit avoids
-+    // stalling the caller on the wire.
-     if (g_arp_cache.lookup(target_ip, out_mac))
-         return true;
- 
-diff --git a/src/kernel/net/net.hpp b/src/kernel/net/net.hpp
-index 8d68145b5..2a0970fe6 100644
---- a/src/kernel/net/net.hpp
-+++ b/src/kernel/net/net.hpp
-@@ -21,8 +21,6 @@
- /// @file net.hpp
- /// @brief Network stack core — NIC interface, packet dispatch.
- 
--#pragma once
--
- #include <types.hpp>
- #include <kernel/net/ether.hpp>
- #include <kernel/net/arp.hpp>
-diff --git a/src/kernel/net/udp.hpp b/src/kernel/net/udp.hpp
-index e76ab6d58..a4d842c62 100644
---- a/src/kernel/net/udp.hpp
-+++ b/src/kernel/net/udp.hpp
-@@ -21,8 +21,6 @@
- /// @file udp.hpp
- /// @brief UDP protocol types and helpers.
- 
--#pragma once
--
- #include <types.hpp>
- 
- namespace net {
+ #include <kernel/arch/virtio.hpp>
+ #include <kernel/net/net.hpp>

@@ -21,8 +21,6 @@
 /// @file virtio_net.hpp
 /// @brief Virtio-net NIC driver — modern (Virtio 1.0) PCI transport.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/arch/virtio.hpp>
 #include <kernel/net/net.hpp>

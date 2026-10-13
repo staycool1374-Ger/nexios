@@ -21,8 +21,6 @@
 /// @file driver.hpp
 /// @brief Driver registry and module management layer.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {
