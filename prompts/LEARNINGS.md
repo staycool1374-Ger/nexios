@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #328 — clone memory-budget charge done (wave 2 complete)
+
+- **Learned:** (1) The global budget is decremented ONLY by create(); PMM allocs attribute to per-task counters instead — read both layers before designing the charge. (2) Reserve only what destroy() releases: over-charging without a matching release monotonically drains the budget (worse than the gap). Symmetry-with-create beat completeness. (3) add_task_err has no budget check (LUB/CPU only) — verified by reading before designing the drain-then-fork test. (4) Aggregate stalls pre-new-test (watchdog 20/145) with identical-binary pass on rerun = TCG flake; Deadline/Proc_elf aggregates flake ~1/3 under host load — always rerun before investigating.
+- **Adapted:** clone reserve + rollback symmetry, regression test, rows sched_admission 8→9 / deadline 144→145; APPROVED (3 S3 notes); pushed, issue closed.
+- **Style re-surface:** fail-closed nullptr + existing sys_fork -1 mapping (no new error paths).
+
 ### Wave 1 verification (#331, #334, #335) — owner-fixed, verified + closed
 
 - **Learned:** (1) Before `issue_write update`, ALWAYS `issue_read get` the full body first — I reconstructed #334/#335 bodies from truncated excerpts and dropped the reporter's fix-hypothesis tails. Closed issues keep evidence comments, but the original text is unrecoverable. (2) `proc_elf` stalls at `loader_fault_dump_gated` (fault-dispatch, zero S-lines) with zero source delta between pass/stall/pass runs = H2 deferred-switch race family flake, not a regression; identical-binary rerun is the correct first move (passed 112/112 on 3rd run). (3) Owner batch-fix commits (`19d55cea1` for 3 issues) shift the role to verify-at-HEAD + close: elf_loader 15/15, task_metering 9/9, deadline 144/144, proc_elf 112/112.
