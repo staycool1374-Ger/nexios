@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #271 P1 — retention + outcome tracking done (issue stays open for P2-P3)
+
+- **Learned:** (1) ISR-callable paths need IrqGuard+SpinLock: `report_user_task_end` runs from interrupt context (fault path) yet touches `ElfLoader::lock_` — plain SpinLock deadlocks (task holds lock, ISR preempts, spins forever). Every set-count site reachable from ISR now IrqGuard-masked. (2) Admission failure after `take_completed` adopted retention (task_refs=1) leaves stale `golden[].phys` dangling: destroy frees the phys via the TCB, but retention still points at it (UAF on next use / leak on abandon). Fix: `abandon_retention()` before destroy on the never-added path (zero/zero frees inline). (3) Staging vs retention two-stage (fill at load, adopt at take, abandon-first) keeps ineligible loads from polluting retention; request_load fail-before-free preserves a good retained set when a bad path fails validation.
+- **Adapted:** Retention struct (golden+pin+refs+ro baseline), staging/adopt/abandon, outcome enum+hooks, unmap_golden wiring before free_user_pages, shell note_launched after admission, snapshot coverage; tests lifecycle+balance; second audit APPROVED after S1 fixes.
+- **Style re-surface:** lock-then-copy staging (bounded walks only, never reschedule inside); outcome tracking via single funnel (report_user_task_end) never UNKNOWN for reported ends.
+
 ### #340 — iocd keyboard delivery done P0-P2 (wave 3: 3/4, issue closed)
 
 - **Learned:** (1) Implicit routing (pid-gating) broke 7 legacy tests by starving the kernel ring — explicit ownership flag won on evidence; "simpler" without a switch is wrong when two consumers exist. (2) Daemon decode fires regardless of registration — self-registration would only add a forward-to-self loop; don't register what needs no routing (guard stayed as defense). (3) Tests that flip global routing must collect-then-clear-then-assert + snapshot-cover the flag (abort-leak safety). (4) Shell services can send_sync to daemons (fail-open, no retry) without liveness risk — precedent for future microkernel transitions.
