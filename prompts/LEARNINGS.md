@@ -46,6 +46,12 @@
 
 ## Entries
 
+### Wave 0 (#342, #343, #341) — gate hygiene + fail-closeds done
+
+- **Learned:** (1) `make execute-test dump-counts` is broken on x86_64 (mux chardev vs mon:stdio sed — filed #344); capture TCOUNT from stdout instead. (2) A "flag mismatch" fix can hide a second gate: #341's translation was correct but unobservable until the vfsd daemon's create-deny was found by reading — always trace the FULL path (stub→syscall→daemon→backend) before claiming E2E. Kernel-side translation was impossible (bit 0x200 ambiguous across libcs) — translate at the single owner above the boundary. (3) Daemon fd-table calls (fstat) can never succeed for user fds — authorization-only handlers are the correct shape (mirrors read/write). (4) Ring-3 probes that create files are safe under test_isolate (tmpfs reset between tests) but MUST unlink in-test; place early-print markers (512 B capture cap).
+- **Adapted:** #342 rows reconciled (APPROVED, zero findings); #343 zero-esz guard + probe (APPROVED); #341 translation + VFS_OPEN_CREATE /tmp policy + fstat fix + E2E (APPROVED, 2 S3 notes). All pushed, issues closed.
+- **Style re-surface:** explicit intent ops beat inferred intent (VFS_OPEN_CREATE vs ENOENT-inference); fail honest (ENOSYS) never silent.
+
 ### #262 — VFS+daemons+ELF H1–H8 verification pass (9/9 #253 parts done)
 
 - **Learned:** (1) Audit handoffs must match the patch pathspec exactly — citing already-committed files (net.cpp under #260) in a new audit prompt earns a valid S3; generate the patch FIRST, then describe it from `git diff --stat`, never from memory. (2) S4 taxonomy verification = grep raw −1 INSIDE VfsError-typed returns (none found) + confirm boundary enums are actually referenced (vfs.cpp/fat32_fs.cpp use VFS_ERR_*) — internal int conventions with interface docs are compliant, not gaps. (3) History hygiene: awk-captured values carry `\r` from QEMU output — strip before appending, and never invent TIME values; re-run small classes to measure honestly.
