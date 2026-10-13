@@ -206,6 +206,102 @@ JARVIS_TEST(cross_boundary_iocd_register_and_irq_forward,
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: The live iocd daemon decodes a keyboard scancode into its
+//           byte queue and serves it via KEYBOARD_READ (issue #340 P0:
+//           daemon side only — no kernel forward or shell changes yet).
+// Input: send_sync REGISTER (self pid, IRQ line 1); async IRQ_EVENT
+//        with scancode 0x1E ('a' press); tick-spin for daemon dispatch;
+//        send_sync KEYBOARD_READ twice.
+// Expect: First read result=1, data[0]='a'; second read result=0
+//         (exactly-once, queue drained — suite stays IPC-quiescent).
+// Depends: iocd daemon (userspace/iocd.c decode + queue + read paths)
+JARVIS_TEST(cross_boundary_iocd_keyboard_read_delivery,
+            "PRE: vfsd, iocd | POST: iocd") {
+    uint64_t iocd_pid = iocd::get_iocd_pid();
+    JARVIS_ASSERT_FMT(iocd_pid != 0, "iocd not running");
+    auto *cur = Scheduler::current_task();
+    JARVIS_ASSERT(cur != nullptr);
+    drain_own_inbox();
+
+    iocd::Msg req{};
+    req.type = iocd::IOCD_REGISTER_DEVICE;
+    req.args[0] = cur->id;
+    req.args[1] = 1; // IRQ line 1: keyboard
+    __builtin_memcpy(&req.args[2], "KBD", 4);
+    Message send{};
+    send.sender_id = cur->id;
+    send.type = iocd::IOCD_REGISTER_DEVICE;
+    send.data_size = sizeof(req);
+    __builtin_memcpy(send.data, &req, sizeof(req));
+    Message reply{};
+    JARVIS_ASSERT_FMT(IPC::send_sync(iocd_pid, send, reply),
+                      "REGISTER_DEVICE send_sync failed");
+    JARVIS_ASSERT_FMT(reply.data_size >= sizeof(iocd::Reply),
+                      "REGISTER reply too short (%lu)", reply.data_size);
+
+    // Inject 'a' press (set-1 0x1E) as the kernel IRQ path would.
+    iocd::Msg ev{};
+    ev.type = iocd::IOCD_IRQ_EVENT;
+    ev.args[0] = 1;
+    ev.args[1] = 0x1E;
+    Message fev{};
+    fev.sender_id = cur->id;
+    fev.type = iocd::IOCD_IRQ_EVENT;
+    fev.data_size = sizeof(ev);
+    __builtin_memcpy(fev.data, &ev, sizeof(ev));
+    JARVIS_ASSERT_FMT(IPC::send(iocd_pid, fev, IPC_NONBLOCK),
+                      "IRQ_EVENT send rejected");
+
+    // The daemon needs timer ticks to run (same bound as the forward
+    // test); the queue is filled asynchronously.
+    uint64_t deadline = arch::Timer::ticks() + 50;
+    bool readable = false;
+    iocd::Reply rpl{};
+    while (!readable && arch::Timer::ticks() < deadline) {
+        iocd::Msg rd{};
+        rd.type = iocd::IOCD_KEYBOARD_READ;
+        rd.args[0] = cur->id;
+        Message sread{};
+        sread.sender_id = cur->id;
+        sread.type = iocd::IOCD_KEYBOARD_READ;
+        sread.data_size = sizeof(rd);
+        __builtin_memcpy(sread.data, &rd, sizeof(rd));
+        Message rreply{};
+        if (!IPC::send_sync(iocd_pid, sread, rreply))
+            break;
+        if (rreply.data_size < sizeof(iocd::Reply))
+            break;
+        __builtin_memcpy(&rpl, rreply.data, sizeof(rpl));
+        if (rpl.result == 1)
+            readable = true;
+        else
+            arch::pause();
+    }
+    JARVIS_ASSERT_FMT(readable, "no decoded byte within 50 ticks");
+    JARVIS_ASSERT_FMT(rpl.data[0] == static_cast<uint64_t>('a'),
+                      "decoded byte 0x%lx != 'a'", rpl.data[0]);
+
+    // Exactly-once: second read is empty.
+    iocd::Msg rd2{};
+    rd2.type = iocd::IOCD_KEYBOARD_READ;
+    rd2.args[0] = cur->id;
+    Message sread2{};
+    sread2.sender_id = cur->id;
+    sread2.type = iocd::IOCD_KEYBOARD_READ;
+    sread2.data_size = sizeof(rd2);
+    __builtin_memcpy(sread2.data, &rd2, sizeof(rd2));
+    Message rreply2{};
+    JARVIS_ASSERT_FMT(IPC::send_sync(iocd_pid, sread2, rreply2),
+                      "second KEYBOARD_READ send_sync failed");
+    iocd::Reply rpl2{};
+    __builtin_memcpy(&rpl2, rreply2.data, sizeof(rpl2));
+    JARVIS_ASSERT_FMT(rpl2.result == 0, "queue not drained (result %ld)",
+                      rpl2.result);
+    drain_own_inbox();
+    JARVIS_TEST_PASS();
+}
+
 #endif // CONFIG_ARCH_X86_64
 
 // Runmode: kernel
@@ -218,5 +314,6 @@ void register_cross_boundary_tests() {
 #if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(cross_boundary_ring3_vfsd_file_chain);
     JARVIS_REGISTER_TEST(cross_boundary_iocd_register_and_irq_forward);
+    JARVIS_REGISTER_TEST(cross_boundary_iocd_keyboard_read_delivery); // #340 P0
 #endif
 }
