@@ -22,8 +22,6 @@
 /// @brief RAII interrupt disable — disable IRQs on construction, restore on
 /// destruction.
 
-#pragma once
-
 #include <kernel/arch/hal/io.hpp>
 
 namespace arch {

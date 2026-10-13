@@ -21,8 +21,6 @@
 /// @file keyboard.hpp
 /// @brief PS/2 keyboard driver (x86_64) / no-op stubs (AArch64, RISC-V).
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/sync/spsc_ring.hpp>
 #include <kernel/nexios_config.h>

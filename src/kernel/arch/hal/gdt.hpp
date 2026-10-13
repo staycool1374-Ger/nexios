@@ -22,8 +22,6 @@
 /// @brief Global Descriptor Table (x86_64) / no-op stubs for other
 /// architectures.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/nexios_config.h>
 

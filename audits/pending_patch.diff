@@ -1,52 +1,234 @@
-diff --git a/src/kernel/ipc/buffer_pool.hpp b/src/kernel/ipc/buffer_pool.hpp
-index 19226371a..ee7720a6f 100644
---- a/src/kernel/ipc/buffer_pool.hpp
-+++ b/src/kernel/ipc/buffer_pool.hpp
+diff --git a/src/kernel/arch/hal/bits.hpp b/src/kernel/arch/hal/bits.hpp
+index 58aace0a3..f2c930bc0 100644
+--- a/src/kernel/arch/hal/bits.hpp
++++ b/src/kernel/arch/hal/bits.hpp
+@@ -21,8 +21,6 @@
+ /// @file bits.hpp
+ /// @brief Bit manipulation utilities — find highest/lowest set bit.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ /// @brief HAL-level bit manipulation utilities.
+diff --git a/src/kernel/arch/hal/context.hpp b/src/kernel/arch/hal/context.hpp
+index 0b32f2eb7..d501430d7 100644
+--- a/src/kernel/arch/hal/context.hpp
++++ b/src/kernel/arch/hal/context.hpp
 @@ -22,8 +22,6 @@
- /// @brief Zero-copy buffer pool — allocate, transfer, map, free buffers via
- /// handles.
+ /// @brief Architecture-specific CPU context (register save area) and context
+ /// switching.
  
 -#pragma once
 -
  #include <types.hpp>
  #include <constants.hpp>
- #include <kernel/memory/checked_ptr.hpp>
-diff --git a/src/kernel/ipc/buffer_pool_errors.hpp b/src/kernel/ipc/buffer_pool_errors.hpp
-index df4a591d8..dd4f0c706 100644
---- a/src/kernel/ipc/buffer_pool_errors.hpp
-+++ b/src/kernel/ipc/buffer_pool_errors.hpp
-@@ -21,8 +21,6 @@
- /// @file buffer_pool_errors.hpp
- /// @brief Buffer pool error codes (X-macro table with human-readable strings).
+ 
+diff --git a/src/kernel/arch/hal/cpuid.hpp b/src/kernel/arch/hal/cpuid.hpp
+index 973143284..c411346af 100644
+--- a/src/kernel/arch/hal/cpuid.hpp
++++ b/src/kernel/arch/hal/cpuid.hpp
+@@ -22,8 +22,6 @@
+ /// @brief CPU identification — dispatches to architecture-specific cpuid
+ /// implementations.
  
 -#pragma once
 -
  #include <types.hpp>
- #include <assert.hpp>
+ #include <kernel/nexios_config.h>
  
-diff --git a/src/kernel/ipc/ipc.hpp b/src/kernel/ipc/ipc.hpp
-index 1dc6dbe81..727038ade 100644
---- a/src/kernel/ipc/ipc.hpp
-+++ b/src/kernel/ipc/ipc.hpp
-@@ -21,8 +21,6 @@
- /// @file ipc.hpp
- /// @brief Priority-based IPC — send, recv, events, notifications.
- 
--#pragma once
--
- #include <types.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/sync/spinlock.hpp>
-diff --git a/src/kernel/ipc/ipc_errors.hpp b/src/kernel/ipc/ipc_errors.hpp
-index b2f308567..530168697 100644
---- a/src/kernel/ipc/ipc_errors.hpp
-+++ b/src/kernel/ipc/ipc_errors.hpp
-@@ -21,8 +21,6 @@
- /// @file ipc_errors.hpp
- /// @brief IPC error codes (X-macro table with human-readable strings).
+diff --git a/src/kernel/arch/hal/gdt.hpp b/src/kernel/arch/hal/gdt.hpp
+index 7c584442e..a5efdc9d4 100644
+--- a/src/kernel/arch/hal/gdt.hpp
++++ b/src/kernel/arch/hal/gdt.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Global Descriptor Table (x86_64) / no-op stubs for other
+ /// architectures.
  
 -#pragma once
 -
  #include <types.hpp>
- #include <assert.hpp>
+ #include <kernel/nexios_config.h>
  
+diff --git a/src/kernel/arch/hal/idt.hpp b/src/kernel/arch/hal/idt.hpp
+index c9407c6e1..bd520e6c7 100644
+--- a/src/kernel/arch/hal/idt.hpp
++++ b/src/kernel/arch/hal/idt.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Interrupt Descriptor Table (x86_64) / interrupt vector dispatch for
+ /// all architectures.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/nexios_config.h>
+ 
+diff --git a/src/kernel/arch/hal/interrupt_controller.hpp b/src/kernel/arch/hal/interrupt_controller.hpp
+index 54f33d0cb..a82588a29 100644
+--- a/src/kernel/arch/hal/interrupt_controller.hpp
++++ b/src/kernel/arch/hal/interrupt_controller.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Interrupt controller abstraction — PIC (x86_64), GIC (AArch64), PLIC
+ /// (RISC-V).
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <constants.hpp>
+ #include <kernel/arch/hal/io.hpp>
+diff --git a/src/kernel/arch/hal/io.hpp b/src/kernel/arch/hal/io.hpp
+index 83fcf96c2..4d3114e90 100644
+--- a/src/kernel/arch/hal/io.hpp
++++ b/src/kernel/arch/hal/io.hpp
+@@ -21,8 +21,6 @@
+ /// @file io.hpp
+ /// @brief Port I/O (x86_64) and memory-mapped I/O (AArch64, RISC-V) primitives.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ /// @cond
+diff --git a/src/kernel/arch/hal/irq_guard.hpp b/src/kernel/arch/hal/irq_guard.hpp
+index 57ee6f686..85fc0b050 100644
+--- a/src/kernel/arch/hal/irq_guard.hpp
++++ b/src/kernel/arch/hal/irq_guard.hpp
+@@ -22,8 +22,6 @@
+ /// @brief RAII interrupt disable — disable IRQs on construction, restore on
+ /// destruction.
+ 
+-#pragma once
+-
+ #include <kernel/arch/hal/io.hpp>
+ 
+ namespace arch {
+diff --git a/src/kernel/arch/hal/keyboard.hpp b/src/kernel/arch/hal/keyboard.hpp
+index b8bf7e107..86bfb2151 100644
+--- a/src/kernel/arch/hal/keyboard.hpp
++++ b/src/kernel/arch/hal/keyboard.hpp
+@@ -21,8 +21,6 @@
+ /// @file keyboard.hpp
+ /// @brief PS/2 keyboard driver (x86_64) / no-op stubs (AArch64, RISC-V).
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/sync/spsc_ring.hpp>
+ #include <kernel/nexios_config.h>
+diff --git a/src/kernel/arch/hal/msr.hpp b/src/kernel/arch/hal/msr.hpp
+index f66c34356..fc45034c5 100644
+--- a/src/kernel/arch/hal/msr.hpp
++++ b/src/kernel/arch/hal/msr.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Model-Specific Register (MSR) read/write (x86_64) / no-op stubs
+ /// (AArch64, RISC-V).
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/nexios_config.h>
+ 
+diff --git a/src/kernel/arch/hal/page_flags.hpp b/src/kernel/arch/hal/page_flags.hpp
+index 4a23a0717..5d4b9e9b8 100644
+--- a/src/kernel/arch/hal/page_flags.hpp
++++ b/src/kernel/arch/hal/page_flags.hpp
+@@ -21,8 +21,6 @@
+ /// @file page_flags.hpp
+ /// @brief Architecture-independent page flag constants for page table entries.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ namespace kernel {
+diff --git a/src/kernel/arch/hal/page_table.hpp b/src/kernel/arch/hal/page_table.hpp
+index 84f9f39a1..0f7caed56 100644
+--- a/src/kernel/arch/hal/page_table.hpp
++++ b/src/kernel/arch/hal/page_table.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Page table management — dispatches to architecture-specific
+ /// implementations.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ /// @cond
+diff --git a/src/kernel/arch/hal/pci.hpp b/src/kernel/arch/hal/pci.hpp
+index 4cd81a08e..13db7f0d2 100644
+--- a/src/kernel/arch/hal/pci.hpp
++++ b/src/kernel/arch/hal/pci.hpp
+@@ -22,8 +22,6 @@
+ /// @brief PCI config space access — CF8/CFC port I/O (x86_64) and ECAM
+ /// (AArch64, RISC-V).
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ namespace arch {
+diff --git a/src/kernel/arch/hal/rand.hpp b/src/kernel/arch/hal/rand.hpp
+index 96f1f8eec..0b4955e3a 100644
+--- a/src/kernel/arch/hal/rand.hpp
++++ b/src/kernel/arch/hal/rand.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Hardware random number generation — dispatches to
+ /// architecture-specific implementations.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/nexios_config.h>
+ 
+diff --git a/src/kernel/arch/hal/rtc.hpp b/src/kernel/arch/hal/rtc.hpp
+index f0f622d7b..da6ee879f 100644
+--- a/src/kernel/arch/hal/rtc.hpp
++++ b/src/kernel/arch/hal/rtc.hpp
+@@ -21,8 +21,6 @@
+ /// @file rtc.hpp
+ /// @brief Real-Time Clock (CMOS RTC on x86_64, platform RTC on AArch64/RISC-V).
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/nexios_config.h>
+ 
+diff --git a/src/kernel/arch/hal/serial.hpp b/src/kernel/arch/hal/serial.hpp
+index d349c5105..36dde7303 100644
+--- a/src/kernel/arch/hal/serial.hpp
++++ b/src/kernel/arch/hal/serial.hpp
+@@ -21,8 +21,6 @@
+ /// @file serial.hpp
+ /// @brief Serial port (UART) driver — architecture-agnostic interface.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ namespace arch {
+diff --git a/src/kernel/arch/hal/timer.hpp b/src/kernel/arch/hal/timer.hpp
+index a8b8899e5..e245693bc 100644
+--- a/src/kernel/arch/hal/timer.hpp
++++ b/src/kernel/arch/hal/timer.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Timer abstraction — PIT+TSC (x86_64), generic timer (AArch64), timer
+ /// (RISC-V).
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/nexios_config.h>
+ 
+diff --git a/src/kernel/boot/bootinfo.hpp b/src/kernel/boot/bootinfo.hpp
+index c4a25f87a..e527974ba 100644
+--- a/src/kernel/boot/bootinfo.hpp
++++ b/src/kernel/boot/bootinfo.hpp
+@@ -22,8 +22,6 @@
+ /// @brief Boot information structure — memory regions, DTB, multiboot, command
+ /// line.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ 
+ /// Maximum number of memory regions that can be reported.

@@ -21,8 +21,6 @@
 /// @file io.hpp
 /// @brief Port I/O (x86_64) and memory-mapped I/O (AArch64, RISC-V) primitives.
 
-#pragma once
-
 #include <types.hpp>
 
 /// @cond

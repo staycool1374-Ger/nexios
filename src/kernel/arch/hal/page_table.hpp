@@ -22,8 +22,6 @@
 /// @brief Page table management — dispatches to architecture-specific
 /// implementations.
 
-#pragma once
-
 #include <types.hpp>
 
 /// @cond

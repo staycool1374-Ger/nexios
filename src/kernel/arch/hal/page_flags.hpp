@@ -21,8 +21,6 @@
 /// @file page_flags.hpp
 /// @brief Architecture-independent page flag constants for page table entries.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {

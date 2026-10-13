@@ -22,8 +22,6 @@
 /// @brief Interrupt controller abstraction — PIC (x86_64), GIC (AArch64), PLIC
 /// (RISC-V).
 
-#pragma once
-
 #include <types.hpp>
 #include <constants.hpp>
 #include <kernel/arch/hal/io.hpp>

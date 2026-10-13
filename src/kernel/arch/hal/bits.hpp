@@ -21,8 +21,6 @@
 /// @file bits.hpp
 /// @brief Bit manipulation utilities — find highest/lowest set bit.
 
-#pragma once
-
 #include <types.hpp>
 
 /// @brief HAL-level bit manipulation utilities.

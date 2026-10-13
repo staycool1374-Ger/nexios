@@ -22,8 +22,6 @@
 /// @brief Timer abstraction — PIT+TSC (x86_64), generic timer (AArch64), timer
 /// (RISC-V).
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/nexios_config.h>
 
