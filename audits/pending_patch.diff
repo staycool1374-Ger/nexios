@@ -1,399 +1,145 @@
-diff --git a/src/kernel/arch/hal/keyboard.hpp b/src/kernel/arch/hal/keyboard.hpp
-index 86bfb2151..eed83d4db 100644
---- a/src/kernel/arch/hal/keyboard.hpp
-+++ b/src/kernel/arch/hal/keyboard.hpp
-@@ -45,6 +45,14 @@ class Keyboard {
-     /// @param[out] c Output character.
-     /// @return true if a character was available.
-     static bool getchar(char &c);
-+    /// @brief Forward a raw scancode to the iocd daemon (issue #340 P1).
-+    /// Task context only: returns false in ISR context (never IPC-sends
-+    /// from an interrupt), when no daemon runs, or when the send is
-+    /// refused — the caller falls back to the legacy ring path.
-+    /// @param scancode Raw PS/2 set-1 byte (press or release).
-+    /// @return true when the daemon accepted it (caller must skip the
-+    ///         ring push — never both), false otherwise.
-+    static bool try_forward_to_iocd(uint8_t scancode);
-     /// @brief Read multiple characters into a buffer (non-blocking).
-     /// @param buf Output buffer.
-     /// @param len Maximum number of characters to read.
-diff --git a/src/kernel/arch/x86_64/keyboard.cpp b/src/kernel/arch/x86_64/keyboard.cpp
-index 28ae7db08..ab93ec0d0 100644
---- a/src/kernel/arch/x86_64/keyboard.cpp
-+++ b/src/kernel/arch/x86_64/keyboard.cpp
-@@ -22,6 +22,10 @@
- 
- #include <kernel/arch/keyboard.hpp>
- #include <kernel/arch/io.hpp>
-+#include <kernel/arch/cpu_context.hpp>
-+#include <kernel/driver/iocd.hpp>
-+#include <kernel/ipc/ipc.hpp>
-+#include <kernel/task/scheduler.hpp>
- 
- namespace arch {
- 
-@@ -111,6 +115,15 @@ void Keyboard::handle_irq() {
-     uint8_t scancode = inb(DATA_PORT);
- 
-     bool pressed = !(scancode & 0x80);
-+    // Issue #340 P1: daemon-owned keyboard — forward the raw scancode
-+    // and skip the ring push (never both: single-ownership invariant).
-+    // try_forward fails closed (ISR context, daemon down, send refused)
-+    // and the legacy path below preserves every keystroke.
-+    if (kernel::iocd::is_keyboard_owned() &&
-+        try_forward_to_iocd(scancode)) {
-+        update_modifiers(scancode, pressed);
-+        return;
-+    }
-     uint8_t code = scancode & 0x7F;
- 
-     update_modifiers(scancode, pressed);
-@@ -138,6 +151,29 @@ void Keyboard::handle_irq() {
-         push_ring(c);
- }
- 
-+/// @brief Forward a raw scancode to the iocd daemon (issue #340 P1).
-+/// Task context only: ISR context (isr nesting nonzero), no daemon, or
-+/// a refused NONBLOCK send all fail closed so the caller keeps the
-+/// legacy ring push and no keystroke is lost.
-+bool Keyboard::try_forward_to_iocd(uint8_t scancode) {
-+    if (kernel::isr_nesting_own() != 0)
-+        return false;
-+    uint64_t pid = kernel::iocd::get_iocd_pid();
-+    if (pid == 0)
-+        return false;
-+    kernel::iocd::Msg req{};
-+    req.type = kernel::iocd::IOCD_IRQ_EVENT;
-+    req.args[0] = 1; // IRQ line 1: keyboard
-+    req.args[1] = scancode;
-+    kernel::Message send{};
-+    auto *cur = kernel::Scheduler::current_task();
-+    send.sender_id = cur ? cur->id : 0;
-+    send.type = kernel::iocd::IOCD_IRQ_EVENT;
-+    send.data_size = sizeof(req);
-+    __builtin_memcpy(send.data, &req, sizeof(req));
-+    return kernel::IPC::send(pid, send, kernel::IPC_NONBLOCK);
-+}
-+
- /// @brief Dequeue a single character from the input ring buffer.
- /// @param[out] c Reference that receives the retrieved character.
- /// @return true if a character was available and dequeued, false if the buffer
-diff --git a/src/kernel/driver/iocd.cpp b/src/kernel/driver/iocd.cpp
-index 3ab324286..d6a575c0a 100644
---- a/src/kernel/driver/iocd.cpp
-+++ b/src/kernel/driver/iocd.cpp
-@@ -46,5 +46,23 @@ bool is_iocd_task() {
-     return cur && cur->id == g_iocd_pid;
- }
- 
-+namespace {
-+
-+// Keyboard ownership cell (issue #340 P1): atomic access everywhere,
-+// including the handle_irq read side. Snapshot-covered.
-+bool g_keyboard_owned = false;
-+
-+} // namespace
-+
-+/// @brief Keyboard ownership for input routing (issue #340 P1).
-+bool is_keyboard_owned() {
-+    return __atomic_load_n(&g_keyboard_owned, __ATOMIC_ACQUIRE);
-+}
-+
-+/// @brief Set or clear keyboard ownership.
-+void set_keyboard_owned(bool owned) {
-+    __atomic_store_n(&g_keyboard_owned, owned, __ATOMIC_RELEASE);
-+}
-+
- } // namespace iocd
- } // namespace kernel
-diff --git a/src/kernel/driver/iocd.hpp b/src/kernel/driver/iocd.hpp
-index b33e7e23f..690bf09d7 100644
---- a/src/kernel/driver/iocd.hpp
-+++ b/src/kernel/driver/iocd.hpp
-@@ -52,8 +52,19 @@ void set_iocd_pid(uint64_t pid);
- /// @return The PID, or 0 if not yet set.
- uint64_t get_iocd_pid();
- /// @brief Check if the current task is the IOCD.
--/// @return true if the current task's PID matches the IOCD PID.
-+/// @return true if the current task's PID matches the recorded IOCD PID.
- bool is_iocd_task();
-+/// @brief Keyboard ownership for input routing (issue #340 P1).
-+/// False (default) = legacy: kernel handle_irq pushes its ring, shell
-+/// polls hardware. True = daemon-owned: handle_irq forwards raw
-+/// scancodes to iocd (never both — single-ownership invariant).
-+/// Set only by explicit consumers (shell, tests); fail-open per
-+/// keystroke on daemon-down/ISR-context regardless of the flag.
-+/// Snapshot-covered (test isolation restores it like daemon PIDs).
-+bool is_keyboard_owned();
-+/// @brief Set or clear keyboard ownership.
-+/// @param owned True to route keyboard bytes through iocd.
-+void set_keyboard_owned(bool owned);
- 
- } // namespace iocd
- } // namespace kernel
 diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index b6a8a4235..ed2f887b2 100644
+index ed2f887b2..009b4441a 100644
 --- a/src/kernel/kernel.cpp
 +++ b/src/kernel/kernel.cpp
-@@ -108,6 +108,17 @@ using namespace arch;
- // the boot context (IF=0, where reschedule()+hlt() would hang).
- static bool g_run_tests = false;
- 
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_THREADED_IRQS
-+// Issue #340 P1: threaded keyboard handler (IrqThread task context —
-+// the ONLY context in which handle_irq may IPC-forward to iocd).
-+// Named (not a lambda) so the single IPC-capable call site stays
-+// grep-visible for audit. The non-threaded IDT path below runs in
-+// ISR context where try_forward_to_iocd refuses by isr_nesting.
-+static void keyboard_threaded_handler(uint64_t, uint64_t, uint64_t) {
-+    arch::Keyboard::handle_irq();
-+}
-+#endif
-+
- // ── init_task_main ──────────────────────────────────────────────────────
- // Init task entry point for PID 1.  Mounts fstab, runs /etc/rc, then
- // blocks as reaper.  Referenced by both the manual pre-test create (below)
-@@ -642,12 +653,15 @@ void init_task_main() {
-     // IrqThread task).  Only in interactive mode (no test suite): during the
-     // test run keyboard input is unused and a persistent IrqThread task would
-     // perturb snapshot-isolation task-count expectations.
-+    // Issue #340 P1: the threaded handler runs handle_irq() in IrqThread
-+    // task context, where try_forward_to_iocd may IPC-send to iocd. The
-+    // non-threaded IDT path below runs in ISR context: handle_irq detects
-+    // that via isr_nesting and takes the decode-only legacy branch (it
-+    // must never IPC-send — §11.1). Named function (not a lambda) so the
-+    // single IPC-capable call site stays grep-visible for audit.
+@@ -659,7 +659,12 @@ void init_task_main() {
+     // that via isr_nesting and takes the decode-only legacy branch (it
+     // must never IPC-send — §11.1). Named function (not a lambda) so the
+     // single IPC-capable call site stays grep-visible for audit.
++    // Issue #340 P2: route keyboard bytes through iocd in interactive
++    // mode only. Test runs keep legacy routing (decode tests inject
++    // straight into the hardware ring); the cross_boundary test sets
++    // ownership explicitly (snapshot-restored).
      if (!g_run_tests) {
++    kernel::iocd::set_keyboard_owned(true);
  #if defined(CONFIG_ARCH_X86_64) && CONFIG_THREADED_IRQS
--    kernel::IrqThread::create(33, 50,
--                              [](uint64_t, uint64_t, uint64_t) {
--                                  arch::Keyboard::handle_irq();
--                              },
-+    kernel::IrqThread::create(33, 50, keyboard_threaded_handler,
+     kernel::IrqThread::create(33, 50, keyboard_threaded_handler,
                                [](uint8_t vector) {
-                                   // x86_64: send APIC EOI + PIC EOI
-                                   if (arch::APIC::is_enabled())
-diff --git a/src/kernel/test/test_cross_boundary.cpp b/src/kernel/test/test_cross_boundary.cpp
-index 268acc6f7..dea910443 100644
---- a/src/kernel/test/test_cross_boundary.cpp
-+++ b/src/kernel/test/test_cross_boundary.cpp
-@@ -38,6 +38,8 @@
- #include <logger.hpp>
- #include <kernel/arch/timer.hpp>
- #include <kernel/arch/hal/irq_guard.hpp>
-+#include <kernel/arch/io.hpp>
-+#include <kernel/arch/keyboard.hpp>
- #include <kernel/driver/iocd.hpp>
- #include <kernel/ipc/ipc.hpp>
- #include <kernel/task/scheduler.hpp>
-@@ -207,15 +209,18 @@ JARVIS_TEST(cross_boundary_iocd_register_and_irq_forward,
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index a1c9fbe5f..8cd0c5221 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -131,6 +131,43 @@ void shell_input_timeout_fire(void *context) {
+     shell_input_notify().notify(1);
  }
  
- // Runmode: kernel
--// Testidea: The live iocd daemon decodes a keyboard scancode into its
--//           byte queue and serves it via KEYBOARD_READ (issue #340 P0:
--//           daemon side only — no kernel forward or shell changes yet).
--// Input: send_sync REGISTER (self pid, IRQ line 1); async IRQ_EVENT
--//        with scancode 0x1E ('a' press); tick-spin for daemon dispatch;
--//        send_sync KEYBOARD_READ twice.
--// Expect: First read result=1, data[0]='a'; second read result=0
--//         (exactly-once, queue drained — suite stays IPC-quiescent).
--// Depends: iocd daemon (userspace/iocd.c decode + queue + read paths)
-+// Testidea: The kernel forward path delivers a keyboard scancode to the
-+//           live iocd daemon, which decodes and serves it via
-+//           KEYBOARD_READ (issue #340 P1: forward + single ownership;
-+//           P0 proved the daemon side via direct injection).
-+// Input: Set keyboard ownership; inject 'a' press (set-1 0x1E) through
-+//        the REAL i8042 path (0xD2 + genuine handle_irq); tick-spin;
-+//        send_sync KEYBOARD_READ twice; poll the kernel ring. Ownership
-+//        cleared before asserts so an abort cannot leak the routing.
-+// Expect: Forward accepted; first read result=1, data[0]='a'; second
-+//         read result=0 (exactly-once); kernel ring empty (never both).
-+// Depends: Keyboard::handle_irq ownership branch + try_forward_to_iocd
-+//          + iocd decode/queue/read
- JARVIS_TEST(cross_boundary_iocd_keyboard_read_delivery,
-             "PRE: vfsd, iocd | POST: iocd") {
-     uint64_t iocd_pid = iocd::get_iocd_pid();
-@@ -223,40 +228,20 @@ JARVIS_TEST(cross_boundary_iocd_keyboard_read_delivery,
-     auto *cur = Scheduler::current_task();
-     JARVIS_ASSERT(cur != nullptr);
-     drain_own_inbox();
-+    arch::Keyboard::flush();
- 
--    iocd::Msg req{};
--    req.type = iocd::IOCD_REGISTER_DEVICE;
--    req.args[0] = cur->id;
--    req.args[1] = 1; // IRQ line 1: keyboard
--    __builtin_memcpy(&req.args[2], "KBD", 4);
--    Message send{};
--    send.sender_id = cur->id;
--    send.type = iocd::IOCD_REGISTER_DEVICE;
--    send.data_size = sizeof(req);
--    __builtin_memcpy(send.data, &req, sizeof(req));
--    Message reply{};
--    JARVIS_ASSERT_FMT(IPC::send_sync(iocd_pid, send, reply),
--                      "REGISTER_DEVICE send_sync failed");
--    JARVIS_ASSERT_FMT(reply.data_size >= sizeof(iocd::Reply),
--                      "REGISTER reply too short (%lu)", reply.data_size);
-+    // Take ownership, then inject through genuine hardware + handler.
-+    // Collect everything into locals, restore ownership, THEN assert
-+    // (an abort must not leak the routing into later tests).
-+    iocd::set_keyboard_owned(true);
-+    arch::outb(0x64, 0xD2); // i8042: write keyboard output buffer
-+    arch::outb(0x60, 0x1E); // 'a' press
-+    arch::Keyboard::handle_irq();
- 
--    // Inject 'a' press (set-1 0x1E) as the kernel IRQ path would.
--    iocd::Msg ev{};
--    ev.type = iocd::IOCD_IRQ_EVENT;
--    ev.args[0] = 1;
--    ev.args[1] = 0x1E;
--    Message fev{};
--    fev.sender_id = cur->id;
--    fev.type = iocd::IOCD_IRQ_EVENT;
--    fev.data_size = sizeof(ev);
--    __builtin_memcpy(fev.data, &ev, sizeof(ev));
--    JARVIS_ASSERT_FMT(IPC::send(iocd_pid, fev, IPC_NONBLOCK),
--                      "IRQ_EVENT send rejected");
--
--    // The daemon needs timer ticks to run (same bound as the forward
--    // test); the queue is filled asynchronously.
-+    // The daemon needs timer ticks to run; the queue fills async.
-     uint64_t deadline = arch::Timer::ticks() + 50;
-     bool readable = false;
-+    bool read_ok = true;
-     iocd::Reply rpl{};
-     while (!readable && arch::Timer::ticks() < deadline) {
-         iocd::Msg rd{};
-@@ -268,37 +253,57 @@ JARVIS_TEST(cross_boundary_iocd_keyboard_read_delivery,
-         sread.data_size = sizeof(rd);
-         __builtin_memcpy(sread.data, &rd, sizeof(rd));
-         Message rreply{};
--        if (!IPC::send_sync(iocd_pid, sread, rreply))
-+        if (!IPC::send_sync(iocd_pid, sread, rreply)) {
-+            read_ok = false;
-             break;
--        if (rreply.data_size < sizeof(iocd::Reply))
++// Issue #340 P2: central keyboard/serial input poll. Order: serial
++// (separate source, always first) → iocd daemon (keyboard bytes routed
++// there when owned) → hardware ring, but ONLY when the daemon is down
++// (pid 0 or send_sync refused): when the daemon is up the ring is empty
++// by the single-ownership invariant, and draining it would risk double
++// delivery. Never blocks on the daemon beyond one send_sync round-trip
++// (fail-open); shell liveness never depends on iocd.
++bool shell_try_get_key(char &out) {
++    if (arch::Serial::poll_getchar(out))
++        return true;
++    uint64_t pid = kernel::iocd::get_iocd_pid();
++    if (pid != 0) {
++        kernel::iocd::Msg req{};
++        req.type = kernel::iocd::IOCD_KEYBOARD_READ;
++        auto *cur = kernel::Scheduler::current_task();
++        req.args[0] = cur ? cur->id : 0;
++        kernel::Message send{};
++        send.sender_id = req.args[0];
++        send.type = kernel::iocd::IOCD_KEYBOARD_READ;
++        send.data_size = sizeof(req);
++        __builtin_memcpy(send.data, &req, sizeof(req));
++        kernel::Message reply{};
++        if (kernel::IPC::send_sync(pid, send, reply) &&
++            reply.data_size >= sizeof(kernel::iocd::Reply)) {
++            kernel::iocd::Reply rpl{};
++            __builtin_memcpy(&rpl, reply.data, sizeof(rpl));
++            if (rpl.result == 1) {
++                out = static_cast<char>(rpl.data[0]);
++                return true;
++            }
++            return false; // daemon up, queue empty: ring empty by invariant
 +        }
-+        if (rreply.data_size < sizeof(iocd::Reply)) {
-+            read_ok = false;
-             break;
-+        }
-         __builtin_memcpy(&rpl, rreply.data, sizeof(rpl));
-         if (rpl.result == 1)
-             readable = true;
-         else
-             arch::pause();
-     }
-+
-+    // Exactly-once: second read is empty. Single ownership: the
-+    // forwarded byte must NOT also sit in the kernel hardware ring.
-+    bool second_ok = true;
-+    iocd::Reply rpl2{};
-+    {
-+        iocd::Msg rd2{};
-+        rd2.type = iocd::IOCD_KEYBOARD_READ;
-+        rd2.args[0] = cur->id;
-+        Message sread2{};
-+        sread2.sender_id = cur->id;
-+        sread2.type = iocd::IOCD_KEYBOARD_READ;
-+        sread2.data_size = sizeof(rd2);
-+        __builtin_memcpy(sread2.data, &rd2, sizeof(rd2));
-+        Message rreply2{};
-+        if (!IPC::send_sync(iocd_pid, sread2, rreply2))
-+            second_ok = false;
-+        else {
-+            if (rreply2.data_size < sizeof(iocd::Reply))
-+                second_ok = false;
-+            else
-+                __builtin_memcpy(&rpl2, rreply2.data, sizeof(rpl2));
-+        }
++        // send_sync refused (daemon dying): fall through to hardware.
 +    }
-+    char c = 0;
-+    bool ring_empty = !arch::Keyboard::getchar(c);
-+    iocd::set_keyboard_owned(false);
-+    drain_own_inbox();
-+    JARVIS_ASSERT_FMT(read_ok, "KEYBOARD_READ send_sync failed");
-     JARVIS_ASSERT_FMT(readable, "no decoded byte within 50 ticks");
-     JARVIS_ASSERT_FMT(rpl.data[0] == static_cast<uint64_t>('a'),
-                       "decoded byte 0x%lx != 'a'", rpl.data[0]);
--
--    // Exactly-once: second read is empty.
--    iocd::Msg rd2{};
--    rd2.type = iocd::IOCD_KEYBOARD_READ;
--    rd2.args[0] = cur->id;
--    Message sread2{};
--    sread2.sender_id = cur->id;
--    sread2.type = iocd::IOCD_KEYBOARD_READ;
--    sread2.data_size = sizeof(rd2);
--    __builtin_memcpy(sread2.data, &rd2, sizeof(rd2));
--    Message rreply2{};
--    JARVIS_ASSERT_FMT(IPC::send_sync(iocd_pid, sread2, rreply2),
--                      "second KEYBOARD_READ send_sync failed");
--    iocd::Reply rpl2{};
--    __builtin_memcpy(&rpl2, rreply2.data, sizeof(rpl2));
-+    JARVIS_ASSERT_FMT(second_ok, "second KEYBOARD_READ send_sync failed");
-     JARVIS_ASSERT_FMT(rpl2.result == 0, "queue not drained (result %ld)",
-                       rpl2.result);
--    drain_own_inbox();
-+    JARVIS_ASSERT_FMT(ring_empty,
-+                      "double delivery: byte also in kernel ring");
-     JARVIS_TEST_PASS();
- }
- 
-diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index 9c7a0de94..de4a9f159 100644
---- a/src/kernel/test/test_isolate.cpp
-+++ b/src/kernel/test/test_isolate.cpp
-@@ -212,10 +212,16 @@ static size_t off_watchdogd_pid() {
-     return off_iocd_pid() + sizeof(uint64_t);
- }
- 
--static size_t off_bufpool() {
-+// Issue #340 P1: keyboard-ownership routing flag (1 byte payload in a
-+// uint64 slot to keep the offset chain aligned).
-+static size_t off_kbd_owned() {
-     return off_watchdogd_pid() + sizeof(uint64_t);
- }
- 
-+static size_t off_bufpool() {
-+    return off_kbd_owned() + sizeof(uint64_t);
++    return arch::Keyboard::getchar(out);
 +}
 +
- static constexpr uint64_t CANARY_BEFORE  = 0xCAFEBABE00000001ULL;
- static constexpr uint64_t CANARY_AFTER   = 0xCAFEBABE00000002ULL;
- static constexpr uint64_t CANARY_PD      = 0xCAFEBABE00000003ULL;
-@@ -568,6 +574,9 @@ bool snapshot_create() {
-         iocd::get_iocd_pid();
-     *reinterpret_cast<uint64_t *>(g_snapshot + off_watchdogd_pid()) =
-         watchdogd::get_watchdogd_pid();
-+    // Issue #340 P1: snapshot the keyboard-ownership routing flag.
-+    *reinterpret_cast<uint64_t *>(g_snapshot + off_kbd_owned()) =
-+        iocd::is_keyboard_owned() ? 1ULL : 0ULL;
-     Logger::info("[SNAP:SAVE] vfsd_pid=%u iocd_pid=%u watchdogd_pid=%u",
-                  vfsd::get_vfsd_pid(), iocd::get_iocd_pid(),
-                  watchdogd::get_watchdogd_pid());
-@@ -1703,6 +1712,10 @@ void snapshot_restore(const char *test_name) {
-         *reinterpret_cast<uint64_t *>(g_snapshot + off_iocd_pid()));
-     watchdogd::set_watchdogd_pid(
-         *reinterpret_cast<uint64_t *>(g_snapshot + off_watchdogd_pid()));
-+    // Issue #340 P1: restore input routing with the daemon PIDs (a test
-+    // aborting with ownership set must not reroute later tests).
-+    iocd::set_keyboard_owned(
-+        *reinterpret_cast<uint64_t *>(g_snapshot + off_kbd_owned()) != 0);
-     Logger::info("[SNAP:RESTORE] vfsd_pid=%u iocd_pid=%u watchdogd_pid=%u",
-                  vfsd::get_vfsd_pid(), iocd::get_iocd_pid(),
-                  watchdogd::get_watchdogd_pid());
+ void shell_idle_nap(uint64_t timeout_us) {
+     if (!shell_input_inited) {
+         new (shell_input_notify_buf) kernel::sync::Notify();
+@@ -495,12 +532,9 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
+         char c = 0;
+         // Issue #245: poll the UART first on every architecture (the old
+         // x86-only COM1 inline poll never ran on aarch64/riscv64), then
+-        // fall back to the (PS/2-backed, x86-only) Keyboard path.
+-        bool got_char = arch::Serial::poll_getchar(c);
+-
+-        if (!got_char) {
+-            got_char = arch::Keyboard::getchar(c);
+-        }
++        // the iocd-routed keyboard, then the hardware ring fallback
++        // (issue #340: single helper owns the order + fallback).
++        bool got_char = shell_try_get_key(c);
+ 
+         if (!got_char) {
+             // Async background output arrived?  Move to a fresh line and
+@@ -1668,9 +1702,7 @@ void Shell::cmd_top(int argc, const char** argv) {
+         bool quit = false;
+         while (arch::Timer::ticks() < deadline) {
+             char c = 0;
+-            bool got = arch::Serial::poll_getchar(c); // issue #245
+-            if (!got)
+-                got = arch::Keyboard::getchar(c);
++            bool got = shell_try_get_key(c); // issues #245 + #340
+             if (got && (c == 'q' || c == 'Q')) {
+                 quit = true;
+                 break;
+@@ -2192,9 +2224,7 @@ void Shell::cmd_monstat(int argc, const char** argv) {
+     size_t pos = 0;
+     for (;;) {
+         char c = 0;
+-        bool got = arch::Serial::poll_getchar(c);
+-        if (!got)
+-            got = arch::Keyboard::getchar(c);
++        bool got = shell_try_get_key(c); // issues #245 + #340
+         if (!got) {
+             shell_idle_nap(20000);
+             continue;
+@@ -3296,8 +3326,7 @@ void Shell::cmd_read(int argc, const char** argv) {
+     size_t pos = 0;
+     for (;;) {
+         char c = 0;
+-        bool got = arch::Serial::poll_getchar(c); // issue #245: UART source
+-        if (!got) got = arch::Keyboard::getchar(c);
++        bool got = shell_try_get_key(c); // issues #245 + #340: UART source
+         if (!got) {
+             // Same idle nap as readline (read builtin efficiency).
+             shell_idle_nap(20000);
+@@ -4022,9 +4051,7 @@ void Shell::cmd_less(int argc, const char** argv) {
+                     Terminal::write("--More--");
+                     char c = 0;
+                     for (;;) {
+-                        bool got = arch::Serial::poll_getchar(c); // #245
+-                        if (!got)
+-                            got = arch::Keyboard::getchar(c);
++                        bool got = shell_try_get_key(c); // #245 + #340
+                         if (got && (c == 'q' || c == 'Q')) {
+                             Terminal::putchar('\n');
+                             kernel::vfs::release(vn); // issue #268
+@@ -4042,9 +4069,7 @@ void Shell::cmd_less(int argc, const char** argv) {
+ 
+     char c = 0;
+     for (;;) {
+-        bool got = arch::Serial::poll_getchar(c); // issue #245: UART source
+-        if (!got)
+-            got = arch::Keyboard::getchar(c);
++        bool got = shell_try_get_key(c); // issues #245 + #340: UART source
+         if (got && (c == 'q' || c == 'Q')) {
+             Terminal::putchar('\n');
+             kernel::vfs::release(vn); // issue #268
 diff --git a/test-history.txt b/test-history.txt
-index d63a661de..e6db6c93d 100644
+index e6db6c93d..d3a9ed8ab 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -3409,3 +3409,8 @@ SUMMARY: total=20 ok=18 fail=2
- 2026-10-13 15:32:00 elf_loader PASSED: 16 FAILED: 0 TIME: 2374ms
- 2026-10-13 15:40:00 cross_boundary PASSED: 3 FAILED: 0 TIME: 17213ms
- 2026-10-13 15:42:00 proc_elf PASSED: 114 FAILED: 0 TIME: 13582ms
-+2026-10-13 15:50:00 cross_boundary PASSED: 3 FAILED: 0 TIME: 3230ms
-+2026-10-13 15:55:00 cross_boundary PASSED: 3 FAILED: 0 TIME: 3504ms
-+2026-10-13 15:57:00 hal_keyboard_decode PASSED: 10 FAILED: 0 TIME: 1167ms
-+2026-10-13 16:00:00 ipc PASSED: 87 FAILED: 0 TIME: 12122ms
-+2026-10-13 16:03:00 proc_elf PASSED: 114 FAILED: 0 TIME: 64643ms
+@@ -3414,3 +3414,5 @@ SUMMARY: total=20 ok=18 fail=2
+ 2026-10-13 15:57:00 hal_keyboard_decode PASSED: 10 FAILED: 0 TIME: 1167ms
+ 2026-10-13 16:00:00 ipc PASSED: 87 FAILED: 0 TIME: 12122ms
+ 2026-10-13 16:03:00 proc_elf PASSED: 114 FAILED: 0 TIME: 64643ms
++2026-10-13 16:10:00 ui PASSED: 73 FAILED: 0 TIME: 13387ms
++2026-10-13 16:12:00 servers PASSED: 66 FAILED: 0 TIME: 8197ms

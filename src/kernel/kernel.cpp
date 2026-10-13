@@ -659,7 +659,12 @@ void init_task_main() {
     // that via isr_nesting and takes the decode-only legacy branch (it
     // must never IPC-send — §11.1). Named function (not a lambda) so the
     // single IPC-capable call site stays grep-visible for audit.
+    // Issue #340 P2: route keyboard bytes through iocd in interactive
+    // mode only. Test runs keep legacy routing (decode tests inject
+    // straight into the hardware ring); the cross_boundary test sets
+    // ownership explicitly (snapshot-restored).
     if (!g_run_tests) {
+    kernel::iocd::set_keyboard_owned(true);
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_THREADED_IRQS
     kernel::IrqThread::create(33, 50, keyboard_threaded_handler,
                               [](uint8_t vector) {

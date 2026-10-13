@@ -131,6 +131,43 @@ void shell_input_timeout_fire(void *context) {
     shell_input_notify().notify(1);
 }
 
+// Issue #340 P2: central keyboard/serial input poll. Order: serial
+// (separate source, always first) → iocd daemon (keyboard bytes routed
+// there when owned) → hardware ring, but ONLY when the daemon is down
+// (pid 0 or send_sync refused): when the daemon is up the ring is empty
+// by the single-ownership invariant, and draining it would risk double
+// delivery. Never blocks on the daemon beyond one send_sync round-trip
+// (fail-open); shell liveness never depends on iocd.
+bool shell_try_get_key(char &out) {
+    if (arch::Serial::poll_getchar(out))
+        return true;
+    uint64_t pid = kernel::iocd::get_iocd_pid();
+    if (pid != 0) {
+        kernel::iocd::Msg req{};
+        req.type = kernel::iocd::IOCD_KEYBOARD_READ;
+        auto *cur = kernel::Scheduler::current_task();
+        req.args[0] = cur ? cur->id : 0;
+        kernel::Message send{};
+        send.sender_id = req.args[0];
+        send.type = kernel::iocd::IOCD_KEYBOARD_READ;
+        send.data_size = sizeof(req);
+        __builtin_memcpy(send.data, &req, sizeof(req));
+        kernel::Message reply{};
+        if (kernel::IPC::send_sync(pid, send, reply) &&
+            reply.data_size >= sizeof(kernel::iocd::Reply)) {
+            kernel::iocd::Reply rpl{};
+            __builtin_memcpy(&rpl, reply.data, sizeof(rpl));
+            if (rpl.result == 1) {
+                out = static_cast<char>(rpl.data[0]);
+                return true;
+            }
+            return false; // daemon up, queue empty: ring empty by invariant
+        }
+        // send_sync refused (daemon dying): fall through to hardware.
+    }
+    return arch::Keyboard::getchar(out);
+}
+
 void shell_idle_nap(uint64_t timeout_us) {
     if (!shell_input_inited) {
         new (shell_input_notify_buf) kernel::sync::Notify();
@@ -495,12 +532,9 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
         char c = 0;
         // Issue #245: poll the UART first on every architecture (the old
         // x86-only COM1 inline poll never ran on aarch64/riscv64), then
-        // fall back to the (PS/2-backed, x86-only) Keyboard path.
-        bool got_char = arch::Serial::poll_getchar(c);
-
-        if (!got_char) {
-            got_char = arch::Keyboard::getchar(c);
-        }
+        // the iocd-routed keyboard, then the hardware ring fallback
+        // (issue #340: single helper owns the order + fallback).
+        bool got_char = shell_try_get_key(c);
 
         if (!got_char) {
             // Async background output arrived?  Move to a fresh line and
@@ -1668,9 +1702,7 @@ void Shell::cmd_top(int argc, const char** argv) {
         bool quit = false;
         while (arch::Timer::ticks() < deadline) {
             char c = 0;
-            bool got = arch::Serial::poll_getchar(c); // issue #245
-            if (!got)
-                got = arch::Keyboard::getchar(c);
+            bool got = shell_try_get_key(c); // issues #245 + #340
             if (got && (c == 'q' || c == 'Q')) {
                 quit = true;
                 break;
@@ -2192,9 +2224,7 @@ void Shell::cmd_monstat(int argc, const char** argv) {
     size_t pos = 0;
     for (;;) {
         char c = 0;
-        bool got = arch::Serial::poll_getchar(c);
-        if (!got)
-            got = arch::Keyboard::getchar(c);
+        bool got = shell_try_get_key(c); // issues #245 + #340
         if (!got) {
             shell_idle_nap(20000);
             continue;
@@ -3296,8 +3326,7 @@ void Shell::cmd_read(int argc, const char** argv) {
     size_t pos = 0;
     for (;;) {
         char c = 0;
-        bool got = arch::Serial::poll_getchar(c); // issue #245: UART source
-        if (!got) got = arch::Keyboard::getchar(c);
+        bool got = shell_try_get_key(c); // issues #245 + #340: UART source
         if (!got) {
             // Same idle nap as readline (read builtin efficiency).
             shell_idle_nap(20000);
@@ -4022,9 +4051,7 @@ void Shell::cmd_less(int argc, const char** argv) {
                     Terminal::write("--More--");
                     char c = 0;
                     for (;;) {
-                        bool got = arch::Serial::poll_getchar(c); // #245
-                        if (!got)
-                            got = arch::Keyboard::getchar(c);
+                        bool got = shell_try_get_key(c); // #245 + #340
                         if (got && (c == 'q' || c == 'Q')) {
                             Terminal::putchar('\n');
                             kernel::vfs::release(vn); // issue #268
@@ -4042,9 +4069,7 @@ void Shell::cmd_less(int argc, const char** argv) {
 
     char c = 0;
     for (;;) {
-        bool got = arch::Serial::poll_getchar(c); // issue #245: UART source
-        if (!got)
-            got = arch::Keyboard::getchar(c);
+        bool got = shell_try_get_key(c); // issues #245 + #340: UART source
         if (got && (c == 'q' || c == 'Q')) {
             Terminal::putchar('\n');
             kernel::vfs::release(vn); // issue #268
