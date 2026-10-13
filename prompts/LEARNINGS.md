@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #340 — iocd keyboard delivery done P0-P2 (wave 3: 3/4, issue closed)
+
+- **Learned:** (1) Implicit routing (pid-gating) broke 7 legacy tests by starving the kernel ring — explicit ownership flag won on evidence; "simpler" without a switch is wrong when two consumers exist. (2) Daemon decode fires regardless of registration — self-registration would only add a forward-to-self loop; don't register what needs no routing (guard stayed as defense). (3) Tests that flip global routing must collect-then-clear-then-assert + snapshot-cover the flag (abort-leak safety). (4) Shell services can send_sync to daemons (fail-open, no retry) without liveness risk — precedent for future microkernel transitions.
+- **Adapted:** P0 daemon, P1 forward+flag, P2 shell helper + interactive default; all APPROVED; pushed, issue closed. MMIO/SERIAL stubs explicitly left for separate issues.
+- **Style re-surface:** never both paths (single-ownership invariant asserted, not just commented).
+
 ### #271 P0 — VMM RO primitive + load application done (issue stays open for P1-P3)
 
 - **Learned:** (1) aarch64 EL0-RO = AP_USER|AP_RO (both bits) — clearing AP_USER gives no-EL0-access, not RO; verify encodings against the file's own constants, not memory. (2) Namespace-brace accounting: a leftover `} // namespace` silently closed `namespace kernel` — 12 cascade errors from one brace; always re-check block balance after restructuring edits. (3) Test out-param contracts: conditional-write out-params must be documented + never asserted on the negative path (second vacuous-assert catch this session). (4) Big features land phased (P0→P3) with the issue open and R-ticks pending — planner delegation first when no planner type exists (general subagent + schema).
