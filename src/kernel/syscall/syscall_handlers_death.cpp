@@ -26,6 +26,7 @@
 /// they MUST stay out of k_syscall_fast[] (issue #92 discipline).
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/ipc/death_notify.hpp>
 #include <kernel/memory/checked_ptr.hpp>
@@ -38,16 +39,18 @@ uint64_t Syscall::sys_death_watch(uint64_t watched_pid, uint64_t supervisor_pid,
                                   uint64_t, uint64_t, uint64_t *) {
     auto *t = Scheduler::current_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     bool ok = ipc::DeathNotify::watch(*t, watched_pid, supervisor_pid);
-    return ok ? 0 : static_cast<uint64_t>(-1);
+    return ok
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_death_recv(uint64_t out_ptr, uint64_t, uint64_t,
                                  uint64_t, uint64_t *) {
     auto *t = Scheduler::current_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // MP-4 (SMAP): a user task writes via safe_copy_to_user (stac-wrapped);
     // a kernel task writes directly.
@@ -59,28 +62,28 @@ uint64_t Syscall::sys_death_recv(uint64_t out_ptr, uint64_t, uint64_t,
     if (syscall_is_user_task()) {
         CheckedPtr<ipc::DeathRecord> cptr(out, 1);
         if (!cptr.valid())
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         got = ipc::DeathNotify::recv(*t, rec);
         if (got == 0)
             return 0; // nothing pending — never blocks
         if (!cptr.copy_to(&rec))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     } else {
         if (!out)
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         got = ipc::DeathNotify::recv(*t, rec);
         if (got == 0)
             return 0; // nothing pending — never blocks
         *out = rec;
     }
-    return 1;
+    return 1; // one death record delivered (count, not status).
 }
 
 uint64_t Syscall::sys_death_unwatch(uint64_t watched_pid, uint64_t, uint64_t,
                                     uint64_t, uint64_t *) {
     auto *t = Scheduler::current_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     ipc::DeathNotify::unwatch(*t, watched_pid);
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }

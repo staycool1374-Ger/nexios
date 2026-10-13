@@ -21,8 +21,6 @@
 /// @file syscall_errors.hpp
 /// @brief Syscall error codes aggregated from all subsystems (X-macro table).
 
-#pragma once
-
 #include <types.hpp>
 #include <assert.hpp>
 
@@ -130,6 +128,11 @@ enum SyscallError : uint64_t {
 #define X(name, num, msg) SYS_ERR_##name = (num),
     SYSCALL_ERROR_CODES
 #undef X
+    /// @brief ABI-level generic failure (issue #257 H6): names the historic
+    ///        `(uint64_t)-1` so no failure path returns a raw -1. Value-kept
+    ///        (all-ones) — the userspace ABI contract for "failed, no
+    ///        specific code". Never renumber; never narrow before compare.
+    SYS_ERR_GENERIC_FAIL = 0xFFFFFFFFFFFFFFFFULL,
 };
 
 /// @brief Return a human-readable string for a syscall error code.
@@ -140,6 +143,8 @@ template <> inline const char *error_string(SyscallError e) {
         return msg;
         SYSCALL_ERROR_CODES
 #undef X
+    case SYS_ERR_GENERIC_FAIL:
+        return "Generic failure (no specific code)";
     }
     return "Unknown syscall error";
 }

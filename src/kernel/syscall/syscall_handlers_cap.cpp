@@ -22,6 +22,7 @@
 ///        through capability slots validated by cap::lookup.
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/cap/cap.hpp>
@@ -44,13 +45,13 @@ uint64_t Syscall::sys_cap_grant(uint64_t src_handle, uint64_t dst_handle,
                                 uint64_t, uint64_t, uint64_t *) {
     cap::CNode *src = current_cspace();
     if (!src)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Destination CNode is addressed by a CapCNode handle in the caller's
     // own CSpace.  The dest CNode must itself be a capability we hold.
     KernelObject *dst_obj =
         cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_GRANT);
     if (!dst_obj)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
     uint32_t gen = 0;
     int idx = cap::grant(src, src_handle, dst, &gen);
@@ -64,11 +65,11 @@ uint64_t Syscall::sys_cap_copy(uint64_t src_handle, uint64_t dst_handle,
                                uint64_t, uint64_t, uint64_t *) {
     cap::CNode *src = current_cspace();
     if (!src)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     KernelObject *dst_obj =
         cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_COPY);
     if (!dst_obj)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
     uint32_t gen = 0;
     int idx = cap::copy(src, src_handle, dst, &gen);
@@ -82,10 +83,10 @@ uint64_t Syscall::sys_cap_revoke(uint64_t src_handle, uint64_t, uint64_t,
                                  uint64_t, uint64_t *) {
     cap::CNode *src = current_cspace();
     if (!src)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!cap::revoke(src, src_handle))
-        return static_cast<uint64_t>(-1);
-    return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_cap_mint(uint64_t src_handle, uint64_t dst_handle,
@@ -93,11 +94,11 @@ uint64_t Syscall::sys_cap_mint(uint64_t src_handle, uint64_t dst_handle,
                                uint64_t *) {
     cap::CNode *src = current_cspace();
     if (!src)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     KernelObject *dst_obj =
         cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_COPY);
     if (!dst_obj)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
     uint32_t gen = 0;
     int idx =
@@ -112,7 +113,7 @@ uint64_t Syscall::sys_cap_retype(uint64_t untyped_handle, uint64_t target_type,
                                  uint64_t size, uint64_t rights, uint64_t *) {
     cap::CNode *src = current_cspace();
     if (!src)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Installs the retyped target (and, on a sub-range carve, the child
     // Untyped) into the caller's own root CNode.  cap::retype validates the
     // type/size (garbage target_type or oversize/unaligned -> -1, parent kept).

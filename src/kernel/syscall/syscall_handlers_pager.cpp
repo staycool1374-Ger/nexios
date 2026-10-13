@@ -27,6 +27,7 @@
 /// MUST stay out of k_syscall_fast[] (issue #92 discipline).
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/cap/cap.hpp>
@@ -41,17 +42,17 @@ uint64_t Syscall::sys_pager_register(uint64_t pager_pid, uint64_t, uint64_t,
                                      uint64_t, uint64_t *) {
     auto *t = Scheduler::current_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     return ipc::PagerRegistry::register_client(*t, pager_pid)
-               ? 0
-               : static_cast<uint64_t>(-1);
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_pager_recv(uint64_t out_ptr, uint64_t, uint64_t,
                                  uint64_t, uint64_t *) {
     auto *t = Scheduler::current_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // Validate the destination BEFORE consuming (auditor S2 pattern from
     // sys_death_recv): a failed recv must not lose the fault notification.
@@ -61,65 +62,67 @@ uint64_t Syscall::sys_pager_recv(uint64_t out_ptr, uint64_t, uint64_t,
     if (syscall_is_user_task()) {
         CheckedPtr<ipc::PagerFaultMsg> cptr(out, 1);
         if (!cptr.valid())
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         got = ipc::PagerRegistry::recv(*t, msg);
         if (got == 0)
-            return 0; // nothing pending — never blocks
+            return 0; // nothing pending — never blocks (count, not status)
         if (!cptr.copy_to(&msg))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     } else {
         if (!out)
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         got = ipc::PagerRegistry::recv(*t, msg);
         if (got == 0)
-            return 0;
+            return 0; // nothing pending — never blocks (count, not status)
         *out = msg;
     }
-    return 1;
+    return 1; // one fault record delivered (count, not status).
 }
 
 uint64_t Syscall::sys_pager_map(uint64_t fault_id, uint64_t cap_handle,
                                 uint64_t count, uint64_t flags, uint64_t *) {
     auto *pager = Scheduler::current_task();
     if (!pager)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // Capability-gated: the pager must hold the Frame capability it maps
     // (type + WRITE).  Mirrors sys_frame_map.
     pager->ensure_cspace();
     cap::CNode *cs = pager->get_cspace();
     if (!cs)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     KernelObject *obj =
         cap::lookup(cs, cap_handle, cap::CapType::Frame, cap::CAP_RIGHT_WRITE);
     if (!obj)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *fc = static_cast<cap::FrameCap *>(obj);
 
     int r = ipc::PagerRegistry::map(*pager, fault_id, fc, count, flags);
     obj->release();
-    return r == 0 ? 0 : static_cast<uint64_t>(-1);
+    return r == 0
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_pager_abort(uint64_t fault_id, uint64_t, uint64_t,
                                   uint64_t, uint64_t *) {
     auto *t = Scheduler::current_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     return ipc::PagerRegistry::abort(*t, fault_id) == 0
-               ? 0
-               : static_cast<uint64_t>(-1);
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_pager_unregister(uint64_t client_pid, uint64_t, uint64_t,
                                        uint64_t, uint64_t *) {
     auto *t = Scheduler::current_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Authority is enforced inside the registry: the caller may remove its own
     // registration, or its designated pager may drop it (checked by slot
     // match against the caller).
     return ipc::PagerRegistry::unregister(*t, client_pid)
-               ? 0
-               : static_cast<uint64_t>(-1);
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }

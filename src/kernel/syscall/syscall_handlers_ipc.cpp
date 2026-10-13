@@ -21,6 +21,7 @@
 /// mailbox, notify, events.
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -45,11 +46,13 @@ uint64_t Syscall::sys_send(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto data = checked(reinterpret_cast<const uint8_t *>(arg1), msg.data_size);
     if (!data.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     for (size_t i = 0; i < msg.data_size; ++i) {
         msg.data[i] = data.read(i);
     }
-    return IPC::send(dest_id, msg, flags) ? 0 : static_cast<uint64_t>(-1);
+    return IPC::send(dest_id, msg, flags)
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
@@ -62,12 +65,12 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto buf = checked(reinterpret_cast<uint8_t *>(arg1), max_size);
     if (!buf.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint8_t *raw_buf = buf.unsafe_ptr();
     Message msg{};
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     bool ok = false;
     bool was_blocked = false;
     if (IPC::recv_wait_arm(*cur, timeout_ticks)) {
@@ -106,7 +109,7 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
             if (__atomic_load_n(&cur->recv_timed_out, __ATOMIC_ACQUIRE)) {
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
-                return static_cast<uint64_t>(-1);
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
         }
         cur->blocked_in_recv = false;
@@ -119,13 +122,13 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
         // polite to same-priority tasks. Degenerate no-tick config fails
         // fast (a frozen tick counter can never expire).
         if (CONFIG_TICK_HZ == 0) {
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
         const uint64_t fallback_deadline =
             arch::Timer::ticks() + timeout_ticks;
         while (!(ok = IPC::recv(msg))) {
             if (arch::Timer::ticks() >= fallback_deadline) {
-                return static_cast<uint64_t>(-1);
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
             Scheduler::reschedule();
             arch::pause();
@@ -145,7 +148,7 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
     // loop into user memory.
     if (copy_size > 0 &&
         !safe_copy_to_user(raw_buf, msg.data, copy_size))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     return msg.type;
 }
 
@@ -162,7 +165,7 @@ static inline uint64_t syscall_arg4(const uint64_t *regs) noexcept {
 #elif defined(CONFIG_ARCH_RISCV64)
     return regs ? regs[13] : 0; // a4
 #else
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK); // No register file on this arch: 4th arg reads as 0 (data).
 #endif
 }
 
@@ -174,11 +177,11 @@ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto data = checked(reinterpret_cast<const uint8_t *>(arg1), data_size);
     if (!data.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     Message msg{};
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     msg.sender_id = cur->id;
     msg.type = type;
     msg.data_size = data_size;
@@ -186,7 +189,7 @@ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         msg.data[i] = data.read(i);
     Message reply{};
     if (!IPC::send_sync(dest_id, msg, reply))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Issue #317 option (b): the reply payload is written to the caller's
     // REPLY BUFFER (5th arg / free register), NOT over the request buffer.
     // reply_buf == 0 => the caller requested no reply payload.  The reply is
@@ -200,13 +203,13 @@ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         auto reply_out =
             checked(reinterpret_cast<uint8_t *>(reply_buf), data_size);
         if (!reply_out.valid())
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         uint64_t copy_size = reply.data_size;
         if (copy_size > data_size)
             copy_size = data_size;
         for (size_t i = 0; i < copy_size; ++i)
             if (!reply_out.write(reply.data[i], i))
-                return static_cast<uint64_t>(-1); // unmapped reply_buf: fail closed
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL); // unmapped reply_buf: fail closed
     }
     return reply.type;
 }
@@ -228,27 +231,29 @@ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
 uint64_t Syscall::sys_send_fast(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                 uint64_t arg3, uint64_t *regs) {
     if (!regs)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint64_t dest_id = arg0;
     uint64_t data_size = arg2;
     if (data_size > IPC_FAST_PAYLOAD_BYTES)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     Message m{};
     m.sender_id = cur->id;
     m.type = arg1;
     m.data_size = data_size;
     (void)arg3; // payload word 0 rides in regs[4] (rsi) == arg3; gathered via regs[]
     fast_regs_to_msg(regs, data_size, m);
-    return IPC::send(dest_id, m, 0) ? 0 : static_cast<uint64_t>(-1);
+    return IPC::send(dest_id, m, 0)
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
                                 uint64_t arg3, uint64_t *regs) {
     if (!regs)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint64_t max_size = arg2;
     uint64_t timeout_ticks = arg3;
     uint32_t clamp =
@@ -257,7 +262,7 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             : static_cast<uint32_t>(IPC_FAST_PAYLOAD_BYTES);
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     Message msg{};
     bool ok = false;
     bool was_blocked = false;
@@ -275,7 +280,7 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
                 // arrival would then spuriously wake this task (#208 recurs).
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
-                return static_cast<uint64_t>(-1);
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
             if (cur->get_sporadic_server()) {
                 kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
@@ -305,12 +310,12 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             if (!cur->msg_queue.is_empty()) {
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
-                return static_cast<uint64_t>(-1);
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
             if (__atomic_load_n(&cur->recv_timed_out, __ATOMIC_ACQUIRE)) {
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
-                return static_cast<uint64_t>(-1);
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
         }
         cur->blocked_in_recv = false;
@@ -323,16 +328,16 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
         // polite to same-priority tasks. Degenerate no-tick config fails
         // fast (a frozen tick counter can never expire).
         if (CONFIG_TICK_HZ == 0) {
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
         const uint64_t fallback_deadline =
             arch::Timer::ticks() + timeout_ticks;
         while (!(ok = cur->msg_queue.pop_clamped(msg, clamp))) {
             if (!cur->msg_queue.is_empty()) {
-                return static_cast<uint64_t>(-1);
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
             if (arch::Timer::ticks() >= fallback_deadline) {
-                return static_cast<uint64_t>(-1);
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
             Scheduler::reschedule();
             arch::pause();
@@ -357,14 +362,14 @@ uint64_t Syscall::sys_send_sync_fast(uint64_t arg0, uint64_t arg1,
                                      uint64_t arg2, uint64_t arg3,
                                      uint64_t *regs) {
     if (!regs)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint64_t dest_id = arg0;
     uint64_t data_size = arg2;
     if (data_size > IPC_FAST_PAYLOAD_BYTES)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Gather the request BEFORE IPC::send_sync — the frame is read-only after
     // the gather, so a block cannot invalidate the payload (INV-5).
     Message m{};
@@ -375,26 +380,26 @@ uint64_t Syscall::sys_send_sync_fast(uint64_t arg0, uint64_t arg1,
     fast_regs_to_msg(regs, data_size, m);
     Message reply{};
     if (!IPC::send_sync(dest_id, m, reply, IPC_FAST_PAYLOAD_BYTES))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     fast_msg_to_regs(reply, regs);
     return reply.type;
 }
 
 uint64_t Syscall::sys_create_mailbox(uint64_t, uint64_t, uint64_t, uint64_t,
                                      uint64_t *) {
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_destroy_mailbox(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *) {
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_buf_alloc(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                                 uint64_t *) {
     auto *cur = syscall_task();
     if (!cur)
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     uint64_t va = arg0;
     return BufferPool::alloc(*cur, va);
 }
@@ -403,32 +408,32 @@ uint64_t Syscall::sys_buf_free(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                                uint64_t *) {
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!BufferPool::free(*cur, arg0))
-        return static_cast<uint64_t>(-1);
-    return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_buf_map(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
                               uint64_t *) {
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint64_t handle = arg0;
     uint64_t va = arg1;
     if (!BufferPool::map(*cur, handle, va))
-        return static_cast<uint64_t>(-1);
-    return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_buf_unmap(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                                 uint64_t *) {
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!BufferPool::unmap(*cur, arg0))
-        return static_cast<uint64_t>(-1);
-    return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 } // namespace kernel

@@ -21,6 +21,7 @@
 /// close, stat, etc.
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -217,7 +218,7 @@ uint64_t Syscall::sys_open(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     const char *path = user_path;
     if (syscall_is_user_task()) {
         if (!strncpy_from_user(path_buf, user_path, SYSCALL_MAX_PATH))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         path = path_buf;
     }
     vfs::Vnode *vn = nullptr;
@@ -249,7 +250,7 @@ uint64_t Syscall::sys_open(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
             vfs::release(parent); // issue #268
         }
     }
-    return static_cast<uint64_t>(-1);
+    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
@@ -257,17 +258,17 @@ uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     kernel::test::mark_vfs_touched();
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!vfsd_authorize_fd_op(vfsd::VFS_READ, cur->id, static_cast<int>(arg0)))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *f = cur->fd_table.get(static_cast<int>(arg0));
     if (!f)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint64_t count = arg2;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto buf = checked(reinterpret_cast<uint8_t *>(arg1), count);
     if (syscall_is_user_task() && !buf.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Issue #76: timerfd read bypasses the vnode ops table (the counter
     // lives in the PosixTime registry, not in a filesystem backend).
     if (is_timerfd_vnode(f->vnode)) {
@@ -276,7 +277,7 @@ uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                   nonblock);
     }
     if (!f->vnode || !f->vnode->ops->read)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // MP-4 (SMAP): ops->read writes user memory directly (generic vnode code
     // uses kernel buffers elsewhere, so stac cannot live inside the op).
     // Arm fault recovery + stac around the call so a #PF on the user buffer
@@ -298,7 +299,7 @@ uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
 recover_read:
     arch::clac();
     g_user_access_recover_ip = 0;
-    return static_cast<uint64_t>(-1);
+    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_close(uint64_t arg0, uint64_t, uint64_t, uint64_t,
@@ -306,12 +307,12 @@ uint64_t Syscall::sys_close(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     kernel::test::mark_vfs_touched();
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!vfsd_authorize_fd_op(vfsd::VFS_CLOSE, cur->id, static_cast<int>(arg0)))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     int fd = static_cast<int>(arg0);
     cur->fd_table.free(fd);
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_fstat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
@@ -319,16 +320,16 @@ uint64_t Syscall::sys_fstat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     kernel::test::mark_vfs_touched();
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!vfsd_authorize_fd_op(vfsd::VFS_FSTAT, cur->id, static_cast<int>(arg0)))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *f = cur->fd_table.get(static_cast<int>(arg0));
     if (!f || !f->vnode || !f->vnode->ops->fstat)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto st = checked(reinterpret_cast<vfs::VfsStat *>(arg1));
     if (syscall_is_user_task() && !st.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // MP-4 (SMAP): build into a kernel-local VfsStat, then safe_copy to user
     // (the vnode op derefs a kernel buffer; the user copy is stac-wrapped).
     vfs::VfsStat kst{};
@@ -339,11 +340,11 @@ uint64_t Syscall::sys_fstat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     // rejects kernel addresses, so copy directly on the kernel path.
     if (syscall_is_user_task()) {
         if (!safe_copy_to_user(st.unsafe_ptr(), &kst, 1))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     } else {
         *st.unsafe_ptr() = kst;
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_write(uint64_t arg0, uint64_t arg1, uint64_t arg2,
@@ -351,22 +352,22 @@ uint64_t Syscall::sys_write(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     kernel::test::mark_vfs_touched();
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!vfsd_authorize_fd_op(vfsd::VFS_WRITE, cur->id, static_cast<int>(arg0)))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *f = cur->fd_table.get(static_cast<int>(arg0));
     if (!f || !f->vnode || !f->vnode->ops->write)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint64_t count = arg2;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto buf = checked(reinterpret_cast<const uint8_t *>(arg1), count);
     if (syscall_is_user_task() && !buf.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // Kernel tasks (no page table): buffer is already in kernel space, no
     // bounce buffer needed (mirrors the vfsd_authorize kernel bypass pattern).
     if (count == 0)
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK); // zero-length write: zero bytes written (count, not status)
     if (!syscall_is_user_task()) {
         int64_t r = f->vnode->ops->write(*f->vnode, buf.unsafe_ptr(), count,
                                           f->offset);
@@ -384,7 +385,7 @@ uint64_t Syscall::sys_write(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         if (page_off + count <= 4096) {
             uint64_t phys = VMM::virt_to_phys_in_pml4(page_va, cur->page_table_);
             if (phys == 0)
-                return static_cast<uint64_t>(-1);
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             auto *kaddr = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
                                                       phys + page_off);
             int64_t r = f->vnode->ops->write(*f->vnode, kaddr, count,
@@ -398,13 +399,13 @@ uint64_t Syscall::sys_write(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     // This path is rare (most writes fit in a single page).
     constexpr uint64_t kMaxWriteBounce = 1 << 20; // 1 MiB
     if (count > kMaxWriteBounce)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint8_t *kb = static_cast<uint8_t *>(MemPool::alloc(count));
     if (!kb)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!safe_copy_from_user(kb, buf.unsafe_ptr(), count)) {
         MemPool::free(kb);
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     int64_t r = f->vnode->ops->write(*f->vnode, kb, count, f->offset);
     MemPool::free(kb);
@@ -418,17 +419,17 @@ uint64_t Syscall::sys_lseek(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     kernel::test::mark_vfs_touched();
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *f = cur->fd_table.get(static_cast<int>(arg0));
     if (!f || !f->vnode || !f->vnode->ops->lseek)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Issue #176: validate whence at dispatch — backends historically
     // accepted bogus values silently (null_lseek fell through with a stale
     // offset, tmpfs ignores whence entirely).
     int whence = static_cast<int>(arg2);
     if (whence != vfs::SEEK_SET && whence != vfs::SEEK_CUR &&
         whence != vfs::SEEK_END)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     int64_t r = f->vnode->ops->lseek(*f->vnode, static_cast<int64_t>(arg1),
                                      whence, &f->offset);
     return static_cast<uint64_t>(r >= 0 ? r : -1);
@@ -439,14 +440,16 @@ uint64_t Syscall::sys_ioctl(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     kernel::test::mark_vfs_touched();
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *f = cur->fd_table.get(static_cast<int>(arg0));
     if (!f || !f->vnode || !f->vnode->ops->ioctl)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto arg_chk = checked(reinterpret_cast<uint8_t *>(arg2), sizeof(uint64_t));
-    if (syscall_is_user_task() && arg2 != 0 && !arg_chk.valid())
-        return static_cast<uint64_t>(-1);
+    // H5 cheap-first: the integer compare precedes the two pure predicate
+    // calls (all side-effect-free, so the reorder is behavior-identical).
+    if (arg2 != 0 && syscall_is_user_task() && !arg_chk.valid())
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     return static_cast<uint64_t>(
         f->vnode->ops->ioctl(*f->vnode, arg1, arg_chk));
 }
@@ -456,16 +459,16 @@ uint64_t Syscall::sys_readdir(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     kernel::test::mark_vfs_touched();
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *f = cur->fd_table.get(static_cast<int>(arg0));
     if (!f || !f->vnode || !f->vnode->ops->readdir)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto pos_chk = checked(reinterpret_cast<uint64_t *>(arg1));
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto dent_chk = checked(reinterpret_cast<vfs::Dirent *>(arg2));
     if (syscall_is_user_task() && (!pos_chk.valid() || !dent_chk.valid()))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Kernel-task callers pass kernel addresses: CheckedPtr::read/write
     // fail closed on those, so dereference directly (issue #175).
     uint64_t position = 0;
@@ -480,14 +483,16 @@ uint64_t Syscall::sys_readdir(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     if (r == 0) {
         if (syscall_is_user_task()) {
             if (!safe_copy_to_user(dent_chk.unsafe_ptr(), &kdent, 1))
-                return static_cast<uint64_t>(-1);
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             pos_chk.write(position);
         } else {
             *dent_chk.unsafe_ptr() = kdent;
             *pos_chk.unsafe_ptr() = position;
         }
     }
-    return static_cast<uint64_t>(r == 0 ? 0 : -1);
+    return r == 0
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_stat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
@@ -500,20 +505,20 @@ uint64_t Syscall::sys_stat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     const char *path = user_path;
     if (syscall_is_user_task()) {
         if (!strncpy_from_user(path_buf, user_path, SYSCALL_MAX_PATH))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         path = path_buf;
     }
     vfs::Vnode *vn = nullptr;
     if (!resolve_then_authorize(vfsd::VFS_STAT, pid, path, vn) || !vn ||
         !vn->ops->fstat) {
         vfs::release(vn); // issue #268 (null-safe)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto st = checked(reinterpret_cast<vfs::VfsStat *>(arg1));
     if (syscall_is_user_task() && !st.valid()) {
         vfs::release(vn); // issue #268
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     // MP-4 (SMAP): local VfsStat + safe_copy_to_user (see sys_fstat).
     vfs::VfsStat kst{};
@@ -526,13 +531,13 @@ uint64_t Syscall::sys_stat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     if (syscall_is_user_task()) {
         if (!safe_copy_to_user(st.unsafe_ptr(), &kst, 1)) {
             vfs::release(vn); // issue #268
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
     } else {
         *st.unsafe_ptr() = kst;
     }
     vfs::release(vn); // issue #268
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_dup(uint64_t arg0, uint64_t, uint64_t, uint64_t,
@@ -540,14 +545,14 @@ uint64_t Syscall::sys_dup(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     kernel::test::mark_vfs_touched();
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     int old_fd = static_cast<int>(arg0);
     auto *old = cur->fd_table.get(old_fd);
     if (!old)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     int new_fd = cur->fd_table.alloc();
     if (new_fd < 0)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     cur->fd_table.fds[new_fd] = cur->fd_table.fds[old_fd];
     vfs::vnode_ref_inc(old->vnode);
     return static_cast<uint64_t>(new_fd);
@@ -564,7 +569,7 @@ uint64_t Syscall::sys_chdir(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     const char *resolved_path = nullptr;
     if (syscall_is_user_task()) {
         if (!strncpy_from_user(path_buf, user_path, SYSCALL_MAX_PATH))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         path = path_buf;
         resolved_path = path_buf;
     } else {
@@ -572,15 +577,15 @@ uint64_t Syscall::sys_chdir(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     }
     vfs::Vnode *vn = nullptr;
     if (!resolve_then_authorize(vfsd::VFS_CHDIR, pid, path, vn) || !vn)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *cur = syscall_task();
     if (!cur) {
         vfs::release(vn); // issue #268
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     if (!(vn->mode & vfs::S_IFDIR)) {
         vfs::release(vn); // issue #268
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     cur->cwd_lock_.lock();
     // Issue #268: transfer the resolve() reference to the task (no inc);
@@ -600,7 +605,7 @@ uint64_t Syscall::sys_chdir(uint64_t arg0, uint64_t, uint64_t, uint64_t,
         ++i;
     }
     cur->cwd[i] = '\0';
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_pipe(uint64_t arg0, uint64_t, uint64_t, uint64_t,
@@ -609,22 +614,22 @@ uint64_t Syscall::sys_pipe(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     int fds[2];
     int result = vfs::create_pipe(fds);
     if (result < 0)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *out = reinterpret_cast<int *>(arg0);
     if (syscall_is_user_task()) {
         auto fds_buf = checked(out, 2);
         if (!fds_buf.valid())
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         if (!fds_buf.write(fds[0], 0))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         if (!fds_buf.write(fds[1], 1))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     } else {
         out[0] = fds[0];
         out[1] = fds[1];
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_dup2(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
@@ -634,14 +639,14 @@ uint64_t Syscall::sys_dup2(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     int new_fd = static_cast<int>(arg1);
     auto *t = syscall_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *old_desc = t->fd_table.get(old_fd);
     if (!old_desc)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (old_fd == new_fd)
         return static_cast<uint64_t>(new_fd);
     if (new_fd < 0 || static_cast<size_t>(new_fd) >= vfs::MAX_FDS)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     t->fd_table.free(new_fd);
     t->fd_table.fds[new_fd] = *old_desc;
     t->fd_table.fds[new_fd].used = true;
@@ -659,21 +664,23 @@ uint64_t Syscall::sys_mkdir(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     const char *path = user_path;
     if (syscall_is_user_task()) {
         if (!strncpy_from_user(path_buf, user_path, SYSCALL_MAX_PATH))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         path = path_buf;
     }
     const char *name = nullptr;
     vfs::Vnode *parent = nullptr;
     if (!resolve_parent_then_authorize(vfsd::VFS_MKDIR, pid, path, name,
                                        parent))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!parent->ops || !parent->ops->mkdir) {
         vfs::release(parent); // issue #268: owned parent, all exits
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     int r = parent->ops->mkdir(*parent, name, static_cast<uint16_t>(arg1));
     vfs::release(parent); // issue #268
-    return static_cast<uint64_t>(r == 0 ? 0 : -1);
+    return r == 0
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_unlink(uint64_t arg0, uint64_t, uint64_t, uint64_t,
@@ -686,21 +693,23 @@ uint64_t Syscall::sys_unlink(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     const char *path = user_path;
     if (syscall_is_user_task()) {
         if (!strncpy_from_user(path_buf, user_path, SYSCALL_MAX_PATH))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         path = path_buf;
     }
     const char *name = nullptr;
     vfs::Vnode *parent = nullptr;
     if (!resolve_parent_then_authorize(vfsd::VFS_UNLINK, pid, path, name,
                                        parent))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!parent->ops || !parent->ops->unlink) {
         vfs::release(parent); // issue #268: owned parent, all exits
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     int r = parent->ops->unlink(*parent, name);
     vfs::release(parent); // issue #268
-    return static_cast<uint64_t>(r == 0 ? 0 : -1);
+    return r == 0
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_rmdir(uint64_t arg0, uint64_t, uint64_t, uint64_t,
@@ -714,21 +723,23 @@ uint64_t Syscall::sys_rmdir(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     const char *path = user_path;
     if (syscall_is_user_task()) {
         if (!strncpy_from_user(path_buf, user_path, SYSCALL_MAX_PATH))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         path = path_buf;
     }
     const char *name = nullptr;
     vfs::Vnode *parent = nullptr;
     if (!resolve_parent_then_authorize(vfsd::VFS_RMDIR, pid, path, name,
                                        parent))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!parent->ops || !parent->ops->unlink) {
         vfs::release(parent); // issue #268: owned parent, all exits
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     int r = parent->ops->unlink(*parent, name);
     vfs::release(parent); // issue #268
-    return static_cast<uint64_t>(r == 0 ? 0 : -1);
+    return r == 0
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 } // namespace kernel

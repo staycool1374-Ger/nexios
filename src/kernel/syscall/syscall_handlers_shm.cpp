@@ -27,6 +27,7 @@
 /// (issue #92 discipline).
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/frame.hpp>
 #include <kernel/cap/frame_map.hpp>
@@ -51,21 +52,21 @@ uint64_t Syscall::sys_frame_create(uint64_t count, uint64_t, uint64_t,
                                    uint64_t, uint64_t *) {
     cap::CNode *cs = shm_current_cspace();
     if (!cs)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (count == 0 || count > CONFIG_CAP_MAX_FRAME_MAPS)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // Allocate contiguous USER-owned frames (fail closed on exhaustion).
     uint64_t phys = PMM::alloc_user_contiguous(static_cast<size_t>(count));
     if (phys == 0)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     auto *fc = cap::FrameCap::create(phys, static_cast<size_t>(count), true);
     if (!fc) {
         // Roll back the allocation on cap-create failure.
         for (size_t i = 0; i < count; ++i)
             PMM::free_page(phys + i * arch::PAGE_SIZE);
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
     uint32_t gen = 0;
@@ -73,7 +74,7 @@ uint64_t Syscall::sys_frame_create(uint64_t count, uint64_t, uint64_t,
                           cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
     if (idx < 0) {
         fc->release(); // never installed — drop the creator reference
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     fc->release(); // slot holds a reference; drop the creator's
     // Issue #266: opaque encoded handle for the caller's own root CNode,
@@ -85,20 +86,20 @@ uint64_t Syscall::sys_frame_map(uint64_t cap_handle, uint64_t, uint64_t,
                                 uint64_t, uint64_t *) {
     cap::CNode *src = shm_current_cspace();
     if (!src)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // Capability-gated: the caller must hold a Frame capability (WRITE = the
     // right to install the mapping).  Mirrors sys_mmio_map.
     KernelObject *obj =
         cap::lookup(src, cap_handle, cap::CapType::Frame, cap::CAP_RIGHT_WRITE);
     if (!obj)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *fc = static_cast<cap::FrameCap *>(obj);
 
     auto *t = Scheduler::current_task();
     if (!t) {
         obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     uint64_t va = cap::FrameUserMap::map(*t, *fc);
     obj->release();
@@ -109,6 +110,8 @@ uint64_t Syscall::sys_frame_unmap(uint64_t va, uint64_t, uint64_t, uint64_t,
                                   uint64_t *) {
     auto *t = Scheduler::current_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
-    return cap::FrameUserMap::unmap(*t, va) ? 0 : static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    return cap::FrameUserMap::unmap(*t, va)
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
