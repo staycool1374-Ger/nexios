@@ -91,20 +91,14 @@ Done roadmap archived in `prompts/README_done.md`.
 ## Recent Release Highlights
 
 ### **v0.5.3 — User Space Enhancements**
-* **Microkernel Services Live:** ramdiskd block service (8×2 MiB, chunked IPC, lazy mapping) with ramdisk_fs mount/file ops + loadelf/runelf support, host XMODEM/upload tooling, and the watchdogd supervision daemon.
-* **Userspace Usability:** initrd /bin hierarchy, sh PATH lookup + export, English shell strings + unified terminal core, and Rust no_std hello-world user ELF with pinned toolchain.
-* **Loader & IPC Hardening:** runelf 3-arg envp canary fix, fork admission scoping for user children, send_sync reply-buffer ABI contract, CheckedPtr count-overflow guard, and fat32 stable identity for TOCTOU re-resolve.
-* **Full Gates Green:** 1768/1768 debug, 89/89 release, `make build` Errors 0 (smp stall + deadline tick-race cleared by identical-binary rerun evidence).
+* **Microkernel Services Live:** ramdiskd block service (8×2 MiB, chunked IPC, lazy mapping) with ramdisk_fs mount/file ops + loadelf/runelf support, 
+* **XMODEM Utilities:** host XMODEM/upload tooling, and the watchdogd supervision daemon.
+* **Userspace enhancements* initrd /bin hierarchy, sh PATH lookup + export, English shell strings + unified terminal core, and Rust no_std hello-world user ELF with pinned toolchain.
 
 ### **v0.5.2 — User-ELF Bring-up to Run**
 * **End-to-End User ELF Execution:** `runelf` loads and runs general ELFs as strictly periodic user tasks with deadline registration, Liu-Leyland + memory-budget admission, TLS setup, and `/etc/rc` integration.
 * **Kernel Hygiene H1–H8:** pure-refactor cleanup across memory (PMM/VMM/MemPool), scheduler/task lifecycle, and sync primitives — zero functional change, SIL 3 PRE+POST approved per part.
 * **Debugger Surface:** `runelf --debug` integration, stop-event snapshot budget export, and the bare-metal debug-discipline audit (gaps filed as follow-ups).
-* **Full Gates Green:** 1696/1696 debug, 85/85 release, `make build` Errors 0.
-
-### **v0.5.1 — Bring-up Multi-Arch Boot**
-* **Three Architectures Boot to Production:** aarch64 and riscv64 join x86_64 with real production boot paths — page-table/HHDM bring-up, PCI discovery, per-arch syscall ABI conformance tests, an EL0 fork smoke test, and riscv64 U-mode user tasks.
-* **Kernel Debugger Foundations:** the debugd groundwork lands — kernel debug syscalls (read/write regs/mem, attach), stop-event routing with breakpoint shadows, per-arch stepping, and an RSP parser core with mock-transport tests.
 
 ---
 
