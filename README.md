@@ -65,7 +65,7 @@ Please read through open roadmap issues before submitting major architectural ch
 ## Demo
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=foApKYTFSlE">
+  <a href="https://youtu.be/-jyvFReC9K8?si=b71XUpnEghm0CTqk">
     <img src="https://img.youtube.com/vi/foApKYTFSlE/sddefault.jpg" alt="NexIOS demo video — watch on YouTube" width="720"/>
   </a>
 </p>
