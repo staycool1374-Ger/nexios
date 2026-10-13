@@ -1558,9 +1558,30 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
 
     // Allocate and set up kernel stack
     size_t stack_pages = (STACK_SIZE + 4095) / arch::PAGE_SIZE;
+#if CONFIG_MEMORY_BUDGET
+    // Issue #328: charge the child's kernel stack against the global
+    // budget, symmetric to create(). Fail-closed before any allocation;
+    // later failure paths destroy() the TCB, which releases exactly
+    // these pages (stack_phys_ set below), so no rollback is needed
+    // here. User-stack/PML4/table pages stay uncharged — create_user()
+    // charges nothing either, and destroy() has no matching release
+    // for them (charging without release would drain the budget).
+    if (!Scheduler::reserve_memory_pages(stack_pages)) {
+        Logger::warn("TCB::clone: budget OOM for %zu-page stack",
+                     stack_pages);
+        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
+                            log::kDmesgBase_TASK + 1, log::LogSeverity::ERROR,
+                            "TCB stack budget OOM", stack_pages);
+        TaskControlBlock::destroy(tcb);
+        return nullptr;
+    }
+#endif
     uint64_t kstack_phys = PMM::alloc_contiguous(stack_pages);
     if (!kstack_phys) {
         ASSERT(errors::TaskError::TASK_ERR_STACK_ALLOC);
+#if CONFIG_MEMORY_BUDGET
+        Scheduler::release_memory_pages(stack_pages);
+#endif
         TaskControlBlock::destroy(tcb);
         return nullptr;
     }
