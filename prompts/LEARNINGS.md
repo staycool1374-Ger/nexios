@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #338 — thread-local errno via TP cell done (wave 3: 1/4)
+
+- **Learned:** (1) No shared-VM threads exist (clone always deep-copies) + x86 Ring-3 cannot rdfsbase without CR4.FSGSBASE — both found by reading before designing; the design fell out (PCID/SMAP probe pattern). (2) Kernel-side translation impossibility arguments cut both ways: document WHY the layer was chosen. (3) crt0 changes move EVERY userspace image: layout-sensitive tests (stack_cookie DATA-padding assumption) flip — the test mirrored the kernel's own skip-zero invariant instead of over-constraining. (4) Full-suite STALLs (hal/smp/testrunner) all cleared standalone — pressure flakes; always rerun before bisecting. (5) Tracked .elf rebuilds must be committed (libc_verify.c.elf); ignored ones (vfsd, errno_probe) rebuild via make. (6) Second owner-commit race handled by clean rebase, never force-push.
+- **Adapted:** CR4 BSP+AP, libc TP-errno ×3 archs, crt0 registration, probe+harness, counts; full debug 17/20 + 3 reruns; APPROVED; pushed, issue closed.
+- **Style re-surface:** explicit intent, graceful-off CPU probes with loud messages.
+
 ### #328 — clone memory-budget charge done (wave 2 complete)
 
 - **Learned:** (1) The global budget is decremented ONLY by create(); PMM allocs attribute to per-task counters instead — read both layers before designing the charge. (2) Reserve only what destroy() releases: over-charging without a matching release monotonically drains the budget (worse than the gap). Symmetry-with-create beat completeness. (3) add_task_err has no budget check (LUB/CPU only) — verified by reading before designing the drain-then-fork test. (4) Aggregate stalls pre-new-test (watchdog 20/145) with identical-binary pass on rerun = TCG flake; Deadline/Proc_elf aggregates flake ~1/3 under host load — always rerun before investigating.
