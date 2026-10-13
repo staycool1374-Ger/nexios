@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #257 — syscall H1–H8 pure refactor (first v0.5.4 cleanup part)
+
+- **Learned:** (1) Raw `-1/0` ABI returns migrate safely in two classes: failure-`-1` → a value-kept all-ones enumerator (`SYS_ERR_GENERIC_FAIL`), status-`0` → `SYS_ERR_OK` — but pid wildcards (`waitpid -1`), UINT64_MAX saturation, byte/record counts, and int-typed VFS-op zeros must be inventoried FIRST (grep by syntactic shape, judge each) or a mechanical replaceAll corrupts sentinels. (2) H2-vs-S1 collisions (canary-latch failure policy, `mark_vfs_touched` with test-side readers) resolve to KEEP + WHY-comment + report — never refactor the seam under a pure-refactor gate. (3) A stall cluster (suite-first-class TIMEOUTs + one standalone hang at a spinner test) under sustained host load convicts environmental via stash control (clean 553/553) + identical-binary green, even when the hang shape matches a known bug's hang — check `pmset -g therm` + desktop hogs (aerial video decode) before bisecting; the suite's later classes going green in the same run further exonerates the diff.
+- **Adapted:** `SYS_ERR_GENERIC_FAIL` + file-local `kEio` in-tree; keeps annotated at their sites; H8-decline rationale (per-site cleanup pairing) recorded on #257; evidence comment posted.
+- **Style re-surface:** §5 fail-closed preserved (values identical); §10.5 named sentinels; 80-col discipline on the verbose cast idiom (multiline ternaries); dead-artifact asm stays read-only without deletion approval.
+
 ### #337 — CheckedPtr count*sizeof overflow rejection
 
 - **Learned:** (1) `count * sizeof(T)` in wrapping uint64 arithmetic can yield 0, and `is_user_range(addr, 0)` early-returns true — so `valid()` accepted an effectively unbounded range. The `count <= LIMIT / sizeof(T)` guard form is constexpr-friendly, freestanding-safe, and keeps `valid()` range-only (the 1 TiB in-range pin still passes). (2) The same wrapping idiom existed in `safe_copy_from_user`/`safe_copy_to_user` — fix every site sharing the idiom, not just the reported one. (3) The `core` aggregate embeds the pointer_isolation group, so enabling one test needs both the fine-row (4→5) and the aggregate (552→553) bump; the `core` run validates both.
