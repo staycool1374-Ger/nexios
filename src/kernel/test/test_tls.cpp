@@ -697,13 +697,16 @@ bool run_errno_probe(char *capture, size_t cap) {
 
 // Runmode: kernel
 // Testidea: Issue #338 — thread-local errno works from Ring 3: crt0
-//           publishes the block (TLS_SET), errno reads TP+0.
+//           publishes the block (TLS_SET), errno reads TP+0. The same
+//           dispatch also covers issue #339 (in-tree strtok/strtok_r
+//           from Ring 3 via the STRTOK_PROBE marker).
 // Input: Dispatch the embedded probe twice; each run prints
-//        ERRNO_PROBE: <fresh> <roundtrip> <cleared>.
+//        ERRNO_PROBE: <fresh> <roundtrip> <cleared> + STRTOK_PROBE.
 // Expect: Both runs exit 0 with "ERRNO_PROBE: 0 42 0" (fresh cell,
-//         42 round-trips, write-back clears; second task unaffected
-//         by the first).
-// Depends: CR4.FSGSBASE + crt0 TLS_SET + errno macro (issue #338)
+//        42 round-trips, write-back clears; second task unaffected
+//        by the first) and "STRTOK_PROBE: 1" (a/b/c tokenized).
+// Depends: CR4.FSGSBASE + crt0 TLS_SET + errno macro (issue #338);
+//          strtok/strtok_r (issue #339)
 JARVIS_TEST(tls_errno_ring3_cell, "PRE: vfsd | POST: none") {
 #if defined(CONFIG_ARCH_X86_64)
     char first[64]{};
@@ -714,6 +717,8 @@ JARVIS_TEST(tls_errno_ring3_cell, "PRE: vfsd | POST: none") {
     JARVIS_ASSERT(clean_second);
     JARVIS_ASSERT(errno_contains(first, "ERRNO_PROBE: 0 42 0"));
     JARVIS_ASSERT(errno_contains(second, "ERRNO_PROBE: 0 42 0"));
+    JARVIS_ASSERT(errno_contains(first, "STRTOK_PROBE: 1"));
+    JARVIS_ASSERT(errno_contains(second, "STRTOK_PROBE: 1"));
 #else
     // x86_64-only image (RDFSBASE proof runs on TCG-x86_64).
 #endif

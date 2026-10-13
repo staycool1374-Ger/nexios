@@ -1,644 +1,129 @@
-diff --git a/mk/rules.mk b/mk/rules.mk
-index d38a44ab6..f2f49bd61 100644
---- a/mk/rules.mk
-+++ b/mk/rules.mk
-@@ -250,9 +250,9 @@ userspace/%.c.elf: userspace/%.c $(LIBC_A) build/libc/crt0.o
- # -nostartfiles via CCFLAGS -nostdlib, no specs, no toolchain crt
- # files). Order-only sysroot edge: readiness gates the link but
- # sysroot mtime never forces an ELF rebuild.
--$(PICOLIBC_ELF): userspace/picolibc/%.c.elf: userspace/picolibc/%.c $(PICOLIBC_GLUE) build/libc/picolib_stubs.o | $(PICOLIBC_SYSROOT)/lib/libc.a $(PICOLIBC_SYSROOT)/lib/libm.a
-+$(PICOLIBC_ELF): userspace/picolibc/%.c.elf: userspace/picolibc/%.c $(PICOLIBC_GLUE) build/libc/picolib_stubs.o build/libc/errno.o | $(PICOLIBC_SYSROOT)/lib/libc.a $(PICOLIBC_SYSROOT)/lib/libm.a
- 	@printf '  %-7s %s\n' 'CC' '$@'
--	$(CC) $(CCFLAGS) -I $(PICOLIBC_SYSROOT)/include -o $@ build/libc/crt0.o $< $(PICOLIBC_GLUE) build/libc/picolib_stubs.o -L $(PICOLIBC_SYSROOT)/lib -lc -lm
-+	$(CC) $(CCFLAGS) -I $(PICOLIBC_SYSROOT)/include -o $@ build/libc/crt0.o $< $(PICOLIBC_GLUE) build/libc/picolib_stubs.o build/libc/errno.o -L $(PICOLIBC_SYSROOT)/lib -lc -lm
- 
- $(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c | $(PICOLIBC_SYSROOT)/lib/libc.a $(PICOLIBC_SYSROOT)/lib/libm.a
- 	@printf '  %-7s %s\n' 'CC' '$@'
-@@ -350,6 +350,33 @@ $(VERIFY_IMG_OBJ): $(VERIFY_IMG_STRIPPED)
- 	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_size=_binary_libc_verify_img_size \
- 	    $< $@
- 
-+# Issue #338: the errno-probe ELF is embedded for the kernel test (same
-+# initrd-not-mounted reason as #75). x86_64 only — the Ring-3 TP read
-+# (RDFSBASE) is proven on TCG-x86_64; other archs ship the probe in
-+# /bin via the generic rule, untested.
-+ifeq ($(ARCH),x86_64)
-+ERRNO_IMG_OBJ := build/initrd/errno_probe_img.o
-+ERRNO_IMG_SRC := userspace/errno_probe.c.elf
-+ERRNO_IMG_STRIPPED := build/initrd/errno_probe_stripped.elf
-+else
-+ERRNO_IMG_OBJ :=
-+ERRNO_IMG_SRC :=
-+ERRNO_IMG_STRIPPED :=
-+endif
-+
-+$(ERRNO_IMG_STRIPPED): $(ERRNO_IMG_SRC)
-+	@mkdir -p $(dir $@)
-+	cp $< $@
-+	$(X86_64_TRIPLET)strip $@
-+
-+$(ERRNO_IMG_OBJ): $(ERRNO_IMG_STRIPPED)
-+	@mkdir -p $(dir $@)
-+	$(OBJCOPY) -I binary -O $(OBJCOPY_FMT) -B $(OBJCOPY_ARCH) \
-+	    --redefine-sym _binary_build_initrd_errno_probe_stripped_elf_start=_binary_errno_probe_img_start \
-+	    --redefine-sym _binary_build_initrd_errno_probe_stripped_elf_end=_binary_errno_probe_img_end \
-+	    --redefine-sym _binary_build_initrd_errno_probe_stripped_elf_size=_binary_errno_probe_img_size \
-+	    $< $@
-+
- # Issue #104: the fork-marker ELF is embedded for the EL0/U-mode smoke
- # tests (same initrd-not-mounted reason as above). aarch64 + riscv64 (issue
- # #206 M2) — the program is built by the generic userspace/%.c.elf rule with
-@@ -381,18 +408,18 @@ $(FORK_MARKER_OBJ): $(FORK_MARKER_STRIPPED)
- 	    --redefine-sym _binary_build_initrd_fork_marker_stripped_elf_size=_binary_fork_marker_img_size \
- 	    $< $@
- 
--$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
-+$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(ERRNO_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
- 	@mkdir -p $(dir $@)
- 	@printf '  %-7s %s\n' 'LD' 'kernel-debug.elf'
--	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
-+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(ERRNO_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
- 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
- 	@python3 tools/patch_code_crc.py $@
- 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
- 
--$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
-+$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(ERRNO_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
- 	@mkdir -p $(dir $@)
- 	@printf '  %-7s %s\n' 'LD' 'kernel.elf'
--	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
-+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(ERRNO_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
- 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
- 	@python3 tools/patch_code_crc.py $@
- 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
-diff --git a/src/kernel/arch/x86_64/hal/cpuid_impl.hpp b/src/kernel/arch/x86_64/hal/cpuid_impl.hpp
-index acff6ffbb..b02269833 100644
---- a/src/kernel/arch/x86_64/hal/cpuid_impl.hpp
-+++ b/src/kernel/arch/x86_64/hal/cpuid_impl.hpp
-@@ -72,6 +72,9 @@ inline constexpr uint32_t CPUID_ECX1_PCID = 1u << 17;
- inline constexpr uint32_t CPUID_EBX7_RDSEED = 1u << 18;
- /// @brief INVPCID feature bit (EBX, leaf 7, subleaf 0).
- inline constexpr uint32_t CPUID_EBX7_INVPCID = 1u << 10;
-+/// @brief FSGSBASE feature bit (EBX, leaf 7, subleaf 0): userspace
-+/// RDFSBASE/WRFSBASE (issue #338 — thread-local errno reads its TP).
-+inline constexpr uint32_t CPUID_EBX7_FSGSBASE = 1u << 0;
- 
- /// @brief Check if the CPU has an x87 FPU.
- /// @return true if the FPU feature bit is set.
-@@ -108,6 +111,11 @@ inline bool has_invpcid() {
- inline bool has_rdseed() {
-     return (cpuid(7, 0).ebx & CPUID_EBX7_RDSEED) != 0;
- }
-+/// @brief Check if the CPU supports FSGSBASE (userspace FS-base access).
-+/// @return true if the FSGSBASE feature bit (leaf 7, subleaf 0) is set.
-+inline bool has_fsgsbase() {
-+    return (cpuid(7, 0).ebx & CPUID_EBX7_FSGSBASE) != 0;
-+}
- /// @brief TSC-deadline timer feature bit (ECX, leaf 1).
- inline constexpr uint32_t CPUID_ECX1_TSC_DEADLINE = 1u << 24;
- /// @brief Check if the CPU supports TSC-deadline timer mode.
-diff --git a/src/kernel/arch/x86_64/hal/io_impl.hpp b/src/kernel/arch/x86_64/hal/io_impl.hpp
-index 05af35eb1..b084cf6c5 100644
---- a/src/kernel/arch/x86_64/hal/io_impl.hpp
-+++ b/src/kernel/arch/x86_64/hal/io_impl.hpp
-@@ -74,6 +74,9 @@ inline void write_cr4(uint64_t v) {
- }
- /// @brief CR4.PCIDE bit (17): process-context identifiers (issue #156).
- inline constexpr uint64_t CR4_PCIDE = 1ULL << 17;
-+/// @brief CR4.FSGSBASE bit (16): userspace RDFSBASE/WRFSBASE
-+/// (issue #338 — thread-local errno reads its TP from Ring 3).
-+inline constexpr uint64_t CR4_FSGSBASE = 1ULL << 16;
- 
- /// @brief INVPCID invalidation types (issue #157, Intel SDM Vol 2B).
- enum class InvpcidType : uint32_t {
-diff --git a/src/kernel/arch/x86_64/hal/smp.cpp b/src/kernel/arch/x86_64/hal/smp.cpp
-index ee9aa2139..883907c75 100644
---- a/src/kernel/arch/x86_64/hal/smp.cpp
-+++ b/src/kernel/arch/x86_64/hal/smp.cpp
-@@ -26,6 +26,7 @@
- 
- #include <kernel/arch/x86_64/hal/smp.hpp>
- 
-+#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
- #include <kernel/arch/x86_64/hal/apic.hpp>
- #include <kernel/arch/x86_64/hal/percpu.hpp>
- #include <kernel/arch/x86_64/hal/io_impl.hpp>
-@@ -352,6 +353,15 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
-         pcide = arch::CR4_PCIDE;
- #endif
-     arch::write_cr4(cr4 | (1ULL << 9) | (1ULL << 10) | pcide); // OSFXSR|OSXMMEXCPT
-+#if defined(CONFIG_ARCH_X86_64)
-+    // Issue #338: mirror BSP's CR4.FSGSBASE probe so AP userspace reads
-+    // its TP identically (BSP probed support at boot; has_fsgsbase() is
-+    // pure CPUID, safe to re-evaluate here).
-+    if (arch::has_fsgsbase()) {
-+        uint64_t cr4b = arch::read_cr4();
-+        arch::write_cr4(cr4b | arch::CR4_FSGSBASE);
-+    }
-+#endif
- 
-     // Start-gate: spin parked (IF=0, Phase-B behavior) until the BSP
-     // publishes scheduler_ready after reboot_from_table() finishes
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 86291d952..b6a8a4235 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -1004,6 +1004,20 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
-     } else {
-         debug_write("[BOOT] PCID not supported by CPU — leaving off\n");
-     }
-+#endif
-+#if defined(CONFIG_ARCH_X86_64)
-+    // Issue #338: FSGSBASE (CR4 bit 16) — userspace RDFSBASE so Ring-3
-+    // libc reads its thread-local block (errno) without a syscall.
-+    // BSP-only probe here; APs mirror it in ap_main (smp.cpp).  Same
-+    // CPU floor as the SMEP-era features above; without it the libc
-+    // errno path faults (#UD), so an unsupported CPU cannot run
-+    // userspace (loud by design — like SMAP-off above, but fatal).
-+    if (arch::has_fsgsbase()) {
-+        cr4 |= arch::CR4_FSGSBASE;
-+        debug_write("[BOOT] FSGSBASE enabled\n");
-+    } else {
-+        debug_write("[BOOT] FSGSBASE not supported by CPU — no userspace\n");
-+    }
- #endif
-     arch::write_cr4(cr4);
- 
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index f21c4f1cb..8b9e29d4f 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -282,7 +282,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
- 
-     // Structural/semantic aggregates (issue #173).  Values are filled
-     // from measured `dump-counts` output; 0 disables validation.
--    {"core",                553,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
-+    {"core",                554,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 1 ring3 errno cell (#338) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
-     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
-     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
-     {"proc_elf",            112,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 6 pre-existing aggregate drift at HEAD
-@@ -304,7 +304,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"random",              17,   0,       0      },  // random_* (issue #173)
-     {"bench",               27,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303)
-     {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls, rescued (issue #61, wired up #173)
--    {"tls",                 12,   12,      12     },  // TLS_SET + publish/apply (issue #74)
-+    {"tls",                 13,   12,      12     },  // TLS_SET + publish/apply (issue #74) + Ring-3 errno cell probe, x86_64-only (#338)
- };
- 
- static constexpr size_t k_expected_count_size =
-diff --git a/src/kernel/test/test_stack_cookie.cpp b/src/kernel/test/test_stack_cookie.cpp
-index d6f11b929..dc0c36e64 100644
---- a/src/kernel/test/test_stack_cookie.cpp
-+++ b/src/kernel/test/test_stack_cookie.cpp
-@@ -126,21 +126,25 @@ JARVIS_TEST(stack_cookie_canary_values_are_segment_derived,
-     for (uint64_t seg = 0; seg < TaskControlBlock::CANARY_SEGMENTS; ++seg) {
-         if ((t->canary_installed & (1u << seg)) == 0)
-             continue;
--        uint64_t before = 0;
--        uint64_t after = 0;
--        JARVIS_ASSERT_FMT(read_live_u64(t->canary_before[seg],
--                                        t->page_table_, before),
--                          "canary_before[%lu] unreadable", seg);
--        JARVIS_ASSERT_FMT(read_live_u64(t->canary_after[seg],
--                                        t->page_table_, after),
--                          "canary_after[%lu] unreadable", seg);
--        uint64_t expected = TaskControlBlock::CANARY_MAGIC ^ (seg + 1);
--        JARVIS_ASSERT_FMT(before == expected,
--                          "before[%lu] 0x%lx != derived 0x%lx", seg, before,
--                          expected);
--        JARVIS_ASSERT_FMT(after == expected,
--                          "after[%lu] 0x%lx != derived 0x%lx", seg, after,
--                          expected);
-+        // Zero slots are not installed (DATA has an after-canary only by
-+        // design — its segment start is payload, not padding) and are
-+        // skipped by canary_verify_user_segments itself; asserting them
-+        // here made the test flip with any userspace layout change
-+        // (issue #338: crt0 growth added RW padding). Mirror the kernel
-+        // invariant instead of over-constraining it.
-+        const uint64_t slots[2] = {t->canary_before[seg],
-+                                   t->canary_after[seg]};
-+        for (int k = 0; k < 2; ++k) {
-+            if (slots[k] == 0)
-+                continue;
-+            uint64_t live = 0;
-+            JARVIS_ASSERT_FMT(read_live_u64(slots[k], t->page_table_, live),
-+                              "canary[%lu][%d] unreadable", seg, k);
-+            uint64_t expected = TaskControlBlock::CANARY_MAGIC ^ (seg + 1);
-+            JARVIS_ASSERT_FMT(live == expected,
-+                              "canary[%lu][%d] 0x%lx != derived 0x%lx", seg,
-+                              k, live, expected);
-+        }
-     }
-     JARVIS_TEST_PASS();
- }
 diff --git a/src/kernel/test/test_tls.cpp b/src/kernel/test/test_tls.cpp
-index 607a60be2..cad9fe1af 100644
+index cad9fe1af..7d88a6f17 100644
 --- a/src/kernel/test/test_tls.cpp
 +++ b/src/kernel/test/test_tls.cpp
-@@ -35,6 +35,12 @@
- #include <kernel/task/task.hpp>
- #include <kernel/arch/hal/irq_guard.hpp>
- #include <kernel/arch/msr.hpp>
-+#include <kernel/arch/io.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/elf/elf_loader.hpp>
-+#include <kernel/memory/vmm.hpp>
-+#include <kernel/vfs/vfs.hpp>
-+#include <kernel/test/test_isolate.hpp>
- #include <kernel/nexios_config.h>
- #include <constants.hpp>
- #include "test_sched_helpers.hpp"
-@@ -543,6 +549,177 @@ JARVIS_TEST(tls_no_stale_slot_after_cancel, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
+@@ -697,13 +697,16 @@ bool run_errno_probe(char *capture, size_t cap) {
  
-+#if defined(CONFIG_ARCH_X86_64)
-+// Issue #338 Ring-3 proof: the in-tree errno-probe ELF (embedded,
-+// x86_64 only — the initrd is not mounted in test boot) runs crt0's
-+// TLS_SET + the errno macro from userspace. A faulting TP (FSGSBASE
-+// off, unregistered block) dies before printing, so the exact marker
-+// plus clean exit proves the whole chain. Dispatched twice: the
-+// second task must also observe a zero-initialized cell (no
-+// cross-task contamination).
-+extern "C" {
-+extern const uint8_t _binary_errno_probe_img_start[];
-+extern const uint8_t _binary_errno_probe_img_end[];
-+}
-+
-+namespace {
-+
-+constexpr const char *kErrnoImagePath = "/tmp/errno_probe.elf";
-+constexpr const char *kErrnoStdoutPath = "/tmp/errno_stdout.txt";
-+constexpr uint64_t kErrnoJoinSpins = 10000000ULL;
-+
-+uint64_t write_errno_image() {
-+    kernel::test::mark_vfs_touched();
-+    size_t size = static_cast<size_t>(_binary_errno_probe_img_end -
-+                                      _binary_errno_probe_img_start);
-+    if (size == 0)
-+        return 0;
-+    if (vfs::create(kErrnoImagePath, 0) != 0)
-+        return 0;
-+    vfs::Vnode *file = vfs::resolve(kErrnoImagePath);
-+    if (file == nullptr || file->ops == nullptr ||
-+        file->ops->write == nullptr) {
-+        vfs::unlink(kErrnoImagePath);
-+        return 0;
-+    }
-+    size_t off = 0;
-+    while (off < size) {
-+        size_t chunk = size - off;
-+        if (chunk > 4096)
-+            chunk = 4096;
-+        int64_t written = file->ops->write(
-+            *file, _binary_errno_probe_img_start + off, chunk, off);
-+        if (written <= 0) {
-+            vfs::unlink(kErrnoImagePath);
-+            return 0;
-+        }
-+        off += static_cast<size_t>(written);
-+    }
-+    return (off == size) ? size : 0ULL;
-+}
-+
-+void cleanup_errno_files() {
-+    kernel::test::mark_vfs_touched();
-+    vfs::unlink(kErrnoImagePath);
-+    vfs::unlink(kErrnoStdoutPath);
-+}
-+
-+bool errno_contains(const char *buf, const char *needle) {
-+    for (size_t i = 0; buf[i] != '\0'; ++i) {
-+        size_t j = 0;
-+        for (; needle[j] != '\0'; ++j) {
-+            if (buf[i + j] != needle[j])
-+                break;
-+        }
-+        if (needle[j] == '\0')
-+            return true;
-+    }
-+    return false;
-+}
-+
-+// One dispatch: stage, load, wire stdout to a tmpfs capture, run to
-+// EXIT, read the marker back. Returns true on clean exit (code 0);
-+// fills capture (NUL-terminated, possibly truncated).
-+bool run_errno_probe(char *capture, size_t cap) {
-+    if (write_errno_image() == 0)
-+        return false;
-+    elf::ElfLoader::reset();
-+    if (elf::ElfLoader::request_load(kErrnoImagePath) !=
-+        elf::LoadResult::OK) {
-+        cleanup_errno_files();
-+        return false;
-+    }
-+    elf::ElfLoader::wait_loader_idle();
-+    TaskControlBlock *t = elf::ElfLoader::take_completed();
-+    if (t == nullptr || t->page_table_ == 0 || !t->is_user_) {
-+        if (t != nullptr)
-+            elf::ElfLoader::destroy_completed_tcb(t);
-+        cleanup_errno_files();
-+        return false;
-+    }
-+    if (!t->fd_table.fds[1].used) {
-+        elf::ElfLoader::destroy_completed_tcb(t);
-+        cleanup_errno_files();
-+        return false;
-+    }
-+    kernel::test::mark_vfs_touched();
-+    if (vfs::create(kErrnoStdoutPath, 0) != 0) {
-+        elf::ElfLoader::destroy_completed_tcb(t);
-+        cleanup_errno_files();
-+        return false;
-+    }
-+    vfs::Vnode *stdout_vnode = vfs::resolve(kErrnoStdoutPath);
-+    if (stdout_vnode == nullptr) {
-+        elf::ElfLoader::destroy_completed_tcb(t);
-+        cleanup_errno_files();
-+        return false;
-+    }
-+    t->fd_table.fds[1].vnode = stdout_vnode;
-+    t->fd_table.fds[1].offset = 0;
-+    t->fd_table.fds[1].flags = 0;
-+    t->priority = 11;
-+    t->base_priority = 11;
-+    {
-+        arch::IrqGuard ig{};
-+        Scheduler::add_task(*t);
-+    }
-+    Scheduler::reschedule();
-+    for (uint64_t i = 0;
-+         i < kErrnoJoinSpins && t->state != TaskState::TERMINATED; ++i)
-+        arch::pause();
-+    bool clean = (t->state == TaskState::TERMINATED && t->exit_code == 0);
-+    size_t pos = 0;
-+    {
-+        vfs::Vnode *cap_file = vfs::resolve(kErrnoStdoutPath);
-+        if (cap_file != nullptr && cap_file->ops != nullptr &&
-+            cap_file->ops->read != nullptr) {
-+            while (pos + 1 < cap) {
-+                int64_t rd = cap_file->ops->read(
-+                    *cap_file, reinterpret_cast<uint8_t *>(capture + pos),
-+                    1, pos);
-+                if (rd <= 0)
-+                    break;
-+                pos += static_cast<size_t>(rd);
-+            }
-+        }
-+    }
-+    capture[pos] = '\0';
-+    if (TaskControlBlock::is_valid(t) &&
-+        (t->state != TaskState::TERMINATED || t->exit_code == 0))
-+        Scheduler::terminate(*t, 0);
-+    Scheduler::drain_zombie_list();
-+    cleanup_errno_files();
-+    return clean;
-+}
-+
-+} // namespace
-+#endif // CONFIG_ARCH_X86_64
-+
-+// Runmode: kernel
-+// Testidea: Issue #338 — thread-local errno works from Ring 3: crt0
-+//           publishes the block (TLS_SET), errno reads TP+0.
-+// Input: Dispatch the embedded probe twice; each run prints
-+//        ERRNO_PROBE: <fresh> <roundtrip> <cleared>.
-+// Expect: Both runs exit 0 with "ERRNO_PROBE: 0 42 0" (fresh cell,
-+//         42 round-trips, write-back clears; second task unaffected
-+//         by the first).
-+// Depends: CR4.FSGSBASE + crt0 TLS_SET + errno macro (issue #338)
-+JARVIS_TEST(tls_errno_ring3_cell, "PRE: vfsd | POST: none") {
-+#if defined(CONFIG_ARCH_X86_64)
-+    char first[64]{};
-+    char second[64]{};
-+    bool clean_first = run_errno_probe(first, sizeof(first));
-+    bool clean_second = run_errno_probe(second, sizeof(second));
-+    JARVIS_ASSERT(clean_first);
-+    JARVIS_ASSERT(clean_second);
-+    JARVIS_ASSERT(errno_contains(first, "ERRNO_PROBE: 0 42 0"));
-+    JARVIS_ASSERT(errno_contains(second, "ERRNO_PROBE: 0 42 0"));
-+#else
-+    // x86_64-only image (RDFSBASE proof runs on TCG-x86_64).
-+#endif
-+    JARVIS_TEST_PASS();
-+}
-+
- void register_tls_tests() {
-     Logger::info("Registering TLS tests");
-     JARVIS_REGISTER_TEST(tls_set_zero_clears);
-@@ -557,4 +734,7 @@ void register_tls_tests() {
-     JARVIS_REGISTER_TEST(tls_cancel_clears_slot);
-     JARVIS_REGISTER_TEST(tls_second_publish_site);
-     JARVIS_REGISTER_TEST(tls_no_stale_slot_after_cancel);
-+#if defined(CONFIG_ARCH_X86_64)
-+    JARVIS_REGISTER_TEST(tls_errno_ring3_cell); // issue #338
-+#endif
- }
-diff --git a/src/libc/crt0.S b/src/libc/crt0.S
-index 00825c319..a0fe77c05 100644
---- a/src/libc/crt0.S
-+++ b/src/libc/crt0.S
-@@ -7,6 +7,18 @@ _start:
-     lea 8(%rsp), %rsi
-     lea 16(%rsp,%rdi,8), %rdx
-     andq $-16, %rsp
-+    // Issue #338: publish the thread-local block (errno at TP+0) before
-+    // main. TLS_SET = 85, address in rbx. main args (rdi/rsi/rdx) are
-+    // preserved across the trap via push/pop (no call between).
-+    push %rdi
-+    push %rsi
-+    push %rdx
-+    mov $85, %rax
-+    lea nexios_tls_block(%rip), %rbx
-+    int $0x80
-+    pop %rdx
-+    pop %rsi
-+    pop %rdi
-     call main
-     mov %rax, %rdi
-     call exit
-@@ -14,6 +26,14 @@ _start:
- #elif defined(__aarch64__)
- _start:
-     mov x0, sp
-+    // Issue #338: publish the thread-local block before main. x0 (sp)
-+    // is stashed on the aligned stack across the svc.
-+    str x0, [sp, #-16]!
-+    mov x8, #85
-+    adrp x0, nexios_tls_block
-+    add x0, x0, :lo12:nexios_tls_block
-+    svc #0
-+    ldr x0, [sp], #16
-     bl main
-     bl exit
- 1:  wfe
-@@ -25,8 +45,26 @@ _start:
-     la gp, __global_pointer$
-     .option pop
-     mv a0, sp
-+    // Issue #338: publish the thread-local block before main. a0 (sp)
-+    // is stashed on the aligned stack across the ecall.
-+    addi sp, sp, -16
-+    sd a0, 0(sp)
-+    li a7, 85
-+    la a0, nexios_tls_block
-+    ecall
-+    ld a0, 0(sp)
-+    addi sp, sp, 16
-     call main
-     call exit
- 1:  wfi
-     j 1b
+ // Runmode: kernel
+ // Testidea: Issue #338 — thread-local errno works from Ring 3: crt0
+-//           publishes the block (TLS_SET), errno reads TP+0.
++//           publishes the block (TLS_SET), errno reads TP+0. The same
++//           dispatch also covers issue #339 (in-tree strtok/strtok_r
++//           from Ring 3 via the STRTOK_PROBE marker).
+ // Input: Dispatch the embedded probe twice; each run prints
+-//        ERRNO_PROBE: <fresh> <roundtrip> <cleared>.
++//        ERRNO_PROBE: <fresh> <roundtrip> <cleared> + STRTOK_PROBE.
+ // Expect: Both runs exit 0 with "ERRNO_PROBE: 0 42 0" (fresh cell,
+-//         42 round-trips, write-back clears; second task unaffected
+-//         by the first).
+-// Depends: CR4.FSGSBASE + crt0 TLS_SET + errno macro (issue #338)
++//        42 round-trips, write-back clears; second task unaffected
++//        by the first) and "STRTOK_PROBE: 1" (a/b/c tokenized).
++// Depends: CR4.FSGSBASE + crt0 TLS_SET + errno macro (issue #338);
++//          strtok/strtok_r (issue #339)
+ JARVIS_TEST(tls_errno_ring3_cell, "PRE: vfsd | POST: none") {
+ #if defined(CONFIG_ARCH_X86_64)
+     char first[64]{};
+@@ -714,6 +717,8 @@ JARVIS_TEST(tls_errno_ring3_cell, "PRE: vfsd | POST: none") {
+     JARVIS_ASSERT(clean_second);
+     JARVIS_ASSERT(errno_contains(first, "ERRNO_PROBE: 0 42 0"));
+     JARVIS_ASSERT(errno_contains(second, "ERRNO_PROBE: 0 42 0"));
++    JARVIS_ASSERT(errno_contains(first, "STRTOK_PROBE: 1"));
++    JARVIS_ASSERT(errno_contains(second, "STRTOK_PROBE: 1"));
+ #else
+     // x86_64-only image (RDFSBASE proof runs on TCG-x86_64).
  #endif
+diff --git a/src/libc/string.c b/src/libc/string.c
+index f4fa37546..e4da864e1 100644
+--- a/src/libc/string.c
++++ b/src/libc/string.c
+@@ -138,3 +138,36 @@ char* strdup(const char* s) {
+     }
+     return p;
+ }
 +
-+    // Issue #338: per-task thread-local block (struct nexios_tcb layout
-+    // in errno.h — errno int at offset 0). Zero-init .bss: fresh tasks
-+    // observe errno == 0; fork copies it with the address space.
-+    .section .bss
-+    .align 16
-+    .global nexios_tls_block
-+nexios_tls_block:
-+    .zero 16
-diff --git a/src/libc/errno.c b/src/libc/errno.c
-index 6e7bb62b5..ca3df140e 100644
---- a/src/libc/errno.c
-+++ b/src/libc/errno.c
-@@ -1 +1,51 @@
--int errno;
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file errno.c
-+/// @brief Thread-local errno backend (issue #338).  The per-task block
-+/// (struct nexios_tcb) is allocated by crt0 and published via TLS_SET;
-+/// the kernel reloads TP on every dispatch, so this read is always the
-+/// current task's cell — including future same-address-space threads,
-+/// which will carry distinct TP values.
-+
-+#include <errno.h>
-+#include <sys/types.h>
-+
-+/// @brief Read the thread-pointer register (userspace-readable on all
-+/// arches: RDFSBASE needs CR4.FSGSBASE, enabled at boot on x86_64).
-+static uintptr_t read_tp(void) {
-+#if defined(__x86_64__)
-+    unsigned long v = 0;
-+    __asm__ volatile("rdfsbase %0" : "=r"(v));
-+    return (uintptr_t)v;
-+#elif defined(__aarch64__)
-+    unsigned long v = 0;
-+    __asm__ volatile("mrs %0, tpidr_el0" : "=r"(v));
-+    return (uintptr_t)v;
-+#elif defined(__riscv)
-+    uintptr_t v = 0;
-+    __asm__ volatile("mv %0, tp" : "=r"(v));
-+    return v;
-+#else
-+    return 0;
-+#endif
++// Issue #339: reentrant tokenizer. NULL delim/saveptr fail closed
++// (POSIX leaves NULL-delim undefined); empty tokens are skipped like
++// consecutive delimiters; end-of-string parks saveptr at 0.
++char* strtok_r(char* s, const char* delim, char** saveptr) {
++    if (!delim || !saveptr)
++        return 0;
++    char* cur = s ? s : *saveptr;
++    if (!cur)
++        return 0;
++    cur += strspn(cur, delim);
++    if (*cur == '\0') {
++        *saveptr = 0;
++        return 0;
++    }
++    char* tok = cur;
++    cur += strcspn(cur, delim);
++    if (*cur == '\0') {
++        *saveptr = 0;
++    } else {
++        *cur = '\0';
++        *saveptr = cur + 1;
++    }
++    return tok;
 +}
 +
-+int *__errno_location(void) {
-+    return &((struct nexios_tcb *)read_tp())->errno_value;
++// Issue #339: classic strtok over a process-private save cell (NOT
++// thread-safe — threaded code must use strtok_r; safe under fork since
++// the cell copies with the address space).
++char* strtok(char* s, const char* delim) {
++    static char* save = 0;
++    return strtok_r(s, delim, &save);
 +}
-diff --git a/src/libc/errno.h b/src/libc/errno.h
-index 14b9e666d..5eaf3592d 100644
---- a/src/libc/errno.h
-+++ b/src/libc/errno.h
-@@ -18,7 +18,25 @@
- 
- #pragma once
- 
--extern int errno;
-+/// @brief Per-task control block (issue #338 — thread-local errno).
-+/// Lives in task-private memory; the kernel loads its address into the
-+/// TP register on every dispatch (TLS_SET at crt0 startup, inherited
-+/// across fork by address-space copy). errno sits at offset 0 so
-+/// __errno_location() is a single TP read + dereference with no layout
-+/// dependency beyond this header. Future thread-private state grows
-+/// here (never reorder existing fields).
-+struct nexios_tcb {
-+    int errno_value;
-+};
-+
-+/// @brief Address of the calling task's errno cell (TP + 0).
-+/// Never NULL after crt0 startup (block registered before main).
-+int *__errno_location(void);
-+
-+/// @brief Thread-local errno (issue #338): each task reads its own
-+/// TP-published cell. Plain `errno = x` / `errno` uses keep working
-+/// through the dereference.
-+#define errno (*__errno_location())
- 
- #define EPERM   1
- #define ENOENT  2
-diff --git a/src/libc/time.c b/src/libc/time.c
-index 61cc7ac3b..6448447c8 100644
---- a/src/libc/time.c
-+++ b/src/libc/time.c
-@@ -2,8 +2,6 @@
- #include <time.h>
- #include <errno.h>
- 
--extern int errno;
--
- /// @brief §2 error predicate (picolib_stubs.c map_err shape): map a raw
- /// syscall return to errno/-1.
- static long map_err(long ret) {
+diff --git a/src/libc/string.h b/src/libc/string.h
+index 56147ae78..796d5076d 100644
+--- a/src/libc/string.h
++++ b/src/libc/string.h
+@@ -37,3 +37,5 @@ size_t strspn(const char* s, const char* accept);
+ size_t strcspn(const char* s, const char* reject);
+ char* strstr(const char* haystack, const char* needle);
+ char* strdup(const char* s);
++char* strtok(char* s, const char* delim);
++char* strtok_r(char* s, const char* delim, char** saveptr);
 diff --git a/test-history.txt b/test-history.txt
-index 1dc4e0907..bebcdb773 100644
+index 1da7c7ead..ff0c981ab 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -3349,3 +3349,8 @@ SUMMARY: total=18 ok=18 fail=0
- 2026-10-13 14:02:15 sched_admission PASSED: 9 FAILED: 0 TIME: 298ms
- 2026-10-13 14:02:51 deadline PASSED: 0 FAILED: 0 TIME: 227s STATUS: TIMEOUT stall-watchdog-group-20/145
- 2026-10-13 14:02:51 deadline PASSED: 145 FAILED: 0 TIME: 56030ms
-+2026-10-13 14:20:00 tls PASSED: 13 FAILED: 0 TIME: 1819ms
-+2026-10-13 14:25:00 core PASSED: 553 FAILED: 1 TIME: 82978ms NOTE: stack_cookie layout latent (fixed test-side)
-+2026-10-13 14:26:00 stack_cookie PASSED: 3 FAILED: 1 TIME: 2162ms NOTE: same latent
-+2026-10-13 14:28:00 stack_cookie PASSED: 4 FAILED: 0 TIME: 533ms
-+2026-10-13 14:30:00 core PASSED: 554 FAILED: 0 TIME: 15874ms
+@@ -3379,3 +3379,5 @@ SUMMARY: total=20 ok=17 fail=3
+ 2026-10-13 15:00:00 hal PASSED: 122 FAILED: 0 TIME: 0ms NOTE: standalone rerun after full-suite STALL
+ 2026-10-13 15:03:00 smp PASSED: 81 FAILED: 0 TIME: 10741ms NOTE: standalone rerun after full-suite STALL
+ 2026-10-13 15:06:00 testrunner PASSED: 16 FAILED: 0 TIME: 0ms NOTE: standalone rerun PASS-expected-panic after full-suite STALL
++2026-10-13 15:10:00 tls PASSED: 12 FAILED: 1 TIME: 7898ms NOTE: tls_publish_applies live-register flake, passes on rerun
++2026-10-13 15:12:00 tls PASSED: 13 FAILED: 0 TIME: 182ms
 diff --git a/userspace/errno_probe.c b/userspace/errno_probe.c
-new file mode 100644
-index 000000000..f191116b7
---- /dev/null
+index f191116b7..610457f9c 100644
+--- a/userspace/errno_probe.c
 +++ b/userspace/errno_probe.c
-@@ -0,0 +1,20 @@
-+/* NexIOS in-tree errno proof probe (issue #338).
-+ * Hosted on the in-tree libc only (no sysroot headers): exercises the
-+ * thread-local errno cell end to end — crt0 publishes the block via
-+ * TLS_SET, __errno_location() reads TP+0, the errno macro round-trips.
-+ * A faulting TP (unregistered/unreadable) dies before printing, so a
-+ * clean exit with the exact marker line proves the whole chain.
-+ * stdout goes to serial via the WRITE path. */
+@@ -8,6 +8,7 @@
+ 
+ #include <stdio.h>
+ #include <errno.h>
++#include <string.h>
+ 
+ int main(void) {
+     int e0 = errno; /* fresh .bss block: expect 0 */
+@@ -16,5 +17,20 @@ int main(void) {
+     errno = 0;
+     int e2 = errno; /* write-back, no stickiness: expect 0 */
+     printf("ERRNO_PROBE: %d %d %d\n", e0, e1, e2);
 +
-+#include <stdio.h>
-+#include <errno.h>
-+
-+int main(void) {
-+    int e0 = errno; /* fresh .bss block: expect 0 */
-+    errno = 42;
-+    int e1 = errno; /* TP cell round-trip: expect 42 */
-+    errno = 0;
-+    int e2 = errno; /* write-back, no stickiness: expect 0 */
-+    printf("ERRNO_PROBE: %d %d %d\n", e0, e1, e2);
-+    return 0;
-+}
-diff --git a/userspace/picolibc/libc_verify.c.elf b/userspace/picolibc/libc_verify.c.elf
-index 60b732845..a35c8e8b3 100755
-Binary files a/userspace/picolibc/libc_verify.c.elf and b/userspace/picolibc/libc_verify.c.elf differ
++    /* ---- #339: in-tree strtok/strtok_r from Ring 3 ---- */
++    {
++        char a[] = "a,b;c";
++        char *s1 = 0;
++        char *t0 = strtok_r(a, ",;", &s1);
++        char *t1 = strtok_r(0, ",;", &s1);
++        char *t2 = strtok_r(0, ",;", &s1);
++        char *t3 = strtok_r(0, ",;", &s1);
++        int ok = (t0 && t1 && t2 && !t3 && strcmp(t0, "a") == 0 &&
++                  strcmp(t1, "b") == 0 && strcmp(t2, "c") == 0)
++                     ? 1
++                     : 0;
++        printf("STRTOK_PROBE: %d\n", ok);
++    }
+     return 0;
+ }
