@@ -38,6 +38,8 @@
 #include <logger.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/arch/io.hpp>
+#include <kernel/arch/keyboard.hpp>
 #include <kernel/driver/iocd.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -207,15 +209,18 @@ JARVIS_TEST(cross_boundary_iocd_register_and_irq_forward,
 }
 
 // Runmode: kernel
-// Testidea: The live iocd daemon decodes a keyboard scancode into its
-//           byte queue and serves it via KEYBOARD_READ (issue #340 P0:
-//           daemon side only — no kernel forward or shell changes yet).
-// Input: send_sync REGISTER (self pid, IRQ line 1); async IRQ_EVENT
-//        with scancode 0x1E ('a' press); tick-spin for daemon dispatch;
-//        send_sync KEYBOARD_READ twice.
-// Expect: First read result=1, data[0]='a'; second read result=0
-//         (exactly-once, queue drained — suite stays IPC-quiescent).
-// Depends: iocd daemon (userspace/iocd.c decode + queue + read paths)
+// Testidea: The kernel forward path delivers a keyboard scancode to the
+//           live iocd daemon, which decodes and serves it via
+//           KEYBOARD_READ (issue #340 P1: forward + single ownership;
+//           P0 proved the daemon side via direct injection).
+// Input: Set keyboard ownership; inject 'a' press (set-1 0x1E) through
+//        the REAL i8042 path (0xD2 + genuine handle_irq); tick-spin;
+//        send_sync KEYBOARD_READ twice; poll the kernel ring. Ownership
+//        cleared before asserts so an abort cannot leak the routing.
+// Expect: Forward accepted; first read result=1, data[0]='a'; second
+//         read result=0 (exactly-once); kernel ring empty (never both).
+// Depends: Keyboard::handle_irq ownership branch + try_forward_to_iocd
+//          + iocd decode/queue/read
 JARVIS_TEST(cross_boundary_iocd_keyboard_read_delivery,
             "PRE: vfsd, iocd | POST: iocd") {
     uint64_t iocd_pid = iocd::get_iocd_pid();
@@ -223,40 +228,20 @@ JARVIS_TEST(cross_boundary_iocd_keyboard_read_delivery,
     auto *cur = Scheduler::current_task();
     JARVIS_ASSERT(cur != nullptr);
     drain_own_inbox();
+    arch::Keyboard::flush();
 
-    iocd::Msg req{};
-    req.type = iocd::IOCD_REGISTER_DEVICE;
-    req.args[0] = cur->id;
-    req.args[1] = 1; // IRQ line 1: keyboard
-    __builtin_memcpy(&req.args[2], "KBD", 4);
-    Message send{};
-    send.sender_id = cur->id;
-    send.type = iocd::IOCD_REGISTER_DEVICE;
-    send.data_size = sizeof(req);
-    __builtin_memcpy(send.data, &req, sizeof(req));
-    Message reply{};
-    JARVIS_ASSERT_FMT(IPC::send_sync(iocd_pid, send, reply),
-                      "REGISTER_DEVICE send_sync failed");
-    JARVIS_ASSERT_FMT(reply.data_size >= sizeof(iocd::Reply),
-                      "REGISTER reply too short (%lu)", reply.data_size);
+    // Take ownership, then inject through genuine hardware + handler.
+    // Collect everything into locals, restore ownership, THEN assert
+    // (an abort must not leak the routing into later tests).
+    iocd::set_keyboard_owned(true);
+    arch::outb(0x64, 0xD2); // i8042: write keyboard output buffer
+    arch::outb(0x60, 0x1E); // 'a' press
+    arch::Keyboard::handle_irq();
 
-    // Inject 'a' press (set-1 0x1E) as the kernel IRQ path would.
-    iocd::Msg ev{};
-    ev.type = iocd::IOCD_IRQ_EVENT;
-    ev.args[0] = 1;
-    ev.args[1] = 0x1E;
-    Message fev{};
-    fev.sender_id = cur->id;
-    fev.type = iocd::IOCD_IRQ_EVENT;
-    fev.data_size = sizeof(ev);
-    __builtin_memcpy(fev.data, &ev, sizeof(ev));
-    JARVIS_ASSERT_FMT(IPC::send(iocd_pid, fev, IPC_NONBLOCK),
-                      "IRQ_EVENT send rejected");
-
-    // The daemon needs timer ticks to run (same bound as the forward
-    // test); the queue is filled asynchronously.
+    // The daemon needs timer ticks to run; the queue fills async.
     uint64_t deadline = arch::Timer::ticks() + 50;
     bool readable = false;
+    bool read_ok = true;
     iocd::Reply rpl{};
     while (!readable && arch::Timer::ticks() < deadline) {
         iocd::Msg rd{};
@@ -268,37 +253,57 @@ JARVIS_TEST(cross_boundary_iocd_keyboard_read_delivery,
         sread.data_size = sizeof(rd);
         __builtin_memcpy(sread.data, &rd, sizeof(rd));
         Message rreply{};
-        if (!IPC::send_sync(iocd_pid, sread, rreply))
+        if (!IPC::send_sync(iocd_pid, sread, rreply)) {
+            read_ok = false;
             break;
-        if (rreply.data_size < sizeof(iocd::Reply))
+        }
+        if (rreply.data_size < sizeof(iocd::Reply)) {
+            read_ok = false;
             break;
+        }
         __builtin_memcpy(&rpl, rreply.data, sizeof(rpl));
         if (rpl.result == 1)
             readable = true;
         else
             arch::pause();
     }
+
+    // Exactly-once: second read is empty. Single ownership: the
+    // forwarded byte must NOT also sit in the kernel hardware ring.
+    bool second_ok = true;
+    iocd::Reply rpl2{};
+    {
+        iocd::Msg rd2{};
+        rd2.type = iocd::IOCD_KEYBOARD_READ;
+        rd2.args[0] = cur->id;
+        Message sread2{};
+        sread2.sender_id = cur->id;
+        sread2.type = iocd::IOCD_KEYBOARD_READ;
+        sread2.data_size = sizeof(rd2);
+        __builtin_memcpy(sread2.data, &rd2, sizeof(rd2));
+        Message rreply2{};
+        if (!IPC::send_sync(iocd_pid, sread2, rreply2))
+            second_ok = false;
+        else {
+            if (rreply2.data_size < sizeof(iocd::Reply))
+                second_ok = false;
+            else
+                __builtin_memcpy(&rpl2, rreply2.data, sizeof(rpl2));
+        }
+    }
+    char c = 0;
+    bool ring_empty = !arch::Keyboard::getchar(c);
+    iocd::set_keyboard_owned(false);
+    drain_own_inbox();
+    JARVIS_ASSERT_FMT(read_ok, "KEYBOARD_READ send_sync failed");
     JARVIS_ASSERT_FMT(readable, "no decoded byte within 50 ticks");
     JARVIS_ASSERT_FMT(rpl.data[0] == static_cast<uint64_t>('a'),
                       "decoded byte 0x%lx != 'a'", rpl.data[0]);
-
-    // Exactly-once: second read is empty.
-    iocd::Msg rd2{};
-    rd2.type = iocd::IOCD_KEYBOARD_READ;
-    rd2.args[0] = cur->id;
-    Message sread2{};
-    sread2.sender_id = cur->id;
-    sread2.type = iocd::IOCD_KEYBOARD_READ;
-    sread2.data_size = sizeof(rd2);
-    __builtin_memcpy(sread2.data, &rd2, sizeof(rd2));
-    Message rreply2{};
-    JARVIS_ASSERT_FMT(IPC::send_sync(iocd_pid, sread2, rreply2),
-                      "second KEYBOARD_READ send_sync failed");
-    iocd::Reply rpl2{};
-    __builtin_memcpy(&rpl2, rreply2.data, sizeof(rpl2));
+    JARVIS_ASSERT_FMT(second_ok, "second KEYBOARD_READ send_sync failed");
     JARVIS_ASSERT_FMT(rpl2.result == 0, "queue not drained (result %ld)",
                       rpl2.result);
-    drain_own_inbox();
+    JARVIS_ASSERT_FMT(ring_empty,
+                      "double delivery: byte also in kernel ring");
     JARVIS_TEST_PASS();
 }
 

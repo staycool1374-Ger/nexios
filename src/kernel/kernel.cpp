@@ -108,6 +108,17 @@ using namespace arch;
 // the boot context (IF=0, where reschedule()+hlt() would hang).
 static bool g_run_tests = false;
 
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_THREADED_IRQS
+// Issue #340 P1: threaded keyboard handler (IrqThread task context —
+// the ONLY context in which handle_irq may IPC-forward to iocd).
+// Named (not a lambda) so the single IPC-capable call site stays
+// grep-visible for audit. The non-threaded IDT path below runs in
+// ISR context where try_forward_to_iocd refuses by isr_nesting.
+static void keyboard_threaded_handler(uint64_t, uint64_t, uint64_t) {
+    arch::Keyboard::handle_irq();
+}
+#endif
+
 // ── init_task_main ──────────────────────────────────────────────────────
 // Init task entry point for PID 1.  Mounts fstab, runs /etc/rc, then
 // blocks as reaper.  Referenced by both the manual pre-test create (below)
@@ -642,12 +653,15 @@ void init_task_main() {
     // IrqThread task).  Only in interactive mode (no test suite): during the
     // test run keyboard input is unused and a persistent IrqThread task would
     // perturb snapshot-isolation task-count expectations.
+    // Issue #340 P1: the threaded handler runs handle_irq() in IrqThread
+    // task context, where try_forward_to_iocd may IPC-send to iocd. The
+    // non-threaded IDT path below runs in ISR context: handle_irq detects
+    // that via isr_nesting and takes the decode-only legacy branch (it
+    // must never IPC-send — §11.1). Named function (not a lambda) so the
+    // single IPC-capable call site stays grep-visible for audit.
     if (!g_run_tests) {
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_THREADED_IRQS
-    kernel::IrqThread::create(33, 50,
-                              [](uint64_t, uint64_t, uint64_t) {
-                                  arch::Keyboard::handle_irq();
-                              },
+    kernel::IrqThread::create(33, 50, keyboard_threaded_handler,
                               [](uint8_t vector) {
                                   // x86_64: send APIC EOI + PIC EOI
                                   if (arch::APIC::is_enabled())

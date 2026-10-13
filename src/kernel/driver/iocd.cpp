@@ -46,5 +46,23 @@ bool is_iocd_task() {
     return cur && cur->id == g_iocd_pid;
 }
 
+namespace {
+
+// Keyboard ownership cell (issue #340 P1): atomic access everywhere,
+// including the handle_irq read side. Snapshot-covered.
+bool g_keyboard_owned = false;
+
+} // namespace
+
+/// @brief Keyboard ownership for input routing (issue #340 P1).
+bool is_keyboard_owned() {
+    return __atomic_load_n(&g_keyboard_owned, __ATOMIC_ACQUIRE);
+}
+
+/// @brief Set or clear keyboard ownership.
+void set_keyboard_owned(bool owned) {
+    __atomic_store_n(&g_keyboard_owned, owned, __ATOMIC_RELEASE);
+}
+
 } // namespace iocd
 } // namespace kernel

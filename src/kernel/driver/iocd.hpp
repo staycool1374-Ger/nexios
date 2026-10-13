@@ -52,8 +52,19 @@ void set_iocd_pid(uint64_t pid);
 /// @return The PID, or 0 if not yet set.
 uint64_t get_iocd_pid();
 /// @brief Check if the current task is the IOCD.
-/// @return true if the current task's PID matches the IOCD PID.
+/// @return true if the current task's PID matches the recorded IOCD PID.
 bool is_iocd_task();
+/// @brief Keyboard ownership for input routing (issue #340 P1).
+/// False (default) = legacy: kernel handle_irq pushes its ring, shell
+/// polls hardware. True = daemon-owned: handle_irq forwards raw
+/// scancodes to iocd (never both — single-ownership invariant).
+/// Set only by explicit consumers (shell, tests); fail-open per
+/// keystroke on daemon-down/ISR-context regardless of the flag.
+/// Snapshot-covered (test isolation restores it like daemon PIDs).
+bool is_keyboard_owned();
+/// @brief Set or clear keyboard ownership.
+/// @param owned True to route keyboard bytes through iocd.
+void set_keyboard_owned(bool owned);
 
 } // namespace iocd
 } // namespace kernel
