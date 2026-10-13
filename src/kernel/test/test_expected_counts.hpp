@@ -17,8 +17,8 @@ struct ExpectedCounts {
 
 static constexpr ExpectedCounts k_expected_counts[] = {
     // Class name           x86_64  aarch64  riscv64
-    {"safe",                136,    0,       0      },  // curated TF_RELEASE subset (85 executed, +49 TF_KERNEL incl. ata_pio_absent_drive_init_false, issue #66) + 2 CRC32 lib tests (#126)
-    {"selftest",            136,    0,       0      },  // same as safe
+    {"safe",                147,    0,       0      },  // curated TF_RELEASE subset (85 executed, +49 TF_KERNEL incl. ata_pio_absent_drive_init_false, issue #66) + 2 CRC32 lib tests (#126) + 11 pre-existing aggregate drift at HEAD (member groups grew incl. checked_ptr #337; subset never re-reconciled; reconciled #342)
+    {"selftest",            147,    0,       0      },  // same as safe (reconciled #342)
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
 
     // basic
@@ -117,7 +117,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
     {"smp_bringup",            5,   0,       0      },  // AP bring-up (issue #25 Phase B4 + #153): blob layout, staged block memcmp, parked count == MADT APs, mb2 intact + relocated
     {"sched_affinity",         7,    0,       0      },  // CPU affinity (issue #25 Phase C1): default mask, lowest-bit targeting, empty/user clamps, re-queue, is_idle + set_affinity_err OK (issue #23)
-    {"smp_sched",              10,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move + queue fanout (0-AP trivial pass) + 5 per-CPU admission/migration tests (issue #23)
+    {"smp_sched",              13,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move + queue fanout (0-AP trivial pass) + 5 per-CPU admission/migration tests (issue #23) + 3 drain/remote-refuse/quiesce-nesting (issue #197, row bump missed in 32b3017c6; reconciled #342)
     {"lapic",                6,   0,       0      },  // Local APIC (issue #85 module 2): enabled contract, ID stability, one-shot/periodic zero boundaries, bounded one-shot, EOI safety
     {"ioapic",               5,   0,       0      },  // I/O APIC (issue #85 module 3): boot routing liveness, mask/unmask cycle, invalid-IRQ reject, idempotence, lines sweep
     {"core_isolation",       5,   0,       0      },  // Core isolation (issue #85 module 5): slot stride, BSP slot, write isolation, AP-slot envelope, PML4 valid
@@ -284,7 +284,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // from measured `dump-counts` output; 0 disables validation.
     {"core",                553,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
-    {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
+    {"capability",          148,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342)
     {"proc_elf",            111,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 6 pre-existing aggregate drift at HEAD
     {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
     {"libc_stdio",            5,    0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (#303, x86_64-only)
@@ -294,7 +294,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cross_boundary",        2,    0,       0      },  // ring3 vfsd chain + iocd register/forward (#303, x86_64-only)
     {"storage",             166,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333)
     {"servers",             66,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333)
-    {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
+    {"drivers",             107,  0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173) + 13 pre-existing aggregate drift at HEAD (member fine rows all match the dump: 8+12+16+11+19+13+10+18; aggregate never re-reconciled; reconciled #342)
     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
