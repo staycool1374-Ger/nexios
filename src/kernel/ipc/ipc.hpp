@@ -21,8 +21,6 @@
 /// @file ipc.hpp
 /// @brief Priority-based IPC — send, recv, events, notifications.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/sync/spinlock.hpp>

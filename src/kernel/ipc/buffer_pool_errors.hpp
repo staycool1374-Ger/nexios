@@ -21,8 +21,6 @@
 /// @file buffer_pool_errors.hpp
 /// @brief Buffer pool error codes (X-macro table with human-readable strings).
 
-#pragma once
-
 #include <types.hpp>
 #include <assert.hpp>
 

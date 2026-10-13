@@ -22,8 +22,6 @@
 /// @brief Zero-copy buffer pool — allocate, transfer, map, free buffers via
 /// handles.
 
-#pragma once
-
 #include <types.hpp>
 #include <constants.hpp>
 #include <kernel/memory/checked_ptr.hpp>
