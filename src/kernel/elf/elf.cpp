@@ -636,8 +636,6 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     tcb->pcid_ = arch::pcid_alloc();
 #endif
 
-    open_std_fds(*tcb);
-
     if (!finalize_user_tcb_tail(tcb, hdr, ustack_phys, phdr_image,
                                 file_size)) {
         tcb->cleanup();
@@ -655,6 +653,9 @@ bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
                             uint64_t file_size) {
     if (!tcb || !hdr || !phdr_image)
         return false;
+    // Issue #271 P2: the rerun builder shares this tail, so std fds are
+    // wired here (single funnel) — first-run TCBs get byte-identical init.
+    open_std_fds(*tcb);
     tcb->user_stack_ = ustack_phys;
     tcb->user_stack_size_ = mem::STACK_SIZE;
     tcb->program_break_start = mem::HEAP_VADDR;

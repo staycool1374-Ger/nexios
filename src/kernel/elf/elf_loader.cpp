@@ -333,6 +333,11 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
             continue;
         if (pin_off + phdr->filesz > kMaxRerunWritableBytes)
             return;
+        // S3 hardening: cap the BSS span too — an enormous RW memsz
+        // would otherwise drive allocate-until-OOM in the builder.
+        // Bound total mapped span the same as file bytes.
+        if (phdr->memsz > kMaxRerunWritableBytes)
+            return;
         if (pr >= kMaxPinRanges)
             return;
         if (!copy_user_range(tcb->page_table_, phdr->vaddr, phdr->filesz,
@@ -401,6 +406,16 @@ void ElfLoader::drop_task_ref_locked() {
         }
         retention_ = Retention{};
     }
+}
+
+// try_rerun bumped task_refs at the gate; a concurrent adopt swaps the
+// whole Retention (new epoch). Dropping against the new set corrupts its
+// count (1->0 while the new mapper is live -> a later abandon frees live
+// golden). Drop only when our epoch is still current; an abandoned
+// (invalid) retention needs no drop, a replaced one owns no ref of ours.
+void ElfLoader::drop_builder_ref_locked(uint64_t epoch) {
+    if (retention_.valid && retention_.epoch == epoch)
+        drop_task_ref_locked();
 }
 
 void ElfLoader::unmap_golden(TaskControlBlock *tcb) {
@@ -551,7 +566,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
     if (!pml4) {
         arch::IrqGuard irq_guard{};
         SpinLockGuard<sync::SpinLock> guard(lock_);
-        drop_task_ref_locked(); // release our builder ref
+        drop_builder_ref_locked(view.epoch); // release our builder ref
         if (reason) *reason = kRebuildPml4;
         return nullptr;
     }
@@ -560,7 +575,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
     // aligned reads); a torn mix from a concurrent supersede is caught
     // by the epoch re-check at publish -> fail-closed refuse.
     size_t gidx = 0;
-    for (size_t r = 0; r < view.range_count; ++r) {
+    for (size_t r = 0; r < view.range_count && r < kMaxGoldenRanges; ++r) {
         for (size_t p = 0; p < view.ranges[r].page_count; ++p) {
             uint64_t va = view.ranges[r].vaddr + p * arch::PAGE_SIZE;
             bool map_ok = true;
@@ -580,7 +595,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
                 arch::IrqGuard irq_guard{};
                 SpinLockGuard<sync::SpinLock> guard(lock_);
                 fail_fresh_build_locked(pml4, view.ranges, view.range_count);
-                drop_task_ref_locked();
+                drop_builder_ref_locked(view.epoch);
                 if (reason) *reason = kRebuildGolden;
                 return nullptr;
             }
@@ -602,7 +617,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             arch::IrqGuard irq_guard{};
             SpinLockGuard<sync::SpinLock> guard(lock_);
             fail_fresh_build_locked(pml4, view.ranges, view.range_count);
-            drop_task_ref_locked();
+            drop_builder_ref_locked(view.epoch);
             if (reason) *reason = kRebuildStack;
             return nullptr;
         }
@@ -624,7 +639,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             arch::IrqGuard irq_guard{};
             SpinLockGuard<sync::SpinLock> guard(lock_);
             fail_fresh_build_locked(pml4, view.ranges, view.range_count);
-            drop_task_ref_locked();
+            drop_builder_ref_locked(view.epoch);
             if (reason) *reason = kRebuildHeap;
             return nullptr;
         }
@@ -636,7 +651,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
     }
     // Allocate fresh writable pages for RW segments (full memsz span,
     // zeroed incl. BSS tails), then copy pin file bytes into them.
-    for (size_t i = 0; i < view.pin_count; ++i) {
+    for (size_t i = 0; i < view.pin_count && i < kMaxPinRanges; ++i) {
         uint64_t base = view.pin_ranges[i].vaddr & ~(arch::PAGE_SIZE - 1);
         uint64_t top = view.pin_ranges[i].vaddr + view.pin_ranges[i].memsz;
         uint64_t end = (top + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
@@ -646,18 +661,28 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
                 arch::IrqGuard irq_guard{};
                 SpinLockGuard<sync::SpinLock> guard(lock_);
                 fail_fresh_build_locked(pml4, view.ranges, view.range_count);
-                drop_task_ref_locked();
+                drop_builder_ref_locked(view.epoch);
                 if (reason) *reason = kRebuildPin;
                 return nullptr;
             }
             VMM::map_page_in_pml4(va, wp, true, pml4);
+            if (VMM::virt_to_phys_in_pml4(va, pml4) != wp) {
+                // Silent map failure: free the orphan page, then fail.
+                PMM::free_page(wp);
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_builder_ref_locked(view.epoch);
+                if (reason) *reason = kRebuildPin;
+                return nullptr;
+            }
             __builtin_memset(reinterpret_cast<void*>(arch::HHDM_OFFSET + wp),
                              0, arch::PAGE_SIZE);
         }
     }
     // Copy writable pin bytes. Pin bytes stream from retention_
     // (torn mix on concurrent supersede -> epoch refuse at publish).
-    for (size_t i = 0; i < view.pin_count; ++i) {
+    for (size_t i = 0; i < view.pin_count && i < kMaxPinRanges; ++i) {
         uint64_t va = view.pin_ranges[i].vaddr;
         uint64_t off = view.pin_ranges[i].pin_off;
         uint64_t len = view.pin_ranges[i].len;
@@ -666,7 +691,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             arch::IrqGuard irq_guard{};
             SpinLockGuard<sync::SpinLock> guard(lock_);
             fail_fresh_build_locked(pml4, view.ranges, view.range_count);
-            drop_task_ref_locked();
+            drop_builder_ref_locked(view.epoch);
             if (reason) *reason = kRebuildPin;
             return nullptr;
         }
@@ -684,7 +709,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
                 arch::IrqGuard irq_guard{};
                 SpinLockGuard<sync::SpinLock> guard(lock_);
                 fail_fresh_build_locked(pml4, view.ranges, view.range_count);
-                drop_task_ref_locked();
+                drop_builder_ref_locked(view.epoch);
                 if (reason) *reason = kRebuildPin;
                 return nullptr;
             }
@@ -702,7 +727,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
         arch::IrqGuard irq_guard{};
         SpinLockGuard<sync::SpinLock> guard(lock_);
         fail_fresh_build_locked(pml4, view.ranges, view.range_count);
-        drop_task_ref_locked();
+        drop_builder_ref_locked(view.epoch);
         if (reason) *reason = kRebuildTcb;
         return nullptr;
     }
@@ -765,7 +790,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
         arch::IrqGuard irq_guard{};
         SpinLockGuard<sync::SpinLock> guard(lock_);
         fail_fresh_build_locked(pml4, view.ranges, view.range_count);
-        drop_task_ref_locked();
+        drop_builder_ref_locked(view.epoch);
         if (reason) *reason = kRebuildKstack;
         return nullptr;
     }
@@ -798,8 +823,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             SpinLockGuard<sync::SpinLock> guard(lock_);
             unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
                                       view.range_count);
-            tcb->page_table_ = 0;
-            drop_task_ref_locked();
+            drop_builder_ref_locked(view.epoch);
         }
         destroy_completed_tcb(tcb);
         if (reason) *reason = kRebuildFinal;
@@ -811,7 +835,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
     {
         uint32_t acc = CRC32::INITIAL;
         bool scan_ok = true;
-        for (size_t i = 0; i < view.ro_count && scan_ok; ++i) {
+        for (size_t i = 0; i < view.ro_count && i < TaskControlBlock::kMaxRoRanges && scan_ok; ++i) {
             uint64_t vs = view.ro_ranges[i].vaddr;
             uint64_t ve = vs + view.ro_ranges[i].len;
             uint64_t cs = view.canary_slot;
@@ -838,8 +862,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
                 SpinLockGuard<sync::SpinLock> guard(lock_);
                 unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
                                           view.range_count);
-                tcb->page_table_ = 0;
-                drop_task_ref_locked();
+                drop_builder_ref_locked(view.epoch);
             }
             destroy_completed_tcb(tcb);
             if (reason) *reason = kRebuildScan;
@@ -882,8 +905,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             SpinLockGuard<sync::SpinLock> guard(lock_);
             unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
                                       view.range_count);
-            tcb->page_table_ = 0;
-            drop_task_ref_locked();
+            drop_builder_ref_locked(view.epoch);
         }
         destroy_completed_tcb(tcb);
         if (reason) *reason = kRebuildSup;

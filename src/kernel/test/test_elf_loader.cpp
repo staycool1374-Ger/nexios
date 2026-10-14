@@ -922,6 +922,10 @@ JARVIS_TEST(rerun_byte_identity_deleted_file, "PRE: none | POST: none") {
     uint64_t wphys = VMM::virt_to_phys_in_pml4(0x402000, t2->page_table_);
     uint8_t first = *reinterpret_cast<uint8_t*>(arch::HHDM_OFFSET + wphys);
     JARVIS_ASSERT_FMT(first == 0, "writable pin byte 0x%x != 0", first);
+    // Std fds 0/1/2 wired (would have caught the missing open_std_fds).
+    JARVIS_ASSERT(t2->fd_table.fds[0].used);
+    JARVIS_ASSERT(t2->fd_table.fds[1].used);
+    JARVIS_ASSERT(t2->fd_table.fds[2].used);
     // Never-added TCB: destroy path (no scheduler-touching cleanup).
     // unmap_golden drops our builder ref; destroy frees the rest.
     elf::ElfLoader::unmap_golden(t2);

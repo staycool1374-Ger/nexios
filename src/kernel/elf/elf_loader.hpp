@@ -299,6 +299,11 @@ class ElfLoader {
     static void fill_staging_locked(TaskControlBlock *tcb);
     static void adopt_staging_locked();
     static void drop_task_ref_locked();
+    // Drop the try_rerun builder ref ONLY if retention still refers to
+    // the epoch the builder snapshotted: a concurrent adopt swaps the
+    // whole Retention (new epoch, new owner), and an unconditional drop
+    // would corrupt the new set's count. Assumes lock_ held + IRQ-masked.
+    static void drop_builder_ref_locked(uint64_t epoch);
     // Unwind a half-built rerun table: unmap retained-golden VAs (no ref
     // change — caller drops separately), free the rest, free the PML4.
     // Assumes lock_ held + IRQ-masked by the caller.

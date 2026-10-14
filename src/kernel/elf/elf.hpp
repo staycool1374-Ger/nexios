@@ -176,8 +176,10 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
 /// text/data/bss sizes, TLS guard. Factored from finalize_loaded_task
 /// so the rerun builder produces a byte-identical init (a hand-rolled
 /// tail diverges and panics in teardown).
-/// @return false on failure (caller runs destroy path, never touches
-///         retention refs — finalize's internal cleanup already did).
+/// @return false on failure WITHOUT any teardown (the tail never owns
+///         the address space or retention refs — the caller unmaps its
+///         own golden pages, drops its builder ref, then runs destroy;
+///         never cleanup on the never-added TCB).
 bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
                             uint64_t ustack_phys, const uint8_t *phdr_image,
                             uint64_t file_size);
