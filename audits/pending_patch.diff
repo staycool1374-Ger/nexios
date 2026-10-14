@@ -1,274 +1,283 @@
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 540356d00..959a1b21e 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -636,8 +636,6 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
-     tcb->pcid_ = arch::pcid_alloc();
- #endif
- 
--    open_std_fds(*tcb);
--
-     if (!finalize_user_tcb_tail(tcb, hdr, ustack_phys, phdr_image,
-                                 file_size)) {
-         tcb->cleanup();
-@@ -655,6 +653,9 @@ bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
-                             uint64_t file_size) {
-     if (!tcb || !hdr || !phdr_image)
-         return false;
-+    // Issue #271 P2: the rerun builder shares this tail, so std fds are
-+    // wired here (single funnel) — first-run TCBs get byte-identical init.
-+    open_std_fds(*tcb);
-     tcb->user_stack_ = ustack_phys;
-     tcb->user_stack_size_ = mem::STACK_SIZE;
-     tcb->program_break_start = mem::HEAP_VADDR;
-diff --git a/src/kernel/elf/elf.hpp b/src/kernel/elf/elf.hpp
-index 8ba84a73a..b06dccef4 100644
---- a/src/kernel/elf/elf.hpp
-+++ b/src/kernel/elf/elf.hpp
-@@ -176,8 +176,10 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
- /// text/data/bss sizes, TLS guard. Factored from finalize_loaded_task
- /// so the rerun builder produces a byte-identical init (a hand-rolled
- /// tail diverges and panics in teardown).
--/// @return false on failure (caller runs destroy path, never touches
--///         retention refs — finalize's internal cleanup already did).
-+/// @return false on failure WITHOUT any teardown (the tail never owns
-+///         the address space or retention refs — the caller unmaps its
-+///         own golden pages, drops its builder ref, then runs destroy;
-+///         never cleanup on the never-added TCB).
- bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
-                             uint64_t ustack_phys, const uint8_t *phdr_image,
-                             uint64_t file_size);
-diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
-index 2bfb80da5..a09cbf484 100644
---- a/src/kernel/elf/elf_loader.cpp
-+++ b/src/kernel/elf/elf_loader.cpp
-@@ -333,6 +333,11 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
-             continue;
-         if (pin_off + phdr->filesz > kMaxRerunWritableBytes)
-             return;
-+        // S3 hardening: cap the BSS span too — an enormous RW memsz
-+        // would otherwise drive allocate-until-OOM in the builder.
-+        // Bound total mapped span the same as file bytes.
-+        if (phdr->memsz > kMaxRerunWritableBytes)
-+            return;
-         if (pr >= kMaxPinRanges)
-             return;
-         if (!copy_user_range(tcb->page_table_, phdr->vaddr, phdr->filesz,
-@@ -403,6 +408,16 @@ void ElfLoader::drop_task_ref_locked() {
-     }
- }
- 
-+// try_rerun bumped task_refs at the gate; a concurrent adopt swaps the
-+// whole Retention (new epoch). Dropping against the new set corrupts its
-+// count (1->0 while the new mapper is live -> a later abandon frees live
-+// golden). Drop only when our epoch is still current; an abandoned
-+// (invalid) retention needs no drop, a replaced one owns no ref of ours.
-+void ElfLoader::drop_builder_ref_locked(uint64_t epoch) {
-+    if (retention_.valid && retention_.epoch == epoch)
-+        drop_task_ref_locked();
-+}
-+
- void ElfLoader::unmap_golden(TaskControlBlock *tcb) {
-     if (!tcb || !tcb->page_table_)
-         return;
-@@ -551,7 +566,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-     if (!pml4) {
-         arch::IrqGuard irq_guard{};
-         SpinLockGuard<sync::SpinLock> guard(lock_);
--        drop_task_ref_locked(); // release our builder ref
-+        drop_builder_ref_locked(view.epoch); // release our builder ref
-         if (reason) *reason = kRebuildPml4;
-         return nullptr;
-     }
-@@ -560,7 +575,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-     // aligned reads); a torn mix from a concurrent supersede is caught
-     // by the epoch re-check at publish -> fail-closed refuse.
-     size_t gidx = 0;
--    for (size_t r = 0; r < view.range_count; ++r) {
-+    for (size_t r = 0; r < view.range_count && r < kMaxGoldenRanges; ++r) {
-         for (size_t p = 0; p < view.ranges[r].page_count; ++p) {
-             uint64_t va = view.ranges[r].vaddr + p * arch::PAGE_SIZE;
-             bool map_ok = true;
-@@ -580,7 +595,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-                 arch::IrqGuard irq_guard{};
-                 SpinLockGuard<sync::SpinLock> guard(lock_);
-                 fail_fresh_build_locked(pml4, view.ranges, view.range_count);
--                drop_task_ref_locked();
-+                drop_builder_ref_locked(view.epoch);
-                 if (reason) *reason = kRebuildGolden;
-                 return nullptr;
-             }
-@@ -602,7 +617,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-             arch::IrqGuard irq_guard{};
-             SpinLockGuard<sync::SpinLock> guard(lock_);
-             fail_fresh_build_locked(pml4, view.ranges, view.range_count);
--            drop_task_ref_locked();
-+            drop_builder_ref_locked(view.epoch);
-             if (reason) *reason = kRebuildStack;
-             return nullptr;
-         }
-@@ -624,7 +639,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-             arch::IrqGuard irq_guard{};
-             SpinLockGuard<sync::SpinLock> guard(lock_);
-             fail_fresh_build_locked(pml4, view.ranges, view.range_count);
--            drop_task_ref_locked();
-+            drop_builder_ref_locked(view.epoch);
-             if (reason) *reason = kRebuildHeap;
-             return nullptr;
-         }
-@@ -636,7 +651,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-     }
-     // Allocate fresh writable pages for RW segments (full memsz span,
-     // zeroed incl. BSS tails), then copy pin file bytes into them.
--    for (size_t i = 0; i < view.pin_count; ++i) {
-+    for (size_t i = 0; i < view.pin_count && i < kMaxPinRanges; ++i) {
-         uint64_t base = view.pin_ranges[i].vaddr & ~(arch::PAGE_SIZE - 1);
-         uint64_t top = view.pin_ranges[i].vaddr + view.pin_ranges[i].memsz;
-         uint64_t end = (top + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
-@@ -646,18 +661,28 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-                 arch::IrqGuard irq_guard{};
-                 SpinLockGuard<sync::SpinLock> guard(lock_);
-                 fail_fresh_build_locked(pml4, view.ranges, view.range_count);
--                drop_task_ref_locked();
-+                drop_builder_ref_locked(view.epoch);
-                 if (reason) *reason = kRebuildPin;
-                 return nullptr;
-             }
-             VMM::map_page_in_pml4(va, wp, true, pml4);
-+            if (VMM::virt_to_phys_in_pml4(va, pml4) != wp) {
-+                // Silent map failure: free the orphan page, then fail.
-+                PMM::free_page(wp);
-+                arch::IrqGuard irq_guard{};
-+                SpinLockGuard<sync::SpinLock> guard(lock_);
-+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
-+                drop_builder_ref_locked(view.epoch);
-+                if (reason) *reason = kRebuildPin;
-+                return nullptr;
-+            }
-             __builtin_memset(reinterpret_cast<void*>(arch::HHDM_OFFSET + wp),
-                              0, arch::PAGE_SIZE);
-         }
-     }
-     // Copy writable pin bytes. Pin bytes stream from retention_
-     // (torn mix on concurrent supersede -> epoch refuse at publish).
--    for (size_t i = 0; i < view.pin_count; ++i) {
-+    for (size_t i = 0; i < view.pin_count && i < kMaxPinRanges; ++i) {
-         uint64_t va = view.pin_ranges[i].vaddr;
-         uint64_t off = view.pin_ranges[i].pin_off;
-         uint64_t len = view.pin_ranges[i].len;
-@@ -666,7 +691,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-             arch::IrqGuard irq_guard{};
-             SpinLockGuard<sync::SpinLock> guard(lock_);
-             fail_fresh_build_locked(pml4, view.ranges, view.range_count);
--            drop_task_ref_locked();
-+            drop_builder_ref_locked(view.epoch);
-             if (reason) *reason = kRebuildPin;
-             return nullptr;
-         }
-@@ -684,7 +709,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-                 arch::IrqGuard irq_guard{};
-                 SpinLockGuard<sync::SpinLock> guard(lock_);
-                 fail_fresh_build_locked(pml4, view.ranges, view.range_count);
--                drop_task_ref_locked();
-+                drop_builder_ref_locked(view.epoch);
-                 if (reason) *reason = kRebuildPin;
-                 return nullptr;
-             }
-@@ -702,7 +727,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-         arch::IrqGuard irq_guard{};
-         SpinLockGuard<sync::SpinLock> guard(lock_);
-         fail_fresh_build_locked(pml4, view.ranges, view.range_count);
--        drop_task_ref_locked();
-+        drop_builder_ref_locked(view.epoch);
-         if (reason) *reason = kRebuildTcb;
-         return nullptr;
-     }
-@@ -765,7 +790,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-         arch::IrqGuard irq_guard{};
-         SpinLockGuard<sync::SpinLock> guard(lock_);
-         fail_fresh_build_locked(pml4, view.ranges, view.range_count);
--        drop_task_ref_locked();
-+        drop_builder_ref_locked(view.epoch);
-         if (reason) *reason = kRebuildKstack;
-         return nullptr;
-     }
-@@ -798,8 +823,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-             SpinLockGuard<sync::SpinLock> guard(lock_);
-             unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
-                                       view.range_count);
--            tcb->page_table_ = 0;
--            drop_task_ref_locked();
-+            drop_builder_ref_locked(view.epoch);
-         }
-         destroy_completed_tcb(tcb);
-         if (reason) *reason = kRebuildFinal;
-@@ -811,7 +835,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-     {
-         uint32_t acc = CRC32::INITIAL;
-         bool scan_ok = true;
--        for (size_t i = 0; i < view.ro_count && scan_ok; ++i) {
-+        for (size_t i = 0; i < view.ro_count && i < TaskControlBlock::kMaxRoRanges && scan_ok; ++i) {
-             uint64_t vs = view.ro_ranges[i].vaddr;
-             uint64_t ve = vs + view.ro_ranges[i].len;
-             uint64_t cs = view.canary_slot;
-@@ -838,8 +862,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-                 SpinLockGuard<sync::SpinLock> guard(lock_);
-                 unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
-                                           view.range_count);
--                tcb->page_table_ = 0;
--                drop_task_ref_locked();
-+                drop_builder_ref_locked(view.epoch);
-             }
-             destroy_completed_tcb(tcb);
-             if (reason) *reason = kRebuildScan;
-@@ -882,8 +905,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
-             SpinLockGuard<sync::SpinLock> guard(lock_);
-             unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
-                                       view.range_count);
--            tcb->page_table_ = 0;
--            drop_task_ref_locked();
-+            drop_builder_ref_locked(view.epoch);
-         }
-         destroy_completed_tcb(tcb);
-         if (reason) *reason = kRebuildSup;
-diff --git a/src/kernel/elf/elf_loader.hpp b/src/kernel/elf/elf_loader.hpp
-index 725351836..12998ecaf 100644
---- a/src/kernel/elf/elf_loader.hpp
-+++ b/src/kernel/elf/elf_loader.hpp
-@@ -299,6 +299,11 @@ class ElfLoader {
-     static void fill_staging_locked(TaskControlBlock *tcb);
-     static void adopt_staging_locked();
-     static void drop_task_ref_locked();
-+    // Drop the try_rerun builder ref ONLY if retention still refers to
-+    // the epoch the builder snapshotted: a concurrent adopt swaps the
-+    // whole Retention (new epoch, new owner), and an unconditional drop
-+    // would corrupt the new set's count. Assumes lock_ held + IRQ-masked.
-+    static void drop_builder_ref_locked(uint64_t epoch);
-     // Unwind a half-built rerun table: unmap retained-golden VAs (no ref
-     // change — caller drops separately), free the rest, free the PML4.
-     // Assumes lock_ held + IRQ-masked by the caller.
 diff --git a/src/kernel/test/test_elf_loader.cpp b/src/kernel/test/test_elf_loader.cpp
-index 62cc99118..5f5dbed00 100644
+index 5f5dbed00..3990c05bd 100644
 --- a/src/kernel/test/test_elf_loader.cpp
 +++ b/src/kernel/test/test_elf_loader.cpp
-@@ -922,6 +922,10 @@ JARVIS_TEST(rerun_byte_identity_deleted_file, "PRE: none | POST: none") {
-     uint64_t wphys = VMM::virt_to_phys_in_pml4(0x402000, t2->page_table_);
-     uint8_t first = *reinterpret_cast<uint8_t*>(arch::HHDM_OFFSET + wphys);
-     JARVIS_ASSERT_FMT(first == 0, "writable pin byte 0x%x != 0", first);
-+    // Std fds 0/1/2 wired (would have caught the missing open_std_fds).
-+    JARVIS_ASSERT(t2->fd_table.fds[0].used);
-+    JARVIS_ASSERT(t2->fd_table.fds[1].used);
-+    JARVIS_ASSERT(t2->fd_table.fds[2].used);
-     // Never-added TCB: destroy path (no scheduler-touching cleanup).
-     // unmap_golden drops our builder ref; destroy frees the rest.
-     elf::ElfLoader::unmap_golden(t2);
+@@ -29,6 +29,7 @@
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/memory/vmm.hpp>
++#include <kernel/memory/pmm.hpp>
+ #include <kernel/memory/integrity.hpp>
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/log/ring_buffer.hpp>
+@@ -976,6 +977,229 @@ JARVIS_TEST(rerun_refusal_matrix, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Issue #271 P3: decay Refused pre-publish — corrupt one golden byte
++// (HHDM phys write, simulating bit-rot) and the rerun build must
++// refuse with kRebuildScan before publishing any TCB. Retention stays
++// valid (builder never adopts on refuse).
++JARVIS_TEST(rerun_auth_decay_refused, "PRE: none | POST: none") {
++    elf::ElfLoader::reset();
++    uint8_t img[8192];
++    elf::ELF64Header hdr{};
++    uint64_t sz = build_rw_elf(&hdr, img);
++    JARVIS_ASSERT(write_file("/tmp/decay.elf", img, sz) == sz);
++    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/decay.elf") ==
++                  elf::LoadResult::OK);
++    elf::ElfLoader::wait_loader_idle();
++    auto *t1 = elf::ElfLoader::take_completed();
++    JARVIS_ASSERT(t1 != nullptr);
++    JARVIS_ASSERT(elf::ElfLoader::has_retained());
++    uint64_t id1 = t1->id;
++    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->page_table_);
++    JARVIS_ASSERT(g0 != 0);
++    elf::ElfLoader::note_launched(id1);
++    elf::ElfLoader::note_task_end(id1, true, 0);
++    t1->cleanup();
++    delete t1;
++    // Corrupt one golden byte past the TEXT canary slot [base, base+8).
++    uint8_t *decayed = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
++                                                   g0 + 0x100);
++    uint8_t orig = *decayed;
++    *decayed = static_cast<uint8_t>(orig ^ 0xFF);
++    const char *reason = nullptr;
++    auto *t2 = elf::ElfLoader::try_rerun(&reason);
++    JARVIS_ASSERT(t2 == nullptr);
++    JARVIS_ASSERT(reason != nullptr);
++    // Retention intact (refuse path adopts nothing, clobbers nothing).
++    JARVIS_ASSERT(elf::ElfLoader::has_retained());
++    *decayed = orig; // restore before teardown accounting
++    elf::ElfLoader::reset();
++    cleanup_file("/tmp/decay.elf");
++    JARVIS_TEST_PASS();
++}
++
++// Issue #271 P3: canary + RO-perm pins on the RERUN table — DATA-after,
++// stack and heap slots hold live derived magic after a rerun build,
++// TEXT-before is untouched since load (shared phys), and golden PTEs
++// are RW-clear with NX following PF_X.
++JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
++    elf::ElfLoader::reset();
++    uint8_t img[8192];
++    elf::ELF64Header hdr{};
++    uint64_t sz = build_rw_elf(&hdr, img);
++    JARVIS_ASSERT(write_file("/tmp/canary.elf", img, sz) == sz);
++    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/canary.elf") ==
++                  elf::LoadResult::OK);
++    elf::ElfLoader::wait_loader_idle();
++    auto *t1 = elf::ElfLoader::take_completed();
++    JARVIS_ASSERT(t1 != nullptr);
++    uint64_t id1 = t1->id;
++    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->page_table_);
++    JARVIS_ASSERT(g0 != 0);
++    elf::ElfLoader::note_launched(id1);
++    elf::ElfLoader::note_task_end(id1, true, 0);
++    t1->cleanup();
++    delete t1;
++    const char *reason = nullptr;
++    auto *t2 = elf::ElfLoader::try_rerun(&reason);
++    JARVIS_ASSERT_FMT(t2 != nullptr, "rerun failed: %s", reason ? reason : "?");
++    auto read8 = [](uint64_t va, uint64_t pml4, uint64_t &out) {
++        uint64_t phys = VMM::virt_to_phys_in_pml4(va, pml4);
++        if (!phys)
++            return false;
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        __builtin_memcpy(&out, reinterpret_cast<const void *>(
++                                    arch::HHDM_OFFSET + phys),
++                         8);
++        return true;
++    };
++    const uint64_t text = TaskControlBlock::SEG_TEXT;
++    const uint64_t heap = TaskControlBlock::SEG_HEAP;
++    const uint64_t stk = TaskControlBlock::SEG_STACK;
++    JARVIS_ASSERT(t2->canary_installed & (1u << text));
++    JARVIS_ASSERT(t2->canary_installed & (1u << heap));
++    JARVIS_ASSERT(t2->canary_installed & (1u << stk));
++    // TEXT-before: shared phys since load (selective skip), live magic.
++    uint64_t tb = 0;
++    JARVIS_ASSERT(read8(t2->canary_before[text], t2->page_table_, tb));
++    JARVIS_ASSERT(tb == (TaskControlBlock::CANARY_MAGIC ^ (text + 1)));
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(t2->canary_before[text],
++                                            t2->page_table_) == g0);
++    // HEAP + STACK slots: fresh pages, live derived magic both ends.
++    uint64_t live = 0;
++    JARVIS_ASSERT(read8(t2->canary_before[heap], t2->page_table_, live));
++    JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (heap + 1)));
++    JARVIS_ASSERT(read8(t2->canary_after[heap], t2->page_table_, live));
++    JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (heap + 1)));
++    JARVIS_ASSERT(read8(t2->canary_before[stk], t2->page_table_, live));
++    JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (stk + 1)));
++    JARVIS_ASSERT(read8(t2->canary_after[stk], t2->page_table_, live));
++    JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (stk + 1)));
++    // RO perms on the rerun table: code RO+exec, data writable.
++    bool exec = false;
++    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(0x400000, t2->page_table_, &exec));
++    JARVIS_ASSERT(exec);
++    JARVIS_ASSERT(
++        !VMM::pte_is_ro_in_pml4(0x402000, t2->page_table_, nullptr));
++    t2->cleanup();
++    delete t2;
++    elf::ElfLoader::reset();
++    cleanup_file("/tmp/canary.elf");
++    JARVIS_TEST_PASS();
++}
++
++// Issue #271 P3: supersede-while-live — take-overwrite during a live
++// run must NOT free golden phys (live mapper owns them through its own
++// teardown); the live task stays byte-correct; everything reclaims
++// after death + drop.
++JARVIS_TEST(rerun_supersede_while_live, "PRE: none | POST: none") {
++    elf::ElfLoader::reset();
++    uint8_t imgA[8192];
++    elf::ELF64Header hdrA{};
++    uint64_t szA = build_rw_elf(&hdrA, imgA);
++    JARVIS_ASSERT(write_file("/tmp/supA.elf", imgA, szA) == szA);
++    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/supA.elf") ==
++                  elf::LoadResult::OK);
++    elf::ElfLoader::wait_loader_idle();
++    auto *tA = elf::ElfLoader::take_completed();
++    JARVIS_ASSERT(tA != nullptr);
++    JARVIS_ASSERT(elf::ElfLoader::has_retained());
++    // tA stays LIVE (no teardown): it is the live mapper.
++    // Second image: same layout, one byte different.
++    uint8_t imgB[8192];
++    elf::ELF64Header hdrB{};
++    uint64_t szB = build_rw_elf(&hdrB, imgB);
++    imgB[sizeof(elf::ELF64Header) +
++         2 * sizeof(elf::ELF64ProgramHeader) + 0x200] = 0xCC;
++    JARVIS_ASSERT(write_file("/tmp/supB.elf", imgB, szB) == szB);
++    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/supB.elf") ==
++                  elf::LoadResult::OK);
++    elf::ElfLoader::wait_loader_idle();
++    auto *tB = elf::ElfLoader::take_completed();
++    JARVIS_ASSERT(tB != nullptr);
++    JARVIS_ASSERT(elf::ElfLoader::has_retained());
++    // Live task still byte-correct: TEXT canary slot holds derived
++    // magic (written at load into the shared golden page), the rest
++    // of the prefix is NOP fill.
++    {
++        uint64_t phys =
++            VMM::virt_to_phys_in_pml4(0x400000, tA->page_table_);
++        JARVIS_ASSERT(phys != 0);
++        uint64_t slot = 0;
++        __builtin_memcpy(&slot, reinterpret_cast<const void *>(
++                                    arch::HHDM_OFFSET + phys),
++                         8);
++        JARVIS_ASSERT_FMT(
++            slot == (TaskControlBlock::CANARY_MAGIC ^ (0 + 1)),
++            "live canary slot 0x%lx != derived", slot);
++    }
++    for (size_t i = 8; i < 24; ++i) {
++        uint64_t phys =
++            VMM::virt_to_phys_in_pml4(0x400000 + i, tA->page_table_);
++        JARVIS_ASSERT(phys != 0);
++        uint8_t b = *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
++        JARVIS_ASSERT_FMT(b == 0x90, "live byte %lu = 0x%x, want NOP", i,
++                          b);
++    }
++    // Teardown live mapper first: no phys match vs R_B, so no drop;
++    // its pages (incl. old golden) free normally — nobody owns them.
++    tA->cleanup();
++    delete tA;
++    // Then the superseding set: matches, drops, frees at reset.
++    tB->cleanup();
++    delete tB;
++    elf::ElfLoader::reset();
++    JARVIS_ASSERT(!elf::ElfLoader::has_retained());
++    cleanup_file("/tmp/supA.elf");
++    cleanup_file("/tmp/supB.elf");
++    JARVIS_TEST_PASS();
++}
++
++// Issue #271 P3 (C8): fork children deep-copy golden pages into
++// private phys, so teardown never disturbs retention counts. Uses the
++// real deep_copy_user_pages primitive (what clone() calls): the copy's
++// golden VA must resolve to DIFFERENT phys; freeing the copy must leave
++// retention valid with refs intact; final teardown stays flat.
++JARVIS_TEST(rerun_fork_child_private_copy, "PRE: none | POST: none") {
++    elf::ElfLoader::reset();
++    uint8_t img[8192];
++    elf::ELF64Header hdr{};
++    uint64_t sz = build_rw_elf(&hdr, img);
++    JARVIS_ASSERT(write_file("/tmp/forkcopy.elf", img, sz) == sz);
++    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/forkcopy.elf") ==
++                  elf::LoadResult::OK);
++    elf::ElfLoader::wait_loader_idle();
++    auto *tA = elf::ElfLoader::take_completed();
++    JARVIS_ASSERT(tA != nullptr);
++    JARVIS_ASSERT(elf::ElfLoader::has_retained());
++    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, tA->page_table_);
++    JARVIS_ASSERT(g0 != 0);
++    // Fork-equivalent: deep-copy the whole address space into a fresh
++    // PML4, like clone() does for a fork child.
++    uint64_t child_pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(child_pml4 != 0);
++    JARVIS_ASSERT(VMM::deep_copy_user_pages(tA->page_table_, child_pml4));
++    uint64_t gc = VMM::virt_to_phys_in_pml4(0x400000, child_pml4);
++    JARVIS_ASSERT(gc != 0);
++    JARVIS_ASSERT_FMT(gc != g0, "fork copy shares golden phys 0x%lx", gc);
++    // Copy content identical (deep copy, not empty).
++    uint8_t b0 = *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + g0 + 0x100);
++    uint8_t bc = *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + gc + 0x100);
++    JARVIS_ASSERT_FMT(b0 == bc, "copy byte 0x%x != orig 0x%x", bc, b0);
++    // Teardown copy via blind free (never mapped golden-shared — all
++    // phys private, so no unmap needed and no ref may drop).
++    VMM::free_user_pages(child_pml4);
++    PMM::free_page(child_pml4);
++    // Retention intact: still valid (refs untouched by private copy).
++    JARVIS_ASSERT(elf::ElfLoader::has_retained());
++    // Parent teardown drops its ref normally.
++    tA->cleanup();
++    delete tA;
++    elf::ElfLoader::reset();
++    JARVIS_ASSERT(!elf::ElfLoader::has_retained());
++    cleanup_file("/tmp/forkcopy.elf");
++    JARVIS_TEST_PASS();
++}
++
+ void register_elf_loader_tests() {
+     Logger::info("Registering background ELF loader tests");
+     JARVIS_REGISTER_TEST(loader_load_success);
+@@ -998,4 +1222,8 @@ void register_elf_loader_tests() {
+     JARVIS_REGISTER_TEST(rerun_golden_balance); // #271 P1 balance
+     JARVIS_REGISTER_TEST(rerun_byte_identity_deleted_file); // #271 P2 byte-identity
+     JARVIS_REGISTER_TEST(rerun_refusal_matrix); // #271 P2 refusals
++    JARVIS_REGISTER_TEST(rerun_auth_decay_refused); // #271 P3 auth-decay
++    JARVIS_REGISTER_TEST(rerun_canary_perm_pins); // #271 P3 canary+perm
++    JARVIS_REGISTER_TEST(rerun_supersede_while_live); // #271 P3 supersede
++    JARVIS_REGISTER_TEST(rerun_fork_child_private_copy); // #271 P3 fork (C8)
+ }
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 70901df91..920bd4312 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -75,7 +75,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // process
+     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
+     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
+-    {"elf_loader",            20,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp + #271 P0 RO-perm pin + P1 retention/balance + P2 byte-identity/refusals)
++    {"elf_loader",            24,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp + #271 P0 RO-perm pin + P1 retention/balance + P2 byte-identity/refusals + P3 decay/canary/supersede/fork)
+     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)
+     {"process_signals",       8,    0,       0      },  // signal delivery/handling
+     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
+@@ -285,7 +285,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"core",                554,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 1 ring3 errno cell (#338) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
+     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
+     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
+-    {"proc_elf",            118,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD
++    {"proc_elf",            122,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD
+     {"libc_verify",          8,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77) + Ring-3 create/trunc flag-translation probe (#341)
+     {"libc_stdio",            5,    0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (#303, x86_64-only)
+     {"libc_malloc",           5,    0,       0      },  // malloc0/align/calloc/realloc+OOM/cycle-no-leak (#303, x86_64-only)
 diff --git a/test-history.txt b/test-history.txt
-index 2a8f70f23..8251595b0 100644
+index 8251595b0..91b7c6800 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -3418,3 +3418,5 @@ SUMMARY: total=20 ok=18 fail=2
- 2026-10-13 16:12:00 servers PASSED: 66 FAILED: 0 TIME: 8197ms
- 2026-10-13 16:30:00 elf_loader PASSED: 18 FAILED: 0 TIME: 2840ms NOTE: STALL attempt 1/2, retry green
+@@ -3420,3 +3420,5 @@ SUMMARY: total=20 ok=18 fail=2
  2026-10-13 19:10:00 elf_loader PASSED: 18 FAILED: 0 TIME: 2840ms NOTE: re-audit after IrqGuard+abandon fixes, retry green
-+2026-10-14 10:45:00 elf_loader PASSED: 20 FAILED: 0 TIME: 3393ms
-+2026-10-14 10:52:00 proc_elf PASSED: 118 FAILED: 0 TIME: 67330ms
+ 2026-10-14 10:45:00 elf_loader PASSED: 20 FAILED: 0 TIME: 3393ms
+ 2026-10-14 10:52:00 proc_elf PASSED: 118 FAILED: 0 TIME: 67330ms
++2026-10-14 11:20:00 elf_loader PASSED: 24 FAILED: 0 TIME: 4156ms
++2026-10-14 11:28:00 proc_elf PASSED: 122 FAILED: 0 TIME: 62830ms

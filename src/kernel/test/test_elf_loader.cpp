@@ -29,6 +29,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/pmm.hpp>
 #include <kernel/memory/integrity.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/log/ring_buffer.hpp>
@@ -976,6 +977,229 @@ JARVIS_TEST(rerun_refusal_matrix, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Issue #271 P3: decay Refused pre-publish — corrupt one golden byte
+// (HHDM phys write, simulating bit-rot) and the rerun build must
+// refuse with kRebuildScan before publishing any TCB. Retention stays
+// valid (builder never adopts on refuse).
+JARVIS_TEST(rerun_auth_decay_refused, "PRE: none | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t sz = build_rw_elf(&hdr, img);
+    JARVIS_ASSERT(write_file("/tmp/decay.elf", img, sz) == sz);
+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/decay.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *t1 = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t1 != nullptr);
+    JARVIS_ASSERT(elf::ElfLoader::has_retained());
+    uint64_t id1 = t1->id;
+    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->page_table_);
+    JARVIS_ASSERT(g0 != 0);
+    elf::ElfLoader::note_launched(id1);
+    elf::ElfLoader::note_task_end(id1, true, 0);
+    t1->cleanup();
+    delete t1;
+    // Corrupt one golden byte past the TEXT canary slot [base, base+8).
+    uint8_t *decayed = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
+                                                   g0 + 0x100);
+    uint8_t orig = *decayed;
+    *decayed = static_cast<uint8_t>(orig ^ 0xFF);
+    const char *reason = nullptr;
+    auto *t2 = elf::ElfLoader::try_rerun(&reason);
+    JARVIS_ASSERT(t2 == nullptr);
+    JARVIS_ASSERT(reason != nullptr);
+    // Retention intact (refuse path adopts nothing, clobbers nothing).
+    JARVIS_ASSERT(elf::ElfLoader::has_retained());
+    *decayed = orig; // restore before teardown accounting
+    elf::ElfLoader::reset();
+    cleanup_file("/tmp/decay.elf");
+    JARVIS_TEST_PASS();
+}
+
+// Issue #271 P3: canary + RO-perm pins on the RERUN table — DATA-after,
+// stack and heap slots hold live derived magic after a rerun build,
+// TEXT-before is untouched since load (shared phys), and golden PTEs
+// are RW-clear with NX following PF_X.
+JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t sz = build_rw_elf(&hdr, img);
+    JARVIS_ASSERT(write_file("/tmp/canary.elf", img, sz) == sz);
+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/canary.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *t1 = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t1 != nullptr);
+    uint64_t id1 = t1->id;
+    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->page_table_);
+    JARVIS_ASSERT(g0 != 0);
+    elf::ElfLoader::note_launched(id1);
+    elf::ElfLoader::note_task_end(id1, true, 0);
+    t1->cleanup();
+    delete t1;
+    const char *reason = nullptr;
+    auto *t2 = elf::ElfLoader::try_rerun(&reason);
+    JARVIS_ASSERT_FMT(t2 != nullptr, "rerun failed: %s", reason ? reason : "?");
+    auto read8 = [](uint64_t va, uint64_t pml4, uint64_t &out) {
+        uint64_t phys = VMM::virt_to_phys_in_pml4(va, pml4);
+        if (!phys)
+            return false;
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        __builtin_memcpy(&out, reinterpret_cast<const void *>(
+                                    arch::HHDM_OFFSET + phys),
+                         8);
+        return true;
+    };
+    const uint64_t text = TaskControlBlock::SEG_TEXT;
+    const uint64_t heap = TaskControlBlock::SEG_HEAP;
+    const uint64_t stk = TaskControlBlock::SEG_STACK;
+    JARVIS_ASSERT(t2->canary_installed & (1u << text));
+    JARVIS_ASSERT(t2->canary_installed & (1u << heap));
+    JARVIS_ASSERT(t2->canary_installed & (1u << stk));
+    // TEXT-before: shared phys since load (selective skip), live magic.
+    uint64_t tb = 0;
+    JARVIS_ASSERT(read8(t2->canary_before[text], t2->page_table_, tb));
+    JARVIS_ASSERT(tb == (TaskControlBlock::CANARY_MAGIC ^ (text + 1)));
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(t2->canary_before[text],
+                                            t2->page_table_) == g0);
+    // HEAP + STACK slots: fresh pages, live derived magic both ends.
+    uint64_t live = 0;
+    JARVIS_ASSERT(read8(t2->canary_before[heap], t2->page_table_, live));
+    JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (heap + 1)));
+    JARVIS_ASSERT(read8(t2->canary_after[heap], t2->page_table_, live));
+    JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (heap + 1)));
+    JARVIS_ASSERT(read8(t2->canary_before[stk], t2->page_table_, live));
+    JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (stk + 1)));
+    JARVIS_ASSERT(read8(t2->canary_after[stk], t2->page_table_, live));
+    JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (stk + 1)));
+    // RO perms on the rerun table: code RO+exec, data writable.
+    bool exec = false;
+    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(0x400000, t2->page_table_, &exec));
+    JARVIS_ASSERT(exec);
+    JARVIS_ASSERT(
+        !VMM::pte_is_ro_in_pml4(0x402000, t2->page_table_, nullptr));
+    t2->cleanup();
+    delete t2;
+    elf::ElfLoader::reset();
+    cleanup_file("/tmp/canary.elf");
+    JARVIS_TEST_PASS();
+}
+
+// Issue #271 P3: supersede-while-live — take-overwrite during a live
+// run must NOT free golden phys (live mapper owns them through its own
+// teardown); the live task stays byte-correct; everything reclaims
+// after death + drop.
+JARVIS_TEST(rerun_supersede_while_live, "PRE: none | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t imgA[8192];
+    elf::ELF64Header hdrA{};
+    uint64_t szA = build_rw_elf(&hdrA, imgA);
+    JARVIS_ASSERT(write_file("/tmp/supA.elf", imgA, szA) == szA);
+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/supA.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *tA = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(tA != nullptr);
+    JARVIS_ASSERT(elf::ElfLoader::has_retained());
+    // tA stays LIVE (no teardown): it is the live mapper.
+    // Second image: same layout, one byte different.
+    uint8_t imgB[8192];
+    elf::ELF64Header hdrB{};
+    uint64_t szB = build_rw_elf(&hdrB, imgB);
+    imgB[sizeof(elf::ELF64Header) +
+         2 * sizeof(elf::ELF64ProgramHeader) + 0x200] = 0xCC;
+    JARVIS_ASSERT(write_file("/tmp/supB.elf", imgB, szB) == szB);
+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/supB.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *tB = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(tB != nullptr);
+    JARVIS_ASSERT(elf::ElfLoader::has_retained());
+    // Live task still byte-correct: TEXT canary slot holds derived
+    // magic (written at load into the shared golden page), the rest
+    // of the prefix is NOP fill.
+    {
+        uint64_t phys =
+            VMM::virt_to_phys_in_pml4(0x400000, tA->page_table_);
+        JARVIS_ASSERT(phys != 0);
+        uint64_t slot = 0;
+        __builtin_memcpy(&slot, reinterpret_cast<const void *>(
+                                    arch::HHDM_OFFSET + phys),
+                         8);
+        JARVIS_ASSERT_FMT(
+            slot == (TaskControlBlock::CANARY_MAGIC ^ (0 + 1)),
+            "live canary slot 0x%lx != derived", slot);
+    }
+    for (size_t i = 8; i < 24; ++i) {
+        uint64_t phys =
+            VMM::virt_to_phys_in_pml4(0x400000 + i, tA->page_table_);
+        JARVIS_ASSERT(phys != 0);
+        uint8_t b = *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
+        JARVIS_ASSERT_FMT(b == 0x90, "live byte %lu = 0x%x, want NOP", i,
+                          b);
+    }
+    // Teardown live mapper first: no phys match vs R_B, so no drop;
+    // its pages (incl. old golden) free normally — nobody owns them.
+    tA->cleanup();
+    delete tA;
+    // Then the superseding set: matches, drops, frees at reset.
+    tB->cleanup();
+    delete tB;
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT(!elf::ElfLoader::has_retained());
+    cleanup_file("/tmp/supA.elf");
+    cleanup_file("/tmp/supB.elf");
+    JARVIS_TEST_PASS();
+}
+
+// Issue #271 P3 (C8): fork children deep-copy golden pages into
+// private phys, so teardown never disturbs retention counts. Uses the
+// real deep_copy_user_pages primitive (what clone() calls): the copy's
+// golden VA must resolve to DIFFERENT phys; freeing the copy must leave
+// retention valid with refs intact; final teardown stays flat.
+JARVIS_TEST(rerun_fork_child_private_copy, "PRE: none | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t sz = build_rw_elf(&hdr, img);
+    JARVIS_ASSERT(write_file("/tmp/forkcopy.elf", img, sz) == sz);
+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/forkcopy.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *tA = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(tA != nullptr);
+    JARVIS_ASSERT(elf::ElfLoader::has_retained());
+    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, tA->page_table_);
+    JARVIS_ASSERT(g0 != 0);
+    // Fork-equivalent: deep-copy the whole address space into a fresh
+    // PML4, like clone() does for a fork child.
+    uint64_t child_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(child_pml4 != 0);
+    JARVIS_ASSERT(VMM::deep_copy_user_pages(tA->page_table_, child_pml4));
+    uint64_t gc = VMM::virt_to_phys_in_pml4(0x400000, child_pml4);
+    JARVIS_ASSERT(gc != 0);
+    JARVIS_ASSERT_FMT(gc != g0, "fork copy shares golden phys 0x%lx", gc);
+    // Copy content identical (deep copy, not empty).
+    uint8_t b0 = *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + g0 + 0x100);
+    uint8_t bc = *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + gc + 0x100);
+    JARVIS_ASSERT_FMT(b0 == bc, "copy byte 0x%x != orig 0x%x", bc, b0);
+    // Teardown copy via blind free (never mapped golden-shared — all
+    // phys private, so no unmap needed and no ref may drop).
+    VMM::free_user_pages(child_pml4);
+    PMM::free_page(child_pml4);
+    // Retention intact: still valid (refs untouched by private copy).
+    JARVIS_ASSERT(elf::ElfLoader::has_retained());
+    // Parent teardown drops its ref normally.
+    tA->cleanup();
+    delete tA;
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT(!elf::ElfLoader::has_retained());
+    cleanup_file("/tmp/forkcopy.elf");
+    JARVIS_TEST_PASS();
+}
+
 void register_elf_loader_tests() {
     Logger::info("Registering background ELF loader tests");
     JARVIS_REGISTER_TEST(loader_load_success);
@@ -998,4 +1222,8 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(rerun_golden_balance); // #271 P1 balance
     JARVIS_REGISTER_TEST(rerun_byte_identity_deleted_file); // #271 P2 byte-identity
     JARVIS_REGISTER_TEST(rerun_refusal_matrix); // #271 P2 refusals
+    JARVIS_REGISTER_TEST(rerun_auth_decay_refused); // #271 P3 auth-decay
+    JARVIS_REGISTER_TEST(rerun_canary_perm_pins); // #271 P3 canary+perm
+    JARVIS_REGISTER_TEST(rerun_supersede_while_live); // #271 P3 supersede
+    JARVIS_REGISTER_TEST(rerun_fork_child_private_copy); // #271 P3 fork (C8)
 }

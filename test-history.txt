@@ -3420,3 +3420,5 @@ SUMMARY: total=20 ok=18 fail=2
 2026-10-13 19:10:00 elf_loader PASSED: 18 FAILED: 0 TIME: 2840ms NOTE: re-audit after IrqGuard+abandon fixes, retry green
 2026-10-14 10:45:00 elf_loader PASSED: 20 FAILED: 0 TIME: 3393ms
 2026-10-14 10:52:00 proc_elf PASSED: 118 FAILED: 0 TIME: 67330ms
+2026-10-14 11:20:00 elf_loader PASSED: 24 FAILED: 0 TIME: 4156ms
+2026-10-14 11:28:00 proc_elf PASSED: 122 FAILED: 0 TIME: 62830ms
