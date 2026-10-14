@@ -5,6 +5,7 @@
 
 ## Active Summary
 ### Objective
+- **DONE (2026-10-14):** Issue #271 CLOSED (restartable runelf): P0 RO primitive (`a6aa3a414`) → P1 retention/outcome (`43cbec5a6`) → P2 rerun builder + shell (`1ef62a349`) → P3 tests (`d2b9483ae`) → live-E2E BSS-only fix (`8aa9cef6f`: filesz-0 RW recorded len-0 pin range; regression `rerun_bss_only_data_canary`, counts 24→25/122→123). Audits APPROVED ×2 (`report-2026-10-14T101139Z`, `report-2026-10-14T111206Z`). R1 live E2E `RERUN: PASS` (2 outputs, 0 trips). R7: debug 17/20 + 3 flakes green standalone (capability 149, storage 166, smp_multicpu 18); release 18/18.
 - **DONE (2026-10-11):** Issue #311 (runelf 3-arg main envp #GP) — the user-stack "after" canary (`STACK_VADDR+PAGE_SIZE+STACK_SIZE-8`, task.cpp:841) ran AFTER `setup_user_stack` and overwrote the arg layout's top slot (`envp[0]` NULL terminator) with `CANARY_MAGIC`; a 2-arg main never read it, a 3-arg main walked the bogus pointer → instant #GP. Fix: `setup_user_stack` reserves the top 8 bytes (`sp = stack_top - 8`). Probe `userspace/envprobe.c`; regression `loader_runelf_3arg_main_envp` (elf_loader 14→15). Gates: elf_loader 15/15, proc_elf 92/92, process_elf 9/9, elf_shared 9/9, syscall_core 33/33. Uncommitted.
 - **DONE (2026-10-11):** Issue #312 (committed `8299acf47`, closes #312); #298 (committed `06c9750f9`, closes #298).
 - **DONE (2026-10-10):** Issue #317 (send_sync userspace contract) — **option (b)**: thread a real reply address through the ABI (committed `ee9824769`, closes #317).
@@ -129,6 +130,7 @@
 - GIC test: verify via ISENABLER (ICENABLER read-back unreliable on QEMU GICv2); DTB test: HHDM deref + tolerate absent DTB (QEMU non-Linux `-kernel` provides none), fallback memory region recorded in boot_info.
 
 ### Next Move
+- **#271 follow-ups (non-blocking):** storage gate-order flake (2 failed mid-full-gate, 166/166 standalone; VFS-only, zero loader overlap) wants a #345 entry + name capture if it recurs; release `task_fpu` shows NO_TESTS_REGISTERED (253s wall — mostly idle shell wait, pre-existing harness shape).
 - **#320 follow-ups (non-blocking S3):** anchor the "pin-holding registries are empty at every snapshot capture" invariant beside `snapshot_create`; exercise the now arch-neutral `snapshot_reset()` calls on aarch64/riscv64; note the detector's 0xDD-poison blind spot. #314 verification (storage 160/160 now green) still gated on the daemon `[LEAK: PMM +1]` WARN review + #321 (restore replay duplication).
 - **Next selection:** #95 (elf-shared-libs design paper) or #85 (v0.4.x SMP test-coverage checklist, testbed).
 - **MSI-X follow-ups (after #10):** user-facing PCI-delegation create syscall (SYS_MSIX_CREATE from a BDF) for Ring-3 drivers; VT-d interrupt remapping (IRTE encoding) so MSI-X messages route through the IOMMU under `intremap=on` (currently `intremap=off` in the iommu_live variant); per-entry mask re-read in `entry_masked()` is already table-backed. See docs/specs/cspace.md §2.6 + iommu.md §8.
