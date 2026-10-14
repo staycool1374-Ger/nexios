@@ -285,7 +285,12 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
         }
     }
     if (has_dynamic)
-        return; // excluded entirely: no pin, no golden, no refs
+        return; // excluded entirely: no pin, no golden, no refs.
+    // R5 note: dynamic images are refused explicitly at LOAD time by
+    // the dep backend ("failed: ..." with reason verbs — verified live:
+    // a synthetic ET_EXEC+PT_DYNAMIC fails closed there), so nothing is
+    // ever retained and try_rerun's "no elf loaded" is accurate, not
+    // misleading. The kDynamic gate below stays as defense-in-depth.
     TaskControlBlock::RoRange ros[TaskControlBlock::kMaxRoRanges] = {};
     uint64_t n = collect_ro_ranges(phdr_image_, sizeof(ELF64Header),
                                    hdr_.phnum, hdr_.phentsize, file_size_,
