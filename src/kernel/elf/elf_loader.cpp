@@ -33,6 +33,9 @@
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+#include <kernel/arch/x86_64/hal/pcid.hpp>
+#endif
 #include <kernel/arch/timer.hpp>
 #include <services/terminal/terminal.hpp>
 #include <kernel/core/global_state.hpp>
@@ -338,6 +341,7 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
         staging_.pin_ranges[pr].vaddr = phdr->vaddr;
         staging_.pin_ranges[pr].pin_off = pin_off;
         staging_.pin_ranges[pr].len = phdr->filesz;
+        staging_.pin_ranges[pr].memsz = phdr->memsz;
         ++pr;
         pin_off += phdr->filesz;
     }
@@ -430,13 +434,75 @@ void ElfLoader::unmap_golden(TaskControlBlock *tcb) {
         drop_task_ref_locked();
 }
 
+// Unwind helper for try_rerun failure paths: unmap any retained-golden
+// pages from the fresh table (they stay owned by retention/live mapper),
+// then free the fresh-only pages + PML4. Caller drops its builder ref
+// separately via drop_task_ref_locked. Assumes lock_ held + IRQ-masked.
+void ElfLoader::unmap_fresh_golden_locked(uint64_t pml4,
+                                             const GoldenRange *ranges,
+                                             size_t range_count) {
+    if (!pml4 || !ranges)
+        return;
+    // Unmap every mapped page in OUR ranges unconditionally: the fresh
+    // table maps golden phys exactly here by construction (stack/heap/
+    // pin went elsewhere), so no phys matching against possibly-
+    // superseded retention state is needed.
+    for (size_t r = 0; r < range_count && r < kMaxGoldenRanges; ++r) {
+        for (size_t p = 0; p < ranges[r].page_count; ++p) {
+            uint64_t va = ranges[r].vaddr + p * arch::PAGE_SIZE;
+            if (VMM::virt_to_phys_in_pml4(va, pml4))
+                VMM::unmap_page_in_pml4(va, pml4);
+        }
+    }
+}
+
+void ElfLoader::fail_fresh_build_locked(uint64_t pml4,
+                                          const GoldenRange *ranges,
+                                          size_t range_count) {
+    if (!pml4)
+        return;
+    unmap_fresh_golden_locked(pml4, ranges, range_count);
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+}
+
 TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
     static const char kNoElf[] = "no elf loaded";
     static const char kDynamic[] = "dynamic image needs reload";
     static const char kNotClean[] = "last run not clean, reload required";
     static const char kBusy[] = "loader busy";
-    static const char kRebuild[] = "rebuild failed";
-    Retention snap{};
+    static const char kRebuildPml4[] = "rebuild failed: pml4";
+    static const char kRebuildKstack[] = "rebuild failed: kstack";
+    static const char kRebuildGolden[] = "rebuild failed: golden-map";
+    static const char kRebuildStack[] = "rebuild failed: stack";
+    static const char kRebuildHeap[] = "rebuild failed: heap";
+    static const char kRebuildPin[] = "rebuild failed: pin";
+    static const char kRebuildTcb[] = "rebuild failed: tcb-alloc";
+    static const char kRebuildFinal[] = "rebuild failed: finalize";
+    static const char kRebuildScan[] = "rebuild failed: rescan";
+    static const char kRebuildSup[] = "rebuild failed: superseded";
+    // Small stack view: big arrays (golden phys, phdr_image, pin_buf)
+    // are streamed from retention_ directly. A concurrent adopt/abandon
+    // (only via take/reset/release, same-thread callers in practice) is
+    // caught by the epoch re-check at publish; torn mid-build reads can
+    // only cause a fail-closed refuse, never a fault (retention_ is
+    // always mapped kernel memory).
+    struct View {
+        GoldenRange ranges[kMaxGoldenRanges] = {};
+        size_t range_count = 0;
+        size_t golden_pages = 0;
+        PinRange pin_ranges[kMaxPinRanges] = {};
+        size_t pin_count = 0;
+        ELF64Header hdr = {};
+        char path[kMaxPath] = {};
+        uint64_t file_size = 0;
+        TaskControlBlock::RoRange ro_ranges[TaskControlBlock::kMaxRoRanges] = {};
+        size_t ro_count = 0;
+        uint32_t ro_crc32 = 0;
+        uint64_t canary_slot = 0;
+        uint64_t epoch = 0;
+    };
+    View view{};
     {
         arch::IrqGuard irq_guard{};
         SpinLockGuard<sync::SpinLock> guard(lock_);
@@ -457,32 +523,65 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             if (reason) *reason = kNotClean;
             return nullptr;
         }
-        snap = retention_;
+        // Bump first: abandon cannot free golden phys while we build.
+        retention_.task_refs++;
+        view.epoch = retention_.epoch;
+        view.range_count = retention_.range_count;
+        for (size_t i = 0; i < view.range_count && i < kMaxGoldenRanges; ++i)
+            view.ranges[i] = retention_.ranges[i];
+        view.golden_pages = retention_.golden_pages;
+        view.pin_count = retention_.pin_count;
+        for (size_t i = 0; i < view.pin_count && i < kMaxPinRanges; ++i)
+            view.pin_ranges[i] = retention_.pin_ranges[i];
+        view.hdr = retention_.hdr;
+        for (size_t i = 0; i < kMaxPath; ++i) {
+            view.path[i] = retention_.path[i];
+            if (!retention_.path[i]) break;
+        }
+        view.file_size = retention_.file_size;
+        view.ro_count = retention_.ro_count;
+        for (size_t i = 0; i < view.ro_count &&
+                            i < TaskControlBlock::kMaxRoRanges; ++i)
+            view.ro_ranges[i] = retention_.ro_ranges[i];
+        view.ro_crc32 = retention_.ro_crc32;
+        view.canary_slot = retention_.canary_slot;
     }
     // Fresh address space.
     uint64_t pml4 = VMM::clone_kernel_pml4();
     if (!pml4) {
-        if (reason) *reason = kRebuild;
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> guard(lock_);
+        drop_task_ref_locked(); // release our builder ref
+        if (reason) *reason = kRebuildPml4;
         return nullptr;
     }
     VMM::assert_kernel_half_converged(pml4);
-    // Map golden RO pages.
+    // Map golden RO pages. Golden phys stream from retention_ (8-byte
+    // aligned reads); a torn mix from a concurrent supersede is caught
+    // by the epoch re-check at publish -> fail-closed refuse.
     size_t gidx = 0;
-    for (size_t r = 0; r < snap.range_count; ++r) {
-        for (size_t p = 0; p < snap.ranges[r].page_count; ++p) {
-            uint64_t va = snap.ranges[r].vaddr + p * arch::PAGE_SIZE;
-            if (gidx >= snap.golden_pages) {
-                VMM::free_user_pages(pml4);
-                PMM::free_page(pml4);
-                if (reason) *reason = kRebuild;
-                return nullptr;
+    for (size_t r = 0; r < view.range_count; ++r) {
+        for (size_t p = 0; p < view.ranges[r].page_count; ++p) {
+            uint64_t va = view.ranges[r].vaddr + p * arch::PAGE_SIZE;
+            bool map_ok = true;
+            if (gidx < view.golden_pages) {
+                uint64_t gphys = retention_.golden[gidx].phys;
+                bool gexec = retention_.golden[gidx].executable;
+                if (gphys) {
+                    VMM::map_page_ro_in_pml4(va, gphys, gexec, pml4);
+                    map_ok = (VMM::virt_to_phys_in_pml4(va, pml4) != 0);
+                } else {
+                    map_ok = false;
+                }
+            } else {
+                map_ok = false;
             }
-            VMM::map_page_ro_in_pml4(va, snap.golden[gidx].phys,
-                                     snap.golden[gidx].executable, pml4);
-            if (!VMM::virt_to_phys_in_pml4(va, pml4)) {
-                VMM::free_user_pages(pml4);
-                PMM::free_page(pml4);
-                if (reason) *reason = kRebuild;
+            if (!map_ok) {
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_task_ref_locked();
+                if (reason) *reason = kRebuildGolden;
                 return nullptr;
             }
             ++gidx;
@@ -500,9 +599,11 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
         size_t stack_pages = (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
         uint64_t sphys = PMM::alloc_user_contiguous(stack_pages);
         if (!sphys) {
-            VMM::free_user_pages(pml4);
-            PMM::free_page(pml4);
-            if (reason) *reason = kRebuild;
+            arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> guard(lock_);
+            fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+            drop_task_ref_locked();
+            if (reason) *reason = kRebuildStack;
             return nullptr;
         }
         for (size_t i = 0; i < stack_pages; ++i) {
@@ -520,10 +621,11 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
         size_t heap_pages = 4; // 16 KiB initial heap like load_segments_and_stack
         uint64_t hphys = PMM::alloc_user_contiguous(heap_pages);
         if (!hphys) {
-            VMM::free_user_pages(pml4);
-            PMM::free_page(pml4);
-            PMM::free_page(ustack_phys); // partial free not precise but leak bounded
-            if (reason) *reason = kRebuild;
+            arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> guard(lock_);
+            fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+            drop_task_ref_locked();
+            if (reason) *reason = kRebuildHeap;
             return nullptr;
         }
         for (size_t i = 0; i < heap_pages; ++i) {
@@ -532,16 +634,40 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
         }
         __builtin_memset(reinterpret_cast<void*>(arch::HHDM_OFFSET + hphys), 0, heap_pages * arch::PAGE_SIZE);
     }
-    // Copy writable pin bytes
-    for (size_t i = 0; i < snap.pin_count; ++i) {
-        uint64_t va = snap.pin_ranges[i].vaddr;
-        uint64_t off = snap.pin_ranges[i].pin_off;
-        uint64_t len = snap.pin_ranges[i].len;
+    // Allocate fresh writable pages for RW segments (full memsz span,
+    // zeroed incl. BSS tails), then copy pin file bytes into them.
+    for (size_t i = 0; i < view.pin_count; ++i) {
+        uint64_t base = view.pin_ranges[i].vaddr & ~(arch::PAGE_SIZE - 1);
+        uint64_t top = view.pin_ranges[i].vaddr + view.pin_ranges[i].memsz;
+        uint64_t end = (top + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
+        for (uint64_t va = base; va < end; va += arch::PAGE_SIZE) {
+            uint64_t wp = PMM::alloc_user_page();
+            if (!wp) {
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_task_ref_locked();
+                if (reason) *reason = kRebuildPin;
+                return nullptr;
+            }
+            VMM::map_page_in_pml4(va, wp, true, pml4);
+            __builtin_memset(reinterpret_cast<void*>(arch::HHDM_OFFSET + wp),
+                             0, arch::PAGE_SIZE);
+        }
+    }
+    // Copy writable pin bytes. Pin bytes stream from retention_
+    // (torn mix on concurrent supersede -> epoch refuse at publish).
+    for (size_t i = 0; i < view.pin_count; ++i) {
+        uint64_t va = view.pin_ranges[i].vaddr;
+        uint64_t off = view.pin_ranges[i].pin_off;
+        uint64_t len = view.pin_ranges[i].len;
         uint64_t phys = VMM::virt_to_phys_in_pml4(va & ~(arch::PAGE_SIZE-1), pml4);
         if (!phys) {
-            VMM::free_user_pages(pml4);
-            PMM::free_page(pml4);
-            if (reason) *reason = kRebuild;
+            arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> guard(lock_);
+            fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+            drop_task_ref_locked();
+            if (reason) *reason = kRebuildPin;
             return nullptr;
         }
         // May span pages; copy via HHDM per page chunk
@@ -555,13 +681,15 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             if (chunk > remaining) chunk = remaining;
             uint64_t p = VMM::virt_to_phys_in_pml4(page_va, pml4);
             if (!p) {
-                VMM::free_user_pages(pml4);
-                PMM::free_page(pml4);
-                if (reason) *reason = kRebuild;
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_task_ref_locked();
+                if (reason) *reason = kRebuildPin;
                 return nullptr;
             }
             __builtin_memcpy(reinterpret_cast<void*>(arch::HHDM_OFFSET + p + page_off),
-                             snap.pin_buf + cur_off, chunk);
+                             retention_.pin_buf + cur_off, chunk);
             cur_va += chunk;
             cur_off += chunk;
             remaining -= chunk;
@@ -571,83 +699,195 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
     // For now, allocate TCB directly and minimally initialize.
     auto *tcb = static_cast<TaskControlBlock*>(kernel::MemPool::alloc(sizeof(TaskControlBlock)));
     if (!tcb) {
-        VMM::free_user_pages(pml4);
-        PMM::free_page(pml4);
-        if (reason) *reason = kRebuild;
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> guard(lock_);
+        fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+        drop_task_ref_locked();
+        if (reason) *reason = kRebuildTcb;
         return nullptr;
     }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
     __builtin_memset(tcb, 0, sizeof(TaskControlBlock));
 #pragma GCC diagnostic pop
+    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+    tcb->tls_base_ = 0; // issue #74: fresh image starts with no TLS
+    tcb->wdog_armed = false;
+    tcb->wdog_period_ticks = 0;
+    tcb->wdog_last_kick_tick = 0;
+    tcb->wdog_expiry_tick = 0;
+    tcb->wdog_gen = 0;
     tcb->magic = TaskControlBlock::TCB_MAGIC;
     tcb->id = Scheduler::alloc_id();
-    // Minimal common init (IPC queues, fd table, cwd) — mirrors create()
-    {
-        // fd_table + cwd
-        for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
-            tcb->fd_table.fds[i].used = false;
-            tcb->fd_table.fds[i].vnode = nullptr;
-            tcb->fd_table.fds[i].offset = 0;
-            tcb->fd_table.fds[i].flags = 0;
-        }
-        tcb->cwd[0] = '/'; tcb->cwd[1] = '\0';
-        tcb->cwd_vnode = vfs::get_root_vnode();
-        if (tcb->cwd_vnode) vfs::vnode_ref_inc(tcb->cwd_vnode);
-        tcb->msg_queue.init();
-        tcb->msg_queue.owner = tcb;
-        kernel::test::ResourceTracker::instance().track_msg_queue_add();
-        tcb->notify.init();
-        kernel::test::ResourceTracker::instance().track_notify_add();
-        tcb->event_group.init();
-        kernel::test::ResourceTracker::instance().track_event_group_add();
-        tcb->blocked_next = nullptr; tcb->blocked_prev = nullptr;
-        tcb->blocked_on_queue = nullptr;
-    }
-    // Full init via shared finalizer (identical to first-run TCBs:
-    // kstack, std fds, user stack frame, canaries, sizes, TLS guard).
-    // On failure it already ran tcb->cleanup(); only the fresh PML4
-    // pages remain (golden unmapped by cleanup, fresh freed below).
-    if (!finalize_user_tcb_tail(tcb, &snap.hdr, ustack_phys,
-                                snap.phdr_image, snap.file_size)) {
-        VMM::free_user_pages(pml4);
-        PMM::free_page(pml4);
-        kernel::MemPool::free(tcb);
-        if (reason) *reason = kRebuild;
+    tcb->state = TaskState::READY;
+    tcb->priority = 2;
+    tcb->period_ticks = 0;
+    tcb->base_priority = 2;
+    tcb->executed_ticks = 0;
+    tcb->exec_ns_total = 0;
+    tcb->exec_period_ns = 0;
+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
+    tcb->exec_stamp_ns = 0;
+    tcb->wcet_observed_ns = 0;
+    tcb->mem_alloc_ops_ = 0;
+    tcb->mem_free_ops_ = 0;
+    tcb->mem_prev_outstanding_ = 0;
+    tcb->mem_prev_used_ = 0;
+    tcb->mem_leak_streak_ = 0;
+    tcb->sched_policy = SchedPolicy::AUTO;
+    tcb->edf_exempt = false;
+    tcb->edf_next_ = nullptr;
+    tcb->edf_prev_ = nullptr;
+    tcb->in_edf_queue_ = false;
+    tcb->ready_deferred_ = false;
+    tcb->remaining_ticks = 0;
+    tcb->deadline_ticks = arch::Timer::ticks();
+    tcb->page_table_ = 0;
+    tcb->stack_phys_ = 0;
+    tcb->kernel_stack = nullptr;
+    tcb->kernel_stack_top = 0;
+    tcb->user_stack_ = 0;
+    tcb->user_stack_size_ = 0;
+    tcb->program_break_start = 0;
+    tcb->program_break = 0;
+    tcb->buf_list_head = -1;
+    tcb->fpu_used = false;
+    tcb->sporadic_server = nullptr;
+
+    init_task_common(*tcb);
+
+    size_t kstack_pages =
+        (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
+    uint64_t kstack_phys = PMM::alloc_contiguous(kstack_pages);
+    if (!kstack_phys) {
+        // No page_table_ yet: destroy handles IPC/fds/cwd teardown.
+        destroy_completed_tcb(tcb);
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> guard(lock_);
+        fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+        drop_task_ref_locked();
+        if (reason) *reason = kRebuildKstack;
         return nullptr;
+    }
+    tcb->stack_phys_ = kstack_phys;
+    uint64_t kstack_virt = arch::HHDM_OFFSET + kstack_phys;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_virt);
+    tcb->kernel_stack_top = kstack_virt + TaskControlBlock::STACK_SIZE;
+
+    tcb->page_table_ = pml4;
+    tcb->is_user_ = true;
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+    tcb->pcid_ = arch::pcid_alloc();
+#endif
+    // Full init via shared finalizer (identical to first-run TCBs:
+    // std fds, user stack frame, canaries, sizes, TLS guard).
+    // hdr/phdr_image stream from retention_ (epoch-checked at publish).
+    // The tail returns false without teardown on failure, so unmap OUR
+    // golden (else blind free below takes retained phys), then destroy
+    // owns kstack/IPC/fds/fresh-pages/MemPool teardown.
+    // destroy does not touch refs; drop our builder ref after.
+    if (!finalize_user_tcb_tail(tcb, &view.hdr, ustack_phys,
+                                retention_.phdr_image, view.file_size)) {
+        // finalize failed partway (kstack/frame/canaries): unmap OUR
+        // golden (else blind free below takes retained phys), then
+        // destroy owns kstack/IPC/fds/fresh-pages/MemPool teardown.
+        // destroy does not touch refs; drop our builder ref after.
+        {
+            arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> guard(lock_);
+            unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
+                                      view.range_count);
+            tcb->page_table_ = 0;
+            drop_task_ref_locked();
+        }
+        destroy_completed_tcb(tcb);
+        if (reason) *reason = kRebuildFinal;
+        return nullptr;
+    }
+    // Rescan-compare: re-walk RO ranges (canary slot carved) against
+    // the retained baseline. Catches decay since retention; never
+    // re-adopts (compare-only per spec).
+    {
+        uint32_t acc = CRC32::INITIAL;
+        bool scan_ok = true;
+        for (size_t i = 0; i < view.ro_count && scan_ok; ++i) {
+            uint64_t vs = view.ro_ranges[i].vaddr;
+            uint64_t ve = vs + view.ro_ranges[i].len;
+            uint64_t cs = view.canary_slot;
+            uint64_t ce = cs + 8;
+            // Head before slot.
+            if (cs != 0 && vs < cs && cs < ve) {
+                if (!crc_user_range(pml4, vs, cs - vs, acc))
+                    scan_ok = false;
+                vs = ce;
+            } else if (cs != 0 && cs <= vs && vs < ce) {
+                vs = ce; // range starts inside slot: skip head
+            }
+            if (scan_ok && vs < ve) {
+                if (!crc_user_range(pml4, vs, ve - vs, acc))
+                    scan_ok = false;
+            }
+        }
+        if (!scan_ok || CRC32::finalize(acc) != view.ro_crc32) {
+            // Decay (or torn-pin mix): unmap OUR golden first so the
+            // blind free in destroy cannot take retained phys, then
+            // destroy + drop our builder ref.
+            {
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
+                                          view.range_count);
+                tcb->page_table_ = 0;
+                drop_task_ref_locked();
+            }
+            destroy_completed_tcb(tcb);
+            if (reason) *reason = kRebuildScan;
+            return nullptr;
+        }
     }
     // Carry retained RO baseline (compare, never re-adopt) + UNVERIFIED.
     for (size_t i = 0; i < TaskControlBlock::kMaxRoRanges; ++i) {
-        if (i < snap.ro_count) {
-            tcb->ro_ranges_[i] = snap.ro_ranges[i];
+        if (i < view.ro_count) {
+            tcb->ro_ranges_[i] = view.ro_ranges[i];
         }
     }
-    tcb->ro_seg_count_ = snap.ro_count;
-    tcb->ro_crc32_ = snap.ro_crc32;
+    tcb->ro_seg_count_ = view.ro_count;
+    tcb->ro_crc32_ = view.ro_crc32;
     tcb->ro_verify_state_ = TaskControlBlock::RoVerifyState::UNVERIFIED;
     // Copy name from retention path leaf
     {
-        const char *slash = snap.path;
-        const char *p = snap.path;
+        const char *slash = view.path;
+        const char *p = view.path;
         while (*p) { if (*p=='/') slash=p+1; ++p; }
         size_t n=0; while (slash[n] && n+1 < CONFIG_TASK_NAME_LEN) { tcb->name[n]=slash[n]; ++n; }
         tcb->name[n]='\0';
     }
-    // Bump task_refs under lock (new live mapper)
+    // Publish: re-validate epoch (no supersede/abandon mid-build).
+    // Our builder ref was bumped at the gate and is already counted.
+    bool still_current = false;
     {
         arch::IrqGuard irq_guard{};
         SpinLockGuard<sync::SpinLock> guard(lock_);
-        // Re-validate retention still valid and same golden (no supersede race)
-        if (!retention_.valid || retention_.golden_pages != snap.golden_pages) {
-            // Superseded while we built: free and refuse
-            tcb->page_table_=0; // prevent double free in destroy path
-            VMM::free_user_pages(pml4);
-            PMM::free_page(pml4);
-            kernel::MemPool::free(tcb);
-            if (reason) *reason = kRebuild;
-            return nullptr;
+        still_current =
+            retention_.valid && retention_.epoch == view.epoch;
+    }
+    if (!still_current) {
+        // Superseded while we built: unmap OUR golden (view ranges are
+        // what WE mapped, regardless of current retention), then destroy
+        // owns the rest; drop our builder ref explicitly since destroy
+        // never touches refs.
+        {
+            arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> guard(lock_);
+            unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
+                                      view.range_count);
+            tcb->page_table_ = 0;
+            drop_task_ref_locked();
         }
-        retention_.task_refs++;
+        destroy_completed_tcb(tcb);
+        if (reason) *reason = kRebuildSup;
+        return nullptr;
     }
     return tcb;
 }

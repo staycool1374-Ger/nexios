@@ -256,6 +256,7 @@ class ElfLoader {
         uint64_t vaddr = 0;    // destination VA in the fresh build
         uint64_t pin_off = 0;  // offset into pin_buf_
         uint64_t len = 0;      // file bytes (never BSS tail)
+        uint64_t memsz = 0;    // full RW span incl. BSS tail (fresh-mapped + zeroed)
     };
     struct Retention {
         bool valid = false;
@@ -298,6 +299,17 @@ class ElfLoader {
     static void fill_staging_locked(TaskControlBlock *tcb);
     static void adopt_staging_locked();
     static void drop_task_ref_locked();
+    // Unwind a half-built rerun table: unmap retained-golden VAs (no ref
+    // change — caller drops separately), free the rest, free the PML4.
+    // Assumes lock_ held + IRQ-masked by the caller.
+    static void fail_fresh_build_locked(uint64_t pml4,
+                                          const GoldenRange *ranges,
+                                          size_t range_count);
+    // Unmap-only half of the above (no frees): for post-TCB failure
+    // paths where destroy_completed_tcb owns the frees. Assumes lock_.
+    static void unmap_fresh_golden_locked(uint64_t pml4,
+                                          const GoldenRange *ranges,
+                                          size_t range_count);
     static char msg_buf_[16][160];
     static uint32_t msg_idx_;
     // Issue #95: per-request dep-resolve context (loader single-owner;

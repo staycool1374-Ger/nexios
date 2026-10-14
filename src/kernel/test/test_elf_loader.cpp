@@ -922,8 +922,10 @@ JARVIS_TEST(rerun_byte_identity_deleted_file, "PRE: none | POST: none") {
     uint64_t wphys = VMM::virt_to_phys_in_pml4(0x402000, t2->page_table_);
     uint8_t first = *reinterpret_cast<uint8_t*>(arch::HHDM_OFFSET + wphys);
     JARVIS_ASSERT_FMT(first == 0, "writable pin byte 0x%x != 0", first);
-    t2->cleanup();
-    delete t2;
+    // Never-added TCB: destroy path (no scheduler-touching cleanup).
+    // unmap_golden drops our builder ref; destroy frees the rest.
+    elf::ElfLoader::unmap_golden(t2);
+    elf::ElfLoader::destroy_completed_tcb(t2);
     elf::ElfLoader::reset();
     JARVIS_TEST_PASS();
 }
@@ -990,5 +992,6 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(rerun_ro_perm_first_run); // #271 P0 RO primitive
     JARVIS_REGISTER_TEST(rerun_retention_lifecycle); // #271 P1 staging/adopt
     JARVIS_REGISTER_TEST(rerun_golden_balance); // #271 P1 balance
-    // P2 tests: rerun path panics in TEST (loader state) — keep builder green, land tests with proper init next.
+    JARVIS_REGISTER_TEST(rerun_byte_identity_deleted_file); // #271 P2 byte-identity
+    JARVIS_REGISTER_TEST(rerun_refusal_matrix); // #271 P2 refusals
 }
