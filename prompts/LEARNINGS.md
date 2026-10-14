@@ -46,6 +46,12 @@
 
 ## Entries
 
+### #271 P2 — rerun builder + shell gate done (issue stays open for P3)
+
+- **Learned:** (1) A shared finalizer tail is a contract: every field it assumes preset (kstack, page_table_, std fds) must be set by ALL callers — the rerun builder missed kstack and faulted on the entry-frame push (convicted via disassembly + register dump, not guessing). (2) Fresh writable pages must be allocated for RW segments before pin copy — the pre-check `virt_to_phys==0 → refuse` correctly caught the missing step with a site-distinct reason (generic reasons hide the site; distinct strings convicted it in one run). (3) Audit-grade teardown accounting: `page_table_=0`-before-destroy leaks the whole fresh space; drops must be epoch-guarded across supersede; doc claims must match implementation (tail returns false WITHOUT teardown).
+- **Adapted:** open_std_fds moved into shared tail (single funnel); unmap-without-free + destroy + epoch-guarded drops on all 13 failure paths; memsz cap, orphan-page free, count clamps; fd asserts in test. Re-audit APPROVED after verbatim rejected-patch application.
+- **Style re-surface:** site-distinct failure reasons (diagnosable first-try); shared-init-or-diverge (hand-rolled TCB init panics in teardown).
+
 ### #271 P1 — retention + outcome tracking done (issue stays open for P2-P3)
 
 - **Learned:** (1) ISR-callable paths need IrqGuard+SpinLock: `report_user_task_end` runs from interrupt context (fault path) yet touches `ElfLoader::lock_` — plain SpinLock deadlocks (task holds lock, ISR preempts, spins forever). Every set-count site reachable from ISR now IrqGuard-masked. (2) Admission failure after `take_completed` adopted retention (task_refs=1) leaves stale `golden[].phys` dangling: destroy frees the phys via the TCB, but retention still points at it (UAF on next use / leak on abandon). Fix: `abandon_retention()` before destroy on the never-added path (zero/zero frees inline). (3) Staging vs retention two-stage (fill at load, adopt at take, abandon-first) keeps ineligible loads from polluting retention; request_load fail-before-free preserves a good retained set when a bad path fails validation.
