@@ -638,17 +638,31 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
 
     open_std_fds(*tcb);
 
+    if (!finalize_user_tcb_tail(tcb, hdr, ustack_phys, phdr_image,
+                                file_size)) {
+        tcb->cleanup();
+        delete tcb;
+        return nullptr;
+    }
+
+    // (text/data/bss sizes, canaries, entry frame now live in
+    // finalize_user_tcb_tail above.)
+    return tcb;
+}
+
+bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
+                            uint64_t ustack_phys, const uint8_t *phdr_image,
+                            uint64_t file_size) {
+    if (!tcb || !hdr || !phdr_image)
+        return false;
     tcb->user_stack_ = ustack_phys;
     tcb->user_stack_size_ = mem::STACK_SIZE;
     tcb->program_break_start = mem::HEAP_VADDR;
     tcb->program_break = mem::HEAP_VADDR + INITIAL_HEAP_SIZE;
 
     uint64_t user_rsp = setup_user_stack(ustack_phys, nullptr, nullptr);
-    if (user_rsp == 0) {
-        tcb->cleanup();
-        delete tcb;
-        return nullptr;
-    }
+    if (user_rsp == 0)
+        return false;
 
 #if defined(CONFIG_ARCH_X86_64)
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -724,7 +738,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     // silently — fail stop here, not at first dispatch.  (When user TLS
     // lands, this relaxes to the TLS-template contract.)
     ENSURE(tcb->tls_base_ == 0);
-    return tcb;
+    return true;
 }
 
 /// @brief Install v0.4.0 MP-3 segment-boundary canaries for a freshly loaded

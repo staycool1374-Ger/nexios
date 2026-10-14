@@ -990,5 +990,5 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(rerun_ro_perm_first_run); // #271 P0 RO primitive
     JARVIS_REGISTER_TEST(rerun_retention_lifecycle); // #271 P1 staging/adopt
     JARVIS_REGISTER_TEST(rerun_golden_balance); // #271 P1 balance
-    // P2 tests panicked (TCB init/bus) — keep builder green, land tests with proper init next.
+    // P2 tests: rerun path panics in TEST (loader state) — keep builder green, land tests with proper init next.
 }

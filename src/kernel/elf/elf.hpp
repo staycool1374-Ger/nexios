@@ -171,6 +171,17 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
                                        const uint8_t *phdr_image,
                                        uint64_t file_size);
 
+/// @brief Shared user-TCB final tail (issue #271 P2 rerun): open_std_fds,
+/// user stack/heap fields, setup_user_stack + entry frame, canaries,
+/// text/data/bss sizes, TLS guard. Factored from finalize_loaded_task
+/// so the rerun builder produces a byte-identical init (a hand-rolled
+/// tail diverges and panics in teardown).
+/// @return false on failure (caller runs destroy path, never touches
+///         retention refs — finalize's internal cleanup already did).
+bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
+                            uint64_t ustack_phys, const uint8_t *phdr_image,
+                            uint64_t file_size);
+
 /// @brief Replace the current task's address space with an ELF binary (exec).
 /// @param regs Register state to update with new entry point and stack.
 /// @param file_size Validated size of `data` in bytes (VULN-H2).

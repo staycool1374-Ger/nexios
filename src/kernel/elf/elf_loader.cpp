@@ -358,6 +358,10 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
     copy_bounded(staging_.path, path_, kMaxPath);
     staging_.file_size = file_size_;
     staging_.entry = hdr_.entry;
+    staging_.hdr = hdr_;
+    staging_.hdr.phoff = sizeof(ELF64Header);
+    __builtin_memcpy(staging_.phdr_image, phdr_image_,
+                     sizeof(staging_.phdr_image));
     staging_.has_dynamic = false;
     staging_.valid = true;
 }
@@ -600,34 +604,19 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
         tcb->blocked_next = nullptr; tcb->blocked_prev = nullptr;
         tcb->blocked_on_queue = nullptr;
     }
-    // Kernel stack (like clone fallback: HHDM-mapped, no kslot guard for rerun — bounded)
-    {
-        size_t kpages = (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
-        uint64_t kphys = PMM::alloc_contiguous(kpages);
-        if (!kphys) {
-            VMM::free_user_pages(pml4);
-            PMM::free_page(pml4);
-            tcb->msg_queue.~MessageQueue(); kernel::test::ResourceTracker::instance().track_msg_queue_remove();
-            tcb->notify.~Notify(); kernel::test::ResourceTracker::instance().track_notify_remove();
-            tcb->event_group.~EventGroup(); kernel::test::ResourceTracker::instance().track_event_group_remove();
-            if (tcb->cwd_vnode) vfs::vnode_ref_dec(tcb->cwd_vnode);
-            kernel::MemPool::free(tcb);
-            if (reason) *reason = kRebuild;
-            return nullptr;
-        }
-        tcb->stack_phys_ = kphys;
-        uint64_t kvirt = arch::HHDM_OFFSET + kphys;
-        tcb->kernel_stack = reinterpret_cast<uint8_t*>(kvirt);
-        tcb->kernel_stack_top = kvirt + TaskControlBlock::STACK_SIZE;
-        tcb->kstack_slot_va_ = 0; tcb->kstack_slot_size_ = 0;
+    // Full init via shared finalizer (identical to first-run TCBs:
+    // kstack, std fds, user stack frame, canaries, sizes, TLS guard).
+    // On failure it already ran tcb->cleanup(); only the fresh PML4
+    // pages remain (golden unmapped by cleanup, fresh freed below).
+    if (!finalize_user_tcb_tail(tcb, &snap.hdr, ustack_phys,
+                                snap.phdr_image, snap.file_size)) {
+        VMM::free_user_pages(pml4);
+        PMM::free_page(pml4);
+        kernel::MemPool::free(tcb);
+        if (reason) *reason = kRebuild;
+        return nullptr;
     }
-    tcb->page_table_ = pml4;
-    tcb->is_user_ = true;
-    tcb->user_stack_ = ustack_phys;
-    tcb->user_stack_size_ = TaskControlBlock::STACK_SIZE;
-    tcb->program_break = mem::HEAP_VADDR + 4 * arch::PAGE_SIZE;
-    tcb->program_break_start = mem::HEAP_VADDR;
-    // Canaries: install fresh ones (skip TEXT-before write)
+    // Carry retained RO baseline (compare, never re-adopt) + UNVERIFIED.
     for (size_t i = 0; i < TaskControlBlock::kMaxRoRanges; ++i) {
         if (i < snap.ro_count) {
             tcb->ro_ranges_[i] = snap.ro_ranges[i];

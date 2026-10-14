@@ -262,6 +262,12 @@ class ElfLoader {
         char path[kMaxPath] = {};
         uint64_t file_size = 0;
         uint64_t entry = 0;
+        // Packed header image for rerun finalization: real header with
+        // phoff rewritten to sizeof(ELF64Header) + packed table, so
+        // install_segment_canaries (hdr->phoff based) reads correctly.
+        ELF64Header hdr = {};
+        uint8_t phdr_image[sizeof(ELF64Header) +
+                           64 * sizeof(ELF64ProgramHeader)] = {};
         bool has_dynamic = false;
         GoldenPage golden[kMaxGoldenPages] = {};
         size_t golden_pages = 0;
@@ -272,6 +278,7 @@ class ElfLoader {
         PinRange pin_ranges[kMaxPinRanges] = {};
         size_t pin_count = 0;
         uint64_t task_refs = 0; // live tasks mapping the set
+        uint64_t epoch = 0;     // bumped on every adopt/abandon (builder race detector)
         bool retained = false;  // retention holds a ref
         RunOutcome outcome = RunOutcome::UNKNOWN;
         uint64_t outcome_code = 0;
