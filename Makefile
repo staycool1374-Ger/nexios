@@ -1208,11 +1208,26 @@ renode-test:
 # ------------------------------------------------------------------------------
 
 # Shared expect helper for autonomous test runs.
-# Single consistent serial log path for all automated test runs.
+# Verdict-stream log (guest debugcon device): QEMU writes it DIRECTLY via a
+# file backend — never through a host pipe.  Issue #345 convicted pipe
+# backpressure (slow host reader blocks the vCPU inside guest Logger output;
+# GDB showed the vCPU frozen in Logger::putchar with an unresponsive stub):
+# with file backends a lagging observer only delays verdict matching, it can
+# never freeze the guest.  Single consistent path for all automated runs.
 TEST_SERIAL_LOG := /tmp/jarvis-serial.log
+# COM1 forensics log (guest UART device, file backend).  Not matched by the
+# harness — kept for post-mortem only.
+TEST_COM1_LOG := /tmp/jarvis-com1.log
 # Verdict file: the expect script writes its machine-readable verdict here so it
 # is never lost to pipe buffering. The Makefile reads it back to set the exit code.
 TEST_VERDICT_LOG := /tmp/jarvis-verdict.log
+# File-backend QEMU flags for test runs: derived from $(QEMU_FLAGS) by swapping
+# the stdio-mux console triple for file backends (debugcon carries the Logger
+# verdict stream during test runs; COM1 is forensics-only; the monitor is
+# unused by the harness).  Covers all QEMU_FLAGS variants (base, iommu_live,
+# ahci_live) since they share the token spellings.
+comma := ,
+QEMU_FLAGS_FILE = $(subst -mon chardev=dbg,-mon none,$(subst -monitor chardev:dbg,-monitor none,$(subst -serial chardev:dbg,-serial file:$(TEST_COM1_LOG),$(subst -chardev stdio$(comma)id=dbg$(comma)mux=on,-chardev file$(comma)path=$(TEST_SERIAL_LOG)$(comma)id=dbg,$(QEMU_FLAGS)))))
 
 # Timing model (single source of truth, correctly scaled):
 #   - expect waits up to TEST_TIMEOUT_* for the kernel's TEST SUMMARY.
@@ -1238,10 +1253,15 @@ TEST_MAX_ATTEMPTS   := 2
 
 # Usage: $(call _run_test_qemu,<description>,<timeout_sec>)
 # Robust design:
+#   - QEMU runs file-backed (see QEMU_FLAGS_FILE): guest serial+debugcon go
+#     straight to $(TEST_SERIAL_LOG)/$(TEST_COM1_LOG), so no host pipe can
+#     ever stall the vCPU (issue #345).  tools/qemu-file-log.sh launches QEMU
+#     and tails the verdict stream for expect, preserving spawn/eof verdict
+#     semantics exactly (QEMU death closes the tail → eof arm → QEMU_EXIT).
 #   - The expect driver (tools/run-test.exp) writes its machine-readable VERDICT
-#     to $(TEST_VERDICT_LOG); the full serial stream is teed to $(TEST_SERIAL_LOG).
+#     to $(TEST_VERDICT_LOG); the Makefile reads it back to set the exit code.
 #     Writing the verdict to a dedicated file (not just stdout/pipe) guarantees it
-#     is never lost to pipe buffering or a killed tee.
+#     is never lost to pipe buffering or a killed observer.
 #   - After expect returns, the Makefile reads $(TEST_VERDICT_LOG) and replays it
 #     to stdout, then sets the exit code from it.
 #   - The expect logic lives in a committed .exp file (not an inline -c string) so
@@ -1257,7 +1277,7 @@ define _run_test_qemu
 	VERDICT=""; \
 	while [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; do \
 	    ATTEMPT=$$(( ATTEMPT + 1 )); \
-	    rm -f "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)" /tmp/test-start.timestamp /tmp/test-end.timestamp; \
+	    rm -f "$(TEST_SERIAL_LOG)" "$(TEST_COM1_LOG)" "$(TEST_VERDICT_LOG)" /tmp/test-start.timestamp /tmp/test-end.timestamp; \
 	    date +%s > /tmp/test-start.timestamp; \
 	    ( \
 	        trap "exit 0" TERM; \
@@ -1281,9 +1301,9 @@ define _run_test_qemu
 	    ) & \
 	    MONITOR_PID=$$!; \
 	    expect tools/run-test.exp $(2) "$(TEST_VERDICT_LOG)" "$(TEST_SERIAL_LOG)" \
-	        $(QEMU_SYSTEM) $(QEMU_FLAGS) -display none -no-reboot $(QEMU_DEBUG_EXIT) \
-	        $(QEMU_ICOUNT) $(QEMU_TRACE_EVENTS) \
-	        2>&1 | gstdbuf -oL tee "$(TEST_SERIAL_LOG)"; \
+	        sh tools/qemu-file-log.sh "$(TEST_SERIAL_LOG)" "$(TEST_COM1_LOG)" \
+	        $(QEMU_SYSTEM) $(QEMU_FLAGS_FILE) -display none -no-reboot $(QEMU_DEBUG_EXIT) \
+	        $(QEMU_ICOUNT) $(QEMU_TRACE_EVENTS); \
 	    date +%s > /tmp/test-end.timestamp; \
 	    pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null || true; \
 	    kill $$MONITOR_PID 2>/dev/null; \
