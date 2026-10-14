@@ -334,8 +334,9 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
             (uint64_t)i * hdr_.phentsize);
         if (!phdr || phdr->type != PT_LOAD || !(phdr->flags & PF_W))
             continue;
-        if (phdr->filesz == 0)
-            continue;
+        // NOTE: no filesz==0 skip — a BSS-only RW segment still needs
+        // its memsz span mapped+zeroed in the rerun build (canary slots
+        // and program break live there); len 0 simply copies nothing.
         if (pin_off + phdr->filesz > kMaxRerunWritableBytes)
             return;
         // S3 hardening: cap the BSS span too — an enormous RW memsz

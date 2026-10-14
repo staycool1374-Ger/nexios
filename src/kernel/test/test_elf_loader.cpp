@@ -743,6 +743,57 @@ uint64_t build_rw_elf(elf::ELF64Header *hdr, uint8_t *data) {
     return ph1->offset + 0x100;
 }
 
+// Issue #271 live-E2E follow-up: BSS-only RW segment (filesz 0, memsz
+// nonzero — as in userspace/hey.c.elf's 0x402e80 filesz-0 segment).
+// The rerun builder must still map+zero the memsz span (canary slots
+// live in the tail padding) even though there are no file bytes to pin.
+uint64_t build_bss_elf(elf::ELF64Header *hdr, uint8_t *data) {
+    __builtin_memset(hdr, 0, sizeof(elf::ELF64Header));
+    hdr->ident[0] = 0x7F;
+    hdr->ident[1] = 'E';
+    hdr->ident[2] = 'L';
+    hdr->ident[3] = 'F';
+    hdr->ident[4] = 2;
+    hdr->ident[5] = 1;
+    hdr->type = elf::ET_EXEC;
+    hdr->machine = 0x3E;
+    hdr->version = 1;
+    hdr->entry = 0x400000;
+    hdr->phoff = sizeof(elf::ELF64Header);
+    hdr->ehsize = sizeof(elf::ELF64Header);
+    hdr->phentsize = sizeof(elf::ELF64ProgramHeader);
+    hdr->phnum = 2;
+    auto *ph0 = reinterpret_cast<elf::ELF64ProgramHeader *>(
+        data + sizeof(elf::ELF64Header));
+    ph0->type = elf::PT_LOAD;
+    ph0->flags = elf::PF_R | elf::PF_X;
+    ph0->offset = sizeof(elf::ELF64Header) +
+                  2 * sizeof(elf::ELF64ProgramHeader);
+    ph0->vaddr = 0x400000;
+    ph0->paddr = 0x400000;
+    ph0->filesz = 0x1000;
+    ph0->memsz = 0x1000;
+    ph0->align = 0x1000;
+    auto *ph1 = reinterpret_cast<elf::ELF64ProgramHeader *>(
+        data + sizeof(elf::ELF64Header) + sizeof(elf::ELF64ProgramHeader));
+    ph1->type = elf::PT_LOAD;
+    ph1->flags = elf::PF_R | elf::PF_W;
+    ph1->offset = ph0->offset + 0x1000;
+    // hey.c.elf's exact RW shape: BSS-only (filesz 0) with a tiny
+    // non-page-aligned memsz, so the DATA-after slot falls in real
+    // page padding (in_padding true) and must be armed + live.
+    ph1->vaddr = 0x402e80;
+    ph1->paddr = 0x402e80;
+    ph1->filesz = 0;
+    ph1->memsz = 0x18;
+    ph1->align = 0x1000;
+    __builtin_memcpy(data, hdr, sizeof(elf::ELF64Header));
+    uint8_t *code = data + ph0->offset;
+    for (size_t i = 0; i < 0x1000; ++i)
+        code[i] = 0x90;
+    return ph1->offset;
+}
+
 // Runmode: kernel
 // Testidea: Issue #271 P0 — read-only segments map PTE-read-only
 //           through the shared primitive on the FIRST run (both the
@@ -1087,6 +1138,58 @@ JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Issue #271 live-E2E follow-up — BSS-only RW segment
+//           (filesz 0) must still get its memsz span mapped+zeroed in
+//           the rerun build, with the DATA-after canary holding live
+//           magic. Pre-fix the span was skipped (no pin bytes), the
+//           canary write silently missed, and dispatch tripped.
+// Input: BSS-only two-segment static image via background
+//        request_load, take, note_launched, note_task_end, try_rerun.
+// Expect: try_rerun succeeds; DATA-after slot (0x402FF8) mapped and
+//         holding live derived magic.
+// Depends: pin-range recording for filesz-0 RW spans (issue #271)
+JARVIS_TEST(rerun_bss_only_data_canary, "PRE: none | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t sz = build_bss_elf(&hdr, img);
+    JARVIS_ASSERT(write_file("/tmp/bsscan.elf", img, sz) == sz);
+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/bsscan.elf") ==
+                  elf::LoadResult::OK);
+    elf::ElfLoader::wait_loader_idle();
+    auto *t1 = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT(t1 != nullptr);
+    uint64_t id1 = t1->id;
+    elf::ElfLoader::note_launched(id1);
+    elf::ElfLoader::note_task_end(id1, true, 0);
+    t1->cleanup();
+    delete t1;
+    const char *reason = nullptr;
+    auto *t2 = elf::ElfLoader::try_rerun(&reason);
+    JARVIS_ASSERT_FMT(t2 != nullptr, "rerun failed: %s", reason ? reason : "?");
+    const uint64_t data = TaskControlBlock::SEG_DATA;
+    JARVIS_ASSERT(t2->canary_installed & (1u << data));
+    // DATA-after = page_align_up(0x402e80 + 0x18) - 8 = 0x402FF8:
+    // must be mapped AND hold live magic (pre-fix: unmapped).
+    JARVIS_ASSERT(t2->canary_after[data] == 0x402FF8);
+    uint64_t phys =
+        VMM::virt_to_phys_in_pml4(0x402FF8, t2->page_table_);
+    JARVIS_ASSERT_FMT(phys != 0, "DATA-after slot unmapped");
+    uint64_t live = 0;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    __builtin_memcpy(&live,
+                     reinterpret_cast<const void *>(arch::HHDM_OFFSET + phys),
+                     8);
+    JARVIS_ASSERT_FMT(live == (TaskControlBlock::CANARY_MAGIC ^ (data + 1)),
+                      "DATA-after canary dead: 0x%lx", live);
+    t2->cleanup();
+    delete t2;
+    elf::ElfLoader::reset();
+    cleanup_file("/tmp/bsscan.elf");
+    JARVIS_TEST_PASS();
+}
+
 // Issue #271 P3: supersede-while-live — take-overwrite during a live
 // run must NOT free golden phys (live mapper owns them through its own
 // teardown); the live task stays byte-correct; everything reclaims
@@ -1226,4 +1329,5 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(rerun_canary_perm_pins); // #271 P3 canary+perm
     JARVIS_REGISTER_TEST(rerun_supersede_while_live); // #271 P3 supersede
     JARVIS_REGISTER_TEST(rerun_fork_child_private_copy); // #271 P3 fork (C8)
+    JARVIS_REGISTER_TEST(rerun_bss_only_data_canary); // #271 live-E2E BSS-only
 }
