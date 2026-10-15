@@ -1,380 +1,69 @@
-diff --git a/src/kernel/syscall/syscall_handlers_fs.cpp b/src/kernel/syscall/syscall_handlers_fs.cpp
-index 8d1c714d5..abff297a8 100644
---- a/src/kernel/syscall/syscall_handlers_fs.cpp
-+++ b/src/kernel/syscall/syscall_handlers_fs.cpp
-@@ -464,7 +464,7 @@ uint64_t Syscall::sys_readdir(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-     if (!cur)
-         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-     auto *f = cur->fd_table.get(static_cast<int>(arg0));
--    if (!f || !f->vnode || !f->vnode->ops->readdir)
-+    if (!f || !f->vnode || !f->vnode->ops)
-         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto pos_chk = checked(reinterpret_cast<uint64_t *>(arg1));
-@@ -480,9 +480,11 @@ uint64_t Syscall::sys_readdir(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-     else
-         position = *pos_chk.unsafe_ptr();
-     // MP-4 (SMAP): readdir writes the Dirent through a generic vnode op; build
--    // into a kernel local, then safe_copy to user (stac-wrapped).
-+    // into a kernel local, then safe_copy to user (stac-wrapped). The
-+    // merged helper overlays child mount points (#346) and tolerates a
-+    // missing readdir hook (empty underlying phase, mounts still listed).
-     vfs::Dirent kdent{};
--    int r = f->vnode->ops->readdir(*f->vnode, position, kdent);
-+    int r = vfs::readdir_merged(*f->vnode, position, kdent);
-     if (r == 0) {
-         if (syscall_is_user_task()) {
-             if (!safe_copy_to_user(dent_chk.unsafe_ptr(), &kdent, 1))
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 3c7c45f0d..8b230cc8e 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -292,7 +292,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"libc_string",           3,    0,       0      },  // ring3 exact+sweep + kernel api sweep (#303)
-     {"libc_syscall",          4,    0,       0      },  // image size + getpid + write-cross + no-corruption (#303, x86_64-only)
-     {"cross_boundary",        3,    0,       0      },  // ring3 vfsd chain + iocd register/forward (#303, x86_64-only) + iocd keyboard-read delivery (#340 P0)
--    {"storage",             166,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333)
-+    {"storage",             167,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333) + 1 readdir mount overlay (#346)
-     {"servers",             66,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333)
-     {"drivers",             107,  0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173) + 13 pre-existing aggregate drift at HEAD (member fine rows all match the dump: 8+12+16+11+19+13+10+18; aggregate never re-reconciled; reconciled #342)
-     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
 diff --git a/src/kernel/test/test_vfs.cpp b/src/kernel/test/test_vfs.cpp
-index 33b1222a4..ecce63ada 100644
+index ecce63ada..791b59af6 100644
 --- a/src/kernel/test/test_vfs.cpp
 +++ b/src/kernel/test/test_vfs.cpp
-@@ -205,6 +205,109 @@ JARVIS_TEST(vfs_mount_unmount, "PRE: vfsd, iocd | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Runmode: kernel
-+// Testidea: Verifies readdir_merged overlays child mount points that the
-+//           underlying readdir cannot see (issue #346: ls hid /mnt and
-+//           /mnt/ramdisk while cd worked).
-+// Input: Fake parent fs (one underlying entry) at /VFS_LS_PARENT plus a
-+//        fake child mount at /VFS_LS_PARENT/LS_CHILD; merged walk of the
-+//        parent.
-+// Expect: Both the underlying entry and the child mount leaf appear
-+//         exactly once; walk ends with VFS_INVALID.
-+// Depends: kernel::vfs::readdir_merged, mount, resolve
-+static Vnode fake_ls_parent_root;
-+static Vnode fake_ls_child_root;
-+
-+static int fake_ls_parent_readdir(Vnode &self, uint64_t &pos,
-+                                  Dirent &dent) {
-+    (void)self;
-+    if (pos != 0)
-+        return VFS_INVALID;
-+    const char *base_name = "LS_BASE_TXT";
-+    size_t name_idx = 0;
-+    while (base_name[name_idx] != '\0' && name_idx < sizeof(dent.d_name) - 1) {
-+        dent.d_name[name_idx] = base_name[name_idx];
-+        ++name_idx;
-+    }
-+    dent.d_name[name_idx] = '\0';
-+    dent.d_ino = 7;
-+    ++pos;
-+    return 0;
-+}
-+
-+static const VnodeOps fake_ls_parent_ops = {
-+    nullptr, // read
-+    nullptr, // write
-+    nullptr, // open
-+    nullptr, // close
-+    nullptr, // lseek
-+    nullptr, // fstat
-+    nullptr, // ioctl
-+    fake_ls_parent_readdir,
-+    nullptr, // lookup
-+    nullptr, // mkdir
-+    nullptr, // unlink
-+    nullptr, // create
-+};
-+
-+static Vnode *fake_ls_parent_get_root() {
-+    return &fake_ls_parent_root;
-+}
-+
-+static Vnode *fake_ls_child_get_root() {
-+    return &fake_ls_child_root;
-+}
-+
-+static kernel::vfs::Filesystem fake_ls_parent_fs = {.name = "fakelsparent",
-+                                                    .get_root =
-+                                                        fake_ls_parent_get_root};
-+static kernel::vfs::Filesystem fake_ls_child_fs = {.name = "fakelschild",
-+                                                   .get_root =
-+                                                       fake_ls_child_get_root};
-+
-+JARVIS_TEST(vfs_readdir_lists_mount_points, "PRE: vfsd, iocd | POST: none") {
-+    fake_ls_parent_root = Vnode{};
-+    fake_ls_parent_root.ops = &fake_ls_parent_ops;
-+    fake_ls_parent_root.mode = vfs::S_IFDIR;
-+    fake_ls_parent_root.ino = 41;
-+    fake_ls_child_root = Vnode{};
-+    fake_ls_child_root.mode = vfs::S_IFDIR;
-+    fake_ls_child_root.ino = 42;
-+
-+    JARVIS_ASSERT_EQ(0, vfs::mount(fake_ls_parent_fs, "/VFS_LS_PARENT"));
-+    JARVIS_ASSERT_EQ(0, vfs::mount(fake_ls_child_fs,
-+                                   "/VFS_LS_PARENT/LS_CHILD"));
-+
-+    Vnode *parent_vn = vfs::resolve("/VFS_LS_PARENT");
-+    JARVIS_ASSERT(parent_vn != nullptr);
-+
-+    uint64_t walk_pos = 0;
-+    Dirent walk_dent{};
-+    bool saw_base = false;
-+    bool saw_child = false;
-+    uint64_t entry_total = 0;
-+    while (vfs::readdir_merged(*parent_vn, walk_pos, walk_dent) == 0) {
-+        if (strcmp(walk_dent.d_name, "LS_BASE_TXT") == 0) {
-+            JARVIS_ASSERT(!saw_base);
-+            saw_base = true;
-+        } else if (strcmp(walk_dent.d_name, "LS_CHILD") == 0) {
-+            JARVIS_ASSERT(!saw_child);
-+            saw_child = true;
-+        } else {
-+            JARVIS_ASSERT_FMT(false, "unexpected entry %s",
-+                              walk_dent.d_name);
-+        }
-+        ++entry_total;
-+        JARVIS_ASSERT(entry_total <= 8);
-+    }
-+    JARVIS_ASSERT(saw_base);
-+    JARVIS_ASSERT(saw_child);
-+    JARVIS_ASSERT_EQ(2, entry_total);
-+    vfs::release(parent_vn); // issue #268: owned resolve result
-+
-+    JARVIS_TEST_PASS();
-+}
-+
- // Runmode: kernel
- // Testidea: Verifies vfs::mkdir creates a directory at a valid path.
- // Input: vfs::mkdir("/mnt/NEWDIR_TEST", 0)
-@@ -577,6 +680,7 @@ void register_vfs_tests() {
-     JARVIS_REGISTER_TEST(vfs_resolve_relative_path);
-     JARVIS_REGISTER_TEST(vfs_resolve_dotdot);
-     JARVIS_REGISTER_TEST(vfs_mount_unmount);
-+    JARVIS_REGISTER_TEST(vfs_readdir_lists_mount_points); // #346
-     JARVIS_REGISTER_TEST(vfs_mkdir_valid);
-     JARVIS_REGISTER_TEST(vfs_mkdir_nonexistent_parent);
-     JARVIS_REGISTER_TEST(vfs_mkdir_parent_not_dir);
-diff --git a/src/kernel/vfs/vfs.cpp b/src/kernel/vfs/vfs.cpp
-index aff435345..4ad0d2cf4 100644
---- a/src/kernel/vfs/vfs.cpp
-+++ b/src/kernel/vfs/vfs.cpp
-@@ -347,6 +347,152 @@ int mount(Filesystem &filesystem, const char *mount_point) {
+@@ -231,7 +231,11 @@ static int fake_ls_parent_readdir(Vnode &self, uint64_t &pos,
+     }
+     dent.d_name[name_idx] = '\0';
+     dent.d_ino = 7;
+-    ++pos;
++    // Issue #358: stride the cursor past a phantom slot, modeling
++    // the real hooks (initrd raw cpio index, fat32 free/LFN slots).
++    // A yielded-count phase boundary would compute mount_index 1 here
++    // and skip the child — the EOF-cursor boundary must yield 0.
++    pos += 2;
      return 0;
  }
  
-+/// @brief Maximum underlying names remembered for mount dedup (#346).
-+/// Bounds the phase-2 re-walk name table. Entries beyond the cap are
-+/// still counted for the phase boundary but skipped for dedup: a mount
-+/// colliding with an over-cap entry then double-lists instead of hiding
-+/// (fail-visible; resolve() shadowing already defines that ambiguity).
-+static constexpr size_t VFS_MERGED_MAX_SEEN = 64;
-+
-+/// @brief Leaf component of a mount path ("" for "/" itself).
-+static const char *mount_leaf_name(const char *mount_point) {
-+    const char *leaf_name = mount_point;
-+    for (const char *scan = mount_point; *scan != '\0'; ++scan) {
-+        if (*scan == '/')
-+            leaf_name = scan + 1;
-+    }
-+    return leaf_name;
-+}
-+
-+/// @brief Parent path of a mount point into out_parent.
-+/// @return false for "/" itself, non-absolute paths, or truncation.
-+static bool mount_parent_path(const char *mount_point, char *out_parent,
-+                              size_t parent_size) {
-+    if (mount_point == nullptr || mount_point[0] != '/' ||
-+        mount_point[1] == '\0' || parent_size == 0) {
-+        return false;
-+    }
-+    const char *last_slash = nullptr;
-+    for (const char *scan = mount_point + 1; *scan != '\0'; ++scan) {
-+        if (*scan == '/')
-+            last_slash = scan;
-+    }
-+    if (last_slash == nullptr) {
-+        // Direct child of root ("/mnt"): parent is "/".
-+        if (parent_size < 2)
-+            return false;
-+        out_parent[0] = '/';
-+        out_parent[1] = '\0';
-+        return true;
-+    }
-+    const size_t parent_len = static_cast<size_t>(last_slash - mount_point);
-+    if (parent_len + 1 > parent_size)
-+        return false;
-+    for (size_t idx = 0; idx < parent_len; ++idx)
-+        out_parent[idx] = mount_point[idx];
-+    out_parent[parent_len] = '\0';
-+    return true;
-+}
-+
-+/// @brief Read a directory entry, overlaying child mount points (#346).
-+int readdir_merged(Vnode &dir_vnode, uint64_t &pos, Dirent &dent) {
-+#ifdef CONFIG_TEST
-+    kernel::test::mark_vfs_touched();
-+#endif
-+    // Phase 1: the filesystem's own entries. A missing ops table or
-+    // readdir hook (test fakes) means an empty underlying phase. All
-+    // in-tree hooks use pos as an ordinal index (+1 per entry, untouched
-+    // on EOF), so pos passes through untouched into the phase boundary.
-+    const VnodeOps *ops = dir_vnode.ops;
-+    if (ops != nullptr && ops->readdir != nullptr) {
-+        if (ops->readdir(dir_vnode, pos, dent) == 0)
-+            return 0;
-+    }
-+    // Phase 2: mount-table overlay. Re-walk the underlying entries to
-+    // learn the phase boundary (caller pos at underlying EOF) and the
-+    // names already yielded (exact-match dedup). Walk-until-EOF matches
-+    // the cmd_ls loop shape; the stuck-hook break keeps it terminating.
-+    uint64_t underlying_count = 0;
-+    char seen_names[VFS_MERGED_MAX_SEEN][sizeof(Dirent::d_name)];
-+    size_t seen_count = 0;
-+    if (ops != nullptr && ops->readdir != nullptr) {
-+        uint64_t walk_pos = 0;
-+        Dirent walk_dent{};
-+        while (true) {
-+            const uint64_t before_pos = walk_pos;
-+            if (ops->readdir(dir_vnode, walk_pos, walk_dent) != 0)
-+                break;
-+            if (walk_pos <= before_pos)
-+                break; // stuck hook: fail closed with what we learned
-+            if (seen_count < VFS_MERGED_MAX_SEEN) {
-+                size_t name_idx = 0;
-+                while (walk_dent.d_name[name_idx] != '\0' &&
-+                       name_idx < sizeof(seen_names[0]) - 1) {
-+                    seen_names[seen_count][name_idx] =
-+                        walk_dent.d_name[name_idx];
-+                    ++name_idx;
-+                }
-+                seen_names[seen_count][name_idx] = '\0';
-+                ++seen_count;
-+            }
-+            ++underlying_count;
-+        }
-+    }
-+    if (pos < underlying_count)
-+        return VFS_INVALID; // shrunk mid-listing: fail closed, no guess
-+    const uint64_t mount_index = pos - underlying_count;
-+    // Holds no locks: per-call ops locking only, mount_table is read
-+    // unlocked under the UP assumption (same as resolve(), spec §1.4).
-+    uint64_t candidate_index = 0;
-+    for (size_t mount_idx = 0; mount_idx < mount_count; ++mount_idx) {
-+        if (!mount_table[mount_idx].used)
-+            continue;
-+        const char *mount_point = mount_table[mount_idx].mount_point;
-+        if (mount_point == nullptr)
-+            continue;
-+        const char *leaf_name = mount_leaf_name(mount_point);
-+        if (leaf_name[0] == '\0')
-+            continue; // "/" itself is never a child entry
-+        char parent_path[MAX_PATH];
-+        parent_path[0] = '\0';
-+        if (!mount_parent_path(mount_point, parent_path, sizeof(parent_path)))
-+            continue;
-+        Vnode *parent_vnode = resolve(parent_path);
-+        if (parent_vnode == nullptr)
-+            continue;
-+        const bool is_child = vnode_identity_match(&dir_vnode, parent_vnode,
-+                                                   dir_vnode.ino);
-+        release(parent_vnode); // issue #268: owned resolve result
-+        if (!is_child)
-+            continue;
-+        bool already_listed = false;
-+        for (size_t seen_idx = 0; seen_idx < seen_count; ++seen_idx) {
-+            if (strcmp(seen_names[seen_idx], leaf_name) == 0) {
-+                already_listed = true;
-+                break;
-+            }
-+        }
-+        if (already_listed)
-+            continue;
-+        if (candidate_index != mount_index) {
-+            ++candidate_index;
-+            continue;
-+        }
-+        size_t name_idx = 0;
-+        while (leaf_name[name_idx] != '\0' &&
-+               name_idx < sizeof(dent.d_name) - 1) {
-+            dent.d_name[name_idx] = leaf_name[name_idx];
-+            ++name_idx;
-+        }
-+        dent.d_name[name_idx] = '\0';
-+        const Vnode *child_root = mount_table[mount_idx].root_vnode;
-+        dent.d_ino = (child_root != nullptr) ? child_root->ino : 0;
-+        ++pos;
-+        return 0;
-+    }
-+    return VFS_INVALID;
-+}
-+
- /// @brief Initialize the VFS subsystem (clear mount table).
- void init() {
-     mount_count = 0;
-diff --git a/src/kernel/vfs/vfs.hpp b/src/kernel/vfs/vfs.hpp
-index 41a26f81c..87260294b 100644
---- a/src/kernel/vfs/vfs.hpp
-+++ b/src/kernel/vfs/vfs.hpp
-@@ -280,6 +280,15 @@ VfsError find_fs_err(const char *name, Filesystem *&out_fs);
- Vnode *get_root_vnode();
- /// @brief Set the root vnode of the VFS tree.
- void set_root_vnode(Vnode &vnode);
-+/// @brief Read a directory entry, overlaying child mount points (#346).
-+/// Phase 1 delegates to the vnode's own readdir while it returns 0; on
-+/// underlying EOF the mount table is scanned for mounts whose parent
-+/// resolves to this vnode (spelling-independent via resolve() +
-+/// vnode_identity_match), skipping names already yielded by phase 1.
-+/// Holds no locks itself; stateless across calls except the caller-owned
-+/// position. Null readdir ops are treated as an empty underlying phase.
-+/// @return 0 with dent filled, or VFS_INVALID when exhausted.
-+int readdir_merged(Vnode &dir_vnode, uint64_t &pos, Dirent &dent);
- /// @brief Set the root vnode of the VFS tree with error code.
- /// @return VfsError code.
- VfsError set_root_vnode_err(Vnode &vnode);
-diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index a29c79a19..7c5d171a5 100644
---- a/src/services/shell.cpp
-+++ b/src/services/shell.cpp
-@@ -3780,11 +3780,35 @@ void Shell::cmd_ls(int argc, const char** argv) {
- 
-     uint64_t pos = 0;
-     kernel::vfs::Dirent dent;
--    while (vn->ops->readdir(*vn, pos, dent) == 0) {
-+    while (kernel::vfs::readdir_merged(*vn, pos, dent) == 0) {
-         if (dent.d_name[0] == '\0') continue;
-         if (str_cmp(dent.d_name, ".") == 0 || str_cmp(dent.d_name, "..") == 0) continue;
- 
-         auto* child = vn->ops->lookup(*vn, dent.d_name);
-+        if (!child) {
-+            // Mount-table overlay (#346): synthesized entries (e.g. a
-+            // child mount shadowing the directory) are invisible to the
-+            // underlying lookup — fall back to a full resolve for the
-+            // type probe so mount points still highlight as directories.
-+            char dir_abs[256];
-+            auto* self_task = kernel::Scheduler::current_task();
-+            const char* cwd_str =
-+                (self_task && self_task->cwd[0]) ? self_task->cwd : "/";
-+            build_canonical_path(cwd_str, path, dir_abs, sizeof(dir_abs));
-+            char child_abs[256];
-+            size_t abs_idx = 0;
-+            while (dir_abs[abs_idx] && abs_idx < sizeof(child_abs) - 1) {
-+                child_abs[abs_idx] = dir_abs[abs_idx];
-+                ++abs_idx;
-+            }
-+            if (abs_idx > 1) child_abs[abs_idx++] = '/';
-+            size_t name_idx = 0;
-+            while (dent.d_name[name_idx] && abs_idx < sizeof(child_abs) - 1) {
-+                child_abs[abs_idx++] = dent.d_name[name_idx++];
-+            }
-+            child_abs[abs_idx] = '\0';
-+            child = kernel::vfs::resolve(child_abs);
-+        }
-         if (child) {
-             if (child->mode & kernel::vfs::S_IFDIR) {
-                 Terminal::set_fg(COLOR_DIR);
+diff --git a/src/kernel/vfs/vfs.cpp b/src/kernel/vfs/vfs.cpp
+index 4ad0d2cf4..23d91d43b 100644
+--- a/src/kernel/vfs/vfs.cpp
++++ b/src/kernel/vfs/vfs.cpp
+@@ -400,19 +400,24 @@ int readdir_merged(Vnode &dir_vnode, uint64_t &pos, Dirent &dent) {
+     kernel::test::mark_vfs_touched();
+ #endif
+     // Phase 1: the filesystem's own entries. A missing ops table or
+-    // readdir hook (test fakes) means an empty underlying phase. All
+-    // in-tree hooks use pos as an ordinal index (+1 per entry, untouched
+-    // on EOF), so pos passes through untouched into the phase boundary.
++    // readdir hook (test fakes) means an empty underlying phase. The
++    // hooks own the cursor units (initrd: raw cpio index; fat32: raw dir
++    // slot — both advance past skipped entries), so pos passes through
++    // untouched into the phase boundary below.
+     const VnodeOps *ops = dir_vnode.ops;
+     if (ops != nullptr && ops->readdir != nullptr) {
+         if (ops->readdir(dir_vnode, pos, dent) == 0)
+             return 0;
+     }
+     // Phase 2: mount-table overlay. Re-walk the underlying entries to
+-    // learn the phase boundary (caller pos at underlying EOF) and the
+-    // names already yielded (exact-match dedup). Walk-until-EOF matches
+-    // the cmd_ls loop shape; the stuck-hook break keeps it terminating.
+-    uint64_t underlying_count = 0;
++    // learn the phase boundary as an EOF CURSOR (not a yielded count —
++    // issue #358: raw-slot strides inflate pos past yielded counts, so a
++    // yielded-count boundary skips overlay candidates) and the names
++    // already yielded (exact-match dedup). Walk-until-EOF matches the
++    // cmd_ls loop shape; the stuck-hook break keeps it terminating.
++    // Deterministic hooks re-walk to the caller's EOF cursor, making the
++    // first overlay index 0; concurrent mutation fails closed below.
++    uint64_t underlying_eof = 0;
+     char seen_names[VFS_MERGED_MAX_SEEN][sizeof(Dirent::d_name)];
+     size_t seen_count = 0;
+     if (ops != nullptr && ops->readdir != nullptr) {
+@@ -435,12 +440,12 @@ int readdir_merged(Vnode &dir_vnode, uint64_t &pos, Dirent &dent) {
+                 seen_names[seen_count][name_idx] = '\0';
+                 ++seen_count;
+             }
+-            ++underlying_count;
+         }
++        underlying_eof = walk_pos;
+     }
+-    if (pos < underlying_count)
++    if (pos < underlying_eof)
+         return VFS_INVALID; // shrunk mid-listing: fail closed, no guess
+-    const uint64_t mount_index = pos - underlying_count;
++    const uint64_t mount_index = pos - underlying_eof;
+     // Holds no locks: per-call ops locking only, mount_table is read
+     // unlocked under the UP assumption (same as resolve(), spec §1.4).
+     uint64_t candidate_index = 0;

@@ -49,6 +49,18 @@
 
 ## Entries
 
+### #358 — readdir cursor-stride follow-up (overlay skipped live)
+
+- **Learned:** (1) Readdir `pos` is a per-hook CURSOR, not a yielded ordinal — initrd advances per raw cpio name, fat32 per raw slot (free/LFN skips included); any index derived as `pos - yielded_count` inflates and skips. Derive phase boundaries in cursor units (re-walk to the EOF cursor). (2) A fake that advances 1:1 per entry cannot catch cursor bugs — stride the fake (phantom slots) to lock real hook semantics; the negctrl then discriminates the exact shipped bug. (3) "No progress" reports need a stray-process check first: two orphaned QEMUs (aborted expect runs) held the disk lock and confused the session — reap + `Failed to get write lock` is the tell. Expect probes must `send "exit"` + expect eof so no strays survive.
+- **Adapted:** EOF-cursor boundary + stride-2 fake; live `ls` E2E probe (`/tmp/jarvis-358-ls.exp`); SIL 3 APPROVED zero findings (`report-2026-10-15T11-41-59Z`).
+- **Style re-surface:** §5 fail-closed on skew (pos < eof guard); §6 terminating walks (stuck-hook break kept); no new locks (§11 untouched).
+
+### #344 — dump-counts mux-chardev redirect fix
+
+- **Learned:** A `sed` substitution against a QEMU flag string fails silently when the flags evolve (mux `chardev:dbg` replaced `mon:stdio`) — the target then runs against unredirected output and reports "not found" instead of the real cause. Every flag-rewriting recipe needs a grep-guard per pattern plus a loud `ERROR + exit 1` when none matches; the coverage target already carried the correct idiom — grep the Makefile for the working precedent before inventing a new redirect.
+- **Adapted:** `_run_dump_counts_qemu` now tries `chardev:dbg` → `mon:stdio` → loud failure; SIL 3 APPROVED zero findings (`report-2026-10-15T06-57-55Z`).
+- **Style re-surface:** build-system changes still need retrieval artifacts + SIL 3 audit; reproduce-first applies to tooling too (the exact `grep: No such file` signature was captured pre-fix).
+
 ### #346 — readdir mount-point overlay (ls hid /mnt, /mnt/ramdisk)
 
 - **Learned:** (1) `readdir` enumerates only the underlying fs's own entries while `resolve()` consults the mount table both ways — so mount points are traversable but never listed; the defect necessarily hid every mount (`/dev`, `/proc`, `/tmp` too), not just the reported two. (2) Vnode-identity matching (`resolve(parent)` + `vnode_identity_match`) makes the overlay spelling-independent (relative paths, `.`, trailing slashes need zero normalization) and path-free, so the same helper serves both `cmd_ls` (has path) and `sys_readdir` (fd only, no reverse map). (3) All in-tree readdir hooks share the ordinal-pos convention (+1/entry, untouched on EOF) — pos passthrough is safe, and the phase boundary is re-derived per call by re-walk. (4) A negative control (temporarily return EOF after phase 1) is a ~25 s run and proves the regression test discriminates — do it for every overlay-style fix.

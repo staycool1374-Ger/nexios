@@ -400,19 +400,24 @@ int readdir_merged(Vnode &dir_vnode, uint64_t &pos, Dirent &dent) {
     kernel::test::mark_vfs_touched();
 #endif
     // Phase 1: the filesystem's own entries. A missing ops table or
-    // readdir hook (test fakes) means an empty underlying phase. All
-    // in-tree hooks use pos as an ordinal index (+1 per entry, untouched
-    // on EOF), so pos passes through untouched into the phase boundary.
+    // readdir hook (test fakes) means an empty underlying phase. The
+    // hooks own the cursor units (initrd: raw cpio index; fat32: raw dir
+    // slot — both advance past skipped entries), so pos passes through
+    // untouched into the phase boundary below.
     const VnodeOps *ops = dir_vnode.ops;
     if (ops != nullptr && ops->readdir != nullptr) {
         if (ops->readdir(dir_vnode, pos, dent) == 0)
             return 0;
     }
     // Phase 2: mount-table overlay. Re-walk the underlying entries to
-    // learn the phase boundary (caller pos at underlying EOF) and the
-    // names already yielded (exact-match dedup). Walk-until-EOF matches
-    // the cmd_ls loop shape; the stuck-hook break keeps it terminating.
-    uint64_t underlying_count = 0;
+    // learn the phase boundary as an EOF CURSOR (not a yielded count —
+    // issue #358: raw-slot strides inflate pos past yielded counts, so a
+    // yielded-count boundary skips overlay candidates) and the names
+    // already yielded (exact-match dedup). Walk-until-EOF matches the
+    // cmd_ls loop shape; the stuck-hook break keeps it terminating.
+    // Deterministic hooks re-walk to the caller's EOF cursor, making the
+    // first overlay index 0; concurrent mutation fails closed below.
+    uint64_t underlying_eof = 0;
     char seen_names[VFS_MERGED_MAX_SEEN][sizeof(Dirent::d_name)];
     size_t seen_count = 0;
     if (ops != nullptr && ops->readdir != nullptr) {
@@ -435,12 +440,12 @@ int readdir_merged(Vnode &dir_vnode, uint64_t &pos, Dirent &dent) {
                 seen_names[seen_count][name_idx] = '\0';
                 ++seen_count;
             }
-            ++underlying_count;
         }
+        underlying_eof = walk_pos;
     }
-    if (pos < underlying_count)
+    if (pos < underlying_eof)
         return VFS_INVALID; // shrunk mid-listing: fail closed, no guess
-    const uint64_t mount_index = pos - underlying_count;
+    const uint64_t mount_index = pos - underlying_eof;
     // Holds no locks: per-call ops locking only, mount_table is read
     // unlocked under the UP assumption (same as resolve(), spec §1.4).
     uint64_t candidate_index = 0;

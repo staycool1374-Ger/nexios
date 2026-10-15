@@ -231,7 +231,11 @@ static int fake_ls_parent_readdir(Vnode &self, uint64_t &pos,
     }
     dent.d_name[name_idx] = '\0';
     dent.d_ino = 7;
-    ++pos;
+    // Issue #358: stride the cursor past a phantom slot, modeling
+    // the real hooks (initrd raw cpio index, fat32 free/LFN slots).
+    // A yielded-count phase boundary would compute mount_index 1 here
+    // and skip the child — the EOF-cursor boundary must yield 0.
+    pos += 2;
     return 0;
 }
 

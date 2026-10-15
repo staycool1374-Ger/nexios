@@ -5,6 +5,8 @@
 
 ## Active Summary
 ### Objective
+- **DONE (2026-10-15):** Issue #358 (cursor-stride follow-up to #346): FIX (uncommitted): EOF-cursor phase boundary + stride-2 fake. Validation: storage 167/167, negctrl 166+1, live E2E (`mnt` in `ls`, `ramdisk` in `ls /mnt`, clean exit). Audit APPROVED zero findings (`report-2026-10-15T11-41-59Z`). Issue stays OPEN for owner close.
+- **DONE (2026-10-15):** Issue #344 (S3 dump-counts no-op): FIX (uncommitted, Makefile-only): chardev-aware serial redirect (`chardev:dbg` → `mon:stdio` fallback → loud ERROR). Validation: pre-fix repro captured, post-fix 223 [TCOUNT] lines ×2 runs, zero errors. Audit APPROVED zero findings (`report-2026-10-15T06-57-55Z`). Issue stays OPEN for owner close.
 - **DONE (2026-10-15):** Issue #346 (S2 `ls` hid mounts): FIX (uncommitted): `vfs::readdir_merged()` overlay (underlying readdir → mount-table scan via resolve+identity, exact-name dedup) in both `cmd_ls` + `sys_readdir`; resolve-fallback color probe; regression `vfs_readdir_lists_mount_points` (storage 166→167). Validation: storage 167/167, negctrl 166+1 (only new test fails), build Errors 0. Audit APPROVED (`report-2026-10-15T06-35-44Z`, 2 S3). Issue stays OPEN for owner close.
 - **DONE (2026-10-15):** Issue #345 (S2 flake tracker): FIX LANDED (commit `560b87027`): per-tick #18 re-wake starvation (level-triggered re-apply → edge: skip duplicate READY+queued) + EDF self-pick guard (never return current via EDF). Validation: task_watchdog 6/6 ×6, deadline 145/145, proc_elf 123/123 through file-backed harness (pipe-backpressure already fixed via `QEMU_FLAGS_FILE`). Audit APPROVED (`report-2026-10-15T055555Z`). Issue stays OPEN for owner close.
 - **ACTIVE (2026-10-14):** Issue #345 hunt phase — see DONE above.

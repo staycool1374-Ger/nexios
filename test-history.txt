@@ -3489,3 +3489,5 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-15 08:31:00 storage PASSED: 167 FAILED: 0 TIME: 60504ms
 2026-10-15 08:32:30 storage PASSED: 166 FAILED: 1 TIME: 67627ms STATUS: NEGCTRL-346 (phase-2 disabled, only vfs_readdir_lists_mount_points fails)
 2026-10-15 08:34:04 storage PASSED: 167 FAILED: 0 TIME: 60368ms
+2026-10-15 13:38:00 storage PASSED: 167 FAILED: 0 TIME: 57271ms
+2026-10-15 13:39:30 storage PASSED: 166 FAILED: 1 TIME: 57239ms STATUS: NEGCTRL-358 (yielded-count boundary + stride-2 fake, only vfs_readdir_lists_mount_points fails)
