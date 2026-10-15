@@ -347,6 +347,152 @@ int mount(Filesystem &filesystem, const char *mount_point) {
     return 0;
 }
 
+/// @brief Maximum underlying names remembered for mount dedup (#346).
+/// Bounds the phase-2 re-walk name table. Entries beyond the cap are
+/// still counted for the phase boundary but skipped for dedup: a mount
+/// colliding with an over-cap entry then double-lists instead of hiding
+/// (fail-visible; resolve() shadowing already defines that ambiguity).
+static constexpr size_t VFS_MERGED_MAX_SEEN = 64;
+
+/// @brief Leaf component of a mount path ("" for "/" itself).
+static const char *mount_leaf_name(const char *mount_point) {
+    const char *leaf_name = mount_point;
+    for (const char *scan = mount_point; *scan != '\0'; ++scan) {
+        if (*scan == '/')
+            leaf_name = scan + 1;
+    }
+    return leaf_name;
+}
+
+/// @brief Parent path of a mount point into out_parent.
+/// @return false for "/" itself, non-absolute paths, or truncation.
+static bool mount_parent_path(const char *mount_point, char *out_parent,
+                              size_t parent_size) {
+    if (mount_point == nullptr || mount_point[0] != '/' ||
+        mount_point[1] == '\0' || parent_size == 0) {
+        return false;
+    }
+    const char *last_slash = nullptr;
+    for (const char *scan = mount_point + 1; *scan != '\0'; ++scan) {
+        if (*scan == '/')
+            last_slash = scan;
+    }
+    if (last_slash == nullptr) {
+        // Direct child of root ("/mnt"): parent is "/".
+        if (parent_size < 2)
+            return false;
+        out_parent[0] = '/';
+        out_parent[1] = '\0';
+        return true;
+    }
+    const size_t parent_len = static_cast<size_t>(last_slash - mount_point);
+    if (parent_len + 1 > parent_size)
+        return false;
+    for (size_t idx = 0; idx < parent_len; ++idx)
+        out_parent[idx] = mount_point[idx];
+    out_parent[parent_len] = '\0';
+    return true;
+}
+
+/// @brief Read a directory entry, overlaying child mount points (#346).
+int readdir_merged(Vnode &dir_vnode, uint64_t &pos, Dirent &dent) {
+#ifdef CONFIG_TEST
+    kernel::test::mark_vfs_touched();
+#endif
+    // Phase 1: the filesystem's own entries. A missing ops table or
+    // readdir hook (test fakes) means an empty underlying phase. All
+    // in-tree hooks use pos as an ordinal index (+1 per entry, untouched
+    // on EOF), so pos passes through untouched into the phase boundary.
+    const VnodeOps *ops = dir_vnode.ops;
+    if (ops != nullptr && ops->readdir != nullptr) {
+        if (ops->readdir(dir_vnode, pos, dent) == 0)
+            return 0;
+    }
+    // Phase 2: mount-table overlay. Re-walk the underlying entries to
+    // learn the phase boundary (caller pos at underlying EOF) and the
+    // names already yielded (exact-match dedup). Walk-until-EOF matches
+    // the cmd_ls loop shape; the stuck-hook break keeps it terminating.
+    uint64_t underlying_count = 0;
+    char seen_names[VFS_MERGED_MAX_SEEN][sizeof(Dirent::d_name)];
+    size_t seen_count = 0;
+    if (ops != nullptr && ops->readdir != nullptr) {
+        uint64_t walk_pos = 0;
+        Dirent walk_dent{};
+        while (true) {
+            const uint64_t before_pos = walk_pos;
+            if (ops->readdir(dir_vnode, walk_pos, walk_dent) != 0)
+                break;
+            if (walk_pos <= before_pos)
+                break; // stuck hook: fail closed with what we learned
+            if (seen_count < VFS_MERGED_MAX_SEEN) {
+                size_t name_idx = 0;
+                while (walk_dent.d_name[name_idx] != '\0' &&
+                       name_idx < sizeof(seen_names[0]) - 1) {
+                    seen_names[seen_count][name_idx] =
+                        walk_dent.d_name[name_idx];
+                    ++name_idx;
+                }
+                seen_names[seen_count][name_idx] = '\0';
+                ++seen_count;
+            }
+            ++underlying_count;
+        }
+    }
+    if (pos < underlying_count)
+        return VFS_INVALID; // shrunk mid-listing: fail closed, no guess
+    const uint64_t mount_index = pos - underlying_count;
+    // Holds no locks: per-call ops locking only, mount_table is read
+    // unlocked under the UP assumption (same as resolve(), spec §1.4).
+    uint64_t candidate_index = 0;
+    for (size_t mount_idx = 0; mount_idx < mount_count; ++mount_idx) {
+        if (!mount_table[mount_idx].used)
+            continue;
+        const char *mount_point = mount_table[mount_idx].mount_point;
+        if (mount_point == nullptr)
+            continue;
+        const char *leaf_name = mount_leaf_name(mount_point);
+        if (leaf_name[0] == '\0')
+            continue; // "/" itself is never a child entry
+        char parent_path[MAX_PATH];
+        parent_path[0] = '\0';
+        if (!mount_parent_path(mount_point, parent_path, sizeof(parent_path)))
+            continue;
+        Vnode *parent_vnode = resolve(parent_path);
+        if (parent_vnode == nullptr)
+            continue;
+        const bool is_child = vnode_identity_match(&dir_vnode, parent_vnode,
+                                                   dir_vnode.ino);
+        release(parent_vnode); // issue #268: owned resolve result
+        if (!is_child)
+            continue;
+        bool already_listed = false;
+        for (size_t seen_idx = 0; seen_idx < seen_count; ++seen_idx) {
+            if (strcmp(seen_names[seen_idx], leaf_name) == 0) {
+                already_listed = true;
+                break;
+            }
+        }
+        if (already_listed)
+            continue;
+        if (candidate_index != mount_index) {
+            ++candidate_index;
+            continue;
+        }
+        size_t name_idx = 0;
+        while (leaf_name[name_idx] != '\0' &&
+               name_idx < sizeof(dent.d_name) - 1) {
+            dent.d_name[name_idx] = leaf_name[name_idx];
+            ++name_idx;
+        }
+        dent.d_name[name_idx] = '\0';
+        const Vnode *child_root = mount_table[mount_idx].root_vnode;
+        dent.d_ino = (child_root != nullptr) ? child_root->ino : 0;
+        ++pos;
+        return 0;
+    }
+    return VFS_INVALID;
+}
+
 /// @brief Initialize the VFS subsystem (clear mount table).
 void init() {
     mount_count = 0;

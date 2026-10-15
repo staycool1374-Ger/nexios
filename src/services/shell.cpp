@@ -3780,11 +3780,35 @@ void Shell::cmd_ls(int argc, const char** argv) {
 
     uint64_t pos = 0;
     kernel::vfs::Dirent dent;
-    while (vn->ops->readdir(*vn, pos, dent) == 0) {
+    while (kernel::vfs::readdir_merged(*vn, pos, dent) == 0) {
         if (dent.d_name[0] == '\0') continue;
         if (str_cmp(dent.d_name, ".") == 0 || str_cmp(dent.d_name, "..") == 0) continue;
 
         auto* child = vn->ops->lookup(*vn, dent.d_name);
+        if (!child) {
+            // Mount-table overlay (#346): synthesized entries (e.g. a
+            // child mount shadowing the directory) are invisible to the
+            // underlying lookup — fall back to a full resolve for the
+            // type probe so mount points still highlight as directories.
+            char dir_abs[256];
+            auto* self_task = kernel::Scheduler::current_task();
+            const char* cwd_str =
+                (self_task && self_task->cwd[0]) ? self_task->cwd : "/";
+            build_canonical_path(cwd_str, path, dir_abs, sizeof(dir_abs));
+            char child_abs[256];
+            size_t abs_idx = 0;
+            while (dir_abs[abs_idx] && abs_idx < sizeof(child_abs) - 1) {
+                child_abs[abs_idx] = dir_abs[abs_idx];
+                ++abs_idx;
+            }
+            if (abs_idx > 1) child_abs[abs_idx++] = '/';
+            size_t name_idx = 0;
+            while (dent.d_name[name_idx] && abs_idx < sizeof(child_abs) - 1) {
+                child_abs[abs_idx++] = dent.d_name[name_idx++];
+            }
+            child_abs[abs_idx] = '\0';
+            child = kernel::vfs::resolve(child_abs);
+        }
         if (child) {
             if (child->mode & kernel::vfs::S_IFDIR) {
                 Terminal::set_fg(COLOR_DIR);

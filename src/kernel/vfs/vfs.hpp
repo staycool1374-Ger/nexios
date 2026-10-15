@@ -280,6 +280,15 @@ VfsError find_fs_err(const char *name, Filesystem *&out_fs);
 Vnode *get_root_vnode();
 /// @brief Set the root vnode of the VFS tree.
 void set_root_vnode(Vnode &vnode);
+/// @brief Read a directory entry, overlaying child mount points (#346).
+/// Phase 1 delegates to the vnode's own readdir while it returns 0; on
+/// underlying EOF the mount table is scanned for mounts whose parent
+/// resolves to this vnode (spelling-independent via resolve() +
+/// vnode_identity_match), skipping names already yielded by phase 1.
+/// Holds no locks itself; stateless across calls except the caller-owned
+/// position. Null readdir ops are treated as an empty underlying phase.
+/// @return 0 with dent filled, or VFS_INVALID when exhausted.
+int readdir_merged(Vnode &dir_vnode, uint64_t &pos, Dirent &dent);
 /// @brief Set the root vnode of the VFS tree with error code.
 /// @return VfsError code.
 VfsError set_root_vnode_err(Vnode &vnode);

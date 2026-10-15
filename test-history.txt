@@ -3486,3 +3486,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-14 19:05:00 elf_loader PASSED: 25 FAILED: 0 TIME: 4267ms STATUS: file-backend path cool-host
 2026-10-14 20:30:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 997ms STATUS: STALL-RECOVERED post-TEMP-revert (tree clean, Errors 0, zero diag strings)
 2026-10-15 07:50:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 1002ms STATUS: #345 fix validation (edge-triggered + EDF guard, 6/6)
+2026-10-15 08:31:00 storage PASSED: 167 FAILED: 0 TIME: 60504ms
+2026-10-15 08:32:30 storage PASSED: 166 FAILED: 1 TIME: 67627ms STATUS: NEGCTRL-346 (phase-2 disabled, only vfs_readdir_lists_mount_points fails)
+2026-10-15 08:34:04 storage PASSED: 167 FAILED: 0 TIME: 60368ms

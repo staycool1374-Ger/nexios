@@ -464,7 +464,7 @@ uint64_t Syscall::sys_readdir(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     if (!cur)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *f = cur->fd_table.get(static_cast<int>(arg0));
-    if (!f || !f->vnode || !f->vnode->ops->readdir)
+    if (!f || !f->vnode || !f->vnode->ops)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto pos_chk = checked(reinterpret_cast<uint64_t *>(arg1));
@@ -480,9 +480,11 @@ uint64_t Syscall::sys_readdir(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     else
         position = *pos_chk.unsafe_ptr();
     // MP-4 (SMAP): readdir writes the Dirent through a generic vnode op; build
-    // into a kernel local, then safe_copy to user (stac-wrapped).
+    // into a kernel local, then safe_copy to user (stac-wrapped). The
+    // merged helper overlays child mount points (#346) and tolerates a
+    // missing readdir hook (empty underlying phase, mounts still listed).
     vfs::Dirent kdent{};
-    int r = f->vnode->ops->readdir(*f->vnode, position, kdent);
+    int r = vfs::readdir_merged(*f->vnode, position, kdent);
     if (r == 0) {
         if (syscall_is_user_task()) {
             if (!safe_copy_to_user(dent_chk.unsafe_ptr(), &kdent, 1))

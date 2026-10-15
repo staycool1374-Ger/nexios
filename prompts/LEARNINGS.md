@@ -23,8 +23,8 @@
 - Freeze ticks (IrqGuard) around ISR-observed measurements; expiries derive from the live clock, never fixed bases; relative-over-absolute timing asserts (≥3× headroom); watchdog kills get STATUS history rows.
 - Zero-S-line TIMEOUT + identical-binary rerun green = TCG stall, not regression (check host load first); debug-green never implies release-green (build release before any full gate).
 - Hunt-loop evidence is file-grade or it didn't happen: tee every loop to `/tmp/jarvis-hunt-<issue>-<YYYYMMDD-HHMMSS>.log`, record per-iteration PASS/TIMEOUT + load average inline, and post the file path + tally as an issue comment the same session (serial log is shared/singleton — raw output not tee'd is lost); never pipe make/test through `head` (SIGPIPE kills the run). GDB stops the guest: one interrupt + full capture + detach, never touch a timed run; `call` lies on the TCG stub (raw reads only); S-lines live in debugcon, not serial.
+- Readdir lists only the underlying fs: mount points live solely in the VFS mount table, so every `ops->readdir` caller hides them — overlay at the VFS layer (resolve + vnode_identity_match, spelling-independent), never per-fs; synthesized entries need a resolve-fallback for type probes (#346).
 - Timeout wake is edge-triggered: one expiry → one READY wake (skip duplicate READY+queued re-wakes); EDF never returns current (self-pick guard) — both one-line guards, no new locks, stranded READY still rescued (#345).
-- TCG wall dilation is load-bearing: size every timeout tier from measured walls; re-verify flakes before bisecting.
 - TCG wall dilation is load-bearing: size every timeout tier from measured walls; re-verify flakes before bisecting.
 - Reap stray QEMUs after every session (tool-killed interactive runs survive reparented, burning ~25% CPU each, masquerading as load spells); recipe-only Makefile edits don't rebuild cpio/ISO — rm the artifacts to force repack.
 - Interactive user-task tests need a scripted handoff (`source`: loadelf/sleep/runelf/sleep — `fg` is a stub, /dev/tty shared); TCP-serial output before connect is lost (send CR first for a fresh prompt); convict user-space faults by pristine-binary control experiment, never by re-reading the derivation.
@@ -48,6 +48,12 @@
 ```
 
 ## Entries
+
+### #346 — readdir mount-point overlay (ls hid /mnt, /mnt/ramdisk)
+
+- **Learned:** (1) `readdir` enumerates only the underlying fs's own entries while `resolve()` consults the mount table both ways — so mount points are traversable but never listed; the defect necessarily hid every mount (`/dev`, `/proc`, `/tmp` too), not just the reported two. (2) Vnode-identity matching (`resolve(parent)` + `vnode_identity_match`) makes the overlay spelling-independent (relative paths, `.`, trailing slashes need zero normalization) and path-free, so the same helper serves both `cmd_ls` (has path) and `sys_readdir` (fd only, no reverse map). (3) All in-tree readdir hooks share the ordinal-pos convention (+1/entry, untouched on EOF) — pos passthrough is safe, and the phase boundary is re-derived per call by re-walk. (4) A negative control (temporarily return EOF after phase 1) is a ~25 s run and proves the regression test discriminates — do it for every overlay-style fix.
+- **Adapted:** `vfs::readdir_merged()` (vfs.cpp/vfs.hpp) + both callers + resolve-fallback color probe; `vfs_readdir_lists_mount_points` test (storage 166→167); SIL 3 APPROVED (`report-2026-10-15T06-35-44Z`, 2 S3 notes dispositioned harmless).
+- **Style re-surface:** §5 fail-closed on reachable input (shrunk-dir early EOF, truncation guards); §10 named sentinels/bounds; §11 no locks across reschedule (helper holds none; mount table read unlocked like resolve()).
 
 ### #271 P2 — rerun builder + shell gate done (issue stays open for P3)
 
