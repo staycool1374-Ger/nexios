@@ -968,6 +968,26 @@ bool VMM::pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
 #endif
 }
 
+/// @brief Test inspector: reports whether the mapped leaf is executable
+///        per the arch NX encoding (walk-only, never allocates).
+/// @param virt_addr Virtual address to inspect.
+/// @param pml4_phys Physical address of the target PML4.
+/// @return false when unmapped (or a huge/block entry, not ours).
+bool VMM::pte_is_executable_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+    uint64_t *leaf = pte_leaf_in_pml4(virt_addr, pml4_phys);
+    if (!leaf) {
+        return false;
+    }
+    const uint64_t entry = *leaf;
+#if defined(CONFIG_ARCH_AARCH64)
+    return (entry & PAGE_UXN) == 0;
+#elif defined(CONFIG_ARCH_RISCV64)
+    return (entry & PAGE_EXEC) != 0;
+#else
+    return (entry & (1ULL << 63)) == 0;
+#endif
+}
+
 void VMM::remap_range_ro_in_pml4(uint64_t pml4_phys, uint64_t vaddr,
                                  uint64_t size, bool executable) {
     if (size == 0)
@@ -1943,7 +1963,8 @@ bool VMM::map_frame_from_cap(cap::FrameCap *fc, uint64_t virt_addr, bool user,
 errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
                                              uint64_t phys_addr,
                                              size_t page_count, bool user,
-                                             uint64_t pml4_phys) {
+                                             uint64_t pml4_phys,
+                                             bool executable) {
     if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0 ||
         (phys_addr & (arch::PAGE_SIZE - 1)) != 0) {
         return errors::VMM_ERR_INVALID_ADDR;
@@ -1959,7 +1980,7 @@ errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
         const uint64_t page_va = virt_addr + page_idx * arch::PAGE_SIZE;
         const uint64_t page_pa = phys_addr + page_idx * arch::PAGE_SIZE;
         errors::VmmError step = map_page_in_pml4_try(
-            page_va, page_pa, user, true, pml4_phys);
+            page_va, page_pa, user, executable, pml4_phys);
         if (step != errors::VMM_ERR_OK) {
             for (size_t back = 0; back < page_idx; ++back) {
                 unmap_page_in_pml4(virt_addr + back * arch::PAGE_SIZE,
@@ -1973,7 +1994,8 @@ errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
 
 errors::VmmError VMM::map_frame_from_cap_err(cap::FrameCap *fc,
                                               uint64_t virt_addr, bool user,
-                                              uint64_t pml4_phys) {
+                                              uint64_t pml4_phys,
+                                              bool executable) {
     if (!fc) {
         return errors::VMM_ERR_INVALID_ADDR;
     }
@@ -1983,7 +2005,8 @@ errors::VmmError VMM::map_frame_from_cap_err(cap::FrameCap *fc,
     if (fc->phys == 0 || fc->count == 0) {
         return errors::VMM_ERR_EMPTY_RANGE;
     }
-    return map_phys_range_try(virt_addr, fc->phys, fc->count, user, pml4_phys);
+    return map_phys_range_try(virt_addr, fc->phys, fc->count, user, pml4_phys,
+                              executable);
 }
 
 /// @brief Unmaps one page previously mapped via map_frame_from_cap().
@@ -2005,7 +2028,8 @@ bool VMM::map_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr, bool user,
 
 errors::VmmError VMM::map_mmio_from_cap_err(cap::MmioCap *mmio,
                                              uint64_t virt_addr, bool user,
-                                             uint64_t pml4_phys) {
+                                             uint64_t pml4_phys,
+                                             bool executable) {
     if (!mmio) {
         return errors::VMM_ERR_INVALID_ADDR;
     }
@@ -2024,7 +2048,8 @@ errors::VmmError VMM::map_mmio_from_cap_err(cap::MmioCap *mmio,
     }
     const size_t pages =
         (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
-    return map_phys_range_try(virt_addr, mmio->phys, pages, user, pml4_phys);
+    return map_phys_range_try(virt_addr, mmio->phys, pages, user, pml4_phys,
+                              executable);
 }
 
 /// @brief Unmaps an MmioCap's memory BAR range previously mapped via

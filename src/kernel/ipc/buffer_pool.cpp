@@ -341,7 +341,8 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
     ENSURE(PMM::is_user_page(phys) &&
            "BufferPool::alloc: page not user-owned before map_page_in_pml4");
 
-    VMM::map_page_in_pml4(va, phys, true, task.page_table_);
+    // Issue #325-D: IPC buffers are data (never executable).
+    VMM::map_page_in_pml4(va, phys, true, false, task.page_table_);
 
     entries[idx].phys_addr = phys;
     entries[idx].generation =
@@ -403,7 +404,9 @@ bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
     if (VMM::virt_to_phys_in_pml4(va, task.page_table_) != 0)
         return false;
 
-    VMM::map_page_in_pml4(va, entries[idx].phys_addr, true, task.page_table_);
+    // Issue #325-D: IPC buffers are data (never executable).
+    VMM::map_page_in_pml4(va, entries[idx].phys_addr, true, false,
+                          task.page_table_);
 
     entries[idx].owner_task = static_cast<uint32_t>(task.id);
     entries[idx].mapped_va = va;

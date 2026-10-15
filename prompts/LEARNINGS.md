@@ -49,6 +49,21 @@
 
 ## Entries
 
+### #325-D — NX posture (audit APPROVED, commit pending)
+
+- **Learned:** (1) Policy defaults beat per-call discipline: flipping the
+  cap-map default to NX fixed 2 registries + pager with zero caller edits;
+  explicit opt-in (`executable=true`) keeps code paths possible.
+  (2) Walk-only inspectors (RO precedent) are the sanctioned way to pin
+  PTE bits from tests — no execution probes needed. (3) Migration
+  audit order: data-only void→5-arg flips are behavior-safe iff the
+  pages provably never execute (stacks/heaps/buffers); code/data-mixed
+  (ELF pins) must keep X — check segment content, not just the call.
+- **Adapted:** NX-default cap errs + bools; 6 data-site NX migrations;
+  `pte_is_executable_in_pml4`; cap_mmio 19→20.
+- **Style re-surface:** defaulted params preserve callers (§9 docs must
+  state behavior changes); arch-bit symmetry in inspectors.
+
 ### #325-C — unmap naming + B swapped-arg catch
 
 - **Learned:** (1) Caller-migration slices must run the aggregates OWNING

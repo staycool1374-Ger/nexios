@@ -784,6 +784,59 @@ JARVIS_TEST(cap_unmap_clears_present_bit, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: NX policy pinning — cap-mapped memory is non-executable by
+//           default; explicit executable round-trips through the leaf bit
+// Input: frame + MMIO maps (default), explicit true/false via _err,
+//         unmapped VA probe
+// Expect: defaults + explicit-false read non-executable on all arches
+//         (x86 NX63 / aarch64 UXN / riscv64 ~X); explicit-true reads
+//         executable; unmapped reads false
+// Depends: kernel::memory::VMM NX policy (issue #325-D)
+JARVIS_TEST(cap_map_nx_policy_pinning, "PRE: none | POST: none") {
+    constexpr uint64_t VA = 0x500000ULL;
+    uint64_t fphys = PMM::alloc_user_contiguous(1);
+    JARVIS_ASSERT(fphys != 0);
+    auto *fc = cap::FrameCap::create(fphys, 1, true);
+    JARVIS_ASSERT(fc != nullptr);
+    uint64_t phys = PMM::alloc_page();
+    JARVIS_ASSERT(phys != 0);
+    auto *mmio = cap::MmioCap::create(phys, arch::PAGE_SIZE,
+                                      arch::PciBarType::MEMORY_32);
+    JARVIS_ASSERT(mmio != nullptr);
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(VA, pml4));
+    VMM::unmap_frame_from_cap(VA, pml4);
+
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(VA, pml4));
+    VMM::unmap_mmio_from_cap(mmio, VA, pml4);
+
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4, true) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(VMM::pte_is_executable_in_pml4(VA, pml4));
+    VMM::unmap_frame_from_cap(VA, pml4);
+
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4, false) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(VA, pml4));
+    VMM::unmap_mmio_from_cap(mmio, VA, pml4);
+
+    JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(VA, pml4));
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    fc->release();
+    mmio->release();
+    PMM::free_page(phys);
+    JARVIS_TEST_PASS();
+}
+
 #if defined(CONFIG_ARCH_X86_64)
 // Runmode: kernel
 // Testidea: Revoking an IO MmioCap retroactively re-masks the granted port
@@ -1098,6 +1151,7 @@ void register_cap_mmio_tests() {
     JARVIS_REGISTER_TEST(cap_map_err_validation_matrix);
     JARVIS_REGISTER_TEST(mmio_map_err_rollback_oom);
     JARVIS_REGISTER_TEST(cap_unmap_clears_present_bit);
+    JARVIS_REGISTER_TEST(cap_map_nx_policy_pinning);
     JARVIS_REGISTER_TEST(ioport_grant_dispatch_happy);
     JARVIS_REGISTER_TEST(ioport_grant_validation_matrix);
     JARVIS_REGISTER_TEST(ioport_switch_applies_and_restores);

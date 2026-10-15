@@ -628,10 +628,11 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             return nullptr;
         }
         for (size_t i = 0; i < stack_pages; ++i) {
+            // Issue #325-D: rebuild stack is data (never executable).
             if (VMM::map_page_in_pml4_err(
                     mem::STACK_VADDR + arch::PAGE_SIZE + i * arch::PAGE_SIZE,
-                    sphys + i * arch::PAGE_SIZE, true,
-                    pml4) != errors::VMM_ERR_OK) {
+                    sphys + i * arch::PAGE_SIZE, true, pml4,
+                    false) != errors::VMM_ERR_OK) {
                 for (size_t rest = i; rest < stack_pages; ++rest) {
                     PMM::free_page(sphys + rest * arch::PAGE_SIZE);
                 }
@@ -662,9 +663,11 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             return nullptr;
         }
         for (size_t i = 0; i < heap_pages; ++i) {
+            // Issue #325-D: rebuild heap is data (never executable).
             if (VMM::map_page_in_pml4_err(mem::HEAP_VADDR + i * arch::PAGE_SIZE,
                                           hphys + i * arch::PAGE_SIZE, true,
-                                          pml4) != errors::VMM_ERR_OK) {
+                                          pml4,
+                                          false) != errors::VMM_ERR_OK) {
                 for (size_t rest = i; rest < heap_pages; ++rest) {
                     PMM::free_page(hphys + rest * arch::PAGE_SIZE);
                 }

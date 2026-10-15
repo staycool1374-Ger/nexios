@@ -1332,8 +1332,10 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     // Guard page: leave first page unmapped, start mapping at +arch::PAGE_SIZE
     uint64_t user_stack_virt = mem::STACK_VADDR + arch::PAGE_SIZE;
     for (size_t i = 0; i < user_stack_pages; ++i) {
+        // Issue #325-D: user stacks are data (never executable).
         VMM::map_page_in_pml4(user_stack_virt + i * arch::PAGE_SIZE,
-                              ustack_phys + i * arch::PAGE_SIZE, true, pml4);
+                              ustack_phys + i * arch::PAGE_SIZE, true, false,
+                              pml4);
     }
 
     tcb->user_stack_ = ustack_phys;
@@ -1765,9 +1767,10 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
         // +arch::PAGE_SIZE
         uint64_t user_stack_virt = mem::STACK_VADDR + arch::PAGE_SIZE;
         for (size_t i = 0; i < ustack_pages; ++i) {
+            // Issue #325-D: user stacks are data (never executable).
             VMM::map_page_in_pml4(user_stack_virt + i * arch::PAGE_SIZE,
                                   ustack_phys + i * arch::PAGE_SIZE, true,
-                                  new_pml4);
+                                  false, new_pml4);
             // Copy physical page content via kernel mapping
             uint64_t src_virt =
                 arch::HHDM_OFFSET + parent->user_stack_ + i * arch::PAGE_SIZE;

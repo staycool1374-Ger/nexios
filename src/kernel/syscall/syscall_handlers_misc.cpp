@@ -331,7 +331,8 @@ uint64_t Syscall::sys_brk(uint64_t arg0, uint64_t, uint64_t, uint64_t,
             uint64_t phys = PMM::alloc_user_page();
             if (!phys)
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-            VMM::map_page_in_pml4(vaddr, phys, true, t->page_table_);
+            // Issue #325-D: brk heap is data (never executable).
+            VMM::map_page_in_pml4(vaddr, phys, true, false, t->page_table_);
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys),
                              0, arch::PAGE_SIZE);

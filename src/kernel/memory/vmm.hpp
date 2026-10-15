@@ -185,7 +185,14 @@ class VMM {
     ///        (callers must not read it on a false return).
     /// @return false when unmapped (or a huge/block entry, not ours).
     static bool pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
-                                  bool *executable_out);
+                                   bool *executable_out);
+    /// @brief Test inspector: reports whether the mapped leaf is
+    ///        executable per the arch NX encoding (walk-only, never
+    ///        allocates; issue #325-D NX pinning).  x86_64: NX bit 63
+    ///        clear; aarch64: UXN (bit 54) clear; riscv64: X bit set.
+    /// @return false when unmapped (or a huge/block entry, not ours).
+    static bool pte_is_executable_in_pml4(uint64_t virt_addr,
+                                          uint64_t pml4_phys);
     /// @brief Remap every mapped page in [vaddr, vaddr+size) read-only
     ///        through the RO primitive (issue #271 P0 — load paths and
     ///        the P2 rerun builder share this). Unmapped holes are
@@ -242,6 +249,7 @@ class VMM {
     /// @param pml4_phys Physical address of the target PML4.
     /// @return true when every frame was mapped, false on a revoked cap or
     ///         a zero frame.
+    /// @note Mapped non-executable (issue #325-D NX policy).
     static bool map_frame_from_cap(class cap::FrameCap *fc, uint64_t virt_addr,
                                    bool user, uint64_t pml4_phys);
     /// @brief Maps the frame(s) owned by a FrameCap with error code and
@@ -256,10 +264,14 @@ class VMM {
     ///         misuse; VMM_ERR_REVOKED on a revoked cap;
     ///         VMM_ERR_EMPTY_RANGE on a zero frame; VMM_ERR_PAGE_ALLOC when
     ///         a table page allocation fails mid-walk (prefix rolled back).
+    /// @note NX policy (issue #325-D): cap-mapped memory defaults
+    ///       non-executable (no production caller executes from it);
+    ///       pass executable=true only for code.
     static errors::VmmError map_frame_from_cap_err(class cap::FrameCap *fc,
                                                    uint64_t virt_addr,
                                                    bool user,
-                                                   uint64_t pml4_phys);
+                                                   uint64_t pml4_phys,
+                                                   bool executable = false);
 
     /// @brief Unmaps one page previously mapped via map_frame_from_cap().
     /// @param virt_addr Virtual address to unmap.
@@ -279,6 +291,7 @@ class VMM {
     /// @param pml4_phys Physical address of the target PML4.
     /// @return true when every page was mapped, false on a revoked/IO-type
     ///         cap or a zero range.
+    /// @note Mapped non-executable (issue #325-D NX policy).
     static bool map_mmio_from_cap(class cap::MmioCap *mmio, uint64_t virt_addr,
                                    bool user, uint64_t pml4_phys);
     /// @brief Maps an MmioCap's BAR range with error code and transactional
@@ -288,10 +301,12 @@ class VMM {
     ///        as map_frame_from_cap_err).
     /// @return VMM_ERR_OK when every page was mapped; error codes as in
     ///         map_frame_from_cap_err (IO-type BAR → VMM_ERR_INVALID_ADDR).
+    /// @note NX policy (issue #325-D): device memory is never executable.
     static errors::VmmError map_mmio_from_cap_err(class cap::MmioCap *mmio,
                                                   uint64_t virt_addr,
                                                   bool user,
-                                                  uint64_t pml4_phys);
+                                                  uint64_t pml4_phys,
+                                                  bool executable = false);
 
     /// @brief Unmaps an MmioCap's memory BAR range previously mapped via
     ///        map_mmio_from_cap().
@@ -519,10 +534,13 @@ class VMM {
     ///         range as VMM_ERR_EMPTY_RANGE instead); VMM_ERR_PAGE_ALLOC
     ///         on a mid-walk table allocation failure (prefix rolled
     ///         back before returning).
+    /// @param executable If true, pages are executable (issue #325-D;
+    ///        cap wrappers default false).
     static errors::VmmError map_phys_range_try(uint64_t virt_addr,
                                                uint64_t phys_addr,
                                                size_t page_count, bool user,
-                                               uint64_t pml4_phys);
+                                               uint64_t pml4_phys,
+                                               bool executable);
     /// @brief Walks or creates a page-table entry at the given level.
     /// @param table Pointer to the current-level page table.
     /// @param index Index into the table.

@@ -90,7 +90,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_syscall",           9,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch + returned-handle roundtrip (issue #266)
     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
     {"cap_untyped",          18,    0,       0      },  // Untyped allocator + sub-range carve/child split (issue #1)
-    {"cap_mmio",              19,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3) + revocation-closure (issue #8)
+    {"cap_mmio",              20,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3) + revocation-closure (issue #8)
     {"cap_mmio_user",         9,   0,       0      },  // user MMIO map/unmap syscalls + registry (0.4.2 issue #8)
     {"cap_irq",               12,   0,       0      },  // IRQ caps + user-space delivery (0.4.2 issue #2)
     {"cap_irq_notify",        7,   0,       0      },  // IRQ→IPC Notify bridge, NOTIFY mode (0.4.2 issue #7)
