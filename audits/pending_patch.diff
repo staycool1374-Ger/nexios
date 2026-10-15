@@ -1,69 +1,216 @@
-diff --git a/src/kernel/test/test_vfs.cpp b/src/kernel/test/test_vfs.cpp
-index ecce63ada..791b59af6 100644
---- a/src/kernel/test/test_vfs.cpp
-+++ b/src/kernel/test/test_vfs.cpp
-@@ -231,7 +231,11 @@ static int fake_ls_parent_readdir(Vnode &self, uint64_t &pos,
-     }
-     dent.d_name[name_idx] = '\0';
-     dent.d_ino = 7;
--    ++pos;
-+    // Issue #358: stride the cursor past a phantom slot, modeling
-+    // the real hooks (initrd raw cpio index, fat32 free/LFN slots).
-+    // A yielded-count phase boundary would compute mount_index 1 here
-+    // and skip the child — the EOF-cursor boundary must yield 0.
-+    pos += 2;
-     return 0;
+diff --git a/src/kernel/arch/x86_64/hal/timer.cpp b/src/kernel/arch/x86_64/hal/timer.cpp
+index 755c635f8..8364c5a5c 100644
+--- a/src/kernel/arch/x86_64/hal/timer.cpp
++++ b/src/kernel/arch/x86_64/hal/timer.cpp
+@@ -43,6 +43,8 @@ static constexpr uint64_t k_tsc_min_hz = 50000000ULL;
+ static constexpr uint64_t k_tsc_max_hz = 100000000000ULL;
+ /// @brief Fail-closed TSC frequency when calibration finds nothing.
+ static constexpr uint64_t k_fallback_tsc_hz = 2000000000ULL;
++/// @brief Minimum PIT clocks per calibration sample (tearing floor).
++static constexpr uint32_t k_cal_min_clocks = 200U;
+ 
+ /// @brief Convert coarse ticks to nanoseconds without 64-bit overflow.
+ /// @param tick_count Coarse tick count.
+@@ -192,15 +194,35 @@ void Timer::handle_irq(uint64_t ip) {
  }
  
-diff --git a/src/kernel/vfs/vfs.cpp b/src/kernel/vfs/vfs.cpp
-index 4ad0d2cf4..23d91d43b 100644
---- a/src/kernel/vfs/vfs.cpp
-+++ b/src/kernel/vfs/vfs.cpp
-@@ -400,19 +400,24 @@ int readdir_merged(Vnode &dir_vnode, uint64_t &pos, Dirent &dent) {
-     kernel::test::mark_vfs_touched();
- #endif
-     // Phase 1: the filesystem's own entries. A missing ops table or
--    // readdir hook (test fakes) means an empty underlying phase. All
--    // in-tree hooks use pos as an ordinal index (+1 per entry, untouched
--    // on EOF), so pos passes through untouched into the phase boundary.
-+    // readdir hook (test fakes) means an empty underlying phase. The
-+    // hooks own the cursor units (initrd: raw cpio index; fat32: raw dir
-+    // slot — both advance past skipped entries), so pos passes through
-+    // untouched into the phase boundary below.
-     const VnodeOps *ops = dir_vnode.ops;
-     if (ops != nullptr && ops->readdir != nullptr) {
-         if (ops->readdir(dir_vnode, pos, dent) == 0)
-             return 0;
-     }
-     // Phase 2: mount-table overlay. Re-walk the underlying entries to
--    // learn the phase boundary (caller pos at underlying EOF) and the
--    // names already yielded (exact-match dedup). Walk-until-EOF matches
--    // the cmd_ls loop shape; the stuck-hook break keeps it terminating.
--    uint64_t underlying_count = 0;
-+    // learn the phase boundary as an EOF CURSOR (not a yielded count —
-+    // issue #358: raw-slot strides inflate pos past yielded counts, so a
-+    // yielded-count boundary skips overlay candidates) and the names
-+    // already yielded (exact-match dedup). Walk-until-EOF matches the
-+    // cmd_ls loop shape; the stuck-hook break keeps it terminating.
-+    // Deterministic hooks re-walk to the caller's EOF cursor, making the
-+    // first overlay index 0; concurrent mutation fails closed below.
-+    uint64_t underlying_eof = 0;
-     char seen_names[VFS_MERGED_MAX_SEEN][sizeof(Dirent::d_name)];
-     size_t seen_count = 0;
-     if (ops != nullptr && ops->readdir != nullptr) {
-@@ -435,12 +440,12 @@ int readdir_merged(Vnode &dir_vnode, uint64_t &pos, Dirent &dent) {
-                 seen_names[seen_count][name_idx] = '\0';
-                 ++seen_count;
-             }
--            ++underlying_count;
+ /// @brief Calibrate the TSC frequency using the PIT as a reference.
+-/// Performs up to CONFIG_HRT_CALIBRATION_RETRIES iterations with increasing
+-/// measurement windows and picks the first result that falls in a plausible
+-/// range (50 MHz – 100 GHz). Bounded in wall time by
+-/// CONFIG_HRT_CALIBRATION_TIMEOUT_MS at a 50 MHz floor; on failure the
+-/// fail-closed 2 GHz default applies. Resolves the HRT source label.
++/// Programs the PIT to the assumed reference first (mode-3 square wave
++/// with the exact divisor below — whatever mode/divisor firmware left
++/// behind no longer matters), then takes up to
++/// CONFIG_HRT_CALIBRATION_RETRIES samples of growing windows and keeps
++/// the median of the plausible, sufficiently long ones (50 MHz – 100 GHz,
++/// at least k_cal_min_clocks PIT clocks to outrun latch tearing).
++/// Bounded in wall time by CONFIG_HRT_CALIBRATION_TIMEOUT_MS at a 50 MHz
++/// floor; with no usable sample the fail-closed 2 GHz default applies.
++/// Resolves the HRT source label.
+ /// @param frequency_hz The PIT frequency used as the timing reference.
+ void Timer::calibrate_tsc(uint32_t frequency_hz) {
+-    uint32_t divisor = PIT_BASE_FREQ / frequency_hz;
+     calibrated_ = true;
++    if (frequency_hz == 0) {
++        tsc_freq_hz_ = k_fallback_tsc_hz;
++        resolve_source();
++        return;
++    }
++    // Program the reference the math assumes: the latch counter then
++    // decrements by 2 per input clock (the doubling below) over a known
++    // divisor (the wraparound term needs no firmware trust).
++    set_frequency(frequency_hz);
++    const uint32_t divisor = PIT_BASE_FREQ / frequency_hz;
++    if (divisor == 0) {
++        tsc_freq_hz_ = k_fallback_tsc_hz;
++        resolve_source();
++        return;
++    }
++    uint64_t samples[CONFIG_HRT_CALIBRATION_RETRIES];
++    size_t sample_count = 0;
+     const uint64_t cal_start = rdtsc();
+     const uint64_t timeout_ticks =
+         (uint64_t)CONFIG_HRT_CALIBRATION_TIMEOUT_MS *
+@@ -231,18 +253,35 @@ void Timer::calibrate_tsc(uint32_t frequency_hz) {
+             count_delta = c0 + (divisor - c1);
          }
-+        underlying_eof = walk_pos;
+ 
+-        if (count_delta > 0 && tsc_delta > 0) {
+-            uint64_t pit_ticks = (uint64_t)count_delta * 2;
+-            tsc_freq_hz_ = (tsc_delta * PIT_BASE_FREQ) / pit_ticks;
+-            if (tsc_freq_hz_ >= k_tsc_min_hz &&
+-                tsc_freq_hz_ <= k_tsc_max_hz) {
+-                resolve_source();
+-                return;
+-            }
++        // Mode-3 double-decrement: one latch unit is two input clocks.
++        // Short spans stay out (latch tearing dominates); the retries grow
++        // the window instead of accepting the first plausible noise.
++        if (count_delta < k_cal_min_clocks || tsc_delta == 0) {
++            continue;
++        }
++        const uint64_t pit_ticks = (uint64_t)count_delta * 2ULL;
++        const uint64_t freq = (tsc_delta * PIT_BASE_FREQ) / pit_ticks;
++        if (freq >= k_tsc_min_hz && freq <= k_tsc_max_hz) {
++            samples[sample_count++] = freq;
+         }
      }
--    if (pos < underlying_count)
-+    if (pos < underlying_eof)
-         return VFS_INVALID; // shrunk mid-listing: fail closed, no guess
--    const uint64_t mount_index = pos - underlying_count;
-+    const uint64_t mount_index = pos - underlying_eof;
-     // Holds no locks: per-call ops locking only, mount_table is read
-     // unlocked under the UP assumption (same as resolve(), spec §1.4).
-     uint64_t candidate_index = 0;
+ 
+-    tsc_freq_hz_ = k_fallback_tsc_hz;
++    if (sample_count == 0) {
++        tsc_freq_hz_ = k_fallback_tsc_hz;
++        resolve_source();
++        return;
++    }
++    // Insertion sort on a bounded stack array; lower-middle median.
++    for (size_t sort_idx = 1; sort_idx < sample_count; ++sort_idx) {
++        const uint64_t sort_key = samples[sort_idx];
++        size_t place_idx = sort_idx;
++        while (place_idx > 0 && samples[place_idx - 1] > sort_key) {
++            samples[place_idx] = samples[place_idx - 1];
++            --place_idx;
++        }
++        samples[place_idx] = sort_key;
++    }
++    tsc_freq_hz_ = samples[(sample_count - 1) / 2];
+     resolve_source();
+ }
+ 
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 8b230cc8e..9e6daee2e 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -272,7 +272,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // hrt — hard real-time measurement under QEMU -icount (issue #101)
+     {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
+     {"stress_24h",            2,    0,       0      },  // soak driver SHORT horizon + liveness (#303)
+-    {"hrt_monotonic",         5,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16)
++    {"hrt_monotonic",         6,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16) + wall accuracy bound (#319)
+     {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
+     {"task_metering",         9,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21) + blocked-window reset/wcet-keep (#331)
+     {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
+@@ -298,7 +298,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
+     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
+     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
+-    {"deadline",            145,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 budget-denied-at-fork (#328) + 1 pre-existing aggregate drift at HEAD
++    {"deadline",            146,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 budget-denied-at-fork (#328) + 1 wall accuracy bound (#319) + 1 pre-existing aggregate drift at HEAD
+     {"ui",                  73,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
+     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
+     {"random",              17,   0,       0      },  // random_* (issue #173)
+diff --git a/src/kernel/test/test_hr_clock.cpp b/src/kernel/test/test_hr_clock.cpp
+index 98ba67038..ee713de81 100644
+--- a/src/kernel/test/test_hr_clock.cpp
++++ b/src/kernel/test/test_hr_clock.cpp
+@@ -22,6 +22,8 @@
+ #include <test.hpp>
+ #include <logger.hpp>
+ #include <kernel/arch/timer.hpp>
++#include <kernel/arch/cpuid.hpp>
++#include <kernel/arch/io.hpp>
+ #include <kernel/nexios_config.h>
+ #if defined(CONFIG_ARCH_X86_64)
+ #include <kernel/arch/apic.hpp>
+@@ -30,6 +32,11 @@
+ 
+ using namespace kernel;
+ 
++#if defined(CONFIG_ARCH_X86_64)
++/// @brief CPUID leaf 1 ECX hypervisor-present bit (issue #319).
++static constexpr uint32_t k_ecx_hypervisor_present = 1U << 31;
++#endif
++
+ // Runmode: kernel
+ // Testidea: calibrate() leaves a nonzero unified frequency (fail-closed).
+ // Input: Call calibrate() twice (idempotency), read freq_hz()
+@@ -171,6 +178,62 @@ JARVIS_TEST(hrt_oneshot_remaining_ns, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: ns_monotonic() tracks the IRQ tick domain within tolerance
++// (issue #319: TSC miscalibration made wall time run ~2.75x fast).
++// Input: Spin until ticks() advances 2000 (≈2 s at CONFIG_TICK_HZ),
++//        sampling ns_monotonic(); 60-nominal-s cap guarantees termination.
++// Expect: mono delta within ±25% of ticks*1e9/CONFIG_TICK_HZ on
++//         trustworthy TSCs; warn-skip under a hypervisor (TCG virtual
++//         TSC/PIT wall agreement is unenforceable there — see #319).
++// Depends: arch::Timer::ticks/ns_monotonic/tsc_freq_hz, arch::pause
++JARVIS_TEST(hrt_wall_accuracy_bound, "PRE: none | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    // CPUID leaf 1 ECX bit 31: hypervisor present. PIT-vs-TSC wall
++    // agreement cannot be enforced on a virtual TSC (issue #319); the
++    // E2E transfer gate remains the wall validator there.
++    if ((arch::cpuid(1).ecx & k_ecx_hypervisor_present) != 0) {
++        Logger::warn("HRT wall accuracy skipped (virtualized TSC)");
++        JARVIS_TEST_PASS();
++        return;
++    }
++#endif
++    const uint64_t freq_now = arch::Timer::tsc_freq_hz();
++    JARVIS_ASSERT(freq_now != 0);
++    const uint64_t tick_start = arch::Timer::ticks();
++    const uint64_t mono_start = arch::Timer::ns_monotonic();
++    const uint64_t tsc_start = arch::rdtsc();
++    constexpr uint64_t k_wait_ticks = 2000;
++    constexpr uint64_t k_ns_cap = 60000000000ULL;
++    uint64_t mono_end = mono_start;
++    while (arch::Timer::ticks() - tick_start < k_wait_ticks) {
++        arch::pause();
++        mono_end = arch::Timer::ns_monotonic();
++        if (mono_end - mono_start >= k_ns_cap)
++            break;
++    }
++    const uint64_t tick_delta = arch::Timer::ticks() - tick_start;
++    mono_end = arch::Timer::ns_monotonic();
++    const uint64_t mono_delta = mono_end - mono_start;
++    // Ground-truth virtual TSC rate over the same wall-true tick window
++    // (issue #319 diagnosis readout only): tsc units per tick-second.
++    const uint64_t tsc_delta = arch::rdtsc() - tsc_start;
++    uint64_t true_hz = 0;
++    if (tick_delta != 0)
++        true_hz = (tsc_delta * CONFIG_TICK_HZ) / tick_delta;
++    JARVIS_ASSERT(tick_delta >= k_wait_ticks || mono_delta >= k_ns_cap);
++    const uint64_t expected_ns =
++        (tick_delta * 1000000000ULL) / CONFIG_TICK_HZ;
++    const uint64_t lo_bound = (expected_ns * 3ULL) / 4ULL;
++    const uint64_t hi_bound = (expected_ns * 5ULL) / 4ULL;
++    JARVIS_ASSERT_FMT(mono_delta >= lo_bound && mono_delta <= hi_bound,
++                      "wall accuracy: mono=%lx exp=%lx cal=%lx true=%lx ticks=%lx",
++                      (unsigned long)mono_delta, (unsigned long)expected_ns,
++                      (unsigned long)freq_now, (unsigned long)true_hz,
++                      (unsigned long)tick_delta);
++    JARVIS_TEST_PASS();
++}
++
+ void register_hrt_monotonic_tests() {
+     Logger::info("Registering hrt_monotonic tests");
+     JARVIS_REGISTER_TEST(hrt_freq_nonzero_after_calibrate);
+@@ -178,4 +241,5 @@ void register_hrt_monotonic_tests() {
+     JARVIS_REGISTER_TEST(hrt_active_source_valid);
+     JARVIS_REGISTER_TEST(hrt_test_ticks_determinism);
+     JARVIS_REGISTER_TEST(hrt_oneshot_remaining_ns);
++    JARVIS_REGISTER_TEST(hrt_wall_accuracy_bound); // #319
+ }

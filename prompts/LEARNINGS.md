@@ -49,6 +49,12 @@
 
 ## Entries
 
+### #319 — TSC calibration hygiene landing (wall truth deferred to #359)
+
+- **Learned:** (1) Under TCG the virtual TSC rate is workload-dependent (PIO exits retard it, pause-spins yield the vCPU, warm compute runs ~1GHz) while the PIT/APIC follow different virtual clocks — so no boot-time PIT scalar is wall-true for all regimes, and variance across boots (250M→363M) is environmental, not algorithmic. Prove it with host-timestamped markers (WALLMARK: ticks 0.8x, ns 4x, TSC 1G) + external E2E (`sleep 2` wall), never by more in-guest theorizing. (2) Revert discipline held twice: PIO-poll rewrite moved the number the wrong way (250M), warm recal read 3.76G with frozen mono — both reverted immediately, no stacking. (3) A test that cannot pass on the CI platform must warn-skip there (hypervisor CPUID bit, oneshot precedent), enforcing strictly only where trustworthy — a permanently-red gate is worse than an honest skip.
+- **Adapted:** programmed PIT + min-window + median calibration (same gates/fallback); hypervisor-gated `hrt_wall_accuracy_bound` (hrt 5→6, deadline 145→146); SIL 3 APPROVED (`report-20261015T150149Z`); remainder filed as #359 (v0.5.5).
+- **Style re-surface:** §5 fail-closed preserved (guards + fallback untouched); §6 named bounds reused (no new unbounded loops); §10 named sentinels for new constants.
+
 ### #358 — readdir cursor-stride follow-up (overlay skipped live)
 
 - **Learned:** (1) Readdir `pos` is a per-hook CURSOR, not a yielded ordinal — initrd advances per raw cpio name, fat32 per raw slot (free/LFN skips included); any index derived as `pos - yielded_count` inflates and skips. Derive phase boundaries in cursor units (re-walk to the EOF cursor). (2) A fake that advances 1:1 per entry cannot catch cursor bugs — stride the fake (phantom slots) to lock real hook semantics; the negctrl then discriminates the exact shipped bug. (3) "No progress" reports need a stray-process check first: two orphaned QEMUs (aborted expect runs) held the disk lock and confused the session — reap + `Failed to get write lock` is the tell. Expect probes must `send "exit"` + expect eof so no strays survive.

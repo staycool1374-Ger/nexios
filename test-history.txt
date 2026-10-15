@@ -3491,3 +3491,15 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-15 08:34:04 storage PASSED: 167 FAILED: 0 TIME: 60368ms
 2026-10-15 13:38:00 storage PASSED: 167 FAILED: 0 TIME: 57271ms
 2026-10-15 13:39:30 storage PASSED: 166 FAILED: 1 TIME: 57239ms STATUS: NEGCTRL-358 (yielded-count boundary + stride-2 fake, only vfs_readdir_lists_mount_points fails)
+2026-10-15 16:05:00 deadline PASSED: 0 FAILED: 0 TIME: 225000ms STATUS: HOST-WATCHDOG (94/146 then silence after scheduler_hrt_rdtsc_canary; posix_timer_table_full FAIL live_count)
+2026-10-15 16:09:00 deadline PASSED: 145 FAILED: 1 TIME: 63694ms STATUS: hrt_wall_accuracy_bound FAILS pre-fix (mono 3.48x fast, cal 363MHz)
+2026-10-15 16:14:00 deadline PASSED: 0 FAILED: 0 TIME: 230000ms STATUS: HOST-WATCHDOG (19/146 then silence at watchdog_expiry_kill_default, #345 signature)
+2026-10-15 16:17:00 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 11131ms
+2026-10-15 16:24:00 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 13090ms
+2026-10-15 16:33:00 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 11123ms STATUS: WALLMARK run (ticks 0.8x wall, ns 4x fast, TSC 1GHz wall)
+2026-10-15 16:36:00 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 11158ms
+2026-10-15 16:39:00 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 11117ms
+2026-10-15 16:46:00 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 2076ms STATUS: warm-recal experiment (cal 3.76G, mono frozen — reverted)
+2026-10-15 16:56:00 hrt_monotonic PASSED: 6 FAILED: 0 TIME: 407ms STATUS: hypervisor warn-skip active
+2026-10-15 16:58:43 hrt_monotonic PASSED: 6 FAILED: 0 TIME: 409ms
+2026-10-15 16:59:17 selftest PASSED: 147 FAILED: 0 TIME: 11927ms
