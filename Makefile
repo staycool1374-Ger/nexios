@@ -1355,7 +1355,13 @@ define _run_dump_counts_qemu
 	if ! command -v $(QEMU_SYSTEM) >/dev/null 2>&1; then echo "QEMU missing."; echo $(PKG_HINT); exit 1; fi; \
 	printf '  %-7s %s\n'  'TCOUNT' 'Dumping per-class registration counts…'; \
 	rm -f "$(DUMP_COUNTS_LOG)"; \
-	_DQ_FLAGS=$$(echo "$(QEMU_FLAGS)" | sed 's|-serial mon:stdio|-serial file:$(DUMP_COUNTS_LOG)|'); \
+	if printf '%s' "$(QEMU_FLAGS)" | grep -q -- '-serial chardev:dbg'; then \
+	    _DQ_FLAGS=$$(echo "$(QEMU_FLAGS)" | sed 's|-serial chardev:dbg|-serial file:$(DUMP_COUNTS_LOG)|'); \
+	elif printf '%s' "$(QEMU_FLAGS)" | grep -q -- '-serial mon:stdio'; then \
+	    _DQ_FLAGS=$$(echo "$(QEMU_FLAGS)" | sed 's|-serial mon:stdio|-serial file:$(DUMP_COUNTS_LOG)|'); \
+	else \
+	    echo "ERROR: QEMU_FLAGS has neither '-serial chardev:dbg' nor '-serial mon:stdio' to redirect"; exit 1; \
+	fi; \
 	$(QEMU_SYSTEM) $$_DQ_FLAGS -display none -no-reboot $(QEMU_DEBUG_EXIT) 2>&1 & \
 	QEMU_PID=$$!; \
 	sleep 30; \
