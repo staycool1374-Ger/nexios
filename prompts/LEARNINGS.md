@@ -49,6 +49,12 @@
 
 ## Entries
 
+### #327 — aarch64 stack-marker link break (stale issue premise)
+
+- **Learned:** (1) Verify issue premises against the tree before designing: the "empty span" claim died to one `grep` (`kernel_stack[16KiB]` in shared kernel.cpp) + `readelf` (spans 0x4028/0x4010/0x13F10) — the real defect was aarch64-only `adrp` reachability, a smaller fix than the issue scoped. (2) On aarch64, ANY reference to a low-VMA object (even address-of) emits a potentially out-of-range `adrp` — placement tests must use absolute linker symbols (immediate-materialized) instead. (3) Answering "are there placement tests" with a test that locks layout via immediates works on all arches without touching the checked values.
+- **Adapted:** aarch64-only value-check guard; `integrity_stack_markers_span` (memory 2→3, core 554→555); SIL 3 APPROVED (`report-20261015T152834Z`, S3-only).
+- **Style re-surface:** arch-guard symmetry (decl/def/call); minimal diff where nothing is broken (riscv untouched).
+
 ### #319 — TSC calibration hygiene landing (wall truth deferred to #359)
 
 - **Learned:** (1) Under TCG the virtual TSC rate is workload-dependent (PIO exits retard it, pause-spins yield the vCPU, warm compute runs ~1GHz) while the PIT/APIC follow different virtual clocks — so no boot-time PIT scalar is wall-true for all regimes, and variance across boots (250M→363M) is environmental, not algorithmic. Prove it with host-timestamped markers (WALLMARK: ticks 0.8x, ns 4x, TSC 1G) + external E2E (`sleep 2` wall), never by more in-guest theorizing. (2) Revert discipline held twice: PIO-poll rewrite moved the number the wrong way (250M), warm recal read 3.76G with frozen mono — both reverted immediately, no stacking. (3) A test that cannot pass on the CI platform must warn-skip there (hypervisor CPUID bit, oneshot precedent), enforcing strictly only where trustworthy — a permanently-red gate is worse than an honest skip.
