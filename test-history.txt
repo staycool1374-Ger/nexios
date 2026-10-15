@@ -3485,3 +3485,4 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-14 19:00:00 elf_loader PASSED: 0 FAILED: 0 TIME: 240000ms STATUS: FAIL 2xTIMEOUT hot-host slowness
 2026-10-14 19:05:00 elf_loader PASSED: 25 FAILED: 0 TIME: 4267ms STATUS: file-backend path cool-host
 2026-10-14 20:30:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 997ms STATUS: STALL-RECOVERED post-TEMP-revert (tree clean, Errors 0, zero diag strings)
+2026-10-15 07:50:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 1002ms STATUS: #345 fix validation (edge-triggered + EDF guard, 6/6)

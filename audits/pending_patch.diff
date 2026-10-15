@@ -1,176 +1,47 @@
-diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
-index 8c2e99634..7c86776a0 100644
---- a/src/kernel/elf/elf_loader.cpp
-+++ b/src/kernel/elf/elf_loader.cpp
-@@ -334,8 +334,9 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
-             (uint64_t)i * hdr_.phentsize);
-         if (!phdr || phdr->type != PT_LOAD || !(phdr->flags & PF_W))
-             continue;
--        if (phdr->filesz == 0)
--            continue;
-+        // NOTE: no filesz==0 skip — a BSS-only RW segment still needs
-+        // its memsz span mapped+zeroed in the rerun build (canary slots
-+        // and program break live there); len 0 simply copies nothing.
-         if (pin_off + phdr->filesz > kMaxRerunWritableBytes)
-             return;
-         // S3 hardening: cap the BSS span too — an enormous RW memsz
-diff --git a/src/kernel/test/test_elf_loader.cpp b/src/kernel/test/test_elf_loader.cpp
-index 3990c05bd..e1133c9e4 100644
---- a/src/kernel/test/test_elf_loader.cpp
-+++ b/src/kernel/test/test_elf_loader.cpp
-@@ -743,6 +743,57 @@ uint64_t build_rw_elf(elf::ELF64Header *hdr, uint8_t *data) {
-     return ph1->offset + 0x100;
- }
- 
-+// Issue #271 live-E2E follow-up: BSS-only RW segment (filesz 0, memsz
-+// nonzero — as in userspace/hey.c.elf's 0x402e80 filesz-0 segment).
-+// The rerun builder must still map+zero the memsz span (canary slots
-+// live in the tail padding) even though there are no file bytes to pin.
-+uint64_t build_bss_elf(elf::ELF64Header *hdr, uint8_t *data) {
-+    __builtin_memset(hdr, 0, sizeof(elf::ELF64Header));
-+    hdr->ident[0] = 0x7F;
-+    hdr->ident[1] = 'E';
-+    hdr->ident[2] = 'L';
-+    hdr->ident[3] = 'F';
-+    hdr->ident[4] = 2;
-+    hdr->ident[5] = 1;
-+    hdr->type = elf::ET_EXEC;
-+    hdr->machine = 0x3E;
-+    hdr->version = 1;
-+    hdr->entry = 0x400000;
-+    hdr->phoff = sizeof(elf::ELF64Header);
-+    hdr->ehsize = sizeof(elf::ELF64Header);
-+    hdr->phentsize = sizeof(elf::ELF64ProgramHeader);
-+    hdr->phnum = 2;
-+    auto *ph0 = reinterpret_cast<elf::ELF64ProgramHeader *>(
-+        data + sizeof(elf::ELF64Header));
-+    ph0->type = elf::PT_LOAD;
-+    ph0->flags = elf::PF_R | elf::PF_X;
-+    ph0->offset = sizeof(elf::ELF64Header) +
-+                  2 * sizeof(elf::ELF64ProgramHeader);
-+    ph0->vaddr = 0x400000;
-+    ph0->paddr = 0x400000;
-+    ph0->filesz = 0x1000;
-+    ph0->memsz = 0x1000;
-+    ph0->align = 0x1000;
-+    auto *ph1 = reinterpret_cast<elf::ELF64ProgramHeader *>(
-+        data + sizeof(elf::ELF64Header) + sizeof(elf::ELF64ProgramHeader));
-+    ph1->type = elf::PT_LOAD;
-+    ph1->flags = elf::PF_R | elf::PF_W;
-+    ph1->offset = ph0->offset + 0x1000;
-+    // hey.c.elf's exact RW shape: BSS-only (filesz 0) with a tiny
-+    // non-page-aligned memsz, so the DATA-after slot falls in real
-+    // page padding (in_padding true) and must be armed + live.
-+    ph1->vaddr = 0x402e80;
-+    ph1->paddr = 0x402e80;
-+    ph1->filesz = 0;
-+    ph1->memsz = 0x18;
-+    ph1->align = 0x1000;
-+    __builtin_memcpy(data, hdr, sizeof(elf::ELF64Header));
-+    uint8_t *code = data + ph0->offset;
-+    for (size_t i = 0; i < 0x1000; ++i)
-+        code[i] = 0x90;
-+    return ph1->offset;
-+}
-+
- // Runmode: kernel
- // Testidea: Issue #271 P0 — read-only segments map PTE-read-only
- //           through the shared primitive on the FIRST run (both the
-@@ -1087,6 +1138,58 @@ JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Runmode: kernel
-+// Testidea: Issue #271 live-E2E follow-up — BSS-only RW segment
-+//           (filesz 0) must still get its memsz span mapped+zeroed in
-+//           the rerun build, with the DATA-after canary holding live
-+//           magic. Pre-fix the span was skipped (no pin bytes), the
-+//           canary write silently missed, and dispatch tripped.
-+// Input: BSS-only two-segment static image via background
-+//        request_load, take, note_launched, note_task_end, try_rerun.
-+// Expect: try_rerun succeeds; DATA-after slot (0x402FF8) mapped and
-+//         holding live derived magic.
-+// Depends: pin-range recording for filesz-0 RW spans (issue #271)
-+JARVIS_TEST(rerun_bss_only_data_canary, "PRE: none | POST: none") {
-+    elf::ElfLoader::reset();
-+    uint8_t img[8192];
-+    elf::ELF64Header hdr{};
-+    uint64_t sz = build_bss_elf(&hdr, img);
-+    JARVIS_ASSERT(write_file("/tmp/bsscan.elf", img, sz) == sz);
-+    JARVIS_ASSERT(elf::ElfLoader::request_load("/tmp/bsscan.elf") ==
-+                  elf::LoadResult::OK);
-+    elf::ElfLoader::wait_loader_idle();
-+    auto *t1 = elf::ElfLoader::take_completed();
-+    JARVIS_ASSERT(t1 != nullptr);
-+    uint64_t id1 = t1->id;
-+    elf::ElfLoader::note_launched(id1);
-+    elf::ElfLoader::note_task_end(id1, true, 0);
-+    t1->cleanup();
-+    delete t1;
-+    const char *reason = nullptr;
-+    auto *t2 = elf::ElfLoader::try_rerun(&reason);
-+    JARVIS_ASSERT_FMT(t2 != nullptr, "rerun failed: %s", reason ? reason : "?");
-+    const uint64_t data = TaskControlBlock::SEG_DATA;
-+    JARVIS_ASSERT(t2->canary_installed & (1u << data));
-+    // DATA-after = page_align_up(0x402e80 + 0x18) - 8 = 0x402FF8:
-+    // must be mapped AND hold live magic (pre-fix: unmapped).
-+    JARVIS_ASSERT(t2->canary_after[data] == 0x402FF8);
-+    uint64_t phys =
-+        VMM::virt_to_phys_in_pml4(0x402FF8, t2->page_table_);
-+    JARVIS_ASSERT_FMT(phys != 0, "DATA-after slot unmapped");
-+    uint64_t live = 0;
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    __builtin_memcpy(&live,
-+                     reinterpret_cast<const void *>(arch::HHDM_OFFSET + phys),
-+                     8);
-+    JARVIS_ASSERT_FMT(live == (TaskControlBlock::CANARY_MAGIC ^ (data + 1)),
-+                      "DATA-after canary dead: 0x%lx", live);
-+    t2->cleanup();
-+    delete t2;
-+    elf::ElfLoader::reset();
-+    cleanup_file("/tmp/bsscan.elf");
-+    JARVIS_TEST_PASS();
-+}
-+
- // Issue #271 P3: supersede-while-live — take-overwrite during a live
- // run must NOT free golden phys (live mapper owns them through its own
- // teardown); the live task stays byte-correct; everything reclaims
-@@ -1226,4 +1329,5 @@ void register_elf_loader_tests() {
-     JARVIS_REGISTER_TEST(rerun_canary_perm_pins); // #271 P3 canary+perm
-     JARVIS_REGISTER_TEST(rerun_supersede_while_live); // #271 P3 supersede
-     JARVIS_REGISTER_TEST(rerun_fork_child_private_copy); // #271 P3 fork (C8)
-+    JARVIS_REGISTER_TEST(rerun_bss_only_data_canary); // #271 live-E2E BSS-only
- }
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 920bd4312..3c7c45f0d 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -75,7 +75,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     // process
-     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
-     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
--    {"elf_loader",            24,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp + #271 P0 RO-perm pin + P1 retention/balance + P2 byte-identity/refusals + P3 decay/canary/supersede/fork)
-+    {"elf_loader",            25,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp + #271 P0 RO-perm pin + P1 retention/balance + P2 byte-identity/refusals + P3 decay/canary/supersede/fork + BSS-only DATA-canary live-E2E follow-up)
-     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)
-     {"process_signals",       8,    0,       0      },  // signal delivery/handling
-     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
-@@ -285,7 +285,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"core",                554,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 1 ring3 errno cell (#338) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
-     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
-     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
--    {"proc_elf",            122,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD
-+    {"proc_elf",            123,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD
-     {"libc_verify",          8,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77) + Ring-3 create/trunc flag-translation probe (#341)
-     {"libc_stdio",            5,    0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (#303, x86_64-only)
-     {"libc_malloc",           5,    0,       0      },  // malloc0/align/calloc/realloc+OOM/cycle-no-leak (#303, x86_64-only)
-diff --git a/test-history.txt b/test-history.txt
-index 898730530..b33df4af6 100644
---- a/test-history.txt
-+++ b/test-history.txt
-@@ -3424,3 +3424,6 @@ SUMMARY: total=20 ok=18 fail=2
- 2026-10-14 11:28:00 proc_elf PASSED: 122 FAILED: 0 TIME: 62830ms
- 2026-10-14 11:40:00 elf_loader PASSED: 24 FAILED: 0 TIME: 4074ms
- 2026-10-14 11:48:00 proc_elf PASSED: 122 FAILED: 0 TIME: 70295ms
-+2026-10-14 13:05:00 elf_loader PASSED: 24 FAILED: 1 TIME: 4304ms STATUS: NEGATIVE-CONTROL (filesz==0 skip restored, rerun_bss_only_data_canary FAIL as designed)
-+2026-10-14 13:08:00 elf_loader PASSED: 25 FAILED: 0 TIME: 4304ms
-+2026-10-14 13:10:00 proc_elf PASSED: 123 FAILED: 0 TIME: 59665ms
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index 24fa4c2ac..18b7ae37a 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -462,6 +462,13 @@ static TaskControlBlock *edf_preempt_candidate() noexcept {
+     if (e == nullptr)
+         return nullptr;
+     TaskControlBlock *cur = Scheduler::current_task();
++    // #345: never return current via EDF — absolute EDF precedence would
++    // let a never-yielding AUTO task with earliest (expired) deadline
++    // self-pick forever, starving the bitmap (harness). Fall through to
++    // bitmap so lower prio READY tasks get a chance. Keep #19 semantics
++    // for non-current EDF tasks (earlier deadline still preempts).
++    if (e == cur)
++        return nullptr;
+     if (!cur || cur->magic != TaskControlBlock::TCB_MAGIC)
+         return e;
+     if (cur->state != TaskState::READY && cur->state != TaskState::RUNNING)
+@@ -3229,15 +3236,21 @@ void Scheduler::on_tick() noexcept {
+                 continue;
+             if (queue_target(*task) != sched_cpu())
+                 continue;
+-            if (task->state == TaskState::BLOCKED)
++            if (task->state == TaskState::BLOCKED) {
+                 task->state = TaskState::READY;
+-            // SIL 3 guard (audit issue #18): never queue a task that is not
+-            // BLOCKED-turned-READY or already READY. A dispatched waiter is
+-            // RUNNING with its slot still armed until its resume path runs
+-            // recv_wait_cancel; queueing it violates the
+-            // current-never-queued invariant (set_current defense, H2).
+-            else if (task->state != TaskState::READY)
++            } else if (task->state == TaskState::READY) {
++                if (task->in_ready_queue_) {
++                    // #345: already queued — duplicate per-tick re-wake
++                    // would starve lower priorities (wdwake 1:1). Skip;
++                    // stranded READY (!in_queue) still rescued below.
++                    continue;
++                }
++                // Stranded READY (!in_queue) -> rescue via enqueue
++            } else {
++                // SIL 3 guard (audit issue #18): never queue RUNNING etc.
++                // (current-never-queued invariant).
+                 continue;
++            }
+             enqueue_ready(*task);
+             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                              __ATOMIC_RELEASE);

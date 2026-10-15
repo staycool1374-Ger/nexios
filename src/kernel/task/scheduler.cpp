@@ -462,6 +462,13 @@ static TaskControlBlock *edf_preempt_candidate() noexcept {
     if (e == nullptr)
         return nullptr;
     TaskControlBlock *cur = Scheduler::current_task();
+    // #345: never return current via EDF — absolute EDF precedence would
+    // let a never-yielding AUTO task with earliest (expired) deadline
+    // self-pick forever, starving the bitmap (harness). Fall through to
+    // bitmap so lower prio READY tasks get a chance. Keep #19 semantics
+    // for non-current EDF tasks (earlier deadline still preempts).
+    if (e == cur)
+        return nullptr;
     if (!cur || cur->magic != TaskControlBlock::TCB_MAGIC)
         return e;
     if (cur->state != TaskState::READY && cur->state != TaskState::RUNNING)
@@ -3229,15 +3236,21 @@ void Scheduler::on_tick() noexcept {
                 continue;
             if (queue_target(*task) != sched_cpu())
                 continue;
-            if (task->state == TaskState::BLOCKED)
+            if (task->state == TaskState::BLOCKED) {
                 task->state = TaskState::READY;
-            // SIL 3 guard (audit issue #18): never queue a task that is not
-            // BLOCKED-turned-READY or already READY. A dispatched waiter is
-            // RUNNING with its slot still armed until its resume path runs
-            // recv_wait_cancel; queueing it violates the
-            // current-never-queued invariant (set_current defense, H2).
-            else if (task->state != TaskState::READY)
+            } else if (task->state == TaskState::READY) {
+                if (task->in_ready_queue_) {
+                    // #345: already queued — duplicate per-tick re-wake
+                    // would starve lower priorities (wdwake 1:1). Skip;
+                    // stranded READY (!in_queue) still rescued below.
+                    continue;
+                }
+                // Stranded READY (!in_queue) -> rescue via enqueue
+            } else {
+                // SIL 3 guard (audit issue #18): never queue RUNNING etc.
+                // (current-never-queued invariant).
                 continue;
+            }
             enqueue_ready(*task);
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
                              __ATOMIC_RELEASE);
