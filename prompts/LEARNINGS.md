@@ -49,6 +49,28 @@
 
 ## Entries
 
+### #325-B — real error propagation + B0 PMM pool-head fix
+
+- **Learned:** (1) 100k takes from a 32k-page window PROVES a cycling free
+  list — arithmetic beats theory; hang-guard caps turn stalls into loud
+  failures. (2) `rebuild_free_list` reset `free_head_` but never
+  `pool_free_head_` despite the hpp promising both — doc-vs-code gaps are
+  real bugs; the OOM tests are now its regression proof. (3) Restoring a
+  boot huge entry RE-MAPS the VA (virt != 0 is correct post-restore).
+  (4) Kernel data mapped through a split PT is NOT freed by snapshot
+  rewind — manual PD save/restore+free is the sanctioned pattern
+  (cross_arch doctrine). (5) OOM-killer null + BSP IrqGuard + settle
+  rounds = deterministic pool exhaustion under SMP; table-pool exact-need
+  math is fragile (staleness/racers) — refusal-loops absorb both.
+  (6) Caller migration must preserve NX bit-for-bit: my first pass
+  silently flipped stack/heap to executable — caught pre-audit by
+  re-reading the 5-arg call.
+- **Adapted:** map_page_try/err real; executable param on in_pml4_err;
+  elf/loader/pager migrations; memory_page_tables 9→11, core 555→557;
+  A-test KEEP 3→4 (rollback was vacuous — clone eats one).
+- **Style re-surface:** checked arithmetic (§6) on every base+count;
+  Requires-preconditions (§9); bounded loops with hang-guard caps (§6).
+
 ### #325-A — VMM cap-map transactions (commit pending, audit APPROVED)
 
 - **Learned:** (1) `alloc_page_table` falls back to the general pool when the

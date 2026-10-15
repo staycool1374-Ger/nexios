@@ -175,6 +175,12 @@ void PMM::init(uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end,
 
 void PMM::rebuild_free_list() noexcept {
     free_head_ = UINT64_MAX;
+    // Issue #325-B0: the pool head must reset too — the hpp contract
+    // (§rebuild_free_list) promises both heads re-synced from the bitmap.
+    // Without this, prepends accumulate stale entries across rebuilds and
+    // the pool list can cycle, serving already-allocated pages forever
+    // (proven: 100k takes from a 32k-page window in the #325-B OOM drain).
+    pool_free_head_ = UINT64_MAX;
     auto *fl = reinterpret_cast<uint64_t *>(free_list_);
     uint64_t pool_start = page_table_pool_start_ / PAGE_SIZE;
     uint64_t pool_end = page_table_pool_end_ / PAGE_SIZE;

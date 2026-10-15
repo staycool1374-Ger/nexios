@@ -628,8 +628,20 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             return nullptr;
         }
         for (size_t i = 0; i < stack_pages; ++i) {
-            VMM::map_page_in_pml4(mem::STACK_VADDR + arch::PAGE_SIZE + i * arch::PAGE_SIZE,
-                                  sphys + i * arch::PAGE_SIZE, true, pml4);
+            if (VMM::map_page_in_pml4_err(
+                    mem::STACK_VADDR + arch::PAGE_SIZE + i * arch::PAGE_SIZE,
+                    sphys + i * arch::PAGE_SIZE, true,
+                    pml4) != errors::VMM_ERR_OK) {
+                for (size_t rest = i; rest < stack_pages; ++rest) {
+                    PMM::free_page(sphys + rest * arch::PAGE_SIZE);
+                }
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_builder_ref_locked(view.epoch);
+                if (reason) *reason = kRebuildStack;
+                return nullptr;
+            }
         }
         ustack_phys = sphys;
         // Zero stack via HHDM
@@ -650,8 +662,19 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             return nullptr;
         }
         for (size_t i = 0; i < heap_pages; ++i) {
-            VMM::map_page_in_pml4(mem::HEAP_VADDR + i * arch::PAGE_SIZE,
-                                  hphys + i * arch::PAGE_SIZE, true, pml4);
+            if (VMM::map_page_in_pml4_err(mem::HEAP_VADDR + i * arch::PAGE_SIZE,
+                                          hphys + i * arch::PAGE_SIZE, true,
+                                          pml4) != errors::VMM_ERR_OK) {
+                for (size_t rest = i; rest < heap_pages; ++rest) {
+                    PMM::free_page(hphys + rest * arch::PAGE_SIZE);
+                }
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_builder_ref_locked(view.epoch);
+                if (reason) *reason = kRebuildHeap;
+                return nullptr;
+            }
         }
         __builtin_memset(reinterpret_cast<void*>(arch::HHDM_OFFSET + hphys), 0, heap_pages * arch::PAGE_SIZE);
     }
@@ -671,8 +694,8 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
                 if (reason) *reason = kRebuildPin;
                 return nullptr;
             }
-            VMM::map_page_in_pml4(va, wp, true, pml4);
-            if (VMM::virt_to_phys_in_pml4(va, pml4) != wp) {
+            if (VMM::map_page_in_pml4_err(va, wp, true, pml4) !=
+                errors::VMM_ERR_OK) {
                 // Silent map failure: free the orphan page, then fail.
                 PMM::free_page(wp);
                 arch::IrqGuard irq_guard{};
@@ -1534,7 +1557,14 @@ void ElfLoader::run_load() {
                 cleanup_and_idle();
                 return;
             }
-            VMM::map_page_in_pml4(vaddr, phys, true, pml4_);
+            if (VMM::map_page_in_pml4_err(vaddr, phys, true, pml4_) !=
+                errors::VMM_ERR_OK) {
+                post_event(0xDB05, " failed: page-table OOM", 0,
+                           PostKind::OTHER);
+                PMM::free_page(phys);
+                cleanup_and_idle();
+                return;
+            }
             uint8_t *page = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
                                                         phys);
             __builtin_memset(page, 0, kChunkSize);

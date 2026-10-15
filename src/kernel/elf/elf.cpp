@@ -268,9 +268,18 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
         if (!seg_phys)
             return false;
         for (size_t page_idx = 0; page_idx < num_pages; ++page_idx) {
-            VMM::map_page_in_pml4(vaddr_base + page_idx * arch::PAGE_SIZE,
-                                  seg_phys + page_idx * arch::PAGE_SIZE, true,
-                                  pml4);
+            if (VMM::map_page_in_pml4_err(
+                    vaddr_base + page_idx * arch::PAGE_SIZE,
+                    seg_phys + page_idx * arch::PAGE_SIZE, true,
+                    pml4) != errors::VMM_ERR_OK) {
+                // Mid-load table OOM: the mapped prefix is reclaimed by
+                // the caller's free_user_pages teardown; free only the
+                // never-mapped suffix here (double-free otherwise).
+                for (size_t rest = page_idx; rest < num_pages; ++rest) {
+                    PMM::free_page(seg_phys + rest * arch::PAGE_SIZE);
+                }
+                return false;
+            }
         }
 
         uint64_t offset_in_region = phdr->vaddr - vaddr_base;
@@ -344,10 +353,15 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
     // Guard page: leave first page unmapped, start mapping at +arch::PAGE_SIZE
     // VULN-H1: user stack is writable-only (never executable).
     for (size_t i = 0; i < ustack_pages; ++i) {
-        VMM::map_page_in_pml4(mem::STACK_VADDR + arch::PAGE_SIZE +
-                                  i * arch::PAGE_SIZE,
-                              ustack_phys + i * arch::PAGE_SIZE, true, false,
-                              pml4);
+        if (VMM::map_page_in_pml4_err(mem::STACK_VADDR + arch::PAGE_SIZE +
+                                          i * arch::PAGE_SIZE,
+                                      ustack_phys + i * arch::PAGE_SIZE, true,
+                                      pml4, false) != errors::VMM_ERR_OK) {
+            for (size_t rest = i; rest < ustack_pages; ++rest) {
+                PMM::free_page(ustack_phys + rest * arch::PAGE_SIZE);
+            }
+            return false;
+        }
     }
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -361,9 +375,15 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
 
     // VULN-H1: initial heap is writable-only (never executable).
     for (size_t i = 0; i < heap_pages; ++i) {
-        VMM::map_page_in_pml4(mem::HEAP_VADDR + i * arch::PAGE_SIZE,
-                              heap_phys + i * arch::PAGE_SIZE, true, false,
-                              pml4);
+        if (VMM::map_page_in_pml4_err(mem::HEAP_VADDR + i * arch::PAGE_SIZE,
+                                      heap_phys + i * arch::PAGE_SIZE, true,
+                                      pml4,
+                                      false) != errors::VMM_ERR_OK) {
+            for (size_t rest = i; rest < heap_pages; ++rest) {
+                PMM::free_page(heap_phys + rest * arch::PAGE_SIZE);
+            }
+            return false;
+        }
     }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + heap_phys), 0,

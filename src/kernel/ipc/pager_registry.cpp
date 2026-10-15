@@ -656,11 +656,20 @@ int PagerRegistry::map(kernel::TaskControlBlock &pager, uint64_t fault_id,
 
     // Phase 2: map the pager's frames into the CLIENT's PML4 OUTSIDE the lock
     // (map_page_in_pml4 may allocate table pages; NX-only, user-accessible).
-    // Still inside IrqGuard — the map is atomic.
+    // Still inside IrqGuard — the map is atomic.  A mid-range table OOM
+    // fails the fault: the phase-3 !committed path below rolls back the
+    // installed prefix.
+    bool phase2_ok = true;
     for (uint64_t i = 0; i < count; ++i) {
-        VMM::map_page_in_pml4(fault_va + i * arch::PAGE_SIZE,
-                              fc->phys + i * arch::PAGE_SIZE, /*user=*/true,
-                              /*executable=*/false, client_pml4);
+        if (VMM::map_page_in_pml4_err(fault_va + i * arch::PAGE_SIZE,
+                                      fc->phys + i * arch::PAGE_SIZE,
+                                      /*user=*/true,
+                                      /*executable=*/false,
+                                      client_pml4) !=
+            kernel::errors::VMM_ERR_OK) {
+            phase2_ok = false;
+            break;
+        }
     }
 
     // Phase 3: re-acquire the lock; re-validate the record still PENDING and
@@ -676,7 +685,7 @@ int PagerRegistry::map(kernel::TaskControlBlock &pager, uint64_t fault_id,
     {
         SpinLockGuard<sync::SpinLock> guard(s_lock_);
         auto &sl = s_slots_[slot_idx];
-        if (sl.state != SlotState::FREE && sl.pending &&
+        if (phase2_ok && sl.state != SlotState::FREE && sl.pending &&
             sl.fault.fault_id == fault_id && !fc->revoked()) {
             committed = true;
             for (uint64_t i = 0; i < count; ++i) {

@@ -362,7 +362,8 @@ static void note_silent_drop_once(const char *tag, uint64_t val) {
 /// @param virt_addr Page-aligned virtual address.
 /// @param phys_addr Page-aligned physical address.
 /// @param user      If true, mark the page as user-accessible.
-void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+                                      bool user) {
 #if defined(CONFIG_ARCH_RISCV64)
     // Sv39 3-level page table walk
     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
@@ -384,7 +385,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     auto *l1 = get_table(l0, l0_idx, true);
     if (!l1) {
         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
-        return;
+        return errors::VMM_ERR_PAGE_ALLOC;
     }
 
     // If L1 entry is a 2MB block, split it into 512 4KB entries.
@@ -394,7 +395,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
         uint64_t new_l2_phys = PMM::alloc_page_table();
         if (!new_l2_phys) {
             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-            return;
+            return errors::VMM_ERR_PAGE_ALLOC;
         }
         auto *new_l2 =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_l2_phys);
@@ -413,7 +414,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     auto *l2 = get_table(l1, l1_idx, true);
     if (!l2) {
         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
-        return;
+        return errors::VMM_ERR_PAGE_ALLOC;
     }
 
     if (user && phys_addr < PMM::total_memory())
@@ -427,6 +428,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
 
     l2[l2_idx] = VMM::sv39_phys_pte(phys_addr) | flags;
     arch::ArchPageTable::tlb_flush(virt_addr);
+    return errors::VMM_ERR_OK;
 #else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
@@ -452,12 +454,12 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     auto *pdpt = get_table(pml4, pml4_idx, true);
     if (!pdpt) {
         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
-        return;
+        return errors::VMM_ERR_PAGE_ALLOC;
     }
     auto *pd = get_table(pdpt, pdpt_idx, true);
     if (!pd) {
         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
-        return;
+        return errors::VMM_ERR_PAGE_ALLOC;
     }
 
     // If the PD entry is a 2MB huge page, split it into 512 4KB entries
@@ -471,7 +473,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
         uint64_t new_pt_phys = PMM::alloc_page_table();
         if (!new_pt_phys) {
             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-            return;
+            return errors::VMM_ERR_PAGE_ALLOC;
         }
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto *new_pt =
@@ -509,7 +511,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     auto *pt = get_table(pd, pd_idx, true);
     if (!pt) {
         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
-        return;
+        return errors::VMM_ERR_PAGE_ALLOC;
     }
 
     if (user && phys_addr < PMM::total_memory())
@@ -535,6 +537,15 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     pt[pt_idx] = phys_addr | flags;
     arch::ArchPageTable::tlb_flush(virt_addr);
 #endif
+    return errors::VMM_ERR_OK;
+}
+
+/// @brief Map a virtual page in the kernel table (legacy void wrapper:
+///        behavior-identical to the pre-#325 revision — walk allocation
+///        failures stay silent drops with a one-time log; fallible
+///        callers use map_page_try / map_page_err).
+void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+    (void)map_page_try(virt_addr, phys_addr, user);
 }
 
 /// @brief Unmap a virtual page from the kernel page table.
@@ -1841,8 +1852,7 @@ VmmError VMM::map_page_err(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     if ((virt_addr & 0xFFF) != 0 || (phys_addr & 0xFFF) != 0) {
         return VMM_ERR_INVALID_ADDR;
     }
-    map_page(virt_addr, phys_addr, user);
-    return VMM_ERR_OK;
+    return map_page_try(virt_addr, phys_addr, user);
 }
 
 /// @brief Unmap a page with alignment validation and error-code return.
@@ -1888,11 +1898,13 @@ VmmError VMM::clone_kernel_pml4_err(uint64_t &out_pml4_phys) {
 /// @param pml4_phys Physical address of the target PML4.
 /// @return VmmError code.
 VmmError VMM::map_page_in_pml4_err(uint64_t virt_addr, uint64_t phys_addr,
-                                    bool user, uint64_t pml4_phys) {
+                                    bool user, uint64_t pml4_phys,
+                                    bool executable) {
     if ((virt_addr & 0xFFF) != 0 || (phys_addr & 0xFFF) != 0) {
         return VMM_ERR_INVALID_ADDR;
     }
-    return map_page_in_pml4_try(virt_addr, phys_addr, user, true, pml4_phys);
+    return map_page_in_pml4_try(virt_addr, phys_addr, user, executable,
+                                pml4_phys);
 }
 
 /// @brief Free all user pages from a PML4 with error-code return.

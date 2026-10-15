@@ -46,7 +46,8 @@ class VMM {
     /// @brief Initialises the VMM and sets up the kernel page tables.
     static void init();
     /// @brief Initialises the VMM with error code.
-    /// @return VmmError code.
+    /// @return VmmError code (always VMM_ERR_OK: init only zeroes
+    ///         boot-constructed tables and allocates nothing).
     static errors::VmmError init_err();
 
     /// @brief Maps a virtual page to a physical page in the kernel page table.
@@ -64,13 +65,22 @@ class VMM {
     /// @return VmmError code.
     static errors::VmmError map_page_err(uint64_t virt_addr, uint64_t phys_addr,
                                          bool user = false);
+    /// @brief Fallible kernel-table map worker (issue #325-B): the
+    ///        map_page body with walk allocation failures surfaced
+    ///        instead of silently dropped (same contract shape as
+    ///        map_page_in_pml4_try).
+    /// @return VMM_ERR_OK, or VMM_ERR_PAGE_ALLOC when a table page or
+    ///         huge-page split allocation fails mid-walk.
+    static errors::VmmError map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+                                         bool user = false);
 
     /// @brief Unmaps a virtual page.
     /// @param virt_addr Virtual address to unmap.
     static void unmap_page(uint64_t virt_addr);
     /// @brief Unmaps a virtual page with error code.
     /// @param virt_addr Virtual address to unmap.
-    /// @return VmmError code.
+    /// @return VmmError code (walk-only with create=false: allocates
+    ///         nothing, so only alignment can fail).
     static errors::VmmError unmap_page_err(uint64_t virt_addr);
 
     /// @brief Translates a virtual address to its physical address.
@@ -188,10 +198,14 @@ class VMM {
     /// @param phys_addr Physical address (page-aligned).
     /// @param user      If true, sets user-accessible flag.
     /// @param pml4_phys Physical address of the target PML4.
-    /// @return VmmError code.
+    /// @param executable If true, page is executable (default preserves the
+    ///        legacy 4-arg mapping behaviour; pass false for W^X data).
+    /// @return VmmError code (walk allocation failures propagate as
+    ///         VMM_ERR_PAGE_ALLOC).
     static errors::VmmError map_page_in_pml4_err(uint64_t virt_addr,
                                                  uint64_t phys_addr, bool user,
-                                                 uint64_t pml4_phys);
+                                                 uint64_t pml4_phys,
+                                                 bool executable = true);
 
     /// @brief Return the physical address of the kernel PML4 table.
     /// @return Physical address of the kernel page-table root.
@@ -215,7 +229,8 @@ class VMM {
     static void free_user_pages(uint64_t pml4_phys);
     /// @brief Frees all user-space pages and page tables with error code.
     /// @param pml4_phys Physical address of the user PML4.
-    /// @return VmmError code.
+    /// @return VmmError code (always VMM_ERR_OK: teardown walks with
+    ///         create=false and frees; it cannot fail).
     static errors::VmmError free_user_pages_err(uint64_t pml4_phys);
 
     /// @brief Maps the frame(s) owned by a FrameCap into @p pml4_phys.

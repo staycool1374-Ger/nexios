@@ -26,6 +26,8 @@
 
 #include <test.hpp>
 #include <logger.hpp>
+#include <scope_guard.hpp>
+#include <kernel/arch/irq_guard.hpp>
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/cap_types.hpp>
 #include <kernel/cap/mmio.hpp>
@@ -650,44 +652,50 @@ JARVIS_TEST(cap_map_err_validation_matrix, "PRE: none | POST: none") {
 // Expect: VMM_ERR_PAGE_ALLOC; all 513 pages unmapped; no PMM/table leak
 // Depends: kernel::cap::MmioCap, kernel::memory::VMM, kernel::memory::PMM
 JARVIS_TEST(mmio_map_err_rollback_oom, "PRE: none | POST: none") {
-    static uint64_t s_table_stash[4096];
-    const uint64_t pool_lo = PMM::pool_start();
-    const uint64_t pool_hi = PMM::pool_end();
-    const uint64_t pool_total = PMM::pool_total_pages();
-    const uint64_t pool_used = PMM::pool_used_pages();
-    size_t stashed = 0;
-    if (pool_hi > pool_lo && pool_total > pool_used) {
-        size_t need = static_cast<size_t>(pool_total - pool_used);
-        if (need > 4096) {
-            need = 4096;
-        }
-        for (size_t drain_idx = 0; drain_idx < need; ++drain_idx) {
-            uint64_t table_page = PMM::alloc_page_table();
-            if (table_page < pool_lo || table_page >= pool_hi) {
-                if (table_page != 0) {
-                    PMM::free_page(table_page); // general-pool fallback
-                }
-                break;
-            }
-            s_table_stash[stashed++] = table_page;
-        }
-    }
-
-    // Drain the general pool through an intrusive chain (first word of
-    // each held page links the next) — O(1) storage, exact restore.
+    // Deterministic OOM: null the OOM-killer for the drain+probe window
+    // (test_resource_exhaustion doctrine) — otherwise the handler kills
+    // user tasks mid-drain and the reaper frees pages under the probe.
+    PMM::OOMHandler saved_oom = PMM::get_oom_handler();
+    PMM::set_oom_handler(nullptr);
+    auto oom_restore = ScopeGuard([&]() { PMM::set_oom_handler(saved_oom); });
+    // Unified refusal-loop drain (same doctrine as
+    // map_page_err_oom_writes_nothing): alloc_page_table serves the table
+    // pool first, then falls back across the whole window, so ONE loop
+    // dries every pool bitmap-wide.  Settle rounds absorb SMP racers.
+    // IRQs off shrinks the racer window to the AP tick.
+    arch::IrqGuard drain_guard;
+    // Rebuild free lists from the bitmap FIRST (B0: pre-existing pool-list
+    // cycles spin an unbounded drain forever; with the fix this yields a
+    // bitmap-fresh list and the drain below terminates).
+    PMM::rebuild_free_list();
     uint64_t chain_head = 0;
-    uint64_t general_page = 0;
-    while ((general_page = PMM::alloc_page()) != 0) {
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                  general_page);
-        *link = chain_head;
-        chain_head = general_page;
+    for (int settle = 0; settle < 3; ++settle) {
+        size_t took = 0;
+        uint64_t take_page = 0;
+        // Hang guard: the window holds < 32768 pages; more takes means a
+        // cycling free list (fail loud, never stall the harness).
+        size_t take_cap = 0;
+        while ((take_page = PMM::alloc_page_table()) != 0) {
+            JARVIS_ASSERT_FMT(take_cap < 100000,
+                              "drain takes exceed window (cycling list?)");
+            ++take_cap;
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                      take_page);
+            *link = chain_head;
+            chain_head = take_page;
+            ++took;
+        }
+        if (took == 0) {
+            break;
+        }
     }
 #if defined(CONFIG_ARCH_RISCV64)
-    constexpr size_t KEEP_TABLES = 2; // L1 + first L2
+    constexpr size_t KEEP_TABLES = 3; // clone PML4 + L1 + first L2 (L2b fails)
 #else
-    constexpr size_t KEEP_TABLES = 3; // PDPT + PD + first PT
+    constexpr size_t KEEP_TABLES = 4; // clone PML4 + PDPT + PD + first PT
+                                      // (second PT fails → 512-page prefix
+                                      // mapped then rolled back)
 #endif
     for (size_t keep = 0; keep < KEEP_TABLES; ++keep) {
         JARVIS_ASSERT(chain_head != 0);
@@ -725,9 +733,6 @@ JARVIS_TEST(mmio_map_err_rollback_oom, "PRE: none | POST: none") {
         const uint64_t next_head = *link;
         PMM::free_page(chain_head);
         chain_head = next_head;
-    }
-    for (size_t stash_idx = 0; stash_idx < stashed; ++stash_idx) {
-        PMM::free_page(s_table_stash[stash_idx]);
     }
     JARVIS_TEST_PASS();
 }
