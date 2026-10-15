@@ -31,7 +31,9 @@ namespace kernel::errors {
     X(PAGE_ALLOC, 1, "Failed to allocate page table page")                     \
     X(PML4_ALLOC, 2, "Failed to allocate PML4 page for clone")                 \
     X(INVALID_ADDR, 3, "Invalid virtual address")                              \
-    X(NOT_MAPPED, 4, "Virtual address not mapped")
+    X(NOT_MAPPED, 4, "Virtual address not mapped")                             \
+    X(REVOKED, 5, "Capability revoked")                                        \
+    X(EMPTY_RANGE, 6, "Empty frame range")
 
 /// @brief Error codes for the Virtual Memory Manager.
 // NOLINTNEXTLINE(performance-enum-size)

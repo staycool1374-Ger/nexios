@@ -514,6 +514,224 @@ JARVIS_TEST(ioport_pool_exhaustion_fails_closed, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: map_mmio_from_cap_err success path returns OK and resolves
+// Input: 1-page memory BAR, scratch PML4
+// Expect: VMM_ERR_OK; virt_to_phys resolves; unmap clears
+// Depends: kernel::cap::MmioCap, kernel::memory::VMM
+JARVIS_TEST(mmio_map_err_success_roundtrip, "PRE: none | POST: none") {
+    uint64_t phys = PMM::alloc_page();
+    JARVIS_ASSERT(phys != 0);
+    auto *mmio = cap::MmioCap::create(phys, arch::PAGE_SIZE,
+                                      arch::PciBarType::MEMORY_32);
+    JARVIS_ASSERT(mmio != nullptr);
+
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+    constexpr uint64_t VA = 0x500000ULL;
+
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT_EQ(phys, VMM::virt_to_phys_in_pml4(VA, pml4));
+    VMM::unmap_mmio_from_cap(mmio, VA, pml4);
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(VA, pml4));
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    mmio->release();
+    PMM::free_page(phys);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: map_frame_from_cap_err maps every frame of a FrameCap
+// Input: 2 contiguous user pages wrapped in a FrameCap, scratch PML4
+// Expect: VMM_ERR_OK; both pages resolve; per-page unmap clears
+// Depends: kernel::cap::FrameCap, kernel::memory::VMM
+JARVIS_TEST(frame_map_err_success_roundtrip, "PRE: none | POST: none") {
+    uint64_t phys = PMM::alloc_user_contiguous(2);
+    JARVIS_ASSERT(phys != 0);
+    auto *fc = cap::FrameCap::create(phys, 2, true);
+    JARVIS_ASSERT(fc != nullptr);
+
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+    constexpr uint64_t VA = 0x500000ULL;
+
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT_EQ(phys, VMM::virt_to_phys_in_pml4(VA, pml4));
+    JARVIS_ASSERT_EQ(phys + arch::PAGE_SIZE,
+                     VMM::virt_to_phys_in_pml4(VA + arch::PAGE_SIZE, pml4));
+    VMM::unmap_frame_from_cap(VA, pml4);
+    VMM::unmap_frame_from_cap(VA + arch::PAGE_SIZE, pml4);
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(VA, pml4));
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    fc->release(); // dispose returns the wrapped frames to the PMM
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: cap-map err validation matrix — every refusal carries its code
+// Input: null/revoked/zero/misaligned/wrap-around/IO-bar caps
+// Expect: INVALID_ADDR, REVOKED, EMPTY_RANGE as documented; no mappings
+// Depends: kernel::cap::FrameCap, kernel::cap::MmioCap, kernel::memory::VMM
+JARVIS_TEST(cap_map_err_validation_matrix, "PRE: none | POST: none") {
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+    constexpr uint64_t VA = 0x500000ULL;
+
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(nullptr, VA, false, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(nullptr, VA, false, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+
+    uint64_t phys = PMM::alloc_page();
+    JARVIS_ASSERT(phys != 0);
+    auto *mmio = cap::MmioCap::create(phys, arch::PAGE_SIZE,
+                                      arch::PciBarType::MEMORY_32);
+    JARVIS_ASSERT(mmio != nullptr);
+    mmio->size = 0; // zero range (public field; dispose frees no memory)
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_EMPTY_RANGE);
+    mmio->size = arch::PAGE_SIZE;
+    const uint64_t saved_size = mmio->size;
+    mmio->size = UINT64_MAX; // roundup would wrap, restored below
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    mmio->size = saved_size;
+    mmio->revoke();
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_REVOKED);
+
+    auto *io = cap::MmioCap::create(0x3F8, 8, arch::PciBarType::IO);
+    JARVIS_ASSERT(io != nullptr);
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(io, VA, false, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+
+    uint64_t uphys = PMM::alloc_user_contiguous(1);
+    JARVIS_ASSERT(uphys != 0);
+    auto *fc = cap::FrameCap::create(uphys, 1, true);
+    JARVIS_ASSERT(fc != nullptr);
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA + 1, true, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    const size_t saved_count = fc->count;
+    fc->count = static_cast<size_t>(-1); // wrap-around range, restored below
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    fc->count = saved_count;
+    fc->count = 0; // zero frame
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_EMPTY_RANGE);
+    fc->count = saved_count;
+    const uint64_t saved_phys = fc->phys;
+    fc->phys = UINT64_MAX - arch::PAGE_SIZE / 2; // phys wrap, restored below
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    fc->phys = saved_phys;
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    io->release();
+    mmio->release();
+    fc->release();
+    PMM::free_page(phys);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: mid-range OOM rolls back the mapped prefix (all-or-nothing)
+// Input: 513-page MMIO range crossing a PT boundary; both PMM pools
+//        drained exactly (table pool via pool_used/total into a small
+//        static stash, general pool via an intrusive HHDM chain with O(1)
+//        storage), KEEP tables freed back
+// Expect: VMM_ERR_PAGE_ALLOC; all 513 pages unmapped; no PMM/table leak
+// Depends: kernel::cap::MmioCap, kernel::memory::VMM, kernel::memory::PMM
+JARVIS_TEST(mmio_map_err_rollback_oom, "PRE: none | POST: none") {
+    static uint64_t s_table_stash[4096];
+    const uint64_t pool_lo = PMM::pool_start();
+    const uint64_t pool_hi = PMM::pool_end();
+    const uint64_t pool_total = PMM::pool_total_pages();
+    const uint64_t pool_used = PMM::pool_used_pages();
+    size_t stashed = 0;
+    if (pool_hi > pool_lo && pool_total > pool_used) {
+        size_t need = static_cast<size_t>(pool_total - pool_used);
+        if (need > 4096) {
+            need = 4096;
+        }
+        for (size_t drain_idx = 0; drain_idx < need; ++drain_idx) {
+            uint64_t table_page = PMM::alloc_page_table();
+            if (table_page < pool_lo || table_page >= pool_hi) {
+                if (table_page != 0) {
+                    PMM::free_page(table_page); // general-pool fallback
+                }
+                break;
+            }
+            s_table_stash[stashed++] = table_page;
+        }
+    }
+
+    // Drain the general pool through an intrusive chain (first word of
+    // each held page links the next) — O(1) storage, exact restore.
+    uint64_t chain_head = 0;
+    uint64_t general_page = 0;
+    while ((general_page = PMM::alloc_page()) != 0) {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                  general_page);
+        *link = chain_head;
+        chain_head = general_page;
+    }
+#if defined(CONFIG_ARCH_RISCV64)
+    constexpr size_t KEEP_TABLES = 2; // L1 + first L2
+#else
+    constexpr size_t KEEP_TABLES = 3; // PDPT + PD + first PT
+#endif
+    for (size_t keep = 0; keep < KEEP_TABLES; ++keep) {
+        JARVIS_ASSERT(chain_head != 0);
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                  chain_head);
+        const uint64_t next_head = *link;
+        PMM::free_page(chain_head);
+        chain_head = next_head;
+    }
+
+    constexpr uint64_t VA = 0x400000ULL; // 2 MiB-aligned: 512 pages fill one
+                                        // PT, page 512 needs the next PT
+    constexpr size_t NPAGES = 513;
+    auto *mmio = cap::MmioCap::create(0x1000000, NPAGES * arch::PAGE_SIZE,
+                                      arch::PciBarType::MEMORY_32);
+    JARVIS_ASSERT(mmio != nullptr);
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_PAGE_ALLOC);
+    for (size_t page_idx = 0; page_idx < NPAGES; ++page_idx) {
+        JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(
+                                   VA + page_idx * arch::PAGE_SIZE, pml4));
+    }
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    mmio->release();
+    while (chain_head != 0) {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                  chain_head);
+        const uint64_t next_head = *link;
+        PMM::free_page(chain_head);
+        chain_head = next_head;
+    }
+    for (size_t stash_idx = 0; stash_idx < stashed; ++stash_idx) {
+        PMM::free_page(s_table_stash[stash_idx]);
+    }
+    JARVIS_TEST_PASS();
+}
+
 #if defined(CONFIG_ARCH_X86_64)
 // Runmode: kernel
 // Testidea: Revoking an IO MmioCap retroactively re-masks the granted port
@@ -823,6 +1041,10 @@ void register_cap_mmio_tests() {
     JARVIS_REGISTER_TEST(mmio_cap_create_io_bar_bounds);
     JARVIS_REGISTER_TEST(mmio_cap_install_lookup_revoke);
     JARVIS_REGISTER_TEST(mmio_map_memory_bar_roundtrip);
+    JARVIS_REGISTER_TEST(mmio_map_err_success_roundtrip);
+    JARVIS_REGISTER_TEST(frame_map_err_success_roundtrip);
+    JARVIS_REGISTER_TEST(cap_map_err_validation_matrix);
+    JARVIS_REGISTER_TEST(mmio_map_err_rollback_oom);
     JARVIS_REGISTER_TEST(ioport_grant_dispatch_happy);
     JARVIS_REGISTER_TEST(ioport_grant_validation_matrix);
     JARVIS_REGISTER_TEST(ioport_switch_applies_and_restores);

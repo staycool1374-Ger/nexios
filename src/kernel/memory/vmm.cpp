@@ -686,8 +686,10 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     map_page_in_pml4(virt_addr, phys_addr, user, true, pml4_phys);
 }
 
-void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
-                           bool executable, uint64_t pml4_phys) {
+errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
+                                              uint64_t phys_addr, bool user,
+                                              bool executable,
+                                              uint64_t pml4_phys) {
 #if defined(CONFIG_ARCH_RISCV64)
     // Sv39 3-level page table walk
     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
@@ -709,12 +711,12 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     auto *l1 = get_table(l0, l0_idx, true, true);
     if (!l1) {
         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
-        return;
+        return errors::VMM_ERR_PAGE_ALLOC;
     }
     auto *l2 = get_table(l1, l1_idx, true, true);
     if (!l2) {
         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
-        return;
+        return errors::VMM_ERR_PAGE_ALLOC;
     }
 
     if (user && phys_addr < PMM::total_memory())
@@ -751,12 +753,12 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     auto *pdpt = get_table(pml4, pml4_idx, true, true);
     if (!pdpt) {
         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
-        return;
+        return errors::VMM_ERR_PAGE_ALLOC;
     }
     auto *pd = get_table(pdpt, pdpt_idx, true, true);
     if (!pd) {
         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
-        return;
+        return errors::VMM_ERR_PAGE_ALLOC;
     }
 
 #if defined(CONFIG_ARCH_AARCH64)
@@ -768,7 +770,7 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
         uint64_t new_pt_phys = PMM::alloc_user_page();
         if (!new_pt_phys) {
             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-            return;
+            return errors::VMM_ERR_PAGE_ALLOC;
         }
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto *new_pt =
@@ -798,7 +800,7 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     auto *pt = get_table(pd, pd_idx, true, true);
     if (!pt) {
         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
-        return;
+        return errors::VMM_ERR_PAGE_ALLOC;
     }
 
     if (user && phys_addr < PMM::total_memory())
@@ -830,6 +832,18 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     // required when they are (present→present remaps would otherwise
     // serve stale TLB/PCID entries, globals included).
     arch::ArchPageTable::tlb_flush(virt_addr);
+    return errors::VMM_ERR_OK;
+}
+
+/// @brief Maps a page into a specific page table with explicit W^X
+///        permission (legacy void wrapper: behavior-identical to the
+///        pre-#325 revision — walk allocation failures stay silent
+///        drops with a one-time log; fallible callers use
+///        map_page_in_pml4_try / map_page_in_pml4_err).
+void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+                           bool executable, uint64_t pml4_phys) {
+    (void)map_page_in_pml4_try(virt_addr, phys_addr, user, executable,
+                               pml4_phys);
 }
 
 uint64_t *VMM::pte_leaf_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
@@ -1874,12 +1888,11 @@ VmmError VMM::clone_kernel_pml4_err(uint64_t &out_pml4_phys) {
 /// @param pml4_phys Physical address of the target PML4.
 /// @return VmmError code.
 VmmError VMM::map_page_in_pml4_err(uint64_t virt_addr, uint64_t phys_addr,
-                                   bool user, uint64_t pml4_phys) {
+                                    bool user, uint64_t pml4_phys) {
     if ((virt_addr & 0xFFF) != 0 || (phys_addr & 0xFFF) != 0) {
         return VMM_ERR_INVALID_ADDR;
     }
-    map_page_in_pml4(virt_addr, phys_addr, user, pml4_phys);
-    return VMM_ERR_OK;
+    return map_page_in_pml4_try(virt_addr, phys_addr, user, true, pml4_phys);
 }
 
 /// @brief Free all user pages from a PML4 with error-code return.
@@ -1910,16 +1923,55 @@ VmmError VMM::virt_to_phys_in_pml4_err(uint64_t virt_addr, uint64_t pml4_phys,
 ///        revocation (ROADMAP 0.4.1 CSpace).  The caller must hold a pin
 ///        (ScopedRef / live capability slot) on @p fc.
 bool VMM::map_frame_from_cap(cap::FrameCap *fc, uint64_t virt_addr, bool user,
-                             uint64_t pml4_phys) {
-    if (!fc || fc->revoked())
-        return false;
-    if (fc->phys == 0 || fc->count == 0)
-        return false;
-    for (size_t i = 0; i < fc->count; ++i) {
-        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE,
-                         fc->phys + i * arch::PAGE_SIZE, user, pml4_phys);
+                              uint64_t pml4_phys) {
+    return map_frame_from_cap_err(fc, virt_addr, user, pml4_phys) ==
+           errors::VMM_ERR_OK;
+}
+
+errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
+                                             uint64_t phys_addr,
+                                             size_t page_count, bool user,
+                                             uint64_t pml4_phys) {
+    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0 ||
+        (phys_addr & (arch::PAGE_SIZE - 1)) != 0) {
+        return errors::VMM_ERR_INVALID_ADDR;
     }
-    return true;
+    if (page_count == 0 ||
+        page_count > (UINT64_MAX - virt_addr) / arch::PAGE_SIZE) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
+    if (page_count > (UINT64_MAX - phys_addr) / arch::PAGE_SIZE) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
+    for (size_t page_idx = 0; page_idx < page_count; ++page_idx) {
+        const uint64_t page_va = virt_addr + page_idx * arch::PAGE_SIZE;
+        const uint64_t page_pa = phys_addr + page_idx * arch::PAGE_SIZE;
+        errors::VmmError step = map_page_in_pml4_try(
+            page_va, page_pa, user, true, pml4_phys);
+        if (step != errors::VMM_ERR_OK) {
+            for (size_t back = 0; back < page_idx; ++back) {
+                unmap_page_in_pml4(virt_addr + back * arch::PAGE_SIZE,
+                                   pml4_phys);
+            }
+            return step;
+        }
+    }
+    return errors::VMM_ERR_OK;
+}
+
+errors::VmmError VMM::map_frame_from_cap_err(cap::FrameCap *fc,
+                                              uint64_t virt_addr, bool user,
+                                              uint64_t pml4_phys) {
+    if (!fc) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
+    if (fc->revoked()) {
+        return errors::VMM_ERR_REVOKED;
+    }
+    if (fc->phys == 0 || fc->count == 0) {
+        return errors::VMM_ERR_EMPTY_RANGE;
+    }
+    return map_phys_range_try(virt_addr, fc->phys, fc->count, user, pml4_phys);
 }
 
 /// @brief Unmaps one page previously mapped via map_frame_from_cap().
@@ -1932,20 +1984,33 @@ void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
 
 /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys.
 bool VMM::map_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr, bool user,
-                            uint64_t pml4_phys) {
-    if (!mmio || mmio->revoked())
-        return false;
-    if (mmio->phys == 0 || mmio->size == 0)
-        return false;
-    if (mmio->bar_type == arch::PciBarType::IO)
-        return false; // port I/O is delegated via sys_ioport_grant, not MMIO
+                             uint64_t pml4_phys) {
+    return map_mmio_from_cap_err(mmio, virt_addr, user, pml4_phys) ==
+           errors::VMM_ERR_OK;
+}
+
+errors::VmmError VMM::map_mmio_from_cap_err(cap::MmioCap *mmio,
+                                             uint64_t virt_addr, bool user,
+                                             uint64_t pml4_phys) {
+    if (!mmio) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
+    if (mmio->revoked()) {
+        return errors::VMM_ERR_REVOKED;
+    }
+    if (mmio->phys == 0 || mmio->size == 0) {
+        return errors::VMM_ERR_EMPTY_RANGE;
+    }
+    if (mmio->bar_type == arch::PciBarType::IO) {
+        return errors::VMM_ERR_INVALID_ADDR; // port I/O is delegated via
+                                             // sys_ioport_grant, not MMIO
+    }
+    if (mmio->size > UINT64_MAX - (arch::PAGE_SIZE - 1)) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
     const size_t pages =
         (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
-    for (size_t i = 0; i < pages; ++i) {
-        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE,
-                         mmio->phys + i * arch::PAGE_SIZE, user, pml4_phys);
-    }
-    return true;
+    return map_phys_range_try(virt_addr, mmio->phys, pages, user, pml4_phys);
 }
 
 /// @brief Unmaps an MmioCap's memory BAR range previously mapped via

@@ -1,91 +1,558 @@
-diff --git a/src/kernel/memory/integrity.cpp b/src/kernel/memory/integrity.cpp
-index 887f519d1..b4bd44adc 100644
---- a/src/kernel/memory/integrity.cpp
-+++ b/src/kernel/memory/integrity.cpp
-@@ -91,12 +91,21 @@ void check_section_markers() {
-     if (_m_bss_end != kMagicBssEnd) {
-         panic("INTEGRITY: .bss end marker corrupted");
-     }
-+// Issue #327: the stack markers bracket the real 16 KiB kernel_stack on
-+// every arch (emitted from kernel.cpp, not only x86_64) — but the marker
-+// objects themselves sit in the low-VMA .boot_stack region, unreachable
-+// via adrp from higher-half .text on aarch64 (link break). The value
-+// check stays out there; the span placement is asserted by
-+// integrity_stack_markers_span on all arches. Live stacks remain guarded
-+// by guard pages (see stack-guard spec).
-+#if !defined(CONFIG_ARCH_AARCH64)
-     if (_m_stack_before != kMagicStackBefore) {
-         panic("INTEGRITY: stack before marker corrupted");
-     }
-     if (_m_stack_after != kMagicStackAfter) {
-         panic("INTEGRITY: stack after marker corrupted");
-     }
-+#endif
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index ac5f13cf6..300a49a95 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -686,8 +686,10 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+     map_page_in_pml4(virt_addr, phys_addr, user, true, pml4_phys);
  }
  
- /// @brief Reset CRC accumulator, offset, and completion flags for a fresh scan.
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 9e6daee2e..ddaa75422 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -232,7 +232,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"kernel_top",            22, 0,       0      },  // Top-level kernel (#131): histogram + random + IrqThread (#144, unknown-vec/sync-ack/guard) + datetime + global_state accessors (#136)
-     {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
-     {"memory_checked_ptr_api", 10,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views + non-#PF vector gate (#252)
--    {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
-+    {"memory_integrity",      3,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127) + stack-marker span placement (#327)
-     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
-     {"shell_commands",       34,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77) + --debug flag pin (#231) + --debug spawn success (#295, replaces refusal pin) + --debug no-image refusal (#295 audit)
-     {"services_framework",    7,    0,       0      },  // services framework (issue #125): terminal colors, length-bounded write, cursor/splash, fb gate, scroll, program registry bounds
-@@ -282,7 +282,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+-void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+-                           bool executable, uint64_t pml4_phys) {
++errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
++                                              uint64_t phys_addr, bool user,
++                                              bool executable,
++                                              uint64_t pml4_phys) {
+ #if defined(CONFIG_ARCH_RISCV64)
+     // Sv39 3-level page table walk
+     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+@@ -709,12 +711,12 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+     auto *l1 = get_table(l0, l0_idx, true, true);
+     if (!l1) {
+         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
+-        return;
++        return errors::VMM_ERR_PAGE_ALLOC;
+     }
+     auto *l2 = get_table(l1, l1_idx, true, true);
+     if (!l2) {
+         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
+-        return;
++        return errors::VMM_ERR_PAGE_ALLOC;
+     }
  
-     // Structural/semantic aggregates (issue #173).  Values are filled
-     // from measured `dump-counts` output; 0 disables validation.
--    {"core",                554,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 1 ring3 errno cell (#338) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
-+    {"core",                555,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 1 ring3 errno cell (#338) + 1 stack-marker span (#327) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
-     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
-     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
-     {"proc_elf",            123,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD
-diff --git a/src/kernel/test/test_memory_integrity.cpp b/src/kernel/test/test_memory_integrity.cpp
-index 69346deb1..177a9487d 100644
---- a/src/kernel/test/test_memory_integrity.cpp
-+++ b/src/kernel/test/test_memory_integrity.cpp
-@@ -34,6 +34,7 @@
- #include <test.hpp>
- #include <logger.hpp>
- #include <kernel/memory/integrity.hpp>
-+#include <kernel/core/global_state.hpp>
+     if (user && phys_addr < PMM::total_memory())
+@@ -751,12 +753,12 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+     auto *pdpt = get_table(pml4, pml4_idx, true, true);
+     if (!pdpt) {
+         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
+-        return;
++        return errors::VMM_ERR_PAGE_ALLOC;
+     }
+     auto *pd = get_table(pdpt, pdpt_idx, true, true);
+     if (!pd) {
+         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
+-        return;
++        return errors::VMM_ERR_PAGE_ALLOC;
+     }
  
- using namespace kernel;
+ #if defined(CONFIG_ARCH_AARCH64)
+@@ -768,7 +770,7 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+         uint64_t new_pt_phys = PMM::alloc_user_page();
+         if (!new_pt_phys) {
+             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
+-            return;
++            return errors::VMM_ERR_PAGE_ALLOC;
+         }
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         auto *new_pt =
+@@ -798,7 +800,7 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+     auto *pt = get_table(pd, pd_idx, true, true);
+     if (!pt) {
+         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
+-        return;
++        return errors::VMM_ERR_PAGE_ALLOC;
+     }
  
-@@ -92,8 +93,28 @@ JARVIS_TEST(integrity_crc_scan_completes_and_matches,
+     if (user && phys_addr < PMM::total_memory())
+@@ -830,6 +832,18 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+     // required when they are (present→present remaps would otherwise
+     // serve stale TLB/PCID entries, globals included).
+     arch::ArchPageTable::tlb_flush(virt_addr);
++    return errors::VMM_ERR_OK;
++}
++
++/// @brief Maps a page into a specific page table with explicit W^X
++///        permission (legacy void wrapper: behavior-identical to the
++///        pre-#325 revision — walk allocation failures stay silent
++///        drops with a one-time log; fallible callers use
++///        map_page_in_pml4_try / map_page_in_pml4_err).
++void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
++                           bool executable, uint64_t pml4_phys) {
++    (void)map_page_in_pml4_try(virt_addr, phys_addr, user, executable,
++                               pml4_phys);
+ }
+ 
+ uint64_t *VMM::pte_leaf_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+@@ -1874,12 +1888,11 @@ VmmError VMM::clone_kernel_pml4_err(uint64_t &out_pml4_phys) {
+ /// @param pml4_phys Physical address of the target PML4.
+ /// @return VmmError code.
+ VmmError VMM::map_page_in_pml4_err(uint64_t virt_addr, uint64_t phys_addr,
+-                                   bool user, uint64_t pml4_phys) {
++                                    bool user, uint64_t pml4_phys) {
+     if ((virt_addr & 0xFFF) != 0 || (phys_addr & 0xFFF) != 0) {
+         return VMM_ERR_INVALID_ADDR;
+     }
+-    map_page_in_pml4(virt_addr, phys_addr, user, pml4_phys);
+-    return VMM_ERR_OK;
++    return map_page_in_pml4_try(virt_addr, phys_addr, user, true, pml4_phys);
+ }
+ 
+ /// @brief Free all user pages from a PML4 with error-code return.
+@@ -1910,16 +1923,55 @@ VmmError VMM::virt_to_phys_in_pml4_err(uint64_t virt_addr, uint64_t pml4_phys,
+ ///        revocation (ROADMAP 0.4.1 CSpace).  The caller must hold a pin
+ ///        (ScopedRef / live capability slot) on @p fc.
+ bool VMM::map_frame_from_cap(cap::FrameCap *fc, uint64_t virt_addr, bool user,
+-                             uint64_t pml4_phys) {
+-    if (!fc || fc->revoked())
+-        return false;
+-    if (fc->phys == 0 || fc->count == 0)
+-        return false;
+-    for (size_t i = 0; i < fc->count; ++i) {
+-        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE,
+-                         fc->phys + i * arch::PAGE_SIZE, user, pml4_phys);
++                              uint64_t pml4_phys) {
++    return map_frame_from_cap_err(fc, virt_addr, user, pml4_phys) ==
++           errors::VMM_ERR_OK;
++}
++
++errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
++                                             uint64_t phys_addr,
++                                             size_t page_count, bool user,
++                                             uint64_t pml4_phys) {
++    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0 ||
++        (phys_addr & (arch::PAGE_SIZE - 1)) != 0) {
++        return errors::VMM_ERR_INVALID_ADDR;
++    }
++    if (page_count == 0 ||
++        page_count > (UINT64_MAX - virt_addr) / arch::PAGE_SIZE) {
++        return errors::VMM_ERR_INVALID_ADDR;
++    }
++    if (page_count > (UINT64_MAX - phys_addr) / arch::PAGE_SIZE) {
++        return errors::VMM_ERR_INVALID_ADDR;
++    }
++    for (size_t page_idx = 0; page_idx < page_count; ++page_idx) {
++        const uint64_t page_va = virt_addr + page_idx * arch::PAGE_SIZE;
++        const uint64_t page_pa = phys_addr + page_idx * arch::PAGE_SIZE;
++        errors::VmmError step = map_page_in_pml4_try(
++            page_va, page_pa, user, true, pml4_phys);
++        if (step != errors::VMM_ERR_OK) {
++            for (size_t back = 0; back < page_idx; ++back) {
++                unmap_page_in_pml4(virt_addr + back * arch::PAGE_SIZE,
++                                   pml4_phys);
++            }
++            return step;
++        }
+     }
+-    return true;
++    return errors::VMM_ERR_OK;
++}
++
++errors::VmmError VMM::map_frame_from_cap_err(cap::FrameCap *fc,
++                                              uint64_t virt_addr, bool user,
++                                              uint64_t pml4_phys) {
++    if (!fc) {
++        return errors::VMM_ERR_INVALID_ADDR;
++    }
++    if (fc->revoked()) {
++        return errors::VMM_ERR_REVOKED;
++    }
++    if (fc->phys == 0 || fc->count == 0) {
++        return errors::VMM_ERR_EMPTY_RANGE;
++    }
++    return map_phys_range_try(virt_addr, fc->phys, fc->count, user, pml4_phys);
+ }
+ 
+ /// @brief Unmaps one page previously mapped via map_frame_from_cap().
+@@ -1932,20 +1984,33 @@ void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
+ 
+ /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys.
+ bool VMM::map_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr, bool user,
+-                            uint64_t pml4_phys) {
+-    if (!mmio || mmio->revoked())
+-        return false;
+-    if (mmio->phys == 0 || mmio->size == 0)
+-        return false;
+-    if (mmio->bar_type == arch::PciBarType::IO)
+-        return false; // port I/O is delegated via sys_ioport_grant, not MMIO
++                             uint64_t pml4_phys) {
++    return map_mmio_from_cap_err(mmio, virt_addr, user, pml4_phys) ==
++           errors::VMM_ERR_OK;
++}
++
++errors::VmmError VMM::map_mmio_from_cap_err(cap::MmioCap *mmio,
++                                             uint64_t virt_addr, bool user,
++                                             uint64_t pml4_phys) {
++    if (!mmio) {
++        return errors::VMM_ERR_INVALID_ADDR;
++    }
++    if (mmio->revoked()) {
++        return errors::VMM_ERR_REVOKED;
++    }
++    if (mmio->phys == 0 || mmio->size == 0) {
++        return errors::VMM_ERR_EMPTY_RANGE;
++    }
++    if (mmio->bar_type == arch::PciBarType::IO) {
++        return errors::VMM_ERR_INVALID_ADDR; // port I/O is delegated via
++                                             // sys_ioport_grant, not MMIO
++    }
++    if (mmio->size > UINT64_MAX - (arch::PAGE_SIZE - 1)) {
++        return errors::VMM_ERR_INVALID_ADDR;
++    }
+     const size_t pages =
+         (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+-    for (size_t i = 0; i < pages; ++i) {
+-        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE,
+-                         mmio->phys + i * arch::PAGE_SIZE, user, pml4_phys);
+-    }
+-    return true;
++    return map_phys_range_try(virt_addr, mmio->phys, pages, user, pml4_phys);
+ }
+ 
+ /// @brief Unmaps an MmioCap's memory BAR range previously mapped via
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index 2323331cd..f615fc459 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -229,6 +229,22 @@ class VMM {
+     ///         a zero frame.
+     static bool map_frame_from_cap(class cap::FrameCap *fc, uint64_t virt_addr,
+                                    bool user, uint64_t pml4_phys);
++    /// @brief Maps the frame(s) owned by a FrameCap with error code and
++    ///        transactional rollback (issue #325-A): when a page fails
++    ///        mid-range, the already-mapped prefix is unmapped again, so
++    ///        the caller observes all-or-nothing.
++    /// @warning Requires an unmapped target range: rollback clears every
++    ///        leaf it installed and cannot distinguish a pre-existing
++    ///        live mapping (overlapping ranges are a caller bug).
++    /// @return VMM_ERR_OK when every frame was mapped; VMM_ERR_INVALID_ADDR
++    ///         on a null cap, misaligned base, wrap-around range, or IO-bar
++    ///         misuse; VMM_ERR_REVOKED on a revoked cap;
++    ///         VMM_ERR_EMPTY_RANGE on a zero frame; VMM_ERR_PAGE_ALLOC when
++    ///         a table page allocation fails mid-walk (prefix rolled back).
++    static errors::VmmError map_frame_from_cap_err(class cap::FrameCap *fc,
++                                                   uint64_t virt_addr,
++                                                   bool user,
++                                                   uint64_t pml4_phys);
+ 
+     /// @brief Unmaps one page previously mapped via map_frame_from_cap().
+     /// @param virt_addr Virtual address to unmap.
+@@ -245,7 +261,18 @@ class VMM {
+     /// @return true when every page was mapped, false on a revoked/IO-type
+     ///         cap or a zero range.
+     static bool map_mmio_from_cap(class cap::MmioCap *mmio, uint64_t virt_addr,
+-                                  bool user, uint64_t pml4_phys);
++                                   bool user, uint64_t pml4_phys);
++    /// @brief Maps an MmioCap's BAR range with error code and transactional
++    ///        rollback (issue #325-A): same all-or-nothing contract as
++    ///        map_frame_from_cap_err.
++    /// @warning Requires an unmapped target range (same rollback caveat
++    ///        as map_frame_from_cap_err).
++    /// @return VMM_ERR_OK when every page was mapped; error codes as in
++    ///         map_frame_from_cap_err (IO-type BAR → VMM_ERR_INVALID_ADDR).
++    static errors::VmmError map_mmio_from_cap_err(class cap::MmioCap *mmio,
++                                                  uint64_t virt_addr,
++                                                  bool user,
++                                                  uint64_t pml4_phys);
+ 
+     /// @brief Unmaps an MmioCap's memory BAR range previously mapped via
+     ///        map_mmio_from_cap().
+@@ -449,6 +476,32 @@ class VMM {
+     }
+ 
+   private:
++    /// @brief Fallible page-map worker (issue #325-A): the 5-arg
++    ///        map_page_in_pml4 body with walk allocation failures surfaced
++    ///        instead of silently dropped.  Callers needing atomicity
++    ///        (cap-map loops) roll back on non-OK.
++    /// @return VMM_ERR_OK, or VMM_ERR_PAGE_ALLOC when a table page or
++    ///         huge-page split allocation fails mid-walk (tables
++    ///         allocated before the failure stay installed; the caller
++    ///         owns rollback).
++    static errors::VmmError map_page_in_pml4_try(uint64_t virt_addr,
++                                                 uint64_t phys_addr, bool user,
++                                                 bool executable,
++                                                 uint64_t pml4_phys);
++    /// @brief Fallible contiguous-range mapper shared by the cap-map
++    ///        transactions (issue #325-A): maps @p page_count pages from
++    ///        @p phys_addr at @p virt_addr, rolling back the mapped
++    ///        prefix when a page fails mid-range (all-or-nothing).
++    /// @return VMM_ERR_OK on full success; VMM_ERR_INVALID_ADDR on a
++    ///         misaligned base or wrap-around range (including
++    ///         page_count == 0 — the public cap wrappers report a zero
++    ///         range as VMM_ERR_EMPTY_RANGE instead); VMM_ERR_PAGE_ALLOC
++    ///         on a mid-walk table allocation failure (prefix rolled
++    ///         back before returning).
++    static errors::VmmError map_phys_range_try(uint64_t virt_addr,
++                                               uint64_t phys_addr,
++                                               size_t page_count, bool user,
++                                               uint64_t pml4_phys);
+     /// @brief Walks or creates a page-table entry at the given level.
+     /// @param table Pointer to the current-level page table.
+     /// @param index Index into the table.
+diff --git a/src/kernel/memory/vmm_errors.hpp b/src/kernel/memory/vmm_errors.hpp
+index e536cc56f..6839bf897 100644
+--- a/src/kernel/memory/vmm_errors.hpp
++++ b/src/kernel/memory/vmm_errors.hpp
+@@ -31,7 +31,9 @@ namespace kernel::errors {
+     X(PAGE_ALLOC, 1, "Failed to allocate page table page")                     \
+     X(PML4_ALLOC, 2, "Failed to allocate PML4 page for clone")                 \
+     X(INVALID_ADDR, 3, "Invalid virtual address")                              \
+-    X(NOT_MAPPED, 4, "Virtual address not mapped")
++    X(NOT_MAPPED, 4, "Virtual address not mapped")                             \
++    X(REVOKED, 5, "Capability revoked")                                        \
++    X(EMPTY_RANGE, 6, "Empty frame range")
+ 
+ /// @brief Error codes for the Virtual Memory Manager.
+ // NOLINTNEXTLINE(performance-enum-size)
+diff --git a/src/kernel/test/test_cap_mmio.cpp b/src/kernel/test/test_cap_mmio.cpp
+index e2c299983..e02d1e4c8 100644
+--- a/src/kernel/test/test_cap_mmio.cpp
++++ b/src/kernel/test/test_cap_mmio.cpp
+@@ -514,6 +514,224 @@ JARVIS_TEST(ioport_pool_exhaustion_fails_closed, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
  }
  
--void register_memory_integrity_tests() {
--    Logger::info("Registering memory integrity tests");
 +// Runmode: kernel
-+// Testidea: The _stack_start/_stack_end span brackets the real 16 KiB
-+//           kernel_stack on every arch (issue #327: the "empty span"
-+//           premise was stale — the producer moved to shared kernel.cpp).
-+//           Address arithmetic only: the absolute symbols materialize as
-+//           immediates (no adrp), so this links on all arches, including
-+//           aarch64 where the marker objects themselves are unreachable.
-+// Input: Linker symbols _stack_start/_stack_end.
-+// Expect: span >= 16 KiB on all arches (markers + full stack inside).
-+// Depends: linker boot_stack regions, _stack_start/_stack_end
-+JARVIS_TEST(integrity_stack_markers_span, "PRE: vfsd, iocd | POST: none") {
-+    const uint64_t span_start =
-+        reinterpret_cast<uint64_t>(&_stack_start);
-+    const uint64_t span_end = reinterpret_cast<uint64_t>(&_stack_end);
-+    JARVIS_ASSERT(span_end > span_start);
-+    const uint64_t span_bytes = span_end - span_start;
-+    JARVIS_ASSERT(span_bytes >= 16384ULL);
++// Testidea: map_mmio_from_cap_err success path returns OK and resolves
++// Input: 1-page memory BAR, scratch PML4
++// Expect: VMM_ERR_OK; virt_to_phys resolves; unmap clears
++// Depends: kernel::cap::MmioCap, kernel::memory::VMM
++JARVIS_TEST(mmio_map_err_success_roundtrip, "PRE: none | POST: none") {
++    uint64_t phys = PMM::alloc_page();
++    JARVIS_ASSERT(phys != 0);
++    auto *mmio = cap::MmioCap::create(phys, arch::PAGE_SIZE,
++                                      arch::PciBarType::MEMORY_32);
++    JARVIS_ASSERT(mmio != nullptr);
++
++    uint64_t pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++    constexpr uint64_t VA = 0x500000ULL;
++
++    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
++                  errors::VMM_ERR_OK);
++    JARVIS_ASSERT_EQ(phys, VMM::virt_to_phys_in_pml4(VA, pml4));
++    VMM::unmap_mmio_from_cap(mmio, VA, pml4);
++    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(VA, pml4));
++
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    mmio->release();
++    PMM::free_page(phys);
 +    JARVIS_TEST_PASS();
 +}
 +
-+void register_memory_integrity_tests() {    Logger::info("Registering memory integrity tests");
-     JARVIS_REGISTER_TEST(integrity_section_markers_intact);
-     JARVIS_REGISTER_TEST(integrity_crc_scan_completes_and_matches);
-+    JARVIS_REGISTER_TEST(integrity_stack_markers_span); // #327
- }
++// Runmode: kernel
++// Testidea: map_frame_from_cap_err maps every frame of a FrameCap
++// Input: 2 contiguous user pages wrapped in a FrameCap, scratch PML4
++// Expect: VMM_ERR_OK; both pages resolve; per-page unmap clears
++// Depends: kernel::cap::FrameCap, kernel::memory::VMM
++JARVIS_TEST(frame_map_err_success_roundtrip, "PRE: none | POST: none") {
++    uint64_t phys = PMM::alloc_user_contiguous(2);
++    JARVIS_ASSERT(phys != 0);
++    auto *fc = cap::FrameCap::create(phys, 2, true);
++    JARVIS_ASSERT(fc != nullptr);
++
++    uint64_t pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++    constexpr uint64_t VA = 0x500000ULL;
++
++    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
++                  errors::VMM_ERR_OK);
++    JARVIS_ASSERT_EQ(phys, VMM::virt_to_phys_in_pml4(VA, pml4));
++    JARVIS_ASSERT_EQ(phys + arch::PAGE_SIZE,
++                     VMM::virt_to_phys_in_pml4(VA + arch::PAGE_SIZE, pml4));
++    VMM::unmap_frame_from_cap(VA, pml4);
++    VMM::unmap_frame_from_cap(VA + arch::PAGE_SIZE, pml4);
++    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(VA, pml4));
++
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    fc->release(); // dispose returns the wrapped frames to the PMM
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: cap-map err validation matrix — every refusal carries its code
++// Input: null/revoked/zero/misaligned/wrap-around/IO-bar caps
++// Expect: INVALID_ADDR, REVOKED, EMPTY_RANGE as documented; no mappings
++// Depends: kernel::cap::FrameCap, kernel::cap::MmioCap, kernel::memory::VMM
++JARVIS_TEST(cap_map_err_validation_matrix, "PRE: none | POST: none") {
++    uint64_t pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++    constexpr uint64_t VA = 0x500000ULL;
++
++    JARVIS_ASSERT(VMM::map_frame_from_cap_err(nullptr, VA, false, pml4) ==
++                  errors::VMM_ERR_INVALID_ADDR);
++    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(nullptr, VA, false, pml4) ==
++                  errors::VMM_ERR_INVALID_ADDR);
++
++    uint64_t phys = PMM::alloc_page();
++    JARVIS_ASSERT(phys != 0);
++    auto *mmio = cap::MmioCap::create(phys, arch::PAGE_SIZE,
++                                      arch::PciBarType::MEMORY_32);
++    JARVIS_ASSERT(mmio != nullptr);
++    mmio->size = 0; // zero range (public field; dispose frees no memory)
++    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
++                  errors::VMM_ERR_EMPTY_RANGE);
++    mmio->size = arch::PAGE_SIZE;
++    const uint64_t saved_size = mmio->size;
++    mmio->size = UINT64_MAX; // roundup would wrap, restored below
++    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
++                  errors::VMM_ERR_INVALID_ADDR);
++    mmio->size = saved_size;
++    mmio->revoke();
++    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
++                  errors::VMM_ERR_REVOKED);
++
++    auto *io = cap::MmioCap::create(0x3F8, 8, arch::PciBarType::IO);
++    JARVIS_ASSERT(io != nullptr);
++    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(io, VA, false, pml4) ==
++                  errors::VMM_ERR_INVALID_ADDR);
++
++    uint64_t uphys = PMM::alloc_user_contiguous(1);
++    JARVIS_ASSERT(uphys != 0);
++    auto *fc = cap::FrameCap::create(uphys, 1, true);
++    JARVIS_ASSERT(fc != nullptr);
++    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA + 1, true, pml4) ==
++                  errors::VMM_ERR_INVALID_ADDR);
++    const size_t saved_count = fc->count;
++    fc->count = static_cast<size_t>(-1); // wrap-around range, restored below
++    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
++                  errors::VMM_ERR_INVALID_ADDR);
++    fc->count = saved_count;
++    fc->count = 0; // zero frame
++    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
++                  errors::VMM_ERR_EMPTY_RANGE);
++    fc->count = saved_count;
++    const uint64_t saved_phys = fc->phys;
++    fc->phys = UINT64_MAX - arch::PAGE_SIZE / 2; // phys wrap, restored below
++    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
++                  errors::VMM_ERR_INVALID_ADDR);
++    fc->phys = saved_phys;
++
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    io->release();
++    mmio->release();
++    fc->release();
++    PMM::free_page(phys);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: mid-range OOM rolls back the mapped prefix (all-or-nothing)
++// Input: 513-page MMIO range crossing a PT boundary; both PMM pools
++//        drained exactly (table pool via pool_used/total into a small
++//        static stash, general pool via an intrusive HHDM chain with O(1)
++//        storage), KEEP tables freed back
++// Expect: VMM_ERR_PAGE_ALLOC; all 513 pages unmapped; no PMM/table leak
++// Depends: kernel::cap::MmioCap, kernel::memory::VMM, kernel::memory::PMM
++JARVIS_TEST(mmio_map_err_rollback_oom, "PRE: none | POST: none") {
++    static uint64_t s_table_stash[4096];
++    const uint64_t pool_lo = PMM::pool_start();
++    const uint64_t pool_hi = PMM::pool_end();
++    const uint64_t pool_total = PMM::pool_total_pages();
++    const uint64_t pool_used = PMM::pool_used_pages();
++    size_t stashed = 0;
++    if (pool_hi > pool_lo && pool_total > pool_used) {
++        size_t need = static_cast<size_t>(pool_total - pool_used);
++        if (need > 4096) {
++            need = 4096;
++        }
++        for (size_t drain_idx = 0; drain_idx < need; ++drain_idx) {
++            uint64_t table_page = PMM::alloc_page_table();
++            if (table_page < pool_lo || table_page >= pool_hi) {
++                if (table_page != 0) {
++                    PMM::free_page(table_page); // general-pool fallback
++                }
++                break;
++            }
++            s_table_stash[stashed++] = table_page;
++        }
++    }
++
++    // Drain the general pool through an intrusive chain (first word of
++    // each held page links the next) — O(1) storage, exact restore.
++    uint64_t chain_head = 0;
++    uint64_t general_page = 0;
++    while ((general_page = PMM::alloc_page()) != 0) {
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                                  general_page);
++        *link = chain_head;
++        chain_head = general_page;
++    }
++#if defined(CONFIG_ARCH_RISCV64)
++    constexpr size_t KEEP_TABLES = 2; // L1 + first L2
++#else
++    constexpr size_t KEEP_TABLES = 3; // PDPT + PD + first PT
++#endif
++    for (size_t keep = 0; keep < KEEP_TABLES; ++keep) {
++        JARVIS_ASSERT(chain_head != 0);
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                                  chain_head);
++        const uint64_t next_head = *link;
++        PMM::free_page(chain_head);
++        chain_head = next_head;
++    }
++
++    constexpr uint64_t VA = 0x400000ULL; // 2 MiB-aligned: 512 pages fill one
++                                        // PT, page 512 needs the next PT
++    constexpr size_t NPAGES = 513;
++    auto *mmio = cap::MmioCap::create(0x1000000, NPAGES * arch::PAGE_SIZE,
++                                      arch::PciBarType::MEMORY_32);
++    JARVIS_ASSERT(mmio != nullptr);
++    uint64_t pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++
++    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
++                  errors::VMM_ERR_PAGE_ALLOC);
++    for (size_t page_idx = 0; page_idx < NPAGES; ++page_idx) {
++        JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(
++                                   VA + page_idx * arch::PAGE_SIZE, pml4));
++    }
++
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    mmio->release();
++    while (chain_head != 0) {
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                                  chain_head);
++        const uint64_t next_head = *link;
++        PMM::free_page(chain_head);
++        chain_head = next_head;
++    }
++    for (size_t stash_idx = 0; stash_idx < stashed; ++stash_idx) {
++        PMM::free_page(s_table_stash[stash_idx]);
++    }
++    JARVIS_TEST_PASS();
++}
++
+ #if defined(CONFIG_ARCH_X86_64)
+ // Runmode: kernel
+ // Testidea: Revoking an IO MmioCap retroactively re-masks the granted port
+@@ -823,6 +1041,10 @@ void register_cap_mmio_tests() {
+     JARVIS_REGISTER_TEST(mmio_cap_create_io_bar_bounds);
+     JARVIS_REGISTER_TEST(mmio_cap_install_lookup_revoke);
+     JARVIS_REGISTER_TEST(mmio_map_memory_bar_roundtrip);
++    JARVIS_REGISTER_TEST(mmio_map_err_success_roundtrip);
++    JARVIS_REGISTER_TEST(frame_map_err_success_roundtrip);
++    JARVIS_REGISTER_TEST(cap_map_err_validation_matrix);
++    JARVIS_REGISTER_TEST(mmio_map_err_rollback_oom);
+     JARVIS_REGISTER_TEST(ioport_grant_dispatch_happy);
+     JARVIS_REGISTER_TEST(ioport_grant_validation_matrix);
+     JARVIS_REGISTER_TEST(ioport_switch_applies_and_restores);
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index ddaa75422..63c5ebca5 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -90,7 +90,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"cap_syscall",           9,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch + returned-handle roundtrip (issue #266)
+     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
+     {"cap_untyped",          18,    0,       0      },  // Untyped allocator + sub-range carve/child split (issue #1)
+-    {"cap_mmio",              14,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3) + revocation-closure (issue #8)
++    {"cap_mmio",              18,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3) + revocation-closure (issue #8)
+     {"cap_mmio_user",         9,   0,       0      },  // user MMIO map/unmap syscalls + registry (0.4.2 issue #8)
+     {"cap_irq",               12,   0,       0      },  // IRQ caps + user-space delivery (0.4.2 issue #2)
+     {"cap_irq_notify",        7,   0,       0      },  // IRQ→IPC Notify bridge, NOTIFY mode (0.4.2 issue #7)

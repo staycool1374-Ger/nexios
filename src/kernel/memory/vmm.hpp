@@ -229,6 +229,22 @@ class VMM {
     ///         a zero frame.
     static bool map_frame_from_cap(class cap::FrameCap *fc, uint64_t virt_addr,
                                    bool user, uint64_t pml4_phys);
+    /// @brief Maps the frame(s) owned by a FrameCap with error code and
+    ///        transactional rollback (issue #325-A): when a page fails
+    ///        mid-range, the already-mapped prefix is unmapped again, so
+    ///        the caller observes all-or-nothing.
+    /// @warning Requires an unmapped target range: rollback clears every
+    ///        leaf it installed and cannot distinguish a pre-existing
+    ///        live mapping (overlapping ranges are a caller bug).
+    /// @return VMM_ERR_OK when every frame was mapped; VMM_ERR_INVALID_ADDR
+    ///         on a null cap, misaligned base, wrap-around range, or IO-bar
+    ///         misuse; VMM_ERR_REVOKED on a revoked cap;
+    ///         VMM_ERR_EMPTY_RANGE on a zero frame; VMM_ERR_PAGE_ALLOC when
+    ///         a table page allocation fails mid-walk (prefix rolled back).
+    static errors::VmmError map_frame_from_cap_err(class cap::FrameCap *fc,
+                                                   uint64_t virt_addr,
+                                                   bool user,
+                                                   uint64_t pml4_phys);
 
     /// @brief Unmaps one page previously mapped via map_frame_from_cap().
     /// @param virt_addr Virtual address to unmap.
@@ -245,7 +261,18 @@ class VMM {
     /// @return true when every page was mapped, false on a revoked/IO-type
     ///         cap or a zero range.
     static bool map_mmio_from_cap(class cap::MmioCap *mmio, uint64_t virt_addr,
-                                  bool user, uint64_t pml4_phys);
+                                   bool user, uint64_t pml4_phys);
+    /// @brief Maps an MmioCap's BAR range with error code and transactional
+    ///        rollback (issue #325-A): same all-or-nothing contract as
+    ///        map_frame_from_cap_err.
+    /// @warning Requires an unmapped target range (same rollback caveat
+    ///        as map_frame_from_cap_err).
+    /// @return VMM_ERR_OK when every page was mapped; error codes as in
+    ///         map_frame_from_cap_err (IO-type BAR → VMM_ERR_INVALID_ADDR).
+    static errors::VmmError map_mmio_from_cap_err(class cap::MmioCap *mmio,
+                                                  uint64_t virt_addr,
+                                                  bool user,
+                                                  uint64_t pml4_phys);
 
     /// @brief Unmaps an MmioCap's memory BAR range previously mapped via
     ///        map_mmio_from_cap().
@@ -449,6 +476,32 @@ class VMM {
     }
 
   private:
+    /// @brief Fallible page-map worker (issue #325-A): the 5-arg
+    ///        map_page_in_pml4 body with walk allocation failures surfaced
+    ///        instead of silently dropped.  Callers needing atomicity
+    ///        (cap-map loops) roll back on non-OK.
+    /// @return VMM_ERR_OK, or VMM_ERR_PAGE_ALLOC when a table page or
+    ///         huge-page split allocation fails mid-walk (tables
+    ///         allocated before the failure stay installed; the caller
+    ///         owns rollback).
+    static errors::VmmError map_page_in_pml4_try(uint64_t virt_addr,
+                                                 uint64_t phys_addr, bool user,
+                                                 bool executable,
+                                                 uint64_t pml4_phys);
+    /// @brief Fallible contiguous-range mapper shared by the cap-map
+    ///        transactions (issue #325-A): maps @p page_count pages from
+    ///        @p phys_addr at @p virt_addr, rolling back the mapped
+    ///        prefix when a page fails mid-range (all-or-nothing).
+    /// @return VMM_ERR_OK on full success; VMM_ERR_INVALID_ADDR on a
+    ///         misaligned base or wrap-around range (including
+    ///         page_count == 0 — the public cap wrappers report a zero
+    ///         range as VMM_ERR_EMPTY_RANGE instead); VMM_ERR_PAGE_ALLOC
+    ///         on a mid-walk table allocation failure (prefix rolled
+    ///         back before returning).
+    static errors::VmmError map_phys_range_try(uint64_t virt_addr,
+                                               uint64_t phys_addr,
+                                               size_t page_count, bool user,
+                                               uint64_t pml4_phys);
     /// @brief Walks or creates a page-table entry at the given level.
     /// @param table Pointer to the current-level page table.
     /// @param index Index into the table.

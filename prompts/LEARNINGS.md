@@ -49,6 +49,22 @@
 
 ## Entries
 
+### #325-A — VMM cap-map transactions (commit pending, audit APPROVED)
+
+- **Learned:** (1) `alloc_page_table` falls back to the general pool when the
+  table pool is empty — pool-exhaustion tests must drain BOTH pools exactly
+  (table via `pool_used/total` + range check, general via intrusive HHDM
+  chain, O(1) storage). (2) First SIL 3 REJECT this cycle caught two REAL
+  arithmetic bugs of mine (phys wrap, mmio size roundup overflow) — the
+  auditor earns its keep; the diff-patch protocol (apply verbatim + fix S3s
+  + re-audit) works. (3) Shared range worker (`map_phys_range_try`)
+  kills loop duplication between frame/mmio cap-map — factor before the
+  auditor asks.
+- **Adapted:** REVOKED/EMPTY_RANGE codes; fallible `map_page_in_pml4_try` +
+  identical void wrapper; `_err` cap-map with rollback; cap_mmio 14→18.
+- **Style re-surface:** checked arithmetic (§6, UINT64_MAX guards on every
+  base+count), Requires-precondition docs (§9), bounded test loops (§6).
+
 ### #327 — aarch64 stack-marker link break (stale issue premise)
 
 - **Learned:** (1) Verify issue premises against the tree before designing: the "empty span" claim died to one `grep` (`kernel_stack[16KiB]` in shared kernel.cpp) + `readelf` (spans 0x4028/0x4010/0x13F10) — the real defect was aarch64-only `adrp` reachability, a smaller fix than the issue scoped. (2) On aarch64, ANY reference to a low-VMA object (even address-of) emits a potentially out-of-range `adrp` — placement tests must use absolute linker symbols (immediate-materialized) instead. (3) Answering "are there placement tests" with a test that locks layout via immediates works on all arches without touching the checked values.

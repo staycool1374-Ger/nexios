@@ -1,62 +1,24 @@
---- a/Makefile
-+++ b/Makefile
-@@ -1426,7 +1426,10 @@
- # Pinned nightly + rust-src live project-local under build/ (rust-toolchain
- # pin in user/rust-hello/rust-toolchain.toml); the rule hard-sets
- # RUSTUP_HOME/CARGO_HOME/PATH so it never depends on the dev machine's
--# toolchain. First build after a clean needs network (toolchain + core
-+# toolchain. One-time bootstrap (rustup-init into build/, see
-+# docs/specs/rust-userspace.md section 2) is NOT performed by this rule;
-+# the recipe fails closed with the bootstrap pointer when
-+# build/cargo/bin/cargo is absent. First build after a clean needs network (toolchain + core
- # build-deps fetch, pinned by user/rust-hello/Cargo.lock via --locked);
- # later builds are served from the cargo cache. x86_64-only: other
- # arches print a skip and succeed (never error).
-@@ -1443,6 +1446,10 @@
- $(RUST_ELF):
- 	@printf '  %-7s %s\n' 'RUST' '$@'
- 	@mkdir -p build/user $(RUST_TARGET_DIR)
-+	@if [ ! -x "$(RUST_CARGO_HOME)/bin/cargo" ]; then \
-+		echo 'RUST toolchain not bootstrapped: run the one-time rustup-init command in docs/specs/rust-userspace.md section 2, then retry.'; \
-+		exit 1; \
-+	fi
- 	RUSTUP_HOME=$(RUSTUP_HOME_DIR) CARGO_HOME=$(RUST_CARGO_HOME) \
- 	PATH=$(RUST_CARGO_HOME)/bin:$(PATH) \
- 	RUSTFLAGS="-C link-arg=-z -C link-arg=max-page-size=0x1000" \
---- a/docs/specs/rust-userspace.md
-+++ b/docs/specs/rust-userspace.md
-@@ -21,6 +21,23 @@
-   network (toolchain + core build-deps fetch, pinned by
-   `user/rust-hello/Cargo.lock` via `--locked`); later builds are served
-   from the cargo cache.
-+- One-time bootstrap (the `user-rust-hello` rule does NOT perform it;
-+  without it `build/cargo/bin/cargo` is absent and the rule fails):
-+  ```bash
-+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-+    RUSTUP_HOME=$PWD/build/rustup CARGO_HOME=$PWD/build/cargo sh -s -- \
-+    -y --no-modify-path --no-update-default-toolchain
-+  RUSTUP_HOME=$PWD/build/rustup CARGO_HOME=$PWD/build/cargo \
-+    PATH=$PWD/build/cargo/bin:$PATH \
-+    rustup toolchain install nightly-2026-10-12 --component rust-src
-+  RUSTUP_HOME=$PWD/build/rustup CARGO_HOME=$PWD/build/cargo \
-+    PATH=$PWD/build/cargo/bin:$PATH \
-+    rustup default nightly-2026-10-12
-+  ```
-+  The explicit `default` matters: the recipe invokes cargo from the repo
-+  root via `--manifest-path`, and rustup discovers `rust-toolchain.toml`
-+  from the working directory — not the manifest path — so the crate pin
-+  alone does not select the nightly.
- - `make user-rust-hello ARCH=aarch64` (or riscv64) prints a skip and
-   succeeds — Rust is x86_64-only. WARNING: switching `ARCH` wipes
-   `build/` entirely (arch-change clean), including the Rust toolchain —
-@@ -31,7 +48,9 @@
- Derived field-for-field from `x86_64-unknown-none`; deltas: non-PIE
- static `ET_EXEC` (`position-independent-executables false`,
- `relocation-model static`, `code-model small`, `dynamic-linking false`),
--`exe-suffix .elf`, `panic-strategy abort`, `os none` (+ empty env).
-+`exe-suffix .elf`, `panic-strategy abort`. (`os`/`env`/`vendor` are
-+intentionally omitted: nightly-2026-10-12 accepts the file without them
-+and the E2E build proves it; do not re-add without re-running the build.)
- Keeps `rust-lld`, soft-float/no-SSE features, `disable-redzone`,
- `singlethread`. Two nightly-JSON gotchas baked in: `target-pointer-width`
- is a NUMBER (string rejected), and `eh-frame`/`stack-protector` are not
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -1936,7 +1936,10 @@ errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
+     if (page_count == 0 ||
+         page_count > (UINT64_MAX - virt_addr) / arch::PAGE_SIZE) {
+         return errors::VMM_ERR_INVALID_ADDR;
+     }
++    if (page_count > (UINT64_MAX - phys_addr) / arch::PAGE_SIZE) {
++        return errors::VMM_ERR_INVALID_ADDR;
++    }
+     for (size_t page_idx = 0; page_idx < page_count; ++page_idx) {
+         const uint64_t page_va = virt_addr + page_idx * arch::PAGE_SIZE;
+         const uint64_t page_pa = phys_addr + page_idx * arch::PAGE_SIZE;
+@@ -1999,6 +2003,9 @@ errors::VmmError VMM::map_mmio_from_cap_err(cap::MmioCap *mmio,
+         return errors::VMM_ERR_INVALID_ADDR; // port I/O is delegated via
+                                              // sys_ioport_grant, not MMIO
+     }
++    if (mmio->size > UINT64_MAX - (arch::PAGE_SIZE - 1)) {
++        return errors::VMM_ERR_INVALID_ADDR;
++    }
+     const size_t pages =
+         (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+     return map_phys_range_try(virt_addr, mmio->phys, pages, user, pml4_phys);
