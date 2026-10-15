@@ -264,6 +264,10 @@ class VMM {
     /// @brief Unmaps one page previously mapped via map_frame_from_cap().
     /// @param virt_addr Virtual address to unmap.
     /// @param pml4_phys Physical address of the target PML4.
+    /// @note Naming convention (issue #325-C): every `unmap_*` clears the
+    ///       leaf (not-present) and flushes the VA.  Mapping with phys 0
+    ///       is NEVER an unmap — it installs a PRESENT supervisor leaf to
+    ///       physical page zero.
     static void unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys);
 
     /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys
@@ -294,6 +298,8 @@ class VMM {
     /// @param mmio      The MmioCap (must be pinned by the caller).
     /// @param virt_addr Base virtual address the range was mapped at.
     /// @param pml4_phys Physical address of the target PML4.
+    /// @note Same clear-leaf convention as unmap_frame_from_cap (never
+    ///       map-with-zero).
     static void unmap_mmio_from_cap(class cap::MmioCap *mmio,
                                     uint64_t virt_addr, uint64_t pml4_phys);
 

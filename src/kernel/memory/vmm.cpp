@@ -1987,11 +1987,13 @@ errors::VmmError VMM::map_frame_from_cap_err(cap::FrameCap *fc,
 }
 
 /// @brief Unmaps one page previously mapped via map_frame_from_cap().
+///        Clear-leaf primitive (issue #325-C): never map-with-zero (that
+///        installs a PRESENT supervisor-writable leaf to physical page
+///        zero — silent kernel NULL-deref access instead of #PF).
 void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
-    map_page_in_pml4(virt_addr, 0, false, pml4_phys);
-    // Issue #157 H1: the cleared PTE may be cached (tagged or not) on a
-    // live table — purge it; pre-PCID the next switch-flush healed this.
-    arch::ArchPageTable::tlb_flush(virt_addr);
+    // Issue #157 H1 is served by unmap_page_in_pml4's own flush on the
+    // mutating path (no-op paths change nothing and need none).
+    unmap_page_in_pml4(virt_addr, pml4_phys);
 }
 
 /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys.
@@ -2034,10 +2036,9 @@ void VMM::unmap_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr,
     const size_t pages =
         (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
     for (size_t i = 0; i < pages; ++i) {
-        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE, 0, false,
-                         pml4_phys);
-        // Issue #157 H1: purge each cleared PTE (see unmap_frame_from_cap).
-        arch::ArchPageTable::tlb_flush(virt_addr + i * arch::PAGE_SIZE);
+        // Clear-leaf primitive (issue #325-C, same rationale as
+        // unmap_frame_from_cap); per-page flush rides along.
+        unmap_page_in_pml4(virt_addr + i * arch::PAGE_SIZE, pml4_phys);
     }
 }
 

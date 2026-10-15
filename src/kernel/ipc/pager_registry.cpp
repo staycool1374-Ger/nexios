@@ -663,9 +663,8 @@ int PagerRegistry::map(kernel::TaskControlBlock &pager, uint64_t fault_id,
     for (uint64_t i = 0; i < count; ++i) {
         if (VMM::map_page_in_pml4_err(fault_va + i * arch::PAGE_SIZE,
                                       fc->phys + i * arch::PAGE_SIZE,
-                                      /*user=*/true,
-                                      /*executable=*/false,
-                                      client_pml4) !=
+                                      /*user=*/true, client_pml4,
+                                      /*executable=*/false) !=
             kernel::errors::VMM_ERR_OK) {
             phase2_ok = false;
             break;

@@ -49,6 +49,25 @@
 
 ## Entries
 
+### #325-C — unmap naming + B swapped-arg catch
+
+- **Learned:** (1) Caller-migration slices must run the aggregates OWNING
+  the migrated callers: B ran cap_mmio/ipc/selftest/proc_elf but never
+  `capability`, missing a swapped-arg bug (u64↔bool against
+  (user,pml4,executable)) that mapped pager frames into pml4 0 — C's
+  aggregate run caught it. (2) Adjacent bool/u64 params defeat review;
+  the disabled swappable-params tidy check exists for exactly this.
+  (3) Present-to-zero leaves make kernel NULL-derefs silent (supervisor
+  present leaf) instead of #PF — the safety case for clear-leaf unmaps.
+  (4) Not-present is provable unprivileged: offset-read 0 post-unmap
+  (present-to-zero would yield the offset). (5) WARN-level +1 cap
+  residuals pre-date #325-C (bisected, no factory in diff) — filed #360,
+  PASS-with-WARN is not FAIL.
+- **Adapted:** clear-leaf cap-unmaps + convention docs; pager arg fix;
+  cap_mmio 18→19; #360 filed.
+- **Style re-surface:** flush discipline (primitive flushes on mutating
+  path only); Doxygen contract accuracy (§9).
+
 ### #325-B — real error propagation + B0 PMM pool-head fix
 
 - **Learned:** (1) 100k takes from a 32k-page window PROVES a cycling free
