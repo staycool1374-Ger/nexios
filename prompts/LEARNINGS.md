@@ -49,6 +49,21 @@
 
 ## Entries
 
+### #348-F — verification sweep, closing #348
+
+- **Learned:** (1) Sweep discipline: re-run owning aggregates on the
+  FINAL tree even when slices were green (headers are ubiquitous).
+  (2) test-history rows need measured times — copied times are
+  fabrication; re-run rather than paste. (3) One core QEMU_EXIT in
+  the sweep (retry green) matches the session's flake cluster, not
+  new cause (no source changed since green runs). (4) Count rows:
+  fine rows bumped with tests; aggregate totals stay drifted by
+  convention (observed > row tolerated, verified not enforced).
+- **Adapted:** full gate sweep green (selftest/core/ipc/capability/
+  proc_elf + hrt/bench/stress/testrunner); counts reconciled
+  (20/11/13/6). #348 CLOSED (A–E + F, all audits APPROVED).
+- **Style re-surface:** N/A (verification only, no source change).
+
 ### #348-E — constraints (audit APPROVED, commit pending)
 
 - **Learned:** (1) Constraints are review-cheap to audit (restrict-only
