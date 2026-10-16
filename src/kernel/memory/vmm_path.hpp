@@ -48,20 +48,32 @@ enum class VmmMapSteps : uint64_t {
 
 /// @brief Successful range map: Validate → Commit → Done.
 inline constexpr uint64_t k_vmm_map_success_expected =
-    (1ULL << 0) ^ (1ULL << 1) ^ (1ULL << 4);
+    path_expected(VmmMapSteps::Validate, VmmMapSteps::Commit,
+                  VmmMapSteps::Done);
 
 /// @brief Failed range map with compensating unmap: Validate → Rollback →
 ///        Done.
 inline constexpr uint64_t k_vmm_map_rollback_expected =
-    (1ULL << 0) ^ (1ULL << 2) ^ (1ULL << 4);
+    path_expected(VmmMapSteps::Validate, VmmMapSteps::Rollback,
+                  VmmMapSteps::Done);
 
 /// @brief Refused range map: Reject → Done (no Begin).
 inline constexpr uint64_t k_vmm_map_reject_expected =
-    (1ULL << 3) ^ (1ULL << 4);
+    path_expected(VmmMapSteps::Reject, VmmMapSteps::Done);
 
-static_assert(k_vmm_map_success_expected == 0x13ULL);
-static_assert(k_vmm_map_rollback_expected == 0x15ULL);
-static_assert(k_vmm_map_reject_expected == 0x18ULL);
+// Non-zero and pairwise-distinct (a fold typo would collapse these).
+static_assert(k_vmm_map_success_expected != 0);
+static_assert(k_vmm_map_success_expected != k_vmm_map_rollback_expected);
+static_assert(k_vmm_map_success_expected != k_vmm_map_reject_expected);
+static_assert(k_vmm_map_rollback_expected != k_vmm_map_reject_expected);
+
+// Bit-distinctness: bits 0..4 — a duplicated bit would hide a skipped step.
+static_assert((static_cast<uint64_t>(to_underlying(VmmMapSteps::Validate)) |
+               static_cast<uint64_t>(to_underlying(VmmMapSteps::Commit)) |
+               static_cast<uint64_t>(to_underlying(VmmMapSteps::Rollback)) |
+               static_cast<uint64_t>(to_underlying(VmmMapSteps::Reject)) |
+               static_cast<uint64_t>(to_underlying(VmmMapSteps::Done))) ==
+              0x1FULL);
 
 #if defined(CONFIG_DEBUG)
 /// @brief Fault-injection mask for vmm_step() (test-only, Slice D).

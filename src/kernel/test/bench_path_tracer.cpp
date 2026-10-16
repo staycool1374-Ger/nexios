@@ -17,13 +17,13 @@
  */
 
 /// @file bench_path_tracer.cpp
-/// @brief Benchmark — XOR path-tracer step overhead (issue #347 Slice E).
+/// @brief Benchmark — path-tracer step overhead (issue #347 Slice E, #362).
 ///
-/// Measures the per-step cost of path_step() (one XOR into the own-CPU
-/// chain) and path_validate(). The issue budget is ~1 cycle/step on
-/// hardware; under QEMU TCG (no icount here) the wall is dilated and
-/// jittery, so the assertion is a loose upper bound that still catches a
-/// runaway (e.g. an accidental allocation or lock in the step path).
+/// Measures the per-step cost of path_step() (one order-sensitive fold —
+/// `chain*K + bit` — into the own-CPU chain) and path_validate(). The issue
+/// budget is ~1 cycle/step on hardware; under QEMU TCG (no icount here) the
+/// wall is dilated and jittery, so the assertion is a loose upper bound that
+/// still catches a runaway (e.g. an accidental allocation or lock).
 
 #include <test.hpp>
 #include <logger.hpp>
@@ -39,7 +39,7 @@ constexpr size_t kBenchSteps = 100000;
 } // namespace
 
 // Runmode: kernel
-// Testidea: Per-step XOR overhead of the tracer.
+// Testidea: Per-step fold overhead of the tracer.
 // Input: kBenchSteps path_step() calls on the own-CPU chain.
 // Expect: mean cycles/step under a loose TCG-tolerant bound; validate
 //         cost reported alongside. TF_BENCH (never a correctness gate).
@@ -73,7 +73,7 @@ JARVIS_TEST(bench_path_trace_step_overhead, "PRE: none | POST: none") {
     Logger::print_dec(val_per);
     Logger::raw_write(" cyc/call\n");
 
-    // Loose bound: the step is one XOR + an array index. Even under TCG
+    // Loose bound: the step is one multiply+add + an array index. Even under TCG
     // dilation this must stay far below a context switch.
     JARVIS_ASSERT(step_per < 100);
     JARVIS_ASSERT(val_per < 100);

@@ -53,21 +53,19 @@ enum class SchedDispatchSteps : uint64_t {
 
 /// @brief reschedule() arm segment: peek + publish only.
 inline constexpr uint64_t k_dispatch_arm_expected =
-    static_cast<uint64_t>(to_underlying(SchedDispatchSteps::Arm));
+    path_expected(SchedDispatchSteps::Arm);
 
 /// @brief next_task() select segment: eligible peek + dequeue.
 inline constexpr uint64_t k_dispatch_select_expected =
-    static_cast<uint64_t>(to_underlying(SchedDispatchSteps::Select)) ^
-    static_cast<uint64_t>(to_underlying(SchedDispatchSteps::Dequeue));
+    path_expected(SchedDispatchSteps::Select, SchedDispatchSteps::Dequeue);
 
 /// @brief switch_to_task() apply segment: validate through arm.
 inline constexpr uint64_t k_dispatch_apply_expected =
-    static_cast<uint64_t>(to_underlying(SchedDispatchSteps::Validate)) ^
-    static_cast<uint64_t>(to_underlying(SchedDispatchSteps::ChargeStamp)) ^
-    static_cast<uint64_t>(to_underlying(SchedDispatchSteps::OwnerResolve)) ^
-    static_cast<uint64_t>(to_underlying(SchedDispatchSteps::FrameGuard)) ^
-    static_cast<uint64_t>(to_underlying(SchedDispatchSteps::Publish)) ^
-    static_cast<uint64_t>(to_underlying(SchedDispatchSteps::ArmSwitch));
+    path_expected(SchedDispatchSteps::Validate,
+                  SchedDispatchSteps::ChargeStamp,
+                  SchedDispatchSteps::OwnerResolve,
+                  SchedDispatchSteps::FrameGuard, SchedDispatchSteps::Publish,
+                  SchedDispatchSteps::ArmSwitch);
 
 // Nine distinct single bits covering 0..8 — a collision (two steps
 // sharing a bit, e.g. after the #323 split moves code) breaks the build.

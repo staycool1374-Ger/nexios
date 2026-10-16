@@ -120,8 +120,7 @@ static void test_sched_dispatch_skip_detected() {
         skip_detected =
             (picked != nullptr) &&
             !path_validate(k_dispatch_select_expected) &&
-            path_validate(static_cast<uint64_t>(
-                to_underlying(SchedDispatchSteps::Select)));
+            path_validate(path_expected(SchedDispatchSteps::Select));
         g_test_skip_dispatch_step = 0;
         restore_dispatch_candidate(picked);
         if (!t_cur->in_ready_queue_ && t_cur->state == TaskState::READY) {
@@ -143,12 +142,23 @@ static void test_sched_dispatch_skip_detected() {
 }
 
 static void test_sched_dispatch_registry_math() {
-    JARVIS_ASSERT_EQ(1ULL << 0, static_cast<uint64_t>(
-                                    to_underlying(SchedDispatchSteps::Arm)));
-    JARVIS_ASSERT_EQ((1ULL << 1) ^ (1ULL << 2), k_dispatch_select_expected);
-    JARVIS_ASSERT_EQ((1ULL << 3) ^ (1ULL << 4) ^ (1ULL << 5) ^ (1ULL << 6) ^
-                         (1ULL << 7) ^ (1ULL << 8),
-                     k_dispatch_apply_expected);
+    JARVIS_ASSERT_EQ(
+        path_expected(SchedDispatchSteps::Arm), k_dispatch_arm_expected);
+    JARVIS_ASSERT_EQ(
+        path_expected(SchedDispatchSteps::Select, SchedDispatchSteps::Dequeue),
+        k_dispatch_select_expected);
+    JARVIS_ASSERT_EQ(
+        path_expected(SchedDispatchSteps::Validate,
+                      SchedDispatchSteps::ChargeStamp,
+                      SchedDispatchSteps::OwnerResolve,
+                      SchedDispatchSteps::FrameGuard,
+                      SchedDispatchSteps::Publish,
+                      SchedDispatchSteps::ArmSwitch),
+        k_dispatch_apply_expected);
+    // Order sensitivity: swapping Select/Dequeue changes the value.
+    JARVIS_ASSERT(k_dispatch_select_expected !=
+                  path_expected(SchedDispatchSteps::Dequeue,
+                                SchedDispatchSteps::Select));
 }
 
 } // namespace

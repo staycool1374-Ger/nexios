@@ -17,7 +17,8 @@
  */
 
 /// @file path_tracer.cpp
-/// @brief Backing store for the XOR path-tracing primitive (issue #347).
+/// @brief Backing store for the order-sensitive path-tracing primitive
+///        (issues #347, #362).
 
 #include <kernel/core/path_tracer.hpp>
 

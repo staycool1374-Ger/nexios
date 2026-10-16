@@ -108,8 +108,19 @@ static void test_task_cleanup_skip_detected() {
         TaskControlBlock::destroy(tcb);
 #if defined(CONFIG_DEBUG)
         const uint64_t missing_mem_free =
-            k_task_cleanup_expected ^
-            static_cast<uint64_t>(to_underlying(TaskCleanupSteps::MemFree));
+            path_expected(TaskCleanupSteps::Validate,
+                          TaskCleanupSteps::WatchdogDisarm,
+                          TaskCleanupSteps::ExitStats,
+                          TaskCleanupSteps::Unregister,
+                          TaskCleanupSteps::ParentUnbind,
+                          TaskCleanupSteps::TimerDrain,
+                          TaskCleanupSteps::SyncDetach,
+                          TaskCleanupSteps::Notify,
+                          TaskCleanupSteps::VfsDrain,
+                          TaskCleanupSteps::PageTeardown,
+                          TaskCleanupSteps::IpcDestroy,
+                          TaskCleanupSteps::CapRelease,
+                          TaskCleanupSteps::Finalize);
         skip_ok = !path_validate(k_task_cleanup_expected) &&
                   path_validate(missing_mem_free);
         g_test_skip_task_step = 0;
@@ -120,15 +131,20 @@ static void test_task_cleanup_skip_detected() {
 }
 
 static void test_task_path_registry_math() {
-    JARVIS_ASSERT_EQ(0x1FULL, k_task_create_expected);
-    JARVIS_ASSERT_EQ(0x3FFFULL, k_task_cleanup_expected);
-    JARVIS_ASSERT_EQ((1ULL << 0) ^ (1ULL << 1),
-                     k_task_cleanup_pinned_expected);
-    // 14 distinct single bits set.
-    JARVIS_ASSERT_EQ(14ULL, static_cast<uint64_t>(
-                                __builtin_popcountll(k_task_cleanup_expected)));
-    JARVIS_ASSERT_EQ(5ULL, static_cast<uint64_t>(
-                               __builtin_popcountll(k_task_create_expected)));
+    // Expected values are fold-computed (never hand-derived).
+    JARVIS_ASSERT_EQ(
+        path_expected(TaskCreateSteps::Alloc, TaskCreateSteps::ZeroInit,
+                      TaskCreateSteps::StackAlloc, TaskCreateSteps::Pml4Clone,
+                      TaskCreateSteps::FrameBuild),
+        k_task_create_expected);
+    JARVIS_ASSERT_EQ(
+        path_expected(TaskCleanupSteps::Validate,
+                      TaskCleanupSteps::WatchdogDisarm),
+        k_task_cleanup_pinned_expected);
+    // Non-empty and pairwise-distinct.
+    JARVIS_ASSERT(k_task_create_expected != 0);
+    JARVIS_ASSERT(k_task_cleanup_expected != 0);
+    JARVIS_ASSERT(k_task_cleanup_expected != k_task_create_expected);
 }
 
 } // namespace

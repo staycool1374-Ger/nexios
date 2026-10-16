@@ -78,20 +78,56 @@ enum class TaskCleanupSteps : uint64_t {
 
 /// @brief Full create() segment: Alloc through FrameBuild.
 inline constexpr uint64_t k_task_create_expected =
-    (1ULL << 0) ^ (1ULL << 1) ^ (1ULL << 2) ^ (1ULL << 3) ^ (1ULL << 4);
+    path_expected(TaskCreateSteps::Alloc, TaskCreateSteps::ZeroInit,
+                  TaskCreateSteps::StackAlloc, TaskCreateSteps::Pml4Clone,
+                  TaskCreateSteps::FrameBuild);
 
 /// @brief Full cleanup() segment: all 14 blocks.
 inline constexpr uint64_t k_task_cleanup_expected =
-    (1ULL << 0) ^ (1ULL << 1) ^ (1ULL << 2) ^ (1ULL << 3) ^ (1ULL << 4) ^
-    (1ULL << 5) ^ (1ULL << 6) ^ (1ULL << 7) ^ (1ULL << 8) ^ (1ULL << 9) ^
-    (1ULL << 10) ^ (1ULL << 11) ^ (1ULL << 12) ^ (1ULL << 13);
+    path_expected(TaskCleanupSteps::Validate, TaskCleanupSteps::WatchdogDisarm,
+                  TaskCleanupSteps::ExitStats, TaskCleanupSteps::Unregister,
+                  TaskCleanupSteps::ParentUnbind, TaskCleanupSteps::TimerDrain,
+                  TaskCleanupSteps::SyncDetach, TaskCleanupSteps::Notify,
+                  TaskCleanupSteps::VfsDrain, TaskCleanupSteps::MemFree,
+                  TaskCleanupSteps::PageTeardown,
+                  TaskCleanupSteps::IpcDestroy, TaskCleanupSteps::CapRelease,
+                  TaskCleanupSteps::Finalize);
 
 /// @brief Pinned early-return terminal value (teardown skipped).
 inline constexpr uint64_t k_task_cleanup_pinned_expected =
-    (1ULL << 0) ^ (1ULL << 1);
+    path_expected(TaskCleanupSteps::Validate,
+                  TaskCleanupSteps::WatchdogDisarm);
 
-static_assert(k_task_create_expected == 0x1FULL);
-static_assert(k_task_cleanup_expected == 0x3FFFULL);
+// Non-zero and pairwise-distinct from the empty chain — a fold-value typo
+// or a broken mix would collapse these.
+static_assert(k_task_create_expected != 0);
+static_assert(k_task_cleanup_expected != k_task_create_expected);
+static_assert(k_task_cleanup_pinned_expected != k_task_create_expected);
+static_assert(k_task_cleanup_pinned_expected != k_task_cleanup_expected);
+
+// Bit-distinctness: create uses bits 0..4, cleanup bits 0..13 — a
+// duplicated bit (e.g. after a renumbering) would hide a skipped step.
+static_assert((static_cast<uint64_t>(to_underlying(TaskCreateSteps::Alloc)) |
+               static_cast<uint64_t>(to_underlying(TaskCreateSteps::ZeroInit)) |
+               static_cast<uint64_t>(to_underlying(TaskCreateSteps::StackAlloc)) |
+               static_cast<uint64_t>(to_underlying(TaskCreateSteps::Pml4Clone)) |
+               static_cast<uint64_t>(to_underlying(TaskCreateSteps::FrameBuild))) ==
+              0x1FULL);
+static_assert((static_cast<uint64_t>(to_underlying(TaskCleanupSteps::Validate)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::WatchdogDisarm)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::ExitStats)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::Unregister)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::ParentUnbind)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::TimerDrain)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::SyncDetach)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::Notify)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::VfsDrain)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::MemFree)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::PageTeardown)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::IpcDestroy)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::CapRelease)) |
+               static_cast<uint64_t>(to_underlying(TaskCleanupSteps::Finalize))) ==
+              0x3FFFULL);
 
 #if defined(CONFIG_DEBUG)
 /// @brief Fault-injection mask for task_step() (test-only, Slice C).

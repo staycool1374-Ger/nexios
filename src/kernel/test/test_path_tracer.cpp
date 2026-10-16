@@ -40,16 +40,21 @@ enum class TracerTestSteps : uint64_t {
 };
 
 constexpr uint64_t k_full_test_path =
-    (1ULL << 0) ^ (1ULL << 1) ^ (1ULL << 2) ^
-    (1ULL << 3) ^ (1ULL << 4) ^ (1ULL << 5);
+    path_expected(TracerTestSteps::Enter, TracerTestSteps::Validate,
+                  TracerTestSteps::Commit, TracerTestSteps::Publish,
+                  TracerTestSteps::Arm, TracerTestSteps::Retire);
+constexpr uint64_t k_first_three =
+    path_expected(TracerTestSteps::Enter, TracerTestSteps::Validate,
+                  TracerTestSteps::Commit);
 
 static void test_path_tracer_chain_math() {
     path_reset();
-    path_step(1ULL << 0);
-    path_step(1ULL << 1);
-    path_step(1ULL << 2);
-    JARVIS_ASSERT(path_validate((1ULL << 0) ^ (1ULL << 1) ^ (1ULL << 2)));
-    JARVIS_ASSERT(!path_validate((1ULL << 0) ^ (1ULL << 1)));
+    path_step(TracerTestSteps::Enter);
+    path_step(TracerTestSteps::Validate);
+    path_step(TracerTestSteps::Commit);
+    JARVIS_ASSERT(path_validate(k_first_three));
+    JARVIS_ASSERT(!path_validate(
+        path_expected(TracerTestSteps::Enter, TracerTestSteps::Validate)));
     path_reset();
 }
 
@@ -64,7 +69,9 @@ static void test_path_tracer_missing_step_detected() {
     path_step(TracerTestSteps::Retire);
     JARVIS_ASSERT(!path_validate(k_full_test_path));
     const uint64_t without_commit =
-        k_full_test_path ^ static_cast<uint64_t>(to_underlying(TracerTestSteps::Commit));
+        path_expected(TracerTestSteps::Enter, TracerTestSteps::Validate,
+                      TracerTestSteps::Publish, TracerTestSteps::Arm,
+                      TracerTestSteps::Retire);
     JARVIS_ASSERT(path_validate(without_commit));
     path_reset();
 }
@@ -73,8 +80,38 @@ static void test_path_tracer_duplicate_step_detected() {
     path_reset();
     path_step(TracerTestSteps::Enter);
     path_step(TracerTestSteps::Enter);
-    JARVIS_ASSERT(!path_validate(static_cast<uint64_t>(to_underlying(TracerTestSteps::Enter))));
-    JARVIS_ASSERT(path_validate(0));
+    // Two steps do not fold to the single-step value, and not to zero.
+    JARVIS_ASSERT(!path_validate(path_expected(TracerTestSteps::Enter)));
+    JARVIS_ASSERT(!path_validate(0));
+    path_reset();
+}
+
+static void test_path_tracer_reorder_detected() {
+    // The order-sensitivity contract (#362): a permutation of two distinct
+    // steps must NOT validate against the in-order value. Under the old
+    // XOR fold these were equal (a^b == b^a).
+    const uint64_t in_order =
+        path_expected(TracerTestSteps::Enter, TracerTestSteps::Validate);
+    const uint64_t swapped =
+        path_expected(TracerTestSteps::Validate, TracerTestSteps::Enter);
+    JARVIS_ASSERT(in_order != swapped);
+
+    path_reset();
+    path_step(TracerTestSteps::Enter);
+    path_step(TracerTestSteps::Validate);
+    JARVIS_ASSERT(path_validate(in_order));
+    JARVIS_ASSERT(!path_validate(swapped));
+    path_reset();
+
+    // Reordered full path: same step SET, different order → mismatch.
+    path_reset();
+    path_step(TracerTestSteps::Validate);
+    path_step(TracerTestSteps::Enter);
+    path_step(TracerTestSteps::Commit);
+    path_step(TracerTestSteps::Publish);
+    path_step(TracerTestSteps::Arm);
+    path_step(TracerTestSteps::Retire);
+    JARVIS_ASSERT(!path_validate(k_full_test_path));
     path_reset();
 }
 
@@ -84,15 +121,14 @@ static void test_path_tracer_checkpoint_resume() {
     path_step(TracerTestSteps::Validate);
     const uint64_t handoff = path_checkpoint();
     // === <Break>: preemptible window, chain untouched ===
-    JARVIS_ASSERT(path_resume_validate(handoff, 0));
+    JARVIS_ASSERT(path_resume_validate(handoff));
     path_step(TracerTestSteps::Commit);
     path_step(TracerTestSteps::Publish);
-    const uint64_t resumed_bits =
-        static_cast<uint64_t>(to_underlying(TracerTestSteps::Commit)) ^
-        static_cast<uint64_t>(to_underlying(TracerTestSteps::Publish));
-    JARVIS_ASSERT(path_resume_validate(handoff, resumed_bits));
-    JARVIS_ASSERT(!path_resume_validate(handoff,
-        static_cast<uint64_t>(to_underlying(TracerTestSteps::Commit))));
+    // After stepping, the chain no longer equals the handoff.
+    JARVIS_ASSERT(!path_resume_validate(handoff));
+    JARVIS_ASSERT(path_validate(
+        path_expected(TracerTestSteps::Enter, TracerTestSteps::Validate,
+                      TracerTestSteps::Commit, TracerTestSteps::Publish)));
     path_reset();
 }
 
@@ -122,6 +158,7 @@ void register_path_tracer_tests() {
     JARVIS_REGISTER_TEST(path_tracer_chain_math);
     JARVIS_REGISTER_TEST(path_tracer_missing_step_detected);
     JARVIS_REGISTER_TEST(path_tracer_duplicate_step_detected);
+    JARVIS_REGISTER_TEST(path_tracer_reorder_detected);
     JARVIS_REGISTER_TEST(path_tracer_checkpoint_resume);
     JARVIS_REGISTER_TEST(path_tracer_scoped_enum_full_path);
     JARVIS_REGISTER_TEST(path_tracer_reset_clears_chain);

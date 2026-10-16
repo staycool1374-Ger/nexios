@@ -49,6 +49,27 @@
 
 ## Entries
 
+### #362 — order-sensitive path-tracer fold (audit APPROVED, commit pending)
+
+- **Learned:** (1) XOR is order-blind by construction (a^b==b^a) — a
+  path-control scheme claiming "wrong order" detection must NOT use
+  XOR; use an order-sensitive fold `chain = chain*K + bit` (K odd
+  golden). (2) Expected values MUST be computed by the same constexpr
+  fold (`path_expected(...)`), never hand-derived — a hand value and
+  the runtime fold drift silently. (3) When the fold is not invertible,
+  break/resume validation becomes "chain unchanged since handoff"
+  (compare to the checkpoint), not a suffix-XOR. (4) Keep the
+  bit-distinctness static_assert (OR of enum bits == all-ones mask) —
+  a duplicated bit hides a skipped step; the fold-value asserts no
+  longer cover it. (5) A 2-arg API change needs a caller grep
+  (path_resume_validate had exactly one caller).
+- **Adapted:** `path_mix`/`path_expected` in path_tracer.hpp; 3
+  registries express expected via the fold; resume API 1-arg; new
+  reorder test; path_tracer 7/7, core 577/577, release 21/21, bench
+  38 cyc/step.
+- **Style re-surface:** constexpr helpers over hand-derived constants;
+  static_assert on enum bit-uniqueness.
+
 ### #347 — XOR path tracing (CLOSED; A–E all APPROVED)
 
 - **Learned:** (1) XOR traces detect missing/duplicate steps, never

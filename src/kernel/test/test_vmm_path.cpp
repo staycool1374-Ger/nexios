@@ -58,17 +58,20 @@ static void test_vmm_map_range_reject_segment() {
 }
 
 static void test_vmm_map_registry_math() {
-    JARVIS_ASSERT_EQ(0x13ULL, k_vmm_map_success_expected);
-    JARVIS_ASSERT_EQ(0x15ULL, k_vmm_map_rollback_expected);
-    JARVIS_ASSERT_EQ(0x18ULL, k_vmm_map_reject_expected);
-    // Success and rollback share Validate + Done; rollback and reject
-    // share Done; the three outcomes are pairwise distinct.
-    JARVIS_ASSERT_EQ(0x11ULL,
-                     k_vmm_map_success_expected & k_vmm_map_rollback_expected);
-    JARVIS_ASSERT_EQ(0x10ULL,
-                     k_vmm_map_rollback_expected & k_vmm_map_reject_expected);
+    // Expected values are fold-computed (never hand-derived).
+    JARVIS_ASSERT_EQ(path_expected(VmmMapSteps::Validate, VmmMapSteps::Commit,
+                                   VmmMapSteps::Done),
+                     k_vmm_map_success_expected);
+    JARVIS_ASSERT_EQ(path_expected(VmmMapSteps::Validate, VmmMapSteps::Rollback,
+                                   VmmMapSteps::Done),
+                     k_vmm_map_rollback_expected);
+    JARVIS_ASSERT_EQ(
+        path_expected(VmmMapSteps::Reject, VmmMapSteps::Done),
+        k_vmm_map_reject_expected);
+    // Pairwise distinct (order-sensitive fold).
     JARVIS_ASSERT(k_vmm_map_success_expected != k_vmm_map_rollback_expected);
     JARVIS_ASSERT(k_vmm_map_success_expected != k_vmm_map_reject_expected);
+    JARVIS_ASSERT(k_vmm_map_rollback_expected != k_vmm_map_reject_expected);
 }
 
 #if defined(CONFIG_ARCH_X86_64)
@@ -154,9 +157,8 @@ static void test_vmm_map_range_skip_detected() {
 #if defined(CONFIG_DEBUG)
         skip_ok = (err == errors::VMM_ERR_OK) &&
                   !path_validate(k_vmm_map_success_expected) &&
-                  path_validate(k_vmm_map_success_expected ^
-                                static_cast<uint64_t>(
-                                    to_underlying(VmmMapSteps::Commit)));
+                  path_validate(path_expected(VmmMapSteps::Validate,
+                                              VmmMapSteps::Done));
         g_test_skip_vmm_step = 0;
 #endif
         VMM::unmap_page(kVmmScratchVa);
