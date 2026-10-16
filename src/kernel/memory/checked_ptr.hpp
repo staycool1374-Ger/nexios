@@ -19,14 +19,13 @@
  */
 
 #include <types.hpp>
+#include <constants.hpp>
 #include <string.hpp>
 #include <concepts.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/hal/io.hpp>
 
 namespace kernel {
-
-static constexpr uint64_t USER_SPACE_LIMIT = 0x0000800000000000ULL;
 
 /// @brief Recovery address for safe user memory access.
 ///        Non-zero while we are inside a user memory copy attempt.

@@ -1,894 +1,142 @@
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 9d2dec614..d47ebb7e7 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -50,114 +50,64 @@
- namespace kernel {
- namespace elf {
- 
--static constexpr uint64_t ELF_MAGIC = 0x00000000464C457FULL;
--
- /// @brief Validate an ELF64 header (magic, class, endianness, machine, bounds).
- /// @return true if the header is valid and safe to load.
--bool validate_header(const ELF64Header *hdr) {
--    if (!hdr)
--        return false;
--    if (reinterpret_cast<const uint32_t *>(hdr->ident)[0] !=
--        static_cast<uint32_t>(ELF_MAGIC))
--        return false;
--    if (hdr->ident[4] != 2)
--        return false; // 64-bit
--    if (hdr->ident[5] != 1)
--        return false; // little-endian
--    if (hdr->type != ET_EXEC && hdr->type != ET_DYN)
--        return false;
-+// Compile-time goldens (issue #348-C, dmesg_catalog model): pin the
-+// validators above at build time.  Runtime callers use them identically.
-+namespace {
-+
-+// Minimal valid header (machine selected per arch, like the validator).
-+static constexpr ELF64Header kElfGoldenGood = [] {
-+    ELF64Header hdr{};
-+    hdr.ident[0] = 0x7F;
-+    hdr.ident[1] = static_cast<uint8_t>('E');
-+    hdr.ident[2] = static_cast<uint8_t>('L');
-+    hdr.ident[3] = static_cast<uint8_t>('F');
-+    hdr.ident[4] = 2; // 64-bit
-+    hdr.ident[5] = 1; // little-endian
-+    hdr.type = ET_EXEC;
- #if defined(CONFIG_ARCH_AARCH64)
--    if (hdr->machine != 0xB7)
--        return false; // AArch64
-+    hdr.machine = 0xB7;
- #elif defined(CONFIG_ARCH_RISCV64)
--    if (hdr->machine != 0xF3)
--        return false; // RISC-V (EM_RISCV)
-+    hdr.machine = 0xF3;
- #else
--    if (hdr->machine != 0x3E)
--        return false; // x86_64 (default)
-+    hdr.machine = 0x3E;
- #endif
--    if (hdr->version == 0)
--        return false;
--    if (hdr->phnum > 64)
--        return false;
--    if (hdr->ehsize < sizeof(ELF64Header))
--        return false;
--    if (hdr->phentsize < sizeof(ELF64ProgramHeader))
--        return false;
--    if (hdr->phnum > 0) {
--        // Check for arithmetic overflow in program header region end
--        uint64_t ph_end =
--            hdr->phoff + static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
--        if (ph_end < hdr->phoff)
--            return false; // overflow
--        // Ensure header fits within reasonable image size
--        if (ph_end > 1_MiB)
--            return false;
--    }
--    // Verify ident padding bytes are zero
--    for (int i = 7; i < 16; ++i) {
--        if (hdr->ident[i] != 0)
--            return false;
--    }
--    // Reject files with suspicious entry point
--    if (hdr->entry >= USER_SPACE_LIMIT && hdr->entry != 0)
--        return false;
--    return true;
--}
--
--/// @brief Validate a single program header segment.
--/// Checks bounds, permissions (W^X), size limits, and overflow safety.
--bool validate_segment(const ELF64ProgramHeader *phdr, uint64_t file_size) {
--    if (phdr->type != PT_LOAD)
--        return true;
--    // Basic size sanity
--    if (phdr->filesz > phdr->memsz)
--        return false;
--    // Overflow checks
--    if (phdr->offset + phdr->filesz < phdr->offset)
--        return false;
--    if (phdr->vaddr + phdr->memsz < phdr->vaddr)
--        return false;
--    if (phdr->vaddr + phdr->filesz < phdr->vaddr)
--        return false;
--    // VULN-H2: the segment's file-resident bytes must fit inside the actual
--    // file buffer.  Previously only a 4_MiB constant bounded phdr->offset;
--    // a crafted ELF could read past the PMM::alloc_contiguous() buffer.
--    if (file_size != 0 && phdr->offset + phdr->filesz > file_size)
--        return false;
--    // Must be within user space
--    if (phdr->vaddr >= USER_SPACE_LIMIT)
--        return false;
--    if (phdr->vaddr + phdr->memsz > USER_SPACE_LIMIT)
--        return false;
--    // Reject zero-size segments in memory
--    if (phdr->memsz == 0)
--        return false;
--    // Reject segments that are too large (> 64 MiB)
--    if (phdr->memsz > 64_MiB)
--        return false;
--    // Reject segments with suspicious alignment
--    if (phdr->align > 1_MiB)
--        return false;
--    // Validate file offset is within the image (cannot check exact size
--    // without file length,
--    // but ensure it's reasonable: less than a typical max ELF size)
--    if (phdr->offset > 4_MiB)
--        return false;
--    // W^X enforcement: segment should not be both writable AND executable
--    if ((phdr->flags & 2) && (phdr->flags & 1))
--        return false;
--    return true;
--}
-+    hdr.version = 1;
-+    hdr.entry = 0x400000ULL;
-+    hdr.phoff = 64;
-+    hdr.ehsize = sizeof(ELF64Header);
-+    hdr.phentsize = sizeof(ELF64ProgramHeader);
-+    hdr.phnum = 1;
-+    return hdr;
-+}();
-+
-+// Valid read-execute segment, valid read-only segment, W+X segment.
-+static constexpr ELF64ProgramHeader kSegGoldenRx = {
-+    1, 5, 0, 0x400000ULL, 0x400000ULL, 0x1000ULL, 0x1000ULL, 0x1000ULL};
-+static constexpr ELF64ProgramHeader kSegGoldenR = {
-+    1, 4, 0x1000ULL, 0x401000ULL, 0x401000ULL, 0x1000ULL, 0x1000ULL, 0x1000ULL};
-+static constexpr ELF64ProgramHeader kSegGoldenWX = {
-+    1, 3, 0, 0x400000ULL, 0x400000ULL, 0x1000ULL, 0x1000ULL, 0x1000ULL};
-+
-+static_assert(validate_header(&kElfGoldenGood), "golden header must pass");
-+static_assert(!validate_segment(&kSegGoldenWX, 0x10000ULL),
-+              "W+X segment must fail");
-+static_assert(validate_segment(&kSegGoldenRx, 0x10000ULL),
-+              "R+X segment must pass");
-+static_assert(validate_segment(&kSegGoldenR, 0x10000ULL),
-+              "read-only segment must pass");
-+
-+} // namespace
- 
- /// @brief Round address up to the next page boundary.
- static uint64_t page_align_up(uint64_t addr) {
--    return (addr + 0xFFF) & ~0xFFFULL;
-+    return (addr + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
- }
- 
- /// @brief Round address down to the previous page boundary.
- static uint64_t page_align_down(uint64_t addr) {
--    return addr & ~0xFFFULL;
-+    return addr & ~(arch::PAGE_SIZE - 1);
- }
- 
- static constexpr size_t INITIAL_HEAP_PAGES = 4;
 diff --git a/src/kernel/elf/elf.hpp b/src/kernel/elf/elf.hpp
-index b06dccef4..00640a2f6 100644
+index 00640a2f6..606317e61 100644
 --- a/src/kernel/elf/elf.hpp
 +++ b/src/kernel/elf/elf.hpp
-@@ -24,6 +24,7 @@
+@@ -22,9 +22,9 @@
+ /// @brief ELF64 binary loader — validate, load, exec, shared-object support.
+ 
  #include <types.hpp>
++#include <constants.hpp>
  #include <kernel/task/task.hpp>
  #include <kernel/elf/elf_shared.hpp>
-+#include <kernel/memory/checked_ptr.hpp>
+-#include <kernel/memory/checked_ptr.hpp>
  
  namespace kernel {
  namespace elf {
-@@ -84,15 +85,127 @@ enum : uint8_t {
-     ET_DYN = 3,  ///< Shared object / PIE.
- };
+diff --git a/src/kernel/memory/checked_ptr.hpp b/src/kernel/memory/checked_ptr.hpp
+index 8c1c86d84..4b087a22d 100644
+--- a/src/kernel/memory/checked_ptr.hpp
++++ b/src/kernel/memory/checked_ptr.hpp
+@@ -19,6 +19,7 @@
+  */
  
-+/// @brief ELF magic word (0x7F,'E','L','F' little-endian).
-+static constexpr uint64_t ELF_MAGIC = 0x00000000464C457FULL;
-+
- /// @brief Validate an ELF64 header (magic, class, endianness, version).
- /// @return true if the header is valid.
--bool validate_header(const ELF64Header *hdr);
-+/// @note constexpr so golden images pin the logic at compile time
-+///       (issue #348-C); runtime callers use it identically.  Defined
-+///       here (not in elf.cpp) so every TU calling it sees the definition,
-+///       which constexpr requires.
-+constexpr bool validate_header(const ELF64Header *hdr);
- /// @brief Validate a single ELF program-header segment (bounds, W^X, sizes).
- /// @param phdr The program header to validate.
- /// @param file_size Total file size in bytes (0 = unvalidated).
- /// @return true if the segment is safe to load.
--bool validate_segment(const ELF64ProgramHeader *phdr,
--                      uint64_t file_size = 0);
-+/// @note constexpr + golden asserts in elf.cpp (issue #348-C).  Defined
-+///       here (not in elf.cpp) so every TU calling it sees the definition,
-+///       which constexpr requires.
-+constexpr bool validate_segment(const ELF64ProgramHeader *phdr,
-+                                uint64_t file_size = 0);
-+
-+constexpr bool validate_header(const ELF64Header *hdr) {
-+    if (!hdr)
-+        return false;
-+    // Little-endian u32 assembly of ident[0..3] (all supported arches are
-+    // LE; identical to the old reinterpret_cast read, constexpr-clean).
-+    const uint32_t magic = static_cast<uint32_t>(hdr->ident[0]) |
-+                           (static_cast<uint32_t>(hdr->ident[1]) << 8) |
-+                           (static_cast<uint32_t>(hdr->ident[2]) << 16) |
-+                           (static_cast<uint32_t>(hdr->ident[3]) << 24);
-+    if (magic != static_cast<uint32_t>(ELF_MAGIC))
-+        return false;
-+    if (hdr->ident[4] != 2)
-+        return false; // 64-bit
-+    if (hdr->ident[5] != 1)
-+        return false; // little-endian
-+    if (hdr->type != ET_EXEC && hdr->type != ET_DYN)
-+        return false;
-+#if defined(CONFIG_ARCH_AARCH64)
-+    if (hdr->machine != 0xB7)
-+        return false; // AArch64
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    if (hdr->machine != 0xF3)
-+        return false; // RISC-V (EM_RISCV)
-+#else
-+    if (hdr->machine != 0x3E)
-+        return false; // x86_64 (default)
-+#endif
-+    if (hdr->version == 0)
-+        return false;
-+    if (hdr->phnum > 64)
-+        return false;
-+    if (hdr->ehsize < sizeof(ELF64Header))
-+        return false;
-+    if (hdr->phentsize < sizeof(ELF64ProgramHeader))
-+        return false;
-+    if (hdr->phnum > 0) {
-+        // Check for arithmetic overflow in program header region end
-+        uint64_t ph_end =
-+            hdr->phoff + static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
-+        if (ph_end < hdr->phoff)
-+            return false; // overflow
-+        // Ensure header fits within reasonable image size
-+        if (ph_end > 1_MiB)
-+            return false;
-+    }
-+    // Verify ident padding bytes are zero
-+    for (int i = 7; i < 16; ++i) {
-+        if (hdr->ident[i] != 0)
-+            return false;
-+    }
-+    // Reject files with suspicious entry point
-+    if (hdr->entry >= USER_SPACE_LIMIT && hdr->entry != 0)
-+        return false;
-+    return true;
-+}
-+
-+/// @brief Validate a single program header segment.
-+/// Checks bounds, permissions (W^X), size limits, and overflow safety.
-+constexpr bool validate_segment(const ELF64ProgramHeader *phdr, uint64_t file_size) {
-+    if (phdr->type != PT_LOAD)
-+        return true;
-+    // Basic size sanity
-+    if (phdr->filesz > phdr->memsz)
-+        return false;
-+    // Overflow checks
-+    if (phdr->offset + phdr->filesz < phdr->offset)
-+        return false;
-+    if (phdr->vaddr + phdr->memsz < phdr->vaddr)
-+        return false;
-+    if (phdr->vaddr + phdr->filesz < phdr->vaddr)
-+        return false;
-+    // VULN-H2: the segment's file-resident bytes must fit inside the actual
-+    // file buffer.  Previously only a 4_MiB constant bounded phdr->offset;
-+    // a crafted ELF could read past the PMM::alloc_contiguous() buffer.
-+    if (file_size != 0 && phdr->offset + phdr->filesz > file_size)
-+        return false;
-+    // Must be within user space
-+    if (phdr->vaddr >= USER_SPACE_LIMIT)
-+        return false;
-+    if (phdr->vaddr + phdr->memsz > USER_SPACE_LIMIT)
-+        return false;
-+    // Reject zero-size segments in memory
-+    if (phdr->memsz == 0)
-+        return false;
-+    // Reject segments that are too large (> 64 MiB)
-+    if (phdr->memsz > 64_MiB)
-+        return false;
-+    // Reject segments with suspicious alignment
-+    if (phdr->align > 1_MiB)
-+        return false;
-+    // Validate file offset is within the image (cannot check exact size
-+    // without file length,
-+    // but ensure it's reasonable: less than a typical max ELF size)
-+    if (phdr->offset > 4_MiB)
-+        return false;
-+    // W^X enforcement: segment should not be both writable AND executable
-+    if ((phdr->flags & 2) && (phdr->flags & 1))
-+        return false;
-+    return true;
-+}
-+
+ #include <types.hpp>
++#include <constants.hpp>
+ #include <string.hpp>
+ #include <concepts.hpp>
+ #include <kernel/memory/vmm.hpp>
+@@ -26,8 +27,6 @@
  
- /// @brief Bound for the post-relocation baseline scan (issue #46): larger
- ///        read-only images fail the load closed instead of stalling MAPPING.
-diff --git a/src/kernel/ipc/buffer_pool_errors.hpp b/src/kernel/ipc/buffer_pool_errors.hpp
-index dd4f0c706..70088ab9e 100644
---- a/src/kernel/ipc/buffer_pool_errors.hpp
-+++ b/src/kernel/ipc/buffer_pool_errors.hpp
-@@ -46,6 +46,9 @@ enum BufPoolError : uint64_t {
- #undef X
- };
+ namespace kernel {
  
-+/// @brief OK anchor (issue #348-C): success is zero by convention.
-+static_assert(BUF_ERR_OK == 0, "error OK must be 0");
-+
- /// @brief Return a human-readable string for a buffer pool error code.
- template <> inline const char *error_string(BufPoolError e) {
-     switch (e) {
-diff --git a/src/kernel/ipc/ipc_errors.hpp b/src/kernel/ipc/ipc_errors.hpp
-index 530168697..aaaaf1874 100644
---- a/src/kernel/ipc/ipc_errors.hpp
-+++ b/src/kernel/ipc/ipc_errors.hpp
-@@ -46,6 +46,9 @@ enum IpcError : uint64_t {
- #undef X
- };
- 
-+/// @brief OK anchor (issue #348-C): success is zero by convention.
-+static_assert(IPC_ERR_OK == 0, "error OK must be 0");
-+
- /// @brief Return a human-readable string for an IPC error code.
- template <> inline const char *error_string(IpcError e) {
-     switch (e) {
-diff --git a/src/kernel/memory/address.hpp b/src/kernel/memory/address.hpp
-index 36c7dde8e..90c7356c4 100644
---- a/src/kernel/memory/address.hpp
-+++ b/src/kernel/memory/address.hpp
-@@ -133,7 +133,6 @@ class VirtualAddress {
-     constexpr bool operator<(VirtualAddress other) const noexcept {
-         return addr_ < other.addr_;
-     }
+-static constexpr uint64_t USER_SPACE_LIMIT = 0x0000800000000000ULL;
 -
-     constexpr VirtualAddress operator+(size_t offset) const noexcept {
-         return VirtualAddress(addr_ + offset);
-     }
-@@ -193,4 +192,15 @@ class PageAddress : public PhysicalAddress {
-     }
- };
- 
-+// Compile-time goldens (issue #348-C, dmesg_catalog model).
-+static_assert(VirtualAddress(0x400000ULL).is_canonical(),
-+              "low-half user VA is canonical");
-+static_assert(VirtualAddress(0xFFFF800000000000ULL).is_canonical(),
-+              "higher-half kernel VA is canonical");
-+static_assert(!VirtualAddress(0x0000800000000000ULL).is_canonical(),
-+              "hole VA (bit 47 set, high clear) is not canonical");
-+static_assert(VirtualAddress(0xFFFF800000000000ULL).is_kernel(),
-+              "higher-half is kernel");
-+static_assert(VirtualAddress(0x400000ULL).is_user(), "low-half is user");
-+
- } // namespace kernel
-\ No newline at end of file
-diff --git a/src/kernel/memory/mempool_errors.hpp b/src/kernel/memory/mempool_errors.hpp
-index 32c5d51c7..dde6bcc0e 100644
---- a/src/kernel/memory/mempool_errors.hpp
-+++ b/src/kernel/memory/mempool_errors.hpp
-@@ -41,6 +41,9 @@ enum MemPoolError : uint64_t {
- #undef X
- };
- 
-+/// @brief OK anchor (issue #348-C): success is zero by convention.
-+static_assert(MEMPOOL_ERR_OK == 0, "error OK must be 0");
-+
- /// @brief Return a human-readable string for a MemPool error code.
- template <> inline const char *error_string(MemPoolError e) {
-     switch (e) {
-diff --git a/src/kernel/memory/pmm_errors.hpp b/src/kernel/memory/pmm_errors.hpp
-index e6fdb073f..dcca67390 100644
---- a/src/kernel/memory/pmm_errors.hpp
-+++ b/src/kernel/memory/pmm_errors.hpp
-@@ -41,6 +41,9 @@ enum PmmError : uint64_t {
- #undef X
- };
- 
-+/// @brief OK anchor (issue #348-C): success is zero by convention.
-+static_assert(PMM_ERR_OK == 0, "error OK must be 0");
-+
- /// @brief Return a human-readable string for a PMM error code.
- template <> inline const char *error_string(PmmError e) {
-     switch (e) {
-diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index fbf24c18c..5b7aa91d8 100644
---- a/src/kernel/memory/vmm.cpp
-+++ b/src/kernel/memory/vmm.cpp
-@@ -58,7 +58,7 @@ void VMM::init() {
- #if defined(CONFIG_ARCH_X86_64)
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                              (kernel_pml4_ & ~0xFFFULL));
-+                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
- 
-     // Zero unused entries in all boot-constructed page tables so the page
-     // table walker never follows uninitialised garbage pointers.  The boot
-@@ -67,7 +67,7 @@ void VMM::init() {
- 
-     // Zero PDPT_IDENTITY[1-511]
-     {
--        uint64_t pdpt_phys = pml4[0] & ~0xFFFULL;
-+        uint64_t pdpt_phys = pml4[0] & PAGE_TABLE_ADDR_MASK;
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         auto *pdpt_ident =
-             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
-@@ -77,7 +77,7 @@ void VMM::init() {
- 
-     // Zero PDPT_HIGHER[1-511]
-     {
--        uint64_t pdpt_phys = pml4[256] & ~0xFFFULL;
-+        uint64_t pdpt_phys = pml4[256] & PAGE_TABLE_ADDR_MASK;
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         auto *pdpt_higher =
-             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
-@@ -89,10 +89,10 @@ void VMM::init() {
-     {
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         auto *pdpt_ident_p = reinterpret_cast<uint64_t *>(
--            arch::HHDM_OFFSET + (pml4[0] & ~0xFFFULL));
-+            arch::HHDM_OFFSET + (pml4[0] & PAGE_TABLE_ADDR_MASK));
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         auto *pd_ident = reinterpret_cast<uint64_t *>(
--            arch::HHDM_OFFSET + (pdpt_ident_p[0] & ~0xFFFULL));
-+            arch::HHDM_OFFSET + (pdpt_ident_p[0] & PAGE_TABLE_ADDR_MASK));
-         for (size_t i = 64; i < PAGE_TABLE_ENTRIES; ++i)
-             pd_ident[i] = 0;
-     }
-@@ -101,10 +101,10 @@ void VMM::init() {
-     {
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         auto *pdpt_higher_p = reinterpret_cast<uint64_t *>(
--            arch::HHDM_OFFSET + (pml4[256] & ~0xFFFULL));
-+            arch::HHDM_OFFSET + (pml4[256] & PAGE_TABLE_ADDR_MASK));
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         auto *pd_higher = reinterpret_cast<uint64_t *>(
--            arch::HHDM_OFFSET + (pdpt_higher_p[0] & ~0xFFFULL));
-+            arch::HHDM_OFFSET + (pdpt_higher_p[0] & PAGE_TABLE_ADDR_MASK));
-         for (size_t i = 64; i < PAGE_TABLE_ENTRIES; ++i)
-             pd_higher[i] = 0;
-     }
-@@ -146,7 +146,7 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
- #if defined(CONFIG_ARCH_RISCV64)
-         uint64_t target_phys = VMM::sv39_pte_phys(table[index]);
- #else
--        uint64_t target_phys = table[index] & ~0xFFFULL;
-+        uint64_t target_phys = table[index] & PAGE_TABLE_ADDR_MASK;
- #endif
-         if (!PMM::is_allocated(target_phys)) {
-             table[index] = 0;
-@@ -221,7 +221,7 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
-                                                 VMM::sv39_pte_phys(table[index]));
- #else
-             return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                                (table[index] & ~0xFFFULL));
-+                                                (table[index] & PAGE_TABLE_ADDR_MASK));
- #endif
-         }
-     }
-@@ -367,7 +367,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
- #if defined(CONFIG_ARCH_RISCV64)
-     // Sv39 3-level page table walk
-     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                            (kernel_pml4_ & ~0xFFFULL));
-+                                            (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
- 
-     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-@@ -432,7 +432,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
- #else
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                              (kernel_pml4_ & ~0xFFFULL));
-+                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
- 
-     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
- 
-@@ -553,7 +553,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
- void VMM::unmap_page(uint64_t virt_addr) {
- #if defined(CONFIG_ARCH_RISCV64)
-     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                            (kernel_pml4_ & ~0xFFFULL));
-+                                            (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
- 
-     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-@@ -580,7 +580,7 @@ void VMM::unmap_page(uint64_t virt_addr) {
- #else
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                              (kernel_pml4_ & ~0xFFFULL));
-+                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
- 
-     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-     warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
-@@ -620,7 +620,7 @@ void VMM::unmap_page(uint64_t virt_addr) {
- uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
- #if defined(CONFIG_ARCH_RISCV64)
-     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                            (kernel_pml4_ & ~0xFFFULL));
-+                                            (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
- 
-     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-@@ -645,7 +645,7 @@ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
- #else
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                              (kernel_pml4_ & ~0xFFFULL));
-+                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
- 
-     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-     warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
-@@ -704,7 +704,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
- #if defined(CONFIG_ARCH_RISCV64)
-     // Sv39 3-level page table walk
-     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                            (pml4_phys & ~0xFFFULL));
-+                                            (pml4_phys & PAGE_TABLE_ADDR_MASK));
- 
-     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-@@ -746,7 +746,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
- #else
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                              (pml4_phys & ~0xFFFULL));
-+                                              (pml4_phys & PAGE_TABLE_ADDR_MASK));
- 
-     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-@@ -862,7 +862,7 @@ uint64_t *VMM::pte_leaf_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-     // inspector; mirrors the unmap walks with create=false).
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                             (pml4_phys & ~0xFFFULL));
-+                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
- #if defined(CONFIG_ARCH_RISCV64)
-     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-@@ -1013,7 +1013,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-     }
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                             (pml4_phys & ~0xFFFULL));
-+                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
- #if defined(CONFIG_ARCH_RISCV64)
-     // Sv39 3-level walk (mirrors map_page_in_pml4 riscv branch).
-     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-@@ -1086,7 +1086,7 @@ uint64_t VMM::clone_kernel_pml4() {
- 
- #if defined(CONFIG_ARCH_RISCV64)
-     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                             (kernel_pml4_ & ~0xFFFULL));
-+                                             (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
-     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + phys);
- 
-     // Clear user-space entries (L0 indices 0-255 for 0-256GB)
-@@ -1190,7 +1190,7 @@ uint64_t VMM::clone_kernel_pml4() {
- #else
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                             (kernel_pml4_ & ~0xFFFULL));
-+                                             (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + phys);
-     // Clear user-space entries (0-255) — the kernel's boot identity-map must
-@@ -1323,10 +1323,10 @@ bool VMM::merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4) {
-         return false;
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                             (src_pml4 & ~0xFFFULL));
-+                                             (src_pml4 & PAGE_TABLE_ADDR_MASK));
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                             (dst_pml4 & ~0xFFFULL));
-+                                             (dst_pml4 & PAGE_TABLE_ADDR_MASK));
-     // INV-MERGE1: single-threaded pre-CR3-switch window (same window MP-7
-     // uses) — no locking; link semantics keep lower tables shared, so no
-     // allocation can fail mid-merge by construction.
-@@ -1337,7 +1337,7 @@ bool VMM::merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4) {
- void VMM::snapshot_kernel_template() {
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *live = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                              (kernel_pml4_ & ~0xFFFULL));
-+                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
-     for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i)
-         pml4_kernel_template_[i] = live[i];
- }
-@@ -1347,10 +1347,10 @@ bool VMM::kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4) {
-         return false;
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *a = reinterpret_cast<const uint64_t *>(
--        arch::HHDM_OFFSET + (a_pml4 & ~0xFFFULL));
-+        arch::HHDM_OFFSET + (a_pml4 & PAGE_TABLE_ADDR_MASK));
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *b = reinterpret_cast<const uint64_t *>(
--        arch::HHDM_OFFSET + (b_pml4 & ~0xFFFULL));
-+        arch::HHDM_OFFSET + (b_pml4 & PAGE_TABLE_ADDR_MASK));
-     return tables_equal_level(a, b, 0, arch::PML4_KERNEL_START);
- }
- 
-@@ -1359,7 +1359,7 @@ bool VMM::kernel_half_matches_template(uint64_t pml4_phys) {
-         return false;
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *tbl = reinterpret_cast<const uint64_t *>(
--        arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
-+        arch::HHDM_OFFSET + (pml4_phys & PAGE_TABLE_ADDR_MASK));
-     for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i) {
-         if (tbl[i] != pml4_kernel_template_[i])
-             return false;
-@@ -1389,7 +1389,7 @@ void VMM::assert_kernel_half_converged(uint64_t child_pml4) {
- void VMM::free_user_pages(uint64_t pml4_phys) {
- #if defined(CONFIG_ARCH_RISCV64)
-     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                            (pml4_phys & ~0xFFFULL));
-+                                            (pml4_phys & PAGE_TABLE_ADDR_MASK));
-     // User space: L0 indices 0-255 for Sv39 (0-256GB).  Issue #206: all
-     // address codecs below are shift-based Sv39 (raw & ~mask is x86-domain
-     // and decodes 4x too high); L2 non-leaves are invalid in Sv39 (no L3).
-@@ -1446,7 +1446,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
- #else
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                              (pml4_phys & ~0xFFFULL));
-+                                              (pml4_phys & PAGE_TABLE_ADDR_MASK));
-     // v0.3.11: bounded diagnostic — log page-table pages skipped because their
-     // owner bit is KERNEL (free_user_pages only frees USER-owned table pages).
-     static uint64_t s_fup_skip_log = 0;
-@@ -1462,7 +1462,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
-          ++pml4_idx) {
-         if (!(pml4[pml4_idx] & PAGE_PRESENT))
-             continue;
--        uint64_t pdpt_phys = pml4[pml4_idx] & ~0xFFFULL;
-+        uint64_t pdpt_phys = pml4[pml4_idx] & PAGE_TABLE_ADDR_MASK;
-         if (!PMM::is_user_page(pdpt_phys)) {
-             log_skip("[FUP-SKIP] pdpt p4=", pdpt_phys);
-             continue;
-@@ -1485,7 +1485,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
-                 PMM::free_page(page);
-                 continue;
-             }
--            uint64_t pd_phys = pdpt[pdpt_idx] & ~0xFFFULL;
-+            uint64_t pd_phys = pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK;
-             if (!PMM::is_user_page(pd_phys)) {
-                 log_skip("[FUP-SKIP] pd   p4=", pd_phys);
-                 continue;
-@@ -1508,7 +1508,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
-                     PMM::free_page(page);
-                     continue;
-                 }
--                uint64_t pt_phys = pd[pd_idx] & ~0xFFFULL;
-+                uint64_t pt_phys = pd[pd_idx] & PAGE_TABLE_ADDR_MASK;
-                 if (!PMM::is_user_page(pt_phys)) {
-                     log_skip("[FUP-SKIP] pt   p4=", pt_phys);
-                     continue;
-@@ -1548,9 +1548,9 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
- bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
- #if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
-     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                             (src_pml4 & ~0xFFFULL));
-+                                             (src_pml4 & PAGE_TABLE_ADDR_MASK));
-     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                             (dst_pml4 & ~0xFFFULL));
-+                                             (dst_pml4 & PAGE_TABLE_ADDR_MASK));
- 
-     for (int pml4_idx = 0; pml4_idx < static_cast<int>(arch::PML4_USER_COUNT);
-          ++pml4_idx) {
-@@ -1559,7 +1559,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
-             continue;
-         }
- 
--        uint64_t src_pdpt_phys = src[pml4_idx] & ~0xFFFULL;
-+        uint64_t src_pdpt_phys = src[pml4_idx] & PAGE_TABLE_ADDR_MASK;
-         uint64_t dst_pdpt_phys = PMM::alloc_user_page();
-         if (!dst_pdpt_phys)
-             return false;
-@@ -1597,7 +1597,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
-             }
- #endif
- 
--            uint64_t src_pd_phys = src_pdpt[pdpt_idx] & ~0xFFFULL;
-+            uint64_t src_pd_phys = src_pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK;
-             uint64_t dst_pd_phys = PMM::alloc_user_page();
-             if (!dst_pd_phys)
-                 return false;
-@@ -1636,7 +1636,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
-                 }
- #endif
- 
--                uint64_t src_pt_phys = src_pd[pd_idx] & ~0xFFFULL;
-+                uint64_t src_pt_phys = src_pd[pd_idx] & PAGE_TABLE_ADDR_MASK;
-                 uint64_t dst_pt_phys = PMM::alloc_user_page();
-                 if (!dst_pt_phys)
-                     return false;
-@@ -1692,9 +1692,9 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
-     // codec throughout (raw & ~mask decodes 4x too high); flags are bits
-     // 9:0 only (0xFFF would capture PPN bits); no L3 exists in Sv39.
-     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                             (src_pml4 & ~0xFFFULL));
-+                                             (src_pml4 & PAGE_TABLE_ADDR_MASK));
-     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                             (dst_pml4 & ~0xFFFULL));
-+                                             (dst_pml4 & PAGE_TABLE_ADDR_MASK));
- 
-     for (int l0_idx = 0; l0_idx < 256; ++l0_idx) {
-         if (!(src[l0_idx] & PAGE_PRESENT)) {
-@@ -1780,7 +1780,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
- uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
- #if defined(CONFIG_ARCH_RISCV64)
-     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                            (pml4_phys & ~0xFFFULL));
-+                                            (pml4_phys & PAGE_TABLE_ADDR_MASK));
- 
-     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-@@ -1814,7 +1814,7 @@ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
- #else
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                              (pml4_phys & ~0xFFFULL));
-+                                              (pml4_phys & PAGE_TABLE_ADDR_MASK));
- 
-     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-@@ -1825,13 +1825,13 @@ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-         return 0;
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                              (pml4[pml4_idx] & ~0xFFFULL));
-+                                              (pml4[pml4_idx] & PAGE_TABLE_ADDR_MASK));
- 
-     if (!(pdpt[pdpt_idx] & PAGE_PRESENT))
-         return 0;
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                            (pdpt[pdpt_idx] & ~0xFFFULL));
-+                                            (pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK));
- 
- #if defined(CONFIG_ARCH_AARCH64)
-     if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
-@@ -1846,7 +1846,7 @@ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-         return 0;
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
--                                            (pd[pd_idx] & ~0xFFFULL));
-+                                            (pd[pd_idx] & PAGE_TABLE_ADDR_MASK));
- 
-     if (!(pt[pt_idx] & PAGE_PRESENT))
-         return 0;
+ /// @brief Recovery address for safe user memory access.
+ ///        Non-zero while we are inside a user memory copy attempt.
+ ///        Page fault handler checks this and redirects here on fault.
 diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
-index c81f73b7b..482c559fe 100644
+index 482c559fe..edca09807 100644
 --- a/src/kernel/memory/vmm.hpp
 +++ b/src/kernel/memory/vmm.hpp
-@@ -382,6 +382,15 @@ class VMM {
-   private:
-     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
-     static constexpr uint64_t PAGE_TABLE_ENTRIES = 512;
-+    /// @brief Clears the low 12 flag/offset bits of a page-TABLE address
-+    ///        (issue #348-C).  Table addresses only — never PTEs (riscv64
-+    ///        Sv39 PTEs carry PPN<<10 and need the shift codec; x86_64
-+    ///        PTEs may carry NX above the frame).
-+    static constexpr uint64_t PAGE_TABLE_ADDR_MASK = ~0xFFFULL;
-+    static_assert((PAGE_TABLE_ADDR_MASK | 0xFFFULL) == ~0ULL,
-+                  "addr mask must preserve all high bits");
-+    static_assert((0xFFFULL & PAGE_TABLE_ADDR_MASK) == 0,
-+                  "addr mask must clear the low 12 bits");
- 
- #if defined(CONFIG_ARCH_AARCH64)
-     // aarch64 stage-1 page-table descriptor bit layout.
-@@ -459,13 +468,13 @@ class VMM {
-     // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers below
-     // for every Sv39 PTE address codec; the masks stay for x86/aarch64 and
-     // for documentation of the PA width (1TB cap).
--    static inline uint64_t sv39_pte_phys(uint64_t pte) {
+@@ -220,6 +220,21 @@ class VMM {
+     /// @return false when unmapped (or a huge/block entry, not ours).
+     [[nodiscard]] static bool pte_is_executable_in_pml4(uint64_t virt_addr,
+                                           uint64_t pml4_phys);
++#if defined(CONFIG_ARCH_RISCV64)
++    /// @brief Sv39 PTE address codecs (issue #206: PTEs carry PPN<<10, so
++    ///        raw masking is x86-domain-wrong).  Public for the
++    ///        compile-time roundtrip pin below; all production users go
++    ///        through the walk helpers.
 +    static constexpr uint64_t sv39_pte_phys(uint64_t pte) {
-         return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
-     }
--    static inline uint64_t sv39_phys_pte(uint64_t phys) {
++        return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++    }
 +    static constexpr uint64_t sv39_phys_pte(uint64_t phys) {
-         return (phys >> 12) << 10;
-     }
--    static inline bool sv39_is_leaf(uint64_t pte) {
++        return (phys >> 12) << 10;
++    }
 +    static constexpr bool sv39_is_leaf(uint64_t pte) {
-         return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
-     }
++        return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
++    }
++#endif
+     /// @brief Remap every mapped page in [vaddr, vaddr+size) read-only
+     ///        through the RO primitive (issue #271 P0 — load paths and
+     ///        the P2 rerun builder share this). Unmapped holes are
+@@ -465,18 +480,9 @@ class VMM {
+     static constexpr uint64_t PAGE_FRAME_MASK = 0x00000003FFFFFFF000ULL;
+     static constexpr uint64_t PAGE_HUGE_FRAME_MASK = 0x00000003FFFFE00000ULL;
+     // Issue #206: the masks above are x86-domain (phys & mask) and WRONG for
+-    // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers below
+-    // for every Sv39 PTE address codec; the masks stay for x86/aarch64 and
+-    // for documentation of the PA width (1TB cap).
+-    static constexpr uint64_t sv39_pte_phys(uint64_t pte) {
+-        return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+-    }
+-    static constexpr uint64_t sv39_phys_pte(uint64_t phys) {
+-        return (phys >> 12) << 10;
+-    }
+-    static constexpr bool sv39_is_leaf(uint64_t pte) {
+-        return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
+-    }
++    // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers in
++    // the public section below for every Sv39 PTE address codec; the masks
++    // stay for x86/aarch64 and for documentation of the PA width (1TB cap).
  #else
-diff --git a/src/kernel/memory/vmm_errors.hpp b/src/kernel/memory/vmm_errors.hpp
-index 6839bf897..1da0b217d 100644
---- a/src/kernel/memory/vmm_errors.hpp
-+++ b/src/kernel/memory/vmm_errors.hpp
-@@ -43,6 +43,9 @@ enum VmmError : uint64_t {
- #undef X
+     // x86_64: physical frame bits [51:12] (52-bit PA).  Masks off all flags
+     // INCLUDING NX (bit 63) — without this, a leaf PTE with NX set yields a
+@@ -613,4 +619,14 @@ class VMM {
+                                    size_t start);
  };
  
-+/// @brief OK anchor (issue #348-C): success is zero by convention.
-+static_assert(VMM_ERR_OK == 0, "error OK must be 0");
++#if defined(CONFIG_ARCH_RISCV64)
++// Compile-time codec roundtrip (issue #348-C): PPN shift must be lossless
++// for page-aligned addresses.  Outside the class (in-class asserts cannot
++// evaluate members of their own incomplete class on all toolchains); the
++// helpers above are public for exactly this pin.
++static_assert(VMM::sv39_pte_phys(VMM::sv39_phys_pte(0x80200000ULL) |
++                                 (1ULL << 0) | (1ULL << 1)) == 0x80200000ULL,
++              "Sv39 PTE codec must roundtrip");
++#endif
 +
- /// @brief Return a human-readable string for a VMM error code.
- template <> inline const char *error_string(VmmError e) {
-     switch (e) {
-diff --git a/src/kernel/sync/sync_errors.hpp b/src/kernel/sync/sync_errors.hpp
-index e3445c1e4..45d5f760c 100644
---- a/src/kernel/sync/sync_errors.hpp
-+++ b/src/kernel/sync/sync_errors.hpp
-@@ -52,6 +52,9 @@ enum SyncError : uint64_t {
- #undef X
- };
+ } // namespace kernel
+diff --git a/src/lib/constants.hpp b/src/lib/constants.hpp
+index 65b5b2588..1ee98fe9e 100644
+--- a/src/lib/constants.hpp
++++ b/src/lib/constants.hpp
+@@ -38,6 +38,10 @@ namespace arch {
+ /// @brief Higher-half offset: convert physical → kernel-visible virtual.
+ inline constexpr uint64_t HHDM_OFFSET = CONFIG_HHDM_OFFSET;
  
-+/// @brief OK anchor (issue #348-C): success is zero by convention.
-+static_assert(SYNC_ERR_OK == 0, "error OK must be 0");
++/// @brief Upper bound (exclusive) of user-space virtual addresses.
++/// Lives here (not in checked_ptr.hpp) so validators like the ELF loader
++/// can use it without pulling the CheckedPtr machinery (issue #348-C).
 +
- /// @brief Return a human-readable string for a sync error code.
- template <> inline const char *error_string(SyncError e) {
-     switch (e) {
-diff --git a/src/kernel/task/scheduler_errors.hpp b/src/kernel/task/scheduler_errors.hpp
-index f8239d062..1f59a9d11 100644
---- a/src/kernel/task/scheduler_errors.hpp
-+++ b/src/kernel/task/scheduler_errors.hpp
-@@ -51,6 +51,9 @@ enum SchedulerError : uint64_t {
- #undef X
- };
+ /// @brief Size of the PMM allocatable window — the linear-mapped RAM span
+ /// the page allocator scans.  Must be covered by the architecture's MMU
+ /// higher-half mapping (x86_64 identity window; aarch64/riscv64 map it
+@@ -135,6 +139,15 @@ inline constexpr size_t   HEAP_SIZE    = 1_MiB;
  
-+/// @brief OK anchor (issue #348-C): success is zero by convention.
-+static_assert(SCHED_ERR_OK == 0, "error OK must be 0");
+ } // namespace mem
+ 
++namespace kernel {
 +
- /// @brief Return a human-readable string for a scheduler error code.
- template <> inline const char *error_string(SchedulerError e) {
-     switch (e) {
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index fc5afaf2e..ddf0a7bee 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -239,9 +239,9 @@ void TaskControlBlock::detach_all_objects(bool keep_cspace) noexcept {
-         KernelObject *obj = task_obj_head_;
-         // Poison guard: a pool-rewound block's first qword is 0xDDDD... under
-         // CONFIG_DEBUG.  A live object's first qword is its vptr (a kernel-high
--        // ≥ 0xFFFF800000000000 address), which passes the low-address check.
--        // Stop the walk rather than following garbage links.
--        if (reinterpret_cast<uintptr_t>(obj) < 0xFFFF800000000000ULL ||
-+        // address, at/above arch::HHDM_OFFSET), which passes the low-address
-+        // check.  Stop the walk rather than following garbage links.
-+        if (reinterpret_cast<uintptr_t>(obj) < arch::HHDM_OFFSET ||
-             *reinterpret_cast<const uint64_t *>(obj) == 0xDDDDDDDDDDDDDDDDULL) {
-             break;
-         }
-@@ -1195,7 +1195,11 @@ done_stack:
-     stack -= 37;
-     __builtin_memset(stack, 0, 37 * 8);
-     stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
--    stack[32] = (1ULL << 5) | (1ULL << 8); // SSTATUS: SPIE=1, SPP=1 (S-mode)
-+    // SSTATUS bits (issue #348-C): SPIE=1 (prior interrupt enable),
-+    // SPP=1 (trap returns to S-mode).
-+    constexpr uint64_t SSTATUS_SPIE = 1ULL << 5;
-+    constexpr uint64_t SSTATUS_SPP = 1ULL << 8;
-+    stack[32] = SSTATUS_SPIE | SSTATUS_SPP;
-     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
- #endif
- 
-diff --git a/src/kernel/task/task_errors.hpp b/src/kernel/task/task_errors.hpp
-index adf47605d..60873b9c3 100644
---- a/src/kernel/task/task_errors.hpp
-+++ b/src/kernel/task/task_errors.hpp
-@@ -45,6 +45,9 @@ enum TaskError : uint64_t {
- #undef X
- };
- 
-+/// @brief OK anchor (issue #348-C): success is zero by convention.
-+static_assert(TASK_ERR_OK == 0, "error OK must be 0");
++/// @brief Upper bound (exclusive) of user-space virtual addresses.
++/// Lives here (not in checked_ptr.hpp) so validators like the ELF loader
++/// can use it without pulling the CheckedPtr machinery (issue #348-C).
++static constexpr uint64_t USER_SPACE_LIMIT = 0x0000800000000000ULL;
 +
- /// @brief Return a human-readable string for a task error code.
- template <> inline const char *error_string(TaskError error) {
-     switch (error) {
++} // namespace kernel
++
+ // ---------------------------------------------------------------------------
+ // Common error codes for POSIX-style kernel functions
+ // ---------------------------------------------------------------------------
 diff --git a/test-history.txt b/test-history.txt
-index 5186a401e..7a15296bd 100644
+index 7a15296bd..782870159 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -3541,3 +3541,8 @@ SUMMARY: total=18 ok=18 fail=0
- 2026-10-16 09:11:52 testrunner PASSED: 16 FAILED: 0 TIME: 120s
- 2026-10-16 11:43:33 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3335ms
- 2026-10-16 11:46:05 core PASSED: 557 FAILED: 0 TIME: 45992ms
-+2026-10-16 12:20:45 selftest PASSED: 147 FAILED: 0 TIME: 11896ms
-+2026-10-16 12:21:31 proc_elf PASSED: 127 FAILED: 0 TIME: 37785ms
-+2026-10-16 12:21:59 capability PASSED: 155 FAILED: 0 TIME: 10511ms
-+2026-10-16 12:22:49 core PASSED: 557 FAILED: 0 TIME: 46844ms
-+2026-10-16 12:32:35 selftest PASSED: 147 FAILED: 0 TIME: 11782ms
+@@ -3546,3 +3546,7 @@ SUMMARY: total=18 ok=18 fail=0
+ 2026-10-16 12:21:59 capability PASSED: 155 FAILED: 0 TIME: 10511ms
+ 2026-10-16 12:22:49 core PASSED: 557 FAILED: 0 TIME: 46844ms
+ 2026-10-16 12:32:35 selftest PASSED: 147 FAILED: 0 TIME: 11782ms
++2026-10-16 12:45:59 proc_elf PASSED: 127 FAILED: 0 TIME: 33400ms
++2026-10-16 12:46:31 capability PASSED: 155 FAILED: 0 TIME: 10472ms
++2026-10-16 12:46:59 selftest PASSED: 147 FAILED: 0 TIME: 11701ms
++2026-10-16 12:47:50 core PASSED: 557 FAILED: 0 TIME: 46810ms

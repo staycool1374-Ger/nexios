@@ -220,6 +220,21 @@ class VMM {
     /// @return false when unmapped (or a huge/block entry, not ours).
     [[nodiscard]] static bool pte_is_executable_in_pml4(uint64_t virt_addr,
                                           uint64_t pml4_phys);
+#if defined(CONFIG_ARCH_RISCV64)
+    /// @brief Sv39 PTE address codecs (issue #206: PTEs carry PPN<<10, so
+    ///        raw masking is x86-domain-wrong).  Public for the
+    ///        compile-time roundtrip pin below; all production users go
+    ///        through the walk helpers.
+    static constexpr uint64_t sv39_pte_phys(uint64_t pte) {
+        return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+    }
+    static constexpr uint64_t sv39_phys_pte(uint64_t phys) {
+        return (phys >> 12) << 10;
+    }
+    static constexpr bool sv39_is_leaf(uint64_t pte) {
+        return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
+    }
+#endif
     /// @brief Remap every mapped page in [vaddr, vaddr+size) read-only
     ///        through the RO primitive (issue #271 P0 — load paths and
     ///        the P2 rerun builder share this). Unmapped holes are
@@ -465,18 +480,9 @@ class VMM {
     static constexpr uint64_t PAGE_FRAME_MASK = 0x00000003FFFFFFF000ULL;
     static constexpr uint64_t PAGE_HUGE_FRAME_MASK = 0x00000003FFFFE00000ULL;
     // Issue #206: the masks above are x86-domain (phys & mask) and WRONG for
-    // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers below
-    // for every Sv39 PTE address codec; the masks stay for x86/aarch64 and
-    // for documentation of the PA width (1TB cap).
-    static constexpr uint64_t sv39_pte_phys(uint64_t pte) {
-        return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
-    }
-    static constexpr uint64_t sv39_phys_pte(uint64_t phys) {
-        return (phys >> 12) << 10;
-    }
-    static constexpr bool sv39_is_leaf(uint64_t pte) {
-        return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
-    }
+    // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers in
+    // the public section below for every Sv39 PTE address codec; the masks
+    // stay for x86/aarch64 and for documentation of the PA width (1TB cap).
 #else
     // x86_64: physical frame bits [51:12] (52-bit PA).  Masks off all flags
     // INCLUDING NX (bit 63) — without this, a leaf PTE with NX set yields a
@@ -612,5 +618,15 @@ class VMM {
                                    const uint64_t *b_table, unsigned level,
                                    size_t start);
 };
+
+#if defined(CONFIG_ARCH_RISCV64)
+// Compile-time codec roundtrip (issue #348-C): PPN shift must be lossless
+// for page-aligned addresses.  Outside the class (in-class asserts cannot
+// evaluate members of their own incomplete class on all toolchains); the
+// helpers above are public for exactly this pin.
+static_assert(VMM::sv39_pte_phys(VMM::sv39_phys_pte(0x80200000ULL) |
+                                 (1ULL << 0) | (1ULL << 1)) == 0x80200000ULL,
+              "Sv39 PTE codec must roundtrip");
+#endif
 
 } // namespace kernel

@@ -22,9 +22,9 @@
 /// @brief ELF64 binary loader — validate, load, exec, shared-object support.
 
 #include <types.hpp>
+#include <constants.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/elf/elf_shared.hpp>
-#include <kernel/memory/checked_ptr.hpp>
 
 namespace kernel {
 namespace elf {
