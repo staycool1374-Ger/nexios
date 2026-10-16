@@ -87,6 +87,7 @@ void register_spinlock_stress_tests();
 void register_atomic_context_switch_tests();
 void register_bench_syscall_latency_tests();
 void register_bench_irq_latency_tests();
+void register_bench_path_tracer_tests(); // issue #347 Slice E
 void register_apic_timer_tests();
 void register_apic_tpr_tests();
 void register_jitter_tests();
@@ -614,6 +615,9 @@ static void run_bench_syscall_group() {
     register_bench_syscall_latency_tests();
 }
 static void run_bench_irq_group() { register_bench_irq_latency_tests(); }
+static void run_bench_path_tracer_group() {
+    register_bench_path_tracer_tests();
+}
 static void run_bench_jitter_group() { register_jitter_tests(); }
 static void run_bench_microkernel_group() {
     register_microkernel_transition_tests();
@@ -989,6 +993,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"bench_context_switch", []() { run_cs_bench_group(); }},
     {"bench_syscall", []() { run_bench_syscall_group(); }},
     {"bench_irq", []() { run_bench_irq_group(); }},
+    {"bench_path_tracer",
+     []() { run_bench_path_tracer_group(); }}, // issue #347 Slice E
     {"bench_jitter", []() { run_bench_jitter_group(); }},
     {"bench_microkernel", []() { run_bench_microkernel_group(); }},
 
@@ -1296,6 +1302,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_cs_bench_group();       // issue #303
          run_bench_syscall_group();
          run_bench_irq_group();
+         run_bench_path_tracer_group(); // issue #347 Slice E
          run_bench_jitter_group();
          run_bench_microkernel_group();
          run_bench_wcet_memory_group();

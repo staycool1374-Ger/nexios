@@ -270,6 +270,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"bench_context_switch",  1,    0,       0      },  // task<->task p99 distribution, TF_BENCH (#303)
     {"bench_syscall",         3,    0,       0      },  // syscall latency (TF_BENCH)
     {"bench_irq",             3,    0,       0      },  // IRQ latency histogram (TF_BENCH)
+    {"bench_path_tracer",     1,    0,       0      },  // path-tracer per-step XOR overhead (issue #347 Slice E), TF_BENCH
     {"bench_jitter",          2,    0,       0      },  // schedule-to-schedule jitter
     {"bench_microkernel",     5,    0,       0      },  // minimal privileged surface / isolation / jitter / drift
 
@@ -286,7 +287,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // Structural/semantic aggregates (issue #173).  Values are filled
     // from measured `dump-counts` output; 0 disables validation.
-    {"core",                557,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 1 ring3 errno cell (#338) + 1 stack-marker span (#327) + 2 map_page_err (#325-B) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
+    {"core",                576,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 1 ring3 errno cell (#338) + 1 stack-marker span (#327) + 2 map_page_err (#325-B) + 64 pre-existing aggregate drift at HEAD + 19 path-tracer groups: path_tracer 6 + scheduler_dispatch_path 4 + task_path 5 + vmm_path 4 (#347)
     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
     {"proc_elf",            123,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD
@@ -306,7 +307,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ui",                  73,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
     {"random",              17,   0,       0      },  // random_* (issue #173)
-    {"bench",               27,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303)
+    {"bench",               28,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303) + 1 path_tracer overhead (#347-E)
     {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls, rescued (issue #61, wired up #173)
     {"tls",                 13,   12,      12     },  // TLS_SET + publish/apply (issue #74) + Ring-3 errno cell probe, x86_64-only (#338)
 };
