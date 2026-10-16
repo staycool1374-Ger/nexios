@@ -95,10 +95,10 @@ class IPC {
     static void init();
 
     /// @brief Sends a message to a destination task.
-    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0);
+    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0) noexcept;
 
     /// @brief Receives a message from the calling task's own queue.
-    [[nodiscard]] static bool recv(Message &msg);
+    [[nodiscard]] static bool recv(Message &msg) noexcept;
 
     /// @brief Sends and blocks until a reply arrives.
     ///        Reply matching (issue #296): only a queued message whose
@@ -110,7 +110,7 @@ class IPC {
     ///        reply stays queued with immediate false (no block).  Zero keeps
     ///        the full-path contract (consume the matching reply).
     [[nodiscard]] static bool send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-                          uint32_t reply_max_size = 0);
+                          uint32_t reply_max_size = 0) noexcept;
 
     /// @brief Returns the message queue for a given task ID.
     static MessageQueue &queue(uint64_t task_id);
@@ -121,12 +121,12 @@ class IPC {
     ///        queue unless IPC_NONBLOCK.  @p ep must be pinned (a live
     ///        capability lookup result).
     [[nodiscard]] static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
-                             uint64_t flags = 0);
+                             uint64_t flags = 0) noexcept;
 
     /// @brief Receives a message from a capability-gated endpoint into the
     ///        calling task's own queue.  Returns false if the endpoint queue
     ///        is empty.
-    [[nodiscard]] static bool recv_via_cap(cap::Endpoint *ep, Message &msg);
+    [[nodiscard]] static bool recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept;
 
     /// @brief Wheel callback arming a bounded receive's expiry (issue #18).
     /// Flag-only: validates the TCB and generation, sets recv_timed_out.

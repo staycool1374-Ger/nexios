@@ -49,6 +49,23 @@
 
 ## Entries
 
+### #348-B — low-risk attributes (audit APPROVED, commit pending)
+
+- **Learned:** (1) Scripted edits need diff-review before build:
+  one script stripped `static` from 3 tick locals (watchdog died —
+  gates caught it) and another injected `noexcept` at 4 call sites
+  (review caught it). Mechanical ≠ safe; always `git diff` scripts.
+  (2) `[[nodiscard]]`-style placement rules bite again: attributes lead
+  on statics; `constinit` needs static storage (automatics reject).
+  (3) `using enum` with zero applicable sites = no churn (same class
+  as the issue's own evaluated items). (4) Zombie-count tests are
+  timing-sensitive under load — one leftover-zombie flake, green on
+  re-run; re-run, don't chase.
+- **Adapted:** likely/unlikely legs; constinit trivial statics;
+  noexcept leaves+defs; checker noexcept-skip.
+- **Style re-surface:** hints never change semantics (verify by
+  reasoning, not testing); scripts reviewed as code.
+
 ### #348-A — nodiscard (audit APPROVED, commit pending)
 
 - **Learned:** (1) `[[nodiscard]]` goes LEADING on statics

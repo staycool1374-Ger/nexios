@@ -197,7 +197,7 @@ bool Scheduler::canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t
         return true;
     uint8_t bad_seg = 0;
     uint64_t bad_va = 0;
-    if (!canary_verify_user_segments(task, bad_seg, bad_va)) {
+    if (!canary_verify_user_segments(task, bad_seg, bad_va)) [[unlikely]] {
         // Canary negative-test path (issue #255 H3): under test the trip is
         // recorded, not fatal, so the canary suite can assert the latch.
         if (kernel::Scheduler::is_test_active()) {
@@ -245,8 +245,8 @@ struct H2Event {
     uint64_t gen;   ///< scheduler_switch_generation at record time
     uint64_t depth; ///< isr_nesting_depth at record time
 };
-static H2Event g_h2_ring[H2_RING_SIZE];
-static uint64_t g_h2_idx = 0;
+static constinit H2Event g_h2_ring[H2_RING_SIZE] = {};
+static constinit uint64_t g_h2_idx = 0;
 
 inline void h2_record(uint64_t ev, uint64_t a, uint64_t b, uint64_t c) noexcept {
     // Issue #25 C1: atomic index (two CPUs append concurrently; a torn
@@ -290,8 +290,8 @@ void h2_dump_ring() noexcept {
 
 // P5a: Deferred-kill list.
 static constexpr uint64_t MAX_DEFERRED_KILLS = 16;
-static TaskControlBlock *s_deferred_kill_tasks[MAX_DEFERRED_KILLS] = {};
-static uint64_t s_deferred_kill_count = 0;
+static constinit TaskControlBlock *s_deferred_kill_tasks[MAX_DEFERRED_KILLS] = {};
+static constinit uint64_t s_deferred_kill_count = 0;
 
 // TEMP DEBUG (BUGS.md#020): detect a SporadicServer pointer that aliases a
 // freed/poisoned MemPool block (first 8 bytes == 0xDDDDDDDDDDDDDDDD).  A freed
@@ -597,7 +597,7 @@ void Scheduler::enqueue_ready_inner(TaskControlBlock &task) noexcept {
 static void invalidate_pending_switch_to(uint64_t task_id) noexcept;
 
 void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
-    if (task.in_edf_queue_)
+    if (task.in_edf_queue_) [[unlikely]]
         edf_remove(task, queue_target(task));
     rq_task(task).remove(task, effective_priority(&task));
     // Issue #250: leaving the queue voids any wake-while-current deferral
@@ -2059,9 +2059,9 @@ bool Scheduler::s_scan_requested_ = false;
 // Issue #299/#280 stall diagnostics: count timer-tick dispatcher entries and
 // actual switch_to_task calls, to distinguish "ticks dead" (counters frozen)
 // from "ticks alive but switch not applied" (rms advances, switch does not).
-static uint64_t g_diag_rms_count = 0;
-static uint64_t g_diag_switch_count = 0;
-static uint64_t g_diag_tick_count = 0;
+static constinit uint64_t g_diag_rms_count = 0;
+static constinit uint64_t g_diag_switch_count = 0;
+static constinit uint64_t g_diag_tick_count = 0;
 #endif
 ReadyQueueManager Scheduler::ready_queues_[CONFIG_MAX_CPUS];
 DeadlineList Scheduler::deadline_list_;
@@ -2542,12 +2542,12 @@ bool Scheduler::needs_switch() noexcept {
 }
 
 TaskControlBlock *Scheduler::next_task() noexcept {
-    if (all_tasks_.size() <= 1)
+    if (all_tasks_.size() <= 1) [[unlikely]]
         return own_idle();
 
     // Issue #19: the EDF candidate agreed with needs_switch() — dispatch
     // it first so the arm and the decision can never disagree.
-    if (auto *edf_next = edf_preempt_candidate()) {
+    if (auto *edf_next = edf_preempt_candidate()) [[unlikely]] {
         edf_remove(*edf_next, sched_cpu());
         return edf_next;
     }
@@ -2559,7 +2559,7 @@ TaskControlBlock *Scheduler::next_task() noexcept {
             if (candidate == current_task() ||
                 (candidate->state != TaskState::READY &&
                  candidate->state != TaskState::RUNNING) ||
-                queue_target(*candidate) != sched_cpu()) {
+                queue_target(*candidate) != sched_cpu()) [[unlikely]] {
                 rq_own().dequeue_highest();
                 continue;
             }
@@ -2788,7 +2788,7 @@ void Scheduler::credit_task_memory(uint64_t pages) {
 
 // Issue #225: per-CPU interrupted-PC slot for the debugger park check.
 // Own CPU writes (timer ISR), own CPU tick reads; plain relaxed atomics.
-static uint64_t debug_tick_pc_[CONFIG_MAX_CPUS] = {};
+static constinit uint64_t debug_tick_pc_[CONFIG_MAX_CPUS] = {};
 
 void Scheduler::note_debug_tick_pc(uint64_t interrupted_pc) noexcept {
     uint64_t cpu = sched_cpu();
@@ -3660,7 +3660,7 @@ void Scheduler::on_tick() noexcept {
         }
     }
 
-    static uint64_t tick_counter = 0;
+    static constinit uint64_t tick_counter = 0;
     ++tick_counter;
     // Harness owns lifecycle (see harness_owns_lifecycle): the reaper must
     // not race test ScopeGuards (double-free UAF otherwise).  Deferring to
@@ -3686,7 +3686,7 @@ void Scheduler::on_tick() noexcept {
 
     // Harness owns lifecycle (see harness_owns_lifecycle): tests drive
     // balancer_tick() directly so placement asserts stay deterministic.
-    static uint64_t balancer_cadence = 0;
+    static constinit uint64_t balancer_cadence = 0;
     ++balancer_cadence;
     if (!harness_owns_lifecycle() &&
         (balancer_cadence % BALANCER_TICK_PERIOD) == 0) {
@@ -5616,7 +5616,7 @@ deadline_miss_handler(TaskControlBlock &task,
     // starts.  Dump the full task set + monitor state once, from this
     // tick context, so a stalled run leaves reopen-grade evidence in the
     // serial log (no GDB attach needed).  Guarded so it fires at most once.
-    static uint64_t s_init_miss = 0;
+    static constinit uint64_t s_init_miss = 0;
     if (task.id == 1) {
         ++s_init_miss;
         if (s_init_miss == 100) {

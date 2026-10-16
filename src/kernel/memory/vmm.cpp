@@ -383,7 +383,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
     arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
 
     auto *l1 = get_table(l0, l0_idx, true);
-    if (!l1) {
+    if (!l1) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
@@ -393,7 +393,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
     if ((l1[l1_idx] & PAGE_PRESENT) &&
         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
         uint64_t new_l2_phys = PMM::alloc_page_table();
-        if (!new_l2_phys) {
+        if (!new_l2_phys) [[unlikely]] {
             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
             return errors::VMM_ERR_PAGE_ALLOC;
         }
@@ -412,7 +412,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
     }
 
     auto *l2 = get_table(l1, l1_idx, true);
-    if (!l2) {
+    if (!l2) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
@@ -452,12 +452,12 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
 
     auto *pdpt = get_table(pml4, pml4_idx, true);
-    if (!pdpt) {
+    if (!pdpt) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
     auto *pd = get_table(pdpt, pdpt_idx, true);
-    if (!pd) {
+    if (!pd) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
@@ -471,7 +471,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
 #endif
     {
         uint64_t new_pt_phys = PMM::alloc_page_table();
-        if (!new_pt_phys) {
+        if (!new_pt_phys) [[unlikely]] {
             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
             return errors::VMM_ERR_PAGE_ALLOC;
         }
@@ -509,7 +509,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
     }
 
     auto *pt = get_table(pd, pd_idx, true);
-    if (!pt) {
+    if (!pt) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
@@ -565,12 +565,12 @@ void VMM::unmap_page(uint64_t virt_addr) {
                            virt_addr, l0_idx);
 
     auto *l1 = get_table(l0, l0_idx, false);
-    if (!l1) {
+    if (!l1) [[unlikely]] {
         note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
         return;
     }
     auto *l2 = get_table(l1, l1_idx, false);
-    if (!l2) {
+    if (!l2) [[unlikely]] {
         note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
         return;
     }
@@ -593,17 +593,17 @@ void VMM::unmap_page(uint64_t virt_addr) {
     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
 
     auto *pdpt = get_table(pml4, pml4_idx, false);
-    if (!pdpt) {
+    if (!pdpt) [[unlikely]] {
         note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
         return;
     }
     auto *pd = get_table(pdpt, pdpt_idx, false);
-    if (!pd) {
+    if (!pd) [[unlikely]] {
         note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
         return;
     }
     auto *pt = get_table(pd, pd_idx, false);
-    if (!pt) {
+    if (!pt) [[unlikely]] {
         note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
         return;
     }
@@ -720,12 +720,12 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
     arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
 
     auto *l1 = get_table(l0, l0_idx, true, true);
-    if (!l1) {
+    if (!l1) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
     auto *l2 = get_table(l1, l1_idx, true, true);
-    if (!l2) {
+    if (!l2) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
@@ -762,12 +762,12 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
                          pml4_idx < arch::PML4_USER_COUNT);
 
     auto *pdpt = get_table(pml4, pml4_idx, true, true);
-    if (!pdpt) {
+    if (!pdpt) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
     auto *pd = get_table(pdpt, pdpt_idx, true, true);
-    if (!pd) {
+    if (!pd) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
@@ -779,7 +779,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
 #endif
     {
         uint64_t new_pt_phys = PMM::alloc_user_page();
-        if (!new_pt_phys) {
+        if (!new_pt_phys) [[unlikely]] {
             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
             return errors::VMM_ERR_PAGE_ALLOC;
         }
@@ -809,7 +809,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
     }
 
     auto *pt = get_table(pd, pd_idx, true, true);
-    if (!pt) {
+    if (!pt) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
@@ -1025,7 +1025,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
         return; // 1 GiB block: not ours to clear.
     }
     auto *l1 = get_table(top, l0_idx, false);
-    if (!l1) {
+    if (!l1) [[unlikely]] {
         note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
         return;
     }
@@ -1033,7 +1033,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
         return; // 2 MiB block: not ours to clear.
     }
     auto *l2 = get_table(l1, l1_idx, false);
-    if (!l2) {
+    if (!l2) [[unlikely]] {
         note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
         return;
     }
@@ -1047,12 +1047,12 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     // PD_IDENTITY restore (see map_page_in_pml4 note above).
     arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
     auto *pdpt = get_table(top, pml4_idx, false);
-    if (!pdpt) {
+    if (!pdpt) [[unlikely]] {
         note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
         return;
     }
     auto *pd = get_table(pdpt, pdpt_idx, false);
-    if (!pd) {
+    if (!pd) [[unlikely]] {
         note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
         return;
     }
@@ -1066,7 +1066,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     }
 #endif
     auto *pt = get_table(pd, pd_idx, false);
-    if (!pt) {
+    if (!pt) [[unlikely]] {
         note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
         return;
     }

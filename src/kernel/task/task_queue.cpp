@@ -10,9 +10,9 @@ void TaskQueue::push_back(TaskControlBlock &tcb) noexcept {
     // Refuse to link a non-TCB (freed/overwritten) node — doing so would
     // corrupt the intrusive runq_next_/runq_prev_ links and later cause a
     // #GP when pop_front/remove walks them.
-    if (!TaskControlBlock::is_valid(&tcb))
+    if (!TaskControlBlock::is_valid(&tcb)) [[unlikely]]
         return;
-    if (tcb.in_ready_queue_)
+    if (tcb.in_ready_queue_) [[unlikely]]
         return;
     tcb.in_ready_queue_ = true;
     tcb.runq_next_ = nullptr;
@@ -31,14 +31,14 @@ TaskControlBlock *TaskQueue::pop_front() noexcept {
     // corrupted (e.g. a cycle produced by a stray double-enqueue).  Returning
     // early here prevents pop_front from spinning until count_ underflows and
     // hanging the scheduler inside reschedule()/next_task().
-    if (!head_ || count_ == 0)
+    if (!head_ || count_ == 0) [[unlikely]]
         return nullptr;
     // A freed/overwritten head (poisoned with 0xDD under CONFIG_DEBUG) must
     // not be dereferenced — M-2 (audit-task-sync-v0.4.2): drop ONLY the
     // offending head node and preserve the remaining queue instead of
     // zeroing the whole list (which orphans every other queued task and
     // suppresses the corruption rather than containing it).
-    if (!TaskControlBlock::is_valid(head_)) {
+    if (!TaskControlBlock::is_valid(head_)) [[unlikely]] {
         auto *bad = head_;
         head_ = bad->runq_next_;
         if (head_) {

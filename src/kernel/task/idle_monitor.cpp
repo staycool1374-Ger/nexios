@@ -94,7 +94,7 @@ IdleScanProgress idle_scan_stack(IdleScanCursor &cursor,
         idle_publish_stack_low_water(t->kstack_low_water_,
                                      t->kernel_stack_top,
                                      t->stack_low_water_bytes);
-        if (!user_ok || !kstack_ok) {
+        if (!user_ok || !kstack_ok) [[unlikely]] {
             // Existing escalation path only (spec §3 E1): production
             // fail-stops here exactly as the guard-page #PF path does.
             // The scanner itself kills/reaps/reprioritizes nothing (M6).

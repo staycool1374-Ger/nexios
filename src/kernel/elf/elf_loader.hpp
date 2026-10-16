@@ -131,7 +131,7 @@ class ElfLoader {
     ///        a valid set adopted at take, not yet superseded/reset/
     ///        released. Rerun refuses unless this is true (P2 checks the
     ///        outcome gate on top).
-    [[nodiscard]] static bool has_retained();
+    [[nodiscard]] static bool has_retained() noexcept;
 
     /// @brief Outcome of the retained set's last launch (issue #271 P1).
     enum class RunOutcome : uint8_t {
@@ -201,7 +201,7 @@ class ElfLoader {
 
     /// @brief Per-validation-step cancel check (issue #95: shared by the
     ///        dep-resolve backend in elf_shared.cpp).
-    [[nodiscard]] static bool cancel_pending(uint64_t generation);
+    [[nodiscard]] static bool cancel_pending(uint64_t generation) noexcept;
 
     /// @brief Current load generation for DepResolveContext setup.
     static uint64_t generation() { return load_generation_; }

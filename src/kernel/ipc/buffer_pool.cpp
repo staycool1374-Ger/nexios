@@ -299,7 +299,7 @@ static inline void bp_check_guard() {
 #endif
 }
 
-int32_t BufferPool::validate(uint64_t handle) {
+int32_t BufferPool::validate(uint64_t handle) noexcept {
     if (handle == 0)
         return BufferPool::BUF_INVALID_HANDLE;
     uint32_t idx = static_cast<uint32_t>(handle & 0xFFFFFFFFULL);
@@ -318,7 +318,7 @@ int32_t BufferPool::validate(uint64_t handle) {
 /// @brief Allocate a buffer, map it at virtual address @p va in the given
 /// task's space.
 /// @return handle, or 0 on failure.
-uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
+uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
     bp_check_guard();
     // v0.4.0 MP-1: every task owns a private PML4, so this address-space gate
     // is effectively always open — kernel driver tasks (is_user_ == false)
@@ -358,7 +358,7 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
 
 /// @brief Free a buffer: unmap, free the physical page, return entry to pool.
 /// @return true on success.
-bool BufferPool::free(TaskControlBlock &task, uint64_t handle) {
+bool BufferPool::free(TaskControlBlock &task, uint64_t handle) noexcept {
     bp_check_guard();
     int32_t idx = validate(handle);
     if (idx < 0)
@@ -385,7 +385,7 @@ bool BufferPool::free(TaskControlBlock &task, uint64_t handle) {
 /// populated PTE (mapping the same VA twice silently overwrites PTEs and a
 /// later free() deletes another buffer's PTE).
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
+bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) noexcept {
     bp_check_guard();
     int32_t idx = validate(handle);
     if (idx < 0)
@@ -418,7 +418,7 @@ bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
 }
 
 /// @brief Unmap a buffer (PTE clear, list remove) without freeing the page.
-bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) {
+bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) noexcept {
     bp_check_guard();
     int32_t idx = validate(handle);
     if (idx < 0)
@@ -437,7 +437,7 @@ bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) {
 
 /// @brief Transfer buffer ownership from one task to another (IPC send path).
 bool BufferPool::transfer(uint64_t handle, TaskControlBlock &from,
-                          TaskControlBlock &to) {
+                          TaskControlBlock &to) noexcept {
     bp_check_guard();
     int32_t idx = validate(handle);
     if (idx < 0)

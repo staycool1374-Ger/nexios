@@ -986,7 +986,7 @@ void ElfLoader::abandon_retention() {
     staging_ = Retention{};
 }
 
-bool ElfLoader::has_retained() {
+bool ElfLoader::has_retained() noexcept {
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(lock_);
     return retention_.valid;
@@ -1168,7 +1168,7 @@ void ElfLoader::task_main() {
     }
 }
 
-bool ElfLoader::cancel_pending(uint64_t generation) {
+bool ElfLoader::cancel_pending(uint64_t generation) noexcept {
     return state() == LoadState::CANCELED || cancel_requested_ ||
            load_generation_ != generation;
 }

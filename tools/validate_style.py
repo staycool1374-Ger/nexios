@@ -319,7 +319,8 @@ class MemoryChecker(Checker):
                         continue
                     # Skip function/method declarations of free/malloc.
                     if "free(" in snippet and (line_text.endswith("{") or line_text.endswith(");")
-                                              or line_text.endswith(",")):
+                                              or line_text.endswith(",")
+                                              or line_text.endswith("noexcept;")):
                         continue
                     # Skip constructor initializer lists (member init like : data(nullptr)).
                     if "free" in snippet and re.search(r":\s*\w+\s*\(", line_text):

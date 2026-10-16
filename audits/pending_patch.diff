@@ -1,13 +1,35 @@
+diff --git a/src/kernel/cap/frame_map.cpp b/src/kernel/cap/frame_map.cpp
+index 9a9944825..14d44ab49 100644
+--- a/src/kernel/cap/frame_map.cpp
++++ b/src/kernel/cap/frame_map.cpp
+@@ -147,7 +147,7 @@ uint64_t FrameUserMap::map(kernel::TaskControlBlock &task, cap::FrameCap &fc) {
+     return va;
+ }
+ 
+-bool FrameUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) {
++bool FrameUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept {
+     // Find the slot by VA under the lock; ownership + generation revalidated
+     // (a recycled task id or stale VA must not unmap another task's mapping).
+     int16_t idx = -1;
+@@ -317,7 +317,7 @@ size_t FrameUserMap::live_count() {
+     return n;
+ }
+ 
+-bool FrameUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) {
++bool FrameUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept {
+     SpinLockGuard<sync::SpinLock> guard(s_lock_);
+     for (size_t i = 0; i < kMaxMaps; ++i)
+         if (s_slots_[i].occupied && s_slots_[i].va == va &&
 diff --git a/src/kernel/cap/frame_map.hpp b/src/kernel/cap/frame_map.hpp
-index 013c5290a..3fae54301 100644
+index 3fae54301..b57e1e30e 100644
 --- a/src/kernel/cap/frame_map.hpp
 +++ b/src/kernel/cap/frame_map.hpp
 @@ -52,7 +52,7 @@ class FrameUserMap {
  
      /// @brief Unmaps the mapping at @p va if it belongs to @p task.
      /// @return true when a mapping was removed.
--    static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
-+    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
+-    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
++    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept;
  
      /// @brief Immediately removes every live mapping backed by @p fc
      ///        (revocation closure).  Called from FrameCap::dispose/revoke
@@ -15,21 +37,43 @@ index 013c5290a..3fae54301 100644
  
      /// @brief Whether @p task currently owns the mapping at @p va (test
      ///        accessor).
--    static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
-+    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
+-    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
++    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept;
  
    private:
      static constexpr size_t kMaxMaps = CONFIG_CAP_MAX_FRAME_MAPS;
+diff --git a/src/kernel/cap/mmio.cpp b/src/kernel/cap/mmio.cpp
+index b45c9f80f..8fd18f985 100644
+--- a/src/kernel/cap/mmio.cpp
++++ b/src/kernel/cap/mmio.cpp
+@@ -205,7 +205,7 @@ uint64_t MmioUserMap::map(kernel::TaskControlBlock &task, cap::MmioCap &mmio) {
+     return va;
+ }
+ 
+-bool MmioUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) {
++bool MmioUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept {
+     // Find the slot by VA under the lock; ownership + generation revalidated
+     // (a recycled task id or stale VA must not unmap another task's mapping).
+     int16_t idx = -1;
+@@ -356,7 +356,7 @@ size_t MmioUserMap::live_count() {
+     return n;
+ }
+ 
+-bool MmioUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) {
++bool MmioUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept {
+     SpinLockGuard<sync::SpinLock> guard(s_lock_);
+     for (size_t i = 0; i < kMaxMaps; ++i)
+         if (s_slots_[i].occupied && s_slots_[i].va == va &&
 diff --git a/src/kernel/cap/mmio.hpp b/src/kernel/cap/mmio.hpp
-index a7b7e2011..6c5db0acc 100644
+index 6c5db0acc..f890e7338 100644
 --- a/src/kernel/cap/mmio.hpp
 +++ b/src/kernel/cap/mmio.hpp
 @@ -90,7 +90,7 @@ class MmioUserMap {
  
      /// @brief Unmaps the mapping at @p va if it belongs to @p task.
      /// @return true when a mapping was removed.
--    static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
-+    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
+-    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
++    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept;
  
      /// @brief Immediately removes every live mapping backed by @p mmio
      ///        (revocation closure, issue #8).  Called from MmioCap::dispose/
@@ -37,21 +81,43 @@ index a7b7e2011..6c5db0acc 100644
  
      /// @brief Whether @p task currently owns the mapping at @p va (test
      ///        accessor).
--    static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
-+    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
+-    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
++    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept;
  
    private:
      static constexpr size_t kMaxMaps = CONFIG_CAP_MAX_MMIO_MAPS;
+diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
+index c66854c59..3f07f73f6 100644
+--- a/src/kernel/elf/elf_loader.cpp
++++ b/src/kernel/elf/elf_loader.cpp
+@@ -986,7 +986,7 @@ void ElfLoader::abandon_retention() {
+     staging_ = Retention{};
+ }
+ 
+-bool ElfLoader::has_retained() {
++bool ElfLoader::has_retained() noexcept {
+     arch::IrqGuard irq_guard{};
+     SpinLockGuard<sync::SpinLock> guard(lock_);
+     return retention_.valid;
+@@ -1168,7 +1168,7 @@ void ElfLoader::task_main() {
+     }
+ }
+ 
+-bool ElfLoader::cancel_pending(uint64_t generation) {
++bool ElfLoader::cancel_pending(uint64_t generation) noexcept {
+     return state() == LoadState::CANCELED || cancel_requested_ ||
+            load_generation_ != generation;
+ }
 diff --git a/src/kernel/elf/elf_loader.hpp b/src/kernel/elf/elf_loader.hpp
-index 12998ecaf..05734598a 100644
+index 05734598a..19383a1c4 100644
 --- a/src/kernel/elf/elf_loader.hpp
 +++ b/src/kernel/elf/elf_loader.hpp
 @@ -131,7 +131,7 @@ class ElfLoader {
      ///        a valid set adopted at take, not yet superseded/reset/
      ///        released. Rerun refuses unless this is true (P2 checks the
      ///        outcome gate on top).
--    static bool has_retained();
-+    [[nodiscard]] static bool has_retained();
+-    [[nodiscard]] static bool has_retained();
++    [[nodiscard]] static bool has_retained() noexcept;
  
      /// @brief Outcome of the retained set's last launch (issue #271 P1).
      enum class RunOutcome : uint8_t {
@@ -59,852 +125,585 @@ index 12998ecaf..05734598a 100644
  
      /// @brief Per-validation-step cancel check (issue #95: shared by the
      ///        dep-resolve backend in elf_shared.cpp).
--    static bool cancel_pending(uint64_t generation);
-+    [[nodiscard]] static bool cancel_pending(uint64_t generation);
+-    [[nodiscard]] static bool cancel_pending(uint64_t generation);
++    [[nodiscard]] static bool cancel_pending(uint64_t generation) noexcept;
  
      /// @brief Current load generation for DepResolveContext setup.
      static uint64_t generation() { return load_generation_; }
+diff --git a/src/kernel/ipc/buffer_pool.cpp b/src/kernel/ipc/buffer_pool.cpp
+index a0be7fdff..d6d5fc7fa 100644
+--- a/src/kernel/ipc/buffer_pool.cpp
++++ b/src/kernel/ipc/buffer_pool.cpp
+@@ -299,7 +299,7 @@ static inline void bp_check_guard() {
+ #endif
+ }
+ 
+-int32_t BufferPool::validate(uint64_t handle) {
++int32_t BufferPool::validate(uint64_t handle) noexcept {
+     if (handle == 0)
+         return BufferPool::BUF_INVALID_HANDLE;
+     uint32_t idx = static_cast<uint32_t>(handle & 0xFFFFFFFFULL);
+@@ -318,7 +318,7 @@ int32_t BufferPool::validate(uint64_t handle) {
+ /// @brief Allocate a buffer, map it at virtual address @p va in the given
+ /// task's space.
+ /// @return handle, or 0 on failure.
+-uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
++uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
+     bp_check_guard();
+     // v0.4.0 MP-1: every task owns a private PML4, so this address-space gate
+     // is effectively always open — kernel driver tasks (is_user_ == false)
+@@ -358,7 +358,7 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
+ 
+ /// @brief Free a buffer: unmap, free the physical page, return entry to pool.
+ /// @return true on success.
+-bool BufferPool::free(TaskControlBlock &task, uint64_t handle) {
++bool BufferPool::free(TaskControlBlock &task, uint64_t handle) noexcept {
+     bp_check_guard();
+     int32_t idx = validate(handle);
+     if (idx < 0)
+@@ -385,7 +385,7 @@ bool BufferPool::free(TaskControlBlock &task, uint64_t handle) {
+ /// populated PTE (mapping the same VA twice silently overwrites PTEs and a
+ /// later free() deletes another buffer's PTE).
+ // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+-bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
++bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) noexcept {
+     bp_check_guard();
+     int32_t idx = validate(handle);
+     if (idx < 0)
+@@ -418,7 +418,7 @@ bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
+ }
+ 
+ /// @brief Unmap a buffer (PTE clear, list remove) without freeing the page.
+-bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) {
++bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) noexcept {
+     bp_check_guard();
+     int32_t idx = validate(handle);
+     if (idx < 0)
+@@ -437,7 +437,7 @@ bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) {
+ 
+ /// @brief Transfer buffer ownership from one task to another (IPC send path).
+ bool BufferPool::transfer(uint64_t handle, TaskControlBlock &from,
+-                          TaskControlBlock &to) {
++                          TaskControlBlock &to) noexcept {
+     bp_check_guard();
+     int32_t idx = validate(handle);
+     if (idx < 0)
 diff --git a/src/kernel/ipc/buffer_pool.hpp b/src/kernel/ipc/buffer_pool.hpp
-index ee7720a6f..4176ac04f 100644
+index 4176ac04f..0f5b92c05 100644
 --- a/src/kernel/ipc/buffer_pool.hpp
 +++ b/src/kernel/ipc/buffer_pool.hpp
 @@ -66,28 +66,28 @@ class BufferPool {
      /// @brief Allocate a buffer, map it at @p virt_addr in the given
      /// task's address space.
      /// @return handle, or 0 on failure.
--    static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr);
-+    [[nodiscard]] static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr);
+-    [[nodiscard]] static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr);
++    [[nodiscard]] static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr) noexcept;
  
      /// @brief Free a buffer: unmap, deref, return to pool.
--    static bool free(TaskControlBlock &task, uint64_t handle);
-+    [[nodiscard]] static bool free(TaskControlBlock &task, uint64_t handle);
+-    [[nodiscard]] static bool free(TaskControlBlock &task, uint64_t handle);
++    [[nodiscard]] static bool free(TaskControlBlock &task, uint64_t handle) noexcept;
  
      /// @brief Map an existing (transferred) buffer at @p virt_addr in
      /// the caller's space.
--    static bool map(TaskControlBlock &task, uint64_t handle,
-+    [[nodiscard]] static bool map(TaskControlBlock &task, uint64_t handle,
-                     uint64_t virt_addr);
+     [[nodiscard]] static bool map(TaskControlBlock &task, uint64_t handle,
+-                    uint64_t virt_addr);
++                    uint64_t virt_addr) noexcept;
  
      /// @brief Unmap a buffer without freeing it.
--    static bool unmap(TaskControlBlock &task, uint64_t handle);
-+    [[nodiscard]] static bool unmap(TaskControlBlock &task, uint64_t handle);
+-    [[nodiscard]] static bool unmap(TaskControlBlock &task, uint64_t handle);
++    [[nodiscard]] static bool unmap(TaskControlBlock &task, uint64_t handle) noexcept;
  
      /// @brief Transfer ownership to another task (used by IPC send).
--    static bool transfer(uint64_t handle, TaskControlBlock &from,
-+    [[nodiscard]] static bool transfer(uint64_t handle, TaskControlBlock &from,
-                          TaskControlBlock &target_task);
+     [[nodiscard]] static bool transfer(uint64_t handle, TaskControlBlock &from,
+-                         TaskControlBlock &target_task);
++                         TaskControlBlock &target_task) noexcept;
  
      /// @brief Unmap all buffers owned by a task (called from cleanup/exec).
      static void unmap_all(TaskControlBlock &task);
  
      /// @brief Validate a handle and return its index, or -1.
--    static int32_t validate(uint64_t handle);
-+    [[nodiscard]] static int32_t validate(uint64_t handle);
+-    [[nodiscard]] static int32_t validate(uint64_t handle);
++    [[nodiscard]] static int32_t validate(uint64_t handle) noexcept;
  
      // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
      static Entry entries[MAX_BUFFERS];
 diff --git a/src/kernel/ipc/ipc.cpp b/src/kernel/ipc/ipc.cpp
-index 6ce0d63b4..86ddba51a 100644
+index 86ddba51a..e8f4a2072 100644
 --- a/src/kernel/ipc/ipc.cpp
 +++ b/src/kernel/ipc/ipc.cpp
-@@ -332,8 +332,11 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
-     if (!ok) {
-         if (transferred) {
-             auto *cur = Scheduler::current_task();
-+            // Best-effort rollback (issue #348-A): on failure the buffer
-+            // stays with tcb and is reclaimed at task teardown
-+            // (BufferPool::unmap_all) — never leaked, never double-owned.
-             if (cur)
--                BufferPool::transfer(msg.buf_handle, *tcb, *cur); // rollback
-+                (void)BufferPool::transfer(msg.buf_handle, *tcb, *cur);
-         }
+@@ -270,7 +270,7 @@ static void unblock_sender_rollback(MessageQueue &q,
+ 
+ /// @brief Send a message to a destination task (blocks if queue is full, unless
+ /// IPC_NONBLOCK).
+-bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
++bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) noexcept {
+     auto *tcb = Scheduler::find_task(dest_id);
+     if (!tcb || tcb->state == TaskState::TERMINATED)
          return false;
-     }
+@@ -381,7 +381,7 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
+ }
+ 
+ /// @brief Receive a message from the calling task's own queue.
+-bool IPC::recv(Message &msg) {
++bool IPC::recv(Message &msg) noexcept {
+     auto *cur = Scheduler::current_task();
+     if (!cur)
+         return false;
+@@ -396,7 +396,7 @@ bool IPC::recv(Message &msg) {
+ /// @brief Send through a capability-gated endpoint.  The endpoint's message
+ ///        queue is the transport (no task-ID ambient authority).  Blocks on a
+ ///        full queue unless IPC_NONBLOCK; wakes the bound receiver.
+-bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
++bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) noexcept {
+     if (!ep)
+         return false;
+     if (ep->revoked())
+@@ -462,7 +462,7 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
+ 
+ /// @brief Receive from a capability-gated endpoint into the calling task's
+ ///        own queue.  Non-blocking: returns false on an empty endpoint queue.
+-bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
++bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept {
+     if (!ep)
+         return false;
+     if (!ep->q.pop(msg))
+@@ -483,7 +483,7 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
+ ///        unchanged from the v1 contract (dest-death reply preservation,
+ ///        #11 oversized-stays-queued clamp, arrival-triggered wake).
+ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
+-                    uint32_t reply_max_size) {
++                    uint32_t reply_max_size) noexcept {
+     // Send the request message
+     if (!send(dest_id, msg))
+         return false;
 diff --git a/src/kernel/ipc/ipc.hpp b/src/kernel/ipc/ipc.hpp
-index 727038ade..50ab40ab4 100644
+index 50ab40ab4..55c137f8a 100644
 --- a/src/kernel/ipc/ipc.hpp
 +++ b/src/kernel/ipc/ipc.hpp
 @@ -95,10 +95,10 @@ class IPC {
      static void init();
  
      /// @brief Sends a message to a destination task.
--    static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0);
-+    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0);
+-    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0);
++    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0) noexcept;
  
      /// @brief Receives a message from the calling task's own queue.
--    static bool recv(Message &msg);
-+    [[nodiscard]] static bool recv(Message &msg);
+-    [[nodiscard]] static bool recv(Message &msg);
++    [[nodiscard]] static bool recv(Message &msg) noexcept;
  
      /// @brief Sends and blocks until a reply arrives.
      ///        Reply matching (issue #296): only a queued message whose
-@@ -109,7 +109,7 @@ class IPC {
-     ///        fits this budget (issue #11 fastpath); an oversized matching
+@@ -110,7 +110,7 @@ class IPC {
      ///        reply stays queued with immediate false (no block).  Zero keeps
      ///        the full-path contract (consume the matching reply).
--    static bool send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-+    [[nodiscard]] static bool send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-                           uint32_t reply_max_size = 0);
+     [[nodiscard]] static bool send_sync(uint64_t dest_id, const Message &msg, Message &reply,
+-                          uint32_t reply_max_size = 0);
++                          uint32_t reply_max_size = 0) noexcept;
  
      /// @brief Returns the message queue for a given task ID.
-@@ -120,13 +120,13 @@ class IPC {
-     ///        task-ID ambient authority is used.  Blocks on a full endpoint
+     static MessageQueue &queue(uint64_t task_id);
+@@ -121,12 +121,12 @@ class IPC {
      ///        queue unless IPC_NONBLOCK.  @p ep must be pinned (a live
      ///        capability lookup result).
--    static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
-+    [[nodiscard]] static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
-                              uint64_t flags = 0);
+     [[nodiscard]] static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
+-                             uint64_t flags = 0);
++                             uint64_t flags = 0) noexcept;
  
      /// @brief Receives a message from a capability-gated endpoint into the
      ///        calling task's own queue.  Returns false if the endpoint queue
      ///        is empty.
--    static bool recv_via_cap(cap::Endpoint *ep, Message &msg);
-+    [[nodiscard]] static bool recv_via_cap(cap::Endpoint *ep, Message &msg);
+-    [[nodiscard]] static bool recv_via_cap(cap::Endpoint *ep, Message &msg);
++    [[nodiscard]] static bool recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept;
  
      /// @brief Wheel callback arming a bounded receive's expiry (issue #18).
      /// Flag-only: validates the TCB and generation, sets recv_timed_out.
-@@ -146,7 +146,7 @@ class IPC {
-     /// @param task Waiting task (non-null, current task).
-     /// @param timeout_ticks Budget in coarse ticks (0 = forever).
-     /// @return true when armed or when no arm is needed (timeout 0).
--    static bool recv_wait_arm(TaskControlBlock &task,
-+    [[nodiscard]] static bool recv_wait_arm(TaskControlBlock &task,
-                               uint64_t timeout_ticks) noexcept;
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 1d87aa872..fbf24c18c 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -383,7 +383,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+     arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
  
-     /// @brief Cancel the calling task's receive timeout (idempotent).
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 9ac98533b..114b6b4ae 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -513,8 +513,14 @@ void init_task_main() {
-                 __builtin_memcpy(grant.data + 8, &kSupervisedPeriod,
-                                  sizeof(uint64_t));
-                 grant.data_size = 16;
--                kernel::IPC::send(kernel::watchdogd::get_watchdogd_pid(),
--                                  grant, 0);
-+                if (!kernel::IPC::send(kernel::watchdogd::get_watchdogd_pid(),
-+                                       grant, 0)) {
-+                    // Best-effort supervise grant (issue #348-A): the
-+                    // watchdog re-syncs via its supervision scan; boot
-+                    // never blocks on a full queue here.
-+                    kernel::Logger::warn(
-+                        "init: watchdog supervise grant refused");
-+                }
-             }
+     auto *l1 = get_table(l0, l0_idx, true);
+-    if (!l1) {
++    if (!l1) [[unlikely]] {
+         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+@@ -393,7 +393,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+     if ((l1[l1_idx] & PAGE_PRESENT) &&
+         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+         uint64_t new_l2_phys = PMM::alloc_page_table();
+-        if (!new_l2_phys) {
++        if (!new_l2_phys) [[unlikely]] {
+             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
+             return errors::VMM_ERR_PAGE_ALLOC;
          }
-         // Issue #275: ramdisk storage grant — mint one FrameCap per
-@@ -542,7 +548,11 @@ void init_task_main() {
-                 grant.type = kernel::ramdiskd::RAMDISK_GRANT;
-                 __builtin_memcpy(grant.data, handles, sizeof(handles));
-                 grant.data_size = sizeof(handles);
--                kernel::IPC::send(rd_pid, grant, 0);
-+                if (!kernel::IPC::send(rd_pid, grant, 0)) {
-+                    // Best-effort grant delivery (issue #348-A): ramdiskd
-+                    // serves NOGRANT until granted; boot continues.
-+                    kernel::Logger::warn("init: ramdisk grant send refused");
-+                }
-                 // Issue #314: mount the flat file store once the grant is
-                 // delivered (best-effort; a failed mount degrades to raw
-                 // block access, boot never blocks on it).
-diff --git a/src/kernel/memory/pmm.hpp b/src/kernel/memory/pmm.hpp
-index 9cbc80fd5..60cf383f2 100644
---- a/src/kernel/memory/pmm.hpp
-+++ b/src/kernel/memory/pmm.hpp
-@@ -57,7 +57,7 @@ class PMM {
-     /// @param kernel_end End of kernel image in physical memory.
-     /// @param window_base Physical base of the allocatable RAM window.
-     /// @return PmmError code.
--    static errors::PmmError init_err(uint64_t mem_size, uint64_t kernel_start,
-+    [[nodiscard]] static errors::PmmError init_err(uint64_t mem_size, uint64_t kernel_start,
-                                      uint64_t kernel_end,
-                                      uint64_t window_base = 0);
+@@ -412,7 +412,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+     }
  
-@@ -71,7 +71,7 @@ class PMM {
-     /// @brief Allocates a single 4 KiB page (KERNEL ownership) with error code.
-     /// @param[out] out_phys_addr Physical address of allocated page.
-     /// @return PmmError code.
--    static errors::PmmError alloc_page_err(uint64_t &out_phys_addr);
-+    [[nodiscard]] static errors::PmmError alloc_page_err(uint64_t &out_phys_addr);
+     auto *l2 = get_table(l1, l1_idx, true);
+-    if (!l2) {
++    if (!l2) [[unlikely]] {
+         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+@@ -452,12 +452,12 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
  
-     /// @brief Allocates a contiguous block of pages (KERNEL ownership).
-     static uint64_t alloc_contiguous(size_t count);
-@@ -80,7 +80,7 @@ class PMM {
-     /// @param count Number of contiguous pages to allocate.
-     /// @param[out] out_phys_addr Physical address of first page.
-     /// @return PmmError code.
--    static errors::PmmError alloc_contiguous_err(size_t count,
-+    [[nodiscard]] static errors::PmmError alloc_contiguous_err(size_t count,
-                                                  uint64_t &out_phys_addr);
- 
-     /// @brief Allocates a single 4 KiB page (USER ownership).
-@@ -88,7 +88,7 @@ class PMM {
-     /// @brief Allocates a single 4 KiB page (USER ownership) with error code.
-     /// @param[out] out_phys_addr Physical address of allocated page.
-     /// @return PmmError code.
--    static errors::PmmError alloc_user_page_err(uint64_t &out_phys_addr);
-+    [[nodiscard]] static errors::PmmError alloc_user_page_err(uint64_t &out_phys_addr);
- 
-     /// @brief Allocates contiguous pages (USER ownership).
-     static uint64_t alloc_user_contiguous(size_t count);
-@@ -96,7 +96,7 @@ class PMM {
-     /// @param count Number of contiguous pages to allocate.
-     /// @param[out] out_phys_addr Physical address of first page.
-     /// @return PmmError code.
--    static errors::PmmError alloc_user_contiguous_err(size_t count,
-+    [[nodiscard]] static errors::PmmError alloc_user_contiguous_err(size_t count,
-                                                       uint64_t &out_phys_addr);
- 
-     /// @brief Allocates a single 4 KiB page for page tables (KERNEL
-@@ -105,7 +105,7 @@ class PMM {
-     /// @brief Allocates a single 4 KiB page for page tables with error code.
-     /// @param[out] out_phys_addr Physical address of allocated page table page.
-     /// @return PmmError code.
--    static errors::PmmError alloc_page_table_err(uint64_t &out_phys_addr);
-+    [[nodiscard]] static errors::PmmError alloc_page_table_err(uint64_t &out_phys_addr);
- 
-     /// @brief Page color of a physical address (issue #62; delegates
-     ///        to the cache_color contract — pure, lock-free, any ctx).
-@@ -128,7 +128,7 @@ class PMM {
-     /// @param color Requested color.
-     /// @param[out] out_phys_addr Physical address of allocated page.
-     /// @return PmmError code.
--    static errors::PmmError alloc_page_colored_err(uint64_t color,
-+    [[nodiscard]] static errors::PmmError alloc_page_colored_err(uint64_t color,
-                                                    uint64_t &out_phys_addr);
-     /// @brief Allocates a single 4 KiB page of the requested color
-     ///        (USER ownership; issue #62).  Same contract as the
-@@ -140,7 +140,7 @@ class PMM {
-     /// @param color Requested color.
-     /// @param[out] out_phys_addr Physical address of allocated page.
-     /// @return PmmError code.
--    static errors::PmmError alloc_user_page_colored_err(
-+    [[nodiscard]] static errors::PmmError alloc_user_page_colored_err(
-         uint64_t color, uint64_t &out_phys_addr);
-     /// @brief Reset per-color allocation cursors (test hook, issue
-     ///        #62).  Cursors affect placement only, never correctness;
-@@ -152,7 +152,7 @@ class PMM {
-     /// @brief Frees a page with error code.
-     /// @param phys_addr Physical address to free.
-     /// @return PmmError code.
--    static errors::PmmError free_page_err(uint64_t phys_addr);
-+    [[nodiscard]] static errors::PmmError free_page_err(uint64_t phys_addr);
- 
-     /// @brief Marks a physical page range [start_phys, end_phys) as allocated
-     ///        KERNEL-owned (boot-time data: GRUB's Multiboot2 info must never
-@@ -175,7 +175,7 @@ class PMM {
-     /// @param phys_addr Physical address to check.
-     /// @param[out] out_is_user Output: true if user page.
-     /// @return PmmError code.
--    static errors::PmmError is_user_page_err(uint64_t phys_addr,
-+    [[nodiscard]] static errors::PmmError is_user_page_err(uint64_t phys_addr,
-                                              bool &out_is_user);
- 
-     /// @brief Return the amount of free physical memory in bytes.
-diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
-index 28ffa6068..c81f73b7b 100644
---- a/src/kernel/memory/vmm.hpp
-+++ b/src/kernel/memory/vmm.hpp
-@@ -48,7 +48,7 @@ class VMM {
-     /// @brief Initialises the VMM with error code.
-     /// @return VmmError code (always VMM_ERR_OK: init only zeroes
-     ///         boot-constructed tables and allocates nothing).
--    static errors::VmmError init_err();
-+    [[nodiscard]] static errors::VmmError init_err();
- 
-     /// @brief Maps a virtual page to a physical page in the kernel page table.
-     /// @param virt_addr Virtual address (page-aligned).
-@@ -63,7 +63,7 @@ class VMM {
-     /// @param phys_addr Physical address (page-aligned).
-     /// @param user      If true, sets the user-accessible flag.
-     /// @return VmmError code.
--    static errors::VmmError map_page_err(uint64_t virt_addr, uint64_t phys_addr,
-+    [[nodiscard]] static errors::VmmError map_page_err(uint64_t virt_addr, uint64_t phys_addr,
-                                          bool user = false);
-     /// @brief Fallible kernel-table map worker (issue #325-B): the
-     ///        map_page body with walk allocation failures surfaced
-@@ -71,7 +71,7 @@ class VMM {
-     ///        map_page_in_pml4_try).
-     /// @return VMM_ERR_OK, or VMM_ERR_PAGE_ALLOC when a table page or
-     ///         huge-page split allocation fails mid-walk.
--    static errors::VmmError map_page_try(uint64_t virt_addr, uint64_t phys_addr,
-+    [[nodiscard]] static errors::VmmError map_page_try(uint64_t virt_addr, uint64_t phys_addr,
-                                          bool user = false);
- 
-     /// @brief Unmaps a virtual page.
-@@ -81,7 +81,7 @@ class VMM {
-     /// @param virt_addr Virtual address to unmap.
-     /// @return VmmError code (walk-only with create=false: allocates
-     ///         nothing, so only alignment can fail).
--    static errors::VmmError unmap_page_err(uint64_t virt_addr);
-+    [[nodiscard]] static errors::VmmError unmap_page_err(uint64_t virt_addr);
- 
-     /// @brief Translates a virtual address to its physical address.
-     /// @param virt_addr Virtual address.
-@@ -92,7 +92,7 @@ class VMM {
-     /// @param virt_addr Virtual address.
-     /// @param[out] out_phys_addr Physical address on success.
-     /// @return VmmError code.
--    static errors::VmmError virt_to_phys_err(uint64_t virt_addr,
-+    [[nodiscard]] static errors::VmmError virt_to_phys_err(uint64_t virt_addr,
-                                              uint64_t &out_phys_addr);
- 
-     /// @brief Returns the physical address of the current PML4 table.
-@@ -107,7 +107,7 @@ class VMM {
-     /// @brief Creates a fresh PML4 with error code.
-     /// @param[out] out_pml4_phys Physical address of the new PML4.
-     /// @return VmmError code.
--    static errors::VmmError clone_kernel_pml4_err(uint64_t &out_pml4_phys);
-+    [[nodiscard]] static errors::VmmError clone_kernel_pml4_err(uint64_t &out_pml4_phys);
- 
-     /// @brief Converge a child PML4's kernel half (entries 256..511)
-     ///        toward @p src_pml4 (issue #96, kernel-half merge).  Recursive
-@@ -152,7 +152,7 @@ class VMM {
-     /// @param dst_pml4 Physical address of the child PML4 to converge.
-     /// @return true on success, false on invalid arguments (null or
-     ///         identical roots — never on allocation failure).
--    static bool merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4);
-+    [[nodiscard]] static bool merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4);
-     /// @brief Snapshot the live kernel PML4's kernel half (entries
-     ///        256..511) into the bring-up template (issue #96).  Call
-     ///        ONCE at end of bring-up, before the first task spawns.
-@@ -160,11 +160,11 @@ class VMM {
-     /// @brief True when @p a_pml4 and @p b_pml4 agree on every kernel-half
-     ///        entry (256..511), compared recursively through shared
-     ///        tables (present+equal u64, or both-absent, at each level).
--    static bool kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4);
-+    [[nodiscard]] static bool kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4);
-     /// @brief True when @p pml4_phys matches the bring-up template on
-     ///        every kernel-half entry (diagnostics + tests; drift from
-     ///        legitimate late mappings is NOT a failure here).
--    static bool kernel_half_matches_template(uint64_t pml4_phys);
-+    [[nodiscard]] static bool kernel_half_matches_template(uint64_t pml4_phys);
-     /// @brief Halt unless @p child_pml4 converged to the LIVE kernel
-     ///        PML4's kernel half (issue #96, structural audit).  Panics
-     ///        (debug AND release) on mismatch; template drift is
-@@ -211,14 +211,14 @@ class VMM {
-     ///        @p executable_out is written ONLY when the leaf is RO
-     ///        (callers must not read it on a false return).
-     /// @return false when unmapped (or a huge/block entry, not ours).
--    static bool pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
-+    [[nodiscard]] static bool pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
-                                    bool *executable_out);
-     /// @brief Test inspector: reports whether the mapped leaf is
-     ///        executable per the arch NX encoding (walk-only, never
-     ///        allocates; issue #325-D NX pinning).  x86_64: NX bit 63
-     ///        clear; aarch64: UXN (bit 54) clear; riscv64: X bit set.
-     /// @return false when unmapped (or a huge/block entry, not ours).
--    static bool pte_is_executable_in_pml4(uint64_t virt_addr,
-+    [[nodiscard]] static bool pte_is_executable_in_pml4(uint64_t virt_addr,
-                                           uint64_t pml4_phys);
-     /// @brief Remap every mapped page in [vaddr, vaddr+size) read-only
-     ///        through the RO primitive (issue #271 P0 — load paths and
-@@ -236,7 +236,7 @@ class VMM {
-     ///        legacy 4-arg mapping behaviour; pass false for W^X data).
-     /// @return VmmError code (walk allocation failures propagate as
-     ///         VMM_ERR_PAGE_ALLOC).
--    static errors::VmmError map_page_in_pml4_err(uint64_t virt_addr,
-+    [[nodiscard]] static errors::VmmError map_page_in_pml4_err(uint64_t virt_addr,
-                                                  uint64_t phys_addr, bool user,
-                                                  uint64_t pml4_phys,
-                                                  bool executable = true);
-@@ -273,7 +273,7 @@ class VMM {
-     /// @param pml4_phys Physical address of the user PML4.
-     /// @return VmmError code (always VMM_ERR_OK: teardown walks with
-     ///         create=false and frees; it cannot fail).
--    static errors::VmmError free_user_pages_err(uint64_t pml4_phys);
-+    [[nodiscard]] static errors::VmmError free_user_pages_err(uint64_t pml4_phys);
- 
-     /// @brief Maps the frame(s) owned by a FrameCap into @p pml4_phys.
-     ///        Refuses a revoked FrameCap (ROADMAP 0.4.1 CSpace) — mapping
-@@ -285,7 +285,7 @@ class VMM {
-     /// @return true when every frame was mapped, false on a revoked cap or
-     ///         a zero frame.
-     /// @note Mapped non-executable (issue #325-D NX policy).
--    static bool map_frame_from_cap(class cap::FrameCap *fc, uint64_t virt_addr,
-+    [[nodiscard]] static bool map_frame_from_cap(class cap::FrameCap *fc, uint64_t virt_addr,
-                                    bool user, uint64_t pml4_phys);
-     /// @brief Maps the frame(s) owned by a FrameCap with error code and
-     ///        transactional rollback (issue #325-A): when a page fails
-@@ -302,7 +302,7 @@ class VMM {
-     /// @note NX policy (issue #325-D): cap-mapped memory defaults
-     ///       non-executable (no production caller executes from it);
-     ///       pass executable=true only for code.
--    static errors::VmmError map_frame_from_cap_err(class cap::FrameCap *fc,
-+    [[nodiscard]] static errors::VmmError map_frame_from_cap_err(class cap::FrameCap *fc,
-                                                    uint64_t virt_addr,
-                                                    bool user,
-                                                    uint64_t pml4_phys,
-@@ -327,7 +327,7 @@ class VMM {
-     /// @return true when every page was mapped, false on a revoked/IO-type
-     ///         cap or a zero range.
-     /// @note Mapped non-executable (issue #325-D NX policy).
--    static bool map_mmio_from_cap(class cap::MmioCap *mmio, uint64_t virt_addr,
-+    [[nodiscard]] static bool map_mmio_from_cap(class cap::MmioCap *mmio, uint64_t virt_addr,
-                                    bool user, uint64_t pml4_phys);
-     /// @brief Maps an MmioCap's BAR range with error code and transactional
-     ///        rollback (issue #325-A): same all-or-nothing contract as
-@@ -337,7 +337,7 @@ class VMM {
-     /// @return VMM_ERR_OK when every page was mapped; error codes as in
-     ///         map_frame_from_cap_err (IO-type BAR → VMM_ERR_INVALID_ADDR).
-     /// @note NX policy (issue #325-D): device memory is never executable.
--    static errors::VmmError map_mmio_from_cap_err(class cap::MmioCap *mmio,
-+    [[nodiscard]] static errors::VmmError map_mmio_from_cap_err(class cap::MmioCap *mmio,
-                                                   uint64_t virt_addr,
-                                                   bool user,
-                                                   uint64_t pml4_phys,
-@@ -375,7 +375,7 @@ class VMM {
-     /// @param pml4_phys Physical address of the target PML4.
-     /// @param[out] out_phys_addr Physical address on success.
-     /// @return VmmError code.
--    static errors::VmmError virt_to_phys_in_pml4_err(uint64_t virt_addr,
-+    [[nodiscard]] static errors::VmmError virt_to_phys_in_pml4_err(uint64_t virt_addr,
-                                                      uint64_t pml4_phys,
-                                                      uint64_t &out_phys_addr);
- 
-@@ -555,7 +555,7 @@ class VMM {
-     ///         huge-page split allocation fails mid-walk (tables
-     ///         allocated before the failure stay installed; the caller
-     ///         owns rollback).
--    static errors::VmmError map_page_in_pml4_try(uint64_t virt_addr,
-+    [[nodiscard]] static errors::VmmError map_page_in_pml4_try(uint64_t virt_addr,
-                                                  uint64_t phys_addr, bool user,
-                                                  bool executable,
-                                                  uint64_t pml4_phys);
-@@ -571,7 +571,7 @@ class VMM {
-     ///         back before returning).
-     /// @param executable If true, pages are executable (issue #325-D;
-     ///        cap wrappers default false).
--    static errors::VmmError map_phys_range_try(uint64_t virt_addr,
-+    [[nodiscard]] static errors::VmmError map_phys_range_try(uint64_t virt_addr,
-                                                uint64_t phys_addr,
-                                                size_t page_count, bool user,
-                                                uint64_t pml4_phys,
-diff --git a/src/kernel/ramdisk/ramdiskd.cpp b/src/kernel/ramdisk/ramdiskd.cpp
-index 2c98c3fdc..6089cc7b4 100644
---- a/src/kernel/ramdisk/ramdiskd.cpp
-+++ b/src/kernel/ramdisk/ramdiskd.cpp
-@@ -172,7 +172,8 @@ int64_t regrant(uint64_t daemon_pid) {
-     grant.type = RAMDISK_GRANT;
-     __builtin_memcpy(grant.data, handles, sizeof(handles));
-     grant.data_size = sizeof(handles);
--    IPC::send(daemon_pid, grant, 0);
-+    if (!IPC::send(daemon_pid, grant, 0))
-+        return RAMDISK_ERR_NOGRANT; // grant minted but undelivered
-     return RAMDISK_OK;
- }
- 
-diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index bde35ebfa..e0c8648f6 100644
---- a/src/kernel/task/scheduler.hpp
-+++ b/src/kernel/task/scheduler.hpp
-@@ -88,7 +88,7 @@ class Scheduler {
-     ///        Defaults match the pre-refactor behaviour.
-     static void init(const SchedulerConfig &cfg = SchedulerConfig{});
-     /// @brief Error-returning overload for init().
--    static errors::SchedulerError init_err(
-+    [[nodiscard]] static errors::SchedulerError init_err(
-         const SchedulerConfig &cfg = SchedulerConfig{});
- 
-     /// @brief Injects the test-runner context (PfA-A).  Production keeps
-@@ -129,7 +129,7 @@ class Scheduler {
-     ///         This is the enforced admission path — the void add_task()
-     ///         below retains advisory warn-only semantics for legacy callers
-     ///         that cannot fail.
--    static errors::SchedulerError add_task_err(TaskControlBlock &task);
-+    [[nodiscard]] static errors::SchedulerError add_task_err(TaskControlBlock &task);
-     /// @brief Issue #20: WCET validity for one task (allocation-free, no
-     ///        logging).  Caller must hold scheduler_lock_.
-     /// @return SCHED_ERR_OK, or SCHED_ERR_WCET_INVALID when an explicit
-@@ -157,7 +157,7 @@ class Scheduler {
-     ///        the candidate is always counted (on cpu).  Caller must hold
-     ///        scheduler_lock_.  Allocation-free, no logging.  This is the
-     ///        hook a future CPU-pinning mode (#167) will reuse.
--    static errors::SchedulerError admission_check_cpu_locked(
-+    [[nodiscard]] static errors::SchedulerError admission_check_cpu_locked(
-         const TaskControlBlock &candidate, uint64_t cpu, uint64_t *out_util,
-         uint32_t *out_bound) noexcept;
- 
-@@ -180,7 +180,7 @@ class Scheduler {
-     /// @brief Error-returning overload for remove_task().
-     /// @return SCHED_ERR_OK on success, SCHED_ERR_NOT_FOUND if task not in
-     /// table.
--    static errors::SchedulerError remove_task_err(TaskControlBlock &task);
-+    [[nodiscard]] static errors::SchedulerError remove_task_err(TaskControlBlock &task);
- 
-     /// @brief Returns the currently running task (RSP-authoritative).
-     /// @return Pointer to the current TaskControlBlock.
-@@ -524,7 +524,7 @@ class Scheduler {
-     ///        current on ANOTHER CPU — freeing an AP-live stack poisons the
-     ///        running task. Self-termination always succeeds. The void
-     ///        terminate() above delegates and warns on refusal.
--    static errors::SchedulerError terminate_err(TaskControlBlock &task,
-+    [[nodiscard]] static errors::SchedulerError terminate_err(TaskControlBlock &task,
-                                                 uint64_t exit_code) noexcept;
-     /// @brief Result of one idle authenticity re-verify slice (issue #46).
-     enum class AuthStepResult : uint8_t {
-@@ -601,7 +601,7 @@ class Scheduler {
-     /// @param out_id Output parameter for the allocated ID.
-     /// @return SCHED_ERR_OK on success, SCHED_ERR_TABLE_FULL if ID table is
-     /// full.
--    static errors::SchedulerError alloc_id_err(uint64_t &out_id);
-+    [[nodiscard]] static errors::SchedulerError alloc_id_err(uint64_t &out_id);
- 
-     /// @brief Returns the index of the current task (computed from pointer,
-     ///         O(n) for snapshot compatibility; prefer current_task()
-diff --git a/src/kernel/test/test_buffer_pool.cpp b/src/kernel/test/test_buffer_pool.cpp
-index 72408b97b..2edde45a6 100644
---- a/src/kernel/test/test_buffer_pool.cpp
-+++ b/src/kernel/test/test_buffer_pool.cpp
-@@ -128,7 +128,7 @@ JARVIS_TEST(buffer_pool_invalid_handle, "PRE: none | POST: none") {
-         (static_cast<uint64_t>(real_gen) << 32) | BufferPool::MAX_BUFFERS;
-     JARVIS_ASSERT_EQ(BufferPool::BUF_INVALID_INDEX, BufferPool::validate(oob));
- 
--    BufferPool::free(*task, good);
-+    JARVIS_ASSERT(BufferPool::free(*task, good));
- 
-     JARVIS_TEST_PASS();
- }
-@@ -886,7 +886,7 @@ JARVIS_TEST(buffer_pool_realloc_recycles_entry, "PRE: none | POST: none") {
-     JARVIS_ASSERT_EQ(idx1, idx2);
-     JARVIS_ASSERT(gen2 == gen1 + 1);
- 
--    BufferPool::free(*task, h2);
-+    JARVIS_ASSERT(BufferPool::free(*task, h2));
-     JARVIS_TEST_PASS();
- }
- 
-@@ -1015,10 +1015,10 @@ JARVIS_TEST(buffer_pool_alloc_after_exhaustion_and_free,
-         // Cleanup
-         for (size_t i = 0; i < BufferPool::MAX_BUFFERS; ++i) {
-             if (i != 512 && handles[i] != 0) {
--                BufferPool::free(*task, handles[i]);
-+                JARVIS_ASSERT(BufferPool::free(*task, handles[i]));
-             }
+     auto *pdpt = get_table(pml4, pml4_idx, true);
+-    if (!pdpt) {
++    if (!pdpt) [[unlikely]] {
+         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+     auto *pd = get_table(pdpt, pdpt_idx, true);
+-    if (!pd) {
++    if (!pd) [[unlikely]] {
+         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+@@ -471,7 +471,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+ #endif
+     {
+         uint64_t new_pt_phys = PMM::alloc_page_table();
+-        if (!new_pt_phys) {
++        if (!new_pt_phys) [[unlikely]] {
+             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
+             return errors::VMM_ERR_PAGE_ALLOC;
          }
--        BufferPool::free(*task, h);
-+        JARVIS_ASSERT(BufferPool::free(*task, h));
+@@ -509,7 +509,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
      }
-     // SimpleTaskPtr destroyed here -> task->cleanup() completed.
  
-@@ -1313,7 +1313,7 @@ JARVIS_TEST(buffer_pool_list_integrity_after_unlink, "PRE: none | POST: none") {
-     // Cleanup
-     for (int i = 0; i < 10; ++i) {
-         if (i != 5 && handles[i] != 0) {
--            BufferPool::free(*task, handles[i]);
-+            JARVIS_ASSERT(BufferPool::free(*task, handles[i]));
+     auto *pt = get_table(pd, pd_idx, true);
+-    if (!pt) {
++    if (!pt) [[unlikely]] {
+         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+@@ -565,12 +565,12 @@ void VMM::unmap_page(uint64_t virt_addr) {
+                            virt_addr, l0_idx);
+ 
+     auto *l1 = get_table(l0, l0_idx, false);
+-    if (!l1) {
++    if (!l1) [[unlikely]] {
+         note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
+         return;
+     }
+     auto *l2 = get_table(l1, l1_idx, false);
+-    if (!l2) {
++    if (!l2) [[unlikely]] {
+         note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
+         return;
+     }
+@@ -593,17 +593,17 @@ void VMM::unmap_page(uint64_t virt_addr) {
+     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
+ 
+     auto *pdpt = get_table(pml4, pml4_idx, false);
+-    if (!pdpt) {
++    if (!pdpt) [[unlikely]] {
+         note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
+         return;
+     }
+     auto *pd = get_table(pdpt, pdpt_idx, false);
+-    if (!pd) {
++    if (!pd) [[unlikely]] {
+         note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
+         return;
+     }
+     auto *pt = get_table(pd, pd_idx, false);
+-    if (!pt) {
++    if (!pt) [[unlikely]] {
+         note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
+         return;
+     }
+@@ -720,12 +720,12 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
+     arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
+ 
+     auto *l1 = get_table(l0, l0_idx, true, true);
+-    if (!l1) {
++    if (!l1) [[unlikely]] {
+         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+     auto *l2 = get_table(l1, l1_idx, true, true);
+-    if (!l2) {
++    if (!l2) [[unlikely]] {
+         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+@@ -762,12 +762,12 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
+                          pml4_idx < arch::PML4_USER_COUNT);
+ 
+     auto *pdpt = get_table(pml4, pml4_idx, true, true);
+-    if (!pdpt) {
++    if (!pdpt) [[unlikely]] {
+         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+     auto *pd = get_table(pdpt, pdpt_idx, true, true);
+-    if (!pd) {
++    if (!pd) [[unlikely]] {
+         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+@@ -779,7 +779,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
+ #endif
+     {
+         uint64_t new_pt_phys = PMM::alloc_user_page();
+-        if (!new_pt_phys) {
++        if (!new_pt_phys) [[unlikely]] {
+             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
+             return errors::VMM_ERR_PAGE_ALLOC;
          }
+@@ -809,7 +809,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
      }
  
-@@ -1388,7 +1388,7 @@ JARVIS_TEST(buffer_pool_handle_reuse_security, "PRE: none | POST: none") {
-     JARVIS_ASSERT(new_gen > old_gen);
-     JARVIS_ASSERT_EQ(BufferPool::BUF_INVALID_HANDLE, BufferPool::validate(old_handle));
- 
--    BufferPool::free(*task, h2);
-+    JARVIS_ASSERT(BufferPool::free(*task, h2));
-     JARVIS_TEST_PASS();
- }
- 
-@@ -1419,9 +1419,9 @@ JARVIS_TEST(buffer_pool_transfer_to_kernel_task, "PRE: none | POST: none") {
-     // If transfer succeeded, the buffer now belongs to kernel_task;
-     // free it via kernel_task.  Otherwise free via user.
-     if (ok) {
--        BufferPool::free(*kernel_task, handle);
-+        JARVIS_ASSERT(BufferPool::free(*kernel_task, handle));
-     } else {
--        BufferPool::free(*user, handle);
-+        JARVIS_ASSERT(BufferPool::free(*user, handle));
+     auto *pt = get_table(pd, pd_idx, true, true);
+-    if (!pt) {
++    if (!pt) [[unlikely]] {
+         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
+         return errors::VMM_ERR_PAGE_ALLOC;
      }
- 
-     JARVIS_TEST_PASS();
-diff --git a/src/kernel/test/test_buffer_pool_deterministic.cpp b/src/kernel/test/test_buffer_pool_deterministic.cpp
-index 6f666ce08..dd981f023 100644
---- a/src/kernel/test/test_buffer_pool_deterministic.cpp
-+++ b/src/kernel/test/test_buffer_pool_deterministic.cpp
-@@ -90,7 +90,7 @@ JARVIS_TEST(buffer_pool_deterministic_exhaustion_returns_zero,
-         uint32_t idx = static_cast<uint32_t>(handles[i] & 0xFFFFFFFFULL);
-         uint32_t gen = BufferPool::entries[idx].generation;
-         uint64_t h = (static_cast<uint64_t>(gen) << 32) | idx;
--        BufferPool::free(*task, h);
-+        JARVIS_ASSERT(BufferPool::free(*task, h));
+@@ -1025,7 +1025,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+         return; // 1 GiB block: not ours to clear.
      }
-     JARVIS_TEST_PASS();
- }
-diff --git a/src/kernel/test/test_ipc_benchmark.cpp b/src/kernel/test/test_ipc_benchmark.cpp
-index f038d6357..33655d302 100644
---- a/src/kernel/test/test_ipc_benchmark.cpp
-+++ b/src/kernel/test/test_ipc_benchmark.cpp
-@@ -112,9 +112,11 @@ static uint64_t bench_ipc_send_self() {
-     msg.type = 0;
-     msg.priority = 0;
-     msg.data_size = 0;
--    IPC::send(cur->id, msg, IPC_NONBLOCK);
-+    // Benchmark load: results intentionally unchecked (measurement
-+    // purity — throughput/latency is the deliverable, see Testidea).
-+    (void)IPC::send(cur->id, msg, IPC_NONBLOCK);
-     Message out;
--    IPC::recv(out);
-+    (void)IPC::recv(out);
-     return 0;
- }
- 
-@@ -156,8 +158,9 @@ static uint64_t bench_ipc_send_only_task_id_;
- static Message bench_ipc_send_only_msg_;
- 
- static uint64_t bench_ipc_send_only() {
--    IPC::send(bench_ipc_send_only_task_id_, bench_ipc_send_only_msg_,
--              IPC_NONBLOCK);
-+    // Benchmark load: unchecked by design (see above).
-+    (void)IPC::send(bench_ipc_send_only_task_id_, bench_ipc_send_only_msg_,
-+                     IPC_NONBLOCK);
-     return 0;
- }
- 
-@@ -194,7 +197,8 @@ static uint64_t bench_ipc_send_full_id_;
- static uint64_t bench_ipc_send_full() {
-     Message msg{};
-     msg.sender_id = bench_ipc_send_full_id_;
--    IPC::send(bench_ipc_send_full_id_, msg, IPC_NONBLOCK);
-+    // Benchmark load: unchecked by design (see above).
-+    (void)IPC::send(bench_ipc_send_full_id_, msg, IPC_NONBLOCK);
-     return 0;
- }
- 
-@@ -232,9 +236,10 @@ static uint64_t bench_ipc_64byte_id_;
- static Message bench_ipc_64byte_send_;
- 
- static uint64_t bench_ipc_send_64byte() {
--    IPC::send(bench_ipc_64byte_id_, bench_ipc_64byte_send_, IPC_NONBLOCK);
-+    // Benchmark load: unchecked by design (see above).
-+    (void)IPC::send(bench_ipc_64byte_id_, bench_ipc_64byte_send_, IPC_NONBLOCK);
-     Message out;
--    IPC::recv(out);
-+    (void)IPC::recv(out);
-     return 0;
- }
- 
-diff --git a/src/kernel/test/test_ipc_fastpath.cpp b/src/kernel/test/test_ipc_fastpath.cpp
-index ff6a9390e..38573499d 100644
---- a/src/kernel/test/test_ipc_fastpath.cpp
-+++ b/src/kernel/test/test_ipc_fastpath.cpp
-@@ -859,7 +859,7 @@ JARVIS_TEST(fast_hybrid_mixed_queue, "PRE: none | POST: none") {
-                 m.type = ty;
-                 m.priority = 0;
-                 m.data_size = 0;
--                IPC::send(c->peer_id_, m);
-+                JARVIS_ASSERT(IPC::send(c->peer_id_, m));
-             }
-         },
-         12, 10);
-diff --git a/src/kernel/test/test_ipc_lock_free.cpp b/src/kernel/test/test_ipc_lock_free.cpp
-index 55fd98e26..0e863b8c6 100644
---- a/src/kernel/test/test_ipc_lock_free.cpp
-+++ b/src/kernel/test/test_ipc_lock_free.cpp
-@@ -126,7 +126,8 @@ JARVIS_TEST(ipc_send_sync_no_cli, "PRE: none | POST: none") {
-             reply.type = 99;
-             reply.priority = 0;
-             reply.data_size = 0;
--            IPC::send(msg.sender_id, reply);
-+            if (!IPC::send(msg.sender_id, reply))
-+                return;
-         },
-         11, 10);
-     JARVIS_ASSERT(receiver != nullptr);
-diff --git a/src/kernel/test/test_ipc_robustness.cpp b/src/kernel/test/test_ipc_robustness.cpp
-index 8a600a9b3..2a379e9c3 100644
---- a/src/kernel/test/test_ipc_robustness.cpp
-+++ b/src/kernel/test/test_ipc_robustness.cpp
-@@ -67,7 +67,7 @@ void ipc_prio_sender_entry() {
-     msg.type = 1;
-     msg.priority = 0;
-     msg.data_size = 0;
--    IPC::send(s_recv_id, msg, 0);
-+    JARVIS_ASSERT(IPC::send(s_recv_id, msg, 0));
-     __atomic_store_n(flag, 1, __ATOMIC_RELEASE);
- }
- 
-@@ -232,7 +232,10 @@ TEST_CLASS(IpcConcurrentSenders) {
-                         msg.type = c->base_ * MSGS_PER + static_cast<uint64_t>(m);
-                         msg.priority = 0;
-                         msg.data_size = 0;
--                        IPC::send(c->recv_, msg, IPC_NONBLOCK);
-+                        // Contention drops are by design (NONBLOCK into a
-+                        // pre-filled queue; the test asserts count <= MAX,
-+                        // not delivery) — result intentionally unchecked.
-+                        (void)IPC::send(c->recv_, msg, IPC_NONBLOCK);
-                     }
-                 },
-                 12 + static_cast<uint64_t>(i), 10);
-diff --git a/src/kernel/test/test_ipc_throughput.cpp b/src/kernel/test/test_ipc_throughput.cpp
-index 14e263f40..5869995aa 100644
---- a/src/kernel/test/test_ipc_throughput.cpp
-+++ b/src/kernel/test/test_ipc_throughput.cpp
-@@ -78,18 +78,18 @@ JARVIS_TEST(ipc_throughput_self_rate, "PRE: none | POST: none") {
-     Message msg{};
-     msg.sender_id = cur->id;
-     for (size_t i = 0; i < k_warmup; ++i) {
--        IPC::send(cur->id, msg, IPC_NONBLOCK);
-+        JARVIS_ASSERT(IPC::send(cur->id, msg, IPC_NONBLOCK));
-         Message out;
--        IPC::recv(out);
-+        JARVIS_ASSERT(IPC::recv(out));
+     auto *l1 = get_table(top, l0_idx, false);
+-    if (!l1) {
++    if (!l1) [[unlikely]] {
+         note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
+         return;
      }
- 
-     constexpr size_t k_n = 20000;
-     uint64_t t0 = arch::rdtsc();
-     for (size_t i = 0; i < k_n; ++i) {
--        IPC::send(cur->id, msg, IPC_NONBLOCK);
-+        bool sent = IPC::send(cur->id, msg, IPC_NONBLOCK);
-         Message out;
-         bool ok = IPC::recv(out);
--        JARVIS_ASSERT(ok);
-+        JARVIS_ASSERT(ok && sent);
+@@ -1033,7 +1033,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+         return; // 2 MiB block: not ours to clear.
      }
-     uint64_t dt = arch::rdtsc() - t0;
-     JARVIS_ASSERT(dt > 0);
-@@ -129,17 +129,17 @@ JARVIS_TEST(ipc_throughput_size_sweep, "PRE: none | POST: none") {
-         for (size_t i = 0; i < k_sizes[s]; ++i)
-             msg.data[i] = static_cast<uint8_t>(i & 0xFF);
-         for (size_t i = 0; i < k_warmup; ++i) {
--            IPC::send(cur->id, msg, IPC_NONBLOCK);
-+            JARVIS_ASSERT(IPC::send(cur->id, msg, IPC_NONBLOCK));
-             Message out;
--            IPC::recv(out);
-+            JARVIS_ASSERT(IPC::recv(out));
-         }
-         constexpr size_t k_n = 3000;
-         uint64_t t0 = arch::rdtsc();
-         for (size_t i = 0; i < k_n; ++i) {
--            IPC::send(cur->id, msg, IPC_NONBLOCK);
-+            bool sent = IPC::send(cur->id, msg, IPC_NONBLOCK);
-             Message out;
-             bool ok = IPC::recv(out);
--            JARVIS_ASSERT(ok);
-+            JARVIS_ASSERT(ok && sent);
-             JARVIS_ASSERT(out.data_size == k_sizes[s]);
-         }
-         uint64_t dt = arch::rdtsc() - t0;
-diff --git a/src/kernel/test/test_microkernel_transition.cpp b/src/kernel/test/test_microkernel_transition.cpp
-index 3ab79d6d8..c9c416adc 100644
---- a/src/kernel/test/test_microkernel_transition.cpp
-+++ b/src/kernel/test/test_microkernel_transition.cpp
-@@ -60,7 +60,7 @@ TEST_CLASS(KernelApiPureFunctions) {
-     uint64_t task_count_after = Scheduler::task_count();
-     CT_ASSERT(task_count_after == task_count_before);
-     Message out;
--    IPC::recv(out);
-+    CT_ASSERT(IPC::recv(out));
+     auto *l2 = get_table(l1, l1_idx, false);
+-    if (!l2) {
++    if (!l2) [[unlikely]] {
+         note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
+         return;
+     }
+@@ -1047,12 +1047,12 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+     // PD_IDENTITY restore (see map_page_in_pml4 note above).
+     arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
+     auto *pdpt = get_table(top, pml4_idx, false);
+-    if (!pdpt) {
++    if (!pdpt) [[unlikely]] {
+         note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
+         return;
+     }
+     auto *pd = get_table(pdpt, pdpt_idx, false);
+-    if (!pd) {
++    if (!pd) [[unlikely]] {
+         note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
+         return;
+     }
+@@ -1066,7 +1066,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+     }
+ #endif
+     auto *pt = get_table(pd, pd_idx, false);
+-    if (!pt) {
++    if (!pt) [[unlikely]] {
+         note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
+         return;
+     }
+diff --git a/src/kernel/task/idle_monitor.cpp b/src/kernel/task/idle_monitor.cpp
+index 890cca742..32ec269fd 100644
+--- a/src/kernel/task/idle_monitor.cpp
++++ b/src/kernel/task/idle_monitor.cpp
+@@ -94,7 +94,7 @@ IdleScanProgress idle_scan_stack(IdleScanCursor &cursor,
+         idle_publish_stack_low_water(t->kstack_low_water_,
+                                      t->kernel_stack_top,
+                                      t->stack_low_water_bytes);
+-        if (!user_ok || !kstack_ok) {
++        if (!user_ok || !kstack_ok) [[unlikely]] {
+             // Existing escalation path only (spec §3 E1): production
+             // fail-stops here exactly as the guard-page #PF path does.
+             // The scanner itself kills/reaps/reprioritizes nothing (M6).
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index 18b7ae37a..b8370a66b 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -197,7 +197,7 @@ bool Scheduler::canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t
+         return true;
+     uint8_t bad_seg = 0;
+     uint64_t bad_va = 0;
+-    if (!canary_verify_user_segments(task, bad_seg, bad_va)) {
++    if (!canary_verify_user_segments(task, bad_seg, bad_va)) [[unlikely]] {
+         // Canary negative-test path (issue #255 H3): under test the trip is
+         // recorded, not fatal, so the canary suite can assert the latch.
+         if (kernel::Scheduler::is_test_active()) {
+@@ -245,8 +245,8 @@ struct H2Event {
+     uint64_t gen;   ///< scheduler_switch_generation at record time
+     uint64_t depth; ///< isr_nesting_depth at record time
  };
+-static H2Event g_h2_ring[H2_RING_SIZE];
+-static uint64_t g_h2_idx = 0;
++static constinit H2Event g_h2_ring[H2_RING_SIZE] = {};
++static constinit uint64_t g_h2_idx = 0;
  
- // Runmode: kernel
-diff --git a/src/kernel/test/test_resource_exhaustion.cpp b/src/kernel/test/test_resource_exhaustion.cpp
-index d3401499d..2af1cca7d 100644
---- a/src/kernel/test/test_resource_exhaustion.cpp
-+++ b/src/kernel/test/test_resource_exhaustion.cpp
-@@ -193,14 +193,14 @@ TEST_CLASS(MaxBuffersExhaustion) {
-     uint32_t old_idx = static_cast<uint32_t>(handles[512] & 0xFFFFFFFFULL);
-     CT_ASSERT(new_idx == old_idx);
+ inline void h2_record(uint64_t ev, uint64_t a, uint64_t b, uint64_t c) noexcept {
+     // Issue #25 C1: atomic index (two CPUs append concurrently; a torn
+@@ -290,8 +290,8 @@ void h2_dump_ring() noexcept {
  
--    BufferPool::free(*task, h);
-+    CT_ASSERT(BufferPool::free(*task, h));
+ // P5a: Deferred-kill list.
+ static constexpr uint64_t MAX_DEFERRED_KILLS = 16;
+-static TaskControlBlock *s_deferred_kill_tasks[MAX_DEFERRED_KILLS] = {};
+-static uint64_t s_deferred_kill_count = 0;
++static constinit TaskControlBlock *s_deferred_kill_tasks[MAX_DEFERRED_KILLS] = {};
++static constinit uint64_t s_deferred_kill_count = 0;
  
-     // Cleanup all remaining
-     for (int i = 0; i < alloc_count; ++i) {
-         if (i == 512)
-             continue;
-         if (handles[i] != 0) {
--            BufferPool::free(*task, handles[i]);
-+            CT_ASSERT(BufferPool::free(*task, handles[i]));
+ // TEMP DEBUG (BUGS.md#020): detect a SporadicServer pointer that aliases a
+ // freed/poisoned MemPool block (first 8 bytes == 0xDDDDDDDDDDDDDDDD).  A freed
+@@ -597,7 +597,7 @@ void Scheduler::enqueue_ready_inner(TaskControlBlock &task) noexcept {
+ static void invalidate_pending_switch_to(uint64_t task_id) noexcept;
+ 
+ void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
+-    if (task.in_edf_queue_)
++    if (task.in_edf_queue_) [[unlikely]]
+         edf_remove(task, queue_target(task));
+     rq_task(task).remove(task, effective_priority(&task));
+     // Issue #250: leaving the queue voids any wake-while-current deferral
+@@ -2059,9 +2059,9 @@ bool Scheduler::s_scan_requested_ = false;
+ // Issue #299/#280 stall diagnostics: count timer-tick dispatcher entries and
+ // actual switch_to_task calls, to distinguish "ticks dead" (counters frozen)
+ // from "ticks alive but switch not applied" (rms advances, switch does not).
+-static uint64_t g_diag_rms_count = 0;
+-static uint64_t g_diag_switch_count = 0;
+-static uint64_t g_diag_tick_count = 0;
++static constinit uint64_t g_diag_rms_count = 0;
++static constinit uint64_t g_diag_switch_count = 0;
++static constinit uint64_t g_diag_tick_count = 0;
+ #endif
+ ReadyQueueManager Scheduler::ready_queues_[CONFIG_MAX_CPUS];
+ DeadlineList Scheduler::deadline_list_;
+@@ -2542,12 +2542,12 @@ bool Scheduler::needs_switch() noexcept {
+ }
+ 
+ TaskControlBlock *Scheduler::next_task() noexcept {
+-    if (all_tasks_.size() <= 1)
++    if (all_tasks_.size() <= 1) [[unlikely]]
+         return own_idle();
+ 
+     // Issue #19: the EDF candidate agreed with needs_switch() — dispatch
+     // it first so the arm and the decision can never disagree.
+-    if (auto *edf_next = edf_preempt_candidate()) {
++    if (auto *edf_next = edf_preempt_candidate()) [[unlikely]] {
+         edf_remove(*edf_next, sched_cpu());
+         return edf_next;
+     }
+@@ -2559,7 +2559,7 @@ TaskControlBlock *Scheduler::next_task() noexcept {
+             if (candidate == current_task() ||
+                 (candidate->state != TaskState::READY &&
+                  candidate->state != TaskState::RUNNING) ||
+-                queue_target(*candidate) != sched_cpu()) {
++                queue_target(*candidate) != sched_cpu()) [[unlikely]] {
+                 rq_own().dequeue_highest();
+                 continue;
+             }
+@@ -2788,7 +2788,7 @@ void Scheduler::credit_task_memory(uint64_t pages) {
+ 
+ // Issue #225: per-CPU interrupted-PC slot for the debugger park check.
+ // Own CPU writes (timer ISR), own CPU tick reads; plain relaxed atomics.
+-static uint64_t debug_tick_pc_[CONFIG_MAX_CPUS] = {};
++static constinit uint64_t debug_tick_pc_[CONFIG_MAX_CPUS] = {};
+ 
+ void Scheduler::note_debug_tick_pc(uint64_t interrupted_pc) noexcept {
+     uint64_t cpu = sched_cpu();
+@@ -3660,7 +3660,7 @@ void Scheduler::on_tick() noexcept {
          }
      }
  
-diff --git a/src/kernel/test/test_scheduler_hrt.cpp b/src/kernel/test/test_scheduler_hrt.cpp
-index ae7a95f76..a4b49a95a 100644
---- a/src/kernel/test/test_scheduler_hrt.cpp
-+++ b/src/kernel/test/test_scheduler_hrt.cpp
-@@ -109,9 +109,9 @@ void hammerer_entry() {
-         msg.type = 0xEE;
-         msg.priority = 0;
-         msg.data_size = 0;
--        IPC::send(msg.sender_id, msg);
-+        JARVIS_ASSERT(IPC::send(msg.sender_id, msg));
-         Message out;
--        IPC::recv(out);
-+        JARVIS_ASSERT(IPC::recv(out));
-         sync::SpinLock lock;
-         lock.lock();
-         lock.unlock();
-diff --git a/src/kernel/test/test_stress_hrt.cpp b/src/kernel/test/test_stress_hrt.cpp
-index 1e0f62ade..859724412 100644
---- a/src/kernel/test/test_stress_hrt.cpp
-+++ b/src/kernel/test/test_stress_hrt.cpp
-@@ -206,9 +206,9 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
-                 msg.type = 0xEE;
-                 msg.priority = 0;
-                 msg.data_size = 0;
--                IPC::send(msg.sender_id, msg);
-+                JARVIS_ASSERT(IPC::send(msg.sender_id, msg));
-                 Message out;
--                IPC::recv(out);
-+                JARVIS_ASSERT(IPC::recv(out));
-                 sync::SpinLock lock;
-                 lock.lock();
-                 lock.unlock();
-diff --git a/src/kernel/test/test_testrunner.cpp b/src/kernel/test/test_testrunner.cpp
-index dcbba857b..16527883c 100644
---- a/src/kernel/test/test_testrunner.cpp
-+++ b/src/kernel/test/test_testrunner.cpp
-@@ -98,7 +98,7 @@ JARVIS_TEST(harness_priority_ordered_wakeup,
-         Message msg{};
-         msg.type = IPC_MSG_TYPE_TEST;
-         msg.priority = 0;
--        IPC::send(rcv_id, msg, IPC_NONBLOCK);
-+        JARVIS_ASSERT(IPC::send(rcv_id, msg, IPC_NONBLOCK));
-     }
+-    static uint64_t tick_counter = 0;
++    static constinit uint64_t tick_counter = 0;
+     ++tick_counter;
+     // Harness owns lifecycle (see harness_owns_lifecycle): the reaper must
+     // not race test ScopeGuards (double-free UAF otherwise).  Deferring to
+@@ -3686,7 +3686,7 @@ void Scheduler::on_tick() noexcept {
  
-     // Send one more — should block (queue full), then wake when receiver drains
-@@ -165,7 +165,7 @@ JARVIS_TEST(harness_blocked_sender_wakes,
-         Message msg{};
-         msg.type = IPC_MSG_TYPE_TEST;
-         msg.priority = 0;
--        IPC::send(rcv_id, msg, IPC_NONBLOCK);
-+        JARVIS_ASSERT(IPC::send(rcv_id, msg, IPC_NONBLOCK));
-     }
- 
-     // Send one more — should block (queue full)
-@@ -370,7 +370,7 @@ JARVIS_TEST(harness_hhdm_user_page_bounds,
- 
-         // Free the buffer back to the pool (kernel worker's buffer).
-         if (g_handle != 0) {
--            BufferPool::free(*sender, g_handle);
-+            JARVIS_ASSERT(BufferPool::free(*sender, g_handle));
-         }
- 
-         // Clean up tasks (this frees page-table pages back to PMM free list)
+     // Harness owns lifecycle (see harness_owns_lifecycle): tests drive
+     // balancer_tick() directly so placement asserts stay deterministic.
+-    static uint64_t balancer_cadence = 0;
++    static constinit uint64_t balancer_cadence = 0;
+     ++balancer_cadence;
+     if (!harness_owns_lifecycle() &&
+         (balancer_cadence % BALANCER_TICK_PERIOD) == 0) {
+@@ -5616,7 +5616,7 @@ deadline_miss_handler(TaskControlBlock &task,
+     // starts.  Dump the full task set + monitor state once, from this
+     // tick context, so a stalled run leaves reopen-grade evidence in the
+     // serial log (no GDB attach needed).  Guarded so it fires at most once.
+-    static uint64_t s_init_miss = 0;
++    static constinit uint64_t s_init_miss = 0;
+     if (task.id == 1) {
+         ++s_init_miss;
+         if (s_init_miss == 100) {
+diff --git a/src/kernel/task/task_queue.cpp b/src/kernel/task/task_queue.cpp
+index 73adb36ea..e835aab0d 100644
+--- a/src/kernel/task/task_queue.cpp
++++ b/src/kernel/task/task_queue.cpp
+@@ -10,9 +10,9 @@ void TaskQueue::push_back(TaskControlBlock &tcb) noexcept {
+     // Refuse to link a non-TCB (freed/overwritten) node — doing so would
+     // corrupt the intrusive runq_next_/runq_prev_ links and later cause a
+     // #GP when pop_front/remove walks them.
+-    if (!TaskControlBlock::is_valid(&tcb))
++    if (!TaskControlBlock::is_valid(&tcb)) [[unlikely]]
+         return;
+-    if (tcb.in_ready_queue_)
++    if (tcb.in_ready_queue_) [[unlikely]]
+         return;
+     tcb.in_ready_queue_ = true;
+     tcb.runq_next_ = nullptr;
+@@ -31,14 +31,14 @@ TaskControlBlock *TaskQueue::pop_front() noexcept {
+     // corrupted (e.g. a cycle produced by a stray double-enqueue).  Returning
+     // early here prevents pop_front from spinning until count_ underflows and
+     // hanging the scheduler inside reschedule()/next_task().
+-    if (!head_ || count_ == 0)
++    if (!head_ || count_ == 0) [[unlikely]]
+         return nullptr;
+     // A freed/overwritten head (poisoned with 0xDD under CONFIG_DEBUG) must
+     // not be dereferenced — M-2 (audit-task-sync-v0.4.2): drop ONLY the
+     // offending head node and preserve the remaining queue instead of
+     // zeroing the whole list (which orphans every other queued task and
+     // suppresses the corruption rather than containing it).
+-    if (!TaskControlBlock::is_valid(head_)) {
++    if (!TaskControlBlock::is_valid(head_)) [[unlikely]] {
+         auto *bad = head_;
+         head_ = bad->runq_next_;
+         if (head_) {
+diff --git a/src/lib/assert.hpp b/src/lib/assert.hpp
+index 19b0f44a7..cc8ac04a2 100644
+--- a/src/lib/assert.hpp
++++ b/src/lib/assert.hpp
+@@ -47,7 +47,7 @@ namespace kernel::errors {
+ ///        Use this for conditions that should *never* fail.
+ #define ENSURE(cond) \
+     do { \
+-        if (!(cond)) { \
++        if (!(cond)) [[unlikely]] { \
+             panic("ENSURE failed: " #cond " at " __FILE__ ":" \
+                   EXPAND_AND_STRINGIFY(__LINE__)); \
+         } \
 diff --git a/test-history.txt b/test-history.txt
-index e29861f33..c91410085 100644
+index c91410085..5186a401e 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -3533,3 +3533,9 @@ SUMMARY: total=18 ok=18 fail=0
- 2026-10-16 08:38:43 pt_merge PASSED: 6 FAILED: 0 TIME: 396ms
- 2026-10-16 08:39:26 proc_elf PASSED: 127 FAILED: 0 TIME: 33712ms
- 2026-10-16 08:39:56 selftest PASSED: 147 FAILED: 0 TIME: 11687ms
-+2026-10-16 09:07:25 ipc PASSED: 87 FAILED: 0 TIME: 6439ms
-+2026-10-16 09:08:09 selftest PASSED: 147 FAILED: 0 TIME: 11877ms
-+2026-10-16 09:08:36 scheduler_hrt PASSED: 4 FAILED: 0 TIME: 8863ms
-+2026-10-16 09:08:57 bench_ipc_throughput PASSED: 4 FAILED: 0 TIME: 382ms
-+2026-10-16 09:09:31 stress_hrt PASSED: 2 FAILED: 0 TIME: 9262ms
-+2026-10-16 09:11:52 testrunner PASSED: 16 FAILED: 0 TIME: 120s
+@@ -3539,3 +3539,5 @@ SUMMARY: total=18 ok=18 fail=0
+ 2026-10-16 09:08:57 bench_ipc_throughput PASSED: 4 FAILED: 0 TIME: 382ms
+ 2026-10-16 09:09:31 stress_hrt PASSED: 2 FAILED: 0 TIME: 9262ms
+ 2026-10-16 09:11:52 testrunner PASSED: 16 FAILED: 0 TIME: 120s
++2026-10-16 11:43:33 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3335ms
++2026-10-16 11:46:05 core PASSED: 557 FAILED: 0 TIME: 45992ms
 diff --git a/tools/validate_style.py b/tools/validate_style.py
-index bd34e5603..3b135997b 100644
+index 3b135997b..8cd9feb1e 100644
 --- a/tools/validate_style.py
 +++ b/tools/validate_style.py
-@@ -291,6 +291,10 @@ class MemoryChecker(Checker):
-                     line_text = stripped
-                     if line_text.startswith("//") or line_text.startswith("/*"):
+@@ -319,7 +319,8 @@ class MemoryChecker(Checker):
                          continue
-+                    # Attribute-prefixed declarations ([[nodiscard]] etc.)
-+                    # push the symbol past the snippet window below; strip
-+                    # attributes so declaration-skips keep working.
-+                    line_text = re.sub(r"\[\[.*?\]\]\s*", "", line_text)
-                     # Assembly-style ';' comment on the same line.
-                     if ";" in line_text and line_text.split(";")[0].strip() == "":
+                     # Skip function/method declarations of free/malloc.
+                     if "free(" in snippet and (line_text.endswith("{") or line_text.endswith(");")
+-                                              or line_text.endswith(",")):
++                                              or line_text.endswith(",")
++                                              or line_text.endswith("noexcept;")):
                          continue
+                     # Skip constructor initializer lists (member init like : data(nullptr)).
+                     if "free" in snippet and re.search(r":\s*\w+\s*\(", line_text):

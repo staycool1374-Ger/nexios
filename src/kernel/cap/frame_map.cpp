@@ -147,7 +147,7 @@ uint64_t FrameUserMap::map(kernel::TaskControlBlock &task, cap::FrameCap &fc) {
     return va;
 }
 
-bool FrameUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) {
+bool FrameUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept {
     // Find the slot by VA under the lock; ownership + generation revalidated
     // (a recycled task id or stale VA must not unmap another task's mapping).
     int16_t idx = -1;
@@ -317,7 +317,7 @@ size_t FrameUserMap::live_count() {
     return n;
 }
 
-bool FrameUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) {
+bool FrameUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept {
     SpinLockGuard<sync::SpinLock> guard(s_lock_);
     for (size_t i = 0; i < kMaxMaps; ++i)
         if (s_slots_[i].occupied && s_slots_[i].va == va &&
