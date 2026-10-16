@@ -67,7 +67,7 @@ void ipc_prio_sender_entry() {
     msg.type = 1;
     msg.priority = 0;
     msg.data_size = 0;
-    IPC::send(s_recv_id, msg, 0);
+    JARVIS_ASSERT(IPC::send(s_recv_id, msg, 0));
     __atomic_store_n(flag, 1, __ATOMIC_RELEASE);
 }
 
@@ -232,7 +232,10 @@ TEST_CLASS(IpcConcurrentSenders) {
                         msg.type = c->base_ * MSGS_PER + static_cast<uint64_t>(m);
                         msg.priority = 0;
                         msg.data_size = 0;
-                        IPC::send(c->recv_, msg, IPC_NONBLOCK);
+                        // Contention drops are by design (NONBLOCK into a
+                        // pre-filled queue; the test asserts count <= MAX,
+                        // not delivery) — result intentionally unchecked.
+                        (void)IPC::send(c->recv_, msg, IPC_NONBLOCK);
                     }
                 },
                 12 + static_cast<uint64_t>(i), 10);

@@ -48,7 +48,7 @@ class VMM {
     /// @brief Initialises the VMM with error code.
     /// @return VmmError code (always VMM_ERR_OK: init only zeroes
     ///         boot-constructed tables and allocates nothing).
-    static errors::VmmError init_err();
+    [[nodiscard]] static errors::VmmError init_err();
 
     /// @brief Maps a virtual page to a physical page in the kernel page table.
     /// @param virt_addr Virtual address (page-aligned).
@@ -63,7 +63,7 @@ class VMM {
     /// @param phys_addr Physical address (page-aligned).
     /// @param user      If true, sets the user-accessible flag.
     /// @return VmmError code.
-    static errors::VmmError map_page_err(uint64_t virt_addr, uint64_t phys_addr,
+    [[nodiscard]] static errors::VmmError map_page_err(uint64_t virt_addr, uint64_t phys_addr,
                                          bool user = false);
     /// @brief Fallible kernel-table map worker (issue #325-B): the
     ///        map_page body with walk allocation failures surfaced
@@ -71,7 +71,7 @@ class VMM {
     ///        map_page_in_pml4_try).
     /// @return VMM_ERR_OK, or VMM_ERR_PAGE_ALLOC when a table page or
     ///         huge-page split allocation fails mid-walk.
-    static errors::VmmError map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+    [[nodiscard]] static errors::VmmError map_page_try(uint64_t virt_addr, uint64_t phys_addr,
                                          bool user = false);
 
     /// @brief Unmaps a virtual page.
@@ -81,7 +81,7 @@ class VMM {
     /// @param virt_addr Virtual address to unmap.
     /// @return VmmError code (walk-only with create=false: allocates
     ///         nothing, so only alignment can fail).
-    static errors::VmmError unmap_page_err(uint64_t virt_addr);
+    [[nodiscard]] static errors::VmmError unmap_page_err(uint64_t virt_addr);
 
     /// @brief Translates a virtual address to its physical address.
     /// @param virt_addr Virtual address.
@@ -92,7 +92,7 @@ class VMM {
     /// @param virt_addr Virtual address.
     /// @param[out] out_phys_addr Physical address on success.
     /// @return VmmError code.
-    static errors::VmmError virt_to_phys_err(uint64_t virt_addr,
+    [[nodiscard]] static errors::VmmError virt_to_phys_err(uint64_t virt_addr,
                                              uint64_t &out_phys_addr);
 
     /// @brief Returns the physical address of the current PML4 table.
@@ -107,7 +107,7 @@ class VMM {
     /// @brief Creates a fresh PML4 with error code.
     /// @param[out] out_pml4_phys Physical address of the new PML4.
     /// @return VmmError code.
-    static errors::VmmError clone_kernel_pml4_err(uint64_t &out_pml4_phys);
+    [[nodiscard]] static errors::VmmError clone_kernel_pml4_err(uint64_t &out_pml4_phys);
 
     /// @brief Converge a child PML4's kernel half (entries 256..511)
     ///        toward @p src_pml4 (issue #96, kernel-half merge).  Recursive
@@ -152,7 +152,7 @@ class VMM {
     /// @param dst_pml4 Physical address of the child PML4 to converge.
     /// @return true on success, false on invalid arguments (null or
     ///         identical roots — never on allocation failure).
-    static bool merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4);
+    [[nodiscard]] static bool merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4);
     /// @brief Snapshot the live kernel PML4's kernel half (entries
     ///        256..511) into the bring-up template (issue #96).  Call
     ///        ONCE at end of bring-up, before the first task spawns.
@@ -160,11 +160,11 @@ class VMM {
     /// @brief True when @p a_pml4 and @p b_pml4 agree on every kernel-half
     ///        entry (256..511), compared recursively through shared
     ///        tables (present+equal u64, or both-absent, at each level).
-    static bool kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4);
+    [[nodiscard]] static bool kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4);
     /// @brief True when @p pml4_phys matches the bring-up template on
     ///        every kernel-half entry (diagnostics + tests; drift from
     ///        legitimate late mappings is NOT a failure here).
-    static bool kernel_half_matches_template(uint64_t pml4_phys);
+    [[nodiscard]] static bool kernel_half_matches_template(uint64_t pml4_phys);
     /// @brief Halt unless @p child_pml4 converged to the LIVE kernel
     ///        PML4's kernel half (issue #96, structural audit).  Panics
     ///        (debug AND release) on mismatch; template drift is
@@ -211,14 +211,14 @@ class VMM {
     ///        @p executable_out is written ONLY when the leaf is RO
     ///        (callers must not read it on a false return).
     /// @return false when unmapped (or a huge/block entry, not ours).
-    static bool pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
+    [[nodiscard]] static bool pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
                                    bool *executable_out);
     /// @brief Test inspector: reports whether the mapped leaf is
     ///        executable per the arch NX encoding (walk-only, never
     ///        allocates; issue #325-D NX pinning).  x86_64: NX bit 63
     ///        clear; aarch64: UXN (bit 54) clear; riscv64: X bit set.
     /// @return false when unmapped (or a huge/block entry, not ours).
-    static bool pte_is_executable_in_pml4(uint64_t virt_addr,
+    [[nodiscard]] static bool pte_is_executable_in_pml4(uint64_t virt_addr,
                                           uint64_t pml4_phys);
     /// @brief Remap every mapped page in [vaddr, vaddr+size) read-only
     ///        through the RO primitive (issue #271 P0 — load paths and
@@ -236,7 +236,7 @@ class VMM {
     ///        legacy 4-arg mapping behaviour; pass false for W^X data).
     /// @return VmmError code (walk allocation failures propagate as
     ///         VMM_ERR_PAGE_ALLOC).
-    static errors::VmmError map_page_in_pml4_err(uint64_t virt_addr,
+    [[nodiscard]] static errors::VmmError map_page_in_pml4_err(uint64_t virt_addr,
                                                  uint64_t phys_addr, bool user,
                                                  uint64_t pml4_phys,
                                                  bool executable = true);
@@ -273,7 +273,7 @@ class VMM {
     /// @param pml4_phys Physical address of the user PML4.
     /// @return VmmError code (always VMM_ERR_OK: teardown walks with
     ///         create=false and frees; it cannot fail).
-    static errors::VmmError free_user_pages_err(uint64_t pml4_phys);
+    [[nodiscard]] static errors::VmmError free_user_pages_err(uint64_t pml4_phys);
 
     /// @brief Maps the frame(s) owned by a FrameCap into @p pml4_phys.
     ///        Refuses a revoked FrameCap (ROADMAP 0.4.1 CSpace) — mapping
@@ -285,7 +285,7 @@ class VMM {
     /// @return true when every frame was mapped, false on a revoked cap or
     ///         a zero frame.
     /// @note Mapped non-executable (issue #325-D NX policy).
-    static bool map_frame_from_cap(class cap::FrameCap *fc, uint64_t virt_addr,
+    [[nodiscard]] static bool map_frame_from_cap(class cap::FrameCap *fc, uint64_t virt_addr,
                                    bool user, uint64_t pml4_phys);
     /// @brief Maps the frame(s) owned by a FrameCap with error code and
     ///        transactional rollback (issue #325-A): when a page fails
@@ -302,7 +302,7 @@ class VMM {
     /// @note NX policy (issue #325-D): cap-mapped memory defaults
     ///       non-executable (no production caller executes from it);
     ///       pass executable=true only for code.
-    static errors::VmmError map_frame_from_cap_err(class cap::FrameCap *fc,
+    [[nodiscard]] static errors::VmmError map_frame_from_cap_err(class cap::FrameCap *fc,
                                                    uint64_t virt_addr,
                                                    bool user,
                                                    uint64_t pml4_phys,
@@ -327,7 +327,7 @@ class VMM {
     /// @return true when every page was mapped, false on a revoked/IO-type
     ///         cap or a zero range.
     /// @note Mapped non-executable (issue #325-D NX policy).
-    static bool map_mmio_from_cap(class cap::MmioCap *mmio, uint64_t virt_addr,
+    [[nodiscard]] static bool map_mmio_from_cap(class cap::MmioCap *mmio, uint64_t virt_addr,
                                    bool user, uint64_t pml4_phys);
     /// @brief Maps an MmioCap's BAR range with error code and transactional
     ///        rollback (issue #325-A): same all-or-nothing contract as
@@ -337,7 +337,7 @@ class VMM {
     /// @return VMM_ERR_OK when every page was mapped; error codes as in
     ///         map_frame_from_cap_err (IO-type BAR → VMM_ERR_INVALID_ADDR).
     /// @note NX policy (issue #325-D): device memory is never executable.
-    static errors::VmmError map_mmio_from_cap_err(class cap::MmioCap *mmio,
+    [[nodiscard]] static errors::VmmError map_mmio_from_cap_err(class cap::MmioCap *mmio,
                                                   uint64_t virt_addr,
                                                   bool user,
                                                   uint64_t pml4_phys,
@@ -375,7 +375,7 @@ class VMM {
     /// @param pml4_phys Physical address of the target PML4.
     /// @param[out] out_phys_addr Physical address on success.
     /// @return VmmError code.
-    static errors::VmmError virt_to_phys_in_pml4_err(uint64_t virt_addr,
+    [[nodiscard]] static errors::VmmError virt_to_phys_in_pml4_err(uint64_t virt_addr,
                                                      uint64_t pml4_phys,
                                                      uint64_t &out_phys_addr);
 
@@ -555,7 +555,7 @@ class VMM {
     ///         huge-page split allocation fails mid-walk (tables
     ///         allocated before the failure stay installed; the caller
     ///         owns rollback).
-    static errors::VmmError map_page_in_pml4_try(uint64_t virt_addr,
+    [[nodiscard]] static errors::VmmError map_page_in_pml4_try(uint64_t virt_addr,
                                                  uint64_t phys_addr, bool user,
                                                  bool executable,
                                                  uint64_t pml4_phys);
@@ -571,7 +571,7 @@ class VMM {
     ///         back before returning).
     /// @param executable If true, pages are executable (issue #325-D;
     ///        cap wrappers default false).
-    static errors::VmmError map_phys_range_try(uint64_t virt_addr,
+    [[nodiscard]] static errors::VmmError map_phys_range_try(uint64_t virt_addr,
                                                uint64_t phys_addr,
                                                size_t page_count, bool user,
                                                uint64_t pml4_phys,

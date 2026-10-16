@@ -513,8 +513,14 @@ void init_task_main() {
                 __builtin_memcpy(grant.data + 8, &kSupervisedPeriod,
                                  sizeof(uint64_t));
                 grant.data_size = 16;
-                kernel::IPC::send(kernel::watchdogd::get_watchdogd_pid(),
-                                  grant, 0);
+                if (!kernel::IPC::send(kernel::watchdogd::get_watchdogd_pid(),
+                                       grant, 0)) {
+                    // Best-effort supervise grant (issue #348-A): the
+                    // watchdog re-syncs via its supervision scan; boot
+                    // never blocks on a full queue here.
+                    kernel::Logger::warn(
+                        "init: watchdog supervise grant refused");
+                }
             }
         }
         // Issue #275: ramdisk storage grant — mint one FrameCap per
@@ -542,7 +548,11 @@ void init_task_main() {
                 grant.type = kernel::ramdiskd::RAMDISK_GRANT;
                 __builtin_memcpy(grant.data, handles, sizeof(handles));
                 grant.data_size = sizeof(handles);
-                kernel::IPC::send(rd_pid, grant, 0);
+                if (!kernel::IPC::send(rd_pid, grant, 0)) {
+                    // Best-effort grant delivery (issue #348-A): ramdiskd
+                    // serves NOGRANT until granted; boot continues.
+                    kernel::Logger::warn("init: ramdisk grant send refused");
+                }
                 // Issue #314: mount the flat file store once the grant is
                 // delivered (best-effort; a failed mount degrades to raw
                 // block access, boot never blocks on it).

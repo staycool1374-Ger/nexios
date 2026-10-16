@@ -98,7 +98,7 @@ JARVIS_TEST(harness_priority_ordered_wakeup,
         Message msg{};
         msg.type = IPC_MSG_TYPE_TEST;
         msg.priority = 0;
-        IPC::send(rcv_id, msg, IPC_NONBLOCK);
+        JARVIS_ASSERT(IPC::send(rcv_id, msg, IPC_NONBLOCK));
     }
 
     // Send one more — should block (queue full), then wake when receiver drains
@@ -165,7 +165,7 @@ JARVIS_TEST(harness_blocked_sender_wakes,
         Message msg{};
         msg.type = IPC_MSG_TYPE_TEST;
         msg.priority = 0;
-        IPC::send(rcv_id, msg, IPC_NONBLOCK);
+        JARVIS_ASSERT(IPC::send(rcv_id, msg, IPC_NONBLOCK));
     }
 
     // Send one more — should block (queue full)
@@ -370,7 +370,7 @@ JARVIS_TEST(harness_hhdm_user_page_bounds,
 
         // Free the buffer back to the pool (kernel worker's buffer).
         if (g_handle != 0) {
-            BufferPool::free(*sender, g_handle);
+            JARVIS_ASSERT(BufferPool::free(*sender, g_handle));
         }
 
         // Clean up tasks (this frees page-table pages back to PMM free list)

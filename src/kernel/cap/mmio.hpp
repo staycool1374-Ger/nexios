@@ -90,7 +90,7 @@ class MmioUserMap {
 
     /// @brief Unmaps the mapping at @p va if it belongs to @p task.
     /// @return true when a mapping was removed.
-    static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
+    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
 
     /// @brief Immediately removes every live mapping backed by @p mmio
     ///        (revocation closure, issue #8).  Called from MmioCap::dispose/
@@ -111,7 +111,7 @@ class MmioUserMap {
 
     /// @brief Whether @p task currently owns the mapping at @p va (test
     ///        accessor).
-    static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
+    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
 
   private:
     static constexpr size_t kMaxMaps = CONFIG_CAP_MAX_MMIO_MAPS;

@@ -332,8 +332,11 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
     if (!ok) {
         if (transferred) {
             auto *cur = Scheduler::current_task();
+            // Best-effort rollback (issue #348-A): on failure the buffer
+            // stays with tcb and is reclaimed at task teardown
+            // (BufferPool::unmap_all) — never leaked, never double-owned.
             if (cur)
-                BufferPool::transfer(msg.buf_handle, *tcb, *cur); // rollback
+                (void)BufferPool::transfer(msg.buf_handle, *tcb, *cur);
         }
         return false;
     }

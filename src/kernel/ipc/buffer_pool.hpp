@@ -66,28 +66,28 @@ class BufferPool {
     /// @brief Allocate a buffer, map it at @p virt_addr in the given
     /// task's address space.
     /// @return handle, or 0 on failure.
-    static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr);
+    [[nodiscard]] static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr);
 
     /// @brief Free a buffer: unmap, deref, return to pool.
-    static bool free(TaskControlBlock &task, uint64_t handle);
+    [[nodiscard]] static bool free(TaskControlBlock &task, uint64_t handle);
 
     /// @brief Map an existing (transferred) buffer at @p virt_addr in
     /// the caller's space.
-    static bool map(TaskControlBlock &task, uint64_t handle,
+    [[nodiscard]] static bool map(TaskControlBlock &task, uint64_t handle,
                     uint64_t virt_addr);
 
     /// @brief Unmap a buffer without freeing it.
-    static bool unmap(TaskControlBlock &task, uint64_t handle);
+    [[nodiscard]] static bool unmap(TaskControlBlock &task, uint64_t handle);
 
     /// @brief Transfer ownership to another task (used by IPC send).
-    static bool transfer(uint64_t handle, TaskControlBlock &from,
+    [[nodiscard]] static bool transfer(uint64_t handle, TaskControlBlock &from,
                          TaskControlBlock &target_task);
 
     /// @brief Unmap all buffers owned by a task (called from cleanup/exec).
     static void unmap_all(TaskControlBlock &task);
 
     /// @brief Validate a handle and return its index, or -1.
-    static int32_t validate(uint64_t handle);
+    [[nodiscard]] static int32_t validate(uint64_t handle);
 
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static Entry entries[MAX_BUFFERS];

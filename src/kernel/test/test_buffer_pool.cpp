@@ -128,7 +128,7 @@ JARVIS_TEST(buffer_pool_invalid_handle, "PRE: none | POST: none") {
         (static_cast<uint64_t>(real_gen) << 32) | BufferPool::MAX_BUFFERS;
     JARVIS_ASSERT_EQ(BufferPool::BUF_INVALID_INDEX, BufferPool::validate(oob));
 
-    BufferPool::free(*task, good);
+    JARVIS_ASSERT(BufferPool::free(*task, good));
 
     JARVIS_TEST_PASS();
 }
@@ -886,7 +886,7 @@ JARVIS_TEST(buffer_pool_realloc_recycles_entry, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(idx1, idx2);
     JARVIS_ASSERT(gen2 == gen1 + 1);
 
-    BufferPool::free(*task, h2);
+    JARVIS_ASSERT(BufferPool::free(*task, h2));
     JARVIS_TEST_PASS();
 }
 
@@ -1015,10 +1015,10 @@ JARVIS_TEST(buffer_pool_alloc_after_exhaustion_and_free,
         // Cleanup
         for (size_t i = 0; i < BufferPool::MAX_BUFFERS; ++i) {
             if (i != 512 && handles[i] != 0) {
-                BufferPool::free(*task, handles[i]);
+                JARVIS_ASSERT(BufferPool::free(*task, handles[i]));
             }
         }
-        BufferPool::free(*task, h);
+        JARVIS_ASSERT(BufferPool::free(*task, h));
     }
     // SimpleTaskPtr destroyed here -> task->cleanup() completed.
 
@@ -1313,7 +1313,7 @@ JARVIS_TEST(buffer_pool_list_integrity_after_unlink, "PRE: none | POST: none") {
     // Cleanup
     for (int i = 0; i < 10; ++i) {
         if (i != 5 && handles[i] != 0) {
-            BufferPool::free(*task, handles[i]);
+            JARVIS_ASSERT(BufferPool::free(*task, handles[i]));
         }
     }
 
@@ -1388,7 +1388,7 @@ JARVIS_TEST(buffer_pool_handle_reuse_security, "PRE: none | POST: none") {
     JARVIS_ASSERT(new_gen > old_gen);
     JARVIS_ASSERT_EQ(BufferPool::BUF_INVALID_HANDLE, BufferPool::validate(old_handle));
 
-    BufferPool::free(*task, h2);
+    JARVIS_ASSERT(BufferPool::free(*task, h2));
     JARVIS_TEST_PASS();
 }
 
@@ -1419,9 +1419,9 @@ JARVIS_TEST(buffer_pool_transfer_to_kernel_task, "PRE: none | POST: none") {
     // If transfer succeeded, the buffer now belongs to kernel_task;
     // free it via kernel_task.  Otherwise free via user.
     if (ok) {
-        BufferPool::free(*kernel_task, handle);
+        JARVIS_ASSERT(BufferPool::free(*kernel_task, handle));
     } else {
-        BufferPool::free(*user, handle);
+        JARVIS_ASSERT(BufferPool::free(*user, handle));
     }
 
     JARVIS_TEST_PASS();

@@ -57,7 +57,7 @@ class PMM {
     /// @param kernel_end End of kernel image in physical memory.
     /// @param window_base Physical base of the allocatable RAM window.
     /// @return PmmError code.
-    static errors::PmmError init_err(uint64_t mem_size, uint64_t kernel_start,
+    [[nodiscard]] static errors::PmmError init_err(uint64_t mem_size, uint64_t kernel_start,
                                      uint64_t kernel_end,
                                      uint64_t window_base = 0);
 
@@ -71,7 +71,7 @@ class PMM {
     /// @brief Allocates a single 4 KiB page (KERNEL ownership) with error code.
     /// @param[out] out_phys_addr Physical address of allocated page.
     /// @return PmmError code.
-    static errors::PmmError alloc_page_err(uint64_t &out_phys_addr);
+    [[nodiscard]] static errors::PmmError alloc_page_err(uint64_t &out_phys_addr);
 
     /// @brief Allocates a contiguous block of pages (KERNEL ownership).
     static uint64_t alloc_contiguous(size_t count);
@@ -80,7 +80,7 @@ class PMM {
     /// @param count Number of contiguous pages to allocate.
     /// @param[out] out_phys_addr Physical address of first page.
     /// @return PmmError code.
-    static errors::PmmError alloc_contiguous_err(size_t count,
+    [[nodiscard]] static errors::PmmError alloc_contiguous_err(size_t count,
                                                  uint64_t &out_phys_addr);
 
     /// @brief Allocates a single 4 KiB page (USER ownership).
@@ -88,7 +88,7 @@ class PMM {
     /// @brief Allocates a single 4 KiB page (USER ownership) with error code.
     /// @param[out] out_phys_addr Physical address of allocated page.
     /// @return PmmError code.
-    static errors::PmmError alloc_user_page_err(uint64_t &out_phys_addr);
+    [[nodiscard]] static errors::PmmError alloc_user_page_err(uint64_t &out_phys_addr);
 
     /// @brief Allocates contiguous pages (USER ownership).
     static uint64_t alloc_user_contiguous(size_t count);
@@ -96,7 +96,7 @@ class PMM {
     /// @param count Number of contiguous pages to allocate.
     /// @param[out] out_phys_addr Physical address of first page.
     /// @return PmmError code.
-    static errors::PmmError alloc_user_contiguous_err(size_t count,
+    [[nodiscard]] static errors::PmmError alloc_user_contiguous_err(size_t count,
                                                       uint64_t &out_phys_addr);
 
     /// @brief Allocates a single 4 KiB page for page tables (KERNEL
@@ -105,7 +105,7 @@ class PMM {
     /// @brief Allocates a single 4 KiB page for page tables with error code.
     /// @param[out] out_phys_addr Physical address of allocated page table page.
     /// @return PmmError code.
-    static errors::PmmError alloc_page_table_err(uint64_t &out_phys_addr);
+    [[nodiscard]] static errors::PmmError alloc_page_table_err(uint64_t &out_phys_addr);
 
     /// @brief Page color of a physical address (issue #62; delegates
     ///        to the cache_color contract — pure, lock-free, any ctx).
@@ -128,7 +128,7 @@ class PMM {
     /// @param color Requested color.
     /// @param[out] out_phys_addr Physical address of allocated page.
     /// @return PmmError code.
-    static errors::PmmError alloc_page_colored_err(uint64_t color,
+    [[nodiscard]] static errors::PmmError alloc_page_colored_err(uint64_t color,
                                                    uint64_t &out_phys_addr);
     /// @brief Allocates a single 4 KiB page of the requested color
     ///        (USER ownership; issue #62).  Same contract as the
@@ -140,7 +140,7 @@ class PMM {
     /// @param color Requested color.
     /// @param[out] out_phys_addr Physical address of allocated page.
     /// @return PmmError code.
-    static errors::PmmError alloc_user_page_colored_err(
+    [[nodiscard]] static errors::PmmError alloc_user_page_colored_err(
         uint64_t color, uint64_t &out_phys_addr);
     /// @brief Reset per-color allocation cursors (test hook, issue
     ///        #62).  Cursors affect placement only, never correctness;
@@ -152,7 +152,7 @@ class PMM {
     /// @brief Frees a page with error code.
     /// @param phys_addr Physical address to free.
     /// @return PmmError code.
-    static errors::PmmError free_page_err(uint64_t phys_addr);
+    [[nodiscard]] static errors::PmmError free_page_err(uint64_t phys_addr);
 
     /// @brief Marks a physical page range [start_phys, end_phys) as allocated
     ///        KERNEL-owned (boot-time data: GRUB's Multiboot2 info must never
@@ -175,7 +175,7 @@ class PMM {
     /// @param phys_addr Physical address to check.
     /// @param[out] out_is_user Output: true if user page.
     /// @return PmmError code.
-    static errors::PmmError is_user_page_err(uint64_t phys_addr,
+    [[nodiscard]] static errors::PmmError is_user_page_err(uint64_t phys_addr,
                                              bool &out_is_user);
 
     /// @brief Return the amount of free physical memory in bytes.

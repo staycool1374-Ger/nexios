@@ -291,6 +291,10 @@ class MemoryChecker(Checker):
                     line_text = stripped
                     if line_text.startswith("//") or line_text.startswith("/*"):
                         continue
+                    # Attribute-prefixed declarations ([[nodiscard]] etc.)
+                    # push the symbol past the snippet window below; strip
+                    # attributes so declaration-skips keep working.
+                    line_text = re.sub(r"\[\[.*?\]\]\s*", "", line_text)
                     # Assembly-style ';' comment on the same line.
                     if ";" in line_text and line_text.split(";")[0].strip() == "":
                         continue

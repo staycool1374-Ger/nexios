@@ -172,7 +172,8 @@ int64_t regrant(uint64_t daemon_pid) {
     grant.type = RAMDISK_GRANT;
     __builtin_memcpy(grant.data, handles, sizeof(handles));
     grant.data_size = sizeof(handles);
-    IPC::send(daemon_pid, grant, 0);
+    if (!IPC::send(daemon_pid, grant, 0))
+        return RAMDISK_ERR_NOGRANT; // grant minted but undelivered
     return RAMDISK_OK;
 }
 

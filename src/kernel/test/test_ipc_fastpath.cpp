@@ -859,7 +859,7 @@ JARVIS_TEST(fast_hybrid_mixed_queue, "PRE: none | POST: none") {
                 m.type = ty;
                 m.priority = 0;
                 m.data_size = 0;
-                IPC::send(c->peer_id_, m);
+                JARVIS_ASSERT(IPC::send(c->peer_id_, m));
             }
         },
         12, 10);

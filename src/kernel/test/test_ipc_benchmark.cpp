@@ -112,9 +112,11 @@ static uint64_t bench_ipc_send_self() {
     msg.type = 0;
     msg.priority = 0;
     msg.data_size = 0;
-    IPC::send(cur->id, msg, IPC_NONBLOCK);
+    // Benchmark load: results intentionally unchecked (measurement
+    // purity — throughput/latency is the deliverable, see Testidea).
+    (void)IPC::send(cur->id, msg, IPC_NONBLOCK);
     Message out;
-    IPC::recv(out);
+    (void)IPC::recv(out);
     return 0;
 }
 
@@ -156,8 +158,9 @@ static uint64_t bench_ipc_send_only_task_id_;
 static Message bench_ipc_send_only_msg_;
 
 static uint64_t bench_ipc_send_only() {
-    IPC::send(bench_ipc_send_only_task_id_, bench_ipc_send_only_msg_,
-              IPC_NONBLOCK);
+    // Benchmark load: unchecked by design (see above).
+    (void)IPC::send(bench_ipc_send_only_task_id_, bench_ipc_send_only_msg_,
+                     IPC_NONBLOCK);
     return 0;
 }
 
@@ -194,7 +197,8 @@ static uint64_t bench_ipc_send_full_id_;
 static uint64_t bench_ipc_send_full() {
     Message msg{};
     msg.sender_id = bench_ipc_send_full_id_;
-    IPC::send(bench_ipc_send_full_id_, msg, IPC_NONBLOCK);
+    // Benchmark load: unchecked by design (see above).
+    (void)IPC::send(bench_ipc_send_full_id_, msg, IPC_NONBLOCK);
     return 0;
 }
 
@@ -232,9 +236,10 @@ static uint64_t bench_ipc_64byte_id_;
 static Message bench_ipc_64byte_send_;
 
 static uint64_t bench_ipc_send_64byte() {
-    IPC::send(bench_ipc_64byte_id_, bench_ipc_64byte_send_, IPC_NONBLOCK);
+    // Benchmark load: unchecked by design (see above).
+    (void)IPC::send(bench_ipc_64byte_id_, bench_ipc_64byte_send_, IPC_NONBLOCK);
     Message out;
-    IPC::recv(out);
+    (void)IPC::recv(out);
     return 0;
 }
 

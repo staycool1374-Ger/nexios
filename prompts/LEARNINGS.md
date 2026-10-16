@@ -49,6 +49,22 @@
 
 ## Entries
 
+### #348-A — nodiscard (audit APPROVED, commit pending)
+
+- **Learned:** (1) `[[nodiscard]]` goes LEADING on statics
+  (`[[nodiscard]] static T f()`; mid-position is a hard error).
+  (2) -Werror makes the ignored-site set exhaustive by construction —
+  just iterate the build. (3) Assert-choices need loss analysis:
+  NONBLOCK contention sends MUST stay unchecked (fold or void), paired
+  benchmark loops fold into existing asserts. (4) The memory checker's
+  30-char snippet window breaks under attribute prefixes — strip
+  attributes first. (5) Real bugs surface: ramdisk regrant reported OK
+  on undelivered grants (now NOGRANT).
+- **Adapted:** nodiscard on all error/status decls; ~20 call sites
+  fixed; checker snippet fix.
+- **Style re-surface:** explicit discard needs a rationale comment;
+  benchmark purity is a valid rationale.
+
 ### #325-F — shared-table/TLB audit (audit APPROVED, closing #325)
 
 - **Learned:** (1) Audit-first again: merge/TLB/PCID/free-vs-use were all

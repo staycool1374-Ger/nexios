@@ -60,7 +60,7 @@ TEST_CLASS(KernelApiPureFunctions) {
     uint64_t task_count_after = Scheduler::task_count();
     CT_ASSERT(task_count_after == task_count_before);
     Message out;
-    IPC::recv(out);
+    CT_ASSERT(IPC::recv(out));
 };
 
 // Runmode: kernel
