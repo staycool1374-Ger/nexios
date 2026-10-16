@@ -49,7 +49,7 @@ uint64_t Syscall::sys_cap_grant(uint64_t src_handle, uint64_t dst_handle,
     // Destination CNode is addressed by a CapCNode handle in the caller's
     // own CSpace.  The dest CNode must itself be a capability we hold.
     KernelObject *dst_obj =
-        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_GRANT);
+        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CapRights::GRANT);
     if (!dst_obj)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
@@ -67,7 +67,7 @@ uint64_t Syscall::sys_cap_copy(uint64_t src_handle, uint64_t dst_handle,
     if (!src)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     KernelObject *dst_obj =
-        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_COPY);
+        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CapRights::COPY);
     if (!dst_obj)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
@@ -96,13 +96,16 @@ uint64_t Syscall::sys_cap_mint(uint64_t src_handle, uint64_t dst_handle,
     if (!src)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     KernelObject *dst_obj =
-        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_COPY);
+        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CapRights::COPY);
     if (!dst_obj)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
     uint32_t gen = 0;
+    // ABI boundary (issue #348-D1): raw u64 mask, legacy ignore-semantics.
     int idx =
-        cap::mint(src, src_handle, dst, static_cast<uint32_t>(rights_mask),
+        cap::mint(src, src_handle, dst,
+                  static_cast<cap::CapRights>(
+                      static_cast<uint32_t>(rights_mask)),
                   static_cast<uint32_t>(badge), &gen);
     dst_obj->release();
     // Issue #266: opaque encoded handle, never a raw slot index.
@@ -120,10 +123,14 @@ uint64_t Syscall::sys_cap_retype(uint64_t untyped_handle, uint64_t target_type,
     // The install lands in the caller's own root CNode, so the handle is
     // encoded with the caller's own cspace id (issue #266).
     uint32_t gen = 0;
+    // ABI boundary (issue #348-D1): the syscall takes raw u64 rights;
+    // unknown bits keep legacy ignore-semantics downstream.
     int idx = cap::retype(src, untyped_handle,
                           static_cast<cap::CapType>(target_type),
                           static_cast<size_t>(size),
-                          static_cast<uint32_t>(rights), &gen);
+                          static_cast<cap::CapRights>(
+                              static_cast<uint32_t>(rights)),
+                          &gen);
     return cap::encode_user_handle(src->cspace_id, idx, gen);
 }
 

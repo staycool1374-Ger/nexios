@@ -67,7 +67,7 @@ void ipc_prio_sender_entry() {
     msg.type = 1;
     msg.priority = 0;
     msg.data_size = 0;
-    JARVIS_ASSERT(IPC::send(s_recv_id, msg, 0));
+    JARVIS_ASSERT(IPC::send(s_recv_id, msg, IpcFlags::NONE));
     __atomic_store_n(flag, 1, __ATOMIC_RELEASE);
 }
 
@@ -235,7 +235,7 @@ TEST_CLASS(IpcConcurrentSenders) {
                         // Contention drops are by design (NONBLOCK into a
                         // pre-filled queue; the test asserts count <= MAX,
                         // not delivery) — result intentionally unchecked.
-                        (void)IPC::send(c->recv_, msg, IPC_NONBLOCK);
+                        (void)IPC::send(c->recv_, msg, IpcFlags::NONBLOCK);
                     }
                 },
                 12 + static_cast<uint64_t>(i), 10);
@@ -303,7 +303,7 @@ TEST_CLASS(IpcBufHandleTransferRoundtrip) {
             msg.type = 100;
             msg.priority = 0;
             msg.data_size = 0;
-            if (!IPC::send(peer, msg, 0)) {
+            if (!IPC::send(peer, msg, IpcFlags::NONE)) {
                 g_sender_result = 2; // failed
                 return;
             }
@@ -485,7 +485,7 @@ TEST_CLASS(IpcBlockedSenderOnReceiverCleanup) {
             msg.priority = 0;
             msg.data_size = 0;
             // Blocks on the full receiver queue.
-            bool ok = IPC::send(c->recv_, msg, 0);
+            bool ok = IPC::send(c->recv_, msg, IpcFlags::NONE);
             __atomic_store_n(reinterpret_cast<uint64_t *>(c->out_),
                              ok ? 1 : 0, __ATOMIC_RELEASE);
         },
@@ -685,7 +685,7 @@ TEST_CLASS(IpcSendSyncSkipsNonReply) {
             m.data_size = 16;
             for (size_t i = 0; i < 16; ++i)
                 m.data[i] = 0xAB;
-            (void)IPC::send(s_target, m, 0);
+            (void)IPC::send(s_target, m, IpcFlags::NONE);
         },
         11, 10);
     CT_ASSERT(decoy != nullptr);
@@ -702,7 +702,7 @@ TEST_CLASS(IpcSendSyncSkipsNonReply) {
             reply.type = 20;
             reply.priority = 0;
             reply.data_size = 0;
-            (void)IPC::send(msg.sender_id, reply, 0);
+            (void)IPC::send(msg.sender_id, reply, IpcFlags::NONE);
         },
         11, 10);
     CT_ASSERT(peer != nullptr);
@@ -763,7 +763,7 @@ TEST_CLASS(IpcSendSyncDestDeathPreservesNonMatching) {
             m.type = 310;
             m.priority = 0;
             m.data_size = 16;
-            (void)IPC::send(s_target2, m, 0);
+            (void)IPC::send(s_target2, m, IpcFlags::NONE);
         },
         11, 10);
     CT_ASSERT(decoy != nullptr);
@@ -822,7 +822,7 @@ TEST_CLASS(IpcSendSyncDeadPeerFailsFast) {
             m.type = 320;
             m.priority = 0;
             m.data_size = 8;
-            (void)IPC::send(s_target5, m, 0);
+            (void)IPC::send(s_target5, m, IpcFlags::NONE);
         },
         11, 10);
     CT_ASSERT(decoy != nullptr);
@@ -883,7 +883,7 @@ TEST_CLASS(IpcSendSyncOversizedMatchStaysClamped) {
             m.type = 310;
             m.priority = 0;
             m.data_size = 8;
-            (void)IPC::send(s_target3, m, 0);
+            (void)IPC::send(s_target3, m, IpcFlags::NONE);
         },
         11, 10);
     CT_ASSERT(decoy != nullptr);
@@ -902,7 +902,7 @@ TEST_CLASS(IpcSendSyncOversizedMatchStaysClamped) {
             reply.data_size = 64;
             for (size_t i = 0; i < 64; ++i)
                 reply.data[i] = static_cast<uint8_t>(i);
-            (void)IPC::send(msg.sender_id, reply, 0);
+            (void)IPC::send(msg.sender_id, reply, IpcFlags::NONE);
         },
         11, 10);
     CT_ASSERT(peer != nullptr);
@@ -964,7 +964,7 @@ TEST_CLASS(IpcSendSyncStaleSameSenderOrder) {
                 m.type = types[i];
                 m.priority = prios[i];
                 m.data_size = 0;
-                (void)IPC::send(s_target4, m, 0);
+                (void)IPC::send(s_target4, m, IpcFlags::NONE);
             }
             // Park forever: the peer must stay alive so send_sync's
             // send succeeds (a dead peer fails fast without consuming).

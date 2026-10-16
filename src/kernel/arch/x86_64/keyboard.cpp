@@ -171,7 +171,7 @@ bool Keyboard::try_forward_to_iocd(uint8_t scancode) {
     send.type = kernel::iocd::IOCD_IRQ_EVENT;
     send.data_size = sizeof(req);
     __builtin_memcpy(send.data, &req, sizeof(req));
-    return kernel::IPC::send(pid, send, kernel::IPC_NONBLOCK);
+    return kernel::IPC::send(pid, send, kernel::IpcFlags::NONBLOCK);
 }
 
 /// @brief Dequeue a single character from the input ring buffer.

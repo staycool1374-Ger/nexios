@@ -49,7 +49,7 @@ int install_frame(TaskControlBlock *t, cap::FrameCap *fc) {
     if (!cs)
         return -1;
     int s = cs->install(fc, cap::CapType::Frame,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                        cap::CapRights::READ | cap::CapRights::WRITE);
     if (s >= 0)
         fc->release(); // slot holds a reference; drop the creator's
     return s;
@@ -97,7 +97,7 @@ JARVIS_TEST(frame_user_map_unmap_roundtrip, "PRE: none | POST: none") {
             cur->ensure_cspace();
             cap::CNode *cs = cur->get_cspace();
             int s = cs->install(fc, cap::CapType::Frame,
-                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                                cap::CapRights::READ | cap::CapRights::WRITE);
             if (s < 0) {
                 fc->release();
                 Scheduler::terminate(*cur, 0);
@@ -241,7 +241,7 @@ JARVIS_TEST(shm_ring_producer_consumer, "PRE: none | POST: none") {
             cur->ensure_cspace();
             cap::CNode *cs = cur->get_cspace();
             int s = cs->install(fc, cap::CapType::Frame,
-                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                                cap::CapRights::READ | cap::CapRights::WRITE);
             if (s < 0) {
                 fc->release();
                 Scheduler::terminate(*cur, 0);
@@ -364,7 +364,7 @@ JARVIS_TEST(shm_ring_task_death_drain, "PRE: none | POST: none") {
             self->ensure_cspace();
             cap::CNode *cs = self->get_cspace();
             int s = cs->install(fc, cap::CapType::Frame,
-                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                                cap::CapRights::READ | cap::CapRights::WRITE);
             if (s < 0) {
                 fc->release();
                 return;
@@ -428,7 +428,7 @@ JARVIS_TEST(shm_ring_revocation_cleanup, "PRE: none | POST: none") {
             cur->ensure_cspace();
             cap::CNode *cs = cur->get_cspace();
             int s = cs->install(fc, cap::CapType::Frame,
-                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                                cap::CapRights::READ | cap::CapRights::WRITE);
             if (s < 0) {
                 fc->release();
                 Scheduler::terminate(*cur, 0);

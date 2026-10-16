@@ -63,7 +63,7 @@ void grant_supervision(const uint64_t *supervised_pids, size_t count,
             continue;
         uint32_t gen = 0;
         int idx = cs->install(cap, cap::CapType::Wdog,
-                              cap::CAP_RIGHT_WRITE, &gen);
+                              cap::CapRights::WRITE, &gen);
         if (idx < 0) {
             cap->release(); // never installed — drop the creator reference
             continue;

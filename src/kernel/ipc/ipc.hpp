@@ -33,9 +33,26 @@ class Endpoint;
 
 /// @brief Flags for IPC::send().
 // NOLINTNEXTLINE(performance-enum-size)
-enum IpcFlags : uint64_t {
-    IPC_NONBLOCK = 1 << 0,
+enum class IpcFlags : uint64_t {
+    NONE = 0,          ///< blocking send (default).
+    NONBLOCK = 1 << 0, ///< fail immediately when the queue is full.
 };
+
+/// @brief Bitwise-or for IPC flags.
+[[nodiscard]] constexpr IpcFlags operator|(IpcFlags lhs,
+                                           IpcFlags rhs) noexcept {
+    return static_cast<IpcFlags>(kernel::to_underlying(lhs) |
+                                 kernel::to_underlying(rhs));
+}
+/// @brief Bitwise-and for IPC flags (test/mask).
+[[nodiscard]] constexpr IpcFlags operator&(IpcFlags lhs,
+                                           IpcFlags rhs) noexcept {
+    return static_cast<IpcFlags>(kernel::to_underlying(lhs) &
+                                 kernel::to_underlying(rhs));
+}
+
+static_assert(kernel::to_underlying(IpcFlags::NONBLOCK) == 1ULL,
+              "flag bit positions are ABI");
 
 /// @brief regs[] indices of the 6 fastpath payload words (issue #11, paper
 ///        §3.2): rsi(4), rdi(5), r8(7), r9(8), r10(9), r11(10).
@@ -95,7 +112,7 @@ class IPC {
     static void init();
 
     /// @brief Sends a message to a destination task.
-    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0) noexcept;
+    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, IpcFlags flags = IpcFlags::NONE) noexcept;
 
     /// @brief Receives a message from the calling task's own queue.
     [[nodiscard]] static bool recv(Message &msg) noexcept;
@@ -121,7 +138,7 @@ class IPC {
     ///        queue unless IPC_NONBLOCK.  @p ep must be pinned (a live
     ///        capability lookup result).
     [[nodiscard]] static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
-                             uint64_t flags = 0) noexcept;
+                             IpcFlags flags = IpcFlags::NONE) noexcept;
 
     /// @brief Receives a message from a capability-gated endpoint into the
     ///        calling task's own queue.  Returns false if the endpoint queue

@@ -44,12 +44,47 @@ enum class CapType : uint8_t {
 };
 
 /// @brief Rights bitmap, checked by the operation that consumes the cap.
-enum CapRights : uint32_t {
-    CAP_RIGHT_READ = 1u << 0,  ///< endpoint recv / frame read-mapping
-    CAP_RIGHT_WRITE = 1u << 1, ///< endpoint send / frame write-mapping
-    CAP_RIGHT_GRANT = 1u << 2, ///< may grant (copy into another CSpace)
-    CAP_RIGHT_COPY = 1u << 3,  ///< may copy (duplicate into own CSpace)
+///        Scoped enum (issue #348-D): combine with |  test with &, strip
+///        with & ~.  Convert at u32 boundaries via kernel::to_underlying.
+enum class CapRights : uint32_t {
+    NONE = 0,         ///< no rights.
+    READ = 1u << 0,   ///< endpoint recv / frame read-mapping
+    WRITE = 1u << 1,  ///< endpoint send / frame write-mapping
+    GRANT = 1u << 2,  ///< may grant (copy into another CSpace)
+    COPY = 1u << 3,   ///< may copy (duplicate into own CSpace)
 };
+
+/// @brief Bitwise-or for capability rights.
+[[nodiscard]] constexpr CapRights operator|(CapRights lhs,
+                                            CapRights rhs) noexcept {
+    return static_cast<CapRights>(kernel::to_underlying(lhs) |
+                                  kernel::to_underlying(rhs));
+}
+/// @brief Bitwise-and for capability rights (test/mask).
+[[nodiscard]] constexpr CapRights operator&(CapRights lhs,
+                                            CapRights rhs) noexcept {
+    return static_cast<CapRights>(kernel::to_underlying(lhs) &
+                                  kernel::to_underlying(rhs));
+}
+/// @brief Bitwise-not for capability rights (mask-out).
+[[nodiscard]] constexpr CapRights operator~(CapRights rhs) noexcept {
+    return static_cast<CapRights>(~kernel::to_underlying(rhs));
+}
+/// @brief Or-assign for capability rights.
+inline constexpr CapRights &operator|=(CapRights &lhs, CapRights rhs) noexcept {
+    lhs = lhs | rhs;
+    return lhs;
+}
+/// @brief And-assign for capability rights.
+inline constexpr CapRights &operator&=(CapRights &lhs, CapRights rhs) noexcept {
+    lhs = lhs & rhs;
+    return lhs;
+}
+
+static_assert(kernel::to_underlying(CapRights::READ) == 1u,
+              "rights bit positions are ABI");
+static_assert(kernel::to_underlying(CapRights::COPY) == 8u,
+              "rights bit positions are ABI");
 
 /// @brief Bits allocated to the cspace id in a capability handle.
 constexpr uint32_t CAP_HANDLE_IDBITS = 8;
@@ -71,7 +106,7 @@ constexpr uint32_t CAP_SLOT_MASK = (1u << CAP_SLOT_BITS) - 1u;
 struct CSlot {
     KernelObject *obj = nullptr; ///< target; null when unoccupied
     CapType type = CapType::Null;
-    uint32_t rights = 0;
+    CapRights rights = CapRights::NONE;
     uint32_t gen = 0; ///< slot generation; stale-handle detection
     bool occupied = false;
 };

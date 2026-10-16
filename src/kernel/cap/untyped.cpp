@@ -129,13 +129,13 @@ void UntypedMem::dispose() noexcept {
 }
 
 int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
-           size_t size, uint32_t rights, uint32_t *gen_out) noexcept {
+           size_t size, CapRights rights, uint32_t *gen_out) noexcept {
     if (!cspace)
         return -1;
     // Pin the Untyped (WRITE = mutation right).  The pin keeps the object
     // alive across the transfer so dispose() cannot run mid-retype.
     KernelObject *obj = lookup(cspace, untyped_handle, CapType::Untyped,
-                               CAP_RIGHT_WRITE);
+                               CapRights::WRITE);
     if (!obj)
         return -1;
     auto *ut = static_cast<UntypedMem *>(obj);
@@ -201,12 +201,12 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
     }
 
     if (child) {
-        // Child must remain retypable: retype() requires CAP_RIGHT_WRITE on
+        // Child must remain retypable: retype() requires CapRights::WRITE on
         // the Untyped slot; the caller already holds WRITE over the parent
         // region (the parent lookup demanded it), so this grants no new
         // authority.
         int idx_child = cspace->install(child, CapType::Untyped,
-                                        rights | CAP_RIGHT_WRITE);
+                                        rights | CapRights::WRITE);
         if (idx_child < 0) {
             // Roll back the target install, then release the child: the two
             // disposes cover the whole region exactly once.

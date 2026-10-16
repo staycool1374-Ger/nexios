@@ -93,7 +93,7 @@ void ioport_grant_happy_entry() {
         Scheduler::terminate(*cur, 0);
         return;
     }
-    int s = cs->install(mmio, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+    int s = cs->install(mmio, cap::CapType::Mmio, cap::CapRights::WRITE);
     if (s < 0) {
         mmio->release();
         g_grant_ret = 98;
@@ -223,35 +223,35 @@ JARVIS_TEST(mmio_cap_install_lookup_revoke, "PRE: none | POST: none") {
     auto *mmio = cap::MmioCap::create(0x1000000, 0x1000,
                                       arch::PciBarType::MEMORY_32);
     JARVIS_ASSERT(mmio != nullptr);
-    int s = cs->install(mmio, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+    int s = cs->install(mmio, cap::CapType::Mmio, cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t h = cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
                                     cs->slot_gen(static_cast<uint32_t>(s)));
 
     // Correct type + WRITE -> pinned target.
     KernelObject *obj =
-        cap::lookup(cs, h, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+        cap::lookup(cs, h, cap::CapType::Mmio, cap::CapRights::WRITE);
     JARVIS_ASSERT(obj != nullptr);
     JARVIS_ASSERT(obj == static_cast<KernelObject *>(mmio));
     obj->release();
 
     // Wrong type.
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Frame,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
     // Missing rights.
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Mmio,
-                              cap::CAP_RIGHT_GRANT) == nullptr);
+                              cap::CapRights::GRANT) == nullptr);
     // Stale generation.
     uint64_t stale =
         cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
                            cs->slot_gen(static_cast<uint32_t>(s)) + 1);
     JARVIS_ASSERT(cap::lookup(cs, stale, cap::CapType::Mmio,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
 
     // Revoke invalidates.
     JARVIS_ASSERT(cap::revoke(cs, h));
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Mmio,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
     JARVIS_ASSERT(mmio->revoked());
 
     cs->remove(static_cast<uint32_t>(s));
@@ -369,8 +369,8 @@ JARVIS_TEST(ioport_grant_validation_matrix, "PRE: none | POST: none") {
             Scheduler::terminate(*cur, 0);
             return;
         }
-        int s1 = cs->install(mmio, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
-        int s2 = cs->install(ro, cap::CapType::Mmio, cap::CAP_RIGHT_READ);
+        int s1 = cs->install(mmio, cap::CapType::Mmio, cap::CapRights::WRITE);
+        int s2 = cs->install(ro, cap::CapType::Mmio, cap::CapRights::READ);
         if (s1 < 0 || s2 < 0) {
             mmio->release();
             ro->release();
@@ -863,7 +863,7 @@ JARVIS_TEST(ioport_revoke_clears_live_bits, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(mmio, cap::CapType::Mmio,
-                                cap::CAP_RIGHT_WRITE);
+                                cap::CapRights::WRITE);
             if (s < 0) {
                 mmio->release();
                 Scheduler::terminate(*cur, 0);
@@ -944,8 +944,8 @@ JARVIS_TEST(ioport_revoke_other_cap_keeps_bits, "PRE: none | POST: none") {
                 Scheduler::terminate(*cur, 0);
                 return;
             }
-            int sa = cs->install(a, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
-            int sb = cs->install(b, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+            int sa = cs->install(a, cap::CapType::Mmio, cap::CapRights::WRITE);
+            int sb = cs->install(b, cap::CapType::Mmio, cap::CapRights::WRITE);
             if (sa < 0 || sb < 0) {
                 a->release();
                 b->release();
@@ -1039,7 +1039,7 @@ JARVIS_TEST(ioport_ledger_full_fails_closed, "PRE: none | POST: none") {
                     return;
                 }
                 slots[i] = cs->install(caps[i], cap::CapType::Mmio,
-                                       cap::CAP_RIGHT_WRITE);
+                                       cap::CapRights::WRITE);
                 if (slots[i] < 0) {
                     caps[i]->release();
                     for (int j = 0; j < i; ++j)

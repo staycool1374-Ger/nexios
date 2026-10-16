@@ -269,8 +269,8 @@ static void unblock_sender_rollback(MessageQueue &q,
                                     TaskControlBlock &task) noexcept;
 
 /// @brief Send a message to a destination task (blocks if queue is full, unless
-/// IPC_NONBLOCK).
-bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) noexcept {
+/// IpcFlags::NONBLOCK).
+bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
     auto *tcb = Scheduler::find_task(dest_id);
     if (!tcb || tcb->state == TaskState::TERMINATED)
         return false;
@@ -278,7 +278,7 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) noexcept {
     // If the queue is already full, either return immediately (NONBLOCK)
     // or block the sender until space becomes available.
     if (tcb->msg_queue.is_full_locked()) {
-        if (flags & IPC_NONBLOCK)
+        if ((flags & IpcFlags::NONBLOCK) != IpcFlags::NONE)
             return false;
 
         auto *cur = Scheduler::current_task();
@@ -395,8 +395,8 @@ bool IPC::recv(Message &msg) noexcept {
 
 /// @brief Send through a capability-gated endpoint.  The endpoint's message
 ///        queue is the transport (no task-ID ambient authority).  Blocks on a
-///        full queue unless IPC_NONBLOCK; wakes the bound receiver.
-bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) noexcept {
+///        full queue unless IpcFlags::NONBLOCK; wakes the bound receiver.
+bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) noexcept {
     if (!ep)
         return false;
     if (ep->revoked())
@@ -413,7 +413,7 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) no
         return false;
 
     if (ep->q.is_full_locked()) {
-        if (flags & IPC_NONBLOCK)
+        if ((flags & IpcFlags::NONBLOCK) != IpcFlags::NONE)
             return false;
         if (!cur)
             return false;

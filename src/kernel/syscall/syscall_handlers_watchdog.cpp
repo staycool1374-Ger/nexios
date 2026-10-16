@@ -62,7 +62,7 @@ TaskControlBlock *resolve_watchdog_target(uint64_t pid, uint64_t cap_handle) {
     if (src == nullptr)
         return nullptr;
     KernelObject *obj = cap::lookup(src, cap_handle, cap::CapType::Wdog,
-                                    cap::CAP_RIGHT_WRITE);
+                                    cap::CapRights::WRITE);
     if (obj == nullptr)
         return nullptr;
     auto *wdog = static_cast<cap::WdogCap *>(obj);

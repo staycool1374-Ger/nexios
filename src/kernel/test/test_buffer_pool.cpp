@@ -565,7 +565,7 @@ JARVIS_TEST(buffer_pool_ipc_transfer, "PRE: none | POST: none") {
             Message msg{};
             msg.buf_handle = handle;
             msg.type = 42;
-            if (!IPC::send(peer, msg, 0)) {
+            if (!IPC::send(peer, msg, IpcFlags::NONE)) {
                 g_sender_ok = 2;
                 return;
             }

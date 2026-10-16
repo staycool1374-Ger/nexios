@@ -92,7 +92,7 @@ uint64_t Syscall::sys_pager_map(uint64_t fault_id, uint64_t cap_handle,
     if (!cs)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     KernelObject *obj =
-        cap::lookup(cs, cap_handle, cap::CapType::Frame, cap::CAP_RIGHT_WRITE);
+        cap::lookup(cs, cap_handle, cap::CapType::Frame, cap::CapRights::WRITE);
     if (!obj)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *fc = static_cast<cap::FrameCap *>(obj);

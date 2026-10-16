@@ -2807,7 +2807,7 @@ void Shell::cmd_runelf(int argc, const char** argv) {
                              sizeof(uint64_t));
             grant.data_size = 16;
             if (!kernel::IPC::send(debugd_pid, grant,
-                                   kernel::IPC_NONBLOCK)) {
+                                   kernel::IpcFlags::NONBLOCK)) {
                 kernel::debug::debug_launch_undo(*task, dbg_handle);
                 kernel::elf::ElfLoader::destroy_completed_tcb(task);
                 shell_error("runelf", "grant undeliverable");

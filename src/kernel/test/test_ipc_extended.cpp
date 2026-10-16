@@ -218,7 +218,7 @@ JARVIS_TEST(ipc_priority_inversion, "PRE: none | POST: none") {
             msg.type = 42;
             msg.priority = 0;
             msg.data_size = 0;
-            bool ok = IPC::send(c->recv_, msg, 0);
+            bool ok = IPC::send(c->recv_, msg, IpcFlags::NONE);
             __atomic_store_n(reinterpret_cast<uint64_t *>(c->out_),
                              ok ? 1 : 0, __ATOMIC_RELEASE);
         },
@@ -318,7 +318,7 @@ JARVIS_TEST(ipc_buf_handle_max_size, "PRE: none | POST: none") {
             msg.type = 200;
             msg.priority = 0;
             msg.data_size = IPC_MAX_MSG_SIZE;
-            if (!IPC::send(peer, msg, 0)) {
+            if (!IPC::send(peer, msg, IpcFlags::NONE)) {
                 g_sender_ok = 2;
                 return;
             }
@@ -442,7 +442,7 @@ JARVIS_TEST(ipc_priority_inheritance_send, "PRE: none | POST: none") {
             msg.type = 42;
             msg.priority = 0;
             msg.data_size = 0;
-            bool ok = IPC::send(c->recv_, msg, 0);
+            bool ok = IPC::send(c->recv_, msg, IpcFlags::NONE);
             __atomic_store_n(reinterpret_cast<uint64_t *>(c->out_),
                              ok ? 1 : 0, __ATOMIC_RELEASE);
         },
@@ -517,7 +517,7 @@ JARVIS_TEST(ipc_send_no_wake_non_ipc_waiter, "PRE: none | POST: none") {
     msg.type = 77;
     msg.priority = 0;
     msg.data_size = 0;
-    bool ok = IPC::send(waiter->id, msg, 0);
+    bool ok = IPC::send(waiter->id, msg, IpcFlags::NONE);
     JARVIS_ASSERT_FMT(ok, "send to blocked waiter failed");
     JARVIS_ASSERT_FMT(waiter->state == TaskState::BLOCKED,
                       "non-IPC waiter woken by message arrival");
@@ -564,7 +564,7 @@ JARVIS_TEST(ipc_send_wakes_recv_waiter, "PRE: none | POST: none") {
     msg.type = 78;
     msg.priority = 0;
     msg.data_size = 0;
-    bool ok = IPC::send(waiter->id, msg, 0);
+    bool ok = IPC::send(waiter->id, msg, IpcFlags::NONE);
     JARVIS_ASSERT_FMT(ok, "send to recv waiter failed");
     JARVIS_ASSERT_FMT(waiter->state == TaskState::READY,
                       "recv waiter not woken by message arrival");

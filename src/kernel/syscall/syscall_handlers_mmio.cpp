@@ -51,7 +51,7 @@ uint64_t Syscall::sys_ioport_grant(uint64_t cap_handle, uint64_t port_start,
     // requested port range (WRITE = the right to mutate the port-access
     // state this grant installs).
     KernelObject *obj =
-        cap::lookup(src, cap_handle, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+        cap::lookup(src, cap_handle, cap::CapType::Mmio, cap::CapRights::WRITE);
     if (!obj)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *mmio = static_cast<cap::MmioCap *>(obj);
@@ -117,7 +117,7 @@ uint64_t Syscall::sys_mmio_map(uint64_t cap_handle, uint64_t, uint64_t,
     // the right to install the mapping).  IO-type caps are delegated via
     // sys_ioport_grant, not MMIO.
     KernelObject *obj =
-        cap::lookup(src, cap_handle, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+        cap::lookup(src, cap_handle, cap::CapType::Mmio, cap::CapRights::WRITE);
     if (!obj)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *mmio = static_cast<cap::MmioCap *>(obj);

@@ -50,7 +50,9 @@ uint64_t Syscall::sys_send(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     for (size_t i = 0; i < msg.data_size; ++i) {
         msg.data[i] = data.read(i);
     }
-    return IPC::send(dest_id, msg, flags)
+    // ABI boundary (issue #348-D1): user passes raw u64 flags; only the
+    // NONBLOCK bit is read downstream (legacy ignore-semantics).
+    return IPC::send(dest_id, msg, static_cast<IpcFlags>(flags))
                ? static_cast<uint64_t>(errors::SYS_ERR_OK)
                : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
@@ -245,7 +247,7 @@ uint64_t Syscall::sys_send_fast(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     m.data_size = data_size;
     (void)arg3; // payload word 0 rides in regs[4] (rsi) == arg3; gathered via regs[]
     fast_regs_to_msg(regs, data_size, m);
-    return IPC::send(dest_id, m, 0)
+    return IPC::send(dest_id, m, IpcFlags::NONE)
                ? static_cast<uint64_t>(errors::SYS_ERR_OK)
                : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }

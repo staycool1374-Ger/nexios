@@ -102,7 +102,7 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
     // delivery).
     bool is_msix = false;
     KernelObject *obj =
-        lookup_irq_like(src, cap_handle, cap::CAP_RIGHT_WRITE, is_msix);
+        lookup_irq_like(src, cap_handle, cap::CapRights::WRITE, is_msix);
     if (!obj)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
@@ -158,7 +158,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
     // READ is the right to observe (wait on) the IRQ delivery.
     bool is_msix = false;
     KernelObject *obj =
-        lookup_irq_like(src, cap_handle, cap::CAP_RIGHT_READ, is_msix);
+        lookup_irq_like(src, cap_handle, cap::CapRights::READ, is_msix);
     if (!obj)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 

@@ -514,7 +514,7 @@ void init_task_main() {
                                  sizeof(uint64_t));
                 grant.data_size = 16;
                 if (!kernel::IPC::send(kernel::watchdogd::get_watchdogd_pid(),
-                                       grant, 0)) {
+                                       grant, kernel::IpcFlags::NONE)) {
                     // Best-effort supervise grant (issue #348-A): the
                     // watchdog re-syncs via its supervision scan; boot
                     // never blocks on a full queue here.
@@ -548,7 +548,7 @@ void init_task_main() {
                 grant.type = kernel::ramdiskd::RAMDISK_GRANT;
                 __builtin_memcpy(grant.data, handles, sizeof(handles));
                 grant.data_size = sizeof(handles);
-                if (!kernel::IPC::send(rd_pid, grant, 0)) {
+                if (!kernel::IPC::send(rd_pid, grant, kernel::IpcFlags::NONE)) {
                     // Best-effort grant delivery (issue #348-A): ramdiskd
                     // serves NOGRANT until granted; boot continues.
                     kernel::Logger::warn("init: ramdisk grant send refused");

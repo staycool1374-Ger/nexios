@@ -61,7 +61,7 @@ JARVIS_TEST(grant_creates_slot_in_dest, "PRE: none | POST: none") {
     cap::CNode dst;
     TestTarget tgt;
     int s = src.install(&tgt, cap::CapType::Task,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_GRANT);
+                        cap::CapRights::READ | cap::CapRights::GRANT);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(src.cspace_id, static_cast<uint32_t>(s),
                                      src.slot_gen(static_cast<uint32_t>(s)));
@@ -87,7 +87,7 @@ JARVIS_TEST(copy_shares_refcount, "PRE: none | POST: none") {
     cap::CNode dst;
     TestTarget tgt;
     int s = src.install(&tgt, cap::CapType::Task,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_COPY);
+                        cap::CapRights::READ | cap::CapRights::COPY);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(src.cspace_id, static_cast<uint32_t>(s),
                                      src.slot_gen(static_cast<uint32_t>(s)));
@@ -96,7 +96,7 @@ JARVIS_TEST(copy_shares_refcount, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(3U, tgt.refcount());
     // copy() must NOT clear the source COPY right (only grant() is mint-once).
     KernelObject *pinned =
-        cap::lookup(&src, sh, cap::CapType::Null, cap::CAP_RIGHT_COPY);
+        cap::lookup(&src, sh, cap::CapType::Null, cap::CapRights::COPY);
     JARVIS_ASSERT(pinned != nullptr);
     if (pinned)
         pinned->release();
@@ -114,7 +114,7 @@ JARVIS_TEST(copy_shares_refcount, "PRE: none | POST: none") {
 JARVIS_TEST(revoke_removes_slot_and_releases, "PRE: none | POST: none") {
     cap::CNode node;
     TestTarget tgt;
-    int s = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int s = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
@@ -133,7 +133,7 @@ JARVIS_TEST(revoke_removes_slot_and_releases, "PRE: none | POST: none") {
 JARVIS_TEST(revoke_twice_idempotent, "PRE: none | POST: none") {
     cap::CNode node;
     TestTarget tgt;
-    int s = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int s = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
@@ -154,19 +154,19 @@ JARVIS_TEST(mint_reduces_rights, "PRE: none | POST: none") {
     cap::CNode dst;
     TestTarget tgt;
     int s = src.install(&tgt, cap::CapType::Task,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                        cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(src.cspace_id, static_cast<uint32_t>(s),
                                      src.slot_gen(static_cast<uint32_t>(s)));
-    int d = cap::mint(&src, sh, &dst, cap::CAP_RIGHT_READ, 0);
+    int d = cap::mint(&src, sh, &dst, cap::CapRights::READ, 0);
     JARVIS_ASSERT(d >= 0);
     uint64_t dh = cap::encode_handle(dst.cspace_id, static_cast<uint32_t>(d),
                                      dst.slot_gen(static_cast<uint32_t>(d)));
     KernelObject *rw =
-        cap::lookup(&dst, dh, cap::CapType::Null, cap::CAP_RIGHT_WRITE);
+        cap::lookup(&dst, dh, cap::CapType::Null, cap::CapRights::WRITE);
     JARVIS_ASSERT(rw == nullptr);
     KernelObject *ro =
-        cap::lookup(&dst, dh, cap::CapType::Null, cap::CAP_RIGHT_READ);
+        cap::lookup(&dst, dh, cap::CapType::Null, cap::CapRights::READ);
     JARVIS_ASSERT(ro != nullptr);
     if (ro)
         ro->release();
@@ -186,7 +186,7 @@ JARVIS_TEST(revoke_while_scopedref_pinned_delays_dispose,
     TestTarget::g_dispose_count = 0;
     cap::CNode node;
     TestTarget tgt;
-    int s = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int s = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(s >= 0);
 
     ScopedRef pin(&tgt);
@@ -217,7 +217,7 @@ JARVIS_TEST(frame_cap_release_frees_pmm, "PRE: none | POST: none") {
 
     cap::CNode node;
     int s = node.install(fc, cap::CapType::Frame,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     node.remove(static_cast<uint32_t>(s)); // slot ref dropped
     JARVIS_ASSERT_EQ(1U, fc->refcount());  // creator ref only
@@ -249,7 +249,7 @@ JARVIS_TEST(endpoint_cap_release_disposes, "PRE: none | POST: none") {
 
     cap::CNode node;
     int s = node.install(ep, cap::CapType::Endpoint,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     node.remove(static_cast<uint32_t>(s));
     JARVIS_ASSERT_EQ(1U, ep->refcount()); // creator ref only

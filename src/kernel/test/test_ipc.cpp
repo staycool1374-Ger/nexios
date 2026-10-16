@@ -395,13 +395,13 @@ JARVIS_TEST(ipc_send_nonexistent, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: Verifies that IPC::send with IPC_NONBLOCK flag returns false
+// Testidea: Verifies that IPC::send with IpcFlags::NONBLOCK flag returns false
 // when the target queue is full.
-// Input: Fill own queue to IPC_MAX_QUEUE_MSG, then send with IPC_NONBLOCK
+// Input: Fill own queue to IPC_MAX_QUEUE_MSG, then send with IpcFlags::NONBLOCK
 // Expect: Non-blocking send returns false while queue is full; after
 // draining, all recvs succeed and queue is empty
 // Depends: kernel::MessageQueue, kernel::IPC, kernel::Scheduler,
-// IPC_MAX_QUEUE_MSG, IPC_NONBLOCK
+// IPC_MAX_QUEUE_MSG, IpcFlags::NONBLOCK
 JARVIS_TEST(ipc_send_nonblock_full, "PRE: none | POST: none") {
     auto *cur = Scheduler::current_task();
     JARVIS_ASSERT(cur != nullptr);
@@ -417,7 +417,7 @@ JARVIS_TEST(ipc_send_nonblock_full, "PRE: none | POST: none") {
     }
     JARVIS_ASSERT(cur->msg_queue.is_full());
 
-    bool ok = IPC::send(cur->id, msg, IPC_NONBLOCK);
+    bool ok = IPC::send(cur->id, msg, IpcFlags::NONBLOCK);
     JARVIS_ASSERT(!ok);
 
     for (size_t i = 0; i < IPC_MAX_QUEUE_MSG; ++i) {

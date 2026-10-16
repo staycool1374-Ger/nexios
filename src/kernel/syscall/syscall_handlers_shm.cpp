@@ -71,7 +71,7 @@ uint64_t Syscall::sys_frame_create(uint64_t count, uint64_t, uint64_t,
 
     uint32_t gen = 0;
     int idx = cs->install(fc, cap::CapType::Frame,
-                          cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
+                          cap::CapRights::READ | cap::CapRights::WRITE, &gen);
     if (idx < 0) {
         fc->release(); // never installed — drop the creator reference
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
@@ -91,7 +91,7 @@ uint64_t Syscall::sys_frame_map(uint64_t cap_handle, uint64_t, uint64_t,
     // Capability-gated: the caller must hold a Frame capability (WRITE = the
     // right to install the mapping).  Mirrors sys_mmio_map.
     KernelObject *obj =
-        cap::lookup(src, cap_handle, cap::CapType::Frame, cap::CAP_RIGHT_WRITE);
+        cap::lookup(src, cap_handle, cap::CapType::Frame, cap::CapRights::WRITE);
     if (!obj)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *fc = static_cast<cap::FrameCap *>(obj);

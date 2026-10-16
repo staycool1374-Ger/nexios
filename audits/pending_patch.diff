@@ -1,142 +1,2314 @@
-diff --git a/src/kernel/elf/elf.hpp b/src/kernel/elf/elf.hpp
-index 00640a2f6..606317e61 100644
---- a/src/kernel/elf/elf.hpp
-+++ b/src/kernel/elf/elf.hpp
-@@ -22,9 +22,9 @@
- /// @brief ELF64 binary loader — validate, load, exec, shared-object support.
+diff --git a/src/kernel/arch/x86_64/keyboard.cpp b/src/kernel/arch/x86_64/keyboard.cpp
+index ab93ec0d0..239944893 100644
+--- a/src/kernel/arch/x86_64/keyboard.cpp
++++ b/src/kernel/arch/x86_64/keyboard.cpp
+@@ -171,7 +171,7 @@ bool Keyboard::try_forward_to_iocd(uint8_t scancode) {
+     send.type = kernel::iocd::IOCD_IRQ_EVENT;
+     send.data_size = sizeof(req);
+     __builtin_memcpy(send.data, &req, sizeof(req));
+-    return kernel::IPC::send(pid, send, kernel::IPC_NONBLOCK);
++    return kernel::IPC::send(pid, send, kernel::IpcFlags::NONBLOCK);
+ }
  
- #include <types.hpp>
-+#include <constants.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/elf/elf_shared.hpp>
--#include <kernel/memory/checked_ptr.hpp>
+ /// @brief Dequeue a single character from the input ring buffer.
+diff --git a/src/kernel/cap/cap.cpp b/src/kernel/cap/cap.cpp
+index 640e09b3c..7f1e748d4 100644
+--- a/src/kernel/cap/cap.cpp
++++ b/src/kernel/cap/cap.cpp
+@@ -91,7 +91,7 @@ void CNode::revoke() noexcept {
+     }
+ }
  
- namespace kernel {
- namespace elf {
-diff --git a/src/kernel/memory/checked_ptr.hpp b/src/kernel/memory/checked_ptr.hpp
-index 8c1c86d84..4b087a22d 100644
---- a/src/kernel/memory/checked_ptr.hpp
-+++ b/src/kernel/memory/checked_ptr.hpp
-@@ -19,6 +19,7 @@
-  */
+-int CNode::install(KernelObject *obj, CapType type, uint32_t rights,
++int CNode::install(KernelObject *obj, CapType type, CapRights rights,
+                     uint32_t *gen_out) noexcept {
+     if (!obj || type == CapType::Null)
+         return -1;
+@@ -125,7 +125,7 @@ void CNode::remove(uint32_t idx) noexcept {
+         target = slots[idx].obj;
+         slots[idx].obj = nullptr;
+         slots[idx].type = CapType::Null;
+-        slots[idx].rights = 0;
++        slots[idx].rights = CapRights::NONE;
+         ++slots[idx].gen; // invalidate stale handles for a recycled slot
+         slots[idx].occupied = false;
+         kernel::test::ResourceTracker::instance().track_cap_slot_remove();
+@@ -157,11 +157,11 @@ void CNode::clear_grant(uint32_t idx) noexcept {
+     if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
+         !slots[idx].occupied)
+         return;
+-    slots[idx].rights &= ~CAP_RIGHT_GRANT;
++    slots[idx].rights &= ~CapRights::GRANT;
+ }
  
- #include <types.hpp>
-+#include <constants.hpp>
- #include <string.hpp>
- #include <concepts.hpp>
- #include <kernel/memory/vmm.hpp>
-@@ -26,8 +27,6 @@
+ KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
+-                     uint32_t need_rights) noexcept {
++                     CapRights need_rights) noexcept {
+     if (!cspace)
+         return nullptr;
+     const uint32_t idx = handle_slot(handle);
+@@ -210,7 +210,7 @@ bool revoke(CNode *cspace, uint64_t handle) noexcept {
+         target = slot.obj;
+         slot.obj = nullptr;
+         slot.type = CapType::Null;
+-        slot.rights = 0;
++        slot.rights = CapRights::NONE;
+         ++slot.gen;
+         slot.occupied = false;
+         kernel::test::ResourceTracker::instance().track_cap_slot_remove();
+@@ -243,15 +243,16 @@ size_t occupied_count(const CNode *cspace) noexcept {
+ ///        Forwards an optional generation out-slot to the dst install
+ ///        (issue #266: lets syscall returns encode with no TOCTOU).
+ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
+-                   uint32_t rights, uint32_t *gen_out = nullptr) noexcept {
++                   CapRights rights, uint32_t *gen_out = nullptr) noexcept {
+     if (!src || !dst || src == dst)
+         return -1;
+     // lookup() returns the target with acquire() already taken.
+-    KernelObject *target = lookup(src, src_handle, CapType::Null, 0);
++    KernelObject *target = lookup(src, src_handle, CapType::Null,
++                                    CapRights::NONE);
+     if (!target)
+         return -1;
+     CapType type = CapType::Null;
+-    uint32_t src_rights = 0;
++    CapRights src_rights = CapRights::NONE;
+     uint32_t src_gen = 0;
+     {
+         SpinLockGuard<sync::SpinLock> guard(src->lock_);
+@@ -271,7 +272,7 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
+     }
+     // Reduce the granted rights by the requested mask AND the source rights
+     // (a copy can never widen rights).
+-    const uint32_t effective = rights & src_rights;
++    const CapRights effective = rights & src_rights;
+     int installed = dst->install(target, type, effective, gen_out);
+     target->release();
+     return installed;
+@@ -280,21 +281,21 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
+ int copy(CNode *src, uint64_t src_handle, CNode *dst,
+          uint32_t *gen_out) noexcept {
+     return do_copy_pinned(src, src_handle, dst,
+-                          CAP_RIGHT_READ | CAP_RIGHT_WRITE | CAP_RIGHT_COPY |
+-                              CAP_RIGHT_GRANT,
++                          CapRights::READ | CapRights::WRITE | CapRights::COPY |
++                              CapRights::GRANT,
+                           gen_out);
+ }
  
- namespace kernel {
+ int grant(CNode *src, uint64_t src_handle, CNode *dst,
+           uint32_t *gen_out) noexcept {
+-    // Requires CAP_RIGHT_GRANT on the source slot.
++    // Requires CapRights::GRANT on the source slot.
+     KernelObject *target =
+-        lookup(src, src_handle, CapType::Null, CAP_RIGHT_GRANT);
++        lookup(src, src_handle, CapType::Null, CapRights::GRANT);
+     if (!target)
+         return -1;
+     // Capture the type/rights under the lock, then clear GRANT (mint-once).
+     CapType type = CapType::Null;
+-    uint32_t rights = 0;
++    CapRights rights = CapRights::NONE;
+     uint32_t src_gen = 0;
+     {
+         SpinLockGuard<sync::SpinLock> guard(src->lock_);
+@@ -319,7 +320,7 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
+     return installed;
+ }
  
--static constexpr uint64_t USER_SPACE_LIMIT = 0x0000800000000000ULL;
--
- /// @brief Recovery address for safe user memory access.
- ///        Non-zero while we are inside a user memory copy attempt.
- ///        Page fault handler checks this and redirects here on fault.
-diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
-index 482c559fe..edca09807 100644
---- a/src/kernel/memory/vmm.hpp
-+++ b/src/kernel/memory/vmm.hpp
-@@ -220,6 +220,21 @@ class VMM {
-     /// @return false when unmapped (or a huge/block entry, not ours).
-     [[nodiscard]] static bool pte_is_executable_in_pml4(uint64_t virt_addr,
-                                           uint64_t pml4_phys);
-+#if defined(CONFIG_ARCH_RISCV64)
-+    /// @brief Sv39 PTE address codecs (issue #206: PTEs carry PPN<<10, so
-+    ///        raw masking is x86-domain-wrong).  Public for the
-+    ///        compile-time roundtrip pin below; all production users go
-+    ///        through the walk helpers.
-+    static constexpr uint64_t sv39_pte_phys(uint64_t pte) {
-+        return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
-+    }
-+    static constexpr uint64_t sv39_phys_pte(uint64_t phys) {
-+        return (phys >> 12) << 10;
-+    }
-+    static constexpr bool sv39_is_leaf(uint64_t pte) {
-+        return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
-+    }
-+#endif
-     /// @brief Remap every mapped page in [vaddr, vaddr+size) read-only
-     ///        through the RO primitive (issue #271 P0 — load paths and
-     ///        the P2 rerun builder share this). Unmapped holes are
-@@ -465,18 +480,9 @@ class VMM {
-     static constexpr uint64_t PAGE_FRAME_MASK = 0x00000003FFFFFFF000ULL;
-     static constexpr uint64_t PAGE_HUGE_FRAME_MASK = 0x00000003FFFFE00000ULL;
-     // Issue #206: the masks above are x86-domain (phys & mask) and WRONG for
--    // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers below
--    // for every Sv39 PTE address codec; the masks stay for x86/aarch64 and
--    // for documentation of the PA width (1TB cap).
--    static constexpr uint64_t sv39_pte_phys(uint64_t pte) {
--        return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
--    }
--    static constexpr uint64_t sv39_phys_pte(uint64_t phys) {
--        return (phys >> 12) << 10;
--    }
--    static constexpr bool sv39_is_leaf(uint64_t pte) {
--        return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
--    }
-+    // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers in
-+    // the public section below for every Sv39 PTE address codec; the masks
-+    // stay for x86/aarch64 and for documentation of the PA width (1TB cap).
- #else
-     // x86_64: physical frame bits [51:12] (52-bit PA).  Masks off all flags
-     // INCLUDING NX (bit 63) — without this, a leaf PTE with NX set yields a
-@@ -613,4 +619,14 @@ class VMM {
-                                    size_t start);
+-int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
++int mint(CNode *src, uint64_t src_handle, CNode *dst, CapRights rights_mask,
+          uint32_t badge, uint32_t *gen_out) noexcept {
+     (void)badge; // badge re-branding lands with endpoint integration (Phase 4)
+     return do_copy_pinned(src, src_handle, dst, rights_mask, gen_out);
+diff --git a/src/kernel/cap/cap.hpp b/src/kernel/cap/cap.hpp
+index 338306492..0c99ccab6 100644
+--- a/src/kernel/cap/cap.hpp
++++ b/src/kernel/cap/cap.hpp
+@@ -78,7 +78,7 @@ class CNode : public KernelObject {
+     ///        TOCTOU against SMP cross-task grants; stale gens can only fail
+     ///        closed in lookup).
+     /// @return slot index on success, -1 when full or the target is revoked.
+-    int install(KernelObject *obj, CapType type, uint32_t rights,
++    int install(KernelObject *obj, CapType type, CapRights rights,
+                 uint32_t *gen_out = nullptr) noexcept;
+ 
+     /// @brief Removes the slot at @p idx (clears and releases the target).
+@@ -104,7 +104,7 @@ class CNode : public KernelObject {
+ /// @return The pinned target (caller must release() it) or nullptr on any
+ ///         validation failure.  Never returns a target without acquire().
+ KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
+-                     uint32_t need_rights) noexcept;
++                     CapRights need_rights) noexcept;
+ 
+ /// @brief Revokes the capability at @p handle in @p cspace.  Idempotent.
+ /// @return true when a live capability was revoked, false when the slot was
+@@ -127,7 +127,7 @@ int copy(CNode *src, uint64_t src_handle, CNode *dst,
+          uint32_t *gen_out = nullptr) noexcept;
+ 
+ /// @brief Grants the capability at @p src_handle of @p src into @p dst.
+-///        Requires CAP_RIGHT_GRANT on the source slot; clears the source
++///        Requires CapRights::GRANT on the source slot; clears the source
+ ///        GRANT right after use (mint-once semantics).
+ /// @param gen_out when non-null, receives the new destination slot's
+ ///        generation (issue #266; written inside the install lock).
+@@ -138,7 +138,7 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
+ ///        endpoints, a new badge.
+ /// @param gen_out when non-null, receives the new destination slot's
+ ///        generation (issue #266; written inside the install lock).
+-int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
++int mint(CNode *src, uint64_t src_handle, CNode *dst, CapRights rights_mask,
+          uint32_t badge, uint32_t *gen_out = nullptr) noexcept;
+ 
+ /// @brief Retypes the Untyped at @p untyped_handle in @p cspace into a new
+@@ -153,7 +153,7 @@ int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
+ /// @param gen_out when non-null, receives the new target slot's generation
+ ///        (issue #266; written inside the install lock).
+ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
+-           size_t size, uint32_t rights,
++           size_t size, CapRights rights,
+            uint32_t *gen_out = nullptr) noexcept;
+ 
+ } // namespace kernel::cap
+diff --git a/src/kernel/cap/cap_types.hpp b/src/kernel/cap/cap_types.hpp
+index f4b176b3f..ea828e1a2 100644
+--- a/src/kernel/cap/cap_types.hpp
++++ b/src/kernel/cap/cap_types.hpp
+@@ -44,13 +44,48 @@ enum class CapType : uint8_t {
  };
  
-+#if defined(CONFIG_ARCH_RISCV64)
-+// Compile-time codec roundtrip (issue #348-C): PPN shift must be lossless
-+// for page-aligned addresses.  Outside the class (in-class asserts cannot
-+// evaluate members of their own incomplete class on all toolchains); the
-+// helpers above are public for exactly this pin.
-+static_assert(VMM::sv39_pte_phys(VMM::sv39_phys_pte(0x80200000ULL) |
-+                                 (1ULL << 0) | (1ULL << 1)) == 0x80200000ULL,
-+              "Sv39 PTE codec must roundtrip");
-+#endif
+ /// @brief Rights bitmap, checked by the operation that consumes the cap.
+-enum CapRights : uint32_t {
+-    CAP_RIGHT_READ = 1u << 0,  ///< endpoint recv / frame read-mapping
+-    CAP_RIGHT_WRITE = 1u << 1, ///< endpoint send / frame write-mapping
+-    CAP_RIGHT_GRANT = 1u << 2, ///< may grant (copy into another CSpace)
+-    CAP_RIGHT_COPY = 1u << 3,  ///< may copy (duplicate into own CSpace)
++///        Scoped enum (issue #348-D): combine with |  test with &, strip
++///        with & ~.  Convert at u32 boundaries via kernel::to_underlying.
++enum class CapRights : uint32_t {
++    NONE = 0,         ///< no rights.
++    READ = 1u << 0,   ///< endpoint recv / frame read-mapping
++    WRITE = 1u << 1,  ///< endpoint send / frame write-mapping
++    GRANT = 1u << 2,  ///< may grant (copy into another CSpace)
++    COPY = 1u << 3,   ///< may copy (duplicate into own CSpace)
+ };
+ 
++/// @brief Bitwise-or for capability rights.
++[[nodiscard]] constexpr CapRights operator|(CapRights lhs,
++                                            CapRights rhs) noexcept {
++    return static_cast<CapRights>(kernel::to_underlying(lhs) |
++                                  kernel::to_underlying(rhs));
++}
++/// @brief Bitwise-and for capability rights (test/mask).
++[[nodiscard]] constexpr CapRights operator&(CapRights lhs,
++                                            CapRights rhs) noexcept {
++    return static_cast<CapRights>(kernel::to_underlying(lhs) &
++                                  kernel::to_underlying(rhs));
++}
++/// @brief Bitwise-not for capability rights (mask-out).
++[[nodiscard]] constexpr CapRights operator~(CapRights rhs) noexcept {
++    return static_cast<CapRights>(~kernel::to_underlying(rhs));
++}
++/// @brief Or-assign for capability rights.
++inline constexpr CapRights &operator|=(CapRights &lhs, CapRights rhs) noexcept {
++    lhs = lhs | rhs;
++    return lhs;
++}
++/// @brief And-assign for capability rights.
++inline constexpr CapRights &operator&=(CapRights &lhs, CapRights rhs) noexcept {
++    lhs = lhs & rhs;
++    return lhs;
++}
 +
- } // namespace kernel
-diff --git a/src/lib/constants.hpp b/src/lib/constants.hpp
-index 65b5b2588..1ee98fe9e 100644
---- a/src/lib/constants.hpp
-+++ b/src/lib/constants.hpp
-@@ -38,6 +38,10 @@ namespace arch {
- /// @brief Higher-half offset: convert physical → kernel-visible virtual.
- inline constexpr uint64_t HHDM_OFFSET = CONFIG_HHDM_OFFSET;
- 
-+/// @brief Upper bound (exclusive) of user-space virtual addresses.
-+/// Lives here (not in checked_ptr.hpp) so validators like the ELF loader
-+/// can use it without pulling the CheckedPtr machinery (issue #348-C).
++static_assert(kernel::to_underlying(CapRights::READ) == 1u,
++              "rights bit positions are ABI");
++static_assert(kernel::to_underlying(CapRights::COPY) == 8u,
++              "rights bit positions are ABI");
 +
- /// @brief Size of the PMM allocatable window — the linear-mapped RAM span
- /// the page allocator scans.  Must be covered by the architecture's MMU
- /// higher-half mapping (x86_64 identity window; aarch64/riscv64 map it
-@@ -135,6 +139,15 @@ inline constexpr size_t   HEAP_SIZE    = 1_MiB;
+ /// @brief Bits allocated to the cspace id in a capability handle.
+ constexpr uint32_t CAP_HANDLE_IDBITS = 8;
  
- } // namespace mem
+@@ -71,7 +106,7 @@ constexpr uint32_t CAP_SLOT_MASK = (1u << CAP_SLOT_BITS) - 1u;
+ struct CSlot {
+     KernelObject *obj = nullptr; ///< target; null when unoccupied
+     CapType type = CapType::Null;
+-    uint32_t rights = 0;
++    CapRights rights = CapRights::NONE;
+     uint32_t gen = 0; ///< slot generation; stale-handle detection
+     bool occupied = false;
+ };
+diff --git a/src/kernel/cap/untyped.cpp b/src/kernel/cap/untyped.cpp
+index 8b08201e1..0365b70b0 100644
+--- a/src/kernel/cap/untyped.cpp
++++ b/src/kernel/cap/untyped.cpp
+@@ -129,13 +129,13 @@ void UntypedMem::dispose() noexcept {
+ }
  
+ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
+-           size_t size, uint32_t rights, uint32_t *gen_out) noexcept {
++           size_t size, CapRights rights, uint32_t *gen_out) noexcept {
+     if (!cspace)
+         return -1;
+     // Pin the Untyped (WRITE = mutation right).  The pin keeps the object
+     // alive across the transfer so dispose() cannot run mid-retype.
+     KernelObject *obj = lookup(cspace, untyped_handle, CapType::Untyped,
+-                               CAP_RIGHT_WRITE);
++                               CapRights::WRITE);
+     if (!obj)
+         return -1;
+     auto *ut = static_cast<UntypedMem *>(obj);
+@@ -201,12 +201,12 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
+     }
+ 
+     if (child) {
+-        // Child must remain retypable: retype() requires CAP_RIGHT_WRITE on
++        // Child must remain retypable: retype() requires CapRights::WRITE on
+         // the Untyped slot; the caller already holds WRITE over the parent
+         // region (the parent lookup demanded it), so this grants no new
+         // authority.
+         int idx_child = cspace->install(child, CapType::Untyped,
+-                                        rights | CAP_RIGHT_WRITE);
++                                        rights | CapRights::WRITE);
+         if (idx_child < 0) {
+             // Roll back the target install, then release the child: the two
+             // disposes cover the whole region exactly once.
+diff --git a/src/kernel/ipc/ipc.cpp b/src/kernel/ipc/ipc.cpp
+index e8f4a2072..77d7705bd 100644
+--- a/src/kernel/ipc/ipc.cpp
++++ b/src/kernel/ipc/ipc.cpp
+@@ -269,8 +269,8 @@ static void unblock_sender_rollback(MessageQueue &q,
+                                     TaskControlBlock &task) noexcept;
+ 
+ /// @brief Send a message to a destination task (blocks if queue is full, unless
+-/// IPC_NONBLOCK).
+-bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) noexcept {
++/// IpcFlags::NONBLOCK).
++bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
+     auto *tcb = Scheduler::find_task(dest_id);
+     if (!tcb || tcb->state == TaskState::TERMINATED)
+         return false;
+@@ -278,7 +278,7 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) noexcept {
+     // If the queue is already full, either return immediately (NONBLOCK)
+     // or block the sender until space becomes available.
+     if (tcb->msg_queue.is_full_locked()) {
+-        if (flags & IPC_NONBLOCK)
++        if ((flags & IpcFlags::NONBLOCK) != IpcFlags::NONE)
+             return false;
+ 
+         auto *cur = Scheduler::current_task();
+@@ -395,8 +395,8 @@ bool IPC::recv(Message &msg) noexcept {
+ 
+ /// @brief Send through a capability-gated endpoint.  The endpoint's message
+ ///        queue is the transport (no task-ID ambient authority).  Blocks on a
+-///        full queue unless IPC_NONBLOCK; wakes the bound receiver.
+-bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) noexcept {
++///        full queue unless IpcFlags::NONBLOCK; wakes the bound receiver.
++bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) noexcept {
+     if (!ep)
+         return false;
+     if (ep->revoked())
+@@ -413,7 +413,7 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) no
+         return false;
+ 
+     if (ep->q.is_full_locked()) {
+-        if (flags & IPC_NONBLOCK)
++        if ((flags & IpcFlags::NONBLOCK) != IpcFlags::NONE)
+             return false;
+         if (!cur)
+             return false;
+diff --git a/src/kernel/ipc/ipc.hpp b/src/kernel/ipc/ipc.hpp
+index 55c137f8a..116ec1da6 100644
+--- a/src/kernel/ipc/ipc.hpp
++++ b/src/kernel/ipc/ipc.hpp
+@@ -33,10 +33,27 @@ class Endpoint;
+ 
+ /// @brief Flags for IPC::send().
+ // NOLINTNEXTLINE(performance-enum-size)
+-enum IpcFlags : uint64_t {
+-    IPC_NONBLOCK = 1 << 0,
++enum class IpcFlags : uint64_t {
++    NONE = 0,          ///< blocking send (default).
++    NONBLOCK = 1 << 0, ///< fail immediately when the queue is full.
+ };
+ 
++/// @brief Bitwise-or for IPC flags.
++[[nodiscard]] constexpr IpcFlags operator|(IpcFlags lhs,
++                                           IpcFlags rhs) noexcept {
++    return static_cast<IpcFlags>(kernel::to_underlying(lhs) |
++                                 kernel::to_underlying(rhs));
++}
++/// @brief Bitwise-and for IPC flags (test/mask).
++[[nodiscard]] constexpr IpcFlags operator&(IpcFlags lhs,
++                                           IpcFlags rhs) noexcept {
++    return static_cast<IpcFlags>(kernel::to_underlying(lhs) &
++                                 kernel::to_underlying(rhs));
++}
++
++static_assert(kernel::to_underlying(IpcFlags::NONBLOCK) == 1ULL,
++              "flag bit positions are ABI");
++
+ /// @brief regs[] indices of the 6 fastpath payload words (issue #11, paper
+ ///        §3.2): rsi(4), rdi(5), r8(7), r9(8), r10(9), r11(10).
+ ///        Single source of truth shared by the fast handlers and the ABI test
+@@ -95,7 +112,7 @@ class IPC {
+     static void init();
+ 
+     /// @brief Sends a message to a destination task.
+-    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0) noexcept;
++    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, IpcFlags flags = IpcFlags::NONE) noexcept;
+ 
+     /// @brief Receives a message from the calling task's own queue.
+     [[nodiscard]] static bool recv(Message &msg) noexcept;
+@@ -121,7 +138,7 @@ class IPC {
+     ///        queue unless IPC_NONBLOCK.  @p ep must be pinned (a live
+     ///        capability lookup result).
+     [[nodiscard]] static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
+-                             uint64_t flags = 0) noexcept;
++                             IpcFlags flags = IpcFlags::NONE) noexcept;
+ 
+     /// @brief Receives a message from a capability-gated endpoint into the
+     ///        calling task's own queue.  Returns false if the endpoint queue
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 114b6b4ae..903f6dd5a 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -514,7 +514,7 @@ void init_task_main() {
+                                  sizeof(uint64_t));
+                 grant.data_size = 16;
+                 if (!kernel::IPC::send(kernel::watchdogd::get_watchdogd_pid(),
+-                                       grant, 0)) {
++                                       grant, kernel::IpcFlags::NONE)) {
+                     // Best-effort supervise grant (issue #348-A): the
+                     // watchdog re-syncs via its supervision scan; boot
+                     // never blocks on a full queue here.
+@@ -548,7 +548,7 @@ void init_task_main() {
+                 grant.type = kernel::ramdiskd::RAMDISK_GRANT;
+                 __builtin_memcpy(grant.data, handles, sizeof(handles));
+                 grant.data_size = sizeof(handles);
+-                if (!kernel::IPC::send(rd_pid, grant, 0)) {
++                if (!kernel::IPC::send(rd_pid, grant, kernel::IpcFlags::NONE)) {
+                     // Best-effort grant delivery (issue #348-A): ramdiskd
+                     // serves NOGRANT until granted; boot continues.
+                     kernel::Logger::warn("init: ramdisk grant send refused");
+diff --git a/src/kernel/ramdisk/ramdiskd.cpp b/src/kernel/ramdisk/ramdiskd.cpp
+index 6089cc7b4..0387d3ca9 100644
+--- a/src/kernel/ramdisk/ramdiskd.cpp
++++ b/src/kernel/ramdisk/ramdiskd.cpp
+@@ -99,14 +99,14 @@ static int grant_one_segment(cap::CNode *cs, uint64_t seg_idx,
+     uint32_t gen = 0;
+     int ut_idx =
+         cs->install(seg, cap::CapType::Untyped,
+-                    cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
++                    cap::CapRights::READ | cap::CapRights::WRITE, &gen);
+     if (ut_idx < 0)
+         return -1;
+     uint64_t ut_handle =
+         cap::encode_user_handle(cs->cspace_id, ut_idx, gen);
+     int frame_idx = cap::retype(cs, ut_handle, cap::CapType::Frame,
+                                 static_cast<size_t>(RAMDISK_SEGMENT_SIZE),
+-                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE,
++                                cap::CapRights::READ | cap::CapRights::WRITE,
+                                 gen_out);
+     if (frame_idx < 0) {
+         cs->remove(static_cast<uint32_t>(ut_idx));
+@@ -172,7 +172,7 @@ int64_t regrant(uint64_t daemon_pid) {
+     grant.type = RAMDISK_GRANT;
+     __builtin_memcpy(grant.data, handles, sizeof(handles));
+     grant.data_size = sizeof(handles);
+-    if (!IPC::send(daemon_pid, grant, 0))
++    if (!IPC::send(daemon_pid, grant, IpcFlags::NONE))
+         return RAMDISK_ERR_NOGRANT; // grant minted but undelivered
+     return RAMDISK_OK;
+ }
+diff --git a/src/kernel/syscall/syscall_handlers_cap.cpp b/src/kernel/syscall/syscall_handlers_cap.cpp
+index d0aff441a..550a8c9b8 100644
+--- a/src/kernel/syscall/syscall_handlers_cap.cpp
++++ b/src/kernel/syscall/syscall_handlers_cap.cpp
+@@ -49,7 +49,7 @@ uint64_t Syscall::sys_cap_grant(uint64_t src_handle, uint64_t dst_handle,
+     // Destination CNode is addressed by a CapCNode handle in the caller's
+     // own CSpace.  The dest CNode must itself be a capability we hold.
+     KernelObject *dst_obj =
+-        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_GRANT);
++        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CapRights::GRANT);
+     if (!dst_obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     auto *dst = static_cast<cap::CNode *>(dst_obj);
+@@ -67,7 +67,7 @@ uint64_t Syscall::sys_cap_copy(uint64_t src_handle, uint64_t dst_handle,
+     if (!src)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     KernelObject *dst_obj =
+-        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_COPY);
++        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CapRights::COPY);
+     if (!dst_obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     auto *dst = static_cast<cap::CNode *>(dst_obj);
+@@ -96,13 +96,16 @@ uint64_t Syscall::sys_cap_mint(uint64_t src_handle, uint64_t dst_handle,
+     if (!src)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     KernelObject *dst_obj =
+-        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_COPY);
++        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CapRights::COPY);
+     if (!dst_obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     auto *dst = static_cast<cap::CNode *>(dst_obj);
+     uint32_t gen = 0;
++    // ABI boundary (issue #348-D1): raw u64 mask, legacy ignore-semantics.
+     int idx =
+-        cap::mint(src, src_handle, dst, static_cast<uint32_t>(rights_mask),
++        cap::mint(src, src_handle, dst,
++                  static_cast<cap::CapRights>(
++                      static_cast<uint32_t>(rights_mask)),
+                   static_cast<uint32_t>(badge), &gen);
+     dst_obj->release();
+     // Issue #266: opaque encoded handle, never a raw slot index.
+@@ -120,10 +123,14 @@ uint64_t Syscall::sys_cap_retype(uint64_t untyped_handle, uint64_t target_type,
+     // The install lands in the caller's own root CNode, so the handle is
+     // encoded with the caller's own cspace id (issue #266).
+     uint32_t gen = 0;
++    // ABI boundary (issue #348-D1): the syscall takes raw u64 rights;
++    // unknown bits keep legacy ignore-semantics downstream.
+     int idx = cap::retype(src, untyped_handle,
+                           static_cast<cap::CapType>(target_type),
+                           static_cast<size_t>(size),
+-                          static_cast<uint32_t>(rights), &gen);
++                          static_cast<cap::CapRights>(
++                              static_cast<uint32_t>(rights)),
++                          &gen);
+     return cap::encode_user_handle(src->cspace_id, idx, gen);
+ }
+ 
+diff --git a/src/kernel/syscall/syscall_handlers_iommu.cpp b/src/kernel/syscall/syscall_handlers_iommu.cpp
+index a6259eb7b..55c8098b1 100644
+--- a/src/kernel/syscall/syscall_handlers_iommu.cpp
++++ b/src/kernel/syscall/syscall_handlers_iommu.cpp
+@@ -73,9 +73,9 @@ uint32_t validate_iommu_pair(cap::CNode *cs, uint64_t frame_handle,
+     if (cap::handle_gen(frame_handle) != s.gen)
+         return 0;
+     uint32_t flags = 0;
+-    if ((s.rights & cap::CAP_RIGHT_READ) != 0)
++    if ((s.rights & cap::CapRights::READ) != cap::CapRights::NONE)
+         flags |= iommu::vtd::kSlEntryRead;
+-    if ((s.rights & cap::CAP_RIGHT_WRITE) != 0)
++    if ((s.rights & cap::CapRights::WRITE) != cap::CapRights::NONE)
+         flags |= iommu::vtd::kSlEntryWrite;
+     return flags;
+ }
+@@ -96,12 +96,12 @@ uint64_t Syscall::sys_iommu_map(uint64_t dma_handle, uint64_t frame_handle,
+ 
+     // WRITE on the DMA cap = the arming authority (issue #2/#3 pattern).
+     KernelObject *dma_obj = cap::lookup(
+-        cs, dma_handle, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
++        cs, dma_handle, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
+     if (!dma_obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     auto *dma = static_cast<cap::IoMmuDmaCap *>(dma_obj);
+ 
+-    KernelObject *fobj = cap::lookup(cs, frame_handle, cap::CapType::Frame, 0);
++    KernelObject *fobj = cap::lookup(cs, frame_handle, cap::CapType::Frame, cap::CapRights::NONE);
+     if (!fobj) {
+         dma_obj->release();
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+@@ -139,12 +139,12 @@ uint64_t Syscall::sys_iommu_unmap(uint64_t dma_handle, uint64_t frame_handle,
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+ 
+     KernelObject *dma_obj = cap::lookup(
+-        cs, dma_handle, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
++        cs, dma_handle, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
+     if (!dma_obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     auto *dma = static_cast<cap::IoMmuDmaCap *>(dma_obj);
+ 
+-    KernelObject *fobj = cap::lookup(cs, frame_handle, cap::CapType::Frame, 0);
++    KernelObject *fobj = cap::lookup(cs, frame_handle, cap::CapType::Frame, cap::CapRights::NONE);
+     if (!fobj) {
+         dma_obj->release();
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+diff --git a/src/kernel/syscall/syscall_handlers_ipc.cpp b/src/kernel/syscall/syscall_handlers_ipc.cpp
+index ff266a191..1cdc216f8 100644
+--- a/src/kernel/syscall/syscall_handlers_ipc.cpp
++++ b/src/kernel/syscall/syscall_handlers_ipc.cpp
+@@ -50,7 +50,9 @@ uint64_t Syscall::sys_send(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+     for (size_t i = 0; i < msg.data_size; ++i) {
+         msg.data[i] = data.read(i);
+     }
+-    return IPC::send(dest_id, msg, flags)
++    // ABI boundary (issue #348-D1): user passes raw u64 flags; only the
++    // NONBLOCK bit is read downstream (legacy ignore-semantics).
++    return IPC::send(dest_id, msg, static_cast<IpcFlags>(flags))
+                ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+                : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+ }
+@@ -245,7 +247,7 @@ uint64_t Syscall::sys_send_fast(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+     m.data_size = data_size;
+     (void)arg3; // payload word 0 rides in regs[4] (rsi) == arg3; gathered via regs[]
+     fast_regs_to_msg(regs, data_size, m);
+-    return IPC::send(dest_id, m, 0)
++    return IPC::send(dest_id, m, IpcFlags::NONE)
+                ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+                : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+ }
+diff --git a/src/kernel/syscall/syscall_handlers_irq.cpp b/src/kernel/syscall/syscall_handlers_irq.cpp
+index 37b536f8b..e2f26c569 100644
+--- a/src/kernel/syscall/syscall_handlers_irq.cpp
++++ b/src/kernel/syscall/syscall_handlers_irq.cpp
+@@ -102,7 +102,7 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
+     // delivery).
+     bool is_msix = false;
+     KernelObject *obj =
+-        lookup_irq_like(src, cap_handle, cap::CAP_RIGHT_WRITE, is_msix);
++        lookup_irq_like(src, cap_handle, cap::CapRights::WRITE, is_msix);
+     if (!obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+ 
+@@ -158,7 +158,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
+     // READ is the right to observe (wait on) the IRQ delivery.
+     bool is_msix = false;
+     KernelObject *obj =
+-        lookup_irq_like(src, cap_handle, cap::CAP_RIGHT_READ, is_msix);
++        lookup_irq_like(src, cap_handle, cap::CapRights::READ, is_msix);
+     if (!obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+ 
+diff --git a/src/kernel/syscall/syscall_handlers_mmio.cpp b/src/kernel/syscall/syscall_handlers_mmio.cpp
+index 9dcf7e8ac..bb7f23296 100644
+--- a/src/kernel/syscall/syscall_handlers_mmio.cpp
++++ b/src/kernel/syscall/syscall_handlers_mmio.cpp
+@@ -51,7 +51,7 @@ uint64_t Syscall::sys_ioport_grant(uint64_t cap_handle, uint64_t port_start,
+     // requested port range (WRITE = the right to mutate the port-access
+     // state this grant installs).
+     KernelObject *obj =
+-        cap::lookup(src, cap_handle, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
++        cap::lookup(src, cap_handle, cap::CapType::Mmio, cap::CapRights::WRITE);
+     if (!obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     auto *mmio = static_cast<cap::MmioCap *>(obj);
+@@ -117,7 +117,7 @@ uint64_t Syscall::sys_mmio_map(uint64_t cap_handle, uint64_t, uint64_t,
+     // the right to install the mapping).  IO-type caps are delegated via
+     // sys_ioport_grant, not MMIO.
+     KernelObject *obj =
+-        cap::lookup(src, cap_handle, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
++        cap::lookup(src, cap_handle, cap::CapType::Mmio, cap::CapRights::WRITE);
+     if (!obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     auto *mmio = static_cast<cap::MmioCap *>(obj);
+diff --git a/src/kernel/syscall/syscall_handlers_pager.cpp b/src/kernel/syscall/syscall_handlers_pager.cpp
+index b730482e8..31d926d0e 100644
+--- a/src/kernel/syscall/syscall_handlers_pager.cpp
++++ b/src/kernel/syscall/syscall_handlers_pager.cpp
+@@ -92,7 +92,7 @@ uint64_t Syscall::sys_pager_map(uint64_t fault_id, uint64_t cap_handle,
+     if (!cs)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     KernelObject *obj =
+-        cap::lookup(cs, cap_handle, cap::CapType::Frame, cap::CAP_RIGHT_WRITE);
++        cap::lookup(cs, cap_handle, cap::CapType::Frame, cap::CapRights::WRITE);
+     if (!obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     auto *fc = static_cast<cap::FrameCap *>(obj);
+diff --git a/src/kernel/syscall/syscall_handlers_shm.cpp b/src/kernel/syscall/syscall_handlers_shm.cpp
+index 8b875e94a..64a144092 100644
+--- a/src/kernel/syscall/syscall_handlers_shm.cpp
++++ b/src/kernel/syscall/syscall_handlers_shm.cpp
+@@ -71,7 +71,7 @@ uint64_t Syscall::sys_frame_create(uint64_t count, uint64_t, uint64_t,
+ 
+     uint32_t gen = 0;
+     int idx = cs->install(fc, cap::CapType::Frame,
+-                          cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
++                          cap::CapRights::READ | cap::CapRights::WRITE, &gen);
+     if (idx < 0) {
+         fc->release(); // never installed — drop the creator reference
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+@@ -91,7 +91,7 @@ uint64_t Syscall::sys_frame_map(uint64_t cap_handle, uint64_t, uint64_t,
+     // Capability-gated: the caller must hold a Frame capability (WRITE = the
+     // right to install the mapping).  Mirrors sys_mmio_map.
+     KernelObject *obj =
+-        cap::lookup(src, cap_handle, cap::CapType::Frame, cap::CAP_RIGHT_WRITE);
++        cap::lookup(src, cap_handle, cap::CapType::Frame, cap::CapRights::WRITE);
+     if (!obj)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+     auto *fc = static_cast<cap::FrameCap *>(obj);
+diff --git a/src/kernel/syscall/syscall_handlers_watchdog.cpp b/src/kernel/syscall/syscall_handlers_watchdog.cpp
+index 166c408e0..bb8f3e1f0 100644
+--- a/src/kernel/syscall/syscall_handlers_watchdog.cpp
++++ b/src/kernel/syscall/syscall_handlers_watchdog.cpp
+@@ -62,7 +62,7 @@ TaskControlBlock *resolve_watchdog_target(uint64_t pid, uint64_t cap_handle) {
+     if (src == nullptr)
+         return nullptr;
+     KernelObject *obj = cap::lookup(src, cap_handle, cap::CapType::Wdog,
+-                                    cap::CAP_RIGHT_WRITE);
++                                    cap::CapRights::WRITE);
+     if (obj == nullptr)
+         return nullptr;
+     auto *wdog = static_cast<cap::WdogCap *>(obj);
+diff --git a/src/kernel/test/test_buffer_pool.cpp b/src/kernel/test/test_buffer_pool.cpp
+index 2edde45a6..1adeb0eda 100644
+--- a/src/kernel/test/test_buffer_pool.cpp
++++ b/src/kernel/test/test_buffer_pool.cpp
+@@ -565,7 +565,7 @@ JARVIS_TEST(buffer_pool_ipc_transfer, "PRE: none | POST: none") {
+             Message msg{};
+             msg.buf_handle = handle;
+             msg.type = 42;
+-            if (!IPC::send(peer, msg, 0)) {
++            if (!IPC::send(peer, msg, IpcFlags::NONE)) {
+                 g_sender_ok = 2;
+                 return;
+             }
+diff --git a/src/kernel/test/test_cap_core.cpp b/src/kernel/test/test_cap_core.cpp
+index ec4546bdb..8ad77b5fb 100644
+--- a/src/kernel/test/test_cap_core.cpp
++++ b/src/kernel/test/test_cap_core.cpp
+@@ -90,7 +90,7 @@ JARVIS_TEST(cnode_install_acquires_ref, "PRE: none | POST: none") {
+     cap::CNode node;
+     TestTarget tgt;
+     JARVIS_ASSERT_EQ(1U, tgt.refcount());
+-    int idx = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int idx = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(idx >= 0);
+     JARVIS_ASSERT_EQ(2U, tgt.refcount());
+     JARVIS_ASSERT_EQ(1U, cap::occupied_count(&node));
+@@ -110,7 +110,7 @@ JARVIS_TEST(cnode_release_drops_ref, "PRE: none | POST: none") {
+     TestTarget::g_dispose_count = 0;
+     cap::CNode node;
+     TestTarget tgt;
+-    int idx = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int idx = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(idx >= 0);
+     node.remove(static_cast<uint32_t>(idx));
+     JARVIS_ASSERT_EQ(1U, tgt.refcount());
+@@ -134,7 +134,7 @@ JARVIS_TEST(cnode_dispose_frees_pool_block, "PRE: none | POST: none") {
+     cap::CNode *node = cap::CNode::create(0xAB);
+     JARVIS_ASSERT(node != nullptr);
+     JARVIS_ASSERT(node->is_pool_backed());
+-    int idx = node->install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int idx = node->install(&tgt, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(idx >= 0);
+     JARVIS_ASSERT_EQ(1U, tgt.refcount() - 1U);
+ 
+@@ -157,7 +157,7 @@ JARVIS_TEST(cnode_revoke_refuses_acquire, "PRE: none | POST: none") {
+     TestTarget::g_revoke_count = 0;
+     cap::CNode node;
+     TestTarget tgt;
+-    int idx = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int idx = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(idx >= 0);
+     node.revoke();
+     JARVIS_ASSERT_EQ(1U, TestTarget::g_revoke_count);
+@@ -179,9 +179,9 @@ JARVIS_TEST(cnode_cascade_revoke_marks_children, "PRE: none | POST: none") {
+     cap::CNode parent;
+     cap::CNode child;
+     TestTarget leaf;
+-    int cidx = child.install(&leaf, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int cidx = child.install(&leaf, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(cidx >= 0);
+-    int pidx = parent.install(&child, cap::CapType::CNode, cap::CAP_RIGHT_READ);
++    int pidx = parent.install(&child, cap::CapType::CNode, cap::CapRights::READ);
+     JARVIS_ASSERT(pidx >= 0);
+ 
+     parent.revoke();
+@@ -219,7 +219,7 @@ JARVIS_TEST(handle_decode_valid, "PRE: none | POST: none") {
+ JARVIS_TEST(handle_decode_out_of_range_fails, "PRE: none | POST: none") {
+     cap::CNode node;
+     TestTarget tgt;
+-    int idx = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int idx = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(idx >= 0);
+     // Slot index is masked to CAP_SLOT_BITS (power-of-two table), so a
+     // decodable slot is always in-range; the authority boundary is the
+@@ -228,7 +228,7 @@ JARVIS_TEST(handle_decode_out_of_range_fails, "PRE: none | POST: none") {
+         cap::encode_handle(static_cast<uint32_t>(node.cspace_id + 1u),
+                            static_cast<uint32_t>(idx), 0);
+     KernelObject *got =
+-        cap::lookup(&node, foreign, cap::CapType::Task, cap::CAP_RIGHT_READ);
++        cap::lookup(&node, foreign, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(got == nullptr);
+     node.remove(static_cast<uint32_t>(idx));
+     JARVIS_TEST_PASS();
+@@ -244,7 +244,7 @@ JARVIS_TEST(handle_decode_stale_gen_fails, "PRE: none | POST: none") {
+     cap::CNode node;
+     TestTarget tgt;
+     TestTarget tgt2;
+-    int idx = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int idx = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(idx >= 0);
+     uint32_t old_gen = node.slot_gen(static_cast<uint32_t>(idx));
+     uint64_t old_handle =
+@@ -252,12 +252,12 @@ JARVIS_TEST(handle_decode_stale_gen_fails, "PRE: none | POST: none") {
+ 
+     // remove bumps gen; reinstall same slot with a new target
+     node.remove(static_cast<uint32_t>(idx));
+-    int idx2 = node.install(&tgt2, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int idx2 = node.install(&tgt2, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT_EQ(idx, idx2);
+     JARVIS_ASSERT(node.slot_gen(static_cast<uint32_t>(idx2)) != old_gen);
+ 
+     KernelObject *got =
+-        cap::lookup(&node, old_handle, cap::CapType::Task, cap::CAP_RIGHT_READ);
++        cap::lookup(&node, old_handle, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(got == nullptr);
+     node.remove(static_cast<uint32_t>(idx2));
+     JARVIS_TEST_PASS();
+diff --git a/src/kernel/test/test_cap_iommu.cpp b/src/kernel/test/test_cap_iommu.cpp
+index f9ee66b2f..c62c435c5 100644
+--- a/src/kernel/test/test_cap_iommu.cpp
++++ b/src/kernel/test/test_cap_iommu.cpp
+@@ -132,9 +132,9 @@ void iommu_map_happy_entry() {
+         return;
+     }
+ 
+-    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
++    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
+     int s2 = cs->install(fc, cap::CapType::Frame,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     if (s1 < 0 || s2 < 0) {
+         dma->release();
+         fc->release();
+@@ -192,10 +192,10 @@ void iommu_map_matrix_entry() {
+         Scheduler::terminate(*cur, 0);
+         return;
+     }
+-    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
+-    int s2 = cs->install(ro_dma, cap::CapType::IoMmuDma, cap::CAP_RIGHT_READ);
++    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
++    int s2 = cs->install(ro_dma, cap::CapType::IoMmuDma, cap::CapRights::READ);
+     int s3 = cs->install(fc, cap::CapType::Frame,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     if (s1 < 0 || s2 < 0 || s3 < 0) {
+         dma->release();
+         ro_dma->release();
+@@ -274,9 +274,9 @@ void iommu_unmap_dispatch_entry() {
+         Scheduler::terminate(*cur, 0);
+         return;
+     }
+-    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
++    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
+     int s2 = cs->install(fc, cap::CapType::Frame,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     if (s1 < 0 || s2 < 0) {
+         dma->release();
+         fc->release();
+@@ -377,20 +377,20 @@ JARVIS_TEST(iommu_cap_create_install_lookup_revoke, "PRE: none | POST: none") {
+     JARVIS_ASSERT(root != 0);
+ 
+     cap::CNode *cs = cur->get_cspace();
+-    int s = cs->install(dma, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
++    int s = cs->install(dma, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t h = cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
+                                     cs->slot_gen(static_cast<uint32_t>(s)));
+ 
+     KernelObject *obj =
+-        cap::lookup(cs, h, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
++        cap::lookup(cs, h, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
+     JARVIS_ASSERT(obj == static_cast<KernelObject *>(dma));
+     obj->release();
+     // Wrong type / missing rights refuse.
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Frame,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::IoMmuDma,
+-                              cap::CAP_RIGHT_READ) == nullptr);
++                              cap::CapRights::READ) == nullptr);
+ 
+     // Revoke destroys the domain BEFORE publishing the revoke.
+     JARVIS_ASSERT(cap::revoke(cs, h));
+diff --git a/src/kernel/test/test_cap_irq.cpp b/src/kernel/test/test_cap_irq.cpp
+index 334a99912..c6e059d3c 100644
+--- a/src/kernel/test/test_cap_irq.cpp
++++ b/src/kernel/test/test_cap_irq.cpp
+@@ -103,7 +103,7 @@ void irq_waiter_entry(bool wait_for_inject) {
+         return;
+     }
+     int s = cs->install(irq, cap::CapType::Irq,
+-                        cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                        cap::CapRights::WRITE | cap::CapRights::READ);
+     if (s < 0) {
+         irq->release();
+         g_wait_ret = 98;
+@@ -241,30 +241,30 @@ JARVIS_TEST(irq_cap_install_lookup_revoke, "PRE: none | POST: none") {
+     cap::CNode *cs = cur->get_cspace();
+     auto *irq = cap::IrqCap::create(kTestVector);
+     JARVIS_ASSERT(irq != nullptr);
+-    int s = cs->install(irq, cap::CapType::Irq, cap::CAP_RIGHT_WRITE);
++    int s = cs->install(irq, cap::CapType::Irq, cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t h = cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
+                                     cs->slot_gen(static_cast<uint32_t>(s)));
+ 
+     KernelObject *obj =
+-        cap::lookup(cs, h, cap::CapType::Irq, cap::CAP_RIGHT_WRITE);
++        cap::lookup(cs, h, cap::CapType::Irq, cap::CapRights::WRITE);
+     JARVIS_ASSERT(obj != nullptr);
+     JARVIS_ASSERT(obj == static_cast<KernelObject *>(irq));
+     obj->release();
+ 
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Frame,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Irq,
+-                              cap::CAP_RIGHT_GRANT) == nullptr);
++                              cap::CapRights::GRANT) == nullptr);
+     uint64_t stale =
+         cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
+                            cs->slot_gen(static_cast<uint32_t>(s)) + 1);
+     JARVIS_ASSERT(cap::lookup(cs, stale, cap::CapType::Irq,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+ 
+     JARVIS_ASSERT(cap::revoke(cs, h));
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Irq,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+     JARVIS_ASSERT(irq->revoked());
+ 
+     cs->remove(static_cast<uint32_t>(s));
+@@ -306,7 +306,7 @@ JARVIS_TEST(irq_register_dispatch_happy, "PRE: none | POST: none") {
+                 Scheduler::terminate(*cur, 0);
+                 return;
+             }
+-            int s = cs->install(irq, cap::CapType::Irq, cap::CAP_RIGHT_WRITE);
++            int s = cs->install(irq, cap::CapType::Irq, cap::CapRights::WRITE);
+             if (s < 0) {
+                 irq->release();
+                 g_reg_ret = 98;
+@@ -371,8 +371,8 @@ JARVIS_TEST(irq_register_validation_matrix, "PRE: none | POST: none") {
+             Scheduler::terminate(*cur, 0);
+             return;
+         }
+-        int s1 = cs->install(irq, cap::CapType::Irq, cap::CAP_RIGHT_WRITE);
+-        int s2 = cs->install(ro, cap::CapType::Irq, cap::CAP_RIGHT_READ);
++        int s1 = cs->install(irq, cap::CapType::Irq, cap::CapRights::WRITE);
++        int s2 = cs->install(ro, cap::CapType::Irq, cap::CapRights::READ);
+         if (s1 < 0 || s2 < 0) {
+             irq->release();
+             ro->release();
+@@ -410,7 +410,7 @@ JARVIS_TEST(irq_register_validation_matrix, "PRE: none | POST: none") {
+         // Wrong-type: use a FrameCap slot for a genuinely wrong type.
+         auto *fr = cap::FrameCap::create(0x1000000ULL, 1, false);
+         if (fr) {
+-            int sf = cs->install(fr, cap::CapType::Frame, cap::CAP_RIGHT_WRITE);
++            int sf = cs->install(fr, cap::CapType::Frame, cap::CapRights::WRITE);
+             if (sf >= 0) {
+                 uint64_t hf = cap::encode_handle(
+                     cs->cspace_id, static_cast<uint32_t>(sf),
+@@ -530,7 +530,7 @@ JARVIS_TEST(irq_wait_revoked_mid_wait, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(irq, cap::CapType::Irq,
+-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                                cap::CapRights::WRITE | cap::CapRights::READ);
+             if (s < 0) {
+                 irq->release();
+                 g_wait_ret = 98;
+diff --git a/src/kernel/test/test_cap_irq_notify.cpp b/src/kernel/test/test_cap_irq_notify.cpp
+index 696b7bb8a..35313c3d3 100644
+--- a/src/kernel/test/test_cap_irq_notify.cpp
++++ b/src/kernel/test/test_cap_irq_notify.cpp
+@@ -96,7 +96,7 @@ void irq_notify_waiter_entry(bool wait_for_inject) {
+         return;
+     }
+     int s = cs->install(irq, cap::CapType::Irq,
+-                        cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                        cap::CapRights::WRITE | cap::CapRights::READ);
+     if (s < 0) {
+         irq->release();
+         g_wait_ret = 98;
+@@ -175,7 +175,7 @@ JARVIS_TEST(irq_notify_mode_validation, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(irq, cap::CapType::Irq,
+-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                                cap::CapRights::WRITE | cap::CapRights::READ);
+             if (s < 0) {
+                 irq->release();
+                 g_reg_ret = 98;
+@@ -239,7 +239,7 @@ JARVIS_TEST(irq_notify_pending_immediate, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(irq, cap::CapType::Irq,
+-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                                cap::CapRights::WRITE | cap::CapRights::READ);
+             if (s < 0) {
+                 irq->release();
+                 g_wait_ret = 98;
+@@ -343,7 +343,7 @@ JARVIS_TEST(irq_notify_wait_syscall_refused, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(irq, cap::CapType::Irq,
+-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                                cap::CapRights::WRITE | cap::CapRights::READ);
+             if (s < 0) {
+                 irq->release();
+                 g_wait_ret = 98;
+@@ -411,7 +411,7 @@ JARVIS_TEST(irq_notify_revoke_wakes_waiter, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(irq, cap::CapType::Irq,
+-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                                cap::CapRights::WRITE | cap::CapRights::READ);
+             if (s < 0) {
+                 irq->release();
+                 g_wait_ret = 98;
+diff --git a/src/kernel/test/test_cap_lifecycle.cpp b/src/kernel/test/test_cap_lifecycle.cpp
+index b334c3442..6d1c95c19 100644
+--- a/src/kernel/test/test_cap_lifecycle.cpp
++++ b/src/kernel/test/test_cap_lifecycle.cpp
+@@ -61,7 +61,7 @@ JARVIS_TEST(grant_creates_slot_in_dest, "PRE: none | POST: none") {
+     cap::CNode dst;
+     TestTarget tgt;
+     int s = src.install(&tgt, cap::CapType::Task,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_GRANT);
++                        cap::CapRights::READ | cap::CapRights::GRANT);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(src.cspace_id, static_cast<uint32_t>(s),
+                                      src.slot_gen(static_cast<uint32_t>(s)));
+@@ -87,7 +87,7 @@ JARVIS_TEST(copy_shares_refcount, "PRE: none | POST: none") {
+     cap::CNode dst;
+     TestTarget tgt;
+     int s = src.install(&tgt, cap::CapType::Task,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_COPY);
++                        cap::CapRights::READ | cap::CapRights::COPY);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(src.cspace_id, static_cast<uint32_t>(s),
+                                      src.slot_gen(static_cast<uint32_t>(s)));
+@@ -96,7 +96,7 @@ JARVIS_TEST(copy_shares_refcount, "PRE: none | POST: none") {
+     JARVIS_ASSERT_EQ(3U, tgt.refcount());
+     // copy() must NOT clear the source COPY right (only grant() is mint-once).
+     KernelObject *pinned =
+-        cap::lookup(&src, sh, cap::CapType::Null, cap::CAP_RIGHT_COPY);
++        cap::lookup(&src, sh, cap::CapType::Null, cap::CapRights::COPY);
+     JARVIS_ASSERT(pinned != nullptr);
+     if (pinned)
+         pinned->release();
+@@ -114,7 +114,7 @@ JARVIS_TEST(copy_shares_refcount, "PRE: none | POST: none") {
+ JARVIS_TEST(revoke_removes_slot_and_releases, "PRE: none | POST: none") {
+     cap::CNode node;
+     TestTarget tgt;
+-    int s = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int s = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+@@ -133,7 +133,7 @@ JARVIS_TEST(revoke_removes_slot_and_releases, "PRE: none | POST: none") {
+ JARVIS_TEST(revoke_twice_idempotent, "PRE: none | POST: none") {
+     cap::CNode node;
+     TestTarget tgt;
+-    int s = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int s = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+@@ -154,19 +154,19 @@ JARVIS_TEST(mint_reduces_rights, "PRE: none | POST: none") {
+     cap::CNode dst;
+     TestTarget tgt;
+     int s = src.install(&tgt, cap::CapType::Task,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                        cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(src.cspace_id, static_cast<uint32_t>(s),
+                                      src.slot_gen(static_cast<uint32_t>(s)));
+-    int d = cap::mint(&src, sh, &dst, cap::CAP_RIGHT_READ, 0);
++    int d = cap::mint(&src, sh, &dst, cap::CapRights::READ, 0);
+     JARVIS_ASSERT(d >= 0);
+     uint64_t dh = cap::encode_handle(dst.cspace_id, static_cast<uint32_t>(d),
+                                      dst.slot_gen(static_cast<uint32_t>(d)));
+     KernelObject *rw =
+-        cap::lookup(&dst, dh, cap::CapType::Null, cap::CAP_RIGHT_WRITE);
++        cap::lookup(&dst, dh, cap::CapType::Null, cap::CapRights::WRITE);
+     JARVIS_ASSERT(rw == nullptr);
+     KernelObject *ro =
+-        cap::lookup(&dst, dh, cap::CapType::Null, cap::CAP_RIGHT_READ);
++        cap::lookup(&dst, dh, cap::CapType::Null, cap::CapRights::READ);
+     JARVIS_ASSERT(ro != nullptr);
+     if (ro)
+         ro->release();
+@@ -186,7 +186,7 @@ JARVIS_TEST(revoke_while_scopedref_pinned_delays_dispose,
+     TestTarget::g_dispose_count = 0;
+     cap::CNode node;
+     TestTarget tgt;
+-    int s = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++    int s = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
+     JARVIS_ASSERT(s >= 0);
+ 
+     ScopedRef pin(&tgt);
+@@ -217,7 +217,7 @@ JARVIS_TEST(frame_cap_release_frees_pmm, "PRE: none | POST: none") {
+ 
+     cap::CNode node;
+     int s = node.install(fc, cap::CapType::Frame,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     node.remove(static_cast<uint32_t>(s)); // slot ref dropped
+     JARVIS_ASSERT_EQ(1U, fc->refcount());  // creator ref only
+@@ -249,7 +249,7 @@ JARVIS_TEST(endpoint_cap_release_disposes, "PRE: none | POST: none") {
+ 
+     cap::CNode node;
+     int s = node.install(ep, cap::CapType::Endpoint,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     node.remove(static_cast<uint32_t>(s));
+     JARVIS_ASSERT_EQ(1U, ep->refcount()); // creator ref only
+diff --git a/src/kernel/test/test_cap_mmio.cpp b/src/kernel/test/test_cap_mmio.cpp
+index 257a81f9a..312082043 100644
+--- a/src/kernel/test/test_cap_mmio.cpp
++++ b/src/kernel/test/test_cap_mmio.cpp
+@@ -93,7 +93,7 @@ void ioport_grant_happy_entry() {
+         Scheduler::terminate(*cur, 0);
+         return;
+     }
+-    int s = cs->install(mmio, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
++    int s = cs->install(mmio, cap::CapType::Mmio, cap::CapRights::WRITE);
+     if (s < 0) {
+         mmio->release();
+         g_grant_ret = 98;
+@@ -223,35 +223,35 @@ JARVIS_TEST(mmio_cap_install_lookup_revoke, "PRE: none | POST: none") {
+     auto *mmio = cap::MmioCap::create(0x1000000, 0x1000,
+                                       arch::PciBarType::MEMORY_32);
+     JARVIS_ASSERT(mmio != nullptr);
+-    int s = cs->install(mmio, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
++    int s = cs->install(mmio, cap::CapType::Mmio, cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t h = cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
+                                     cs->slot_gen(static_cast<uint32_t>(s)));
+ 
+     // Correct type + WRITE -> pinned target.
+     KernelObject *obj =
+-        cap::lookup(cs, h, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
++        cap::lookup(cs, h, cap::CapType::Mmio, cap::CapRights::WRITE);
+     JARVIS_ASSERT(obj != nullptr);
+     JARVIS_ASSERT(obj == static_cast<KernelObject *>(mmio));
+     obj->release();
+ 
+     // Wrong type.
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Frame,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+     // Missing rights.
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Mmio,
+-                              cap::CAP_RIGHT_GRANT) == nullptr);
++                              cap::CapRights::GRANT) == nullptr);
+     // Stale generation.
+     uint64_t stale =
+         cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
+                            cs->slot_gen(static_cast<uint32_t>(s)) + 1);
+     JARVIS_ASSERT(cap::lookup(cs, stale, cap::CapType::Mmio,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+ 
+     // Revoke invalidates.
+     JARVIS_ASSERT(cap::revoke(cs, h));
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Mmio,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+     JARVIS_ASSERT(mmio->revoked());
+ 
+     cs->remove(static_cast<uint32_t>(s));
+@@ -369,8 +369,8 @@ JARVIS_TEST(ioport_grant_validation_matrix, "PRE: none | POST: none") {
+             Scheduler::terminate(*cur, 0);
+             return;
+         }
+-        int s1 = cs->install(mmio, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+-        int s2 = cs->install(ro, cap::CapType::Mmio, cap::CAP_RIGHT_READ);
++        int s1 = cs->install(mmio, cap::CapType::Mmio, cap::CapRights::WRITE);
++        int s2 = cs->install(ro, cap::CapType::Mmio, cap::CapRights::READ);
+         if (s1 < 0 || s2 < 0) {
+             mmio->release();
+             ro->release();
+@@ -863,7 +863,7 @@ JARVIS_TEST(ioport_revoke_clears_live_bits, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(mmio, cap::CapType::Mmio,
+-                                cap::CAP_RIGHT_WRITE);
++                                cap::CapRights::WRITE);
+             if (s < 0) {
+                 mmio->release();
+                 Scheduler::terminate(*cur, 0);
+@@ -944,8 +944,8 @@ JARVIS_TEST(ioport_revoke_other_cap_keeps_bits, "PRE: none | POST: none") {
+                 Scheduler::terminate(*cur, 0);
+                 return;
+             }
+-            int sa = cs->install(a, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+-            int sb = cs->install(b, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
++            int sa = cs->install(a, cap::CapType::Mmio, cap::CapRights::WRITE);
++            int sb = cs->install(b, cap::CapType::Mmio, cap::CapRights::WRITE);
+             if (sa < 0 || sb < 0) {
+                 a->release();
+                 b->release();
+@@ -1039,7 +1039,7 @@ JARVIS_TEST(ioport_ledger_full_fails_closed, "PRE: none | POST: none") {
+                     return;
+                 }
+                 slots[i] = cs->install(caps[i], cap::CapType::Mmio,
+-                                       cap::CAP_RIGHT_WRITE);
++                                       cap::CapRights::WRITE);
+                 if (slots[i] < 0) {
+                     caps[i]->release();
+                     for (int j = 0; j < i; ++j)
+diff --git a/src/kernel/test/test_cap_mmio_user.cpp b/src/kernel/test/test_cap_mmio_user.cpp
+index 68454968f..09b8766e2 100644
+--- a/src/kernel/test/test_cap_mmio_user.cpp
++++ b/src/kernel/test/test_cap_mmio_user.cpp
+@@ -124,7 +124,7 @@ JARVIS_TEST(mmio_user_syscall_dispatch, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(mmio, cap::CapType::Mmio,
+-                                cap::CAP_RIGHT_WRITE);
++                                cap::CapRights::WRITE);
+             if (s < 0) {
+                 mmio->release();
+                 g_map_ret = 98;
+diff --git a/src/kernel/test/test_cap_msix.cpp b/src/kernel/test/test_cap_msix.cpp
+index 998229fa6..3f87df083 100644
+--- a/src/kernel/test/test_cap_msix.cpp
++++ b/src/kernel/test/test_cap_msix.cpp
+@@ -256,32 +256,32 @@ JARVIS_TEST(msix_cap_install_lookup_revoke, "PRE: none | POST: none") {
+     cap::CNode *cs = cur->get_cspace();
+     auto *msix = cap::MsixCap::create(bdf, 0);
+     JARVIS_ASSERT(msix != nullptr);
+-    int s = cs->install(msix, cap::CapType::Msix, cap::CAP_RIGHT_WRITE);
++    int s = cs->install(msix, cap::CapType::Msix, cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t h = cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
+                                     cs->slot_gen(static_cast<uint32_t>(s)));
+ 
+     KernelObject *obj =
+-        cap::lookup(cs, h, cap::CapType::Msix, cap::CAP_RIGHT_WRITE);
++        cap::lookup(cs, h, cap::CapType::Msix, cap::CapRights::WRITE);
+     JARVIS_ASSERT(obj != nullptr);
+     JARVIS_ASSERT(obj == static_cast<KernelObject *>(msix));
+     obj->release();
+ 
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Frame,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Irq,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Msix,
+-                              cap::CAP_RIGHT_GRANT) == nullptr);
++                              cap::CapRights::GRANT) == nullptr);
+     uint64_t stale =
+         cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
+                            cs->slot_gen(static_cast<uint32_t>(s)) + 1);
+     JARVIS_ASSERT(cap::lookup(cs, stale, cap::CapType::Msix,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+ 
+     JARVIS_ASSERT(cap::revoke(cs, h));
+     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Msix,
+-                              cap::CAP_RIGHT_WRITE) == nullptr);
++                              cap::CapRights::WRITE) == nullptr);
+     JARVIS_ASSERT(msix->revoked());
+     // Revoke re-masks the entry (fail-closed).
+     JARVIS_ASSERT(msix->entry_masked());
+@@ -325,7 +325,7 @@ JARVIS_TEST(msix_register_dispatch_happy, "PRE: none | POST: none") {
+                 Scheduler::terminate(*cur, 0);
+                 return;
+             }
+-            int s = cs->install(msix, cap::CapType::Msix, cap::CAP_RIGHT_WRITE);
++            int s = cs->install(msix, cap::CapType::Msix, cap::CapRights::WRITE);
+             if (s < 0) {
+                 msix->release();
+                 g_reg_ret = 98;
+@@ -382,8 +382,8 @@ JARVIS_TEST(msix_register_validation_matrix, "PRE: none | POST: none") {
+                 Scheduler::terminate(*cur, 0);
+                 return;
+             }
+-            int s1 = cs->install(msix, cap::CapType::Msix, cap::CAP_RIGHT_WRITE);
+-            int s2 = cs->install(msix, cap::CapType::Msix, cap::CAP_RIGHT_READ);
++            int s1 = cs->install(msix, cap::CapType::Msix, cap::CapRights::WRITE);
++            int s2 = cs->install(msix, cap::CapType::Msix, cap::CapRights::READ);
+             if (s1 < 0 || s2 < 0) {
+                 msix->release();
+                 Scheduler::terminate(*cur, 0);
+@@ -470,7 +470,7 @@ JARVIS_TEST(msix_wait_pending_immediate, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(msix, cap::CapType::Msix,
+-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                                cap::CapRights::WRITE | cap::CapRights::READ);
+             if (s < 0) {
+                 msix->release();
+                 g_wait_ret = 98;
+@@ -545,7 +545,7 @@ JARVIS_TEST(msix_wait_blocking_wakeup, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(msix, cap::CapType::Msix,
+-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                                cap::CapRights::WRITE | cap::CapRights::READ);
+             if (s < 0) {
+                 msix->release();
+                 g_wait_ret = 98;
+@@ -627,7 +627,7 @@ JARVIS_TEST(msix_wait_revoked_mid_wait, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(msix, cap::CapType::Msix,
+-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                                cap::CapRights::WRITE | cap::CapRights::READ);
+             if (s < 0) {
+                 msix->release();
+                 g_wait_ret = 98;
+@@ -718,7 +718,7 @@ JARVIS_TEST(msix_notify_delivery, "PRE: none | POST: none") {
+                 return;
+             }
+             int s = cs->install(msix, cap::CapType::Msix,
+-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                                cap::CapRights::WRITE | cap::CapRights::READ);
+             if (s < 0) {
+                 msix->release();
+                 g_notify_val = 98;
+@@ -812,7 +812,7 @@ JARVIS_TEST(msix_task_died_drain, "PRE: none | POST: none") {
+             }
+             s_tbl = msix->tbl_;
+             int s = cs->install(msix, cap::CapType::Msix,
+-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
++                                cap::CapRights::WRITE | cap::CapRights::READ);
+             if (s < 0) {
+                 msix->release();
+                 g_wait_ret = 98;
+diff --git a/src/kernel/test/test_cap_pager.cpp b/src/kernel/test/test_cap_pager.cpp
+index 45f60d9e6..c24593d16 100644
+--- a/src/kernel/test/test_cap_pager.cpp
++++ b/src/kernel/test/test_cap_pager.cpp
+@@ -73,7 +73,7 @@ int install_frame(TaskControlBlock *t, cap::FrameCap *fc) {
+     if (!cs)
+         return -1;
+     int s = cs->install(fc, cap::CapType::Frame,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                        cap::CapRights::READ | cap::CapRights::WRITE);
+     if (s >= 0)
+         fc->release(); // slot holds a reference; drop the creator's
+     return s;
+diff --git a/src/kernel/test/test_cap_shm.cpp b/src/kernel/test/test_cap_shm.cpp
+index 9066e04c1..93fa26508 100644
+--- a/src/kernel/test/test_cap_shm.cpp
++++ b/src/kernel/test/test_cap_shm.cpp
+@@ -49,7 +49,7 @@ int install_frame(TaskControlBlock *t, cap::FrameCap *fc) {
+     if (!cs)
+         return -1;
+     int s = cs->install(fc, cap::CapType::Frame,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                        cap::CapRights::READ | cap::CapRights::WRITE);
+     if (s >= 0)
+         fc->release(); // slot holds a reference; drop the creator's
+     return s;
+@@ -97,7 +97,7 @@ JARVIS_TEST(frame_user_map_unmap_roundtrip, "PRE: none | POST: none") {
+             cur->ensure_cspace();
+             cap::CNode *cs = cur->get_cspace();
+             int s = cs->install(fc, cap::CapType::Frame,
+-                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                                cap::CapRights::READ | cap::CapRights::WRITE);
+             if (s < 0) {
+                 fc->release();
+                 Scheduler::terminate(*cur, 0);
+@@ -241,7 +241,7 @@ JARVIS_TEST(shm_ring_producer_consumer, "PRE: none | POST: none") {
+             cur->ensure_cspace();
+             cap::CNode *cs = cur->get_cspace();
+             int s = cs->install(fc, cap::CapType::Frame,
+-                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                                cap::CapRights::READ | cap::CapRights::WRITE);
+             if (s < 0) {
+                 fc->release();
+                 Scheduler::terminate(*cur, 0);
+@@ -364,7 +364,7 @@ JARVIS_TEST(shm_ring_task_death_drain, "PRE: none | POST: none") {
+             self->ensure_cspace();
+             cap::CNode *cs = self->get_cspace();
+             int s = cs->install(fc, cap::CapType::Frame,
+-                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                                cap::CapRights::READ | cap::CapRights::WRITE);
+             if (s < 0) {
+                 fc->release();
+                 return;
+@@ -428,7 +428,7 @@ JARVIS_TEST(shm_ring_revocation_cleanup, "PRE: none | POST: none") {
+             cur->ensure_cspace();
+             cap::CNode *cs = cur->get_cspace();
+             int s = cs->install(fc, cap::CapType::Frame,
+-                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                                cap::CapRights::READ | cap::CapRights::WRITE);
+             if (s < 0) {
+                 fc->release();
+                 Scheduler::terminate(*cur, 0);
+diff --git a/src/kernel/test/test_cap_syscall.cpp b/src/kernel/test/test_cap_syscall.cpp
+index 44c1a263a..2f6df742e 100644
+--- a/src/kernel/test/test_cap_syscall.cpp
++++ b/src/kernel/test/test_cap_syscall.cpp
+@@ -84,7 +84,7 @@ void install_dest_cspace(TaskControlBlock *t, cap::CNode **dst_out,
+     dst->cspace_id = 0x99;
+     kernel::test::ResourceTracker::instance().track_cap_object_add();
+     int s = cspace->install(dst, cap::CapType::CNode,
+-                            cap::CAP_RIGHT_GRANT | cap::CAP_RIGHT_COPY);
++                            cap::CapRights::GRANT | cap::CapRights::COPY);
+     if (s < 0) {
+         dst->release();
+         return;
+@@ -132,7 +132,7 @@ JARVIS_TEST(sys_cap_grant_dispatch, "PRE: none | POST: none") {
+         kernel::test::ResourceTracker::instance().track_cap_object_add();
+ 
+         int ss = cspace->install(tgt, cap::CapType::Task,
+-                                 cap::CAP_RIGHT_READ | cap::CAP_RIGHT_GRANT);
++                                 cap::CapRights::READ | cap::CapRights::GRANT);
+         cap::CNode *dst = nullptr;
+         int ds = -1;
+         install_dest_cspace(cur, &dst, &ds);
+@@ -186,7 +186,7 @@ JARVIS_TEST(sys_cap_copy_dispatch, "PRE: none | POST: none") {
+         kernel::test::ResourceTracker::instance().track_cap_object_add();
+ 
+         int ss = cspace->install(tgt, cap::CapType::Task,
+-                                 cap::CAP_RIGHT_READ | cap::CAP_RIGHT_COPY);
++                                 cap::CapRights::READ | cap::CapRights::COPY);
+         cap::CNode *dst = nullptr;
+         int ds = -1;
+         install_dest_cspace(cur, &dst, &ds);
+@@ -239,7 +239,7 @@ JARVIS_TEST(sys_cap_revoke_dispatch, "PRE: none | POST: none") {
+         tgt->mark_pool_backed();
+         kernel::test::ResourceTracker::instance().track_cap_object_add();
+ 
+-        int ss = cspace->install(tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++        int ss = cspace->install(tgt, cap::CapType::Task, cap::CapRights::READ);
+         if (ss < 0) {
+             tgt->release();
+             return;
+@@ -328,8 +328,8 @@ JARVIS_TEST(sys_cap_mint_dispatch, "PRE: none | POST: none") {
+         kernel::test::ResourceTracker::instance().track_cap_object_add();
+ 
+         int ss = cspace->install(tgt, cap::CapType::Task,
+-                                 cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE |
+-                                     cap::CAP_RIGHT_COPY);
++                                 cap::CapRights::READ | cap::CapRights::WRITE |
++                                     cap::CapRights::COPY);
+         cap::CNode *dst = nullptr;
+         int ds = -1;
+         install_dest_cspace(cur, &dst, &ds);
+@@ -345,7 +345,7 @@ JARVIS_TEST(sys_cap_mint_dispatch, "PRE: none | POST: none") {
+                                cspace->slot_gen(static_cast<uint32_t>(ds)));
+         g_ret = Syscall::handle(
+             static_cast<uint64_t>(SyscallNumber::CAP_MINT), sh, dh,
+-            static_cast<uint64_t>(cap::CAP_RIGHT_WRITE), 0, nullptr);
++            static_cast<uint64_t>(cap::CapRights::WRITE), 0, nullptr);
+         g_dst_occ = cap::occupied_count(dst);
+         teardown_dest_cspace(cur, dst, ds);
+         cspace->remove(static_cast<uint32_t>(ss));
+@@ -404,7 +404,7 @@ JARVIS_TEST(sys_cap_wrong_type_returns_minus1, "PRE: none | POST: none") {
+         tgt->mark_pool_backed();
+         kernel::test::ResourceTracker::instance().track_cap_object_add();
+ 
+-        int ss = cspace->install(tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++        int ss = cspace->install(tgt, cap::CapType::Task, cap::CapRights::READ);
+         if (ss < 0) {
+             tgt->release();
+             return;
+@@ -426,7 +426,7 @@ JARVIS_TEST(sys_cap_wrong_type_returns_minus1, "PRE: none | POST: none") {
+ // Runmode: kernel
+ // Testidea: A capability lacking the required right is rejected.
+ // Input: task installs a Task cap WITHOUT COPY; dispatches SYS_CAP_COPY
+-// Expect: -1 (CAP_RIGHT_COPY missing on destination)
++// Expect: -1 (CapRights::COPY missing on destination)
+ // Depends: kernel::Syscall, kernel::cap
+ JARVIS_TEST(sys_cap_rights_denied_returns_minus1, "PRE: none | POST: none") {
+     static uint64_t g_ret = 0;
+@@ -445,7 +445,7 @@ JARVIS_TEST(sys_cap_rights_denied_returns_minus1, "PRE: none | POST: none") {
+         tgt->mark_pool_backed();
+         kernel::test::ResourceTracker::instance().track_cap_object_add();
+ 
+-        int ss = cspace->install(tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++        int ss = cspace->install(tgt, cap::CapType::Task, cap::CapRights::READ);
+         if (ss < 0) {
+             tgt->release();
+             return;
+@@ -486,7 +486,7 @@ JARVIS_TEST(sys_cap_revoke_cleanup_zero_delta, "PRE: none | POST: none") {
+         tgt->mark_pool_backed();
+         kernel::test::ResourceTracker::instance().track_cap_object_add();
+ 
+-        int ss = cspace->install(tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
++        int ss = cspace->install(tgt, cap::CapType::Task, cap::CapRights::READ);
+         if (ss < 0) {
+             tgt->release();
+             return;
+diff --git a/src/kernel/test/test_cap_untyped.cpp b/src/kernel/test/test_cap_untyped.cpp
+index 84da2d350..3801eefa4 100644
+--- a/src/kernel/test/test_cap_untyped.cpp
++++ b/src/kernel/test/test_cap_untyped.cpp
+@@ -88,7 +88,7 @@ void cap_retype_happy_entry() {
+     }
+     g_rtype_base = ut->phys;
+     int s = cs->install(ut, cap::CapType::Untyped,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                        cap::CapRights::READ | cap::CapRights::WRITE);
+     if (s < 0) {
+         ut->release();
+         g_rtype_ret = 98;
+@@ -101,14 +101,14 @@ void cap_retype_happy_entry() {
+         static_cast<uint64_t>(SyscallNumber::CAP_RETYPE), h,
+         static_cast<uint64_t>(cap::CapType::Frame),
+         static_cast<uint64_t>(arch::PAGE_SIZE),
+-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE),
++        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE),
+         nullptr);
+     g_rtype_ret = ret;
+     if (ret != static_cast<uint64_t>(-1)) {
+         // Issue #266: the return is an opaque handle, usable directly with
+         // lookup — no manual re-encoding from a slot index.
+         KernelObject *target = cap::lookup(
+-            cs, ret, cap::CapType::Frame, cap::CAP_RIGHT_READ);
++            cs, ret, cap::CapType::Frame, cap::CapRights::READ);
+         if (target) {
+             auto *fc = static_cast<cap::FrameCap *>(target);
+             g_rtype_frame_ok =
+@@ -165,7 +165,7 @@ void cap_retype_validation_entry() {
+         return;
+     }
+     int s = cs->install(ut, cap::CapType::Untyped,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                        cap::CapRights::READ | cap::CapRights::WRITE);
+     if (s < 0) {
+         ut->release();
+         g_rtype_val[0] = 98;
+@@ -186,27 +186,27 @@ void cap_retype_validation_entry() {
+     g_rtype_val[0] = cap_retype_attempt(
+         bad_h, static_cast<uint64_t>(cap::CapType::Frame),
+         static_cast<uint64_t>(arch::PAGE_SIZE),
+-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
++        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
+     g_rtype_val[1] = cap_retype_attempt(
+         h, static_cast<uint64_t>(cap::CapType::Endpoint),
+         static_cast<uint64_t>(arch::PAGE_SIZE),
+-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
++        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
+     g_rtype_val[2] = cap_retype_attempt(
+         h, static_cast<uint64_t>(cap::CapType::Frame),
+         static_cast<uint64_t>(6 * arch::PAGE_SIZE),
+-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
++        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
+     g_rtype_val[3] = cap_retype_attempt(
+         h, static_cast<uint64_t>(cap::CapType::Frame), 0,
+-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
++        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
+     g_rtype_val[4] = cap_retype_attempt(
+         h, static_cast<uint64_t>(cap::CapType::Frame),
+         static_cast<uint64_t>(arch::PAGE_SIZE + 0x100),
+-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
++        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
+     g_rtype_val[5] = ut->owns_region() ? 1 : 0; // parent intact after failures
+     g_rtype_val[6] = cap_retype_attempt(
+         h, static_cast<uint64_t>(cap::CapType::Frame),
+         static_cast<uint64_t>(sz),
+-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
++        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
+     cs->remove(static_cast<uint32_t>(s));
+     if (g_rtype_val[6] != static_cast<uint64_t>(-1))
+         cs->remove(cap::handle_slot(g_rtype_val[6]));
+@@ -261,7 +261,7 @@ JARVIS_TEST(untyped_dispose_returns_region_to_pmm, "PRE: none | POST: none") {
+     JARVIS_ASSERT(ut != nullptr);
+ 
+     cap::CNode node;
+-    int idx = node.install(ut, cap::CapType::Untyped, cap::CAP_RIGHT_READ);
++    int idx = node.install(ut, cap::CapType::Untyped, cap::CapRights::READ);
+     JARVIS_ASSERT(idx >= 0);
+     JARVIS_ASSERT_EQ(1U, cap::occupied_count(&node));
+     node.remove(static_cast<uint32_t>(idx));
+@@ -294,7 +294,7 @@ JARVIS_TEST(untyped_cap_copy_shares_object, "PRE: none | POST: none") {
+     cap::CNode src;
+     cap::CNode dst;
+     int s = src.install(ut, cap::CapType::Untyped,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_COPY);
++                        cap::CapRights::READ | cap::CapRights::COPY);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(src.cspace_id, static_cast<uint32_t>(s),
+                                      src.slot_gen(static_cast<uint32_t>(s)));
+@@ -332,13 +332,13 @@ JARVIS_TEST(retype_frame_exact_size_end_to_end, "PRE: none | POST: none") {
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+ 
+     int r = cap::retype(&node, sh, cap::CapType::Frame, sz,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                        cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(r >= 0);
+     // Exact-size carve installs ONE slot (no child Untyped).
+     JARVIS_ASSERT_EQ(2U, cap::occupied_count(&node)); // ut slot + frame slot
+@@ -348,7 +348,7 @@ JARVIS_TEST(retype_frame_exact_size_end_to_end, "PRE: none | POST: none") {
+         cap::lookup(&node, cap::encode_handle(node.cspace_id,
+                                               static_cast<uint32_t>(r),
+                                               node.slot_gen(static_cast<uint32_t>(r))),
+-                    cap::CapType::Frame, cap::CAP_RIGHT_READ);
++                    cap::CapType::Frame, cap::CapRights::READ);
+     JARVIS_ASSERT(target != nullptr);
+     auto *fc = static_cast<cap::FrameCap *>(target);
+     JARVIS_ASSERT_EQ(ut->phys, fc->phys);
+@@ -384,16 +384,16 @@ JARVIS_TEST(retype_oversize_rejected_parent_intact, "PRE: none | POST: none") {
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+ 
+     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame,
+-                                     6 * arch::PAGE_SIZE, cap::CAP_RIGHT_READ));
++                                     6 * arch::PAGE_SIZE, cap::CapRights::READ));
+     JARVIS_ASSERT(ut->owns_region()); // untouched
+ 
+-    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
++    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CapRights::READ);
+     JARVIS_ASSERT(r >= 0);
+ 
+     node.remove(static_cast<uint32_t>(s));
+@@ -418,17 +418,17 @@ JARVIS_TEST(retype_twice_fails_no_double_free, "PRE: none | POST: none") {
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+ 
+-    int r1 = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
++    int r1 = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CapRights::READ);
+     JARVIS_ASSERT(r1 >= 0);
+     // Second retype on the same handle: the slot still points at the Untyped,
+     // but the guard is set -> -1.  No second FrameCap is ever created.
+     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame, sz,
+-                                     cap::CAP_RIGHT_READ));
++                                     cap::CapRights::READ));
+ 
+     node.remove(static_cast<uint32_t>(s));
+     node.remove(static_cast<uint32_t>(r1));
+@@ -454,18 +454,18 @@ JARVIS_TEST(retype_wrong_target_type_fails, "PRE: none | POST: none") {
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+ 
+     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Endpoint, sz,
+-                                     cap::CAP_RIGHT_READ));
++                                     cap::CapRights::READ));
+     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::CNode, sz,
+-                                     cap::CAP_RIGHT_READ));
++                                     cap::CapRights::READ));
+     JARVIS_ASSERT(ut->owns_region());
+ 
+-    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
++    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CapRights::READ);
+     JARVIS_ASSERT(r >= 0);
+     node.remove(static_cast<uint32_t>(s));
+     node.remove(static_cast<uint32_t>(r));
+@@ -474,7 +474,7 @@ JARVIS_TEST(retype_wrong_target_type_fails, "PRE: none | POST: none") {
+ }
+ 
+ // Runmode: kernel
+-// Testidea: retype requires CAP_RIGHT_WRITE on the Untyped cap.
++// Testidea: retype requires CapRights::WRITE on the Untyped cap.
+ // Input: install with READ|COPY only (no WRITE)
+ // Expect: -1 (lookup rights check); Untyped intact
+ // Depends: kernel::cap::UntypedMem, kernel::cap::retype
+@@ -485,13 +485,13 @@ JARVIS_TEST(retype_requires_write_right, "PRE: none | POST: none") {
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_COPY);
++                         cap::CapRights::READ | cap::CapRights::COPY);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+ 
+     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame, sz,
+-                                     cap::CAP_RIGHT_READ));
++                                     cap::CapRights::READ));
+     JARVIS_ASSERT(ut->owns_region());
+ 
+     node.remove(static_cast<uint32_t>(s));
+@@ -516,8 +516,8 @@ JARVIS_TEST(retype_revoked_untyped_fails_single_free, "PRE: none | POST: none")
+     cap::CNode a;
+     cap::CNode b;
+     int sa = a.install(ut, cap::CapType::Untyped,
+-                       cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE |
+-                           cap::CAP_RIGHT_COPY);
++                       cap::CapRights::READ | cap::CapRights::WRITE |
++                           cap::CapRights::COPY);
+     JARVIS_ASSERT(sa >= 0);
+     uint64_t ha = cap::encode_handle(a.cspace_id, static_cast<uint32_t>(sa),
+                                      a.slot_gen(static_cast<uint32_t>(sa)));
+@@ -532,7 +532,7 @@ JARVIS_TEST(retype_revoked_untyped_fails_single_free, "PRE: none | POST: none")
+     uint64_t hb = cap::encode_handle(b.cspace_id, static_cast<uint32_t>(sb),
+                                      b.slot_gen(static_cast<uint32_t>(sb)));
+     JARVIS_ASSERT_EQ(-1, cap::retype(&b, hb, cap::CapType::Frame, sz,
+-                                     cap::CAP_RIGHT_READ));
++                                     cap::CapRights::READ));
+ 
+     b.remove(static_cast<uint32_t>(sb));
+     ut->release(); // region freed exactly once by Untyped dispose
+@@ -565,14 +565,14 @@ JARVIS_TEST(retype_subrange_carve_creates_child_remainder,
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+ 
+     const size_t carve = arch::PAGE_SIZE;
+     int r = cap::retype(&node, sh, cap::CapType::Frame, carve,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                        cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(r >= 0);
+     JARVIS_ASSERT_EQ(3U, cap::occupied_count(&node)); // ut + frame + child
+     JARVIS_ASSERT(!ut->owns_region());                // parent spent
+@@ -581,7 +581,7 @@ JARVIS_TEST(retype_subrange_carve_creates_child_remainder,
+         cap::lookup(&node, cap::encode_handle(node.cspace_id,
+                                               static_cast<uint32_t>(r),
+                                               node.slot_gen(static_cast<uint32_t>(r))),
+-                    cap::CapType::Frame, cap::CAP_RIGHT_READ);
++                    cap::CapType::Frame, cap::CapRights::READ);
+     JARVIS_ASSERT(target != nullptr);
+     auto *fc = static_cast<cap::FrameCap *>(target);
+     JARVIS_ASSERT_EQ(ut->phys, fc->phys);
+@@ -629,13 +629,13 @@ JARVIS_TEST(retype_two_level_split_child_retyped_again,
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+ 
+     int r1 = cap::retype(&node, sh, cap::CapType::Frame, arch::PAGE_SIZE,
+-                         cap::CAP_RIGHT_READ);
++                         cap::CapRights::READ);
+     JARVIS_ASSERT(r1 >= 0);
+     int child1_idx = find_slot_of(node, cap::CapType::Untyped, ut);
+     JARVIS_ASSERT(child1_idx >= 0);
+@@ -650,7 +650,7 @@ JARVIS_TEST(retype_two_level_split_child_retyped_again,
+         node.cspace_id, static_cast<uint32_t>(child1_idx),
+         node.slot_gen(static_cast<uint32_t>(child1_idx)));
+     int r2 = cap::retype(&node, ch, cap::CapType::Frame, arch::PAGE_SIZE,
+-                         cap::CAP_RIGHT_READ);
++                         cap::CapRights::READ);
+     JARVIS_ASSERT(r2 >= 0);
+     JARVIS_ASSERT(!child1->owns_region()); // child spent by its carve
+     // find_slot_of returns the FIRST Untyped slot, i.e. the still-occupied
+@@ -673,7 +673,7 @@ JARVIS_TEST(retype_two_level_split_child_retyped_again,
+     KernelObject *target2 = cap::lookup(
+         &node, cap::encode_handle(node.cspace_id, static_cast<uint32_t>(r2),
+                                   node.slot_gen(static_cast<uint32_t>(r2))),
+-        cap::CapType::Frame, cap::CAP_RIGHT_READ);
++        cap::CapType::Frame, cap::CapRights::READ);
+     JARVIS_ASSERT(target2 != nullptr);
+     auto *fc2 = static_cast<cap::FrameCap *>(target2);
+     JARVIS_ASSERT_EQ(ut->phys + arch::PAGE_SIZE, fc2->phys);
+@@ -708,17 +708,17 @@ JARVIS_TEST(retype_unaligned_size_rejected_parent_intact,
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+ 
+     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame,
+                                      arch::PAGE_SIZE + 0x100,
+-                                     cap::CAP_RIGHT_READ));
++                                     cap::CapRights::READ));
+     JARVIS_ASSERT(ut->owns_region());
+ 
+-    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
++    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CapRights::READ);
+     JARVIS_ASSERT(r >= 0);
+     node.remove(static_cast<uint32_t>(s));
+     node.remove(static_cast<uint32_t>(r));
+@@ -744,12 +744,12 @@ JARVIS_TEST(retype_child_dispose_frees_only_remainder,
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+     int r = cap::retype(&node, sh, cap::CapType::Frame, arch::PAGE_SIZE,
+-                        cap::CAP_RIGHT_READ);
++                        cap::CapRights::READ);
+     JARVIS_ASSERT(r >= 0);
+     int child_idx = find_slot_of(node, cap::CapType::Untyped, ut);
+     JARVIS_ASSERT(child_idx >= 0);
+@@ -791,12 +791,12 @@ JARVIS_TEST(retype_parent_dispose_after_carve_frees_nothing,
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+     int r = cap::retype(&node, sh, cap::CapType::Frame, arch::PAGE_SIZE,
+-                        cap::CAP_RIGHT_READ);
++                        cap::CapRights::READ);
+     JARVIS_ASSERT(r >= 0);
+     int child_idx = find_slot_of(node, cap::CapType::Untyped, ut);
+     JARVIS_ASSERT(child_idx >= 0);
+@@ -837,20 +837,20 @@ JARVIS_TEST(retype_full_table_precheck_fails_closed,
+ 
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+     int fill[62];
+     for (int i = 0; i < 62; ++i) {
+-        fill[i] = node.install(ut, cap::CapType::Untyped, cap::CAP_RIGHT_READ);
++        fill[i] = node.install(ut, cap::CapType::Untyped, cap::CapRights::READ);
+         JARVIS_ASSERT(fill[i] >= 0);
+     }
+     JARVIS_ASSERT_EQ(63U, cap::occupied_count(&node));
+ 
+     // Sub-range carve needs 2 slots; only 1 free -> rejected, parent intact.
+     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame,
+-                                     arch::PAGE_SIZE, cap::CAP_RIGHT_READ));
++                                     arch::PAGE_SIZE, cap::CapRights::READ));
+     JARVIS_ASSERT(ut->owns_region());
+ 
+     for (int i = 0; i < 62; ++i)
+@@ -859,13 +859,13 @@ JARVIS_TEST(retype_full_table_precheck_fails_closed,
+ 
+     // With space available the exact retype succeeds.
+     int s2 = node.install(ut, cap::CapType::Untyped,
+-                          cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                          cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s2 >= 0);
+     uint64_t sh2 = cap::encode_handle(node.cspace_id,
+                                       static_cast<uint32_t>(s2),
+                                       node.slot_gen(static_cast<uint32_t>(s2)));
+     int r = cap::retype(&node, sh2, cap::CapType::Frame, sz,
+-                        cap::CAP_RIGHT_READ);
++                        cap::CapRights::READ);
+     JARVIS_ASSERT(r >= 0);
+     node.remove(static_cast<uint32_t>(s2));
+     node.remove(static_cast<uint32_t>(r));
+@@ -984,12 +984,12 @@ JARVIS_TEST(untyped_live_bound_counts_children, "PRE: none | POST: none") {
+     auto *ut = uts[kMax - 1];
+     cap::CNode node;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++                         cap::CapRights::READ | cap::CapRights::WRITE);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
+                                      node.slot_gen(static_cast<uint32_t>(s)));
+     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame,
+-                                     arch::PAGE_SIZE, cap::CAP_RIGHT_READ));
++                                     arch::PAGE_SIZE, cap::CapRights::READ));
+     JARVIS_ASSERT(!ut->owns_region()); // spent (guard stays set)
+ 
+     node.remove(static_cast<uint32_t>(s));
+diff --git a/src/kernel/test/test_cross_boundary.cpp b/src/kernel/test/test_cross_boundary.cpp
+index dea910443..eaa2bc6be 100644
+--- a/src/kernel/test/test_cross_boundary.cpp
++++ b/src/kernel/test/test_cross_boundary.cpp
+@@ -175,7 +175,7 @@ JARVIS_TEST(cross_boundary_iocd_register_and_irq_forward,
+     fev.type = iocd::IOCD_IRQ_EVENT;
+     fev.data_size = sizeof(ev);
+     __builtin_memcpy(fev.data, &ev, sizeof(ev));
+-    JARVIS_ASSERT_FMT(IPC::send(iocd_pid, fev, IPC_NONBLOCK),
++    JARVIS_ASSERT_FMT(IPC::send(iocd_pid, fev, IpcFlags::NONBLOCK),
+                       "IRQ_EVENT send rejected");
+ 
+     // 3. The daemon needs timer ticks to run: spin (IRQs on, no
+diff --git a/src/kernel/test/test_init.cpp b/src/kernel/test/test_init.cpp
+index 420e9025b..1ff097c3c 100644
+--- a/src/kernel/test/test_init.cpp
++++ b/src/kernel/test/test_init.cpp
+@@ -86,7 +86,7 @@ JARVIS_TEST(reaper_wakes_on_daemon_ipc, "PRE: none | POST: none") {
+     Message msg{};
+     msg.sender_id = self->id;
+     msg.type = ipc::MSG_DAEMON_READY;
+-    JARVIS_ASSERT(kernel::IPC::send(1, msg, 0));
++    JARVIS_ASSERT(kernel::IPC::send(1, msg, IpcFlags::NONE));
+     Message got{};
+     JARVIS_ASSERT(kernel::IPC::recv(got));
+     JARVIS_ASSERT(got.type == ipc::MSG_DAEMON_READY);
+diff --git a/src/kernel/test/test_ipc.cpp b/src/kernel/test/test_ipc.cpp
+index 1d4b0f2e8..bcb952e25 100644
+--- a/src/kernel/test/test_ipc.cpp
++++ b/src/kernel/test/test_ipc.cpp
+@@ -395,13 +395,13 @@ JARVIS_TEST(ipc_send_nonexistent, "PRE: none | POST: none") {
+ }
+ 
+ // Runmode: kernel
+-// Testidea: Verifies that IPC::send with IPC_NONBLOCK flag returns false
++// Testidea: Verifies that IPC::send with IpcFlags::NONBLOCK flag returns false
+ // when the target queue is full.
+-// Input: Fill own queue to IPC_MAX_QUEUE_MSG, then send with IPC_NONBLOCK
++// Input: Fill own queue to IPC_MAX_QUEUE_MSG, then send with IpcFlags::NONBLOCK
+ // Expect: Non-blocking send returns false while queue is full; after
+ // draining, all recvs succeed and queue is empty
+ // Depends: kernel::MessageQueue, kernel::IPC, kernel::Scheduler,
+-// IPC_MAX_QUEUE_MSG, IPC_NONBLOCK
++// IPC_MAX_QUEUE_MSG, IpcFlags::NONBLOCK
+ JARVIS_TEST(ipc_send_nonblock_full, "PRE: none | POST: none") {
+     auto *cur = Scheduler::current_task();
+     JARVIS_ASSERT(cur != nullptr);
+@@ -417,7 +417,7 @@ JARVIS_TEST(ipc_send_nonblock_full, "PRE: none | POST: none") {
+     }
+     JARVIS_ASSERT(cur->msg_queue.is_full());
+ 
+-    bool ok = IPC::send(cur->id, msg, IPC_NONBLOCK);
++    bool ok = IPC::send(cur->id, msg, IpcFlags::NONBLOCK);
+     JARVIS_ASSERT(!ok);
+ 
+     for (size_t i = 0; i < IPC_MAX_QUEUE_MSG; ++i) {
+diff --git a/src/kernel/test/test_ipc_benchmark.cpp b/src/kernel/test/test_ipc_benchmark.cpp
+index 33655d302..99caffb5b 100644
+--- a/src/kernel/test/test_ipc_benchmark.cpp
++++ b/src/kernel/test/test_ipc_benchmark.cpp
+@@ -114,7 +114,7 @@ static uint64_t bench_ipc_send_self() {
+     msg.data_size = 0;
+     // Benchmark load: results intentionally unchecked (measurement
+     // purity — throughput/latency is the deliverable, see Testidea).
+-    (void)IPC::send(cur->id, msg, IPC_NONBLOCK);
++    (void)IPC::send(cur->id, msg, IpcFlags::NONBLOCK);
+     Message out;
+     (void)IPC::recv(out);
+     return 0;
+@@ -160,13 +160,13 @@ static Message bench_ipc_send_only_msg_;
+ static uint64_t bench_ipc_send_only() {
+     // Benchmark load: unchecked by design (see above).
+     (void)IPC::send(bench_ipc_send_only_task_id_, bench_ipc_send_only_msg_,
+-                     IPC_NONBLOCK);
++                     IpcFlags::NONBLOCK);
+     return 0;
+ }
+ 
+ // Runmode: kernel
+ // Testidea: Measures non-blocking IPC send-only latency
+-// Input: IPC_NONBLOCK send to own task without draining per iteration
++// Input: IpcFlags::NONBLOCK send to own task without draining per iteration
+ // Expect: Average send latency < 10000 cycles
+ // Depends: kernel/ipc, kernel/task
+ JARVIS_TEST(ipc_bench_send_only, "PRE: none | POST: none") {
+@@ -198,13 +198,13 @@ static uint64_t bench_ipc_send_full() {
+     Message msg{};
+     msg.sender_id = bench_ipc_send_full_id_;
+     // Benchmark load: unchecked by design (see above).
+-    (void)IPC::send(bench_ipc_send_full_id_, msg, IPC_NONBLOCK);
++    (void)IPC::send(bench_ipc_send_full_id_, msg, IpcFlags::NONBLOCK);
+     return 0;
+ }
+ 
+ // Runmode: kernel
+ // Testidea: Measures non-blocking IPC send failure path when queue is full
+-// Input: Queue filled to capacity, then IPC_NONBLOCK send attempted
++// Input: Queue filled to capacity, then IpcFlags::NONBLOCK send attempted
+ // Expect: Average failure-path latency < 5000 cycles
+ // Depends: kernel/ipc, kernel/task
+ JARVIS_TEST(ipc_bench_send_full, "PRE: none | POST: none") {
+@@ -237,7 +237,7 @@ static Message bench_ipc_64byte_send_;
+ 
+ static uint64_t bench_ipc_send_64byte() {
+     // Benchmark load: unchecked by design (see above).
+-    (void)IPC::send(bench_ipc_64byte_id_, bench_ipc_64byte_send_, IPC_NONBLOCK);
++    (void)IPC::send(bench_ipc_64byte_id_, bench_ipc_64byte_send_, IpcFlags::NONBLOCK);
+     Message out;
+     (void)IPC::recv(out);
+     return 0;
+diff --git a/src/kernel/test/test_ipc_extended.cpp b/src/kernel/test/test_ipc_extended.cpp
+index ed312a20c..0e9f6bb5b 100644
+--- a/src/kernel/test/test_ipc_extended.cpp
++++ b/src/kernel/test/test_ipc_extended.cpp
+@@ -218,7 +218,7 @@ JARVIS_TEST(ipc_priority_inversion, "PRE: none | POST: none") {
+             msg.type = 42;
+             msg.priority = 0;
+             msg.data_size = 0;
+-            bool ok = IPC::send(c->recv_, msg, 0);
++            bool ok = IPC::send(c->recv_, msg, IpcFlags::NONE);
+             __atomic_store_n(reinterpret_cast<uint64_t *>(c->out_),
+                              ok ? 1 : 0, __ATOMIC_RELEASE);
+         },
+@@ -318,7 +318,7 @@ JARVIS_TEST(ipc_buf_handle_max_size, "PRE: none | POST: none") {
+             msg.type = 200;
+             msg.priority = 0;
+             msg.data_size = IPC_MAX_MSG_SIZE;
+-            if (!IPC::send(peer, msg, 0)) {
++            if (!IPC::send(peer, msg, IpcFlags::NONE)) {
+                 g_sender_ok = 2;
+                 return;
+             }
+@@ -442,7 +442,7 @@ JARVIS_TEST(ipc_priority_inheritance_send, "PRE: none | POST: none") {
+             msg.type = 42;
+             msg.priority = 0;
+             msg.data_size = 0;
+-            bool ok = IPC::send(c->recv_, msg, 0);
++            bool ok = IPC::send(c->recv_, msg, IpcFlags::NONE);
+             __atomic_store_n(reinterpret_cast<uint64_t *>(c->out_),
+                              ok ? 1 : 0, __ATOMIC_RELEASE);
+         },
+@@ -517,7 +517,7 @@ JARVIS_TEST(ipc_send_no_wake_non_ipc_waiter, "PRE: none | POST: none") {
+     msg.type = 77;
+     msg.priority = 0;
+     msg.data_size = 0;
+-    bool ok = IPC::send(waiter->id, msg, 0);
++    bool ok = IPC::send(waiter->id, msg, IpcFlags::NONE);
+     JARVIS_ASSERT_FMT(ok, "send to blocked waiter failed");
+     JARVIS_ASSERT_FMT(waiter->state == TaskState::BLOCKED,
+                       "non-IPC waiter woken by message arrival");
+@@ -564,7 +564,7 @@ JARVIS_TEST(ipc_send_wakes_recv_waiter, "PRE: none | POST: none") {
+     msg.type = 78;
+     msg.priority = 0;
+     msg.data_size = 0;
+-    bool ok = IPC::send(waiter->id, msg, 0);
++    bool ok = IPC::send(waiter->id, msg, IpcFlags::NONE);
+     JARVIS_ASSERT_FMT(ok, "send to recv waiter failed");
+     JARVIS_ASSERT_FMT(waiter->state == TaskState::READY,
+                       "recv waiter not woken by message arrival");
+diff --git a/src/kernel/test/test_ipc_robustness.cpp b/src/kernel/test/test_ipc_robustness.cpp
+index 2a379e9c3..62128625d 100644
+--- a/src/kernel/test/test_ipc_robustness.cpp
++++ b/src/kernel/test/test_ipc_robustness.cpp
+@@ -67,7 +67,7 @@ void ipc_prio_sender_entry() {
+     msg.type = 1;
+     msg.priority = 0;
+     msg.data_size = 0;
+-    JARVIS_ASSERT(IPC::send(s_recv_id, msg, 0));
++    JARVIS_ASSERT(IPC::send(s_recv_id, msg, IpcFlags::NONE));
+     __atomic_store_n(flag, 1, __ATOMIC_RELEASE);
+ }
+ 
+@@ -235,7 +235,7 @@ TEST_CLASS(IpcConcurrentSenders) {
+                         // Contention drops are by design (NONBLOCK into a
+                         // pre-filled queue; the test asserts count <= MAX,
+                         // not delivery) — result intentionally unchecked.
+-                        (void)IPC::send(c->recv_, msg, IPC_NONBLOCK);
++                        (void)IPC::send(c->recv_, msg, IpcFlags::NONBLOCK);
+                     }
+                 },
+                 12 + static_cast<uint64_t>(i), 10);
+@@ -303,7 +303,7 @@ TEST_CLASS(IpcBufHandleTransferRoundtrip) {
+             msg.type = 100;
+             msg.priority = 0;
+             msg.data_size = 0;
+-            if (!IPC::send(peer, msg, 0)) {
++            if (!IPC::send(peer, msg, IpcFlags::NONE)) {
+                 g_sender_result = 2; // failed
+                 return;
+             }
+@@ -485,7 +485,7 @@ TEST_CLASS(IpcBlockedSenderOnReceiverCleanup) {
+             msg.priority = 0;
+             msg.data_size = 0;
+             // Blocks on the full receiver queue.
+-            bool ok = IPC::send(c->recv_, msg, 0);
++            bool ok = IPC::send(c->recv_, msg, IpcFlags::NONE);
+             __atomic_store_n(reinterpret_cast<uint64_t *>(c->out_),
+                              ok ? 1 : 0, __ATOMIC_RELEASE);
+         },
+@@ -685,7 +685,7 @@ TEST_CLASS(IpcSendSyncSkipsNonReply) {
+             m.data_size = 16;
+             for (size_t i = 0; i < 16; ++i)
+                 m.data[i] = 0xAB;
+-            (void)IPC::send(s_target, m, 0);
++            (void)IPC::send(s_target, m, IpcFlags::NONE);
+         },
+         11, 10);
+     CT_ASSERT(decoy != nullptr);
+@@ -702,7 +702,7 @@ TEST_CLASS(IpcSendSyncSkipsNonReply) {
+             reply.type = 20;
+             reply.priority = 0;
+             reply.data_size = 0;
+-            (void)IPC::send(msg.sender_id, reply, 0);
++            (void)IPC::send(msg.sender_id, reply, IpcFlags::NONE);
+         },
+         11, 10);
+     CT_ASSERT(peer != nullptr);
+@@ -763,7 +763,7 @@ TEST_CLASS(IpcSendSyncDestDeathPreservesNonMatching) {
+             m.type = 310;
+             m.priority = 0;
+             m.data_size = 16;
+-            (void)IPC::send(s_target2, m, 0);
++            (void)IPC::send(s_target2, m, IpcFlags::NONE);
+         },
+         11, 10);
+     CT_ASSERT(decoy != nullptr);
+@@ -822,7 +822,7 @@ TEST_CLASS(IpcSendSyncDeadPeerFailsFast) {
+             m.type = 320;
+             m.priority = 0;
+             m.data_size = 8;
+-            (void)IPC::send(s_target5, m, 0);
++            (void)IPC::send(s_target5, m, IpcFlags::NONE);
+         },
+         11, 10);
+     CT_ASSERT(decoy != nullptr);
+@@ -883,7 +883,7 @@ TEST_CLASS(IpcSendSyncOversizedMatchStaysClamped) {
+             m.type = 310;
+             m.priority = 0;
+             m.data_size = 8;
+-            (void)IPC::send(s_target3, m, 0);
++            (void)IPC::send(s_target3, m, IpcFlags::NONE);
+         },
+         11, 10);
+     CT_ASSERT(decoy != nullptr);
+@@ -902,7 +902,7 @@ TEST_CLASS(IpcSendSyncOversizedMatchStaysClamped) {
+             reply.data_size = 64;
+             for (size_t i = 0; i < 64; ++i)
+                 reply.data[i] = static_cast<uint8_t>(i);
+-            (void)IPC::send(msg.sender_id, reply, 0);
++            (void)IPC::send(msg.sender_id, reply, IpcFlags::NONE);
+         },
+         11, 10);
+     CT_ASSERT(peer != nullptr);
+@@ -964,7 +964,7 @@ TEST_CLASS(IpcSendSyncStaleSameSenderOrder) {
+                 m.type = types[i];
+                 m.priority = prios[i];
+                 m.data_size = 0;
+-                (void)IPC::send(s_target4, m, 0);
++                (void)IPC::send(s_target4, m, IpcFlags::NONE);
+             }
+             // Park forever: the peer must stay alive so send_sync's
+             // send succeeds (a dead peer fails fast without consuming).
+diff --git a/src/kernel/test/test_ipc_throughput.cpp b/src/kernel/test/test_ipc_throughput.cpp
+index 5869995aa..29fe727da 100644
+--- a/src/kernel/test/test_ipc_throughput.cpp
++++ b/src/kernel/test/test_ipc_throughput.cpp
+@@ -78,7 +78,7 @@ JARVIS_TEST(ipc_throughput_self_rate, "PRE: none | POST: none") {
+     Message msg{};
+     msg.sender_id = cur->id;
+     for (size_t i = 0; i < k_warmup; ++i) {
+-        JARVIS_ASSERT(IPC::send(cur->id, msg, IPC_NONBLOCK));
++        JARVIS_ASSERT(IPC::send(cur->id, msg, IpcFlags::NONBLOCK));
+         Message out;
+         JARVIS_ASSERT(IPC::recv(out));
+     }
+@@ -86,7 +86,7 @@ JARVIS_TEST(ipc_throughput_self_rate, "PRE: none | POST: none") {
+     constexpr size_t k_n = 20000;
+     uint64_t t0 = arch::rdtsc();
+     for (size_t i = 0; i < k_n; ++i) {
+-        bool sent = IPC::send(cur->id, msg, IPC_NONBLOCK);
++        bool sent = IPC::send(cur->id, msg, IpcFlags::NONBLOCK);
+         Message out;
+         bool ok = IPC::recv(out);
+         JARVIS_ASSERT(ok && sent);
+@@ -129,14 +129,14 @@ JARVIS_TEST(ipc_throughput_size_sweep, "PRE: none | POST: none") {
+         for (size_t i = 0; i < k_sizes[s]; ++i)
+             msg.data[i] = static_cast<uint8_t>(i & 0xFF);
+         for (size_t i = 0; i < k_warmup; ++i) {
+-            JARVIS_ASSERT(IPC::send(cur->id, msg, IPC_NONBLOCK));
++            JARVIS_ASSERT(IPC::send(cur->id, msg, IpcFlags::NONBLOCK));
+             Message out;
+             JARVIS_ASSERT(IPC::recv(out));
+         }
+         constexpr size_t k_n = 3000;
+         uint64_t t0 = arch::rdtsc();
+         for (size_t i = 0; i < k_n; ++i) {
+-            bool sent = IPC::send(cur->id, msg, IPC_NONBLOCK);
++            bool sent = IPC::send(cur->id, msg, IpcFlags::NONBLOCK);
+             Message out;
+             bool ok = IPC::recv(out);
+             JARVIS_ASSERT(ok && sent);
+@@ -172,7 +172,7 @@ JARVIS_TEST(ipc_throughput_depth_sweep, "PRE: none | POST: none") {
+             msg.sender_id = cur->id;
+             msg.type = i;
+             msg.data_size = 0;
+-            bool ok = IPC::send(cur->id, msg, IPC_NONBLOCK);
++            bool ok = IPC::send(cur->id, msg, IpcFlags::NONBLOCK);
+             JARVIS_ASSERT_FMT(ok, "prefill %u/%u rejected", i, k_depths[d]);
+         }
+         uint64_t t0 = arch::rdtsc();
+diff --git a/src/kernel/test/test_ramdisk.cpp b/src/kernel/test/test_ramdisk.cpp
+index 6ca495e14..5c01e58d5 100644
+--- a/src/kernel/test/test_ramdisk.cpp
++++ b/src/kernel/test/test_ramdisk.cpp
+@@ -77,21 +77,21 @@ JARVIS_TEST(ramdisk_chunk_roundtrip, "PRE: none | POST: none") {
+     cap::CNode node;
+     uint32_t gen = 0;
+     int s = node.install(ut, cap::CapType::Untyped,
+-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
++                         cap::CapRights::READ | cap::CapRights::WRITE, &gen);
+     JARVIS_ASSERT(s >= 0);
+     uint64_t sh = cap::encode_handle(node.cspace_id,
+                                      static_cast<uint32_t>(s), gen);
+     uint32_t frame_gen = 0;
+     int r = cap::retype(&node, sh, cap::CapType::Frame,
+                         fixture_pages * arch::PAGE_SIZE,
+-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE,
++                        cap::CapRights::READ | cap::CapRights::WRITE,
+                         &frame_gen);
+     JARVIS_ASSERT(r >= 0);
+     KernelObject *target = cap::lookup(
+         &node,
+         cap::encode_handle(node.cspace_id, static_cast<uint32_t>(r),
+                            frame_gen),
+-        cap::CapType::Frame, cap::CAP_RIGHT_READ);
++        cap::CapType::Frame, cap::CapRights::READ);
+     JARVIS_ASSERT(target != nullptr);
+     auto *fc = static_cast<cap::FrameCap *>(target);
+     const uint64_t base = arch::HHDM_OFFSET + fc->phys;
+@@ -167,7 +167,7 @@ JARVIS_TEST(ramdisk_grant_fail_closed, "PRE: ramdiskd | POST: none") {
+         JARVIS_ASSERT(handles[i] != static_cast<uint64_t>(-1));
+         KernelObject *obj =
+             cap::lookup(dcs, handles[i], cap::CapType::Frame,
+-                        cap::CAP_RIGHT_READ);
++                        cap::CapRights::READ);
+         JARVIS_ASSERT(obj != nullptr);
+         obj->release();
+     }
+@@ -249,7 +249,7 @@ JARVIS_TEST(ramdisk_regrant_pushes_handles, "PRE: ramdiskd | POST: none") {
+             cap::lookup(dcs,
+                         cap::encode_handle(dcs->cspace_id, fresh[i],
+                                            dcs->slot_gen(fresh[i])),
+-                        cap::CapType::Frame, cap::CAP_RIGHT_READ);
++                        cap::CapType::Frame, cap::CapRights::READ);
+         JARVIS_ASSERT(obj != nullptr);
+         obj->release();
+         dcs->remove(fresh[i]);
+diff --git a/src/kernel/test/test_stress_24h.cpp b/src/kernel/test/test_stress_24h.cpp
+index 4ef678ca8..475c4c86e 100644
+--- a/src/kernel/test/test_stress_24h.cpp
++++ b/src/kernel/test/test_stress_24h.cpp
+@@ -110,7 +110,7 @@ bool ipc_burst(uint64_t n) {
+         msg.sender_id = cur->id;
+         msg.type = i & 0xFF;
+         msg.data_size = 0;
+-        if (!IPC::send(cur->id, msg, IPC_NONBLOCK))
++        if (!IPC::send(cur->id, msg, IpcFlags::NONBLOCK))
+             return false;
+         Message out;
+         if (!IPC::recv(out))
+diff --git a/src/kernel/test/test_testrunner.cpp b/src/kernel/test/test_testrunner.cpp
+index 16527883c..3e69b3d65 100644
+--- a/src/kernel/test/test_testrunner.cpp
++++ b/src/kernel/test/test_testrunner.cpp
+@@ -98,7 +98,7 @@ JARVIS_TEST(harness_priority_ordered_wakeup,
+         Message msg{};
+         msg.type = IPC_MSG_TYPE_TEST;
+         msg.priority = 0;
+-        JARVIS_ASSERT(IPC::send(rcv_id, msg, IPC_NONBLOCK));
++        JARVIS_ASSERT(IPC::send(rcv_id, msg, IpcFlags::NONBLOCK));
+     }
+ 
+     // Send one more — should block (queue full), then wake when receiver drains
+@@ -109,7 +109,7 @@ JARVIS_TEST(harness_priority_ordered_wakeup,
+ 
+     // Current task blocks here; receiver runs, drains queue, wakes us.
+     // After waking, the queue has space and our message is delivered.
+-    bool ok = IPC::send(rcv_id, block_msg, 0);
++    bool ok = IPC::send(rcv_id, block_msg, IpcFlags::NONE);
+     JARVIS_ASSERT_FMT(ok, "Priority-ordered wakeup should complete send");
+ 
+     // Let receiver drain remaining messages
+@@ -165,7 +165,7 @@ JARVIS_TEST(harness_blocked_sender_wakes,
+         Message msg{};
+         msg.type = IPC_MSG_TYPE_TEST;
+         msg.priority = 0;
+-        JARVIS_ASSERT(IPC::send(rcv_id, msg, IPC_NONBLOCK));
++        JARVIS_ASSERT(IPC::send(rcv_id, msg, IpcFlags::NONBLOCK));
+     }
+ 
+     // Send one more — should block (queue full)
+@@ -174,7 +174,7 @@ JARVIS_TEST(harness_blocked_sender_wakes,
+     block_msg.type = IPC_MSG_TYPE_TEST;
+     block_msg.priority = 0;
+ 
+-    if (!IPC::send(rcv_id, block_msg, 0)) {
++    if (!IPC::send(rcv_id, block_msg, IpcFlags::NONE)) {
+         // If IPC::send returns false (e.g. OOM), the test failed
+         JARVIS_ASSERT_FMT(false, "Blocking send failed");
+     }
+diff --git a/src/kernel/test/test_watchdog_daemon.cpp b/src/kernel/test/test_watchdog_daemon.cpp
+index 6e40d47a5..cabb24036 100644
+--- a/src/kernel/test/test_watchdog_daemon.cpp
++++ b/src/kernel/test/test_watchdog_daemon.cpp
+@@ -147,7 +147,7 @@ JARVIS_TEST(daemon_cross_arm_kick, "PRE: none | POST: none") {
+             }
+             uint32_t gen = 0;
+             int idx = cs->install(cap, cap::CapType::Wdog,
+-                                  cap::CAP_RIGHT_WRITE, &gen);
++                                  cap::CapRights::WRITE, &gen);
+             if (idx < 0) {
+                 cap->dispose();
+                 return;
+diff --git a/src/kernel/watchdog/watchdogd.cpp b/src/kernel/watchdog/watchdogd.cpp
+index 1befd5a44..660f4fab9 100644
+--- a/src/kernel/watchdog/watchdogd.cpp
++++ b/src/kernel/watchdog/watchdogd.cpp
+@@ -63,7 +63,7 @@ void grant_supervision(const uint64_t *supervised_pids, size_t count,
+             continue;
+         uint32_t gen = 0;
+         int idx = cs->install(cap, cap::CapType::Wdog,
+-                              cap::CAP_RIGHT_WRITE, &gen);
++                              cap::CapRights::WRITE, &gen);
+         if (idx < 0) {
+             cap->release(); // never installed — drop the creator reference
+             continue;
+diff --git a/src/lib/concepts.hpp b/src/lib/concepts.hpp
+index f5def419f..8e94172e7 100644
+--- a/src/lib/concepts.hpp
++++ b/src/lib/concepts.hpp
+@@ -51,6 +51,11 @@ concept ValueType = !_is_reference_v<T>;
+ template<typename T>
+ concept ErrorEnum = __is_enum(T);
+ 
++/// @brief Any scoped/unscoped enumeration (issue #348-D: constrains
++///        kernel::to_underlying without dragging error-enum semantics).
++template<typename T>
++concept Enum = __is_enum(T);
++
+ template<typename T>
+ concept Lockable = requires(T t) {
+     { t.lock() };
+diff --git a/src/lib/types.hpp b/src/lib/types.hpp
+index 7f743f9fb..a108849d7 100644
+--- a/src/lib/types.hpp
++++ b/src/lib/types.hpp
+@@ -49,3 +49,14 @@ void* operator new[](unsigned long size, void* ptr) noexcept;
+ 
+ /// @brief Pull in the central configuration header.
+ #include <kernel/nexios_config.h>
++#include <concepts.hpp>
++
++/// @brief Convert a scoped-enum value to its underlying integer type
++///        (issue #348-D: std::to_underlying is C++23/`<utility>`, absent
++///        under -nostdinc — this is the hand-rolled equivalent).
 +namespace kernel {
-+
-+/// @brief Upper bound (exclusive) of user-space virtual addresses.
-+/// Lives here (not in checked_ptr.hpp) so validators like the ELF loader
-+/// can use it without pulling the CheckedPtr machinery (issue #348-C).
-+static constexpr uint64_t USER_SPACE_LIMIT = 0x0000800000000000ULL;
-+
++template <Enum E>
++[[nodiscard]] constexpr auto to_underlying(E value) noexcept {
++    return static_cast<__underlying_type(E)>(value);
++}
 +} // namespace kernel
-+
- // ---------------------------------------------------------------------------
- // Common error codes for POSIX-style kernel functions
- // ---------------------------------------------------------------------------
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index 7c5d171a5..0aa94267c 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -2807,7 +2807,7 @@ void Shell::cmd_runelf(int argc, const char** argv) {
+                              sizeof(uint64_t));
+             grant.data_size = 16;
+             if (!kernel::IPC::send(debugd_pid, grant,
+-                                   kernel::IPC_NONBLOCK)) {
++                                   kernel::IpcFlags::NONBLOCK)) {
+                 kernel::debug::debug_launch_undo(*task, dbg_handle);
+                 kernel::elf::ElfLoader::destroy_completed_tcb(task);
+                 shell_error("runelf", "grant undeliverable");
 diff --git a/test-history.txt b/test-history.txt
-index 7a15296bd..782870159 100644
+index 782870159..5c8a5ee07 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -3546,3 +3546,7 @@ SUMMARY: total=18 ok=18 fail=0
- 2026-10-16 12:21:59 capability PASSED: 155 FAILED: 0 TIME: 10511ms
- 2026-10-16 12:22:49 core PASSED: 557 FAILED: 0 TIME: 46844ms
- 2026-10-16 12:32:35 selftest PASSED: 147 FAILED: 0 TIME: 11782ms
-+2026-10-16 12:45:59 proc_elf PASSED: 127 FAILED: 0 TIME: 33400ms
-+2026-10-16 12:46:31 capability PASSED: 155 FAILED: 0 TIME: 10472ms
-+2026-10-16 12:46:59 selftest PASSED: 147 FAILED: 0 TIME: 11701ms
-+2026-10-16 12:47:50 core PASSED: 557 FAILED: 0 TIME: 46810ms
+@@ -3550,3 +3550,7 @@ SUMMARY: total=18 ok=18 fail=0
+ 2026-10-16 12:46:31 capability PASSED: 155 FAILED: 0 TIME: 10472ms
+ 2026-10-16 12:46:59 selftest PASSED: 147 FAILED: 0 TIME: 11701ms
+ 2026-10-16 12:47:50 core PASSED: 557 FAILED: 0 TIME: 46810ms
++2026-10-16 13:03:52 capability PASSED: 155 FAILED: 0 TIME: 10517ms
++2026-10-16 13:04:18 ipc PASSED: 87 FAILED: 0 TIME: 6450ms
++2026-10-16 13:04:52 selftest PASSED: 147 FAILED: 0 TIME: 11923ms
++2026-10-16 13:08:51 core PASSED: 557 FAILED: 0 TIME: 46702ms

@@ -114,7 +114,7 @@ static uint64_t bench_ipc_send_self() {
     msg.data_size = 0;
     // Benchmark load: results intentionally unchecked (measurement
     // purity — throughput/latency is the deliverable, see Testidea).
-    (void)IPC::send(cur->id, msg, IPC_NONBLOCK);
+    (void)IPC::send(cur->id, msg, IpcFlags::NONBLOCK);
     Message out;
     (void)IPC::recv(out);
     return 0;
@@ -160,13 +160,13 @@ static Message bench_ipc_send_only_msg_;
 static uint64_t bench_ipc_send_only() {
     // Benchmark load: unchecked by design (see above).
     (void)IPC::send(bench_ipc_send_only_task_id_, bench_ipc_send_only_msg_,
-                     IPC_NONBLOCK);
+                     IpcFlags::NONBLOCK);
     return 0;
 }
 
 // Runmode: kernel
 // Testidea: Measures non-blocking IPC send-only latency
-// Input: IPC_NONBLOCK send to own task without draining per iteration
+// Input: IpcFlags::NONBLOCK send to own task without draining per iteration
 // Expect: Average send latency < 10000 cycles
 // Depends: kernel/ipc, kernel/task
 JARVIS_TEST(ipc_bench_send_only, "PRE: none | POST: none") {
@@ -198,13 +198,13 @@ static uint64_t bench_ipc_send_full() {
     Message msg{};
     msg.sender_id = bench_ipc_send_full_id_;
     // Benchmark load: unchecked by design (see above).
-    (void)IPC::send(bench_ipc_send_full_id_, msg, IPC_NONBLOCK);
+    (void)IPC::send(bench_ipc_send_full_id_, msg, IpcFlags::NONBLOCK);
     return 0;
 }
 
 // Runmode: kernel
 // Testidea: Measures non-blocking IPC send failure path when queue is full
-// Input: Queue filled to capacity, then IPC_NONBLOCK send attempted
+// Input: Queue filled to capacity, then IpcFlags::NONBLOCK send attempted
 // Expect: Average failure-path latency < 5000 cycles
 // Depends: kernel/ipc, kernel/task
 JARVIS_TEST(ipc_bench_send_full, "PRE: none | POST: none") {
@@ -237,7 +237,7 @@ static Message bench_ipc_64byte_send_;
 
 static uint64_t bench_ipc_send_64byte() {
     // Benchmark load: unchecked by design (see above).
-    (void)IPC::send(bench_ipc_64byte_id_, bench_ipc_64byte_send_, IPC_NONBLOCK);
+    (void)IPC::send(bench_ipc_64byte_id_, bench_ipc_64byte_send_, IpcFlags::NONBLOCK);
     Message out;
     (void)IPC::recv(out);
     return 0;

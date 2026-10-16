@@ -49,3 +49,14 @@ void* operator new[](unsigned long size, void* ptr) noexcept;
 
 /// @brief Pull in the central configuration header.
 #include <kernel/nexios_config.h>
+#include <concepts.hpp>
+
+/// @brief Convert a scoped-enum value to its underlying integer type
+///        (issue #348-D: std::to_underlying is C++23/`<utility>`, absent
+///        under -nostdinc — this is the hand-rolled equivalent).
+namespace kernel {
+template <Enum E>
+[[nodiscard]] constexpr auto to_underlying(E value) noexcept {
+    return static_cast<__underlying_type(E)>(value);
+}
+} // namespace kernel

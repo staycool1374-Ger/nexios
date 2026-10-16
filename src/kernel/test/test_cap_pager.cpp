@@ -73,7 +73,7 @@ int install_frame(TaskControlBlock *t, cap::FrameCap *fc) {
     if (!cs)
         return -1;
     int s = cs->install(fc, cap::CapType::Frame,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                        cap::CapRights::READ | cap::CapRights::WRITE);
     if (s >= 0)
         fc->release(); // slot holds a reference; drop the creator's
     return s;

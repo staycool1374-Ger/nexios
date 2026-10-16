@@ -49,6 +49,21 @@
 
 ## Entries
 
+### #348-D1 — enum-class migration (audit APPROVED, commit pending)
+
+- **Learned:** (1) Scoped-enum migration is compiler-complete under
+  -Werror: bulk rename + signature migration, iterate errors to zero.
+  (2) ABI boundaries convert explicitly (static_cast + legacy-semantics
+  comment); internals go fully typed. (3) `==0`/`!=0` and bare-`0`
+  args are the long tail — grep them, don't eyeball. (4) Core
+  QEMU_EXIT during task-creation bursts (pool8 draining, ~1000th
+  task) is an order/load flake signature: isolated class green +
+  re-run green + no migrated type on the path = proceed with note.
+- **Adapted:** Enum concept + to_underlying; CapRights/IpcFlags class
+  + ops + full migration; syscall boundary conversions.
+- **Style re-surface:** short enumerators on scoped enums; NONE = 0
+  sentinel instead of bare 0.
+
 ### #348-C — compile-time (audit APPROVED, commit pending)
 
 - **Learned:** (1) Script value-semantics kill: `& ~0xFFF` → `& ~MASK`

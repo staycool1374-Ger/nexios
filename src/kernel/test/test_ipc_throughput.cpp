@@ -78,7 +78,7 @@ JARVIS_TEST(ipc_throughput_self_rate, "PRE: none | POST: none") {
     Message msg{};
     msg.sender_id = cur->id;
     for (size_t i = 0; i < k_warmup; ++i) {
-        JARVIS_ASSERT(IPC::send(cur->id, msg, IPC_NONBLOCK));
+        JARVIS_ASSERT(IPC::send(cur->id, msg, IpcFlags::NONBLOCK));
         Message out;
         JARVIS_ASSERT(IPC::recv(out));
     }
@@ -86,7 +86,7 @@ JARVIS_TEST(ipc_throughput_self_rate, "PRE: none | POST: none") {
     constexpr size_t k_n = 20000;
     uint64_t t0 = arch::rdtsc();
     for (size_t i = 0; i < k_n; ++i) {
-        bool sent = IPC::send(cur->id, msg, IPC_NONBLOCK);
+        bool sent = IPC::send(cur->id, msg, IpcFlags::NONBLOCK);
         Message out;
         bool ok = IPC::recv(out);
         JARVIS_ASSERT(ok && sent);
@@ -129,14 +129,14 @@ JARVIS_TEST(ipc_throughput_size_sweep, "PRE: none | POST: none") {
         for (size_t i = 0; i < k_sizes[s]; ++i)
             msg.data[i] = static_cast<uint8_t>(i & 0xFF);
         for (size_t i = 0; i < k_warmup; ++i) {
-            JARVIS_ASSERT(IPC::send(cur->id, msg, IPC_NONBLOCK));
+            JARVIS_ASSERT(IPC::send(cur->id, msg, IpcFlags::NONBLOCK));
             Message out;
             JARVIS_ASSERT(IPC::recv(out));
         }
         constexpr size_t k_n = 3000;
         uint64_t t0 = arch::rdtsc();
         for (size_t i = 0; i < k_n; ++i) {
-            bool sent = IPC::send(cur->id, msg, IPC_NONBLOCK);
+            bool sent = IPC::send(cur->id, msg, IpcFlags::NONBLOCK);
             Message out;
             bool ok = IPC::recv(out);
             JARVIS_ASSERT(ok && sent);
@@ -172,7 +172,7 @@ JARVIS_TEST(ipc_throughput_depth_sweep, "PRE: none | POST: none") {
             msg.sender_id = cur->id;
             msg.type = i;
             msg.data_size = 0;
-            bool ok = IPC::send(cur->id, msg, IPC_NONBLOCK);
+            bool ok = IPC::send(cur->id, msg, IpcFlags::NONBLOCK);
             JARVIS_ASSERT_FMT(ok, "prefill %u/%u rejected", i, k_depths[d]);
         }
         uint64_t t0 = arch::rdtsc();

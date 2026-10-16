@@ -175,7 +175,7 @@ JARVIS_TEST(cross_boundary_iocd_register_and_irq_forward,
     fev.type = iocd::IOCD_IRQ_EVENT;
     fev.data_size = sizeof(ev);
     __builtin_memcpy(fev.data, &ev, sizeof(ev));
-    JARVIS_ASSERT_FMT(IPC::send(iocd_pid, fev, IPC_NONBLOCK),
+    JARVIS_ASSERT_FMT(IPC::send(iocd_pid, fev, IpcFlags::NONBLOCK),
                       "IRQ_EVENT send rejected");
 
     // 3. The daemon needs timer ticks to run: spin (IRQs on, no

@@ -88,7 +88,7 @@ void cap_retype_happy_entry() {
     }
     g_rtype_base = ut->phys;
     int s = cs->install(ut, cap::CapType::Untyped,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                        cap::CapRights::READ | cap::CapRights::WRITE);
     if (s < 0) {
         ut->release();
         g_rtype_ret = 98;
@@ -101,14 +101,14 @@ void cap_retype_happy_entry() {
         static_cast<uint64_t>(SyscallNumber::CAP_RETYPE), h,
         static_cast<uint64_t>(cap::CapType::Frame),
         static_cast<uint64_t>(arch::PAGE_SIZE),
-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE),
+        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE),
         nullptr);
     g_rtype_ret = ret;
     if (ret != static_cast<uint64_t>(-1)) {
         // Issue #266: the return is an opaque handle, usable directly with
         // lookup — no manual re-encoding from a slot index.
         KernelObject *target = cap::lookup(
-            cs, ret, cap::CapType::Frame, cap::CAP_RIGHT_READ);
+            cs, ret, cap::CapType::Frame, cap::CapRights::READ);
         if (target) {
             auto *fc = static_cast<cap::FrameCap *>(target);
             g_rtype_frame_ok =
@@ -165,7 +165,7 @@ void cap_retype_validation_entry() {
         return;
     }
     int s = cs->install(ut, cap::CapType::Untyped,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                        cap::CapRights::READ | cap::CapRights::WRITE);
     if (s < 0) {
         ut->release();
         g_rtype_val[0] = 98;
@@ -186,27 +186,27 @@ void cap_retype_validation_entry() {
     g_rtype_val[0] = cap_retype_attempt(
         bad_h, static_cast<uint64_t>(cap::CapType::Frame),
         static_cast<uint64_t>(arch::PAGE_SIZE),
-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
+        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
     g_rtype_val[1] = cap_retype_attempt(
         h, static_cast<uint64_t>(cap::CapType::Endpoint),
         static_cast<uint64_t>(arch::PAGE_SIZE),
-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
+        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
     g_rtype_val[2] = cap_retype_attempt(
         h, static_cast<uint64_t>(cap::CapType::Frame),
         static_cast<uint64_t>(6 * arch::PAGE_SIZE),
-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
+        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
     g_rtype_val[3] = cap_retype_attempt(
         h, static_cast<uint64_t>(cap::CapType::Frame), 0,
-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
+        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
     g_rtype_val[4] = cap_retype_attempt(
         h, static_cast<uint64_t>(cap::CapType::Frame),
         static_cast<uint64_t>(arch::PAGE_SIZE + 0x100),
-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
+        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
     g_rtype_val[5] = ut->owns_region() ? 1 : 0; // parent intact after failures
     g_rtype_val[6] = cap_retype_attempt(
         h, static_cast<uint64_t>(cap::CapType::Frame),
         static_cast<uint64_t>(sz),
-        static_cast<uint64_t>(cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE));
+        static_cast<uint64_t>(cap::CapRights::READ | cap::CapRights::WRITE));
     cs->remove(static_cast<uint32_t>(s));
     if (g_rtype_val[6] != static_cast<uint64_t>(-1))
         cs->remove(cap::handle_slot(g_rtype_val[6]));
@@ -261,7 +261,7 @@ JARVIS_TEST(untyped_dispose_returns_region_to_pmm, "PRE: none | POST: none") {
     JARVIS_ASSERT(ut != nullptr);
 
     cap::CNode node;
-    int idx = node.install(ut, cap::CapType::Untyped, cap::CAP_RIGHT_READ);
+    int idx = node.install(ut, cap::CapType::Untyped, cap::CapRights::READ);
     JARVIS_ASSERT(idx >= 0);
     JARVIS_ASSERT_EQ(1U, cap::occupied_count(&node));
     node.remove(static_cast<uint32_t>(idx));
@@ -294,7 +294,7 @@ JARVIS_TEST(untyped_cap_copy_shares_object, "PRE: none | POST: none") {
     cap::CNode src;
     cap::CNode dst;
     int s = src.install(ut, cap::CapType::Untyped,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_COPY);
+                        cap::CapRights::READ | cap::CapRights::COPY);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(src.cspace_id, static_cast<uint32_t>(s),
                                      src.slot_gen(static_cast<uint32_t>(s)));
@@ -332,13 +332,13 @@ JARVIS_TEST(retype_frame_exact_size_end_to_end, "PRE: none | POST: none") {
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
 
     int r = cap::retype(&node, sh, cap::CapType::Frame, sz,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                        cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(r >= 0);
     // Exact-size carve installs ONE slot (no child Untyped).
     JARVIS_ASSERT_EQ(2U, cap::occupied_count(&node)); // ut slot + frame slot
@@ -348,7 +348,7 @@ JARVIS_TEST(retype_frame_exact_size_end_to_end, "PRE: none | POST: none") {
         cap::lookup(&node, cap::encode_handle(node.cspace_id,
                                               static_cast<uint32_t>(r),
                                               node.slot_gen(static_cast<uint32_t>(r))),
-                    cap::CapType::Frame, cap::CAP_RIGHT_READ);
+                    cap::CapType::Frame, cap::CapRights::READ);
     JARVIS_ASSERT(target != nullptr);
     auto *fc = static_cast<cap::FrameCap *>(target);
     JARVIS_ASSERT_EQ(ut->phys, fc->phys);
@@ -384,16 +384,16 @@ JARVIS_TEST(retype_oversize_rejected_parent_intact, "PRE: none | POST: none") {
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
 
     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame,
-                                     6 * arch::PAGE_SIZE, cap::CAP_RIGHT_READ));
+                                     6 * arch::PAGE_SIZE, cap::CapRights::READ));
     JARVIS_ASSERT(ut->owns_region()); // untouched
 
-    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
+    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CapRights::READ);
     JARVIS_ASSERT(r >= 0);
 
     node.remove(static_cast<uint32_t>(s));
@@ -418,17 +418,17 @@ JARVIS_TEST(retype_twice_fails_no_double_free, "PRE: none | POST: none") {
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
 
-    int r1 = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
+    int r1 = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CapRights::READ);
     JARVIS_ASSERT(r1 >= 0);
     // Second retype on the same handle: the slot still points at the Untyped,
     // but the guard is set -> -1.  No second FrameCap is ever created.
     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame, sz,
-                                     cap::CAP_RIGHT_READ));
+                                     cap::CapRights::READ));
 
     node.remove(static_cast<uint32_t>(s));
     node.remove(static_cast<uint32_t>(r1));
@@ -454,18 +454,18 @@ JARVIS_TEST(retype_wrong_target_type_fails, "PRE: none | POST: none") {
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
 
     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Endpoint, sz,
-                                     cap::CAP_RIGHT_READ));
+                                     cap::CapRights::READ));
     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::CNode, sz,
-                                     cap::CAP_RIGHT_READ));
+                                     cap::CapRights::READ));
     JARVIS_ASSERT(ut->owns_region());
 
-    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
+    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CapRights::READ);
     JARVIS_ASSERT(r >= 0);
     node.remove(static_cast<uint32_t>(s));
     node.remove(static_cast<uint32_t>(r));
@@ -474,7 +474,7 @@ JARVIS_TEST(retype_wrong_target_type_fails, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: retype requires CAP_RIGHT_WRITE on the Untyped cap.
+// Testidea: retype requires CapRights::WRITE on the Untyped cap.
 // Input: install with READ|COPY only (no WRITE)
 // Expect: -1 (lookup rights check); Untyped intact
 // Depends: kernel::cap::UntypedMem, kernel::cap::retype
@@ -485,13 +485,13 @@ JARVIS_TEST(retype_requires_write_right, "PRE: none | POST: none") {
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_COPY);
+                         cap::CapRights::READ | cap::CapRights::COPY);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
 
     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame, sz,
-                                     cap::CAP_RIGHT_READ));
+                                     cap::CapRights::READ));
     JARVIS_ASSERT(ut->owns_region());
 
     node.remove(static_cast<uint32_t>(s));
@@ -516,8 +516,8 @@ JARVIS_TEST(retype_revoked_untyped_fails_single_free, "PRE: none | POST: none") 
     cap::CNode a;
     cap::CNode b;
     int sa = a.install(ut, cap::CapType::Untyped,
-                       cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE |
-                           cap::CAP_RIGHT_COPY);
+                       cap::CapRights::READ | cap::CapRights::WRITE |
+                           cap::CapRights::COPY);
     JARVIS_ASSERT(sa >= 0);
     uint64_t ha = cap::encode_handle(a.cspace_id, static_cast<uint32_t>(sa),
                                      a.slot_gen(static_cast<uint32_t>(sa)));
@@ -532,7 +532,7 @@ JARVIS_TEST(retype_revoked_untyped_fails_single_free, "PRE: none | POST: none") 
     uint64_t hb = cap::encode_handle(b.cspace_id, static_cast<uint32_t>(sb),
                                      b.slot_gen(static_cast<uint32_t>(sb)));
     JARVIS_ASSERT_EQ(-1, cap::retype(&b, hb, cap::CapType::Frame, sz,
-                                     cap::CAP_RIGHT_READ));
+                                     cap::CapRights::READ));
 
     b.remove(static_cast<uint32_t>(sb));
     ut->release(); // region freed exactly once by Untyped dispose
@@ -565,14 +565,14 @@ JARVIS_TEST(retype_subrange_carve_creates_child_remainder,
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
 
     const size_t carve = arch::PAGE_SIZE;
     int r = cap::retype(&node, sh, cap::CapType::Frame, carve,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                        cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(r >= 0);
     JARVIS_ASSERT_EQ(3U, cap::occupied_count(&node)); // ut + frame + child
     JARVIS_ASSERT(!ut->owns_region());                // parent spent
@@ -581,7 +581,7 @@ JARVIS_TEST(retype_subrange_carve_creates_child_remainder,
         cap::lookup(&node, cap::encode_handle(node.cspace_id,
                                               static_cast<uint32_t>(r),
                                               node.slot_gen(static_cast<uint32_t>(r))),
-                    cap::CapType::Frame, cap::CAP_RIGHT_READ);
+                    cap::CapType::Frame, cap::CapRights::READ);
     JARVIS_ASSERT(target != nullptr);
     auto *fc = static_cast<cap::FrameCap *>(target);
     JARVIS_ASSERT_EQ(ut->phys, fc->phys);
@@ -629,13 +629,13 @@ JARVIS_TEST(retype_two_level_split_child_retyped_again,
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
 
     int r1 = cap::retype(&node, sh, cap::CapType::Frame, arch::PAGE_SIZE,
-                         cap::CAP_RIGHT_READ);
+                         cap::CapRights::READ);
     JARVIS_ASSERT(r1 >= 0);
     int child1_idx = find_slot_of(node, cap::CapType::Untyped, ut);
     JARVIS_ASSERT(child1_idx >= 0);
@@ -650,7 +650,7 @@ JARVIS_TEST(retype_two_level_split_child_retyped_again,
         node.cspace_id, static_cast<uint32_t>(child1_idx),
         node.slot_gen(static_cast<uint32_t>(child1_idx)));
     int r2 = cap::retype(&node, ch, cap::CapType::Frame, arch::PAGE_SIZE,
-                         cap::CAP_RIGHT_READ);
+                         cap::CapRights::READ);
     JARVIS_ASSERT(r2 >= 0);
     JARVIS_ASSERT(!child1->owns_region()); // child spent by its carve
     // find_slot_of returns the FIRST Untyped slot, i.e. the still-occupied
@@ -673,7 +673,7 @@ JARVIS_TEST(retype_two_level_split_child_retyped_again,
     KernelObject *target2 = cap::lookup(
         &node, cap::encode_handle(node.cspace_id, static_cast<uint32_t>(r2),
                                   node.slot_gen(static_cast<uint32_t>(r2))),
-        cap::CapType::Frame, cap::CAP_RIGHT_READ);
+        cap::CapType::Frame, cap::CapRights::READ);
     JARVIS_ASSERT(target2 != nullptr);
     auto *fc2 = static_cast<cap::FrameCap *>(target2);
     JARVIS_ASSERT_EQ(ut->phys + arch::PAGE_SIZE, fc2->phys);
@@ -708,17 +708,17 @@ JARVIS_TEST(retype_unaligned_size_rejected_parent_intact,
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
 
     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame,
                                      arch::PAGE_SIZE + 0x100,
-                                     cap::CAP_RIGHT_READ));
+                                     cap::CapRights::READ));
     JARVIS_ASSERT(ut->owns_region());
 
-    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
+    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CapRights::READ);
     JARVIS_ASSERT(r >= 0);
     node.remove(static_cast<uint32_t>(s));
     node.remove(static_cast<uint32_t>(r));
@@ -744,12 +744,12 @@ JARVIS_TEST(retype_child_dispose_frees_only_remainder,
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
     int r = cap::retype(&node, sh, cap::CapType::Frame, arch::PAGE_SIZE,
-                        cap::CAP_RIGHT_READ);
+                        cap::CapRights::READ);
     JARVIS_ASSERT(r >= 0);
     int child_idx = find_slot_of(node, cap::CapType::Untyped, ut);
     JARVIS_ASSERT(child_idx >= 0);
@@ -791,12 +791,12 @@ JARVIS_TEST(retype_parent_dispose_after_carve_frees_nothing,
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
     int r = cap::retype(&node, sh, cap::CapType::Frame, arch::PAGE_SIZE,
-                        cap::CAP_RIGHT_READ);
+                        cap::CapRights::READ);
     JARVIS_ASSERT(r >= 0);
     int child_idx = find_slot_of(node, cap::CapType::Untyped, ut);
     JARVIS_ASSERT(child_idx >= 0);
@@ -837,20 +837,20 @@ JARVIS_TEST(retype_full_table_precheck_fails_closed,
 
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
     int fill[62];
     for (int i = 0; i < 62; ++i) {
-        fill[i] = node.install(ut, cap::CapType::Untyped, cap::CAP_RIGHT_READ);
+        fill[i] = node.install(ut, cap::CapType::Untyped, cap::CapRights::READ);
         JARVIS_ASSERT(fill[i] >= 0);
     }
     JARVIS_ASSERT_EQ(63U, cap::occupied_count(&node));
 
     // Sub-range carve needs 2 slots; only 1 free -> rejected, parent intact.
     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame,
-                                     arch::PAGE_SIZE, cap::CAP_RIGHT_READ));
+                                     arch::PAGE_SIZE, cap::CapRights::READ));
     JARVIS_ASSERT(ut->owns_region());
 
     for (int i = 0; i < 62; ++i)
@@ -859,13 +859,13 @@ JARVIS_TEST(retype_full_table_precheck_fails_closed,
 
     // With space available the exact retype succeeds.
     int s2 = node.install(ut, cap::CapType::Untyped,
-                          cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                          cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s2 >= 0);
     uint64_t sh2 = cap::encode_handle(node.cspace_id,
                                       static_cast<uint32_t>(s2),
                                       node.slot_gen(static_cast<uint32_t>(s2)));
     int r = cap::retype(&node, sh2, cap::CapType::Frame, sz,
-                        cap::CAP_RIGHT_READ);
+                        cap::CapRights::READ);
     JARVIS_ASSERT(r >= 0);
     node.remove(static_cast<uint32_t>(s2));
     node.remove(static_cast<uint32_t>(r));
@@ -984,12 +984,12 @@ JARVIS_TEST(untyped_live_bound_counts_children, "PRE: none | POST: none") {
     auto *ut = uts[kMax - 1];
     cap::CNode node;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
                                      node.slot_gen(static_cast<uint32_t>(s)));
     JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame,
-                                     arch::PAGE_SIZE, cap::CAP_RIGHT_READ));
+                                     arch::PAGE_SIZE, cap::CapRights::READ));
     JARVIS_ASSERT(!ut->owns_region()); // spent (guard stays set)
 
     node.remove(static_cast<uint32_t>(s));

@@ -86,7 +86,7 @@ JARVIS_TEST(reaper_wakes_on_daemon_ipc, "PRE: none | POST: none") {
     Message msg{};
     msg.sender_id = self->id;
     msg.type = ipc::MSG_DAEMON_READY;
-    JARVIS_ASSERT(kernel::IPC::send(1, msg, 0));
+    JARVIS_ASSERT(kernel::IPC::send(1, msg, IpcFlags::NONE));
     Message got{};
     JARVIS_ASSERT(kernel::IPC::recv(got));
     JARVIS_ASSERT(got.type == ipc::MSG_DAEMON_READY);

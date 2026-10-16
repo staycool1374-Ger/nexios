@@ -99,14 +99,14 @@ static int grant_one_segment(cap::CNode *cs, uint64_t seg_idx,
     uint32_t gen = 0;
     int ut_idx =
         cs->install(seg, cap::CapType::Untyped,
-                    cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
+                    cap::CapRights::READ | cap::CapRights::WRITE, &gen);
     if (ut_idx < 0)
         return -1;
     uint64_t ut_handle =
         cap::encode_user_handle(cs->cspace_id, ut_idx, gen);
     int frame_idx = cap::retype(cs, ut_handle, cap::CapType::Frame,
                                 static_cast<size_t>(RAMDISK_SEGMENT_SIZE),
-                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE,
+                                cap::CapRights::READ | cap::CapRights::WRITE,
                                 gen_out);
     if (frame_idx < 0) {
         cs->remove(static_cast<uint32_t>(ut_idx));
@@ -172,7 +172,7 @@ int64_t regrant(uint64_t daemon_pid) {
     grant.type = RAMDISK_GRANT;
     __builtin_memcpy(grant.data, handles, sizeof(handles));
     grant.data_size = sizeof(handles);
-    if (!IPC::send(daemon_pid, grant, 0))
+    if (!IPC::send(daemon_pid, grant, IpcFlags::NONE))
         return RAMDISK_ERR_NOGRANT; // grant minted but undelivered
     return RAMDISK_OK;
 }

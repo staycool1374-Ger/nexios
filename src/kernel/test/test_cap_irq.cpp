@@ -103,7 +103,7 @@ void irq_waiter_entry(bool wait_for_inject) {
         return;
     }
     int s = cs->install(irq, cap::CapType::Irq,
-                        cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                        cap::CapRights::WRITE | cap::CapRights::READ);
     if (s < 0) {
         irq->release();
         g_wait_ret = 98;
@@ -241,30 +241,30 @@ JARVIS_TEST(irq_cap_install_lookup_revoke, "PRE: none | POST: none") {
     cap::CNode *cs = cur->get_cspace();
     auto *irq = cap::IrqCap::create(kTestVector);
     JARVIS_ASSERT(irq != nullptr);
-    int s = cs->install(irq, cap::CapType::Irq, cap::CAP_RIGHT_WRITE);
+    int s = cs->install(irq, cap::CapType::Irq, cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t h = cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
                                     cs->slot_gen(static_cast<uint32_t>(s)));
 
     KernelObject *obj =
-        cap::lookup(cs, h, cap::CapType::Irq, cap::CAP_RIGHT_WRITE);
+        cap::lookup(cs, h, cap::CapType::Irq, cap::CapRights::WRITE);
     JARVIS_ASSERT(obj != nullptr);
     JARVIS_ASSERT(obj == static_cast<KernelObject *>(irq));
     obj->release();
 
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Frame,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Irq,
-                              cap::CAP_RIGHT_GRANT) == nullptr);
+                              cap::CapRights::GRANT) == nullptr);
     uint64_t stale =
         cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
                            cs->slot_gen(static_cast<uint32_t>(s)) + 1);
     JARVIS_ASSERT(cap::lookup(cs, stale, cap::CapType::Irq,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
 
     JARVIS_ASSERT(cap::revoke(cs, h));
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Irq,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
     JARVIS_ASSERT(irq->revoked());
 
     cs->remove(static_cast<uint32_t>(s));
@@ -306,7 +306,7 @@ JARVIS_TEST(irq_register_dispatch_happy, "PRE: none | POST: none") {
                 Scheduler::terminate(*cur, 0);
                 return;
             }
-            int s = cs->install(irq, cap::CapType::Irq, cap::CAP_RIGHT_WRITE);
+            int s = cs->install(irq, cap::CapType::Irq, cap::CapRights::WRITE);
             if (s < 0) {
                 irq->release();
                 g_reg_ret = 98;
@@ -371,8 +371,8 @@ JARVIS_TEST(irq_register_validation_matrix, "PRE: none | POST: none") {
             Scheduler::terminate(*cur, 0);
             return;
         }
-        int s1 = cs->install(irq, cap::CapType::Irq, cap::CAP_RIGHT_WRITE);
-        int s2 = cs->install(ro, cap::CapType::Irq, cap::CAP_RIGHT_READ);
+        int s1 = cs->install(irq, cap::CapType::Irq, cap::CapRights::WRITE);
+        int s2 = cs->install(ro, cap::CapType::Irq, cap::CapRights::READ);
         if (s1 < 0 || s2 < 0) {
             irq->release();
             ro->release();
@@ -410,7 +410,7 @@ JARVIS_TEST(irq_register_validation_matrix, "PRE: none | POST: none") {
         // Wrong-type: use a FrameCap slot for a genuinely wrong type.
         auto *fr = cap::FrameCap::create(0x1000000ULL, 1, false);
         if (fr) {
-            int sf = cs->install(fr, cap::CapType::Frame, cap::CAP_RIGHT_WRITE);
+            int sf = cs->install(fr, cap::CapType::Frame, cap::CapRights::WRITE);
             if (sf >= 0) {
                 uint64_t hf = cap::encode_handle(
                     cs->cspace_id, static_cast<uint32_t>(sf),
@@ -530,7 +530,7 @@ JARVIS_TEST(irq_wait_revoked_mid_wait, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(irq, cap::CapType::Irq,
-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                                cap::CapRights::WRITE | cap::CapRights::READ);
             if (s < 0) {
                 irq->release();
                 g_wait_ret = 98;
