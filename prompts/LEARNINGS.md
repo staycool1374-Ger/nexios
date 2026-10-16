@@ -49,6 +49,31 @@
 
 ## Entries
 
+### #347 — XOR path tracing (CLOSED; A–E all APPROVED)
+
+- **Learned:** (1) XOR traces detect missing/duplicate steps, never
+  reordering — checkpoints between order-sensitive steps are the only
+  order proof. (2) Every traced function needs its own registry; a
+  step/insert anchor must be OUTSIDE the conditional block it marks.
+  (3) Instrumenting private functions forces a visibility decision
+  (map_phys_range_try → public; justified: no hidden state). (4)
+  Test TUs compile in release too — CONFIG_DEBUG-only symbols need
+  `#if` guards with a trivial release pass; debug-only vars in
+  mixed-branch code need `[[maybe_unused]]`. (5) Count rows: bump the
+  FINE row AND every aggregate that includes it (bench 27→28); aggregate
+  drift is warn-only but flagged. (6) Debug-only skip masks must be
+  compiled out in release. (7) Adding any TU perturbs timing and can
+  toggle the pre-existing reaper/zombie flake (zombie_count!=0 at
+  test_zombie_cleanup.cpp:126) — confirm against HEAD + standalone
+  before blaming the slice; host load ~3 correlates.
+- **Adapted:** new `path_tracer.{hpp,cpp}` + per-subsystem registries
+  (`scheduler_path`, `task_path`, `vmm_path`); 5 test classes
+  (path_tracer 6, scheduler_dispatch_path 4, task_path 5, vmm_path 4,
+  bench_path_tracer 1); core 576/576; release core 21/21; overhead
+  25 cyc/step (TCG). Follow-up #361 (safe rollback injector).
+- **Style re-surface:** [[nodiscard]] on validators; constinit state;
+  static_assert on enums/expected constants; release-safe test guards.
+
 ### #347-D — VMM range-map segments (audit APPROVED, commit pending)
 
 - **Learned:** (1) Instrumenting a private function forces a visibility
