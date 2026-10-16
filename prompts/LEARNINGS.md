@@ -49,6 +49,21 @@
 
 ## Entries
 
+### #348-D2 — Span/bit primitives + bounded adoption (audit APPROVED)
+
+- **Learned:** (1) New-utility scope discipline: ship minimal API
+  (dropped subspan — logic without users), static_assert the rest,
+  adopt narrowly, document evaluated-skips like real decisions.
+  (2) `capture_state` IGNORING its size arg was a latent bug class —
+  Span+ENSURE fixed it for free. (3) #347-compat is a design input,
+  not an afterthought: stable VMM signatures + stateless primitives
+  keep the tracing design space open. (4) bit_cast does NOT replace
+  inttoptr idiom or explicit-endian shifts — say so explicitly or
+  someone will "clean them up" later.
+- **Adapted:** span.hpp + bit.hpp with goldens; 2 Span adoptions.
+- **Style re-surface:** transparency as a documented property for
+  future-traced code.
+
 ### #348-D1 — enum-class migration (audit APPROVED, commit pending)
 
 - **Learned:** (1) Scoped-enum migration is compiler-complete under

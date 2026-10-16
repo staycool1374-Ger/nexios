@@ -582,8 +582,9 @@ bool snapshot_create() {
                  watchdogd::get_watchdogd_pid());
 
     // ---- BufferPool ----
-    BufferPool::capture_state(g_snapshot + off_bufpool(),
-                              BufferPool::state_bytes());
+    BufferPool::capture_state(
+        kernel::Span<uint8_t>(g_snapshot + off_bufpool(),
+                              BufferPool::state_bytes()));
 
     // ---- User page content + canary guards ----
     {
@@ -1452,8 +1453,9 @@ void snapshot_restore(const char *test_name) {
     // The AP simply idles parked; nothing below waits on AP progress.
 
     // ---- BufferPool ----
-    BufferPool::restore_state(g_snapshot + off_bufpool(),
-                              BufferPool::state_bytes());
+    BufferPool::restore_state(
+        kernel::Span<const uint8_t>(g_snapshot + off_bufpool(),
+                                    BufferPool::state_bytes()));
 
     // ---- Resource Counters ----
     ResourceCounters saved;

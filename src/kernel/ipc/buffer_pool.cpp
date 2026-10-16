@@ -460,36 +460,38 @@ bool BufferPool::transfer(uint64_t handle, TaskControlBlock &from,
 }
 
 /// @brief Snapshot pool state into a flat buffer (test isolation).
-void BufferPool::capture_state(uint8_t *dst, size_t max_bytes) {
-    (void)max_bytes;
-    __builtin_memcpy(dst, entries, sizeof(entries));
-    dst += sizeof(entries);
-    __builtin_memcpy(dst, &free_head_, sizeof(free_head_));
-    dst += sizeof(free_head_);
-    __builtin_memcpy(dst, &next_cookie_, sizeof(next_cookie_));
-    dst += sizeof(next_cookie_);
-    __builtin_memcpy(dst, &pool_count_, sizeof(pool_count_));
-    dst += sizeof(pool_count_);
+void BufferPool::capture_state(kernel::Span<uint8_t> dst) {
+    ENSURE(dst.size() >= state_bytes());
+    uint8_t *at = dst.data();
+    __builtin_memcpy(at, entries, sizeof(entries));
+    at += sizeof(entries);
+    __builtin_memcpy(at, &free_head_, sizeof(free_head_));
+    at += sizeof(free_head_);
+    __builtin_memcpy(at, &next_cookie_, sizeof(next_cookie_));
+    at += sizeof(next_cookie_);
+    __builtin_memcpy(at, &pool_count_, sizeof(pool_count_));
+    at += sizeof(pool_count_);
     // pool_pages_ must be captured too: without it, snapshot_restore leaves the
     // pool holding whatever phys the LAST test cached, while the rewound PMM
     // bitmap frees those pages — the pool double-books free pages and the
     // ResourceTracker drifts (+1..+3 PMM pages per buffer_pool test, +128 when
     // the whole pool is replaced).  v0.3.11 root cause.
-    __builtin_memcpy(dst, pool_pages_, sizeof(pool_pages_));
+    __builtin_memcpy(at, pool_pages_, sizeof(pool_pages_));
 }
 
 /// @brief Restore pool state from a flat buffer (test isolation).
-void BufferPool::restore_state(const uint8_t *src, size_t max_bytes) {
-    (void)max_bytes;
-    __builtin_memcpy(entries, src, sizeof(entries));
-    src += sizeof(entries);
-    __builtin_memcpy(&free_head_, src, sizeof(free_head_));
-    src += sizeof(free_head_);
-    __builtin_memcpy(&next_cookie_, src, sizeof(next_cookie_));
-    src += sizeof(next_cookie_);
-    __builtin_memcpy(&pool_count_, src, sizeof(pool_count_));
-    src += sizeof(pool_count_);
-    __builtin_memcpy(pool_pages_, src, sizeof(pool_pages_));
+void BufferPool::restore_state(kernel::Span<const uint8_t> src) {
+    ENSURE(src.size() >= state_bytes());
+    const uint8_t *at = src.data();
+    __builtin_memcpy(entries, at, sizeof(entries));
+    at += sizeof(entries);
+    __builtin_memcpy(&free_head_, at, sizeof(free_head_));
+    at += sizeof(free_head_);
+    __builtin_memcpy(&next_cookie_, at, sizeof(next_cookie_));
+    at += sizeof(next_cookie_);
+    __builtin_memcpy(&pool_count_, at, sizeof(pool_count_));
+    at += sizeof(pool_count_);
+    __builtin_memcpy(pool_pages_, at, sizeof(pool_pages_));
 }
 
 /// @brief Unmap and free all buffers owned by a task (called from

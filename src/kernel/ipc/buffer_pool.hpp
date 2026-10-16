@@ -24,6 +24,7 @@
 
 #include <types.hpp>
 #include <constants.hpp>
+#include <span.hpp>
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/ipc/buffer_pool_errors.hpp>
@@ -102,9 +103,12 @@ class BufferPool {
 
     /// @name Test-isolation helpers (snapshot / restore)
     /// @brief Copy all entries + free_head + next_cookie into flat buffer.
-    static void capture_state(uint8_t *dst, size_t max_bytes);
+    /// @param dst Destination view; must hold at least state_bytes()
+    ///        (ENSUREd — snapshot sizing bugs fail closed, issue #348-D2).
+    static void capture_state(kernel::Span<uint8_t> dst);
     /// @brief Restore entries + free_head + next_cookie from flat buffer.
-    static void restore_state(const uint8_t *src, size_t max_bytes);
+    /// @param src Source view; must hold at least state_bytes() (ENSUREd).
+    static void restore_state(kernel::Span<const uint8_t> src);
     /// @brief Bytes needed for BufferPool state capture.
     static constexpr size_t state_bytes() {
         return sizeof(entries) + sizeof(free_head_) + sizeof(next_cookie_) +

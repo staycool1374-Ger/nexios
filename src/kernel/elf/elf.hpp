@@ -23,6 +23,7 @@
 
 #include <types.hpp>
 #include <constants.hpp>
+#include <span.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/elf/elf_shared.hpp>
 
@@ -220,12 +221,14 @@ static constexpr uint64_t kElfAuthKillExitCode = 0xDB0C;
 /// @param phdr_buf_off Buffer offset of the phdr table — NOT the file
 ///        phoff: the loader packs phdrs at sizeof(ELF64Header) regardless
 ///        of where they sit in the file.
-/// @return Range count, or -1 when more than @p max_ranges exist (fail
+/// @param image Whole file image view (bounds all reads; issue #348-D2).
+/// @param out Output view (capacity replaces max_ranges).
+/// @return Range count, or -1 when more than @p out.size() exist (fail
 ///         closed — the TCB snapshot cannot hold them).
-uint64_t collect_ro_ranges(const uint8_t *phdr_image, uint64_t phdr_buf_off,
-                           uint16_t phnum, uint64_t phentsize,
-                           uint64_t file_size, TaskControlBlock::RoRange *out,
-                           uint64_t max_ranges) noexcept;
+uint64_t collect_ro_ranges(kernel::Span<const uint8_t> image,
+                           uint64_t phdr_buf_off, uint16_t phnum,
+                           uint64_t phentsize, uint64_t file_size,
+                           kernel::Span<TaskControlBlock::RoRange> out) noexcept;
 /// @brief Locate the TEXT before-canary slot (issue #46): mirrors
 ///        install_segment_canaries' text_base rule (first PF_X PT_LOAD,
 ///        page_align_down(vaddr)) so the authenticity coverage can exclude

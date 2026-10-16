@@ -292,9 +292,9 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
     // ever retained and try_rerun's "no elf loaded" is accurate, not
     // misleading. The kDynamic gate below stays as defense-in-depth.
     TaskControlBlock::RoRange ros[TaskControlBlock::kMaxRoRanges] = {};
-    uint64_t n = collect_ro_ranges(phdr_image_, sizeof(ELF64Header),
-                                   hdr_.phnum, hdr_.phentsize, file_size_,
-                                   ros, TaskControlBlock::kMaxRoRanges);
+    uint64_t n = collect_ro_ranges(
+        kernel::Span<const uint8_t>(phdr_image_, sizeof(phdr_image_)),
+        sizeof(ELF64Header), hdr_.phnum, hdr_.phentsize, file_size_, ros);
     if (n == (uint64_t)-1 || n > TaskControlBlock::kMaxRoRanges)
         return;
     // Golden walk: every mapped page covering the RO ranges.
