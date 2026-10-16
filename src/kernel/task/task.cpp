@@ -21,6 +21,7 @@
 /// cleanup.
 
 #include <kernel/task/task.hpp>
+#include <kernel/task/task_path.hpp> // issue #347 Slice C
 #include <kernel/task/exit_record.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -61,6 +62,12 @@
 #include <kernel/cap/frame_map.hpp>
 #include <kernel/irq_delivery.hpp>
 #include <assert.hpp>
+
+#if defined(CONFIG_DEBUG)
+// Fault-injection mask for task_step() (issue #347 Slice C, declared in
+// task_path.hpp). Test-only; absent in release.
+uint64_t kernel::g_test_skip_task_step = 0;
+#endif
 
 // BUGS.md#020: ring buffer of recently-created tasks so that when a wild
 // write plants a task's `entry` (code address) into some other field, the
@@ -958,6 +965,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
 #endif
 
     memset(tcb, 0, sizeof(TaskControlBlock));
+    kernel::task_step(kernel::TaskCreateSteps::Alloc); // issue #347 Slice C
 
     TCB_WRITE(tcb, magic, TCB_MAGIC);
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
@@ -1023,6 +1031,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     tcb->mem_prev_used_ = 0;
     tcb->mem_leak_streak_ = 0;
     init_task_common(*tcb);
+    kernel::task_step(kernel::TaskCreateSteps::ZeroInit); // issue #347 Slice C
 
     uint64_t stack_size = stack_size_for_priority(priority);
     size_t stack_pages = (stack_size + 4095) / arch::PAGE_SIZE;
@@ -1052,6 +1061,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     }
 
     tcb->stack_phys_ = stack_phys;
+    kernel::task_step(kernel::TaskCreateSteps::StackAlloc); // issue #347 Slice C
     // ------------------------------------------------------------------
     // Kernel-stack guard page discipline (ASIL-D requirement)
     // ------------------------------------------------------------------
@@ -1127,6 +1137,7 @@ done_stack:
         TaskControlBlock::destroy(tcb);
         return nullptr;
     }
+    kernel::task_step(kernel::TaskCreateSteps::Pml4Clone); // issue #347 Slice C
 
     // PMM does not zero freed pages (it poison-fills them, e.g. with 0x0b),
     // so a stack allocated from recycled memory can retain stale poison in
@@ -1203,6 +1214,7 @@ done_stack:
     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
 #endif
 
+    kernel::task_step(kernel::TaskCreateSteps::FrameBuild); // issue #347 Slice C
     return tcb;
 }
 
@@ -1901,12 +1913,14 @@ void TaskControlBlock::cleanup() noexcept {
         return;
     }
     state = TaskState::REAPED;
+    kernel::task_step(kernel::TaskCleanupSteps::Validate); // issue #347 Slice C
 
     // Issue #41: disarm the watchdog at teardown (bump the generation so
     // a recycled TCB slot can never match a stale expiry).
     wdog_armed = false;
     wdog_expiry_tick = 0;
     ++wdog_gen;
+    kernel::task_step(kernel::TaskCleanupSteps::WatchdogDisarm); // issue #347 Slice C
     if (wdog_gen == 0)
         wdog_gen = 1;
 
@@ -1925,6 +1939,7 @@ void TaskControlBlock::cleanup() noexcept {
     // Placed after the pinned early-return (baseline never recorded)
     // and before unregister (PIDs still valid for daemon exclusion).
     kernel::idle_record_task_exit(*this, arch::Timer::ticks());
+    kernel::task_step(kernel::TaskCleanupSteps::ExitStats); // issue #347 Slice C
 
     // Unregister from the scheduler's live tables so we never leave a dangling
     // tasks_[]/id_table_ entry that aliases a later allocation (which
@@ -1939,6 +1954,7 @@ void TaskControlBlock::cleanup() noexcept {
         arch::IrqGuard irq_guard{};
         Scheduler::unregister_task(*this);
     }
+    kernel::task_step(kernel::TaskCleanupSteps::Unregister); // issue #347 Slice C
 
     // Remove self from parent's child list if we have a parent
     if (parent_id != 0) {
@@ -1948,6 +1964,7 @@ void TaskControlBlock::cleanup() noexcept {
         }
         parent_id = 0;
     }
+    kernel::task_step(kernel::TaskCleanupSteps::ParentUnbind); // issue #347 Slice C
 
     // Cancel a wheel-armed bounded receive (issue #18) before detaching
     // from queues: an armed timer firing after this TCB is freed would run
@@ -1964,6 +1981,7 @@ void TaskControlBlock::cleanup() noexcept {
     // registrations held by this task. Same lock position as the recv
     // cancel above (no scheduler lock held — death-drain §12.3).
     time::PosixTime::drain_owner(*this);
+    kernel::task_step(kernel::TaskCleanupSteps::TimerDrain); // issue #347 Slice C
 
     // Remove self from any message queue's blocked-senders list *before*
     // freeing any resources.  If we are blocked on another task's queue
@@ -2026,6 +2044,7 @@ void TaskControlBlock::cleanup() noexcept {
         waiting_on_queue->remove_waiter(*this);
         waiting_on_queue = nullptr;
     }
+    kernel::task_step(kernel::TaskCleanupSteps::SyncDetach); // issue #347 Slice C
 
     // Notify the daemon manager so registered daemon PIDs are reset to 0.
     // Must run before msg_queue is destroyed so blocked senders get fast-fail
@@ -2050,6 +2069,7 @@ void TaskControlBlock::cleanup() noexcept {
     // from the authoritative table, never assumed.
     kernel::debug::debug_publish_death(*this);
     kernel::debug::debug_drain_debugger(*this);
+    kernel::task_step(kernel::TaskCleanupSteps::Notify); // issue #347 Slice C
 
     for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
         if (fd_table.fds[i].used) {
@@ -2066,6 +2086,7 @@ void TaskControlBlock::cleanup() noexcept {
             fd_table.fds[i].vnode = nullptr;
         }
     }
+    kernel::task_step(kernel::TaskCleanupSteps::VfsDrain); // issue #347 Slice C
 
     // v0.4.0 MP-1: keyed on the authoritative is_user_ flag — a kernel task
     // owns a private kernel-half PML4 but never a user stack.
@@ -2105,6 +2126,7 @@ void TaskControlBlock::cleanup() noexcept {
         kstack_slot_va_ = 0;
         kstack_slot_size_ = 0;
     }
+    kernel::task_step(kernel::TaskCleanupSteps::MemFree); // issue #347 Slice C
 
     if (page_table_) {
         // Free any zero-copy buffers owned by this task before tearing down
@@ -2159,6 +2181,7 @@ void TaskControlBlock::cleanup() noexcept {
 #endif // CONFIG_ARCH_X86_64
         page_table_ = 0;
     }
+    kernel::task_step(kernel::TaskCleanupSteps::PageTeardown); // issue #347 Slice C
 
     msg_queue.~MessageQueue();
     kernel::test::ResourceTracker::instance().track_msg_queue_remove();
@@ -2167,6 +2190,7 @@ void TaskControlBlock::cleanup() noexcept {
     kernel::test::ResourceTracker::instance().track_notify_remove();
 
     event_group.~EventGroup();
+    kernel::task_step(kernel::TaskCleanupSteps::IpcDestroy); // issue #347 Slice C
     kernel::test::ResourceTracker::instance().track_event_group_remove();
 
     // Release the task's I/O permission bitmap slot (x86_64, issue #3)
@@ -2184,6 +2208,7 @@ void TaskControlBlock::cleanup() noexcept {
     if (cwd_vnode)
         vfs::vnode_ref_dec(cwd_vnode);
     cwd_vnode = nullptr;
+    kernel::task_step(kernel::TaskCleanupSteps::CapRelease); // issue #347 Slice C
     kernel::test::ResourceTracker::instance().track_task_remove();
     // If this block was the deadline-monitor task's TCB, clear the scheduler's
     // pointer so s_monitor_task_ can never dangle into a reused block (the
@@ -2193,6 +2218,7 @@ void TaskControlBlock::cleanup() noexcept {
     if (this == Scheduler::get_monitor_task())
         Scheduler::reset_monitor_task();
 #endif
+    kernel::task_step(kernel::TaskCleanupSteps::Finalize); // issue #347 Slice C
 }
 
 } // namespace kernel

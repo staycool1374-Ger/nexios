@@ -49,6 +49,25 @@
 
 ## Entries
 
+### #347-C — task create/cleanup segments (audit APPROVED, commit pending)
+
+- **Learned:** (1) Step/insert anchors must sit OUTSIDE the conditional
+  blocks they mark — inserting after `parent->remove_child()` or
+  `waiting_on_queue = nullptr` put the step inside the `if`, so the
+  common path skipped it (chain 0x3FAF vs 0x3FFF; bits 4+6 missing).
+  (2) Invalid class name silently runs *something* and stalls — verify
+  the class exists in test_registry.cpp (zombie_cleanup ≠
+  scheduler_zombie). (3) A reproducible core QEMU_EXIT is not a
+  regression until reproduced on the committed baseline (git stash -u
+  + rebuild + same class); host-load stall cluster strikes here.
+  (4) Release build must be checked for new test files (TF_KERNEL
+  still compiles); guard debug-only symbol access with #if and give a
+  trivial release pass branch.
+- **Adapted:** `task_path.hpp` (5+14 bits, static_asserts) + 19 step
+  sites; 5 tests green; scheduler_zombie 5/5; core 572/572; release
+  ISO builds.
+- **Style re-surface:** N/A (build Errors 0).
+
 ### #347-B — dispatch segments (audit APPROVED after 1 REJECT, commit pending)
 
 - **Learned:** (1) Test-task priorities: HIGHER number = higher

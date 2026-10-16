@@ -5,9 +5,9 @@
 
 ## Active Summary
 ### Objective
-- **ACTIVE (2026-10-16):** #347 full pipeline — Slices A+B done
-  (committed/pushed/audited-APPROVED). Next: Slices C–E
-  (task/VMM/overhead).
+- **ACTIVE (2026-10-16):** #347 full pipeline — Slices A+B+C done
+  (committed/pushed/audited-APPROVED). Next: Slices D–E
+  (VMM/overhead).
 - **DONE (2026-10-16):** #325-A/B/C/D/E/F CLOSED (all committed/pushed/audited-APPROVED, checkboxes ticked) + #360 filed. Awaiting next work.
 - **DONE (2026-10-15):** Issue #327 (aarch64 stack markers): FIX (uncommitted): aarch64-only guard of stack value-checks (real defect: adrp reachability; "empty span" premise stale — kernel_stack shared, spans verified ≥16KiB all arches) + `integrity_stack_markers_span` placement test (memory 2→3, core 554→555). Validation: aarch64 links (was broken), riscv links, memory_integrity 3/3, selftest 147/147, build Errors 0. Audit APPROVED (S3-only, `report-20261015T152834Z`). Issue stays OPEN for owner close.
 - **DONE (2026-10-15):** Issue #319 (wall clock fast, S3): HYGIENE LANDING (uncommitted): programmed PIT + min-window + median calibration; hypervisor-gated accuracy test (hrt 5→6, deadline 145→146). Validation: hrt 6/6 (skip), selftest 147/147, E2E sleep unchanged, build Errors 0. TCG wall-truth remainder filed as #359 (v0.5.5). Audit APPROVED (`report-20261015T150149Z`). Issue stays OPEN for owner close.
