@@ -21,6 +21,7 @@
 ///        rate-monotonic dispatch, context switching, and test isolation.
 
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/scheduler_path.hpp> // issue #347 Slice B
 #include <kernel/task/idle_monitor.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/elf/elf.hpp>
@@ -65,6 +66,12 @@ extern "C" void debug_write_dec(uint64_t value);
 #endif
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
 #include <kernel/arch/x86_64/hal/pcid.hpp>
+#endif
+
+#if defined(CONFIG_DEBUG)
+// Fault-injection mask for dispatch_step() (issue #347 Slice B,
+// declared in scheduler_path.hpp). Test-only; absent in release.
+uint64_t kernel::g_test_skip_dispatch_step = 0;
 #endif
 
 /// @brief Read the current stack pointer (portable across arches).
@@ -2560,10 +2567,12 @@ TaskControlBlock *Scheduler::next_task() noexcept {
                 (candidate->state != TaskState::READY &&
                  candidate->state != TaskState::RUNNING) ||
                 queue_target(*candidate) != sched_cpu()) [[unlikely]] {
-                rq_own().dequeue_highest();
-                continue;
-            }
             rq_own().dequeue_highest();
+            continue;
+        }
+            kernel::dispatch_step(kernel::SchedDispatchSteps::Select);
+            rq_own().dequeue_highest();
+            kernel::dispatch_step(kernel::SchedDispatchSteps::Dequeue);
             return candidate;
         }
     }
@@ -4143,6 +4152,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         release_lock();
         return;
     }
+    kernel::dispatch_step(kernel::SchedDispatchSteps::Validate); // issue #347
     // Issue #21: bill the outgoing task's quantum, stamp the incoming one.
     // Both run under the caller's scheduler_lock_/IRQ-off discipline, so the
     // add+restamp pairs are atomic — no double-charge, no lost quantum.
@@ -4151,6 +4161,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     // Issue #285: dispatch = forward progress for the stall detector.
     // Runs under the caller's scheduler_lock_/IRQ-off discipline.
     idle_note_progress(next, arch::Timer::ticks());
+    kernel::dispatch_step(kernel::SchedDispatchSteps::ChargeStamp); // #347
 
     uint64_t *save_target = &task_stack_ptr(current);
     bool cur_is_boot_stack = false;
@@ -4233,6 +4244,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
             release_lock();
             return;
         }
+        kernel::dispatch_step(kernel::SchedDispatchSteps::OwnerResolve); // #347
         // H2: keep the resolved owner's context.rsp LIVE.  The original
         // scratch-save (layer 2) sent the harness's RSP to
         // s_foreign_rsp_scratch whenever it was not detected on the linker
@@ -4463,6 +4475,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
             return; // do not set scheduler_load_rsp_from -> no switch
         }
     }
+    kernel::dispatch_step(kernel::SchedDispatchSteps::FrameGuard); // #347
     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), task_stack_ptr(&next),
                      __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(),
@@ -4569,6 +4582,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     // point (self-switch no-ops above return early and keep old value).
     __atomic_store_n(&next.running_on_cpu, Scheduler::sched_cpu(),
                      __ATOMIC_RELEASE);
+    kernel::dispatch_step(kernel::SchedDispatchSteps::Publish); // issue #347
 
     {
         arch::IrqGuard ig{};
@@ -4619,6 +4633,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                          __ATOMIC_RELEASE);
         __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), save_target,
                          __ATOMIC_RELEASE);
+        kernel::dispatch_step(kernel::SchedDispatchSteps::ArmSwitch); // #347
 
         uint64_t cr0 = arch::read_cr0();
         cr0 |= (1ULL << 3);
@@ -4883,6 +4898,7 @@ void Scheduler::reschedule() noexcept {
     // IrqGuard destructor re-enables IRQs here, allowing the timer ISR to
     // fire and acquire scheduler_lock_ for rate_monotonic_schedule().
     __atomic_store_n(&Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
+    kernel::dispatch_step(kernel::SchedDispatchSteps::Arm); // issue #347
 }
 
 void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept {

@@ -238,6 +238,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"services_framework",    7,    0,       0      },  // services framework (issue #125): terminal colors, length-bounded write, cursor/splash, fb gate, scroll, program registry bounds
     {"ui_framebuffer",        6,    0,       0      },  // framebuffer init/putpixel/clear/scroll + terminated-line render pin (#269)
     {"path_tracer",           6,    0,       0      },  // PathTracer core primitive (issue #347 Slice A): chain math, missing/duplicate detection, checkpoint/resume, scoped-enum steps, reset
+    {"scheduler_dispatch_path", 4, 0,      0      },  // dispatch segments (issue #347 Slice B): reschedule arm, next_task select, skip-one-step negative, registry math
 
     // random
     {"random_core",           7,    0,       0      },  // RNG smoke/non-repeating

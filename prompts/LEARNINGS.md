@@ -49,6 +49,24 @@
 
 ## Entries
 
+### #347-B — dispatch segments (audit APPROVED after 1 REJECT, commit pending)
+
+- **Learned:** (1) Test-task priorities: HIGHER number = higher
+  priority (prio-11 starves prio-10, #242) AND must stay within
+  CONFIG_PRIORITY_CEILING (127) — enqueue() indexes the level array
+  directly, so prio-200 wrote OOB and broke the whole RQ (picked
+  idle, chain 0). (2) Debug-only symbols in test TUs need
+  CONFIG_DEBUG guards in the TEST file too (auditor S2, release
+  compile break — rejected patch applied verbatim). (3) Capture
+  results → unwind (arm clear, candidate re-enqueue, hook clear,
+  drain) → assert LAST, or assert-abort leaks. (4) reaper flake:
+  zombie_count!=0 in core but 5/5 standalone + 567/567 retry =
+  stale-zombie timing, note and proceed.
+- **Adapted:** `scheduler_path.hpp` + 8 step sites (reschedule arm,
+  next_task select, 6× switch_to_task apply); 4 tests green;
+  release ISO builds.
+- **Style re-surface:** N/A (build Errors 0).
+
 ### #347-A — PathTracer core (audit APPROVED, commit pending)
 
 - **Learned:** (1) XOR detects missing/duplicate steps, NEVER pure

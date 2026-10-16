@@ -130,6 +130,7 @@ void register_per_cpu_tests();
 void register_sync_err_api_tests();
 void register_checked_ptr_api_tests();
 void register_path_tracer_tests(); // issue #347 Slice A
+void register_sched_dispatch_path_tests(); // issue #347 Slice B
 void register_memory_integrity_tests();
 void register_shell_commands_tests();
 void register_services_framework_tests();
@@ -480,6 +481,9 @@ static void run_memory_checked_ptr_api_group() {
     register_checked_ptr_api_tests();
 }
 static void run_path_tracer_group() { register_path_tracer_tests(); }
+static void run_sched_dispatch_path_group() {
+    register_sched_dispatch_path_tests();
+}
 static void run_memory_integrity_group() {
     register_memory_integrity_tests();
 }
@@ -840,6 +844,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"memory_checked_ptr_api",
      []() { run_memory_checked_ptr_api_group(); }},
     {"path_tracer", []() { run_path_tracer_group(); }}, // issue #347
+    {"scheduler_dispatch_path",
+     []() { run_sched_dispatch_path_group(); }}, // issue #347 Slice B
     // -- Phase 6 (issue #303): canary + isolation pins --
     {"stack_cookie", []() { run_stack_cookie_group(); }},
     {"pointer_isolation", []() { run_pointer_isolation_group(); }},
@@ -1058,6 +1064,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_memory_checked_ptr_group();
          run_memory_checked_ptr_api_group();
          run_path_tracer_group(); // issue #347 Slice A (core primitive)
+         run_sched_dispatch_path_group(); // issue #347 Slice B (dispatch)
          run_stack_cookie_group();      // issue #303
          run_pointer_isolation_group(); // issue #303
          run_memory_integrity_group();
