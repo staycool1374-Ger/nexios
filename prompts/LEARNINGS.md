@@ -49,6 +49,23 @@
 
 ## Entries
 
+### #325-E — fork deep-copy audit (audit APPROVED, commit pending)
+
+- **Learned:** (1) Audit BEFORE assuming defect: flag parity + MMIO skip
+  were already correct verbatim on all arches — encoded as tests, zero
+  code change for 80% of the charter. (2) The real defect was the
+  quiet one: user huge entries copied BY VALUE = shared writable page
+  parent/child; unreachable + fail-closed is strictly safer than alias.
+  (3) OOM "partial state" needs the full teardown chain verified
+  (destroy→cleanup→free_user_pages + USER-ownership of every partial),
+  not just the caller's destroy call. (4) Hand-installed table entries
+  in tests orphan lower tables — capture + free bypassed levels
+  explicitly (free_user_pages only sees linked levels).
+- **Adapted:** huge fail-closed ×4 sites; OOM contract doc; 3 tests
+  (process_pml4_clone 10→13).
+- **Style re-surface:** fail-closed over alias (§5 reachability rule);
+  contract docs state the full invariant chain (§9).
+
 ### #325-D — NX posture (audit APPROVED, commit pending)
 
 - **Learned:** (1) Policy defaults beat per-call discipline: flipping the

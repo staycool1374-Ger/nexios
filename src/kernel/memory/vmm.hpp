@@ -231,7 +231,15 @@ class VMM {
     /// @param src_pml4 Physical address of source PML4.
     /// @param dst_pml4 Physical address of destination PML4 (must already
     ///        have kernel entries populated).
-    /// @return true on success, false on OOM (partial state may remain).
+    /// @return true on success, false on OOM or on a user-range huge/block
+    ///         entry (issue #325-E: by-value copy would alias one writable
+    ///         page parent/child — fail closed instead).  Partial state
+    ///         may remain on false, but every installed table and data
+    ///         page is USER-owned, so the caller MUST destroy the child
+    ///         (TaskControlBlock::destroy → cleanup → free_user_pages
+    ///         reclaims all partials — task.cpp documents this invariant).
+    ///         Leaf flags (USER/write/dirty/accessed/NX) copy verbatim;
+    ///         non-RAM frames are skipped (child leaf stays unmapped).
     static bool deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4);
     static void free_user_pages(uint64_t pml4_phys);
     /// @brief Frees all user-space pages and page tables with error code.

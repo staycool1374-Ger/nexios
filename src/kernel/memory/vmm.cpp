@@ -1580,17 +1580,22 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
             if (!(src_pdpt[pdpt_idx] & PAGE_PRESENT))
                 continue;
 
+            // 1 GiB huge/block entry in the USER range — fail closed
+            // (issue #325-E): copying by value would share one writable
+            // page between parent and child (silent aliasing).  No kernel
+            // path creates user huge entries (every map splits to 4 KiB),
+            // so this is unreachable in practice; the caller destroys the
+            // partial child on false.
 #if defined(CONFIG_ARCH_AARCH64)
             if ((src_pdpt[pdpt_idx] & (PAGE_PRESENT | PAGE_TABLE)) ==
-                PAGE_PRESENT)
-#else
-            if (src_pdpt[pdpt_idx] & VMM::PAGE_HUGE)
-#endif
-            {
-                // 1 GiB huge page — leave as-is in child too.
-                dst_pdpt[pdpt_idx] = src_pdpt[pdpt_idx];
-                continue;
+                PAGE_PRESENT) {
+                return false;
             }
+#else
+            if (src_pdpt[pdpt_idx] & VMM::PAGE_HUGE) {
+                return false;
+            }
+#endif
 
             uint64_t src_pd_phys = src_pdpt[pdpt_idx] & ~0xFFFULL;
             uint64_t dst_pd_phys = PMM::alloc_user_page();
@@ -1618,17 +1623,18 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                 if (!(src_pd[pd_idx] & PAGE_PRESENT))
                     continue;
 
+                // 2 MiB huge/block entry in the USER range — fail closed
+                // (issue #325-E, same aliasing rationale as above).
 #if defined(CONFIG_ARCH_AARCH64)
                 if ((src_pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) ==
-                    PAGE_PRESENT)
-#else
-                if (src_pd[pd_idx] & VMM::PAGE_HUGE)
-#endif
-                {
-                    // 2 MiB huge page — copy as-is.
-                    dst_pd[pd_idx] = src_pd[pd_idx];
-                    continue;
+                    PAGE_PRESENT) {
+                    return false;
                 }
+#else
+                if (src_pd[pd_idx] & VMM::PAGE_HUGE) {
+                    return false;
+                }
+#endif
 
                 uint64_t src_pt_phys = src_pd[pd_idx] & ~0xFFFULL;
                 uint64_t dst_pt_phys = PMM::alloc_user_page();
@@ -1697,9 +1703,9 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
         }
 
         if ((src[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-            // 1 GiB block — copy as-is.
-            dst[l0_idx] = src[l0_idx];
-            continue;
+            // 1 GiB block in the USER range — fail closed (issue #325-E:
+            // by-value copy would alias one writable page parent/child).
+            return false;
         }
 
         uint64_t src_l1_phys = VMM::sv39_pte_phys(src[l0_idx]);
@@ -1718,9 +1724,9 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                 continue;
 
             if ((src_l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-                // 2 MiB block — copy as-is.
-                dst_l1[l1_idx] = src_l1[l1_idx];
-                continue;
+                // 2 MiB block in the USER range — fail closed (issue #325-E,
+                // same aliasing rationale as above).
+                return false;
             }
 
             uint64_t src_l2_phys = VMM::sv39_pte_phys(src_l1[l1_idx]);

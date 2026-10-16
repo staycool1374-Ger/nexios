@@ -21,8 +21,11 @@
 
 #include <test.hpp>
 #include <logger.hpp>
+#include <scope_guard.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/arch/page_table.hpp>
+#include <kernel/arch/irq_guard.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <constants.hpp>
@@ -775,6 +778,201 @@ JARVIS_TEST(fork_page_table_shared_flag_absent, "PRE: none | POST: none") {
 // Input: None
 // Expect: All tests registered
 // Depends: test framework
+// Runmode: kernel
+// Testidea: deep_copy preserves leaf permission flags verbatim
+// Input: parent maps one RO page (non-exec) + one RWX page (exec) via the
+//        shared primitives; deep-copy into a child clone
+// Expect: RO bit + executability match parent→child on both pages; content
+//         identical but phys distinct.  D/A + USER bits copy through the
+//         same verbatim expression (HW-only / ring-0-indistinguishable,
+//         construction-verified, not pinned here).
+// Depends: kernel::memory::VMM::deep_copy_user_pages (issue #325-E)
+JARVIS_TEST(fork_deep_copy_flag_parity, "PRE: none | POST: none") {
+    uint64_t parent_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(parent_pml4 != 0);
+    uint64_t child_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(child_pml4 != 0);
+
+    constexpr uint64_t RO_VA = 0x400000ULL;
+    constexpr uint64_t X_VA = 0x401000ULL;
+    uint64_t ro_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(ro_phys != 0);
+    uint64_t x_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(x_phys != 0);
+    VMM::map_page_ro_in_pml4(RO_VA, ro_phys, false, parent_pml4);
+    VMM::map_page_in_pml4(X_VA, x_phys, true, true, parent_pml4);
+
+    bool parent_ro_exec = true;
+    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(RO_VA, parent_pml4, &parent_ro_exec));
+    JARVIS_ASSERT(!parent_ro_exec);
+    JARVIS_ASSERT(VMM::pte_is_executable_in_pml4(X_VA, parent_pml4));
+
+    JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
+
+    bool child_ro_exec = true;
+    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(RO_VA, child_pml4, &child_ro_exec));
+    JARVIS_ASSERT(!child_ro_exec);
+    JARVIS_ASSERT(VMM::pte_is_executable_in_pml4(X_VA, child_pml4));
+    JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(RO_VA, child_pml4));
+    JARVIS_ASSERT_EQ(ro_phys, VMM::virt_to_phys_in_pml4(RO_VA, parent_pml4));
+    const uint64_t child_ro = VMM::virt_to_phys_in_pml4(RO_VA, child_pml4);
+    JARVIS_ASSERT(child_ro != 0 && child_ro != ro_phys);
+    const uint64_t child_x = VMM::virt_to_phys_in_pml4(X_VA, child_pml4);
+    JARVIS_ASSERT(child_x != 0 && child_x != x_phys);
+
+    VMM::free_user_pages(child_pml4);
+    PMM::free_page(child_pml4);
+    VMM::free_user_pages(parent_pml4);
+    PMM::free_page(parent_pml4);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: deep_copy fails closed on a user-range huge entry (no alias)
+// Input: parent user PD holds a hand-installed 2 MiB huge leaf;
+//        deep-copy into a child clone
+// Expect: false; child PD entry absent (no shared writable page);
+//         parent restored + teardown neutral
+// Depends: kernel::memory::VMM::deep_copy_user_pages (issue #325-E)
+JARVIS_TEST(fork_deep_copy_huge_fails_closed, "PRE: none | POST: none") {
+    uint64_t parent_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(parent_pml4 != 0);
+    uint64_t child_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(child_pml4 != 0);
+
+    // Build the PD first with a throwaway 4 KiB map, then replace the PD
+    // entry with a huge leaf (tables stay; leaf ownership moves to huge).
+    constexpr uint64_t HUGE_VA = 0x400000ULL;
+    uint64_t scratch_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(scratch_phys != 0);
+    VMM::map_page_in_pml4(HUGE_VA, scratch_phys, true, parent_pml4);
+    VMM::unmap_page_in_pml4(HUGE_VA, parent_pml4);
+    PMM::free_page(scratch_phys);
+    uint64_t huge_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(huge_phys != 0);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *parent_top = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (parent_pml4 & ~0xFFFULL));
+    const size_t pml4_idx = arch::ArchPageTable::pml4_index(HUGE_VA);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *parent_pdpt = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (parent_top[pml4_idx] & ~0xFFFULL));
+    const size_t pdpt_idx = arch::ArchPageTable::pdpt_index(HUGE_VA);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *parent_pd = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (parent_pdpt[pdpt_idx] & ~0xFFFULL));
+    const size_t pd_idx = arch::ArchPageTable::pd_index(HUGE_VA);
+    constexpr uint64_t kX86HugeBit = 1ULL << 7;
+    // Capture the orphaned PT before overwriting its PD entry (free below;
+    // free_user_pages cannot reach it once the PD holds the huge leaf).
+    const uint64_t orphan_pt = parent_pd[pd_idx] & ~0xFFFULL;
+    parent_pd[pd_idx] =
+        (huge_phys & ~0x1FFFFFULL) | 0x3ULL | kX86HugeBit; // P+W+huge
+    arch::ArchPageTable::tlb_flush(HUGE_VA);
+
+    JARVIS_ASSERT(!VMM::deep_copy_user_pages(parent_pml4, child_pml4));
+
+    // No alias: the child installed no PD entry for the huge region.
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *child_top = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (child_pml4 & ~0xFFFULL));
+    if ((child_top[pml4_idx] & 1ULL) != 0) {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *child_pdpt = reinterpret_cast<uint64_t *>(
+            arch::HHDM_OFFSET + (child_top[pml4_idx] & ~0xFFFULL));
+        if ((child_pdpt[pdpt_idx] & 1ULL) != 0) {
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *child_pd = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (child_pdpt[pdpt_idx] & ~0xFFFULL));
+            JARVIS_ASSERT((child_pd[pd_idx] & 1ULL) == 0);
+        }
+    }
+
+    // Restore + manual free (hand-made entry: bypass free_user_pages).
+    PMM::free_page(huge_phys);
+    PMM::free_page(orphan_pt);
+    parent_pd[pd_idx] = 0;
+    arch::ArchPageTable::tlb_flush(HUGE_VA);
+    VMM::free_user_pages(child_pml4);
+    PMM::free_page(child_pml4);
+    VMM::free_user_pages(parent_pml4);
+    PMM::free_page(parent_pml4);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: deep_copy OOM returns false and the partial child is fully
+//          reclaimed by teardown (caller-destroys contract)
+// Input: parent holds one user page; both pools drained (unified
+//        refusal-loop drain); 3 tables freed back so the copy installs
+//        PDPT+PD+PT then fails on the data page
+// Expect: false; free_user_pages(child) reclaims the 3 tables;
+//         fully neutral counters
+// Depends: kernel::memory::VMM::deep_copy_user_pages (issue #325-E)
+JARVIS_TEST(fork_deep_copy_oom_reclaimed, "PRE: none | POST: none") {
+    PMM::OOMHandler saved_oom = PMM::get_oom_handler();
+    PMM::set_oom_handler(nullptr);
+    auto oom_restore = ScopeGuard([&]() { PMM::set_oom_handler(saved_oom); });
+
+    uint64_t parent_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(parent_pml4 != 0);
+    uint64_t child_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(child_pml4 != 0);
+    constexpr uint64_t VA = 0x400000ULL;
+    uint64_t data_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(data_phys != 0);
+    VMM::map_page_in_pml4(VA, data_phys, true, parent_pml4);
+
+    arch::IrqGuard drain_guard;
+    PMM::rebuild_free_list();
+    uint64_t chain_head = 0;
+    for (int settle = 0; settle < 3; ++settle) {
+        size_t took = 0;
+        uint64_t take_page = 0;
+        size_t take_cap = 0;
+        while ((take_page = PMM::alloc_page_table()) != 0) {
+            JARVIS_ASSERT_FMT(take_cap < 100000,
+                              "drain takes exceed window (cycling list?)");
+            ++take_cap;
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                      take_page);
+            *link = chain_head;
+            chain_head = take_page;
+            ++took;
+        }
+        if (took == 0) {
+            break;
+        }
+    }
+    // PDPT + PD + PT for the copy; the data page then fails.
+    for (size_t keep = 0; keep < 3; ++keep) {
+        JARVIS_ASSERT(chain_head != 0);
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                  chain_head);
+        const uint64_t next_head = *link;
+        PMM::free_page(chain_head);
+        chain_head = next_head;
+    }
+
+    JARVIS_ASSERT(!VMM::deep_copy_user_pages(parent_pml4, child_pml4));
+
+    VMM::free_user_pages(child_pml4);
+    PMM::free_page(child_pml4);
+    VMM::free_user_pages(parent_pml4);
+    PMM::free_page(parent_pml4);
+    while (chain_head != 0) {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                  chain_head);
+        const uint64_t next_head = *link;
+        PMM::free_page(chain_head);
+        chain_head = next_head;
+    }
+    JARVIS_TEST_PASS();
+}
+
 void register_pml4_clone_tests() {
     Logger::info("Registering bug #007 page table tests");
     JARVIS_REGISTER_TEST(pml4_clone_clears_user_entries);
@@ -787,6 +985,9 @@ void register_pml4_clone_tests() {
     JARVIS_REGISTER_TEST(fork_deep_copy_child_tables_independent);
     JARVIS_REGISTER_TEST(fork_free_user_pages_child_deepcopy);
     JARVIS_REGISTER_TEST(fork_page_table_shared_flag_absent);
+    JARVIS_REGISTER_TEST(fork_deep_copy_flag_parity);
+    JARVIS_REGISTER_TEST(fork_deep_copy_huge_fails_closed);
+    JARVIS_REGISTER_TEST(fork_deep_copy_oom_reclaimed);
 }
 
 #endif // CONFIG_ARCH_X86_64
