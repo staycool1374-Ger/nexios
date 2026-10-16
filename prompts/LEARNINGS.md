@@ -49,6 +49,21 @@
 
 ## Entries
 
+### #348-E — constraints (audit APPROVED, commit pending)
+
+- **Learned:** (1) Constraints are review-cheap to audit (restrict-only
+  ⇒ behavior-neutral by construction when everything compiles).
+  (2) Overload sets need care: constraining one overload reshapes
+  resolution — verify pointer/integer/enum dispatch unchanged
+  (nearly dropped the T* overload mid-edit). (3) Evaluated-no-change
+  is a complete result for an audit tick (designated init already
+  modern). (4) Long core runs flake-cluster under host load
+  (zombie leftovers, partial reads, QEMU_EXIT) — re-run twice before
+  digging; isolated-class green + re-run green = proceed with note.
+- **Adapted:** 5 template constraints; designated-init evaluated.
+- **Style re-surface:** ad-hoc requires for single-use callables over
+  new concepts (no API without a second user).
+
 ### #348-D2 — Span/bit primitives + bounded adoption (audit APPROVED)
 
 - **Learned:** (1) New-utility scope discipline: ship minimal API

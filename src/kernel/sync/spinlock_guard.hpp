@@ -1,6 +1,7 @@
 #pragma once
 
 #include <types.hpp>
+#include <concepts.hpp>
 
 /// @brief Tag type for SpinLockGuard adopt-lock constructor.
 struct adopt_lock_t {};
@@ -8,7 +9,8 @@ struct adopt_lock_t {};
 constexpr adopt_lock_t adopt_lock{};
 
 /// @brief RAII lock guard for any lock type with lock()/unlock() methods.
-template <typename Lock> class [[nodiscard]] SpinLockGuard {
+/// @tparam Lock Lock type satisfying kernel::Lockable (issue #348-E).
+template <kernel::Lockable Lock> class [[nodiscard]] SpinLockGuard {
   public:
     /// @brief Acquire the lock on construction.
     explicit SpinLockGuard(Lock &lock) noexcept : lock_(lock), owns_(true) {

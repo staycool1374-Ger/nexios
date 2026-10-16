@@ -54,9 +54,11 @@ bool scan_candidate(const TaskControlBlock *t) noexcept {
 
 /// @brief Advance a chunked scan over the registry from @p cursor.
 /// @tparam Visit Callable (TaskControlBlock*) -> void, pure reads +
-///         flag sets only (M3/M6).
+///         flag sets only (M3/M6).  Ad-hoc requires (issue #348-E):
+///         any callable taking TaskControlBlock*, returning anything.
 /// @return Progress; cursor wraps to head at the end (wrapped=true).
 template <typename Visit>
+    requires requires(Visit visit, TaskControlBlock *task) { visit(task); }
 IdleScanProgress scan_chunk(IdleScanCursor &cursor, uint64_t budget,
                             Visit visit) noexcept {
     IdleScanProgress progress = {};

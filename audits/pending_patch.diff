@@ -1,433 +1,120 @@
-diff --git a/src/kernel/elf/elf.hpp b/src/kernel/elf/elf.hpp
-index 606317e61..237d4b2a7 100644
---- a/src/kernel/elf/elf.hpp
-+++ b/src/kernel/elf/elf.hpp
-@@ -23,6 +23,7 @@
+diff --git a/src/kernel/core/global_state.hpp b/src/kernel/core/global_state.hpp
+index a9ef93129..f09c4514d 100644
+--- a/src/kernel/core/global_state.hpp
++++ b/src/kernel/core/global_state.hpp
+@@ -40,6 +40,7 @@
+ ///   - NetState       : NIC instance pointer, RANGE_CHECKED.
  
  #include <types.hpp>
- #include <constants.hpp>
-+#include <span.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/elf/elf_shared.hpp>
- 
-@@ -220,12 +221,14 @@ static constexpr uint64_t kElfAuthKillExitCode = 0xDB0C;
- /// @param phdr_buf_off Buffer offset of the phdr table — NOT the file
- ///        phoff: the loader packs phdrs at sizeof(ELF64Header) regardless
- ///        of where they sit in the file.
--/// @return Range count, or -1 when more than @p max_ranges exist (fail
-+/// @param image Whole file image view (bounds all reads; issue #348-D2).
-+/// @param out Output view (capacity replaces max_ranges).
-+/// @return Range count, or -1 when more than @p out.size() exist (fail
- ///         closed — the TCB snapshot cannot hold them).
--uint64_t collect_ro_ranges(const uint8_t *phdr_image, uint64_t phdr_buf_off,
--                           uint16_t phnum, uint64_t phentsize,
--                           uint64_t file_size, TaskControlBlock::RoRange *out,
--                           uint64_t max_ranges) noexcept;
-+uint64_t collect_ro_ranges(kernel::Span<const uint8_t> image,
-+                           uint64_t phdr_buf_off, uint16_t phnum,
-+                           uint64_t phentsize, uint64_t file_size,
-+                           kernel::Span<TaskControlBlock::RoRange> out) noexcept;
- /// @brief Locate the TEXT before-canary slot (issue #46): mirrors
- ///        install_segment_canaries' text_base rule (first PF_X PT_LOAD,
- ///        page_align_down(vaddr)) so the authenticity coverage can exclude
-diff --git a/src/kernel/elf/elf_auth.cpp b/src/kernel/elf/elf_auth.cpp
-index edc5d38aa..d97c6976d 100644
---- a/src/kernel/elf/elf_auth.cpp
-+++ b/src/kernel/elf/elf_auth.cpp
-@@ -34,14 +34,23 @@
- namespace kernel {
- namespace elf {
- 
--uint64_t collect_ro_ranges(const uint8_t *phdr_image, uint64_t phdr_buf_off,
--                           uint16_t phnum, uint64_t phentsize,
--                           uint64_t file_size, TaskControlBlock::RoRange *out,
--                           uint64_t max_ranges) noexcept {
-+uint64_t collect_ro_ranges(kernel::Span<const uint8_t> image,
-+                           uint64_t phdr_buf_off, uint16_t phnum,
-+                           uint64_t phentsize, uint64_t file_size,
-+                           kernel::Span<TaskControlBlock::RoRange> out) noexcept {
-     uint64_t count = 0;
-     for (uint16_t i = 0; i < phnum; ++i) {
-+        // Overflow-safe offset (issue #348-D2): wrap or out-of-image
-+        // entries are skipped, never read.
-+        const uint64_t stride =
-+            static_cast<uint64_t>(i) * phentsize + phdr_buf_off;
-+        if (stride < phdr_buf_off)
-+            continue; // wrapped
-+        if (stride > image.size() ||
-+            sizeof(ELF64ProgramHeader) > image.size() - stride)
-+            continue; // outside the image
-         auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
--            phdr_image + phdr_buf_off + static_cast<uint64_t>(i) * phentsize);
-+            image.data() + stride);
-         if (!phdr || phdr->type != PT_LOAD)
-             continue;
-         if (!validate_segment(phdr, file_size))
-@@ -50,7 +59,7 @@ uint64_t collect_ro_ranges(const uint8_t *phdr_image, uint64_t phdr_buf_off,
-             continue;
-         if (phdr->filesz == 0)
-             continue;
--        if (count >= max_ranges)
-+        if (count >= out.size())
-             return static_cast<uint64_t>(-1); // overflow: fail closed
-         out[count].vaddr = phdr->vaddr;
-         out[count].len = phdr->filesz;
-@@ -120,9 +129,9 @@ bool snapshot_ro_baseline(uint64_t pml4, const uint8_t *phdr_image,
-     if (!tcb)
-         return false;
-     TaskControlBlock::RoRange ranges[TaskControlBlock::kMaxRoRanges];
--    uint64_t n = collect_ro_ranges(phdr_image, phdr_buf_off, phnum, phentsize,
--                                   file_size, ranges,
--                                   TaskControlBlock::kMaxRoRanges);
-+    uint64_t n =
-+        collect_ro_ranges(kernel::Span<const uint8_t>(phdr_image, file_size),
-+                          phdr_buf_off, phnum, phentsize, file_size, ranges);
-     if (n == static_cast<uint64_t>(-1))
-         return false; // more RO ranges than the TCB snapshot holds
-     // Carve the TEXT before-canary slot out (the canary subsystem owns
-diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
-index 3f07f73f6..c95a9d6e3 100644
---- a/src/kernel/elf/elf_loader.cpp
-+++ b/src/kernel/elf/elf_loader.cpp
-@@ -292,9 +292,9 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
-     // ever retained and try_rerun's "no elf loaded" is accurate, not
-     // misleading. The kDynamic gate below stays as defense-in-depth.
-     TaskControlBlock::RoRange ros[TaskControlBlock::kMaxRoRanges] = {};
--    uint64_t n = collect_ro_ranges(phdr_image_, sizeof(ELF64Header),
--                                   hdr_.phnum, hdr_.phentsize, file_size_,
--                                   ros, TaskControlBlock::kMaxRoRanges);
-+    uint64_t n = collect_ro_ranges(
-+        kernel::Span<const uint8_t>(phdr_image_, sizeof(phdr_image_)),
-+        sizeof(ELF64Header), hdr_.phnum, hdr_.phentsize, file_size_, ros);
-     if (n == (uint64_t)-1 || n > TaskControlBlock::kMaxRoRanges)
-         return;
-     // Golden walk: every mapped page covering the RO ranges.
-diff --git a/src/kernel/ipc/buffer_pool.cpp b/src/kernel/ipc/buffer_pool.cpp
-index d6d5fc7fa..9097a60c2 100644
---- a/src/kernel/ipc/buffer_pool.cpp
-+++ b/src/kernel/ipc/buffer_pool.cpp
-@@ -460,36 +460,38 @@ bool BufferPool::transfer(uint64_t handle, TaskControlBlock &from,
- }
- 
- /// @brief Snapshot pool state into a flat buffer (test isolation).
--void BufferPool::capture_state(uint8_t *dst, size_t max_bytes) {
--    (void)max_bytes;
--    __builtin_memcpy(dst, entries, sizeof(entries));
--    dst += sizeof(entries);
--    __builtin_memcpy(dst, &free_head_, sizeof(free_head_));
--    dst += sizeof(free_head_);
--    __builtin_memcpy(dst, &next_cookie_, sizeof(next_cookie_));
--    dst += sizeof(next_cookie_);
--    __builtin_memcpy(dst, &pool_count_, sizeof(pool_count_));
--    dst += sizeof(pool_count_);
-+void BufferPool::capture_state(kernel::Span<uint8_t> dst) {
-+    ENSURE(dst.size() >= state_bytes());
-+    uint8_t *at = dst.data();
-+    __builtin_memcpy(at, entries, sizeof(entries));
-+    at += sizeof(entries);
-+    __builtin_memcpy(at, &free_head_, sizeof(free_head_));
-+    at += sizeof(free_head_);
-+    __builtin_memcpy(at, &next_cookie_, sizeof(next_cookie_));
-+    at += sizeof(next_cookie_);
-+    __builtin_memcpy(at, &pool_count_, sizeof(pool_count_));
-+    at += sizeof(pool_count_);
-     // pool_pages_ must be captured too: without it, snapshot_restore leaves the
-     // pool holding whatever phys the LAST test cached, while the rewound PMM
-     // bitmap frees those pages — the pool double-books free pages and the
-     // ResourceTracker drifts (+1..+3 PMM pages per buffer_pool test, +128 when
-     // the whole pool is replaced).  v0.3.11 root cause.
--    __builtin_memcpy(dst, pool_pages_, sizeof(pool_pages_));
-+    __builtin_memcpy(at, pool_pages_, sizeof(pool_pages_));
- }
- 
- /// @brief Restore pool state from a flat buffer (test isolation).
--void BufferPool::restore_state(const uint8_t *src, size_t max_bytes) {
--    (void)max_bytes;
--    __builtin_memcpy(entries, src, sizeof(entries));
--    src += sizeof(entries);
--    __builtin_memcpy(&free_head_, src, sizeof(free_head_));
--    src += sizeof(free_head_);
--    __builtin_memcpy(&next_cookie_, src, sizeof(next_cookie_));
--    src += sizeof(next_cookie_);
--    __builtin_memcpy(&pool_count_, src, sizeof(pool_count_));
--    src += sizeof(pool_count_);
--    __builtin_memcpy(pool_pages_, src, sizeof(pool_pages_));
-+void BufferPool::restore_state(kernel::Span<const uint8_t> src) {
-+    ENSURE(src.size() >= state_bytes());
-+    const uint8_t *at = src.data();
-+    __builtin_memcpy(entries, at, sizeof(entries));
-+    at += sizeof(entries);
-+    __builtin_memcpy(&free_head_, at, sizeof(free_head_));
-+    at += sizeof(free_head_);
-+    __builtin_memcpy(&next_cookie_, at, sizeof(next_cookie_));
-+    at += sizeof(next_cookie_);
-+    __builtin_memcpy(&pool_count_, at, sizeof(pool_count_));
-+    at += sizeof(pool_count_);
-+    __builtin_memcpy(pool_pages_, at, sizeof(pool_pages_));
- }
- 
- /// @brief Unmap and free all buffers owned by a task (called from
-diff --git a/src/kernel/ipc/buffer_pool.hpp b/src/kernel/ipc/buffer_pool.hpp
-index 0f5b92c05..7d220afbe 100644
---- a/src/kernel/ipc/buffer_pool.hpp
-+++ b/src/kernel/ipc/buffer_pool.hpp
-@@ -24,6 +24,7 @@
- 
- #include <types.hpp>
- #include <constants.hpp>
-+#include <span.hpp>
- #include <kernel/memory/checked_ptr.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/ipc/buffer_pool_errors.hpp>
-@@ -102,9 +103,12 @@ class BufferPool {
- 
-     /// @name Test-isolation helpers (snapshot / restore)
-     /// @brief Copy all entries + free_head + next_cookie into flat buffer.
--    static void capture_state(uint8_t *dst, size_t max_bytes);
-+    /// @param dst Destination view; must hold at least state_bytes()
-+    ///        (ENSUREd — snapshot sizing bugs fail closed, issue #348-D2).
-+    static void capture_state(kernel::Span<uint8_t> dst);
-     /// @brief Restore entries + free_head + next_cookie from flat buffer.
--    static void restore_state(const uint8_t *src, size_t max_bytes);
-+    /// @param src Source view; must hold at least state_bytes() (ENSUREd).
-+    static void restore_state(kernel::Span<const uint8_t> src);
-     /// @brief Bytes needed for BufferPool state capture.
-     static constexpr size_t state_bytes() {
-         return sizeof(entries) + sizeof(free_head_) + sizeof(next_cookie_) +
-diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index de4a9f159..6dc630b85 100644
---- a/src/kernel/test/test_isolate.cpp
-+++ b/src/kernel/test/test_isolate.cpp
-@@ -582,8 +582,9 @@ bool snapshot_create() {
-                  watchdogd::get_watchdogd_pid());
- 
-     // ---- BufferPool ----
--    BufferPool::capture_state(g_snapshot + off_bufpool(),
--                              BufferPool::state_bytes());
-+    BufferPool::capture_state(
-+        kernel::Span<uint8_t>(g_snapshot + off_bufpool(),
-+                              BufferPool::state_bytes()));
- 
-     // ---- User page content + canary guards ----
-     {
-@@ -1452,8 +1453,9 @@ void snapshot_restore(const char *test_name) {
-     // The AP simply idles parked; nothing below waits on AP progress.
- 
-     // ---- BufferPool ----
--    BufferPool::restore_state(g_snapshot + off_bufpool(),
--                              BufferPool::state_bytes());
-+    BufferPool::restore_state(
-+        kernel::Span<const uint8_t>(g_snapshot + off_bufpool(),
-+                                    BufferPool::state_bytes()));
- 
-     // ---- Resource Counters ----
-     ResourceCounters saved;
-diff --git a/src/lib/bit.hpp b/src/lib/bit.hpp
-new file mode 100644
-index 000000000..a271f5153
---- /dev/null
-+++ b/src/lib/bit.hpp
-@@ -0,0 +1,99 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file bit.hpp
-+/// @brief Bit manipulation primitives (issue #348-D2: `<bit>` is absent
-+///        under -nostdinc and std::byteswap is C++23 anyway — hand-rolled).
-+/// @note #347 transparency: pure value functions (constexpr/noexcept,
-+///       no static state, no branches that matter) — safe to call inside
-+///       traced paths without modeling.
-+
-+#pragma once
-+
-+#include <types.hpp>
 +#include <concepts.hpp>
-+
-+namespace kernel {
-+
-+/// @brief Reinterpret the object representation of @p src as To (issue
-+///        #348-D2: std::bit_cast needs `<bit>`).
-+/// @tparam To Destination type (must be trivially copyable, same size).
-+/// @note Endian-sensitive by nature (same bytes, different value
-+///       meaning across endianness) — all supported arches are
-+///       little-endian; do NOT use it to parse multi-byte wire formats
-+///       (assemble those with explicit shifts, see validate_header).
-+template <typename To, TriviallyCopiable From>
-+[[nodiscard]] constexpr To bit_cast(const From &src) noexcept {
-+    static_assert(sizeof(To) == sizeof(From),
-+                  "bit_cast requires equal-sized types");
-+    static_assert(__is_trivially_copyable(To),
-+                  "bit_cast destination must be trivially copyable");
-+    // __builtin_memcpy is constant-evaluated; alignment-safe by construction
-+    // (bytewise copy, no actual misaligned access).
-+    To dst{};
-+    __builtin_memcpy(&dst, &src, sizeof(To));
-+    return dst;
-+}
-+
-+/// @brief Byte order tags (std::endian equivalent).
-+enum class endian : uint32_t {
-+    little = 0,
-+    big = 1,
-+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-+    native = 1,
-+#else
-+    native = 0,
-+#endif
-+};
-+
-+/// @brief 16-bit byte swap (constexpr).
-+[[nodiscard]] constexpr uint16_t byteswap16(uint16_t value) noexcept {
-+    return static_cast<uint16_t>((value << 8) | (value >> 8));
-+}
-+
-+/// @brief 32-bit byte swap (constexpr).
-+[[nodiscard]] constexpr uint32_t byteswap32(uint32_t value) noexcept {
-+    return ((value & 0x000000FFULL) << 24) | ((value & 0x0000FF00ULL) << 8) |
-+           ((value & 0x00FF0000ULL) >> 8) | ((value & 0xFF000000ULL) >> 24);
-+}
-+
-+/// @brief 64-bit byte swap (constexpr).
-+[[nodiscard]] constexpr uint64_t byteswap64(uint64_t value) noexcept {
-+    return ((value & 0x00000000000000FFULL) << 56) |
-+           ((value & 0x000000000000FF00ULL) << 40) |
-+           ((value & 0x0000000000FF0000ULL) << 24) |
-+           ((value & 0x00000000FF000000ULL) << 8) |
-+           ((value & 0x000000FF00000000ULL) >> 8) |
-+           ((value & 0x0000FF0000000000ULL) >> 24) |
-+           ((value & 0x00FF000000000000ULL) >> 40) |
-+           ((value & 0xFF00000000000000ULL) >> 56);
-+}
-+
-+// Compile-time contract (issue #348-D2).
-+static_assert(byteswap16(0x1234) == 0x3412, "byteswap16");
-+static_assert(byteswap32(0x12345678) == 0x78563412, "byteswap32");
-+static_assert(byteswap64(0x0102030405060708ULL) == 0x0807060504030201ULL,
-+              "byteswap64");
-+static_assert(byteswap32(byteswap32(0xDEADBEEFULL)) == 0xDEADBEEFULL,
-+              "byteswap32 involution");
-+static_assert(bit_cast<uint32_t>(0x12345678U) == 0x12345678U,
-+              "bit_cast identity on same representation");
-+static_assert(endian::native == endian::little,
-+              "all supported arches are little-endian");
-+
-+} // namespace kernel
-diff --git a/src/lib/span.hpp b/src/lib/span.hpp
-new file mode 100644
-index 000000000..2ea99eccc
---- /dev/null
-+++ b/src/lib/span.hpp
-@@ -0,0 +1,86 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file span.hpp
-+/// @brief Non-owning contiguous view (issue #348-D2: std::span needs
-+///        `<span>`, absent under -nostdinc — this is the hand-rolled
-+///        equivalent, minimal on purpose).
-+/// @note #347 transparency: a Span is a transparent view, not a path
-+///       step — constexpr/noexcept, zero hidden control flow, no static
-+///       state.  Hot-path tracing never needs to model inside it.
-+
-+#pragma once
-+
-+#include <types.hpp>
-+
-+namespace kernel {
-+
-+/// @brief Non-owning view over count contiguous elements.
-+/// @tparam T Element type (use `const T` for read-only views).
-+template <typename T>
-+class Span {
-+  public:
-+    /// @brief Empty view.
-+    constexpr Span() noexcept : data_(nullptr), size_(0) {
-+    }
-+    /// @brief View over [data, data + count).  Null with nonzero count
-+    ///        is a caller bug (same contract as std::span).
-+    constexpr Span(T *data, size_t count) noexcept
-+        : data_(data), size_(count) {
-+    }
-+    /// @brief View over a C array (size deduced).
-+    template <size_t kCount>
-+    constexpr Span(T (&arr)[kCount]) noexcept : data_(arr), size_(kCount) {
-+    }
-+
-+    /// @brief Element count.
-+    [[nodiscard]] constexpr size_t size() const noexcept {
-+        return size_;
-+    }
-+    /// @brief True when the view holds no elements.
-+    [[nodiscard]] constexpr bool empty() const noexcept {
-+        return size_ == 0;
-+    }
-+    /// @brief Pointer to the first element (may be null when empty).
-+    [[nodiscard]] constexpr T *data() const noexcept {
-+        return data_;
-+    }
-+    /// @brief Unchecked element access (std::span parity: the caller
-+    ///        owns bounds; use size() to guard).
-+    [[nodiscard]] constexpr T &operator[](size_t idx) const noexcept {
-+        return data_[idx];
-+    }
-+    /// @brief Range-for support.
-+    [[nodiscard]] constexpr T *begin() const noexcept {
-+        return data_;
-+    }
-+    /// @brief Range-for support.
-+    [[nodiscard]] constexpr T *end() const noexcept {
-+        return data_ + size_;
-+    }
-+
-+  private:
-+    T *data_;
-+    size_t size_;
-+};
-+
-+// Compile-time contract (issue #348-D2).
-+static_assert(Span<uint8_t>().empty(), "default span is empty");
-+static_assert(Span<uint8_t>().size() == 0, "default span has size 0");
-+
-+} // namespace kernel
+ #include <kernel/boot/bootinfo.hpp>
+ #include <kernel/syscall/syscall.hpp>
+ 
+@@ -111,9 +112,11 @@ void audit_write(const char *name, bool accepted) noexcept;
+ ///        into @p target.  Returns false (and skips the store) when the write
+ ///        is illegitimate.  The caller must hold the same exclusion the
+ ///        variable normally uses (the setter documents the required lock).
+-/// @tparam T        Value type (scalar / pointer / enum).
++/// @tparam T        Value type (scalar / pointer / enum — enforced
++///                  TriviallyCopiable so struct misuse fails at the call
++///                  site, issue #348-E).
+ /// @param name     Debug name for the audit ring.
+-template <typename T>
++template <kernel::TriviallyCopiable T>
+ bool verify_and_write(T &target, const T &value, WriteClass cls,
+                       const WriteContext &ctx, const char *name) noexcept {
+     bool accepted = true;
+diff --git a/src/kernel/sync/spinlock_guard.hpp b/src/kernel/sync/spinlock_guard.hpp
+index ad73bf491..7c71d71a5 100644
+--- a/src/kernel/sync/spinlock_guard.hpp
++++ b/src/kernel/sync/spinlock_guard.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include <types.hpp>
++#include <concepts.hpp>
+ 
+ /// @brief Tag type for SpinLockGuard adopt-lock constructor.
+ struct adopt_lock_t {};
+@@ -8,7 +9,8 @@ struct adopt_lock_t {};
+ constexpr adopt_lock_t adopt_lock{};
+ 
+ /// @brief RAII lock guard for any lock type with lock()/unlock() methods.
+-template <typename Lock> class [[nodiscard]] SpinLockGuard {
++/// @tparam Lock Lock type satisfying kernel::Lockable (issue #348-E).
++template <kernel::Lockable Lock> class [[nodiscard]] SpinLockGuard {
+   public:
+     /// @brief Acquire the lock on construction.
+     explicit SpinLockGuard(Lock &lock) noexcept : lock_(lock), owns_(true) {
+diff --git a/src/kernel/sync/spsc_ring.hpp b/src/kernel/sync/spsc_ring.hpp
+index c077f3eb4..69c32f236 100644
+--- a/src/kernel/sync/spsc_ring.hpp
++++ b/src/kernel/sync/spsc_ring.hpp
+@@ -22,12 +22,14 @@
+ /// @brief Lock-free single-producer single-consumer ring buffer template.
+ 
+ #include <types.hpp>
++#include <concepts.hpp>
+ #include <lib/atomic.hpp>
+ 
+ /// @brief Lock-free single-producer single-consumer ring buffer.
+-/// @tparam T  Element type.
++/// @tparam T  Element type (must be trivially copyable: elements cross
++///         the producer/consumer boundary by value, issue #348-E).
+ /// @tparam N  Capacity (must be a power of two).
+-template <typename T, size_t N> class SPSCRing {
++template <kernel::TriviallyCopiable T, size_t N> class SPSCRing {
+     static_assert(N > 0 && (N & (N - 1)) == 0, "N must be power of 2");
+ 
+     static constexpr size_t MASK = N - 1;
+diff --git a/src/kernel/task/idle_monitor.cpp b/src/kernel/task/idle_monitor.cpp
+index 32ec269fd..7798534a9 100644
+--- a/src/kernel/task/idle_monitor.cpp
++++ b/src/kernel/task/idle_monitor.cpp
+@@ -54,9 +54,11 @@ bool scan_candidate(const TaskControlBlock *t) noexcept {
+ 
+ /// @brief Advance a chunked scan over the registry from @p cursor.
+ /// @tparam Visit Callable (TaskControlBlock*) -> void, pure reads +
+-///         flag sets only (M3/M6).
++///         flag sets only (M3/M6).  Ad-hoc requires (issue #348-E):
++///         any callable taking TaskControlBlock*, returning anything.
+ /// @return Progress; cursor wraps to head at the end (wrapped=true).
+ template <typename Visit>
++    requires requires(Visit visit, TaskControlBlock *task) { visit(task); }
+ IdleScanProgress scan_chunk(IdleScanCursor &cursor, uint64_t budget,
+                             Visit visit) noexcept {
+     IdleScanProgress progress = {};
+diff --git a/src/kernel/task/tcb_write_log.hpp b/src/kernel/task/tcb_write_log.hpp
+index 58f2ed15a..4c3e56f19 100644
+--- a/src/kernel/task/tcb_write_log.hpp
++++ b/src/kernel/task/tcb_write_log.hpp
+@@ -1,5 +1,6 @@
+ #pragma once
+ #include <types.hpp>
++#include <concepts.hpp>
+ 
+ // Freestanding build has no <cstddef>; provide offsetof via the compiler
+ // builtin so the TCB_WRITE macro works when CONFIG_TCB_WRITE_LOG is enabled.
+@@ -49,7 +50,11 @@ template <typename T>
+ inline uint64_t to_u64(T *p) {
+     return reinterpret_cast<uint64_t>(p);
+ }
++/// @brief Generic fallback for integer and enum field values (issue
++///        #348-E: constrained so struct misuse fails at the call site,
++///        not inside the cast).
+ template <typename T>
++    requires kernel::Integral<T> || kernel::Enum<T>
+ inline uint64_t to_u64(T v) {
+     return static_cast<uint64_t>(v);
+ }
 diff --git a/test-history.txt b/test-history.txt
-index 5c8a5ee07..048f63aa0 100644
+index 048f63aa0..ad2047b4c 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -3554,3 +3554,7 @@ SUMMARY: total=18 ok=18 fail=0
- 2026-10-16 13:04:18 ipc PASSED: 87 FAILED: 0 TIME: 6450ms
- 2026-10-16 13:04:52 selftest PASSED: 147 FAILED: 0 TIME: 11923ms
- 2026-10-16 13:08:51 core PASSED: 557 FAILED: 0 TIME: 46702ms
-+2026-10-16 13:22:00 proc_elf PASSED: 127 FAILED: 0 TIME: 33571ms
-+2026-10-16 13:22:28 ipc PASSED: 87 FAILED: 0 TIME: 6464ms
-+2026-10-16 13:22:57 selftest PASSED: 147 FAILED: 0 TIME: 11764ms
-+2026-10-16 13:23:25 capability PASSED: 155 FAILED: 0 TIME: 10573ms
+@@ -3558,3 +3558,6 @@ SUMMARY: total=18 ok=18 fail=0
+ 2026-10-16 13:22:28 ipc PASSED: 87 FAILED: 0 TIME: 6464ms
+ 2026-10-16 13:22:57 selftest PASSED: 147 FAILED: 0 TIME: 11764ms
+ 2026-10-16 13:23:25 capability PASSED: 155 FAILED: 0 TIME: 10573ms
++2026-10-16 13:44:57 selftest PASSED: 147 FAILED: 0 TIME: 11866ms
++2026-10-16 13:45:26 ipc PASSED: 87 FAILED: 0 TIME: 6470ms
++2026-10-16 13:49:18 core PASSED: 557 FAILED: 0 TIME: 46603ms
