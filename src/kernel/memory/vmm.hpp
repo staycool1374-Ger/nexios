@@ -574,6 +574,7 @@ class VMM {
                                                  uint64_t phys_addr, bool user,
                                                  bool executable,
                                                  uint64_t pml4_phys);
+  public:
     /// @brief Fallible contiguous-range mapper shared by the cap-map
     ///        transactions (issue #325-A): maps @p page_count pages from
     ///        @p phys_addr at @p virt_addr, rolling back the mapped
@@ -586,11 +587,16 @@ class VMM {
     ///         back before returning).
     /// @param executable If true, pages are executable (issue #325-D;
     ///        cap wrappers default false).
+    /// @note  Public since issue #347 (Slice D): the XOR path-tracer
+    ///        drives this primitive directly; it is a general fallible
+    ///        range mapper with no hidden state (kernel pml4 or an
+    ///        explicit @p pml4_phys).
     [[nodiscard]] static errors::VmmError map_phys_range_try(uint64_t virt_addr,
                                                uint64_t phys_addr,
                                                size_t page_count, bool user,
                                                uint64_t pml4_phys,
                                                bool executable);
+  private:
     /// @brief Walks or creates a page-table entry at the given level.
     /// @param table Pointer to the current-level page table.
     /// @param index Index into the table.

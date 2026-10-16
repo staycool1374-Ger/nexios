@@ -49,6 +49,20 @@
 
 ## Entries
 
+### #347-D — VMM range-map segments (audit APPROVED, commit pending)
+
+- **Learned:** (1) Instrumenting a private function forces a visibility
+  decision — map_phys_range_try had to become public (judged safe: no
+  hidden state, explicit pml4). (2) A full-PMM-drain fixture to force a
+  mid-range alloc failure PAGE-FAULTED the kernel (freed an in-use
+  page) — do not drain the PMM outside the OOM tests' guard; filed
+  #361 for a safe injector. (3) Always fix a misleading coverage claim
+  rather than leave a docstring asserting coverage that does not exist.
+- **Adapted:** `vmm_path.hpp` (5 steps, 3 outcomes) + steps in
+  map_phys_range_try; vmm.hpp visibility; 4 tests; #361 follow-up.
+- **Style re-surface:** release build needs `[[maybe_unused]]` on
+  variables only used in CONFIG_DEBUG branches.
+
 ### #347-C — task create/cleanup segments (audit APPROVED, commit pending)
 
 - **Learned:** (1) Step/insert anchors must sit OUTSIDE the conditional

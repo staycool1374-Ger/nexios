@@ -17,6 +17,7 @@
  */
 
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/vmm_path.hpp> // issue #347 Slice D
 #include <kernel/memory/pmm.hpp>
 #include <kernel/cap/frame.hpp>
 #include <kernel/cap/mmio.hpp>
@@ -35,6 +36,12 @@ constinit uint64_t VMM::kernel_pml4_ = 0;
 constinit uint64_t VMM::pml4_kernel_template_[512] = {};
 bool VMM::hhdm_modified_ = false;
 bool VMM::identity_modified_ = false;
+
+#if defined(CONFIG_DEBUG)
+// Fault-injection mask for vmm_step() (issue #347 Slice D, declared in
+// vmm_path.hpp). Test-only; absent in release.
+uint64_t g_test_skip_vmm_step = 0;
+#endif
 
 #if defined(CONFIG_ARCH_RISCV64)
 // Issue #152: Sv39 L0 slot covered by the snapshot backend. The HHDM RAM
@@ -1973,15 +1980,22 @@ errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
                                              bool executable) {
     if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0 ||
         (phys_addr & (arch::PAGE_SIZE - 1)) != 0) {
+        vmm_step(VmmMapSteps::Reject); // issue #347 Slice D
+        vmm_step(VmmMapSteps::Done);
         return errors::VMM_ERR_INVALID_ADDR;
     }
     if (page_count == 0 ||
         page_count > (UINT64_MAX - virt_addr) / arch::PAGE_SIZE) {
+        vmm_step(VmmMapSteps::Reject); // issue #347 Slice D
+        vmm_step(VmmMapSteps::Done);
         return errors::VMM_ERR_INVALID_ADDR;
     }
     if (page_count > (UINT64_MAX - phys_addr) / arch::PAGE_SIZE) {
+        vmm_step(VmmMapSteps::Reject); // issue #347 Slice D
+        vmm_step(VmmMapSteps::Done);
         return errors::VMM_ERR_INVALID_ADDR;
     }
+    vmm_step(VmmMapSteps::Validate); // issue #347 Slice D
     for (size_t page_idx = 0; page_idx < page_count; ++page_idx) {
         const uint64_t page_va = virt_addr + page_idx * arch::PAGE_SIZE;
         const uint64_t page_pa = phys_addr + page_idx * arch::PAGE_SIZE;
@@ -1992,9 +2006,13 @@ errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
                 unmap_page_in_pml4(virt_addr + back * arch::PAGE_SIZE,
                                    pml4_phys);
             }
+            vmm_step(VmmMapSteps::Rollback); // issue #347 Slice D
+            vmm_step(VmmMapSteps::Done);
             return step;
         }
     }
+    vmm_step(VmmMapSteps::Commit); // issue #347 Slice D
+    vmm_step(VmmMapSteps::Done);
     return errors::VMM_ERR_OK;
 }
 

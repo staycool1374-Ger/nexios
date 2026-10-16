@@ -240,6 +240,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"path_tracer",           6,    0,       0      },  // PathTracer core primitive (issue #347 Slice A): chain math, missing/duplicate detection, checkpoint/resume, scoped-enum steps, reset
     {"scheduler_dispatch_path", 4, 0,      0      },  // dispatch segments (issue #347 Slice B): reschedule arm, next_task select, skip-one-step negative, registry math
     {"task_path",             5,    0,       0      },  // task create/cleanup segments (issue #347 Slice C): create path, full 14-block cleanup, pinned terminal, skip-one-step negative, registry math
+    {"vmm_path",              4,    0,       0      },  // VMM map/rollback segments (issue #347 Slice D): range-map reject, success, skip-one-step negative, registry math (rollback = inspection only, follow-up #361)
 
     // random
     {"random_core",           7,    0,       0      },  // RNG smoke/non-repeating
