@@ -237,6 +237,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"shell_commands",       34,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77) + --debug flag pin (#231) + --debug spawn success (#295, replaces refusal pin) + --debug no-image refusal (#295 audit)
     {"services_framework",    7,    0,       0      },  // services framework (issue #125): terminal colors, length-bounded write, cursor/splash, fb gate, scroll, program registry bounds
     {"ui_framebuffer",        6,    0,       0      },  // framebuffer init/putpixel/clear/scroll + terminated-line render pin (#269)
+    {"path_tracer",           6,    0,       0      },  // PathTracer core primitive (issue #347 Slice A): chain math, missing/duplicate detection, checkpoint/resume, scoped-enum steps, reset
 
     // random
     {"random_core",           7,    0,       0      },  // RNG smoke/non-repeating

@@ -49,6 +49,22 @@
 
 ## Entries
 
+### #347-A — PathTracer core (audit APPROVED, commit pending)
+
+- **Learned:** (1) XOR detects missing/duplicate steps, NEVER pure
+  permutation (a^b == b^a) — documented in the header; order proof
+  needs checkpoints between order-sensitive steps. (2) New .cpp
+  needs `rm mk/cpp-rules.*.gen.mk` (generated, git-ignored) or the
+  link fails with "No rule to make target". (3) `git add -N` new
+  files before `git diff main` or the audit patch silently omits
+  them. (4) "Error while processing" on ~every file is pre-existing
+  batch-tool noise, not a slice signal. (5) Aggregate count rows
+  stay drifted by convention (core 557 row vs 563 observed — green);
+  only fine rows must match.
+- **Adapted:** `src/kernel/core/path_tracer.{hpp,cpp}` + 6 tests
+  (path_tracer 6/6, core 563/563).
+- **Style re-surface:** N/A (new files clean; build Errors 0).
+
 ### #348-F — verification sweep, closing #348
 
 - **Learned:** (1) Sweep discipline: re-run owning aggregates on the
