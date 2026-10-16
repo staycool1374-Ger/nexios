@@ -81,7 +81,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
     {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
     {"process_pml4_clone",   13,    0,       0      },  // fork deep-copy page tables (7 + 3 MP-7 named)
-    {"pt_merge",              5,    0,       0      },  // kernel-half merge (issue #96): equivalence, idempotent, late-mapping, allocates-nothing, mismatch-detected
+    {"pt_merge",              6,    0,       0      },  // kernel-half merge (issue #96): equivalence, idempotent, late-mapping, allocates-nothing, mismatch-detected
     {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
 
     // cap — capability-based access control (CSpace)

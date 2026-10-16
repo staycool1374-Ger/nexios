@@ -49,6 +49,25 @@
 
 ## Entries
 
+### #325-F — shared-table/TLB audit (audit APPROVED, closing #325)
+
+- **Learned:** (1) Audit-first again: merge/TLB/PCID/free-vs-use were all
+  already coherent (ownership skips, CPU0 pin, switch-flush, pcid purge,
+  dead-table rule, closed #157/#158) — the deliverable is contract docs
+  + one immutability test, not code. Knowing when NOT to change code is
+  the audit's highest-value outcome. (2) Verify the full invariant
+  chain on paper before writing docs: map-flush + switch-flush + pin +
+  never-reactivate must ALL hold for local-only to suffice — one broken
+  link (e.g. exec without switch-flush) voids the contract.
+  (3) #325 full-cycle lessons: verify issue premises first (half the
+  charter was stale/half-done); caller-migration slices must run owning
+  aggregates; adjacent-type params need extra review; refusal-loop
+  drains + hang caps for OOM tests; refusal beats exact-need under SMP.
+- **Adapted:** merge/TLB/free-vs-use contract docs; pt_merge 5→6.
+  #325 CLOSED (A–F all APPROVED).
+- **Style re-surface:** contract docs carry the why-chain (§9); tests
+  mirror file conventions (synthetic kernel-owned tables).
+
 ### #325-E — fork deep-copy audit (audit APPROVED, commit pending)
 
 - **Learned:** (1) Audit BEFORE assuming defect: flag parity + MMIO skip

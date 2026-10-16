@@ -121,6 +121,33 @@ class VMM {
     ///        future allocating revisions (callers must destroy the child
     ///        table on false).  No locking: single-threaded, runs before
     ///        the first CR3 switch to the child (same window MP-7 uses).
+    /// @note Shared-table contract (issue #325-F): shared lower tables
+    ///       are KERNEL-owned (allocated without user_alloc), so child
+    ///       teardown (free_user_pages) always skips them — a child can
+    ///       never free a table the live kernel half still references.
+    ///       Late kernel mappings and huge-page splits rewrite shared
+    ///       entries in place and are visible to all sharers; splits
+    ///       allocate fresh tables, never mutate shared ones in a way
+    ///       that orphans sharers.
+    /// @note No copy-on-write exists in this kernel (answer to "when
+    ///       does COW take place": never): fork deep-copies user pages
+    ///       (deep_copy_user_pages) and shares only kernel-half tables,
+    ///       which are never written through user paths.
+    /// @note TLB locality contract (issue #325-F): every VMM map/unmap
+    ///       site flushes the VA locally (issue #225 discipline).
+    ///       Local-only sufficiency rests on: (a) user tasks execute on
+    ///       CPU0 exclusively (scheduler CPU0 pin, #25 C1), so user TLB
+    ///       entries live on one CPU; (b) CR3 switches flush untagged
+    ///       entries (exec path) and pcid_free purges on PCID release;
+    ///       (c) freed tables are never reactivated (teardown destroys
+    ///       the PML4; exec switches before freeing).  Cross-CPU
+    ///       invalidation beyond this is owned by the selective/lazy
+    ///       shootdown mechanisms (#157/#158).
+    /// @note Free-vs-use ordering (issue #325-F): page-table teardown
+    ///       runs only for dead tasks (cleanup/reap paths) which cannot
+    ///       run on another CPU (CPU0 pin + dead-state filter), after
+    ///       the pager/cap/ELF drains (see TaskControlBlock::cleanup
+    ///       ordering) — a live mapping is never freed under a user.
     /// @param src_pml4 Physical address of the source (canonical) PML4.
     /// @param dst_pml4 Physical address of the child PML4 to converge.
     /// @return true on success, false on invalid arguments (null or

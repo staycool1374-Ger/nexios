@@ -302,6 +302,59 @@ JARVIS_TEST(template_mismatch_detected, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Child teardown after a merge never frees shared kernel-half
+//           tables (ownership immutability, issue #325-F).
+// Input: Scratch parent chain in 256.. (kernel-owned tables + data);
+//        fresh zeroed child; merge; tear the child down via
+//        free_user_pages (the fork-failure path).
+// Expect: merge links (child shares parent's tables); after teardown the
+//         shared PDPT/PD/PT/data are all still allocated and the parent
+//         entries unchanged; PMM delta zero after manual parent teardown.
+// Depends: VMM::merge_kernel_half ownership contract (issue #325-F)
+JARVIS_TEST(merge_child_teardown_preserves_shared, "PRE: none | POST: none") {
+    uint64_t pages_before = PMM::pool_used_pages();
+    uint64_t parent = alloc_zero_table();
+    uint64_t pdpt = alloc_zero_table();
+    uint64_t pd = alloc_zero_table();
+    uint64_t pt = alloc_zero_table();
+    uint64_t data = alloc_zero_table();
+    uint64_t child = alloc_zero_table();
+    JARVIS_ASSERT(parent != 0 && pdpt != 0 && pd != 0 && pt != 0 &&
+                  data != 0 && child != 0);
+
+    table_virt(parent)[256] = pdpt | PAGE_PRESENT | PAGE_WRITE;
+    table_virt(pdpt)[0] = pd | PAGE_PRESENT | PAGE_WRITE;
+    table_virt(pd)[0] = pt | PAGE_PRESENT | PAGE_WRITE;
+    table_virt(pt)[0] = data | PAGE_PRESENT | PAGE_WRITE;
+
+    JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
+    auto *c = table_virt(child);
+    JARVIS_ASSERT((c[256] & ~0xFFFULL) == (pdpt & ~0xFFFULL));
+
+    // Fork-failure path: destroy the child address space.
+    VMM::free_user_pages(child);
+    PMM::free_page(child);
+
+    // Shared chain intact, still allocated, parent untouched.
+    JARVIS_ASSERT(PMM::is_allocated(pdpt));
+    JARVIS_ASSERT(PMM::is_allocated(pd));
+    JARVIS_ASSERT(PMM::is_allocated(pt));
+    JARVIS_ASSERT(PMM::is_allocated(data));
+    JARVIS_ASSERT(table_virt(parent)[256] == (pdpt | PAGE_PRESENT | PAGE_WRITE));
+    JARVIS_ASSERT(table_virt(pdpt)[0] == (pd | PAGE_PRESENT | PAGE_WRITE));
+    JARVIS_ASSERT(table_virt(pd)[0] == (pt | PAGE_PRESENT | PAGE_WRITE));
+    JARVIS_ASSERT(table_virt(pt)[0] == (data | PAGE_PRESENT | PAGE_WRITE));
+
+    PMM::free_page(data);
+    PMM::free_page(pt);
+    PMM::free_page(pd);
+    PMM::free_page(pdpt);
+    PMM::free_page(parent);
+    JARVIS_ASSERT(PMM::pool_used_pages() == pages_before);
+    JARVIS_TEST_PASS();
+}
+
 void register_pt_merge_tests() {
     Logger::info("Registering kernel-half merge tests");
     JARVIS_REGISTER_TEST(merge_equivalent_to_full_copy);
@@ -309,6 +362,7 @@ void register_pt_merge_tests() {
     JARVIS_REGISTER_TEST(late_mapping_visible_after_merge);
     JARVIS_REGISTER_TEST(merge_allocates_nothing);
     JARVIS_REGISTER_TEST(template_mismatch_detected);
+    JARVIS_REGISTER_TEST(merge_child_teardown_preserves_shared);
 }
 
 #endif // CONFIG_ARCH_X86_64
