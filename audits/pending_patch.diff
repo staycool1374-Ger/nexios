@@ -1,709 +1,894 @@
-diff --git a/src/kernel/cap/frame_map.cpp b/src/kernel/cap/frame_map.cpp
-index 9a9944825..14d44ab49 100644
---- a/src/kernel/cap/frame_map.cpp
-+++ b/src/kernel/cap/frame_map.cpp
-@@ -147,7 +147,7 @@ uint64_t FrameUserMap::map(kernel::TaskControlBlock &task, cap::FrameCap &fc) {
-     return va;
- }
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 9d2dec614..d47ebb7e7 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -50,114 +50,64 @@
+ namespace kernel {
+ namespace elf {
  
--bool FrameUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) {
-+bool FrameUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept {
-     // Find the slot by VA under the lock; ownership + generation revalidated
-     // (a recycled task id or stale VA must not unmap another task's mapping).
-     int16_t idx = -1;
-@@ -317,7 +317,7 @@ size_t FrameUserMap::live_count() {
-     return n;
- }
- 
--bool FrameUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) {
-+bool FrameUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept {
-     SpinLockGuard<sync::SpinLock> guard(s_lock_);
-     for (size_t i = 0; i < kMaxMaps; ++i)
-         if (s_slots_[i].occupied && s_slots_[i].va == va &&
-diff --git a/src/kernel/cap/frame_map.hpp b/src/kernel/cap/frame_map.hpp
-index 3fae54301..b57e1e30e 100644
---- a/src/kernel/cap/frame_map.hpp
-+++ b/src/kernel/cap/frame_map.hpp
-@@ -52,7 +52,7 @@ class FrameUserMap {
- 
-     /// @brief Unmaps the mapping at @p va if it belongs to @p task.
-     /// @return true when a mapping was removed.
--    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
-+    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept;
- 
-     /// @brief Immediately removes every live mapping backed by @p fc
-     ///        (revocation closure).  Called from FrameCap::dispose/revoke
-@@ -73,7 +73,7 @@ class FrameUserMap {
- 
-     /// @brief Whether @p task currently owns the mapping at @p va (test
-     ///        accessor).
--    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
-+    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept;
- 
-   private:
-     static constexpr size_t kMaxMaps = CONFIG_CAP_MAX_FRAME_MAPS;
-diff --git a/src/kernel/cap/mmio.cpp b/src/kernel/cap/mmio.cpp
-index b45c9f80f..8fd18f985 100644
---- a/src/kernel/cap/mmio.cpp
-+++ b/src/kernel/cap/mmio.cpp
-@@ -205,7 +205,7 @@ uint64_t MmioUserMap::map(kernel::TaskControlBlock &task, cap::MmioCap &mmio) {
-     return va;
- }
- 
--bool MmioUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) {
-+bool MmioUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept {
-     // Find the slot by VA under the lock; ownership + generation revalidated
-     // (a recycled task id or stale VA must not unmap another task's mapping).
-     int16_t idx = -1;
-@@ -356,7 +356,7 @@ size_t MmioUserMap::live_count() {
-     return n;
- }
- 
--bool MmioUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) {
-+bool MmioUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept {
-     SpinLockGuard<sync::SpinLock> guard(s_lock_);
-     for (size_t i = 0; i < kMaxMaps; ++i)
-         if (s_slots_[i].occupied && s_slots_[i].va == va &&
-diff --git a/src/kernel/cap/mmio.hpp b/src/kernel/cap/mmio.hpp
-index 6c5db0acc..f890e7338 100644
---- a/src/kernel/cap/mmio.hpp
-+++ b/src/kernel/cap/mmio.hpp
-@@ -90,7 +90,7 @@ class MmioUserMap {
- 
-     /// @brief Unmaps the mapping at @p va if it belongs to @p task.
-     /// @return true when a mapping was removed.
--    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
-+    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept;
- 
-     /// @brief Immediately removes every live mapping backed by @p mmio
-     ///        (revocation closure, issue #8).  Called from MmioCap::dispose/
-@@ -111,7 +111,7 @@ class MmioUserMap {
- 
-     /// @brief Whether @p task currently owns the mapping at @p va (test
-     ///        accessor).
--    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
-+    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept;
- 
-   private:
-     static constexpr size_t kMaxMaps = CONFIG_CAP_MAX_MMIO_MAPS;
-diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
-index c66854c59..3f07f73f6 100644
---- a/src/kernel/elf/elf_loader.cpp
-+++ b/src/kernel/elf/elf_loader.cpp
-@@ -986,7 +986,7 @@ void ElfLoader::abandon_retention() {
-     staging_ = Retention{};
- }
- 
--bool ElfLoader::has_retained() {
-+bool ElfLoader::has_retained() noexcept {
-     arch::IrqGuard irq_guard{};
-     SpinLockGuard<sync::SpinLock> guard(lock_);
-     return retention_.valid;
-@@ -1168,7 +1168,7 @@ void ElfLoader::task_main() {
-     }
- }
- 
--bool ElfLoader::cancel_pending(uint64_t generation) {
-+bool ElfLoader::cancel_pending(uint64_t generation) noexcept {
-     return state() == LoadState::CANCELED || cancel_requested_ ||
-            load_generation_ != generation;
- }
-diff --git a/src/kernel/elf/elf_loader.hpp b/src/kernel/elf/elf_loader.hpp
-index 05734598a..19383a1c4 100644
---- a/src/kernel/elf/elf_loader.hpp
-+++ b/src/kernel/elf/elf_loader.hpp
-@@ -131,7 +131,7 @@ class ElfLoader {
-     ///        a valid set adopted at take, not yet superseded/reset/
-     ///        released. Rerun refuses unless this is true (P2 checks the
-     ///        outcome gate on top).
--    [[nodiscard]] static bool has_retained();
-+    [[nodiscard]] static bool has_retained() noexcept;
- 
-     /// @brief Outcome of the retained set's last launch (issue #271 P1).
-     enum class RunOutcome : uint8_t {
-@@ -201,7 +201,7 @@ class ElfLoader {
- 
-     /// @brief Per-validation-step cancel check (issue #95: shared by the
-     ///        dep-resolve backend in elf_shared.cpp).
--    [[nodiscard]] static bool cancel_pending(uint64_t generation);
-+    [[nodiscard]] static bool cancel_pending(uint64_t generation) noexcept;
- 
-     /// @brief Current load generation for DepResolveContext setup.
-     static uint64_t generation() { return load_generation_; }
-diff --git a/src/kernel/ipc/buffer_pool.cpp b/src/kernel/ipc/buffer_pool.cpp
-index a0be7fdff..d6d5fc7fa 100644
---- a/src/kernel/ipc/buffer_pool.cpp
-+++ b/src/kernel/ipc/buffer_pool.cpp
-@@ -299,7 +299,7 @@ static inline void bp_check_guard() {
+-static constexpr uint64_t ELF_MAGIC = 0x00000000464C457FULL;
+-
+ /// @brief Validate an ELF64 header (magic, class, endianness, machine, bounds).
+ /// @return true if the header is valid and safe to load.
+-bool validate_header(const ELF64Header *hdr) {
+-    if (!hdr)
+-        return false;
+-    if (reinterpret_cast<const uint32_t *>(hdr->ident)[0] !=
+-        static_cast<uint32_t>(ELF_MAGIC))
+-        return false;
+-    if (hdr->ident[4] != 2)
+-        return false; // 64-bit
+-    if (hdr->ident[5] != 1)
+-        return false; // little-endian
+-    if (hdr->type != ET_EXEC && hdr->type != ET_DYN)
+-        return false;
++// Compile-time goldens (issue #348-C, dmesg_catalog model): pin the
++// validators above at build time.  Runtime callers use them identically.
++namespace {
++
++// Minimal valid header (machine selected per arch, like the validator).
++static constexpr ELF64Header kElfGoldenGood = [] {
++    ELF64Header hdr{};
++    hdr.ident[0] = 0x7F;
++    hdr.ident[1] = static_cast<uint8_t>('E');
++    hdr.ident[2] = static_cast<uint8_t>('L');
++    hdr.ident[3] = static_cast<uint8_t>('F');
++    hdr.ident[4] = 2; // 64-bit
++    hdr.ident[5] = 1; // little-endian
++    hdr.type = ET_EXEC;
+ #if defined(CONFIG_ARCH_AARCH64)
+-    if (hdr->machine != 0xB7)
+-        return false; // AArch64
++    hdr.machine = 0xB7;
+ #elif defined(CONFIG_ARCH_RISCV64)
+-    if (hdr->machine != 0xF3)
+-        return false; // RISC-V (EM_RISCV)
++    hdr.machine = 0xF3;
+ #else
+-    if (hdr->machine != 0x3E)
+-        return false; // x86_64 (default)
++    hdr.machine = 0x3E;
  #endif
+-    if (hdr->version == 0)
+-        return false;
+-    if (hdr->phnum > 64)
+-        return false;
+-    if (hdr->ehsize < sizeof(ELF64Header))
+-        return false;
+-    if (hdr->phentsize < sizeof(ELF64ProgramHeader))
+-        return false;
+-    if (hdr->phnum > 0) {
+-        // Check for arithmetic overflow in program header region end
+-        uint64_t ph_end =
+-            hdr->phoff + static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
+-        if (ph_end < hdr->phoff)
+-            return false; // overflow
+-        // Ensure header fits within reasonable image size
+-        if (ph_end > 1_MiB)
+-            return false;
+-    }
+-    // Verify ident padding bytes are zero
+-    for (int i = 7; i < 16; ++i) {
+-        if (hdr->ident[i] != 0)
+-            return false;
+-    }
+-    // Reject files with suspicious entry point
+-    if (hdr->entry >= USER_SPACE_LIMIT && hdr->entry != 0)
+-        return false;
+-    return true;
+-}
+-
+-/// @brief Validate a single program header segment.
+-/// Checks bounds, permissions (W^X), size limits, and overflow safety.
+-bool validate_segment(const ELF64ProgramHeader *phdr, uint64_t file_size) {
+-    if (phdr->type != PT_LOAD)
+-        return true;
+-    // Basic size sanity
+-    if (phdr->filesz > phdr->memsz)
+-        return false;
+-    // Overflow checks
+-    if (phdr->offset + phdr->filesz < phdr->offset)
+-        return false;
+-    if (phdr->vaddr + phdr->memsz < phdr->vaddr)
+-        return false;
+-    if (phdr->vaddr + phdr->filesz < phdr->vaddr)
+-        return false;
+-    // VULN-H2: the segment's file-resident bytes must fit inside the actual
+-    // file buffer.  Previously only a 4_MiB constant bounded phdr->offset;
+-    // a crafted ELF could read past the PMM::alloc_contiguous() buffer.
+-    if (file_size != 0 && phdr->offset + phdr->filesz > file_size)
+-        return false;
+-    // Must be within user space
+-    if (phdr->vaddr >= USER_SPACE_LIMIT)
+-        return false;
+-    if (phdr->vaddr + phdr->memsz > USER_SPACE_LIMIT)
+-        return false;
+-    // Reject zero-size segments in memory
+-    if (phdr->memsz == 0)
+-        return false;
+-    // Reject segments that are too large (> 64 MiB)
+-    if (phdr->memsz > 64_MiB)
+-        return false;
+-    // Reject segments with suspicious alignment
+-    if (phdr->align > 1_MiB)
+-        return false;
+-    // Validate file offset is within the image (cannot check exact size
+-    // without file length,
+-    // but ensure it's reasonable: less than a typical max ELF size)
+-    if (phdr->offset > 4_MiB)
+-        return false;
+-    // W^X enforcement: segment should not be both writable AND executable
+-    if ((phdr->flags & 2) && (phdr->flags & 1))
+-        return false;
+-    return true;
+-}
++    hdr.version = 1;
++    hdr.entry = 0x400000ULL;
++    hdr.phoff = 64;
++    hdr.ehsize = sizeof(ELF64Header);
++    hdr.phentsize = sizeof(ELF64ProgramHeader);
++    hdr.phnum = 1;
++    return hdr;
++}();
++
++// Valid read-execute segment, valid read-only segment, W+X segment.
++static constexpr ELF64ProgramHeader kSegGoldenRx = {
++    1, 5, 0, 0x400000ULL, 0x400000ULL, 0x1000ULL, 0x1000ULL, 0x1000ULL};
++static constexpr ELF64ProgramHeader kSegGoldenR = {
++    1, 4, 0x1000ULL, 0x401000ULL, 0x401000ULL, 0x1000ULL, 0x1000ULL, 0x1000ULL};
++static constexpr ELF64ProgramHeader kSegGoldenWX = {
++    1, 3, 0, 0x400000ULL, 0x400000ULL, 0x1000ULL, 0x1000ULL, 0x1000ULL};
++
++static_assert(validate_header(&kElfGoldenGood), "golden header must pass");
++static_assert(!validate_segment(&kSegGoldenWX, 0x10000ULL),
++              "W+X segment must fail");
++static_assert(validate_segment(&kSegGoldenRx, 0x10000ULL),
++              "R+X segment must pass");
++static_assert(validate_segment(&kSegGoldenR, 0x10000ULL),
++              "read-only segment must pass");
++
++} // namespace
+ 
+ /// @brief Round address up to the next page boundary.
+ static uint64_t page_align_up(uint64_t addr) {
+-    return (addr + 0xFFF) & ~0xFFFULL;
++    return (addr + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
  }
  
--int32_t BufferPool::validate(uint64_t handle) {
-+int32_t BufferPool::validate(uint64_t handle) noexcept {
-     if (handle == 0)
-         return BufferPool::BUF_INVALID_HANDLE;
-     uint32_t idx = static_cast<uint32_t>(handle & 0xFFFFFFFFULL);
-@@ -318,7 +318,7 @@ int32_t BufferPool::validate(uint64_t handle) {
- /// @brief Allocate a buffer, map it at virtual address @p va in the given
- /// task's space.
- /// @return handle, or 0 on failure.
--uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
-+uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
-     bp_check_guard();
-     // v0.4.0 MP-1: every task owns a private PML4, so this address-space gate
-     // is effectively always open — kernel driver tasks (is_user_ == false)
-@@ -358,7 +358,7 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
- 
- /// @brief Free a buffer: unmap, free the physical page, return entry to pool.
- /// @return true on success.
--bool BufferPool::free(TaskControlBlock &task, uint64_t handle) {
-+bool BufferPool::free(TaskControlBlock &task, uint64_t handle) noexcept {
-     bp_check_guard();
-     int32_t idx = validate(handle);
-     if (idx < 0)
-@@ -385,7 +385,7 @@ bool BufferPool::free(TaskControlBlock &task, uint64_t handle) {
- /// populated PTE (mapping the same VA twice silently overwrites PTEs and a
- /// later free() deletes another buffer's PTE).
- // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
--bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
-+bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) noexcept {
-     bp_check_guard();
-     int32_t idx = validate(handle);
-     if (idx < 0)
-@@ -418,7 +418,7 @@ bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
+ /// @brief Round address down to the previous page boundary.
+ static uint64_t page_align_down(uint64_t addr) {
+-    return addr & ~0xFFFULL;
++    return addr & ~(arch::PAGE_SIZE - 1);
  }
  
- /// @brief Unmap a buffer (PTE clear, list remove) without freeing the page.
--bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) {
-+bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) noexcept {
-     bp_check_guard();
-     int32_t idx = validate(handle);
-     if (idx < 0)
-@@ -437,7 +437,7 @@ bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) {
+ static constexpr size_t INITIAL_HEAP_PAGES = 4;
+diff --git a/src/kernel/elf/elf.hpp b/src/kernel/elf/elf.hpp
+index b06dccef4..00640a2f6 100644
+--- a/src/kernel/elf/elf.hpp
++++ b/src/kernel/elf/elf.hpp
+@@ -24,6 +24,7 @@
+ #include <types.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/elf/elf_shared.hpp>
++#include <kernel/memory/checked_ptr.hpp>
  
- /// @brief Transfer buffer ownership from one task to another (IPC send path).
- bool BufferPool::transfer(uint64_t handle, TaskControlBlock &from,
--                          TaskControlBlock &to) {
-+                          TaskControlBlock &to) noexcept {
-     bp_check_guard();
-     int32_t idx = validate(handle);
-     if (idx < 0)
-diff --git a/src/kernel/ipc/buffer_pool.hpp b/src/kernel/ipc/buffer_pool.hpp
-index 4176ac04f..0f5b92c05 100644
---- a/src/kernel/ipc/buffer_pool.hpp
-+++ b/src/kernel/ipc/buffer_pool.hpp
-@@ -66,28 +66,28 @@ class BufferPool {
-     /// @brief Allocate a buffer, map it at @p virt_addr in the given
-     /// task's address space.
-     /// @return handle, or 0 on failure.
--    [[nodiscard]] static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr);
-+    [[nodiscard]] static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr) noexcept;
+ namespace kernel {
+ namespace elf {
+@@ -84,15 +85,127 @@ enum : uint8_t {
+     ET_DYN = 3,  ///< Shared object / PIE.
+ };
  
-     /// @brief Free a buffer: unmap, deref, return to pool.
--    [[nodiscard]] static bool free(TaskControlBlock &task, uint64_t handle);
-+    [[nodiscard]] static bool free(TaskControlBlock &task, uint64_t handle) noexcept;
++/// @brief ELF magic word (0x7F,'E','L','F' little-endian).
++static constexpr uint64_t ELF_MAGIC = 0x00000000464C457FULL;
++
+ /// @brief Validate an ELF64 header (magic, class, endianness, version).
+ /// @return true if the header is valid.
+-bool validate_header(const ELF64Header *hdr);
++/// @note constexpr so golden images pin the logic at compile time
++///       (issue #348-C); runtime callers use it identically.  Defined
++///       here (not in elf.cpp) so every TU calling it sees the definition,
++///       which constexpr requires.
++constexpr bool validate_header(const ELF64Header *hdr);
+ /// @brief Validate a single ELF program-header segment (bounds, W^X, sizes).
+ /// @param phdr The program header to validate.
+ /// @param file_size Total file size in bytes (0 = unvalidated).
+ /// @return true if the segment is safe to load.
+-bool validate_segment(const ELF64ProgramHeader *phdr,
+-                      uint64_t file_size = 0);
++/// @note constexpr + golden asserts in elf.cpp (issue #348-C).  Defined
++///       here (not in elf.cpp) so every TU calling it sees the definition,
++///       which constexpr requires.
++constexpr bool validate_segment(const ELF64ProgramHeader *phdr,
++                                uint64_t file_size = 0);
++
++constexpr bool validate_header(const ELF64Header *hdr) {
++    if (!hdr)
++        return false;
++    // Little-endian u32 assembly of ident[0..3] (all supported arches are
++    // LE; identical to the old reinterpret_cast read, constexpr-clean).
++    const uint32_t magic = static_cast<uint32_t>(hdr->ident[0]) |
++                           (static_cast<uint32_t>(hdr->ident[1]) << 8) |
++                           (static_cast<uint32_t>(hdr->ident[2]) << 16) |
++                           (static_cast<uint32_t>(hdr->ident[3]) << 24);
++    if (magic != static_cast<uint32_t>(ELF_MAGIC))
++        return false;
++    if (hdr->ident[4] != 2)
++        return false; // 64-bit
++    if (hdr->ident[5] != 1)
++        return false; // little-endian
++    if (hdr->type != ET_EXEC && hdr->type != ET_DYN)
++        return false;
++#if defined(CONFIG_ARCH_AARCH64)
++    if (hdr->machine != 0xB7)
++        return false; // AArch64
++#elif defined(CONFIG_ARCH_RISCV64)
++    if (hdr->machine != 0xF3)
++        return false; // RISC-V (EM_RISCV)
++#else
++    if (hdr->machine != 0x3E)
++        return false; // x86_64 (default)
++#endif
++    if (hdr->version == 0)
++        return false;
++    if (hdr->phnum > 64)
++        return false;
++    if (hdr->ehsize < sizeof(ELF64Header))
++        return false;
++    if (hdr->phentsize < sizeof(ELF64ProgramHeader))
++        return false;
++    if (hdr->phnum > 0) {
++        // Check for arithmetic overflow in program header region end
++        uint64_t ph_end =
++            hdr->phoff + static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
++        if (ph_end < hdr->phoff)
++            return false; // overflow
++        // Ensure header fits within reasonable image size
++        if (ph_end > 1_MiB)
++            return false;
++    }
++    // Verify ident padding bytes are zero
++    for (int i = 7; i < 16; ++i) {
++        if (hdr->ident[i] != 0)
++            return false;
++    }
++    // Reject files with suspicious entry point
++    if (hdr->entry >= USER_SPACE_LIMIT && hdr->entry != 0)
++        return false;
++    return true;
++}
++
++/// @brief Validate a single program header segment.
++/// Checks bounds, permissions (W^X), size limits, and overflow safety.
++constexpr bool validate_segment(const ELF64ProgramHeader *phdr, uint64_t file_size) {
++    if (phdr->type != PT_LOAD)
++        return true;
++    // Basic size sanity
++    if (phdr->filesz > phdr->memsz)
++        return false;
++    // Overflow checks
++    if (phdr->offset + phdr->filesz < phdr->offset)
++        return false;
++    if (phdr->vaddr + phdr->memsz < phdr->vaddr)
++        return false;
++    if (phdr->vaddr + phdr->filesz < phdr->vaddr)
++        return false;
++    // VULN-H2: the segment's file-resident bytes must fit inside the actual
++    // file buffer.  Previously only a 4_MiB constant bounded phdr->offset;
++    // a crafted ELF could read past the PMM::alloc_contiguous() buffer.
++    if (file_size != 0 && phdr->offset + phdr->filesz > file_size)
++        return false;
++    // Must be within user space
++    if (phdr->vaddr >= USER_SPACE_LIMIT)
++        return false;
++    if (phdr->vaddr + phdr->memsz > USER_SPACE_LIMIT)
++        return false;
++    // Reject zero-size segments in memory
++    if (phdr->memsz == 0)
++        return false;
++    // Reject segments that are too large (> 64 MiB)
++    if (phdr->memsz > 64_MiB)
++        return false;
++    // Reject segments with suspicious alignment
++    if (phdr->align > 1_MiB)
++        return false;
++    // Validate file offset is within the image (cannot check exact size
++    // without file length,
++    // but ensure it's reasonable: less than a typical max ELF size)
++    if (phdr->offset > 4_MiB)
++        return false;
++    // W^X enforcement: segment should not be both writable AND executable
++    if ((phdr->flags & 2) && (phdr->flags & 1))
++        return false;
++    return true;
++}
++
  
-     /// @brief Map an existing (transferred) buffer at @p virt_addr in
-     /// the caller's space.
-     [[nodiscard]] static bool map(TaskControlBlock &task, uint64_t handle,
--                    uint64_t virt_addr);
-+                    uint64_t virt_addr) noexcept;
+ /// @brief Bound for the post-relocation baseline scan (issue #46): larger
+ ///        read-only images fail the load closed instead of stalling MAPPING.
+diff --git a/src/kernel/ipc/buffer_pool_errors.hpp b/src/kernel/ipc/buffer_pool_errors.hpp
+index dd4f0c706..70088ab9e 100644
+--- a/src/kernel/ipc/buffer_pool_errors.hpp
++++ b/src/kernel/ipc/buffer_pool_errors.hpp
+@@ -46,6 +46,9 @@ enum BufPoolError : uint64_t {
+ #undef X
+ };
  
-     /// @brief Unmap a buffer without freeing it.
--    [[nodiscard]] static bool unmap(TaskControlBlock &task, uint64_t handle);
-+    [[nodiscard]] static bool unmap(TaskControlBlock &task, uint64_t handle) noexcept;
++/// @brief OK anchor (issue #348-C): success is zero by convention.
++static_assert(BUF_ERR_OK == 0, "error OK must be 0");
++
+ /// @brief Return a human-readable string for a buffer pool error code.
+ template <> inline const char *error_string(BufPoolError e) {
+     switch (e) {
+diff --git a/src/kernel/ipc/ipc_errors.hpp b/src/kernel/ipc/ipc_errors.hpp
+index 530168697..aaaaf1874 100644
+--- a/src/kernel/ipc/ipc_errors.hpp
++++ b/src/kernel/ipc/ipc_errors.hpp
+@@ -46,6 +46,9 @@ enum IpcError : uint64_t {
+ #undef X
+ };
  
-     /// @brief Transfer ownership to another task (used by IPC send).
-     [[nodiscard]] static bool transfer(uint64_t handle, TaskControlBlock &from,
--                         TaskControlBlock &target_task);
-+                         TaskControlBlock &target_task) noexcept;
++/// @brief OK anchor (issue #348-C): success is zero by convention.
++static_assert(IPC_ERR_OK == 0, "error OK must be 0");
++
+ /// @brief Return a human-readable string for an IPC error code.
+ template <> inline const char *error_string(IpcError e) {
+     switch (e) {
+diff --git a/src/kernel/memory/address.hpp b/src/kernel/memory/address.hpp
+index 36c7dde8e..90c7356c4 100644
+--- a/src/kernel/memory/address.hpp
++++ b/src/kernel/memory/address.hpp
+@@ -133,7 +133,6 @@ class VirtualAddress {
+     constexpr bool operator<(VirtualAddress other) const noexcept {
+         return addr_ < other.addr_;
+     }
+-
+     constexpr VirtualAddress operator+(size_t offset) const noexcept {
+         return VirtualAddress(addr_ + offset);
+     }
+@@ -193,4 +192,15 @@ class PageAddress : public PhysicalAddress {
+     }
+ };
  
-     /// @brief Unmap all buffers owned by a task (called from cleanup/exec).
-     static void unmap_all(TaskControlBlock &task);
++// Compile-time goldens (issue #348-C, dmesg_catalog model).
++static_assert(VirtualAddress(0x400000ULL).is_canonical(),
++              "low-half user VA is canonical");
++static_assert(VirtualAddress(0xFFFF800000000000ULL).is_canonical(),
++              "higher-half kernel VA is canonical");
++static_assert(!VirtualAddress(0x0000800000000000ULL).is_canonical(),
++              "hole VA (bit 47 set, high clear) is not canonical");
++static_assert(VirtualAddress(0xFFFF800000000000ULL).is_kernel(),
++              "higher-half is kernel");
++static_assert(VirtualAddress(0x400000ULL).is_user(), "low-half is user");
++
+ } // namespace kernel
+\ No newline at end of file
+diff --git a/src/kernel/memory/mempool_errors.hpp b/src/kernel/memory/mempool_errors.hpp
+index 32c5d51c7..dde6bcc0e 100644
+--- a/src/kernel/memory/mempool_errors.hpp
++++ b/src/kernel/memory/mempool_errors.hpp
+@@ -41,6 +41,9 @@ enum MemPoolError : uint64_t {
+ #undef X
+ };
  
-     /// @brief Validate a handle and return its index, or -1.
--    [[nodiscard]] static int32_t validate(uint64_t handle);
-+    [[nodiscard]] static int32_t validate(uint64_t handle) noexcept;
++/// @brief OK anchor (issue #348-C): success is zero by convention.
++static_assert(MEMPOOL_ERR_OK == 0, "error OK must be 0");
++
+ /// @brief Return a human-readable string for a MemPool error code.
+ template <> inline const char *error_string(MemPoolError e) {
+     switch (e) {
+diff --git a/src/kernel/memory/pmm_errors.hpp b/src/kernel/memory/pmm_errors.hpp
+index e6fdb073f..dcca67390 100644
+--- a/src/kernel/memory/pmm_errors.hpp
++++ b/src/kernel/memory/pmm_errors.hpp
+@@ -41,6 +41,9 @@ enum PmmError : uint64_t {
+ #undef X
+ };
  
-     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-     static Entry entries[MAX_BUFFERS];
-diff --git a/src/kernel/ipc/ipc.cpp b/src/kernel/ipc/ipc.cpp
-index 86ddba51a..e8f4a2072 100644
---- a/src/kernel/ipc/ipc.cpp
-+++ b/src/kernel/ipc/ipc.cpp
-@@ -270,7 +270,7 @@ static void unblock_sender_rollback(MessageQueue &q,
- 
- /// @brief Send a message to a destination task (blocks if queue is full, unless
- /// IPC_NONBLOCK).
--bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
-+bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) noexcept {
-     auto *tcb = Scheduler::find_task(dest_id);
-     if (!tcb || tcb->state == TaskState::TERMINATED)
-         return false;
-@@ -381,7 +381,7 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
- }
- 
- /// @brief Receive a message from the calling task's own queue.
--bool IPC::recv(Message &msg) {
-+bool IPC::recv(Message &msg) noexcept {
-     auto *cur = Scheduler::current_task();
-     if (!cur)
-         return false;
-@@ -396,7 +396,7 @@ bool IPC::recv(Message &msg) {
- /// @brief Send through a capability-gated endpoint.  The endpoint's message
- ///        queue is the transport (no task-ID ambient authority).  Blocks on a
- ///        full queue unless IPC_NONBLOCK; wakes the bound receiver.
--bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
-+bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) noexcept {
-     if (!ep)
-         return false;
-     if (ep->revoked())
-@@ -462,7 +462,7 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
- 
- /// @brief Receive from a capability-gated endpoint into the calling task's
- ///        own queue.  Non-blocking: returns false on an empty endpoint queue.
--bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
-+bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept {
-     if (!ep)
-         return false;
-     if (!ep->q.pop(msg))
-@@ -483,7 +483,7 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
- ///        unchanged from the v1 contract (dest-death reply preservation,
- ///        #11 oversized-stays-queued clamp, arrival-triggered wake).
- bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
--                    uint32_t reply_max_size) {
-+                    uint32_t reply_max_size) noexcept {
-     // Send the request message
-     if (!send(dest_id, msg))
-         return false;
-diff --git a/src/kernel/ipc/ipc.hpp b/src/kernel/ipc/ipc.hpp
-index 50ab40ab4..55c137f8a 100644
---- a/src/kernel/ipc/ipc.hpp
-+++ b/src/kernel/ipc/ipc.hpp
-@@ -95,10 +95,10 @@ class IPC {
-     static void init();
- 
-     /// @brief Sends a message to a destination task.
--    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0);
-+    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0) noexcept;
- 
-     /// @brief Receives a message from the calling task's own queue.
--    [[nodiscard]] static bool recv(Message &msg);
-+    [[nodiscard]] static bool recv(Message &msg) noexcept;
- 
-     /// @brief Sends and blocks until a reply arrives.
-     ///        Reply matching (issue #296): only a queued message whose
-@@ -110,7 +110,7 @@ class IPC {
-     ///        reply stays queued with immediate false (no block).  Zero keeps
-     ///        the full-path contract (consume the matching reply).
-     [[nodiscard]] static bool send_sync(uint64_t dest_id, const Message &msg, Message &reply,
--                          uint32_t reply_max_size = 0);
-+                          uint32_t reply_max_size = 0) noexcept;
- 
-     /// @brief Returns the message queue for a given task ID.
-     static MessageQueue &queue(uint64_t task_id);
-@@ -121,12 +121,12 @@ class IPC {
-     ///        queue unless IPC_NONBLOCK.  @p ep must be pinned (a live
-     ///        capability lookup result).
-     [[nodiscard]] static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
--                             uint64_t flags = 0);
-+                             uint64_t flags = 0) noexcept;
- 
-     /// @brief Receives a message from a capability-gated endpoint into the
-     ///        calling task's own queue.  Returns false if the endpoint queue
-     ///        is empty.
--    [[nodiscard]] static bool recv_via_cap(cap::Endpoint *ep, Message &msg);
-+    [[nodiscard]] static bool recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept;
- 
-     /// @brief Wheel callback arming a bounded receive's expiry (issue #18).
-     /// Flag-only: validates the TCB and generation, sets recv_timed_out.
++/// @brief OK anchor (issue #348-C): success is zero by convention.
++static_assert(PMM_ERR_OK == 0, "error OK must be 0");
++
+ /// @brief Return a human-readable string for a PMM error code.
+ template <> inline const char *error_string(PmmError e) {
+     switch (e) {
 diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index 1d87aa872..fbf24c18c 100644
+index fbf24c18c..5b7aa91d8 100644
 --- a/src/kernel/memory/vmm.cpp
 +++ b/src/kernel/memory/vmm.cpp
-@@ -383,7 +383,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
-     arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
+@@ -58,7 +58,7 @@ void VMM::init() {
+ #if defined(CONFIG_ARCH_X86_64)
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                              (kernel_pml4_ & ~0xFFFULL));
++                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
  
-     auto *l1 = get_table(l0, l0_idx, true);
--    if (!l1) {
-+    if (!l1) [[unlikely]] {
-         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
-         return errors::VMM_ERR_PAGE_ALLOC;
-     }
-@@ -393,7 +393,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
-     if ((l1[l1_idx] & PAGE_PRESENT) &&
-         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-         uint64_t new_l2_phys = PMM::alloc_page_table();
--        if (!new_l2_phys) {
-+        if (!new_l2_phys) [[unlikely]] {
-             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-             return errors::VMM_ERR_PAGE_ALLOC;
-         }
-@@ -412,7 +412,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
-     }
+     // Zero unused entries in all boot-constructed page tables so the page
+     // table walker never follows uninitialised garbage pointers.  The boot
+@@ -67,7 +67,7 @@ void VMM::init() {
  
-     auto *l2 = get_table(l1, l1_idx, true);
--    if (!l2) {
-+    if (!l2) [[unlikely]] {
-         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
-         return errors::VMM_ERR_PAGE_ALLOC;
-     }
-@@ -452,12 +452,12 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
-     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
- 
-     auto *pdpt = get_table(pml4, pml4_idx, true);
--    if (!pdpt) {
-+    if (!pdpt) [[unlikely]] {
-         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
-         return errors::VMM_ERR_PAGE_ALLOC;
-     }
-     auto *pd = get_table(pdpt, pdpt_idx, true);
--    if (!pd) {
-+    if (!pd) [[unlikely]] {
-         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
-         return errors::VMM_ERR_PAGE_ALLOC;
-     }
-@@ -471,7 +471,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
- #endif
+     // Zero PDPT_IDENTITY[1-511]
      {
-         uint64_t new_pt_phys = PMM::alloc_page_table();
--        if (!new_pt_phys) {
-+        if (!new_pt_phys) [[unlikely]] {
-             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-             return errors::VMM_ERR_PAGE_ALLOC;
-         }
-@@ -509,7 +509,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
-     }
+-        uint64_t pdpt_phys = pml4[0] & ~0xFFFULL;
++        uint64_t pdpt_phys = pml4[0] & PAGE_TABLE_ADDR_MASK;
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         auto *pdpt_ident =
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
+@@ -77,7 +77,7 @@ void VMM::init() {
  
-     auto *pt = get_table(pd, pd_idx, true);
--    if (!pt) {
-+    if (!pt) [[unlikely]] {
-         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
-         return errors::VMM_ERR_PAGE_ALLOC;
-     }
-@@ -565,12 +565,12 @@ void VMM::unmap_page(uint64_t virt_addr) {
-                            virt_addr, l0_idx);
- 
-     auto *l1 = get_table(l0, l0_idx, false);
--    if (!l1) {
-+    if (!l1) [[unlikely]] {
-         note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
-         return;
-     }
-     auto *l2 = get_table(l1, l1_idx, false);
--    if (!l2) {
-+    if (!l2) [[unlikely]] {
-         note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
-         return;
-     }
-@@ -593,17 +593,17 @@ void VMM::unmap_page(uint64_t virt_addr) {
-     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
- 
-     auto *pdpt = get_table(pml4, pml4_idx, false);
--    if (!pdpt) {
-+    if (!pdpt) [[unlikely]] {
-         note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
-         return;
-     }
-     auto *pd = get_table(pdpt, pdpt_idx, false);
--    if (!pd) {
-+    if (!pd) [[unlikely]] {
-         note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
-         return;
-     }
-     auto *pt = get_table(pd, pd_idx, false);
--    if (!pt) {
-+    if (!pt) [[unlikely]] {
-         note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
-         return;
-     }
-@@ -720,12 +720,12 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
-     arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
- 
-     auto *l1 = get_table(l0, l0_idx, true, true);
--    if (!l1) {
-+    if (!l1) [[unlikely]] {
-         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
-         return errors::VMM_ERR_PAGE_ALLOC;
-     }
-     auto *l2 = get_table(l1, l1_idx, true, true);
--    if (!l2) {
-+    if (!l2) [[unlikely]] {
-         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
-         return errors::VMM_ERR_PAGE_ALLOC;
-     }
-@@ -762,12 +762,12 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
-                          pml4_idx < arch::PML4_USER_COUNT);
- 
-     auto *pdpt = get_table(pml4, pml4_idx, true, true);
--    if (!pdpt) {
-+    if (!pdpt) [[unlikely]] {
-         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
-         return errors::VMM_ERR_PAGE_ALLOC;
-     }
-     auto *pd = get_table(pdpt, pdpt_idx, true, true);
--    if (!pd) {
-+    if (!pd) [[unlikely]] {
-         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
-         return errors::VMM_ERR_PAGE_ALLOC;
-     }
-@@ -779,7 +779,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
- #endif
+     // Zero PDPT_HIGHER[1-511]
      {
-         uint64_t new_pt_phys = PMM::alloc_user_page();
--        if (!new_pt_phys) {
-+        if (!new_pt_phys) [[unlikely]] {
-             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-             return errors::VMM_ERR_PAGE_ALLOC;
+-        uint64_t pdpt_phys = pml4[256] & ~0xFFFULL;
++        uint64_t pdpt_phys = pml4[256] & PAGE_TABLE_ADDR_MASK;
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         auto *pdpt_higher =
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
+@@ -89,10 +89,10 @@ void VMM::init() {
+     {
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         auto *pdpt_ident_p = reinterpret_cast<uint64_t *>(
+-            arch::HHDM_OFFSET + (pml4[0] & ~0xFFFULL));
++            arch::HHDM_OFFSET + (pml4[0] & PAGE_TABLE_ADDR_MASK));
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         auto *pd_ident = reinterpret_cast<uint64_t *>(
+-            arch::HHDM_OFFSET + (pdpt_ident_p[0] & ~0xFFFULL));
++            arch::HHDM_OFFSET + (pdpt_ident_p[0] & PAGE_TABLE_ADDR_MASK));
+         for (size_t i = 64; i < PAGE_TABLE_ENTRIES; ++i)
+             pd_ident[i] = 0;
+     }
+@@ -101,10 +101,10 @@ void VMM::init() {
+     {
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         auto *pdpt_higher_p = reinterpret_cast<uint64_t *>(
+-            arch::HHDM_OFFSET + (pml4[256] & ~0xFFFULL));
++            arch::HHDM_OFFSET + (pml4[256] & PAGE_TABLE_ADDR_MASK));
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         auto *pd_higher = reinterpret_cast<uint64_t *>(
+-            arch::HHDM_OFFSET + (pdpt_higher_p[0] & ~0xFFFULL));
++            arch::HHDM_OFFSET + (pdpt_higher_p[0] & PAGE_TABLE_ADDR_MASK));
+         for (size_t i = 64; i < PAGE_TABLE_ENTRIES; ++i)
+             pd_higher[i] = 0;
+     }
+@@ -146,7 +146,7 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+ #if defined(CONFIG_ARCH_RISCV64)
+         uint64_t target_phys = VMM::sv39_pte_phys(table[index]);
+ #else
+-        uint64_t target_phys = table[index] & ~0xFFFULL;
++        uint64_t target_phys = table[index] & PAGE_TABLE_ADDR_MASK;
+ #endif
+         if (!PMM::is_allocated(target_phys)) {
+             table[index] = 0;
+@@ -221,7 +221,7 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+                                                 VMM::sv39_pte_phys(table[index]));
+ #else
+             return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                                (table[index] & ~0xFFFULL));
++                                                (table[index] & PAGE_TABLE_ADDR_MASK));
+ #endif
          }
-@@ -809,7 +809,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
      }
+@@ -367,7 +367,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+ #if defined(CONFIG_ARCH_RISCV64)
+     // Sv39 3-level page table walk
+     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (kernel_pml4_ & ~0xFFFULL));
++                                            (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
  
-     auto *pt = get_table(pd, pd_idx, true, true);
--    if (!pt) {
-+    if (!pt) [[unlikely]] {
-         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
-         return errors::VMM_ERR_PAGE_ALLOC;
-     }
-@@ -1025,7 +1025,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-         return; // 1 GiB block: not ours to clear.
-     }
-     auto *l1 = get_table(top, l0_idx, false);
--    if (!l1) {
-+    if (!l1) [[unlikely]] {
-         note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
-         return;
-     }
-@@ -1033,7 +1033,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-         return; // 2 MiB block: not ours to clear.
-     }
-     auto *l2 = get_table(l1, l1_idx, false);
--    if (!l2) {
-+    if (!l2) [[unlikely]] {
-         note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
-         return;
-     }
-@@ -1047,12 +1047,12 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-     // PD_IDENTITY restore (see map_page_in_pml4 note above).
-     arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
-     auto *pdpt = get_table(top, pml4_idx, false);
--    if (!pdpt) {
-+    if (!pdpt) [[unlikely]] {
-         note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
-         return;
-     }
-     auto *pd = get_table(pdpt, pdpt_idx, false);
--    if (!pd) {
-+    if (!pd) [[unlikely]] {
-         note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
-         return;
-     }
-@@ -1066,7 +1066,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-     }
- #endif
-     auto *pt = get_table(pd, pd_idx, false);
--    if (!pt) {
-+    if (!pt) [[unlikely]] {
-         note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
-         return;
-     }
-diff --git a/src/kernel/task/idle_monitor.cpp b/src/kernel/task/idle_monitor.cpp
-index 890cca742..32ec269fd 100644
---- a/src/kernel/task/idle_monitor.cpp
-+++ b/src/kernel/task/idle_monitor.cpp
-@@ -94,7 +94,7 @@ IdleScanProgress idle_scan_stack(IdleScanCursor &cursor,
-         idle_publish_stack_low_water(t->kstack_low_water_,
-                                      t->kernel_stack_top,
-                                      t->stack_low_water_bytes);
--        if (!user_ok || !kstack_ok) {
-+        if (!user_ok || !kstack_ok) [[unlikely]] {
-             // Existing escalation path only (spec §3 E1): production
-             // fail-stops here exactly as the guard-page #PF path does.
-             // The scanner itself kills/reaps/reprioritizes nothing (M6).
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 18b7ae37a..b8370a66b 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -197,7 +197,7 @@ bool Scheduler::canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t
-         return true;
-     uint8_t bad_seg = 0;
-     uint64_t bad_va = 0;
--    if (!canary_verify_user_segments(task, bad_seg, bad_va)) {
-+    if (!canary_verify_user_segments(task, bad_seg, bad_va)) [[unlikely]] {
-         // Canary negative-test path (issue #255 H3): under test the trip is
-         // recorded, not fatal, so the canary suite can assert the latch.
-         if (kernel::Scheduler::is_test_active()) {
-@@ -245,8 +245,8 @@ struct H2Event {
-     uint64_t gen;   ///< scheduler_switch_generation at record time
-     uint64_t depth; ///< isr_nesting_depth at record time
- };
--static H2Event g_h2_ring[H2_RING_SIZE];
--static uint64_t g_h2_idx = 0;
-+static constinit H2Event g_h2_ring[H2_RING_SIZE] = {};
-+static constinit uint64_t g_h2_idx = 0;
+     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+@@ -432,7 +432,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                              (kernel_pml4_ & ~0xFFFULL));
++                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
  
- inline void h2_record(uint64_t ev, uint64_t a, uint64_t b, uint64_t c) noexcept {
-     // Issue #25 C1: atomic index (two CPUs append concurrently; a torn
-@@ -290,8 +290,8 @@ void h2_dump_ring() noexcept {
+     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
  
- // P5a: Deferred-kill list.
- static constexpr uint64_t MAX_DEFERRED_KILLS = 16;
--static TaskControlBlock *s_deferred_kill_tasks[MAX_DEFERRED_KILLS] = {};
--static uint64_t s_deferred_kill_count = 0;
-+static constinit TaskControlBlock *s_deferred_kill_tasks[MAX_DEFERRED_KILLS] = {};
-+static constinit uint64_t s_deferred_kill_count = 0;
+@@ -553,7 +553,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+ void VMM::unmap_page(uint64_t virt_addr) {
+ #if defined(CONFIG_ARCH_RISCV64)
+     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (kernel_pml4_ & ~0xFFFULL));
++                                            (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
  
- // TEMP DEBUG (BUGS.md#020): detect a SporadicServer pointer that aliases a
- // freed/poisoned MemPool block (first 8 bytes == 0xDDDDDDDDDDDDDDDD).  A freed
-@@ -597,7 +597,7 @@ void Scheduler::enqueue_ready_inner(TaskControlBlock &task) noexcept {
- static void invalidate_pending_switch_to(uint64_t task_id) noexcept;
+     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+@@ -580,7 +580,7 @@ void VMM::unmap_page(uint64_t virt_addr) {
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                              (kernel_pml4_ & ~0xFFFULL));
++                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
  
- void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
--    if (task.in_edf_queue_)
-+    if (task.in_edf_queue_) [[unlikely]]
-         edf_remove(task, queue_target(task));
-     rq_task(task).remove(task, effective_priority(&task));
-     // Issue #250: leaving the queue voids any wake-while-current deferral
-@@ -2059,9 +2059,9 @@ bool Scheduler::s_scan_requested_ = false;
- // Issue #299/#280 stall diagnostics: count timer-tick dispatcher entries and
- // actual switch_to_task calls, to distinguish "ticks dead" (counters frozen)
- // from "ticks alive but switch not applied" (rms advances, switch does not).
--static uint64_t g_diag_rms_count = 0;
--static uint64_t g_diag_switch_count = 0;
--static uint64_t g_diag_tick_count = 0;
-+static constinit uint64_t g_diag_rms_count = 0;
-+static constinit uint64_t g_diag_switch_count = 0;
-+static constinit uint64_t g_diag_tick_count = 0;
- #endif
- ReadyQueueManager Scheduler::ready_queues_[CONFIG_MAX_CPUS];
- DeadlineList Scheduler::deadline_list_;
-@@ -2542,12 +2542,12 @@ bool Scheduler::needs_switch() noexcept {
+     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
+     warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
+@@ -620,7 +620,7 @@ void VMM::unmap_page(uint64_t virt_addr) {
+ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
+ #if defined(CONFIG_ARCH_RISCV64)
+     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (kernel_pml4_ & ~0xFFFULL));
++                                            (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
+ 
+     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+@@ -645,7 +645,7 @@ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                              (kernel_pml4_ & ~0xFFFULL));
++                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
+ 
+     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
+     warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
+@@ -704,7 +704,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
+ #if defined(CONFIG_ARCH_RISCV64)
+     // Sv39 3-level page table walk
+     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (pml4_phys & ~0xFFFULL));
++                                            (pml4_phys & PAGE_TABLE_ADDR_MASK));
+ 
+     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+@@ -746,7 +746,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                              (pml4_phys & ~0xFFFULL));
++                                              (pml4_phys & PAGE_TABLE_ADDR_MASK));
+ 
+     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
+     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
+@@ -862,7 +862,7 @@ uint64_t *VMM::pte_leaf_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+     // inspector; mirrors the unmap walks with create=false).
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                             (pml4_phys & ~0xFFFULL));
++                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
+ #if defined(CONFIG_ARCH_RISCV64)
+     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+@@ -1013,7 +1013,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+     }
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                             (pml4_phys & ~0xFFFULL));
++                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
+ #if defined(CONFIG_ARCH_RISCV64)
+     // Sv39 3-level walk (mirrors map_page_in_pml4 riscv branch).
+     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+@@ -1086,7 +1086,7 @@ uint64_t VMM::clone_kernel_pml4() {
+ 
+ #if defined(CONFIG_ARCH_RISCV64)
+     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                             (kernel_pml4_ & ~0xFFFULL));
++                                             (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
+     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + phys);
+ 
+     // Clear user-space entries (L0 indices 0-255 for 0-256GB)
+@@ -1190,7 +1190,7 @@ uint64_t VMM::clone_kernel_pml4() {
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                             (kernel_pml4_ & ~0xFFFULL));
++                                             (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + phys);
+     // Clear user-space entries (0-255) — the kernel's boot identity-map must
+@@ -1323,10 +1323,10 @@ bool VMM::merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4) {
+         return false;
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                             (src_pml4 & ~0xFFFULL));
++                                             (src_pml4 & PAGE_TABLE_ADDR_MASK));
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                             (dst_pml4 & ~0xFFFULL));
++                                             (dst_pml4 & PAGE_TABLE_ADDR_MASK));
+     // INV-MERGE1: single-threaded pre-CR3-switch window (same window MP-7
+     // uses) — no locking; link semantics keep lower tables shared, so no
+     // allocation can fail mid-merge by construction.
+@@ -1337,7 +1337,7 @@ bool VMM::merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4) {
+ void VMM::snapshot_kernel_template() {
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *live = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                              (kernel_pml4_ & ~0xFFFULL));
++                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
+     for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i)
+         pml4_kernel_template_[i] = live[i];
+ }
+@@ -1347,10 +1347,10 @@ bool VMM::kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4) {
+         return false;
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *a = reinterpret_cast<const uint64_t *>(
+-        arch::HHDM_OFFSET + (a_pml4 & ~0xFFFULL));
++        arch::HHDM_OFFSET + (a_pml4 & PAGE_TABLE_ADDR_MASK));
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *b = reinterpret_cast<const uint64_t *>(
+-        arch::HHDM_OFFSET + (b_pml4 & ~0xFFFULL));
++        arch::HHDM_OFFSET + (b_pml4 & PAGE_TABLE_ADDR_MASK));
+     return tables_equal_level(a, b, 0, arch::PML4_KERNEL_START);
  }
  
- TaskControlBlock *Scheduler::next_task() noexcept {
--    if (all_tasks_.size() <= 1)
-+    if (all_tasks_.size() <= 1) [[unlikely]]
-         return own_idle();
- 
-     // Issue #19: the EDF candidate agreed with needs_switch() — dispatch
-     // it first so the arm and the decision can never disagree.
--    if (auto *edf_next = edf_preempt_candidate()) {
-+    if (auto *edf_next = edf_preempt_candidate()) [[unlikely]] {
-         edf_remove(*edf_next, sched_cpu());
-         return edf_next;
-     }
-@@ -2559,7 +2559,7 @@ TaskControlBlock *Scheduler::next_task() noexcept {
-             if (candidate == current_task() ||
-                 (candidate->state != TaskState::READY &&
-                  candidate->state != TaskState::RUNNING) ||
--                queue_target(*candidate) != sched_cpu()) {
-+                queue_target(*candidate) != sched_cpu()) [[unlikely]] {
-                 rq_own().dequeue_highest();
+@@ -1359,7 +1359,7 @@ bool VMM::kernel_half_matches_template(uint64_t pml4_phys) {
+         return false;
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *tbl = reinterpret_cast<const uint64_t *>(
+-        arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
++        arch::HHDM_OFFSET + (pml4_phys & PAGE_TABLE_ADDR_MASK));
+     for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i) {
+         if (tbl[i] != pml4_kernel_template_[i])
+             return false;
+@@ -1389,7 +1389,7 @@ void VMM::assert_kernel_half_converged(uint64_t child_pml4) {
+ void VMM::free_user_pages(uint64_t pml4_phys) {
+ #if defined(CONFIG_ARCH_RISCV64)
+     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (pml4_phys & ~0xFFFULL));
++                                            (pml4_phys & PAGE_TABLE_ADDR_MASK));
+     // User space: L0 indices 0-255 for Sv39 (0-256GB).  Issue #206: all
+     // address codecs below are shift-based Sv39 (raw & ~mask is x86-domain
+     // and decodes 4x too high); L2 non-leaves are invalid in Sv39 (no L3).
+@@ -1446,7 +1446,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                              (pml4_phys & ~0xFFFULL));
++                                              (pml4_phys & PAGE_TABLE_ADDR_MASK));
+     // v0.3.11: bounded diagnostic — log page-table pages skipped because their
+     // owner bit is KERNEL (free_user_pages only frees USER-owned table pages).
+     static uint64_t s_fup_skip_log = 0;
+@@ -1462,7 +1462,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+          ++pml4_idx) {
+         if (!(pml4[pml4_idx] & PAGE_PRESENT))
+             continue;
+-        uint64_t pdpt_phys = pml4[pml4_idx] & ~0xFFFULL;
++        uint64_t pdpt_phys = pml4[pml4_idx] & PAGE_TABLE_ADDR_MASK;
+         if (!PMM::is_user_page(pdpt_phys)) {
+             log_skip("[FUP-SKIP] pdpt p4=", pdpt_phys);
+             continue;
+@@ -1485,7 +1485,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+                 PMM::free_page(page);
                  continue;
              }
-@@ -2788,7 +2788,7 @@ void Scheduler::credit_task_memory(uint64_t pages) {
+-            uint64_t pd_phys = pdpt[pdpt_idx] & ~0xFFFULL;
++            uint64_t pd_phys = pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK;
+             if (!PMM::is_user_page(pd_phys)) {
+                 log_skip("[FUP-SKIP] pd   p4=", pd_phys);
+                 continue;
+@@ -1508,7 +1508,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+                     PMM::free_page(page);
+                     continue;
+                 }
+-                uint64_t pt_phys = pd[pd_idx] & ~0xFFFULL;
++                uint64_t pt_phys = pd[pd_idx] & PAGE_TABLE_ADDR_MASK;
+                 if (!PMM::is_user_page(pt_phys)) {
+                     log_skip("[FUP-SKIP] pt   p4=", pt_phys);
+                     continue;
+@@ -1548,9 +1548,9 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+ #if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
+     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                             (src_pml4 & ~0xFFFULL));
++                                             (src_pml4 & PAGE_TABLE_ADDR_MASK));
+     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                             (dst_pml4 & ~0xFFFULL));
++                                             (dst_pml4 & PAGE_TABLE_ADDR_MASK));
  
- // Issue #225: per-CPU interrupted-PC slot for the debugger park check.
- // Own CPU writes (timer ISR), own CPU tick reads; plain relaxed atomics.
--static uint64_t debug_tick_pc_[CONFIG_MAX_CPUS] = {};
-+static constinit uint64_t debug_tick_pc_[CONFIG_MAX_CPUS] = {};
- 
- void Scheduler::note_debug_tick_pc(uint64_t interrupted_pc) noexcept {
-     uint64_t cpu = sched_cpu();
-@@ -3660,7 +3660,7 @@ void Scheduler::on_tick() noexcept {
+     for (int pml4_idx = 0; pml4_idx < static_cast<int>(arch::PML4_USER_COUNT);
+          ++pml4_idx) {
+@@ -1559,7 +1559,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+             continue;
          }
+ 
+-        uint64_t src_pdpt_phys = src[pml4_idx] & ~0xFFFULL;
++        uint64_t src_pdpt_phys = src[pml4_idx] & PAGE_TABLE_ADDR_MASK;
+         uint64_t dst_pdpt_phys = PMM::alloc_user_page();
+         if (!dst_pdpt_phys)
+             return false;
+@@ -1597,7 +1597,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+             }
+ #endif
+ 
+-            uint64_t src_pd_phys = src_pdpt[pdpt_idx] & ~0xFFFULL;
++            uint64_t src_pd_phys = src_pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK;
+             uint64_t dst_pd_phys = PMM::alloc_user_page();
+             if (!dst_pd_phys)
+                 return false;
+@@ -1636,7 +1636,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+                 }
+ #endif
+ 
+-                uint64_t src_pt_phys = src_pd[pd_idx] & ~0xFFFULL;
++                uint64_t src_pt_phys = src_pd[pd_idx] & PAGE_TABLE_ADDR_MASK;
+                 uint64_t dst_pt_phys = PMM::alloc_user_page();
+                 if (!dst_pt_phys)
+                     return false;
+@@ -1692,9 +1692,9 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+     // codec throughout (raw & ~mask decodes 4x too high); flags are bits
+     // 9:0 only (0xFFF would capture PPN bits); no L3 exists in Sv39.
+     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                             (src_pml4 & ~0xFFFULL));
++                                             (src_pml4 & PAGE_TABLE_ADDR_MASK));
+     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                             (dst_pml4 & ~0xFFFULL));
++                                             (dst_pml4 & PAGE_TABLE_ADDR_MASK));
+ 
+     for (int l0_idx = 0; l0_idx < 256; ++l0_idx) {
+         if (!(src[l0_idx] & PAGE_PRESENT)) {
+@@ -1780,7 +1780,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+ #if defined(CONFIG_ARCH_RISCV64)
+     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (pml4_phys & ~0xFFFULL));
++                                            (pml4_phys & PAGE_TABLE_ADDR_MASK));
+ 
+     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+@@ -1814,7 +1814,7 @@ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                              (pml4_phys & ~0xFFFULL));
++                                              (pml4_phys & PAGE_TABLE_ADDR_MASK));
+ 
+     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
+     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
+@@ -1825,13 +1825,13 @@ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+         return 0;
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                              (pml4[pml4_idx] & ~0xFFFULL));
++                                              (pml4[pml4_idx] & PAGE_TABLE_ADDR_MASK));
+ 
+     if (!(pdpt[pdpt_idx] & PAGE_PRESENT))
+         return 0;
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (pdpt[pdpt_idx] & ~0xFFFULL));
++                                            (pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK));
+ 
+ #if defined(CONFIG_ARCH_AARCH64)
+     if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
+@@ -1846,7 +1846,7 @@ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+         return 0;
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (pd[pd_idx] & ~0xFFFULL));
++                                            (pd[pd_idx] & PAGE_TABLE_ADDR_MASK));
+ 
+     if (!(pt[pt_idx] & PAGE_PRESENT))
+         return 0;
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index c81f73b7b..482c559fe 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -382,6 +382,15 @@ class VMM {
+   private:
+     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
+     static constexpr uint64_t PAGE_TABLE_ENTRIES = 512;
++    /// @brief Clears the low 12 flag/offset bits of a page-TABLE address
++    ///        (issue #348-C).  Table addresses only — never PTEs (riscv64
++    ///        Sv39 PTEs carry PPN<<10 and need the shift codec; x86_64
++    ///        PTEs may carry NX above the frame).
++    static constexpr uint64_t PAGE_TABLE_ADDR_MASK = ~0xFFFULL;
++    static_assert((PAGE_TABLE_ADDR_MASK | 0xFFFULL) == ~0ULL,
++                  "addr mask must preserve all high bits");
++    static_assert((0xFFFULL & PAGE_TABLE_ADDR_MASK) == 0,
++                  "addr mask must clear the low 12 bits");
+ 
+ #if defined(CONFIG_ARCH_AARCH64)
+     // aarch64 stage-1 page-table descriptor bit layout.
+@@ -459,13 +468,13 @@ class VMM {
+     // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers below
+     // for every Sv39 PTE address codec; the masks stay for x86/aarch64 and
+     // for documentation of the PA width (1TB cap).
+-    static inline uint64_t sv39_pte_phys(uint64_t pte) {
++    static constexpr uint64_t sv39_pte_phys(uint64_t pte) {
+         return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
      }
+-    static inline uint64_t sv39_phys_pte(uint64_t phys) {
++    static constexpr uint64_t sv39_phys_pte(uint64_t phys) {
+         return (phys >> 12) << 10;
+     }
+-    static inline bool sv39_is_leaf(uint64_t pte) {
++    static constexpr bool sv39_is_leaf(uint64_t pte) {
+         return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
+     }
+ #else
+diff --git a/src/kernel/memory/vmm_errors.hpp b/src/kernel/memory/vmm_errors.hpp
+index 6839bf897..1da0b217d 100644
+--- a/src/kernel/memory/vmm_errors.hpp
++++ b/src/kernel/memory/vmm_errors.hpp
+@@ -43,6 +43,9 @@ enum VmmError : uint64_t {
+ #undef X
+ };
  
--    static uint64_t tick_counter = 0;
-+    static constinit uint64_t tick_counter = 0;
-     ++tick_counter;
-     // Harness owns lifecycle (see harness_owns_lifecycle): the reaper must
-     // not race test ScopeGuards (double-free UAF otherwise).  Deferring to
-@@ -3686,7 +3686,7 @@ void Scheduler::on_tick() noexcept {
++/// @brief OK anchor (issue #348-C): success is zero by convention.
++static_assert(VMM_ERR_OK == 0, "error OK must be 0");
++
+ /// @brief Return a human-readable string for a VMM error code.
+ template <> inline const char *error_string(VmmError e) {
+     switch (e) {
+diff --git a/src/kernel/sync/sync_errors.hpp b/src/kernel/sync/sync_errors.hpp
+index e3445c1e4..45d5f760c 100644
+--- a/src/kernel/sync/sync_errors.hpp
++++ b/src/kernel/sync/sync_errors.hpp
+@@ -52,6 +52,9 @@ enum SyncError : uint64_t {
+ #undef X
+ };
  
-     // Harness owns lifecycle (see harness_owns_lifecycle): tests drive
-     // balancer_tick() directly so placement asserts stay deterministic.
--    static uint64_t balancer_cadence = 0;
-+    static constinit uint64_t balancer_cadence = 0;
-     ++balancer_cadence;
-     if (!harness_owns_lifecycle() &&
-         (balancer_cadence % BALANCER_TICK_PERIOD) == 0) {
-@@ -5616,7 +5616,7 @@ deadline_miss_handler(TaskControlBlock &task,
-     // starts.  Dump the full task set + monitor state once, from this
-     // tick context, so a stalled run leaves reopen-grade evidence in the
-     // serial log (no GDB attach needed).  Guarded so it fires at most once.
--    static uint64_t s_init_miss = 0;
-+    static constinit uint64_t s_init_miss = 0;
-     if (task.id == 1) {
-         ++s_init_miss;
-         if (s_init_miss == 100) {
-diff --git a/src/kernel/task/task_queue.cpp b/src/kernel/task/task_queue.cpp
-index 73adb36ea..e835aab0d 100644
---- a/src/kernel/task/task_queue.cpp
-+++ b/src/kernel/task/task_queue.cpp
-@@ -10,9 +10,9 @@ void TaskQueue::push_back(TaskControlBlock &tcb) noexcept {
-     // Refuse to link a non-TCB (freed/overwritten) node — doing so would
-     // corrupt the intrusive runq_next_/runq_prev_ links and later cause a
-     // #GP when pop_front/remove walks them.
--    if (!TaskControlBlock::is_valid(&tcb))
-+    if (!TaskControlBlock::is_valid(&tcb)) [[unlikely]]
-         return;
--    if (tcb.in_ready_queue_)
-+    if (tcb.in_ready_queue_) [[unlikely]]
-         return;
-     tcb.in_ready_queue_ = true;
-     tcb.runq_next_ = nullptr;
-@@ -31,14 +31,14 @@ TaskControlBlock *TaskQueue::pop_front() noexcept {
-     // corrupted (e.g. a cycle produced by a stray double-enqueue).  Returning
-     // early here prevents pop_front from spinning until count_ underflows and
-     // hanging the scheduler inside reschedule()/next_task().
--    if (!head_ || count_ == 0)
-+    if (!head_ || count_ == 0) [[unlikely]]
-         return nullptr;
-     // A freed/overwritten head (poisoned with 0xDD under CONFIG_DEBUG) must
-     // not be dereferenced — M-2 (audit-task-sync-v0.4.2): drop ONLY the
-     // offending head node and preserve the remaining queue instead of
-     // zeroing the whole list (which orphans every other queued task and
-     // suppresses the corruption rather than containing it).
--    if (!TaskControlBlock::is_valid(head_)) {
-+    if (!TaskControlBlock::is_valid(head_)) [[unlikely]] {
-         auto *bad = head_;
-         head_ = bad->runq_next_;
-         if (head_) {
-diff --git a/src/lib/assert.hpp b/src/lib/assert.hpp
-index 19b0f44a7..cc8ac04a2 100644
---- a/src/lib/assert.hpp
-+++ b/src/lib/assert.hpp
-@@ -47,7 +47,7 @@ namespace kernel::errors {
- ///        Use this for conditions that should *never* fail.
- #define ENSURE(cond) \
-     do { \
--        if (!(cond)) { \
-+        if (!(cond)) [[unlikely]] { \
-             panic("ENSURE failed: " #cond " at " __FILE__ ":" \
-                   EXPAND_AND_STRINGIFY(__LINE__)); \
-         } \
++/// @brief OK anchor (issue #348-C): success is zero by convention.
++static_assert(SYNC_ERR_OK == 0, "error OK must be 0");
++
+ /// @brief Return a human-readable string for a sync error code.
+ template <> inline const char *error_string(SyncError e) {
+     switch (e) {
+diff --git a/src/kernel/task/scheduler_errors.hpp b/src/kernel/task/scheduler_errors.hpp
+index f8239d062..1f59a9d11 100644
+--- a/src/kernel/task/scheduler_errors.hpp
++++ b/src/kernel/task/scheduler_errors.hpp
+@@ -51,6 +51,9 @@ enum SchedulerError : uint64_t {
+ #undef X
+ };
+ 
++/// @brief OK anchor (issue #348-C): success is zero by convention.
++static_assert(SCHED_ERR_OK == 0, "error OK must be 0");
++
+ /// @brief Return a human-readable string for a scheduler error code.
+ template <> inline const char *error_string(SchedulerError e) {
+     switch (e) {
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index fc5afaf2e..ddf0a7bee 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -239,9 +239,9 @@ void TaskControlBlock::detach_all_objects(bool keep_cspace) noexcept {
+         KernelObject *obj = task_obj_head_;
+         // Poison guard: a pool-rewound block's first qword is 0xDDDD... under
+         // CONFIG_DEBUG.  A live object's first qword is its vptr (a kernel-high
+-        // ≥ 0xFFFF800000000000 address), which passes the low-address check.
+-        // Stop the walk rather than following garbage links.
+-        if (reinterpret_cast<uintptr_t>(obj) < 0xFFFF800000000000ULL ||
++        // address, at/above arch::HHDM_OFFSET), which passes the low-address
++        // check.  Stop the walk rather than following garbage links.
++        if (reinterpret_cast<uintptr_t>(obj) < arch::HHDM_OFFSET ||
+             *reinterpret_cast<const uint64_t *>(obj) == 0xDDDDDDDDDDDDDDDDULL) {
+             break;
+         }
+@@ -1195,7 +1195,11 @@ done_stack:
+     stack -= 37;
+     __builtin_memset(stack, 0, 37 * 8);
+     stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
+-    stack[32] = (1ULL << 5) | (1ULL << 8); // SSTATUS: SPIE=1, SPP=1 (S-mode)
++    // SSTATUS bits (issue #348-C): SPIE=1 (prior interrupt enable),
++    // SPP=1 (trap returns to S-mode).
++    constexpr uint64_t SSTATUS_SPIE = 1ULL << 5;
++    constexpr uint64_t SSTATUS_SPP = 1ULL << 8;
++    stack[32] = SSTATUS_SPIE | SSTATUS_SPP;
+     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
+ #endif
+ 
+diff --git a/src/kernel/task/task_errors.hpp b/src/kernel/task/task_errors.hpp
+index adf47605d..60873b9c3 100644
+--- a/src/kernel/task/task_errors.hpp
++++ b/src/kernel/task/task_errors.hpp
+@@ -45,6 +45,9 @@ enum TaskError : uint64_t {
+ #undef X
+ };
+ 
++/// @brief OK anchor (issue #348-C): success is zero by convention.
++static_assert(TASK_ERR_OK == 0, "error OK must be 0");
++
+ /// @brief Return a human-readable string for a task error code.
+ template <> inline const char *error_string(TaskError error) {
+     switch (error) {
 diff --git a/test-history.txt b/test-history.txt
-index c91410085..5186a401e 100644
+index 5186a401e..7a15296bd 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -3539,3 +3539,5 @@ SUMMARY: total=18 ok=18 fail=0
- 2026-10-16 09:08:57 bench_ipc_throughput PASSED: 4 FAILED: 0 TIME: 382ms
- 2026-10-16 09:09:31 stress_hrt PASSED: 2 FAILED: 0 TIME: 9262ms
+@@ -3541,3 +3541,8 @@ SUMMARY: total=18 ok=18 fail=0
  2026-10-16 09:11:52 testrunner PASSED: 16 FAILED: 0 TIME: 120s
-+2026-10-16 11:43:33 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3335ms
-+2026-10-16 11:46:05 core PASSED: 557 FAILED: 0 TIME: 45992ms
-diff --git a/tools/validate_style.py b/tools/validate_style.py
-index 3b135997b..8cd9feb1e 100644
---- a/tools/validate_style.py
-+++ b/tools/validate_style.py
-@@ -319,7 +319,8 @@ class MemoryChecker(Checker):
-                         continue
-                     # Skip function/method declarations of free/malloc.
-                     if "free(" in snippet and (line_text.endswith("{") or line_text.endswith(");")
--                                              or line_text.endswith(",")):
-+                                              or line_text.endswith(",")
-+                                              or line_text.endswith("noexcept;")):
-                         continue
-                     # Skip constructor initializer lists (member init like : data(nullptr)).
-                     if "free" in snippet and re.search(r":\s*\w+\s*\(", line_text):
+ 2026-10-16 11:43:33 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3335ms
+ 2026-10-16 11:46:05 core PASSED: 557 FAILED: 0 TIME: 45992ms
++2026-10-16 12:20:45 selftest PASSED: 147 FAILED: 0 TIME: 11896ms
++2026-10-16 12:21:31 proc_elf PASSED: 127 FAILED: 0 TIME: 37785ms
++2026-10-16 12:21:59 capability PASSED: 155 FAILED: 0 TIME: 10511ms
++2026-10-16 12:22:49 core PASSED: 557 FAILED: 0 TIME: 46844ms
++2026-10-16 12:32:35 selftest PASSED: 147 FAILED: 0 TIME: 11782ms

@@ -41,6 +41,9 @@ enum MemPoolError : uint64_t {
 #undef X
 };
 
+/// @brief OK anchor (issue #348-C): success is zero by convention.
+static_assert(MEMPOOL_ERR_OK == 0, "error OK must be 0");
+
 /// @brief Return a human-readable string for a MemPool error code.
 template <> inline const char *error_string(MemPoolError e) {
     switch (e) {

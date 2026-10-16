@@ -382,6 +382,15 @@ class VMM {
   private:
     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
     static constexpr uint64_t PAGE_TABLE_ENTRIES = 512;
+    /// @brief Clears the low 12 flag/offset bits of a page-TABLE address
+    ///        (issue #348-C).  Table addresses only — never PTEs (riscv64
+    ///        Sv39 PTEs carry PPN<<10 and need the shift codec; x86_64
+    ///        PTEs may carry NX above the frame).
+    static constexpr uint64_t PAGE_TABLE_ADDR_MASK = ~0xFFFULL;
+    static_assert((PAGE_TABLE_ADDR_MASK | 0xFFFULL) == ~0ULL,
+                  "addr mask must preserve all high bits");
+    static_assert((0xFFFULL & PAGE_TABLE_ADDR_MASK) == 0,
+                  "addr mask must clear the low 12 bits");
 
 #if defined(CONFIG_ARCH_AARCH64)
     // aarch64 stage-1 page-table descriptor bit layout.
@@ -459,13 +468,13 @@ class VMM {
     // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers below
     // for every Sv39 PTE address codec; the masks stay for x86/aarch64 and
     // for documentation of the PA width (1TB cap).
-    static inline uint64_t sv39_pte_phys(uint64_t pte) {
+    static constexpr uint64_t sv39_pte_phys(uint64_t pte) {
         return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
     }
-    static inline uint64_t sv39_phys_pte(uint64_t phys) {
+    static constexpr uint64_t sv39_phys_pte(uint64_t phys) {
         return (phys >> 12) << 10;
     }
-    static inline bool sv39_is_leaf(uint64_t pte) {
+    static constexpr bool sv39_is_leaf(uint64_t pte) {
         return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
     }
 #else

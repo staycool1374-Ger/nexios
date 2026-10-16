@@ -24,6 +24,7 @@
 #include <types.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/elf/elf_shared.hpp>
+#include <kernel/memory/checked_ptr.hpp>
 
 namespace kernel {
 namespace elf {
@@ -84,15 +85,127 @@ enum : uint8_t {
     ET_DYN = 3,  ///< Shared object / PIE.
 };
 
+/// @brief ELF magic word (0x7F,'E','L','F' little-endian).
+static constexpr uint64_t ELF_MAGIC = 0x00000000464C457FULL;
+
 /// @brief Validate an ELF64 header (magic, class, endianness, version).
 /// @return true if the header is valid.
-bool validate_header(const ELF64Header *hdr);
+/// @note constexpr so golden images pin the logic at compile time
+///       (issue #348-C); runtime callers use it identically.  Defined
+///       here (not in elf.cpp) so every TU calling it sees the definition,
+///       which constexpr requires.
+constexpr bool validate_header(const ELF64Header *hdr);
 /// @brief Validate a single ELF program-header segment (bounds, W^X, sizes).
 /// @param phdr The program header to validate.
 /// @param file_size Total file size in bytes (0 = unvalidated).
 /// @return true if the segment is safe to load.
-bool validate_segment(const ELF64ProgramHeader *phdr,
-                      uint64_t file_size = 0);
+/// @note constexpr + golden asserts in elf.cpp (issue #348-C).  Defined
+///       here (not in elf.cpp) so every TU calling it sees the definition,
+///       which constexpr requires.
+constexpr bool validate_segment(const ELF64ProgramHeader *phdr,
+                                uint64_t file_size = 0);
+
+constexpr bool validate_header(const ELF64Header *hdr) {
+    if (!hdr)
+        return false;
+    // Little-endian u32 assembly of ident[0..3] (all supported arches are
+    // LE; identical to the old reinterpret_cast read, constexpr-clean).
+    const uint32_t magic = static_cast<uint32_t>(hdr->ident[0]) |
+                           (static_cast<uint32_t>(hdr->ident[1]) << 8) |
+                           (static_cast<uint32_t>(hdr->ident[2]) << 16) |
+                           (static_cast<uint32_t>(hdr->ident[3]) << 24);
+    if (magic != static_cast<uint32_t>(ELF_MAGIC))
+        return false;
+    if (hdr->ident[4] != 2)
+        return false; // 64-bit
+    if (hdr->ident[5] != 1)
+        return false; // little-endian
+    if (hdr->type != ET_EXEC && hdr->type != ET_DYN)
+        return false;
+#if defined(CONFIG_ARCH_AARCH64)
+    if (hdr->machine != 0xB7)
+        return false; // AArch64
+#elif defined(CONFIG_ARCH_RISCV64)
+    if (hdr->machine != 0xF3)
+        return false; // RISC-V (EM_RISCV)
+#else
+    if (hdr->machine != 0x3E)
+        return false; // x86_64 (default)
+#endif
+    if (hdr->version == 0)
+        return false;
+    if (hdr->phnum > 64)
+        return false;
+    if (hdr->ehsize < sizeof(ELF64Header))
+        return false;
+    if (hdr->phentsize < sizeof(ELF64ProgramHeader))
+        return false;
+    if (hdr->phnum > 0) {
+        // Check for arithmetic overflow in program header region end
+        uint64_t ph_end =
+            hdr->phoff + static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
+        if (ph_end < hdr->phoff)
+            return false; // overflow
+        // Ensure header fits within reasonable image size
+        if (ph_end > 1_MiB)
+            return false;
+    }
+    // Verify ident padding bytes are zero
+    for (int i = 7; i < 16; ++i) {
+        if (hdr->ident[i] != 0)
+            return false;
+    }
+    // Reject files with suspicious entry point
+    if (hdr->entry >= USER_SPACE_LIMIT && hdr->entry != 0)
+        return false;
+    return true;
+}
+
+/// @brief Validate a single program header segment.
+/// Checks bounds, permissions (W^X), size limits, and overflow safety.
+constexpr bool validate_segment(const ELF64ProgramHeader *phdr, uint64_t file_size) {
+    if (phdr->type != PT_LOAD)
+        return true;
+    // Basic size sanity
+    if (phdr->filesz > phdr->memsz)
+        return false;
+    // Overflow checks
+    if (phdr->offset + phdr->filesz < phdr->offset)
+        return false;
+    if (phdr->vaddr + phdr->memsz < phdr->vaddr)
+        return false;
+    if (phdr->vaddr + phdr->filesz < phdr->vaddr)
+        return false;
+    // VULN-H2: the segment's file-resident bytes must fit inside the actual
+    // file buffer.  Previously only a 4_MiB constant bounded phdr->offset;
+    // a crafted ELF could read past the PMM::alloc_contiguous() buffer.
+    if (file_size != 0 && phdr->offset + phdr->filesz > file_size)
+        return false;
+    // Must be within user space
+    if (phdr->vaddr >= USER_SPACE_LIMIT)
+        return false;
+    if (phdr->vaddr + phdr->memsz > USER_SPACE_LIMIT)
+        return false;
+    // Reject zero-size segments in memory
+    if (phdr->memsz == 0)
+        return false;
+    // Reject segments that are too large (> 64 MiB)
+    if (phdr->memsz > 64_MiB)
+        return false;
+    // Reject segments with suspicious alignment
+    if (phdr->align > 1_MiB)
+        return false;
+    // Validate file offset is within the image (cannot check exact size
+    // without file length,
+    // but ensure it's reasonable: less than a typical max ELF size)
+    if (phdr->offset > 4_MiB)
+        return false;
+    // W^X enforcement: segment should not be both writable AND executable
+    if ((phdr->flags & 2) && (phdr->flags & 1))
+        return false;
+    return true;
+}
+
 
 /// @brief Bound for the post-relocation baseline scan (issue #46): larger
 ///        read-only images fail the load closed instead of stalling MAPPING.

@@ -46,6 +46,9 @@ enum IpcError : uint64_t {
 #undef X
 };
 
+/// @brief OK anchor (issue #348-C): success is zero by convention.
+static_assert(IPC_ERR_OK == 0, "error OK must be 0");
+
 /// @brief Return a human-readable string for an IPC error code.
 template <> inline const char *error_string(IpcError e) {
     switch (e) {

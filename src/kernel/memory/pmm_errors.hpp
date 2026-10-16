@@ -41,6 +41,9 @@ enum PmmError : uint64_t {
 #undef X
 };
 
+/// @brief OK anchor (issue #348-C): success is zero by convention.
+static_assert(PMM_ERR_OK == 0, "error OK must be 0");
+
 /// @brief Return a human-readable string for a PMM error code.
 template <> inline const char *error_string(PmmError e) {
     switch (e) {

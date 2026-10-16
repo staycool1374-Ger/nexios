@@ -133,7 +133,6 @@ class VirtualAddress {
     constexpr bool operator<(VirtualAddress other) const noexcept {
         return addr_ < other.addr_;
     }
-
     constexpr VirtualAddress operator+(size_t offset) const noexcept {
         return VirtualAddress(addr_ + offset);
     }
@@ -192,5 +191,16 @@ class PageAddress : public PhysicalAddress {
         return (value() & 0xFFFULL) == 0;
     }
 };
+
+// Compile-time goldens (issue #348-C, dmesg_catalog model).
+static_assert(VirtualAddress(0x400000ULL).is_canonical(),
+              "low-half user VA is canonical");
+static_assert(VirtualAddress(0xFFFF800000000000ULL).is_canonical(),
+              "higher-half kernel VA is canonical");
+static_assert(!VirtualAddress(0x0000800000000000ULL).is_canonical(),
+              "hole VA (bit 47 set, high clear) is not canonical");
+static_assert(VirtualAddress(0xFFFF800000000000ULL).is_kernel(),
+              "higher-half is kernel");
+static_assert(VirtualAddress(0x400000ULL).is_user(), "low-half is user");
 
 } // namespace kernel

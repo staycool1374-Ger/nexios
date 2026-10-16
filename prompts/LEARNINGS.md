@@ -49,6 +49,23 @@
 
 ## Entries
 
+### #348-C — compile-time (audit APPROVED, commit pending)
+
+- **Learned:** (1) Script value-semantics kill: `& ~0xFFF` → `& ~MASK`
+  where MASK already contains the `~` inverts every address — boot
+  triple-faults with zero serial. Bisect by stash-groups + clean
+  rebuild (rules out incremental staleness). (2) constexpr needs
+  bodies in headers (link users fail otherwise); in-class asserts
+  can't evaluate private members (incomplete-class) — drop or move
+  out with access. (3) evaluated-no-change is a valid slice outcome
+  (macros un-convertible; sv39 assert covered by runtime tests).
+  (4) riscv build catches what x86 can't (assert placement) — always
+  link all three before commit.
+- **Adapted:** constexpr validators + goldens; table mask + asserts;
+  enum anchors; HHDM/SSTATUS naming.
+- **Style re-surface:** masks need documented domains (table vs PTE);
+  scripts reviewed as code (again).
+
 ### #348-B — low-risk attributes (audit APPROVED, commit pending)
 
 - **Learned:** (1) Scripted edits need diff-review before build:

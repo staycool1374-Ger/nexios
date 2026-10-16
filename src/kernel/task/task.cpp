@@ -239,9 +239,9 @@ void TaskControlBlock::detach_all_objects(bool keep_cspace) noexcept {
         KernelObject *obj = task_obj_head_;
         // Poison guard: a pool-rewound block's first qword is 0xDDDD... under
         // CONFIG_DEBUG.  A live object's first qword is its vptr (a kernel-high
-        // ≥ 0xFFFF800000000000 address), which passes the low-address check.
-        // Stop the walk rather than following garbage links.
-        if (reinterpret_cast<uintptr_t>(obj) < 0xFFFF800000000000ULL ||
+        // address, at/above arch::HHDM_OFFSET), which passes the low-address
+        // check.  Stop the walk rather than following garbage links.
+        if (reinterpret_cast<uintptr_t>(obj) < arch::HHDM_OFFSET ||
             *reinterpret_cast<const uint64_t *>(obj) == 0xDDDDDDDDDDDDDDDDULL) {
             break;
         }
@@ -1195,7 +1195,11 @@ done_stack:
     stack -= 37;
     __builtin_memset(stack, 0, 37 * 8);
     stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
-    stack[32] = (1ULL << 5) | (1ULL << 8); // SSTATUS: SPIE=1, SPP=1 (S-mode)
+    // SSTATUS bits (issue #348-C): SPIE=1 (prior interrupt enable),
+    // SPP=1 (trap returns to S-mode).
+    constexpr uint64_t SSTATUS_SPIE = 1ULL << 5;
+    constexpr uint64_t SSTATUS_SPP = 1ULL << 8;
+    stack[32] = SSTATUS_SPIE | SSTATUS_SPP;
     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
 #endif
 
