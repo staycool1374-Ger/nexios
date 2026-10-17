@@ -162,4 +162,66 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
         edf_insert(*t, queue_target(*t));
     }
 }
+
+void Scheduler::capture_task_fields(TaskFields *out) {
+    uint64_t idx = 0;
+    for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
+        if (t->magic != TaskControlBlock::TCB_MAGIC) {
+            if (idx < MAX_TASKS)
+                out[idx].magic = 0;
+            ++idx;
+            continue;
+        }
+        if (idx >= MAX_TASKS)
+            break;
+        out[idx].magic = t->magic;
+        out[idx].id = t->id;
+        out[idx].parent_id = t->parent_id;
+        out[idx].state = t->state;
+        out[idx].priority = t->priority;
+        out[idx].base_priority = t->base_priority;
+        out[idx].period_ticks = t->period_ticks;
+        out[idx].deadline_ticks = t->deadline_ticks;
+        out[idx].deadline_missed = t->deadline_missed;
+        out[idx].deadline_miss_count = t->deadline_miss_count;
+        out[idx].executed_ticks = t->executed_ticks;
+        out[idx].remaining_ticks = t->remaining_ticks;
+        out[idx].exec_window_start_tick = t->exec_window_start_tick;
+        out[idx].exit_code = t->exit_code;
+        out[idx].context = t->context;
+        out[idx].kernel_stack = reinterpret_cast<uint64_t>(t->kernel_stack);
+        out[idx].kernel_stack_top = t->kernel_stack_top;
+        out[idx].waiting_child_pid = t->waiting_child_pid;
+        out[idx].waiting_child_status =
+            reinterpret_cast<uint64_t>(t->waiting_child_status);
+        out[idx].pending_signals = t->pending_signals;
+        out[idx].alarm_ticks = t->alarm_ticks;
+        out[idx].alarm_armed = t->alarm_armed;
+        out[idx].recv_timeout_armed = t->recv_timeout_armed;
+        out[idx].recv_timed_out = t->recv_timed_out;
+        out[idx].sleep_armed = t->sleep_armed;
+        out[idx].sleep_expired = t->sleep_expired;
+        out[idx].wdog_armed = t->wdog_armed;
+        out[idx].wdog_period_ticks = t->wdog_period_ticks;
+        out[idx].wdog_last_kick_tick = t->wdog_last_kick_tick;
+        out[idx].wdog_expiry_tick = t->wdog_expiry_tick;
+        out[idx].wdog_gen = t->wdog_gen;
+        out[idx].runq_next = t->runq_next_;
+        out[idx].runq_prev = t->runq_prev_;
+        out[idx].in_ready_queue = t->in_ready_queue_;
+        out[idx].rq_priority = t->rq_priority_;
+        out[idx].edf_next = t->edf_next_;
+        out[idx].edf_prev = t->edf_prev_;
+        out[idx].in_edf_queue = t->in_edf_queue_;
+        out[idx].ready_deferred = t->ready_deferred_;
+        out[idx].sched_policy = t->sched_policy;
+        out[idx].edf_exempt = t->edf_exempt;
+        out[idx].cpu_affinity = t->cpu_affinity;
+        out[idx].iopb_slot = t->iopb_slot_;
+        out[idx].tls_base = t->tls_base_;
+        ++idx;
+    }
+    while (idx < MAX_TASKS)
+        out[idx++].magic = 0;
+}
 }  // namespace kernel
