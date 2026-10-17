@@ -226,10 +226,10 @@ void arm_test_touch_flags(bool arm_hhdm, bool arm_identity) {
     // Issue #60/#152: release stores pair with the acquire take in
     // snapshot_restore (a concurrent take can never lose a set).
     if (arm_hhdm) {
-        __atomic_store_n(&VMM::hhdm_modified_, true, __ATOMIC_RELEASE);
+        VMM::set_hhdm_modified();
     }
     if (arm_identity) {
-        __atomic_store_n(&VMM::identity_modified_, true, __ATOMIC_RELEASE);
+        VMM::set_identity_modified();
     }
 }
 
@@ -463,6 +463,13 @@ VmmError VMM::map_page_err(uint64_t virt_addr, uint64_t phys_addr, bool user) {
 VmmError VMM::unmap_page_err(uint64_t virt_addr) {
     if ((virt_addr & kPageOffsetMask) != 0) {
         return VMM_ERR_INVALID_ADDR;
+    }
+    // Presence probe first (issue #366 Q2b): pte_leaf excludes missing
+    // tables, clear leaves, and huge/block entries — all NOT_MAPPED and
+    // never cleared.  The void unmap_page below owns the test-touch
+    // warn/arm side effects, which only fire for actually-present leaves.
+    if (pte_leaf_in_pml4(virt_addr, kernel_pml4_) == nullptr) {
+        return VMM_ERR_NOT_MAPPED;
     }
     unmap_page(virt_addr);
     return VMM_ERR_OK;

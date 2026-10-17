@@ -115,6 +115,25 @@ void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
     unmap_page_in_pml4(virt_addr, pml4_phys);
 }
 
+errors::VmmError VMM::unmap_frame_from_cap_err(cap::FrameCap *fc,
+                                               uint64_t virt_addr,
+                                               uint64_t pml4_phys) {
+    if (fc == nullptr) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
+    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
+    // No revoked check (issue #366 Q2b): unmap-after-revoke must work —
+    // the revoke path itself unmaps revoked caps.  Zero-frame caps simply
+    // have nothing mapped (NOT_MAPPED below).
+    if (pte_leaf_in_pml4(virt_addr, pml4_phys) == nullptr) {
+        return errors::VMM_ERR_NOT_MAPPED;
+    }
+    unmap_frame_from_cap(virt_addr, pml4_phys);
+    return errors::VMM_ERR_OK;
+}
+
 /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys.
 bool VMM::map_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr, bool user,
                              uint64_t pml4_phys) {
@@ -161,6 +180,43 @@ void VMM::unmap_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr,
         // unmap_frame_from_cap); per-page flush rides along.
         unmap_page_in_pml4(virt_addr + i * arch::PAGE_SIZE, pml4_phys);
     }
+}
+
+errors::VmmError VMM::unmap_mmio_from_cap_err(cap::MmioCap *mmio,
+                                              uint64_t virt_addr,
+                                              uint64_t pml4_phys) {
+    if (mmio == nullptr) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
+    if (mmio->size == 0) {
+        return errors::VMM_ERR_EMPTY_RANGE;
+    }
+    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
+    if (mmio->size > UINT64_MAX - (arch::PAGE_SIZE - 1)) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
+    if (virt_addr > UINT64_MAX - (mmio->size + arch::PAGE_SIZE - 1)) {
+        return errors::VMM_ERR_INVALID_ADDR; // range wraps (audit S3, #366)
+    }
+    // No revoked/IO-type check (issue #366 Q2b): unmap must work
+    // regardless of cap state — revocation never unmaps by itself.
+    const size_t pages =
+        (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+    // Two-pass (issue #366 Q2b): verify every leaf present first, so a
+    // hole reports NOT_MAPPED with nothing cleared (no rollback needed,
+    // no partial unmap).
+    for (size_t i = 0; i < pages; ++i) {
+        if (pte_leaf_in_pml4(virt_addr + i * arch::PAGE_SIZE, pml4_phys) ==
+            nullptr) {
+            return errors::VMM_ERR_NOT_MAPPED;
+        }
+    }
+    for (size_t i = 0; i < pages; ++i) {
+        unmap_page_in_pml4(virt_addr + i * arch::PAGE_SIZE, pml4_phys);
+    }
+    return errors::VMM_ERR_OK;
 }
 
 } // namespace kernel

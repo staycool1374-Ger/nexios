@@ -1064,7 +1064,7 @@ JARVIS_TEST(cross_teardown_identity_roundtrip_flag_semantics,
     JARVIS_ASSERT_FMT(!VMM::identity_was_modified(),
                       "identity flag must be clean at entry");
     VMM::clear_identity_modified();
-    __atomic_store_n(&VMM::identity_modified_, true, __ATOMIC_RELEASE);
+    VMM::set_identity_modified();
     JARVIS_ASSERT_FMT(VMM::identity_was_modified(),
                       "direct set must be visible");
     JARVIS_ASSERT_FMT(VMM::take_identity_modified(),

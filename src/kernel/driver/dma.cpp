@@ -23,6 +23,7 @@
 #include <kernel/log/dmesg.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
 #include <kernel/arch/io.hpp>
 #include <string.hpp>
 #include <logger.hpp>
@@ -52,7 +53,20 @@ DmaBuffer alloc_buffer(size_t size) {
     buf.owned = true;
 
     for (size_t i = 0; i < page_count; ++i) {
-        VMM::map_page(phys + i * PAGE_SIZE, phys + i * PAGE_SIZE, false);
+        // Issue #366 Q1a: fail fast on table-OOM (was a silent drop).
+        // Free the whole buffer (all pages owned here), not just the
+        // mapped prefix, then return the empty buffer like the OOM path.
+        if (VMM::map_page_err(phys + i * PAGE_SIZE, phys + i * PAGE_SIZE,
+                              false) != kernel::errors::VMM_ERR_OK) {
+            Logger::error("dma: alloc_buffer(%zu) map failed", size);
+            for (size_t j = 0; j < i; ++j) {
+                VMM::unmap_page(phys + j * PAGE_SIZE);
+            }
+            for (size_t j = 0; j < page_count; ++j) {
+                PMM::free_page(phys + j * PAGE_SIZE);
+            }
+            return DmaBuffer{};
+        }
     }
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -65,7 +79,13 @@ void free_buffer(DmaBuffer &buf) {
         return;
     size_t page_count = buf.size / PAGE_SIZE;
     for (size_t i = 0; i < page_count; ++i) {
-        VMM::unmap_page(buf.phys_addr + i * PAGE_SIZE);
+        // Issue #366 Q2b: log-and-continue on holes (free must complete);
+        // the free below is unconditional (page ownership is independent
+        // of PTE presence).
+        if (VMM::unmap_page_err(buf.phys_addr + i * PAGE_SIZE) !=
+            kernel::errors::VMM_ERR_OK) {
+            Logger::error("dma: free_buffer unmap miss page %zu", i);
+        }
         PMM::free_page(buf.phys_addr + i * PAGE_SIZE);
     }
     buf.phys_addr = 0;

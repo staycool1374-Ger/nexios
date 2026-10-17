@@ -1227,10 +1227,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // AArch64/RISC-V use their interrupt controllers, initialised elsewhere).
 #if defined(CONFIG_ARCH_X86_64)
     if (arch::APIC::is_apic_supported()) {
-        arch::APIC::map_mmio();
-        arch::APIC::init();
-        // Issue #25 (Phase A): record the BSP LAPIC ID in its PerCpu page.
-        arch::per_cpu[0].lapic_id = arch::APIC::lapic_id();
+        // Issue #366 Q1a: fail open when the MMIO window cannot map
+        // (map_mmio reports table-OOM instead of silently dropping) —
+        // the legacy PIC path stays live, mirroring early_init.
+        if (arch::APIC::map_mmio()) {
+            arch::APIC::init();
+            // Issue #25 (Phase A): record the BSP LAPIC ID in its PerCpu page.
+            arch::per_cpu[0].lapic_id = arch::APIC::lapic_id();
+        }
     }
     // Issue #25 (Phase B1): scan the MADT for enabled local APICs (log
     // only — AP bring-up lands in Phase B3; single-CPU runs list 1 CPU).

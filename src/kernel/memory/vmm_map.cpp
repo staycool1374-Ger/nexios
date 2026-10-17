@@ -432,5 +432,21 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     arch::ArchPageTable::tlb_flush(virt_addr);
 }
 
+errors::VmmError VMM::unmap_page_in_pml4_err(uint64_t virt_addr,
+                                             uint64_t pml4_phys) {
+    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0) {
+        return errors::VMM_ERR_INVALID_ADDR;
+    }
+    // Presence probe (issue #366 Q2b): pte_leaf excludes missing tables,
+    // clear leaves, and huge/block entries — all NOT_MAPPED, never
+    // cleared.  The void twin below owns the test-touch arm side effects,
+    // which only fire for actually-present leaves.
+    if (pte_leaf_in_pml4(virt_addr, pml4_phys) == nullptr) {
+        return errors::VMM_ERR_NOT_MAPPED;
+    }
+    unmap_page_in_pml4(virt_addr, pml4_phys);
+    return errors::VMM_ERR_OK;
+}
+
 
 } // namespace kernel
