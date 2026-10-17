@@ -113,7 +113,7 @@ class VirtualAddress {
     }
     /// @brief Check whether the address lies in kernel-space (higher half).
     [[nodiscard]] constexpr bool is_kernel() const noexcept {
-        return addr_ >= 0xFFFF800000000000ULL;
+        return addr_ >= CONFIG_HHDM_OFFSET;
     }
     /// @brief Check whether the address lies in user-space (lower half).
     [[nodiscard]] constexpr bool is_user() const noexcept {
@@ -151,7 +151,7 @@ class VirtualAddress {
 
 /// @brief Architecture-specific higher-half direct map offset.
 /// @note Physical address X maps to VirtualAddress(HHDM_OFFSET + X).
-static constexpr uint64_t HHDM_OFFSET = 0xFFFF800000000000ULL;
+static constexpr uint64_t HHDM_OFFSET = CONFIG_HHDM_OFFSET;
 
 /// @brief Convert physical address to higher-half virtual address.
 [[nodiscard]] constexpr VirtualAddress
@@ -195,11 +195,11 @@ class PageAddress : public PhysicalAddress {
 // Compile-time goldens (issue #348-C, dmesg_catalog model).
 static_assert(VirtualAddress(0x400000ULL).is_canonical(),
               "low-half user VA is canonical");
-static_assert(VirtualAddress(0xFFFF800000000000ULL).is_canonical(),
+static_assert(VirtualAddress(CONFIG_HHDM_OFFSET).is_canonical(),
               "higher-half kernel VA is canonical");
 static_assert(!VirtualAddress(0x0000800000000000ULL).is_canonical(),
               "hole VA (bit 47 set, high clear) is not canonical");
-static_assert(VirtualAddress(0xFFFF800000000000ULL).is_kernel(),
+static_assert(VirtualAddress(CONFIG_HHDM_OFFSET).is_kernel(),
               "higher-half is kernel");
 static_assert(VirtualAddress(0x400000ULL).is_user(), "low-half is user");
 
