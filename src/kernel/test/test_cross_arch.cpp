@@ -77,7 +77,7 @@ JARVIS_TEST(cross_page_table_map_unmap, "PRE: none | POST: none") {
     JARVIS_ASSERT_FMT(phys != 0, "PMM::alloc_user_page returned 0");
 
     // Map it as a user page in the cloned PML4
-    VMM::map_page_in_pml4(TEST_VA, phys, true, pml4);
+    VMM::map_page_in_pml4(TEST_VA, phys, true, false, pml4);
 
     // Verify the translation via virt_to_phys_in_pml4
     uint64_t retrieved = VMM::virt_to_phys_in_pml4(TEST_VA, pml4);

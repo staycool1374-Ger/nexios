@@ -83,7 +83,7 @@ JARVIS_TEST(cross_task_page_fault_isolated, "PRE: none | POST: none") {
     // Map one user page at PROBE_VA in A only.
     uint64_t a_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(a_phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, a_phys, true, a->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, a_phys, true, false, a->page_table_);
 
     // Dispatch A: the probe writes 0xAB to PROBE_VA (mapped → succeeds) and
     // exits.
@@ -135,7 +135,7 @@ JARVIS_TEST(hhdm_kernel_reads_user_page, "PRE: none | POST: none") {
     }
     uint64_t a_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(a_phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, a_phys, true, a->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, a_phys, true, false, a->page_table_);
 
     Scheduler::add_task(*a);
     Scheduler::reschedule();

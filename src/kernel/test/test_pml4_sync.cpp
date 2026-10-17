@@ -56,9 +56,9 @@ JARVIS_TEST(pml4_sync_remap_visible, "PRE: none | POST: none") {
     JARVIS_ASSERT(phys_a != 0);
     uint64_t phys_b = PMM::alloc_page();
     JARVIS_ASSERT(phys_b != 0);
-    VMM::map_page_in_pml4(kSyncVa, phys_a, false, pml4);
+    VMM::map_page_in_pml4(kSyncVa, phys_a, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(kSyncVa, pml4) == phys_a);
-    VMM::map_page_in_pml4(kSyncVa, phys_b, false, pml4);
+    VMM::map_page_in_pml4(kSyncVa, phys_b, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(kSyncVa, pml4) == phys_b);
     VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
@@ -81,8 +81,8 @@ JARVIS_TEST(pml4_sync_unmap_selective, "PRE: none | POST: none") {
     JARVIS_ASSERT(phys_a != 0);
     uint64_t phys_b = PMM::alloc_page();
     JARVIS_ASSERT(phys_b != 0);
-    VMM::map_page_in_pml4(kSyncVa, phys_a, false, pml4);
-    VMM::map_page_in_pml4(kSyncVaNext, phys_b, false, pml4);
+    VMM::map_page_in_pml4(kSyncVa, phys_a, false, false, pml4);
+    VMM::map_page_in_pml4(kSyncVaNext, phys_b, false, false, pml4);
     VMM::unmap_frame_from_cap(kSyncVa, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(kSyncVa, pml4) == 0);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(kSyncVaNext, pml4) == phys_b);

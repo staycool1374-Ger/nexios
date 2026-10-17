@@ -18,6 +18,7 @@
 
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/vmm_path.hpp> // issue #347 Slice D
+#include <kernel/memory/vmm_internal.hpp> // issue #363 shared TU internals
 #include <kernel/memory/pmm.hpp>
 #include <kernel/cap/frame.hpp>
 #include <kernel/cap/mmio.hpp>
@@ -41,20 +42,6 @@ bool VMM::identity_modified_ = false;
 // Fault-injection mask for vmm_step() (issue #347 Slice D, declared in
 // vmm_path.hpp). Test-only; absent in release.
 uint64_t g_test_skip_vmm_step = 0;
-#endif
-
-#if defined(CONFIG_ARCH_RISCV64)
-// Issue #152: Sv39 L0 slot covered by the snapshot backend. The HHDM RAM
-// window (boot.S: 128 × 2MB leaves for PA 0x80000000-0x8FFFFFFF) lives
-// under L0[258] — the only HHDM L1 tests can split (L0[256/257] map
-// phys below RAM and have no block leaves). Gating is exact-match so the
-// armed flag always has a restore covering it (no silent holes). There
-// is deliberately no identity slot: the boot identity map (L0[2]) is
-// dead at runtime (L0[2] reads zero; the kernel runs via HHDM).
-constexpr size_t kHhdmL0Idx = 258;
-static_assert(
-    ((CONFIG_HHDM_OFFSET + 0x80000000ULL) >> 30 & 0x1FF) == kHhdmL0Idx,
-    "HHDM RAM L0 moved");
 #endif
 
 /// @brief Initialise the VMM: capture current PML4, zero residual bootloader
@@ -150,27 +137,12 @@ void VMM::init() {
 uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
                          bool user_alloc) {
     if (table[index] & PAGE_PRESENT) {
-#if defined(CONFIG_ARCH_RISCV64)
-        uint64_t target_phys = VMM::sv39_pte_phys(table[index]);
-#else
-        uint64_t target_phys = table[index] & PAGE_TABLE_ADDR_MASK;
-#endif
+        // Arch child-table decode (issue #363 P2: Sv39 PTE codec vs
+        // frame mask).
+        uint64_t target_phys = vmm_arch_table_child(table[index]);
         if (!PMM::is_allocated(target_phys)) {
             table[index] = 0;
-        } else if (
-#if defined(CONFIG_ARCH_AARCH64)
-            (table[index] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT
-#elif defined(CONFIG_ARCH_RISCV64)
-            // Issue #206: Sv39 is the INVERSE of the aarch64 test above —
-            // a V-only entry is a TABLE pointer (descend), while V+R|W|X
-            // is a block LEAF (split to descend).  The old condition split
-            // tables and descended into leaves (second map of a shared L1
-            // entry orphaned the first map's L2).
-            (table[index] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0
-#else
-            table[index] & PAGE_HUGE
-#endif
-        ) {
+        } else if (vmm_arch_split_needed(table[index])) {
             if (!create)
                 return nullptr;
             uint64_t new_page = PMM::alloc_page_table();
@@ -179,57 +151,17 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *new_table =
                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
-#if defined(CONFIG_ARCH_RISCV64)
-            uint64_t huge_base =
-                VMM::sv39_pte_phys(table[index]) & ~0x1FFFFFULL;
-#else
-            uint64_t huge_base = table[index] & ~0x1FFFFFULL;
-#endif
-#if defined(CONFIG_ARCH_AARCH64)
-            uint64_t base_flags =
-                table[index] &
-                (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN |
-                 PAGE_ATTR_NORMAL);
-            for (size_t i = 0; i < 512; ++i) {
-                // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set).
-                new_table[i] = (huge_base + i * 0x1000) | base_flags |
-                               PAGE_TABLE | PAGE_ATTR_NORMAL;
-            }
-            table[index] = new_page | PAGE_PRESENT | PAGE_TABLE;
-#elif defined(CONFIG_ARCH_RISCV64)
-            // For RISC-V, 2MB block entry has V=1, R=1, W=1, X=1 (leaf)
-            // Need to split into 512 4KB entries.  Issue #206: huge_base
-            // decoded above with sv39_pte_phys; store shifted PPNs below.
-            uint64_t base_flags =
-                table[index] &
-                (PAGE_PRESENT | PAGE_READ | PAGE_WRITE | PAGE_EXEC | PAGE_USER |
-                 PAGE_GLOBAL | PAGE_ACCESSED | PAGE_DIRTY);
-            for (size_t i = 0; i < 512; ++i) {
-                new_table[i] = VMM::sv39_phys_pte(huge_base + i * 0x1000) |
-                               base_flags | PAGE_ACCESSED | PAGE_DIRTY;
-            }
-            // Table entry: V=1, no RWX = points to next level table.
-            // PPN-shifted store (raw phys would decode 4x too high).
-            table[index] = VMM::sv39_phys_pte(new_page) | PAGE_PRESENT;
-#else
-            uint64_t base_flags =
-                table[index] & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
-            for (size_t i = 0; i < 512; ++i) {
-                new_table[i] = (huge_base + i * 0x1000) | base_flags;
-            }
-            table[index] = new_page | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
-#endif
+            // Arch split fill + link (issue #363 P2): huge-base decode,
+            // flag preservation, and the 512-entry fill live per-arch.
+            vmm_arch_split_fill(new_table, table[index]);
+            table[index] = vmm_arch_table_link(new_page);
             return new_table;
         } else {
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
-#if defined(CONFIG_ARCH_RISCV64)
-            // Issue #206: Sv39 PTE codec (raw & ~0xFFF is x86-domain).
+            // Arch child-table decode (issue #363 P2).
             return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                VMM::sv39_pte_phys(table[index]));
-#else
-            return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                (table[index] & PAGE_TABLE_ADDR_MASK));
-#endif
+                                                vmm_arch_table_child(
+                                                    table[index]));
         }
     }
     if (!create)
@@ -247,36 +179,13 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
         new_table[i] = 0;
     }
 
-#if defined(CONFIG_ARCH_AARCH64)
-    table[index] = new_page | PAGE_PRESENT | PAGE_TABLE;
-#elif defined(CONFIG_ARCH_RISCV64)
-    // Table entry: V=1, R=W=X=0 points to next level.  PPN-shifted store
-    // (issue #206: raw phys decodes 4x too high through an Sv39 PTE).
-    table[index] = VMM::sv39_phys_pte(new_page) | PAGE_PRESENT;
-#else
-    table[index] = new_page | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
-#endif
+    // Arch table link (issue #363 P2).
+    table[index] = vmm_arch_table_link(new_page);
 
     return new_table;
 }
 
-// Test-time kernel-VA touch notifiers (issue #254 H2: eleven
-// is_test_active() control-flow branches hoisted here, bit-identical).
-// WHY the flags exist: test tasks legitimately map/unmap kernel-half VAs;
-// the snapshot mechanism must know which half was touched so restore rewinds
-// exactly that half (HHDM PD / identity PD / Sv39 L1).  Release stores pair
-// with the acquire take in snapshot_restore (issues #60/#152).  WHY the
-// warns stay: silent kernel-half mutation hides test pollution; each message
-// names the operation + index domain so the polluting test is identifiable.
-enum class TestTouchWarn {
-    kMapL1,
-    kMapPd,
-    kUnmapL0,
-    kUnmapPml4,
-    kAccessPml4,
-};
-
-static void warn_test_kernel_touch(bool gate, TestTouchWarn warn,
+void warn_test_kernel_touch(bool gate, TestTouchWarn warn,
                                    uint64_t va, size_t idx) {
     if (!gate || !Scheduler::is_test_active()) {
         return;
@@ -310,7 +219,7 @@ static void warn_test_kernel_touch(bool gate, TestTouchWarn warn,
     }
 }
 
-static void arm_test_touch_flags(bool arm_hhdm, bool arm_identity) {
+void arm_test_touch_flags(bool arm_hhdm, bool arm_identity) {
     if (!Scheduler::is_test_active()) {
         return;
     }
@@ -324,14 +233,11 @@ static void arm_test_touch_flags(bool arm_hhdm, bool arm_identity) {
     }
 }
 
-// Cap for bounded throttled diagnostics (issue #254 H5: was a raw 24).
-static constexpr uint64_t kFupSkipLogCap = 24;
-
 // Hex-value half of the throttled diagnostics below (issue #254 H8: shared
 // by note_silent_drop_once and the free_user_pages skip log — the 0x-print
 // loop was duplicated).  Debugcon port IO only (lock-free, ISR-safe;
 // no-op off x86_64).
-static void write_hex_debugcon(uint64_t val) {
+void write_hex_debugcon(uint64_t val) {
     char buf[24];
     int p = 0;
     buf[p++] = '0';
@@ -354,7 +260,7 @@ static void write_hex_debugcon(uint64_t val) {
 // The throttled note keeps them observable without flooding the log.
 // Lock-free (atomics + debugcon port IO only): safe from any context,
 // including tick/ISR paths.  Never touches Logger/serial/shell.
-static void note_silent_drop_once(const char *tag, uint64_t val) {
+void note_silent_drop_once(const char *tag, uint64_t val) {
     static uint64_t count = 0;
     if (__atomic_load_n(&count, __ATOMIC_RELAXED) >= kFupSkipLogCap) {
         return;
@@ -362,189 +268,6 @@ static void note_silent_drop_once(const char *tag, uint64_t val) {
     __atomic_fetch_add(&count, 1UL, __ATOMIC_RELAXED);
     arch::QemuDebugcon::write(tag);
     write_hex_debugcon(val);
-}
-
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-/// @brief Map a 4 KiB page in the kernel page table.
-/// @param virt_addr Page-aligned virtual address.
-/// @param phys_addr Page-aligned physical address.
-/// @param user      If true, mark the page as user-accessible.
-errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
-                                      bool user) {
-#if defined(CONFIG_ARCH_RISCV64)
-    // Sv39 3-level page table walk
-    auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
-
-    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
-
-    // Issue #152: snapshot pairing for Sv39 (see arm_test_touch_flags).
-    // No identity flag on riscv64: the boot identity map is dead at
-    // runtime, so low-half maps arm nothing.
-    // Allow kernel-space VAs when tests are active: the Sv39 L1
-    // save/restore in the snapshot mechanism undoes any 2MB-block splits.
-    warn_test_kernel_touch(l0_idx == kHhdmL0Idx, TestTouchWarn::kMapL1,
-                           virt_addr, l0_idx);
-    arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
-
-    auto *l1 = get_table(l0, l0_idx, true);
-    if (!l1) [[unlikely]] {
-        note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
-        return errors::VMM_ERR_PAGE_ALLOC;
-    }
-
-    // If L1 entry is a 2MB block, split it into 512 4KB entries.
-    // Issue #206: Sv39 PTE codec (raw & ~0x1FFFFF is x86-domain).
-    if ((l1[l1_idx] & PAGE_PRESENT) &&
-        (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-        uint64_t new_l2_phys = PMM::alloc_page_table();
-        if (!new_l2_phys) [[unlikely]] {
-            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-            return errors::VMM_ERR_PAGE_ALLOC;
-        }
-        auto *new_l2 =
-            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_l2_phys);
-        uint64_t block_base =
-            VMM::sv39_pte_phys(l1[l1_idx]) & ~0x1FFFFFULL;
-        uint64_t base_flags =
-            l1[l1_idx] & (PAGE_PRESENT | PAGE_READ | PAGE_WRITE | PAGE_EXEC |
-                          PAGE_USER | PAGE_GLOBAL | PAGE_ACCESSED | PAGE_DIRTY);
-        for (size_t i = 0; i < 512; ++i) {
-            new_l2[i] = VMM::sv39_phys_pte(block_base + i * 0x1000) |
-                        base_flags | PAGE_ACCESSED | PAGE_DIRTY;
-        }
-        l1[l1_idx] = VMM::sv39_phys_pte(new_l2_phys) | PAGE_PRESENT;
-    }
-
-    auto *l2 = get_table(l1, l1_idx, true);
-    if (!l2) [[unlikely]] {
-        note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
-        return errors::VMM_ERR_PAGE_ALLOC;
-    }
-
-    if (user && phys_addr < PMM::total_memory())
-        ENSURE(PMM::is_user_page(phys_addr) &&
-               "map_page: KERNEL page mapped as user-accessible");
-
-    uint64_t flags = PAGE_PRESENT | PAGE_READ | PAGE_WRITE;
-    if (user)
-        flags |= PAGE_USER;
-    flags |= PAGE_ACCESSED | PAGE_DIRTY;
-
-    l2[l2_idx] = VMM::sv39_phys_pte(phys_addr) | flags;
-    arch::ArchPageTable::tlb_flush(virt_addr);
-    return errors::VMM_ERR_OK;
-#else
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
-
-    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-
-    // Allow kernel-space VAs when tests are active: PD save/restore in the
-    // snapshot mechanism undoes any huge-page splits.  Boot-time calls (APIC
-    // MMIO mapping, etc.) are still permitted as they run before snapshot.
-    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
-                           TestTouchWarn::kMapPd, virt_addr, pml4_idx);
-    arm_test_touch_flags(pml4_idx >= arch::PML4_USER_COUNT, false);
-    // Low identity-map VAs (pml4_idx 0, PD_IDENTITY phys 0x3000): a map_page
-    // here splits a boot 2 MiB identity huge entry into a PT page.  Flag it so
-    // snapshot_restore restores PD_IDENTITY (see arm_test_touch_flags).
-    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
-
-    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
-
-    auto *pdpt = get_table(pml4, pml4_idx, true);
-    if (!pdpt) [[unlikely]] {
-        note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
-        return errors::VMM_ERR_PAGE_ALLOC;
-    }
-    auto *pd = get_table(pdpt, pdpt_idx, true);
-    if (!pd) [[unlikely]] {
-        note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
-        return errors::VMM_ERR_PAGE_ALLOC;
-    }
-
-    // If the PD entry is a 2MB huge page, split it into 512 4KB entries
-    // so we can map an individual 4KB page within it.
-#if defined(CONFIG_ARCH_AARCH64)
-    if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
-#else
-    if (pd[pd_idx] & PAGE_HUGE)
-#endif
-    {
-        uint64_t new_pt_phys = PMM::alloc_page_table();
-        if (!new_pt_phys) [[unlikely]] {
-            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-            return errors::VMM_ERR_PAGE_ALLOC;
-        }
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        auto *new_pt =
-            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
-        uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
-#if defined(CONFIG_ARCH_AARCH64)
-        uint64_t base_flags =
-            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN |
-                          PAGE_ATTR_NORMAL);
-#else
-        uint64_t base_flags =
-            pd[pd_idx] & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
-#endif
-        for (size_t i = 0; i < 512; ++i) {
-#if defined(CONFIG_ARCH_AARCH64)
-            // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set) — bit1=0 at L3
-            // is a block-at-invalid-level encoding and faults as a
-            // translation fault.  AttrIndx=1 = Normal WB (see the leaf-flags
-            // note in map_page / map_page_in_pml4).
-            new_pt[i] = (huge_base + i * 0x1000) | base_flags |
-                        PAGE_TABLE | PAGE_ATTR_NORMAL;
-#else
-            new_pt[i] = (huge_base + i * 0x1000) | base_flags;
-#endif
-        }
-#if defined(CONFIG_ARCH_AARCH64)
-        // Table descriptor: bits[1:0]=11 only — AF (bit 10) is a block/page
-        // attribute and RES0 in table descriptors.
-        pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_TABLE;
-#else
-        pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
-#endif
-    }
-
-    auto *pt = get_table(pd, pd_idx, true);
-    if (!pt) [[unlikely]] {
-        note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
-        return errors::VMM_ERR_PAGE_ALLOC;
-    }
-
-    if (user && phys_addr < PMM::total_memory())
-        ENSURE(PMM::is_user_page(phys_addr) &&
-               "map_page: KERNEL page mapped as user-accessible");
-
-#if defined(CONFIG_ARCH_AARCH64)
-    // L3 page descriptors are bits[1:0]=11 (PAGE_TABLE set) — bit1=0 at L3
-    // is a block-at-invalid-level encoding and faults as a translation
-    // fault.  AttrIndx=1 selects the Normal WB MAIR attribute; Device
-    // memory is never executable and must not back user/kernel code.
-    uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF | PAGE_ATTR_NORMAL;
-    if (user)
-        flags |= PAGE_AP_USER | PAGE_PXN;
-    else
-        flags |= PAGE_UXN | PAGE_PXN;
-#else
-    uint64_t flags = PAGE_PRESENT | PAGE_WRITE;
-    if (user)
-        flags |= PAGE_USER;
-#endif
-
-    pt[pt_idx] = phys_addr | flags;
-    arch::ArchPageTable::tlb_flush(virt_addr);
-#endif
-    return errors::VMM_ERR_OK;
 }
 
 /// @brief Map a virtual page in the kernel table (legacy void wrapper:
@@ -637,18 +360,19 @@ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
     if (!l1)
         return 0;
 
-    // Check for 2MB block mapping (leaf at L1 level).  Issue #206:
-    // shift-based Sv39 decode (the HugeFrameMask is x86-domain).
-    if ((l1[l1_idx] & PAGE_PRESENT) &&
-        (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-        return VMM::sv39_pte_phys(l1[l1_idx]) + (virt_addr & 0x1FFFFF);
+    // Check for 2MB block mapping (leaf at L1 level).  Arch block-base
+    // decode (issue #363 P2: shift-based Sv39 codec vs frame masks).
+    if ((l1[l1_idx] & PAGE_PRESENT) && vmm_arch_split_needed(l1[l1_idx])) {
+        return vmm_arch_block_base(l1[l1_idx], true) +
+               (virt_addr & kHuge2MOffsetMask);
     }
 
     auto *l2 = get_table(l1, l1_idx, false);
     if (!l2 || !(l2[l2_idx] & PAGE_PRESENT))
         return 0;
 
-    return VMM::sv39_pte_phys(l2[l2_idx]) + (virt_addr & 0xFFF);
+    return vmm_arch_block_base(l2[l2_idx], false) +
+           (virt_addr & kPageOffsetMask);
 #else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
@@ -669,20 +393,18 @@ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
     if (!pd)
         return 0;
 
-#if defined(CONFIG_ARCH_AARCH64)
-    if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
-#else
-    if (pd[pd_idx] & PAGE_HUGE)
-#endif
-    {
-        return (pd[pd_idx] & PAGE_HUGE_FRAME_MASK) + (virt_addr & 0x1FFFFF);
+    // Arch block-leaf test + frame decode (issue #363 P2).
+    if (vmm_arch_split_needed(pd[pd_idx])) {
+        return vmm_arch_block_base(pd[pd_idx], true) +
+               (virt_addr & kHuge2MOffsetMask);
     }
 
     auto *pt = get_table(pd, pd_idx, false);
     if (!pt || !(pt[pt_idx] & PAGE_PRESENT))
         return 0;
 
-    return (pt[pt_idx] & PAGE_FRAME_MASK) + (virt_addr & 0xFFF);
+    return vmm_arch_block_base(pt[pt_idx], false) +
+           (virt_addr & kPageOffsetMask);
 #endif
 }
 
@@ -696,163 +418,6 @@ uint64_t VMM::current_pml4() {
 /// @brief Map a page into a specific (non-kernel) PML4 page table.
 /// @param virt_addr Page-aligned virtual address.
 /// @param phys_addr Page-aligned physical address.
-/// @param user      If true, mark the page as user-accessible.
-/// @param pml4_phys Physical address of the target PML4.
-void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
-                           uint64_t pml4_phys) {
-    // VULN-H1: preserve legacy behaviour (executable) for existing callers.
-    map_page_in_pml4(virt_addr, phys_addr, user, true, pml4_phys);
-}
-
-errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
-                                              uint64_t phys_addr, bool user,
-                                              bool executable,
-                                              uint64_t pml4_phys) {
-#if defined(CONFIG_ARCH_RISCV64)
-    // Sv39 3-level page table walk
-    auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (pml4_phys & PAGE_TABLE_ADDR_MASK));
-
-    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
-
-    // Issue #152 (mirrors #197 on x86_64): flag unconditionally — no warn
-    // here (designated private-table API), but the target may be the
-    // shared kernel table or share the HHDM L1 with it (riscv64 clones
-    // copy L0[256..511] by value), so a split must arm the snapshot L1
-    // rewind.  Without this, splits never trigger it and persist across
-    // boundaries.  HHDM only (no live identity map on riscv64 — see
-    // map_page note above).
-    arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
-
-    auto *l1 = get_table(l0, l0_idx, true, true);
-    if (!l1) [[unlikely]] {
-        note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
-        return errors::VMM_ERR_PAGE_ALLOC;
-    }
-    auto *l2 = get_table(l1, l1_idx, true, true);
-    if (!l2) [[unlikely]] {
-        note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
-        return errors::VMM_ERR_PAGE_ALLOC;
-    }
-
-    if (user && phys_addr < PMM::total_memory())
-        ENSURE(PMM::is_user_page(phys_addr) &&
-               "map_page_in_pml4: KERNEL page mapped as user-accessible");
-
-    uint64_t flags = PAGE_PRESENT | PAGE_READ | PAGE_WRITE;
-    if (executable)
-        flags |= PAGE_EXEC;
-    if (user)
-        flags |= PAGE_USER;
-    flags |= PAGE_ACCESSED | PAGE_DIRTY;
-
-    // Issue #206: PPN-shifted store (raw phys decodes 4x too high).
-    l2[l2_idx] = VMM::sv39_phys_pte(phys_addr) | flags;
-#else
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                              (pml4_phys & PAGE_TABLE_ADDR_MASK));
-
-    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
-
-    // Issue #197: mirror map_page's modified-flags (no warn here — this is
-    // the designated private-table API, but the target may be the shared
-    // kernel table or share PD pages with it, so flag unconditionally).
-    // Without this, splits (e.g. test mb2 identity re-mapping) never
-    // trigger the snapshot PD rewind and persist across boundaries.
-    arm_test_touch_flags(pml4_idx >= arch::PML4_USER_COUNT,
-                         pml4_idx < arch::PML4_USER_COUNT);
-
-    auto *pdpt = get_table(pml4, pml4_idx, true, true);
-    if (!pdpt) [[unlikely]] {
-        note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
-        return errors::VMM_ERR_PAGE_ALLOC;
-    }
-    auto *pd = get_table(pdpt, pdpt_idx, true, true);
-    if (!pd) [[unlikely]] {
-        note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
-        return errors::VMM_ERR_PAGE_ALLOC;
-    }
-
-#if defined(CONFIG_ARCH_AARCH64)
-    if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
-#else
-    if (pd[pd_idx] & PAGE_HUGE)
-#endif
-    {
-        uint64_t new_pt_phys = PMM::alloc_user_page();
-        if (!new_pt_phys) [[unlikely]] {
-            note_silent_drop_once("[MAP-DROP] split ", virt_addr);
-            return errors::VMM_ERR_PAGE_ALLOC;
-        }
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        auto *new_pt =
-            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
-        uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
-#if defined(CONFIG_ARCH_AARCH64)
-        uint64_t base_flags =
-            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN |
-                          PAGE_ATTR_NORMAL);
-        for (size_t i = 0; i < 512; ++i) {
-            // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set).
-            new_pt[i] =
-                (huge_base + i * 0x1000) | base_flags | PAGE_TABLE |
-                PAGE_ATTR_NORMAL;
-        }
-        pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_TABLE;
-#else
-        uint64_t base_flags =
-            pd[pd_idx] & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
-        for (size_t i = 0; i < 512; ++i) {
-            new_pt[i] = (huge_base + i * 0x1000) | base_flags;
-        }
-        pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
-#endif
-    }
-
-    auto *pt = get_table(pd, pd_idx, true, true);
-    if (!pt) [[unlikely]] {
-        note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
-        return errors::VMM_ERR_PAGE_ALLOC;
-    }
-
-    if (user && phys_addr < PMM::total_memory())
-        ENSURE(PMM::is_user_page(phys_addr) &&
-               "map_page_in_pml4: KERNEL page mapped as user-accessible");
-
-#if defined(CONFIG_ARCH_AARCH64)
-    // L3 page descriptors: bits[1:0]=11 (see map_page note).
-    // AttrIndx=1 = Normal WB (see map_page note).
-    uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF | PAGE_ATTR_NORMAL;
-    if (user)
-        flags |= PAGE_AP_USER | PAGE_PXN;
-    else
-        flags |= PAGE_UXN | PAGE_PXN;
-    if (!executable)
-        flags |= PAGE_UXN; // UXN — not executable at EL0
-#else
-    uint64_t flags = PAGE_PRESENT | PAGE_WRITE;
-    if (user)
-        flags |= PAGE_USER;
-    if (!executable)
-        flags |= (1ULL << 63); // NX — not executable
-#endif
-
-    pt[pt_idx] = phys_addr | flags;
-#endif
-    // Issue #225: invalidate like every other map/unmap site in this
-    // file. Harmless when these tables are not current (local INVLPG);
-    // required when they are (present→present remaps would otherwise
-    // serve stale TLB/PCID entries, globals included).
-    arch::ArchPageTable::tlb_flush(virt_addr);
-    return errors::VMM_ERR_OK;
-}
-
 /// @brief Maps a page into a specific page table with explicit W^X
 ///        permission (legacy void wrapper: behavior-identical to the
 ///        pre-#325 revision — walk allocation failures stay silent
@@ -864,1002 +429,6 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
                                pml4_phys);
 }
 
-uint64_t *VMM::pte_leaf_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-    // Walk-only leaf lookup (private helper for the RO primitive +
-    // inspector; mirrors the unmap walks with create=false).
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
-#if defined(CONFIG_ARCH_RISCV64)
-    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
-    if (top[l0_idx] & (VMM::PAGE_READ | VMM::PAGE_WRITE | VMM::PAGE_EXEC))
-        return nullptr;
-    auto *l1 = VMM::get_table(top, l0_idx, false);
-    if (!l1)
-        return nullptr;
-    if (l1[l1_idx] & (VMM::PAGE_READ | VMM::PAGE_WRITE | VMM::PAGE_EXEC))
-        return nullptr;
-    auto *l2 = VMM::get_table(l1, l1_idx, false);
-    if (!l2)
-        return nullptr;
-    if ((l2[l2_idx] & VMM::PAGE_PRESENT) == 0)
-        return nullptr;
-    if ((l2[l2_idx] &
-         (VMM::PAGE_READ | VMM::PAGE_WRITE | VMM::PAGE_EXEC)) == 0)
-        return nullptr; // table pointer, not a leaf
-    return &l2[l2_idx];
-#else
-    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
-    auto *pdpt = VMM::get_table(top, pml4_idx, false);
-    if (!pdpt)
-        return nullptr;
-    auto *pd = VMM::get_table(pdpt, pdpt_idx, false);
-    if (!pd)
-        return nullptr;
-#if defined(CONFIG_ARCH_AARCH64)
-    if ((pd[pd_idx] & (VMM::PAGE_PRESENT | VMM::PAGE_TABLE)) ==
-        VMM::PAGE_PRESENT)
-        return nullptr; // Block entry: not ours.
-#else
-    if (pd[pd_idx] & VMM::PAGE_HUGE)
-        return nullptr; // Huge entry: not ours.
-#endif
-    auto *pt = VMM::get_table(pd, pd_idx, false);
-    if (!pt)
-        return nullptr;
-    if ((pt[pt_idx] & VMM::PAGE_PRESENT) == 0)
-        return nullptr;
-    return &pt[pt_idx];
-#endif
-}
-
-// Issue #271 P0: shared read-only user-map primitive. Map RW first
-// (identical table allocation to every other user map), then clear the
-// write permission with the arch RO encoding. Tables under construction
-// are never live, so no TLB window exists; the trailing flush mirrors
-// every other map site (harmless when not current, required on remap).
-void VMM::map_page_ro_in_pml4(uint64_t virt_addr, uint64_t phys_addr,
-                              bool executable, uint64_t pml4_phys) {
-    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0 ||
-        (phys_addr & (arch::PAGE_SIZE - 1)) != 0) {
-        return;
-    }
-    map_page_in_pml4(virt_addr, phys_addr, true, executable, pml4_phys);
-    uint64_t *leaf = pte_leaf_in_pml4(virt_addr, pml4_phys);
-    if (!leaf)
-        return;
-#if defined(CONFIG_ARCH_AARCH64)
-    // AP[1:0] in bits[7:6]: 01 = EL1-RW/EL0-RW, 11 = EL1-RO/EL0-RO.
-    // Keep EL0 accessibility, add read-only (UXN/PXN already set by
-    // the 5-arg map per @p executable).
-    *leaf |= PAGE_AP_RO;
-#elif defined(CONFIG_ARCH_RISCV64)
-    // Sv39: R stays, W clears (R-only is a valid leaf encoding).
-    *leaf &= ~PAGE_WRITE;
-#else
-    *leaf &= ~PAGE_WRITE;
-    if (!executable)
-        *leaf |= (1ULL << 63); // NX (already set by 5-arg map; idempotent)
-#endif
-    arch::ArchPageTable::tlb_flush(virt_addr);
-}
-
-bool VMM::pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
-                            bool *executable_out) {
-    uint64_t *leaf = pte_leaf_in_pml4(virt_addr, pml4_phys);
-    if (!leaf)
-        return false;
-    const uint64_t e = *leaf;
-#if defined(CONFIG_ARCH_AARCH64)
-    const bool ro =
-        (e & (PAGE_AP_USER | PAGE_AP_RO)) == (PAGE_AP_USER | PAGE_AP_RO);
-    if (executable_out)
-        *executable_out = (e & PAGE_UXN) == 0;
-    return ro;
-#elif defined(CONFIG_ARCH_RISCV64)
-    const bool ro =
-        (e & PAGE_READ) && !(e & PAGE_WRITE);
-    if (executable_out)
-        *executable_out = (e & PAGE_EXEC) != 0;
-    return ro;
-#else
-    const bool ro = (e & PAGE_PRESENT) && !(e & PAGE_WRITE);
-    if (executable_out)
-        *executable_out = (e & (1ULL << 63)) == 0;
-    return ro;
-#endif
-}
-
-/// @brief Test inspector: reports whether the mapped leaf is executable
-///        per the arch NX encoding (walk-only, never allocates).
-/// @param virt_addr Virtual address to inspect.
-/// @param pml4_phys Physical address of the target PML4.
-/// @return false when unmapped (or a huge/block entry, not ours).
-bool VMM::pte_is_executable_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-    uint64_t *leaf = pte_leaf_in_pml4(virt_addr, pml4_phys);
-    if (!leaf) {
-        return false;
-    }
-    const uint64_t entry = *leaf;
-#if defined(CONFIG_ARCH_AARCH64)
-    return (entry & PAGE_UXN) == 0;
-#elif defined(CONFIG_ARCH_RISCV64)
-    return (entry & PAGE_EXEC) != 0;
-#else
-    return (entry & (1ULL << 63)) == 0;
-#endif
-}
-
-void VMM::remap_range_ro_in_pml4(uint64_t pml4_phys, uint64_t vaddr,
-                                 uint64_t size, bool executable) {
-    if (size == 0)
-        return;
-    const uint64_t mask = arch::PAGE_SIZE - 1;
-    uint64_t base = vaddr & ~mask;
-    if (vaddr + size < vaddr)
-        return; // overflow: no-op
-    uint64_t end = (vaddr + size + mask) & ~mask;
-    if (end <= base)
-        return;
-    for (uint64_t va = base; va < end; va += arch::PAGE_SIZE) {
-        uint64_t phys = virt_to_phys_in_pml4(va, pml4_phys);
-        if (!phys)
-            continue; // unmapped hole: skip
-        map_page_ro_in_pml4(va, phys, executable, pml4_phys);
-    }
-}
-
-void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0) {
-        return;
-    }
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
-#if defined(CONFIG_ARCH_RISCV64)
-    // Sv39 3-level walk (mirrors map_page_in_pml4 riscv branch).
-    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
-    // Issue #152: no identity flag on riscv64 (dead boot map — see
-    // map_page note above). Task-private low tables need no snapshot.
-    if (top[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
-        return; // 1 GiB block: not ours to clear.
-    }
-    auto *l1 = get_table(top, l0_idx, false);
-    if (!l1) [[unlikely]] {
-        note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
-        return;
-    }
-    if (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
-        return; // 2 MiB block: not ours to clear.
-    }
-    auto *l2 = get_table(l1, l1_idx, false);
-    if (!l2) [[unlikely]] {
-        note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
-        return;
-    }
-    l2[l2_idx] = 0;
-#else
-    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
-    // Issue #197: mirror unmap_page — flag low-VA surgery for the
-    // PD_IDENTITY restore (see map_page_in_pml4 note above).
-    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
-    auto *pdpt = get_table(top, pml4_idx, false);
-    if (!pdpt) [[unlikely]] {
-        note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
-        return;
-    }
-    auto *pd = get_table(pdpt, pdpt_idx, false);
-    if (!pd) [[unlikely]] {
-        note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
-        return;
-    }
-#if defined(CONFIG_ARCH_AARCH64)
-    if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT) {
-        return; // Block entry: not ours to clear.
-    }
-#else
-    if (pd[pd_idx] & PAGE_HUGE) {
-        return; // Huge entry: not ours to clear.
-    }
-#endif
-    auto *pt = get_table(pd, pd_idx, false);
-    if (!pt) [[unlikely]] {
-        note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
-        return;
-    }
-    pt[pt_idx] = 0;
-#endif
-    arch::ArchPageTable::tlb_flush(virt_addr);
-}
-
-/// @brief Create a new PML4: zeroes user entries, copies kernel entries.
-/// @return Physical address of new PML4, or 0 on failure.
-uint64_t VMM::clone_kernel_pml4() {
-    uint64_t phys = PMM::alloc_page();
-    if (!phys) {
-        ASSERT(errors::VmmError::VMM_ERR_PML4_ALLOC);
-        return 0;
-    }
-
-#if defined(CONFIG_ARCH_RISCV64)
-    auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
-    auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + phys);
-
-    // Clear user-space entries (L0 indices 0-255 for 0-256GB)
-    for (size_t i = 0; i < 256; ++i) {
-        dst[i] = 0;
-    }
-    // Issue #205: riscv64 low half holds kernel MMIO+identity (L0[0]:
-    // 1GB window with PLIC/UART/ECAM leaves + RAM identity), not user
-    // space — every address space needs it (drivers touch raw-phys
-    // identity; aarch64 instead uses HHDM aliases so its clear stands).
-    // U=0 on all copied entries: U-mode cannot reach them (#206-safe).
-    // Issue #221: L0[0] ALSO covers every user low-half mapping
-    // (.text/stack/heap below 1GB).  Sharing src[0] lets get_table()
-    // install one task's child tables into the shared L1 (absent path)
-    // or descend into another task's L2 (table path), so same-VA images
-    // hijack each other's PTEs (last writer wins) and leaf splits
-    // corrupt shared kernel entries.  Deep-copy the subtree instead:
-    // MMIO/identity leaves stay visible by value (U=0) for IRQ-context
-    // drivers, while child tables become private.  USER entries are
-    // never copied (stale hijack PTEs must not propagate; the loader
-    // maps fresh pages for the new task).
-    uint64_t l0_low = src[0];
-    if ((l0_low & PAGE_PRESENT) == 0) {
-        dst[0] = 0;
-    } else if ((l0_low & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0) {
-        // 1GB leaf: no subtree to share, copy by value.
-        dst[0] = l0_low;
-    } else {
-        uint64_t l1_phys = PMM::alloc_user_page();
-        if (l1_phys == 0) {
-            ASSERT(errors::VmmError::VMM_ERR_PML4_ALLOC);
-            PMM::free_page(phys);
-            return 0;
-        }
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        auto *src_l1 = reinterpret_cast<uint64_t *>(
-            arch::HHDM_OFFSET + VMM::sv39_pte_phys(l0_low));
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        auto *dst_l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                    l1_phys);
-        // Audit (iteration 2): the page is recycled unzeroed, and the
-        // !copy_ok unwind below scans all 512 slots — zero first so
-        // never-written slots cannot drive free_page on stale entries.
-        __builtin_memset(dst_l1, 0, 4096);
-        bool copy_ok = true;
-        for (size_t l1_idx = 0; l1_idx < PAGE_TABLE_ENTRIES; ++l1_idx) {
-            const uint64_t l1_entry = src_l1[l1_idx];
-            if ((l1_entry & PAGE_PRESENT) == 0 ||
-                (l1_entry & PAGE_USER) != 0) {
-                dst_l1[l1_idx] = 0;
-                continue;
-            }
-            if ((l1_entry & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0) {
-                // 2MB leaf (MMIO/identity): copy by value.
-                dst_l1[l1_idx] = l1_entry;
-                continue;
-            }
-            const uint64_t l2_phys = PMM::alloc_user_page();
-            if (l2_phys == 0) {
-                copy_ok = false;
-                break;
-            }
-            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            auto *src_l2 = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET + VMM::sv39_pte_phys(l1_entry));
-            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            auto *dst_l2 = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET + l2_phys);
-            for (size_t l2_idx = 0; l2_idx < PAGE_TABLE_ENTRIES; ++l2_idx) {
-                const uint64_t l2_entry = src_l2[l2_idx];
-                dst_l2[l2_idx] =
-                    ((l2_entry & PAGE_PRESENT) == 0 ||
-                     (l2_entry & PAGE_USER) != 0)
-                        ? 0
-                        : l2_entry;
-            }
-            // Table entry: V=1, no RWX = points to next level table.
-            dst_l1[l1_idx] =
-                VMM::sv39_phys_pte(l2_phys) | PAGE_PRESENT;
-        }
-        if (!copy_ok) {
-            for (size_t l1_idx = 0; l1_idx < PAGE_TABLE_ENTRIES; ++l1_idx) {
-                const uint64_t l1_entry = dst_l1[l1_idx];
-                if ((l1_entry & PAGE_PRESENT) != 0 &&
-                    (l1_entry & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) == 0) {
-                    PMM::free_page(VMM::sv39_pte_phys(l1_entry));
-                }
-            }
-            PMM::free_page(l1_phys);
-            PMM::free_page(phys);
-            ASSERT(errors::VmmError::VMM_ERR_PML4_ALLOC);
-            return 0;
-        }
-        dst[0] = VMM::sv39_phys_pte(l1_phys) | PAGE_PRESENT;
-    }
-    // Copy kernel-space entries (L0 indices 256-511 for 256GB-512GB)
-    for (size_t i = 256; i < 512; ++i) {
-        dst[i] = src[i];
-    }
-    return phys;
-#else
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + phys);
-    // Clear user-space entries (0-255) — the kernel's boot identity-map must
-    // not leak into user page tables.  Fork shares user entries by copying them
-    // from the PARENT's PML4, not from the kernel PML4.
-    for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
-        dst[i] = 0;
-    }
-    // Copy kernel-space entries (256-511) so user tasks can access kernel
-    // mappings.
-    for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i) {
-        dst[i] = src[i];
-    }
-    return phys;
-#endif
-}
-
-/// @brief True when @p entry points at a next-level table (vs a huge/leaf
-///        mapping).  Arch-aware: x86_64 uses the PS bit, RISC-V the R|W|X
-///        bits, AArch64 the descriptor type at non-leaf levels.
-/// @param entry Raw 64-bit page-table entry (must be PRESENT).
-/// @param level Table level holding the entry (0=PML4/L0 .. 2=PD/L2;
-///        level 3=PT/L3 entries are always leaves).
-bool VMM::is_table_entry(uint64_t entry, unsigned level) {
-    if (level >= 3)
-        return false;
-#if defined(CONFIG_ARCH_X86_64)
-    (void)level;
-    return (entry & PAGE_HUGE) == 0;
-#elif defined(CONFIG_ARCH_RISCV64)
-    (void)level;
-    constexpr uint64_t k_rwx = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
-    return (entry & k_rwx) == 0;
-#elif defined(CONFIG_ARCH_AARCH64)
-    return (entry & 0x3ULL) == 0x3ULL;
-#else
-    (void)entry;
-    (void)level;
-    return false;
-#endif
-}
-
-/// @brief Recursive merge worker (issue #96): converge @p dst_table
-///        toward @p src_table over [@p start, 512).  Missing-present
-///        entries are linked (copied by value); present entries are left
-///        untouched unless both sides hold tables, in which case the
-///        pair is merged recursively (hole-filling).  Zero allocations.
-/// @param src_table HHDM virtual address of the source table page.
-/// @param dst_table HHDM virtual address of the child table page.
-/// @param level Table level (0=PML4/L0 .. 3=PT/L3).
-/// @param start First index to converge (kernel-half start at level 0).
-void VMM::merge_table_level(uint64_t *src_table, uint64_t *dst_table,
-                            unsigned level, size_t start) {
-    for (size_t i = start; i < 512; ++i) {
-        uint64_t src_entry = src_table[i];
-        if ((src_entry & PAGE_PRESENT) == 0)
-            continue;
-        uint64_t dst_entry = dst_table[i];
-        if ((dst_entry & PAGE_PRESENT) != 0) {
-            if (is_table_entry(src_entry, level) &&
-                is_table_entry(dst_entry, level)) {
-#if defined(CONFIG_ARCH_RISCV64)
-                // Sv39 PTE codec (issue #206: raw & PAGE_FRAME_MASK is
-                // x86-domain — flags sit in bits[9:0], PPN is shifted).
-                auto *src_next = reinterpret_cast<uint64_t *>(
-                    arch::HHDM_OFFSET + VMM::sv39_pte_phys(src_entry));
-                // NOLINTNEXTLINE(performance-no-int-to-ptr)
-                auto *dst_next = reinterpret_cast<uint64_t *>(
-                    arch::HHDM_OFFSET + VMM::sv39_pte_phys(dst_entry));
-#else
-                // NOLINTNEXTLINE(performance-no-int-to-ptr)
-                auto *src_next = reinterpret_cast<uint64_t *>(
-                    arch::HHDM_OFFSET + (src_entry & PAGE_FRAME_MASK));
-                // NOLINTNEXTLINE(performance-no-int-to-ptr)
-                auto *dst_next = reinterpret_cast<uint64_t *>(
-                    arch::HHDM_OFFSET + (dst_entry & PAGE_FRAME_MASK));
-#endif
-                merge_table_level(src_next, dst_next, level + 1, 0);
-            }
-            continue;
-        }
-        dst_table[i] = src_entry;
-    }
-}
-
-/// @brief Recursive equality worker (issue #96): true when the two
-///        tables agree on every present entry over [@p start, 512),
-///        descending into table/table pairs.
-bool VMM::tables_equal_level(const uint64_t *a_table,
-                             const uint64_t *b_table, unsigned level,
-                             size_t start) {
-    for (size_t i = start; i < 512; ++i) {
-        uint64_t a_entry = a_table[i];
-        uint64_t b_entry = b_table[i];
-        bool a_present = (a_entry & PAGE_PRESENT) != 0;
-        bool b_present = (b_entry & PAGE_PRESENT) != 0;
-        if (a_present != b_present)
-            return false;
-        if (!a_present)
-            continue;
-        if (is_table_entry(a_entry, level) &&
-            is_table_entry(b_entry, level)) {
-#if defined(CONFIG_ARCH_RISCV64)
-            // Sv39 PTE codec (issue #206: raw & PAGE_FRAME_MASK is
-            // x86-domain — flags sit in bits[9:0], PPN is shifted).
-            auto *a_next = reinterpret_cast<const uint64_t *>(
-                arch::HHDM_OFFSET + VMM::sv39_pte_phys(a_entry));
-            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            auto *b_next = reinterpret_cast<const uint64_t *>(
-                arch::HHDM_OFFSET + VMM::sv39_pte_phys(b_entry));
-#else
-            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            auto *a_next = reinterpret_cast<const uint64_t *>(
-                arch::HHDM_OFFSET + (a_entry & PAGE_FRAME_MASK));
-            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            auto *b_next = reinterpret_cast<const uint64_t *>(
-                arch::HHDM_OFFSET + (b_entry & PAGE_FRAME_MASK));
-#endif
-            if (!tables_equal_level(a_next, b_next, level + 1, 0))
-                return false;
-        } else if (a_entry != b_entry) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool VMM::merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4) {
-    if (src_pml4 == 0 || dst_pml4 == 0 || src_pml4 == dst_pml4)
-        return false;
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (src_pml4 & PAGE_TABLE_ADDR_MASK));
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (dst_pml4 & PAGE_TABLE_ADDR_MASK));
-    // INV-MERGE1: single-threaded pre-CR3-switch window (same window MP-7
-    // uses) — no locking; link semantics keep lower tables shared, so no
-    // allocation can fail mid-merge by construction.
-    merge_table_level(src, dst, 0, arch::PML4_KERNEL_START);
-    return true;
-}
-
-void VMM::snapshot_kernel_template() {
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *live = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                              (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
-    for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i)
-        pml4_kernel_template_[i] = live[i];
-}
-
-bool VMM::kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4) {
-    if (a_pml4 == 0 || b_pml4 == 0)
-        return false;
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *a = reinterpret_cast<const uint64_t *>(
-        arch::HHDM_OFFSET + (a_pml4 & PAGE_TABLE_ADDR_MASK));
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *b = reinterpret_cast<const uint64_t *>(
-        arch::HHDM_OFFSET + (b_pml4 & PAGE_TABLE_ADDR_MASK));
-    return tables_equal_level(a, b, 0, arch::PML4_KERNEL_START);
-}
-
-bool VMM::kernel_half_matches_template(uint64_t pml4_phys) {
-    if (pml4_phys == 0)
-        return false;
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *tbl = reinterpret_cast<const uint64_t *>(
-        arch::HHDM_OFFSET + (pml4_phys & PAGE_TABLE_ADDR_MASK));
-    for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i) {
-        if (tbl[i] != pml4_kernel_template_[i])
-            return false;
-    }
-    return true;
-}
-
-void VMM::assert_kernel_half_converged(uint64_t child_pml4) {
-    if (!kernel_half_equal(child_pml4, kernel_pml4_))
-        panic("VMM: child kernel half diverged from live kernel PML4");
-#if CONFIG_DEBUG
-    if (!kernel_half_matches_template(child_pml4))
-        Logger::info("VMM: child kernel half drifted from bring-up "
-                     "template (late mapping converged)");
-#endif
-}
-
-/// @brief Free all user-space pages and page tables owned by a user PML4.
-///        Skips kernel-owned pages (PMM::is_user_page owner-bit check).
-/// @param pml4_phys Physical address of the user PML4 to tear down.
-/// @brief Free all user-accessible pages in a page table.
-///        Worst-case iterations: PML4_USER_COUNT (256) × 512 × 512 × 512
-///        leaf visits ≈ 34 billion in a fully populated 4-level walk.
-///        In practice bounded by the actual mapped range (stack + heap +
-///        code segments).  Yields every 64 leaf entries so higher-priority
-///        tasks can run during teardown of large address spaces.
-void VMM::free_user_pages(uint64_t pml4_phys) {
-#if defined(CONFIG_ARCH_RISCV64)
-    auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (pml4_phys & PAGE_TABLE_ADDR_MASK));
-    // User space: L0 indices 0-255 for Sv39 (0-256GB).  Issue #206: all
-    // address codecs below are shift-based Sv39 (raw & ~mask is x86-domain
-    // and decodes 4x too high); L2 non-leaves are invalid in Sv39 (no L3).
-    for (int l0_idx = 0; l0_idx < 256; ++l0_idx) {
-        if (!(l0[l0_idx] & PAGE_PRESENT))
-            continue;
-        // Check for 1GB block at L0
-        if ((l0[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-            uint64_t page = VMM::sv39_pte_phys(l0[l0_idx]);
-            if (!PMM::is_user_page(page))
-                continue;
-            PMM::free_page(page);
-            continue;
-        }
-        uint64_t l1_phys = VMM::sv39_pte_phys(l0[l0_idx]);
-        if (!PMM::is_user_page(l1_phys))
-            continue;
-        auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
-        for (int l1_idx = 0; l1_idx < 512; ++l1_idx) {
-            if (!(l1[l1_idx] & PAGE_PRESENT))
-                continue;
-            // Check for 2MB block at L1
-            if ((l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-                uint64_t page = VMM::sv39_pte_phys(l1[l1_idx]);
-                if (!PMM::is_user_page(page))
-                    continue;
-                PMM::free_page(page);
-                continue;
-            }
-            uint64_t l2_phys = VMM::sv39_pte_phys(l1[l1_idx]);
-            if (!PMM::is_user_page(l2_phys))
-                continue;
-            auto *l2 =
-                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l2_phys);
-            for (int l2_idx = 0; l2_idx < 512; ++l2_idx) {
-                if (!(l2[l2_idx] & PAGE_PRESENT))
-                    continue;
-                // Leaf PTE (V=1, R|W|X=1) — 4KB page in 3-level Sv39.
-                if (!VMM::sv39_is_leaf(l2[l2_idx]))
-                    continue;  // invalid non-leaf: leave alone
-                uint64_t leaf = VMM::sv39_pte_phys(l2[l2_idx]);
-                if (!PMM::is_user_page(leaf))
-                    continue;
-                PMM::free_page(leaf);
-                if ((l2_idx & 0x3F) == 0x3F)
-                    Scheduler::cleanup_step_try();
-            }
-            PMM::free_page(l2_phys);
-            l1[l1_idx] = 0; // clear L1 entry to prevent re-walk
-        }
-        PMM::free_page(l1_phys);
-        l0[l0_idx] = 0;
-    }
-#else
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                              (pml4_phys & PAGE_TABLE_ADDR_MASK));
-    // v0.3.11: bounded diagnostic — log page-table pages skipped because their
-    // owner bit is KERNEL (free_user_pages only frees USER-owned table pages).
-    static uint64_t s_fup_skip_log = 0;
-    auto log_skip = [](const char *lvl, uint64_t phys) {
-        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >=
-            kFupSkipLogCap)
-            return;
-        __atomic_fetch_add(&s_fup_skip_log, 1UL, __ATOMIC_RELAXED);
-        arch::QemuDebugcon::write(lvl);
-        write_hex_debugcon(phys);
-    };
-    for (int pml4_idx = 0; pml4_idx < static_cast<int>(arch::PML4_USER_COUNT);
-         ++pml4_idx) {
-        if (!(pml4[pml4_idx] & PAGE_PRESENT))
-            continue;
-        uint64_t pdpt_phys = pml4[pml4_idx] & PAGE_TABLE_ADDR_MASK;
-        if (!PMM::is_user_page(pdpt_phys)) {
-            log_skip("[FUP-SKIP] pdpt p4=", pdpt_phys);
-            continue;
-        }
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        auto *pdpt =
-            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
-        for (int pdpt_idx = 0; pdpt_idx < 512; ++pdpt_idx) {
-            if (!(pdpt[pdpt_idx] & PAGE_PRESENT))
-                continue;
-#if defined(CONFIG_ARCH_AARCH64)
-            if ((pdpt[pdpt_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
-#else
-            if (pdpt[pdpt_idx] & PAGE_HUGE)
-#endif
-            {
-                uint64_t page = pdpt[pdpt_idx] & ~0x3FFFFFULL;
-                if (!PMM::is_user_page(page))
-                    continue;
-                PMM::free_page(page);
-                continue;
-            }
-            uint64_t pd_phys = pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK;
-            if (!PMM::is_user_page(pd_phys)) {
-                log_skip("[FUP-SKIP] pd   p4=", pd_phys);
-                continue;
-            }
-            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            auto *pd =
-                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd_phys);
-            for (int pd_idx = 0; pd_idx < 512; ++pd_idx) {
-                if (!(pd[pd_idx] & PAGE_PRESENT))
-                    continue;
-#if defined(CONFIG_ARCH_AARCH64)
-                if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
-#else
-                if (pd[pd_idx] & PAGE_HUGE)
-#endif
-                {
-                    uint64_t page = pd[pd_idx] & PAGE_HUGE_FRAME_MASK;
-                    if (!PMM::is_user_page(page))
-                        continue;
-                    PMM::free_page(page);
-                    continue;
-                }
-                uint64_t pt_phys = pd[pd_idx] & PAGE_TABLE_ADDR_MASK;
-                if (!PMM::is_user_page(pt_phys)) {
-                    log_skip("[FUP-SKIP] pt   p4=", pt_phys);
-                    continue;
-                }
-                // NOLINTNEXTLINE(performance-no-int-to-ptr)
-                auto *pt =
-                    reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
-                for (int pt_idx = 0; pt_idx < 512; ++pt_idx) {
-                    if (!(pt[pt_idx] & PAGE_PRESENT))
-                        continue;
-                    uint64_t leaf = pt[pt_idx] & PAGE_FRAME_MASK;
-                    if (!PMM::is_user_page(leaf))
-                        continue;
-                    PMM::free_page(leaf);
-                    if ((pt_idx & 0x3F) == 0x3F)
-                        Scheduler::cleanup_step_try();
-                }
-                PMM::free_page(pt_phys);
-                pd[pd_idx] = 0; // clear PD entry to prevent re-walk
-            }
-            PMM::free_page(pd_phys);
-            pdpt[pdpt_idx] = 0; // clear PDPT entry to prevent re-walk
-        }
-        PMM::free_page(pdpt_phys);
-        pml4[pml4_idx] = 0;
-    }
-#endif
-    // TLB flush is the caller's responsibility (via CR3 reload)
-}
-
-/// @brief Deep-copy user-space page tables from src_pml4 to dst_pml4.
-///        Allocates new PDPT/PD/PT pages and copies data page content.
-///        dst_pml4 must already have kernel entries populated.
-///        Worst-case: PML4_USER_COUNT (256) × 512 × 512 × 512 leaf visits,
-///        each doing a 4 KiB memcpy.  Yields every 64 leaf entries.
-/// @return true on success, false on OOM.
-bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
-#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
-    auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (src_pml4 & PAGE_TABLE_ADDR_MASK));
-    auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (dst_pml4 & PAGE_TABLE_ADDR_MASK));
-
-    for (int pml4_idx = 0; pml4_idx < static_cast<int>(arch::PML4_USER_COUNT);
-         ++pml4_idx) {
-        if (!(src[pml4_idx] & PAGE_PRESENT)) {
-            dst[pml4_idx] = 0;
-            continue;
-        }
-
-        uint64_t src_pdpt_phys = src[pml4_idx] & PAGE_TABLE_ADDR_MASK;
-        uint64_t dst_pdpt_phys = PMM::alloc_user_page();
-        if (!dst_pdpt_phys)
-            return false;
-        auto *dst_pdpt =
-            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_pdpt_phys);
-        __builtin_memset(dst_pdpt, 0, 4096);
-#if defined(CONFIG_ARCH_AARCH64)
-        // Table descriptor: bits[1:0]=11 (issue #103).
-        dst[pml4_idx] = dst_pdpt_phys | VMM::PAGE_PRESENT | VMM::PAGE_TABLE;
-#else
-        dst[pml4_idx] = dst_pdpt_phys | VMM::PAGE_PRESENT | VMM::PAGE_WRITE |
-                        VMM::PAGE_USER;
-#endif
-
-        auto *src_pdpt =
-            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_pdpt_phys);
-        for (int pdpt_idx = 0; pdpt_idx < 512; ++pdpt_idx) {
-            if (!(src_pdpt[pdpt_idx] & PAGE_PRESENT))
-                continue;
-
-            // 1 GiB huge/block entry in the USER range — fail closed
-            // (issue #325-E): copying by value would share one writable
-            // page between parent and child (silent aliasing).  No kernel
-            // path creates user huge entries (every map splits to 4 KiB),
-            // so this is unreachable in practice; the caller destroys the
-            // partial child on false.
-#if defined(CONFIG_ARCH_AARCH64)
-            if ((src_pdpt[pdpt_idx] & (PAGE_PRESENT | PAGE_TABLE)) ==
-                PAGE_PRESENT) {
-                return false;
-            }
-#else
-            if (src_pdpt[pdpt_idx] & VMM::PAGE_HUGE) {
-                return false;
-            }
-#endif
-
-            uint64_t src_pd_phys = src_pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK;
-            uint64_t dst_pd_phys = PMM::alloc_user_page();
-            if (!dst_pd_phys)
-                return false;
-            auto *dst_pd =
-                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_pd_phys);
-            __builtin_memset(dst_pd, 0, 4096);
-#if defined(CONFIG_ARCH_AARCH64)
-            // Table descriptor: bits[1:0]=11 (PAGE_PRESENT|PAGE_TABLE) — bit1=0
-            // at L0/L1/L2 is a reserved/invalid encoding and every walk of the
-            // forked space translation-faults (issue #103).  Bits[11:2] (AF,
-            // AttrIndx, AP) are RES0/ignored in table descriptors; the L3
-            // leaves already carry AF/AttrIndx via verbatim src-flag copy.
-            dst_pdpt[pdpt_idx] = dst_pd_phys | VMM::PAGE_PRESENT |
-                                 VMM::PAGE_TABLE;
-#else
-            dst_pdpt[pdpt_idx] = dst_pd_phys | VMM::PAGE_PRESENT |
-                                 VMM::PAGE_WRITE | VMM::PAGE_USER;
-#endif
-
-            auto *src_pd =
-                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_pd_phys);
-            for (int pd_idx = 0; pd_idx < 512; ++pd_idx) {
-                if (!(src_pd[pd_idx] & PAGE_PRESENT))
-                    continue;
-
-                // 2 MiB huge/block entry in the USER range — fail closed
-                // (issue #325-E, same aliasing rationale as above).
-#if defined(CONFIG_ARCH_AARCH64)
-                if ((src_pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) ==
-                    PAGE_PRESENT) {
-                    return false;
-                }
-#else
-                if (src_pd[pd_idx] & VMM::PAGE_HUGE) {
-                    return false;
-                }
-#endif
-
-                uint64_t src_pt_phys = src_pd[pd_idx] & PAGE_TABLE_ADDR_MASK;
-                uint64_t dst_pt_phys = PMM::alloc_user_page();
-                if (!dst_pt_phys)
-                    return false;
-                auto *dst_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                            dst_pt_phys);
-                __builtin_memset(dst_pt, 0, 4096);
-#if defined(CONFIG_ARCH_AARCH64)
-                // Table descriptor: bits[1:0]=11 (issue #103).
-                dst_pd[pd_idx] = dst_pt_phys | VMM::PAGE_PRESENT |
-                                 VMM::PAGE_TABLE;
-#else
-                dst_pd[pd_idx] = dst_pt_phys | VMM::PAGE_PRESENT |
-                                 VMM::PAGE_WRITE | VMM::PAGE_USER;
-#endif
-
-                auto *src_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                            src_pt_phys);
-                for (int pt_idx = 0; pt_idx < 512; ++pt_idx) {
-                    if (!(src_pt[pt_idx] & PAGE_PRESENT))
-                        continue;
-
-                    uint64_t src_data = src_pt[pt_idx] & PAGE_FRAME_MASK;
-                    uint64_t flags = src_pt[pt_idx] & ~PAGE_FRAME_MASK;
-
-                    // Issue #8 (S2): never deep-copy a non-RAM frame into the
-                    // child.  A user MMIO-window PTE points at device phys
-                    // (>= total RAM): memcpy'ing HHDM+device_phys reads device
-                    // registers or raises a kernel-mode #PF (user-triggerable
-                    // panic), and the child must not inherit a device mapping
-                    // (fail-closed — the window stays unmapped in the child).
-                    if (!PMM::is_user_page(src_data)) {
-                        dst_pt[pt_idx] = 0;
-                        continue;
-                    }
-
-                    uint64_t dst_data = PMM::alloc_user_page();
-                    if (!dst_data)
-                        return false;
-                    __builtin_memcpy(
-                        reinterpret_cast<void *>(arch::HHDM_OFFSET + dst_data),
-                        reinterpret_cast<void *>(arch::HHDM_OFFSET + src_data),
-                        4096);
-                    dst_pt[pt_idx] = dst_data | flags;
-                    if ((pt_idx & 0x3F) == 0x3F)
-                        Scheduler::cleanup_step_try();
-                }
-            }
-        }
-    }
-    return true;
-#elif defined(CONFIG_ARCH_RISCV64)
-    // RISC-V Sv39: L0 → L1 → L2 → leaf.  Issue #206: shift-based PTE
-    // codec throughout (raw & ~mask decodes 4x too high); flags are bits
-    // 9:0 only (0xFFF would capture PPN bits); no L3 exists in Sv39.
-    auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (src_pml4 & PAGE_TABLE_ADDR_MASK));
-    auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (dst_pml4 & PAGE_TABLE_ADDR_MASK));
-
-    for (int l0_idx = 0; l0_idx < 256; ++l0_idx) {
-        if (!(src[l0_idx] & PAGE_PRESENT)) {
-            dst[l0_idx] = 0;
-            continue;
-        }
-
-        if ((src[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-            // 1 GiB block in the USER range — fail closed (issue #325-E:
-            // by-value copy would alias one writable page parent/child).
-            return false;
-        }
-
-        uint64_t src_l1_phys = VMM::sv39_pte_phys(src[l0_idx]);
-        uint64_t dst_l1_phys = PMM::alloc_user_page();
-        if (!dst_l1_phys)
-            return false;
-        auto *dst_l1 =
-            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_l1_phys);
-        __builtin_memset(dst_l1, 0, 4096);
-        dst[l0_idx] = VMM::sv39_phys_pte(dst_l1_phys) | VMM::PAGE_PRESENT;
-
-        auto *src_l1 =
-            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_l1_phys);
-        for (int l1_idx = 0; l1_idx < 512; ++l1_idx) {
-            if (!(src_l1[l1_idx] & PAGE_PRESENT))
-                continue;
-
-            if ((src_l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-                // 2 MiB block in the USER range — fail closed (issue #325-E,
-                // same aliasing rationale as above).
-                return false;
-            }
-
-            uint64_t src_l2_phys = VMM::sv39_pte_phys(src_l1[l1_idx]);
-            uint64_t dst_l2_phys = PMM::alloc_user_page();
-            if (!dst_l2_phys)
-                return false;
-            auto *dst_l2 =
-                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_l2_phys);
-            __builtin_memset(dst_l2, 0, 4096);
-            dst_l1[l1_idx] = VMM::sv39_phys_pte(dst_l2_phys) | VMM::PAGE_PRESENT;
-
-            auto *src_l2 =
-                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_l2_phys);
-            for (int l2_idx = 0; l2_idx < 512; ++l2_idx) {
-                if (!(src_l2[l2_idx] & PAGE_PRESENT))
-                    continue;
-
-                // RISC-V leaf entries have V=1, R|W|X=1.
-                if (VMM::sv39_is_leaf(src_l2[l2_idx])) {
-                    uint64_t src_data = VMM::sv39_pte_phys(src_l2[l2_idx]);
-                    uint64_t flags = src_l2[l2_idx] & 0x3FFULL;
-                    if (!PMM::is_user_page(src_data)) {
-                        dst_l2[l2_idx] = 0;
-                        continue;
-                    }
-                    uint64_t dst_data = PMM::alloc_user_page();
-                    if (!dst_data)
-                        return false;
-                    __builtin_memcpy(
-                        reinterpret_cast<void *>(arch::HHDM_OFFSET + dst_data),
-                        reinterpret_cast<void *>(arch::HHDM_OFFSET + src_data),
-                        4096);
-                    dst_l2[l2_idx] =
-                        VMM::sv39_phys_pte(dst_data) | flags;
-                } else {
-                    // Non-leaf at L2 is invalid in Sv39 (no L3): skip.
-                    dst_l2[l2_idx] = 0;
-                }
-            }
-        }
-    }
-    return true;
-#endif
-}
-
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-/// @brief Translate a virtual address using a specific PML4.
-/// @param virt_addr Virtual address.
-/// @param pml4_phys Physical address of the target PML4.
-/// @return Physical address, or 0 if not mapped.
-uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-#if defined(CONFIG_ARCH_RISCV64)
-    auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (pml4_phys & PAGE_TABLE_ADDR_MASK));
-
-    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
-
-    if (!(l0[l0_idx] & PAGE_PRESENT))
-        return 0;
-    // Issue #206: Sv39 PTE codec (raw & ~0xFFF is x86-domain).
-    auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            VMM::sv39_pte_phys(l0[l0_idx]));
-
-    if (!(l1[l1_idx] & PAGE_PRESENT))
-        return 0;
-    auto *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            VMM::sv39_pte_phys(l1[l1_idx]));
-
-    // Check for 2MB block mapping (leaf at L1 level)
-    if ((l1[l1_idx] & PAGE_PRESENT) &&
-        (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-        return VMM::sv39_pte_phys(l1[l1_idx]) + (virt_addr & 0x1FFFFF);
-    }
-
-    if (!(l2[l2_idx] & PAGE_PRESENT))
-        return 0;
-    // Issue #206: Sv39 has no level below L2 — a V=1,RWX=0 entry here is
-    // invalid (never created by this backend); fail closed, do not descend
-    // into garbage as the old 4-level fallback did.
-    if (!VMM::sv39_is_leaf(l2[l2_idx]))
-        return 0;
-    return VMM::sv39_pte_phys(l2[l2_idx]) + (virt_addr & 0xFFF);
-#else
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                              (pml4_phys & PAGE_TABLE_ADDR_MASK));
-
-    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
-
-    if (!(pml4[pml4_idx] & PAGE_PRESENT))
-        return 0;
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                              (pml4[pml4_idx] & PAGE_TABLE_ADDR_MASK));
-
-    if (!(pdpt[pdpt_idx] & PAGE_PRESENT))
-        return 0;
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK));
-
-#if defined(CONFIG_ARCH_AARCH64)
-    if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
-#else
-    if (pd[pd_idx] & PAGE_HUGE)
-#endif
-    {
-        return (pd[pd_idx] & PAGE_HUGE_FRAME_MASK) + (virt_addr & 0x1FFFFF);
-    }
-
-    if (!(pd[pd_idx] & PAGE_PRESENT))
-        return 0;
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (pd[pd_idx] & PAGE_TABLE_ADDR_MASK));
-
-    if (!(pt[pt_idx] & PAGE_PRESENT))
-        return 0;
-    return (pt[pt_idx] & PAGE_FRAME_MASK) + (virt_addr & 0xFFF);
-#endif
-}
 
 } // namespace kernel
 
@@ -1882,7 +451,7 @@ VmmError VMM::init_err() {
 /// @param user      If true, mark as user-accessible.
 /// @return VmmError code.
 VmmError VMM::map_page_err(uint64_t virt_addr, uint64_t phys_addr, bool user) {
-    if ((virt_addr & 0xFFF) != 0 || (phys_addr & 0xFFF) != 0) {
+    if ((virt_addr & kPageOffsetMask) != 0 || (phys_addr & kPageOffsetMask) != 0) {
         return VMM_ERR_INVALID_ADDR;
     }
     return map_page_try(virt_addr, phys_addr, user);
@@ -1892,7 +461,7 @@ VmmError VMM::map_page_err(uint64_t virt_addr, uint64_t phys_addr, bool user) {
 /// @param virt_addr Virtual address to unmap.
 /// @return VmmError code.
 VmmError VMM::unmap_page_err(uint64_t virt_addr) {
-    if ((virt_addr & 0xFFF) != 0) {
+    if ((virt_addr & kPageOffsetMask) != 0) {
         return VMM_ERR_INVALID_ADDR;
     }
     unmap_page(virt_addr);
@@ -1904,7 +473,7 @@ VmmError VMM::unmap_page_err(uint64_t virt_addr) {
 /// @param[out] out_phys_addr Physical address on success.
 /// @return VmmError code.
 VmmError VMM::virt_to_phys_err(uint64_t virt_addr, uint64_t &out_phys_addr) {
-    if ((virt_addr & 0xFFF) != 0) {
+    if ((virt_addr & kPageOffsetMask) != 0) {
         return VMM_ERR_INVALID_ADDR;
     }
     out_phys_addr = virt_to_phys(virt_addr);
@@ -1933,7 +502,7 @@ VmmError VMM::clone_kernel_pml4_err(uint64_t &out_pml4_phys) {
 VmmError VMM::map_page_in_pml4_err(uint64_t virt_addr, uint64_t phys_addr,
                                     bool user, uint64_t pml4_phys,
                                     bool executable) {
-    if ((virt_addr & 0xFFF) != 0 || (phys_addr & 0xFFF) != 0) {
+    if ((virt_addr & kPageOffsetMask) != 0 || (phys_addr & kPageOffsetMask) != 0) {
         return VMM_ERR_INVALID_ADDR;
     }
     return map_page_in_pml4_try(virt_addr, phys_addr, user, executable,
@@ -1956,139 +525,12 @@ VmmError VMM::free_user_pages_err(uint64_t pml4_phys) {
 /// @return VmmError code.
 VmmError VMM::virt_to_phys_in_pml4_err(uint64_t virt_addr, uint64_t pml4_phys,
                                        uint64_t &out_phys_addr) {
-    if ((virt_addr & 0xFFF) != 0) {
+    if ((virt_addr & kPageOffsetMask) != 0) {
         return VMM_ERR_INVALID_ADDR;
     }
     out_phys_addr = virt_to_phys_in_pml4(virt_addr, pml4_phys);
     return out_phys_addr != 0 ? VMM_ERR_OK : VMM_ERR_NOT_MAPPED;
 }
 
-/// @brief Maps every frame owned by a FrameCap into @p pml4_phys.
-///        Refuses a revoked cap — capability-gated memory must not map after
-///        revocation (ROADMAP 0.4.1 CSpace).  The caller must hold a pin
-///        (ScopedRef / live capability slot) on @p fc.
-bool VMM::map_frame_from_cap(cap::FrameCap *fc, uint64_t virt_addr, bool user,
-                              uint64_t pml4_phys) {
-    return map_frame_from_cap_err(fc, virt_addr, user, pml4_phys) ==
-           errors::VMM_ERR_OK;
-}
-
-errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
-                                             uint64_t phys_addr,
-                                             size_t page_count, bool user,
-                                             uint64_t pml4_phys,
-                                             bool executable) {
-    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0 ||
-        (phys_addr & (arch::PAGE_SIZE - 1)) != 0) {
-        vmm_step(VmmMapSteps::Reject); // issue #347 Slice D
-        vmm_step(VmmMapSteps::Done);
-        return errors::VMM_ERR_INVALID_ADDR;
-    }
-    if (page_count == 0 ||
-        page_count > (UINT64_MAX - virt_addr) / arch::PAGE_SIZE) {
-        vmm_step(VmmMapSteps::Reject); // issue #347 Slice D
-        vmm_step(VmmMapSteps::Done);
-        return errors::VMM_ERR_INVALID_ADDR;
-    }
-    if (page_count > (UINT64_MAX - phys_addr) / arch::PAGE_SIZE) {
-        vmm_step(VmmMapSteps::Reject); // issue #347 Slice D
-        vmm_step(VmmMapSteps::Done);
-        return errors::VMM_ERR_INVALID_ADDR;
-    }
-    vmm_step(VmmMapSteps::Validate); // issue #347 Slice D
-    for (size_t page_idx = 0; page_idx < page_count; ++page_idx) {
-        const uint64_t page_va = virt_addr + page_idx * arch::PAGE_SIZE;
-        const uint64_t page_pa = phys_addr + page_idx * arch::PAGE_SIZE;
-        errors::VmmError step = map_page_in_pml4_try(
-            page_va, page_pa, user, executable, pml4_phys);
-        if (step != errors::VMM_ERR_OK) {
-            for (size_t back = 0; back < page_idx; ++back) {
-                unmap_page_in_pml4(virt_addr + back * arch::PAGE_SIZE,
-                                   pml4_phys);
-            }
-            vmm_step(VmmMapSteps::Rollback); // issue #347 Slice D
-            vmm_step(VmmMapSteps::Done);
-            return step;
-        }
-    }
-    vmm_step(VmmMapSteps::Commit); // issue #347 Slice D
-    vmm_step(VmmMapSteps::Done);
-    return errors::VMM_ERR_OK;
-}
-
-errors::VmmError VMM::map_frame_from_cap_err(cap::FrameCap *fc,
-                                              uint64_t virt_addr, bool user,
-                                              uint64_t pml4_phys,
-                                              bool executable) {
-    if (!fc) {
-        return errors::VMM_ERR_INVALID_ADDR;
-    }
-    if (fc->revoked()) {
-        return errors::VMM_ERR_REVOKED;
-    }
-    if (fc->phys == 0 || fc->count == 0) {
-        return errors::VMM_ERR_EMPTY_RANGE;
-    }
-    return map_phys_range_try(virt_addr, fc->phys, fc->count, user, pml4_phys,
-                              executable);
-}
-
-/// @brief Unmaps one page previously mapped via map_frame_from_cap().
-///        Clear-leaf primitive (issue #325-C): never map-with-zero (that
-///        installs a PRESENT supervisor-writable leaf to physical page
-///        zero — silent kernel NULL-deref access instead of #PF).
-void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
-    // Issue #157 H1 is served by unmap_page_in_pml4's own flush on the
-    // mutating path (no-op paths change nothing and need none).
-    unmap_page_in_pml4(virt_addr, pml4_phys);
-}
-
-/// @brief Maps an MmioCap's memory BAR range into @p pml4_phys.
-bool VMM::map_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr, bool user,
-                             uint64_t pml4_phys) {
-    return map_mmio_from_cap_err(mmio, virt_addr, user, pml4_phys) ==
-           errors::VMM_ERR_OK;
-}
-
-errors::VmmError VMM::map_mmio_from_cap_err(cap::MmioCap *mmio,
-                                             uint64_t virt_addr, bool user,
-                                             uint64_t pml4_phys,
-                                             bool executable) {
-    if (!mmio) {
-        return errors::VMM_ERR_INVALID_ADDR;
-    }
-    if (mmio->revoked()) {
-        return errors::VMM_ERR_REVOKED;
-    }
-    if (mmio->phys == 0 || mmio->size == 0) {
-        return errors::VMM_ERR_EMPTY_RANGE;
-    }
-    if (mmio->bar_type == arch::PciBarType::IO) {
-        return errors::VMM_ERR_INVALID_ADDR; // port I/O is delegated via
-                                             // sys_ioport_grant, not MMIO
-    }
-    if (mmio->size > UINT64_MAX - (arch::PAGE_SIZE - 1)) {
-        return errors::VMM_ERR_INVALID_ADDR;
-    }
-    const size_t pages =
-        (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
-    return map_phys_range_try(virt_addr, mmio->phys, pages, user, pml4_phys,
-                              executable);
-}
-
-/// @brief Unmaps an MmioCap's memory BAR range previously mapped via
-///        map_mmio_from_cap().
-void VMM::unmap_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr,
-                              uint64_t pml4_phys) {
-    if (!mmio || mmio->size == 0)
-        return;
-    const size_t pages =
-        (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
-    for (size_t i = 0; i < pages; ++i) {
-        // Clear-leaf primitive (issue #325-C, same rationale as
-        // unmap_frame_from_cap); per-page flush rides along.
-        unmap_page_in_pml4(virt_addr + i * arch::PAGE_SIZE, pml4_phys);
-    }
-}
 
 } // namespace kernel

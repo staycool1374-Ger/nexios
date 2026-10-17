@@ -529,7 +529,9 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
         PMM::free_page(stub_phys);
         return false;
     }
-    VMM::map_page_in_pml4(kUserYieldStubVa, stub_phys, true, tcb.page_table_);
+    // Issue #363 option-B: stub is executed in user mode — explicit CODE.
+    VMM::map_page_in_pml4(kUserYieldStubVa, stub_phys, true, true,
+                          tcb.page_table_);
 
 #if defined(CONFIG_ARCH_X86_64)
     // The saved iret frame stores the (placeholder kernel) entry in two slots:

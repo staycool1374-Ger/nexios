@@ -71,8 +71,17 @@ void free_priv_window(uint64_t pml4_phys) {
     uint64_t pt_phys = pd[pd_idx] & ~0xFFFULL;
     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
     size_t pt_idx = (PRIV_BASE >> 12) & 0x1FF;
-    if (pt[pt_idx] & P)
-        PMM::free_page(pt[pt_idx] & ~0xFFFULL);
+    // Issue #363 option-B: the leaf may carry NX (x86_64 bit 63) or
+    // UXN/PXN (aarch64) now — raw `& ~0xFFF` keeps those bits and frees a
+    // bogus address (production PAGE_FRAME_MASK strips them; see vmm.hpp).
+    // Reclaim through the canonical translation instead (PRIV_BASE is
+    // page-aligned, so no offset is added).
+    if ((pt[pt_idx] & P) != 0) {
+        uint64_t leaf_phys =
+            VMM::virt_to_phys_in_pml4(PRIV_BASE, pml4_phys);
+        if (leaf_phys != 0)
+            PMM::free_page(leaf_phys);
+    }
     PMM::free_page(pt_phys);
     PMM::free_page(pd_phys);
     PMM::free_page(pdpt_phys);
@@ -177,7 +186,7 @@ JARVIS_TEST(kernel_priv_cross_task_data_isolation,
     JARVIS_ASSERT(priv_phys != 0);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + priv_phys)[0] = 0x00;
-    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, a->page_table_);
+    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, false, a->page_table_);
 
     // Dispatch A: the lambda writes 0xAA through the private VA (with A's
     // PML4 active as CR3, see kernel_priv_cr3_switch_on_dispatch).
@@ -294,7 +303,7 @@ JARVIS_TEST(kernel_priv_teardown_clears_pml4_slot_and_reclaims,
 
     uint64_t priv_phys = PMM::alloc_page();
     JARVIS_ASSERT(priv_phys != 0);
-    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, task_a->page_table_);
+    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, false, task_a->page_table_);
     JARVIS_ASSERT_FMT(
         VMM::virt_to_phys_in_pml4(PRIV_BASE, task_a->page_table_) == priv_phys,
         "PRIV_BASE must resolve after map");
@@ -341,7 +350,7 @@ JARVIS_TEST(kernel_priv_teardown_double_free_safe,
 
     uint64_t priv_phys = PMM::alloc_page();
     JARVIS_ASSERT(priv_phys != 0);
-    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, task_a->page_table_);
+    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, false, task_a->page_table_);
     {
         // NOTE: free_priv_window already reclaims the leaf data page.
         arch::IrqGuard teardown_guard;

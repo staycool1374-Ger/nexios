@@ -132,7 +132,7 @@ JARVIS_TEST(page_tables_max_process_pages_config, "PRE: none | POST: none") {
     // Map a page to verify the page table works
     uint64_t test_pa = PMM::alloc_user_page();
     JARVIS_ASSERT(test_pa != 0);
-    VMM::map_page_in_pml4(0x10000000, test_pa, true, t->page_table_);
+    VMM::map_page_in_pml4(0x10000000, test_pa, true, false, t->page_table_);
     uint64_t resolved = VMM::virt_to_phys_in_pml4(0x10000000, t->page_table_);
     JARVIS_ASSERT_EQ(test_pa, resolved);
     PMM::free_page(test_pa);
@@ -185,7 +185,7 @@ JARVIS_TEST(page_tables_isolation, "PRE: none | POST: none") {
     uint64_t test_va = 0x10000000;
     uint64_t test_pa = PMM::alloc_user_page();
     JARVIS_ASSERT(test_pa != 0);
-    VMM::map_page_in_pml4(test_va, test_pa, true, a->page_table_);
+    VMM::map_page_in_pml4(test_va, test_pa, true, false, a->page_table_);
 
     uint64_t in_a = VMM::virt_to_phys_in_pml4(test_va, a->page_table_);
     JARVIS_ASSERT_FMT(in_a == test_pa,

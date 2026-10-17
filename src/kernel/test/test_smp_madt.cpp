@@ -51,7 +51,7 @@ bool ensure_mb2_readable(uint64_t *mapped_pages_out, size_t *count_out) {
         return false;
     uint64_t active_pml4 = VMM::current_pml4();
     uint64_t base_page = multiboot_info_ptr & ~0xFFFULL;
-    VMM::map_page_in_pml4(base_page, base_page, false, active_pml4);
+    VMM::map_page_in_pml4(base_page, base_page, false, false, active_pml4);
     uint64_t pt = VMM::virt_to_phys_in_pml4(base_page, active_pml4);
     if (pt != base_page)
         return false;
@@ -66,7 +66,7 @@ bool ensure_mb2_readable(uint64_t *mapped_pages_out, size_t *count_out) {
     uint64_t end_page = (end_va + 0xFFFULL) & ~0xFFFULL;
     for (uint64_t page = base_page + 0x1000ULL; page < end_page;
          page += 0x1000ULL) {
-        VMM::map_page_in_pml4(page, page, false, active_pml4);
+        VMM::map_page_in_pml4(page, page, false, false, active_pml4);
         uint64_t check = VMM::virt_to_phys_in_pml4(page, active_pml4);
         if (check != page)
             return false;

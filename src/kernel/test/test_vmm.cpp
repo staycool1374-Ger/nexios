@@ -59,12 +59,12 @@ JARVIS_TEST(vmm_map_already_mapped, "PRE: none | POST: none") {
     uint64_t va = 0x400000ULL;  // user-space address (PML4 entry 0)
     uint64_t phys1 = PMM::alloc_page();
     JARVIS_ASSERT(phys1 != 0);
-    VMM::map_page_in_pml4(va, phys1, false, pml4);
+    VMM::map_page_in_pml4(va, phys1, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == phys1);
 
     uint64_t phys2 = PMM::alloc_page();
     JARVIS_ASSERT(phys2 != 0);
-    VMM::map_page_in_pml4(va, phys2, false, pml4);
+    VMM::map_page_in_pml4(va, phys2, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == phys2);
 
     VMM::free_user_pages(pml4);
@@ -83,7 +83,7 @@ JARVIS_TEST(vmm_map_page_null_phys, "PRE: none | POST: none") {
     uint64_t pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(pml4 != 0);
     uint64_t va = 0x401000ULL;  // user-space address (PML4 entry 0)
-    VMM::map_page_in_pml4(va, 0, false, pml4);
+    VMM::map_page_in_pml4(va, 0, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == 0);
     VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
@@ -213,11 +213,11 @@ JARVIS_TEST(vmm_huge_page_split_corner, "PRE: none | POST: none") {
     uint64_t va = 0x200000;
     uint64_t phys = PMM::alloc_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(va, phys, false, pml4);
+    VMM::map_page_in_pml4(va, phys, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == phys);
     uint64_t phys2 = PMM::alloc_page();
     JARVIS_ASSERT(phys2 != 0);
-    VMM::map_page_in_pml4(va + 0x1000, phys2, false, pml4);
+    VMM::map_page_in_pml4(va + 0x1000, phys2, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va + 0x1000, pml4) == phys2);
     VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
@@ -242,7 +242,7 @@ JARVIS_TEST(vmm_free_user_pages_skips_kernel_owned_entries,
     JARVIS_ASSERT(pml4 != 0);
     uint64_t user_page = PMM::alloc_user_page();
     JARVIS_ASSERT(user_page != 0);
-    VMM::map_page_in_pml4(0x8000000000ULL, user_page, true, pml4);
+    VMM::map_page_in_pml4(0x8000000000ULL, user_page, true, false, pml4);
     VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
     JARVIS_TEST_PASS();
@@ -259,7 +259,7 @@ JARVIS_TEST(vmm_free_user_pages_fork_stack_scenario, "PRE: none | POST: none") {
     JARVIS_ASSERT(pml4 != 0);
     uint64_t stack_page = PMM::alloc_user_page();
     JARVIS_ASSERT(stack_page != 0);
-    VMM::map_page_in_pml4(mem::STACK_VADDR, stack_page, true, pml4);
+    VMM::map_page_in_pml4(mem::STACK_VADDR, stack_page, true, false, pml4);
     VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
     JARVIS_TEST_PASS();

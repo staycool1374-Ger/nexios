@@ -35,10 +35,12 @@ class MmioCap;
 }
 
 /// @brief Virtual memory manager — maps virtual to physical pages.
+/// @note Naming (issue #363): `pml4` names the page-table ROOT cross-arch
+///       (x86_64 PML4, aarch64 L0, riscv64 Sv39 L0) — not the Intel format.
 /// @note Page-walk depth is fixed per architecture (4 levels for
 /// x86_64/aarch64,
 ///       3 levels for riscv64 Sv39).  Huge-page split (512 iterations) occurs
-///       at most once per 2 MB region.  Both walks are bounded, meeting hard-RT
+///       at most once per 2 MB region.  Both walks are bounded, meeting hard-RT
 ///       WCET requirements for map_page / map_page_in_pml4.
 /// @note Supports user/kernel page flags, TLB flush after each mapping.
 class VMM {
@@ -172,13 +174,6 @@ class VMM {
     ///        not panic (paper §4 row 2).
     static void assert_kernel_half_converged(uint64_t child_pml4);
 
-    /// @brief Maps a page into a specific page table (not the kernel one).
-    /// @param virt_addr Virtual address (page-aligned).
-    /// @param phys_addr Physical address (page-aligned).
-    /// @param user      If true, sets user-accessible flag.
-    /// @param pml4_phys Physical address of the target PML4.
-    static void map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr,
-                                 bool user, uint64_t pml4_phys);
     /// @brief Maps a page into a specific page table with explicit W^X
     ///        permission (VULN-H1).  When @p executable is false the
     ///        architectural NX bit is set (x86_64 bit 63, aarch64 bit 54)
@@ -468,6 +463,8 @@ class VMM {
     static constexpr uint64_t PAGE_WRITE = 1ULL << 1;
     static constexpr uint64_t PAGE_USER = 1ULL << 2;
     static constexpr uint64_t PAGE_HUGE = 1ULL << 7;
+    // NX lives in the x86_64 HAL (arch::ArchPageTable::NX, issue #363 P3):
+    // it is an x86-PTE encoding bit, not VMM vocabulary.
 #endif
 
 #if defined(CONFIG_ARCH_AARCH64)
@@ -492,6 +489,10 @@ class VMM {
     static constexpr uint64_t PAGE_HUGE_FRAME_MASK = 0x000FFFFFFFE00000ULL;
 #endif
 
+  public:
+    // Sv39 index geometry is public (issue #363 P3): shared TU code
+    // (vmm_internal.hpp static_asserts, riscv walks) addresses tables
+    // through these; the HAL keeps its own private copies.
 #if defined(CONFIG_ARCH_RISCV64)
     // Sv39: 3-level page table
     // L0 (1GB): bits 38:30
@@ -506,6 +507,7 @@ class VMM {
     static constexpr uint64_t L2_MASK = TABLE_MASK << L2_SHIFT;
 #endif
 
+  private:
     static constinit uint64_t kernel_pml4_;
 
     /// @brief Bring-up snapshot of the kernel PML4's kernel half
@@ -614,7 +616,27 @@ class VMM {
     /// @brief True when @p entry points at a next-level table (issue
     ///        #96).  Arch-aware leaf detection (x86_64 PS bit, RISC-V
     ///        R|W|X, AArch64 descriptor type); level 3 is always a leaf.
+    ///        Delegates the arch arm to vmm_arch_is_table (per-arch TU).
     static bool is_table_entry(uint64_t entry, unsigned level);
+    /// @brief Arch leaf-codec helpers (issue #363 P2/P4): one definition
+    ///        per arch TU (vmm_x86_64/aarch64/riscv64.cpp, guards-in-file),
+    ///        bit-identical to the pre-split inline encodings. Shared walk
+    ///        skeletons (policy: snapshot pairing, ENSURE, drop notes) call
+    ///        these; walk SHAPES stay shared (documented VMM-private residual).
+    ///        NOT HAL attr_from_flags: HAL adds SH/NS + AP policy the VMM map
+    ///        path deliberately omits, so rewiring would change PTE bits.
+    static bool vmm_arch_is_table(uint64_t entry);
+    static uint64_t vmm_arch_table_child(uint64_t entry);
+    static bool vmm_arch_split_needed(uint64_t entry);
+    static void vmm_arch_split_fill(uint64_t *new_table, uint64_t src_entry);
+    static uint64_t vmm_arch_table_link(uint64_t new_phys);
+    static uint64_t vmm_arch_encode_kernel_leaf(uint64_t phys, bool user);
+    static uint64_t vmm_arch_encode_map_leaf(uint64_t phys, bool user,
+                                             bool executable);
+    static uint64_t vmm_arch_encode_ro(uint64_t leaf, bool executable);
+    static bool vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out);
+    static bool vmm_arch_leaf_is_executable(uint64_t leaf);
+    static uint64_t vmm_arch_block_base(uint64_t entry, bool huge);
     /// @brief Recursive merge worker (issue #96): converge @p dst_table
     ///        toward @p src_table over [@p start, 512).  Zero allocations.
     static void merge_table_level(uint64_t *src_table, uint64_t *dst_table,

@@ -218,7 +218,7 @@ JARVIS_TEST(pml4_fork_user_entries_match, "PRE: none | POST: none") {
     constexpr uint64_t TEST_VA = 0x400000;
     uint64_t user_page = PMM::alloc_user_page();
     JARVIS_ASSERT(user_page != 0);
-    VMM::map_page_in_pml4(TEST_VA, user_page, true, parent_pml4);
+    VMM::map_page_in_pml4(TEST_VA, user_page, true, false, parent_pml4);
 
     // v0.4.0 MP-7 fork semantics: deep copy, never shared tables.
     JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
@@ -306,7 +306,7 @@ JARVIS_TEST(pml4_fork_no_child_corrupt_parent, "PRE: none | POST: none") {
     uint64_t child_va = 0x7FFF00000000ULL;
     uint64_t child_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(child_phys != 0);
-    VMM::map_page_in_pml4(child_va, child_phys, true, child_pml4);
+    VMM::map_page_in_pml4(child_va, child_phys, true, false, child_pml4);
 
     // Verify child can translate the new mapping
     uint64_t translated = VMM::virt_to_phys_in_pml4(child_va, child_pml4);
@@ -359,7 +359,7 @@ JARVIS_TEST(pml4_deep_copy_no_alias, "PRE: none | POST: none") {
     auto *parent_frame =
         reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + parent_phys);
     parent_frame[0] = 0x5A;
-    VMM::map_page_in_pml4(TEST_VA, parent_phys, true, parent_pml4);
+    VMM::map_page_in_pml4(TEST_VA, parent_phys, true, false, parent_pml4);
 
     // Deep-copy user entries from parent to child.
     JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
@@ -415,7 +415,7 @@ JARVIS_TEST(pml4_free_user_pages_shared_safe, "PRE: none | POST: none") {
     constexpr uint64_t va = 0x10000000;
     uint64_t user_page = PMM::alloc_user_page();
     JARVIS_ASSERT(user_page != 0);
-    VMM::map_page_in_pml4(va, user_page, true, parent_pml4);
+    VMM::map_page_in_pml4(va, user_page, true, false, parent_pml4);
 
     JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
 
@@ -616,7 +616,7 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
     parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
     uint64_t phys = PMM::alloc_user_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, phys, true, parent->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->page_table_);
 
     Scheduler::add_task(*parent);
     Scheduler::reschedule();
@@ -705,7 +705,7 @@ JARVIS_TEST(fork_free_user_pages_child_deepcopy, "PRE: none | POST: none") {
     parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
     uint64_t phys = PMM::alloc_user_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, phys, true, parent->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->page_table_);
 
     Scheduler::add_task(*parent);
     Scheduler::reschedule();
@@ -845,7 +845,7 @@ JARVIS_TEST(fork_deep_copy_huge_fails_closed, "PRE: none | POST: none") {
     constexpr uint64_t HUGE_VA = 0x400000ULL;
     uint64_t scratch_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(scratch_phys != 0);
-    VMM::map_page_in_pml4(HUGE_VA, scratch_phys, true, parent_pml4);
+    VMM::map_page_in_pml4(HUGE_VA, scratch_phys, true, false, parent_pml4);
     VMM::unmap_page_in_pml4(HUGE_VA, parent_pml4);
     PMM::free_page(scratch_phys);
     uint64_t huge_phys = PMM::alloc_user_page();
@@ -921,7 +921,7 @@ JARVIS_TEST(fork_deep_copy_oom_reclaimed, "PRE: none | POST: none") {
     constexpr uint64_t VA = 0x400000ULL;
     uint64_t data_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(data_phys != 0);
-    VMM::map_page_in_pml4(VA, data_phys, true, parent_pml4);
+    VMM::map_page_in_pml4(VA, data_phys, true, false, parent_pml4);
 
     arch::IrqGuard drain_guard;
     PMM::rebuild_free_list();
