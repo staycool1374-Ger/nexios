@@ -3714,3 +3714,8 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-17 21:14:49 core PASSED: 578 FAILED: 0 TIME: 47678ms STATUS: STALL-RECOVERED-harness-retry-green
 2026-10-17 21:18:47 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3252ms STATUS: post-S3-comment-fix-rerun
 2026-10-17 21:18:47 task_lifecycle PASSED: 9 FAILED: 0 TIME: 643ms STATUS: post-S3-comment-fix-rerun
+2026-10-17 22:06:21 elf_loader PASSED: 25 FAILED: 0 TIME: 2303ms
+2026-10-17 22:06:21 scheduler_zombie PASSED: 4 FAILED: 1 TIME: 3119ms STATUS: FAIL-zombie_cleanup_step_frees_resources-known-reaper-flake-elapsed-from-identical-binary-rerun
+2026-10-17 22:06:21 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3119ms STATUS: STALL-RECOVERED-identical-binary-green
+2026-10-17 22:12:24 core PASSED: 0 FAILED: 0 TIME: 238s STATUS: PANIC-GPF-snap_budget_of-0xDD-poisoned-server-harness-watchdog-kill-load-5
+2026-10-17 22:12:24 core PASSED: 578 FAILED: 0 TIME: 47727ms STATUS: identical-binary-rerun-green-load-2
