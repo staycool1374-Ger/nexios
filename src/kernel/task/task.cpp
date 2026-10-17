@@ -534,8 +534,8 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
 #if defined(CONFIG_ARCH_X86_64)
     // The saved iret frame stores the (placeholder kernel) entry in two slots:
     // the iret RIP and the SysV rdi copy.  The placeholder is a kernel
-    // higher-half address (>= 0xFFFF800000000000); the stub is a low user VA.
-    constexpr uint64_t kKernelHigherHalf = 0xFFFF800000000000ULL;
+    // higher-half address (>= CONFIG_HHDM_OFFSET); the stub is a low user VA.
+    constexpr uint64_t kKernelHigherHalf = CONFIG_HHDM_OFFSET;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *frame = reinterpret_cast<uint64_t *>(tcb.context.rsp);
     size_t slots = (tcb.kernel_stack_top - tcb.context.rsp) / sizeof(uint64_t);
@@ -1989,7 +1989,7 @@ void TaskControlBlock::cleanup() noexcept {
     // queue owner's cleanup() will walk a dangling pointer after we are
     // freed and poisoned.
     if (blocked_on_queue && reinterpret_cast<uintptr_t>(blocked_on_queue) >=
-                                0xFFFF800000000000ULL) {
+                                CONFIG_HHDM_OFFSET) {
         auto &q = *blocked_on_queue;
         if (TaskControlBlock::is_valid(q.blocked_senders_head) &&
             q.blocked_senders_head == this) {
@@ -2023,24 +2023,24 @@ void TaskControlBlock::cleanup() noexcept {
     // wake paths.  The higher-half range check mirrors the blocked_on_queue
     // validation above (objects live in kernel/HHDM space, never low VA).
     if (waiting_on_mutex && reinterpret_cast<uintptr_t>(waiting_on_mutex) >=
-                                0xFFFF800000000000ULL) {
+                                CONFIG_HHDM_OFFSET) {
         waiting_on_mutex->remove_waiter(*this);
         waiting_on_mutex = nullptr;
     }
     if (waiting_on_semaphore &&
         reinterpret_cast<uintptr_t>(waiting_on_semaphore) >=
-            0xFFFF800000000000ULL) {
+            CONFIG_HHDM_OFFSET) {
         waiting_on_semaphore->remove_waiter(*this);
         waiting_on_semaphore = nullptr;
     }
     if (waiting_on_eventgroup &&
         reinterpret_cast<uintptr_t>(waiting_on_eventgroup) >=
-            0xFFFF800000000000ULL) {
+            CONFIG_HHDM_OFFSET) {
         waiting_on_eventgroup->remove_waiter(*this);
         waiting_on_eventgroup = nullptr;
     }
     if (waiting_on_queue && reinterpret_cast<uintptr_t>(waiting_on_queue) >=
-                                0xFFFF800000000000ULL) {
+                                CONFIG_HHDM_OFFSET) {
         waiting_on_queue->remove_waiter(*this);
         waiting_on_queue = nullptr;
     }

@@ -41,8 +41,9 @@ namespace {
 bool scan_candidate(const TaskControlBlock *t) noexcept {
     if (!t)
         return false;
-    if (reinterpret_cast<uint64_t>(t) < 0xFFFF800000000000ULL)
-        return false;
+    // Issue #323: is_valid() already performs the kernel-half range check
+    // (TaskControlBlock::is_kernel_pointer) before touching t->magic, so the
+    // former duplicated literal compare here is redundant.
     if (!TaskControlBlock::is_valid(t))
         return false;
     if (Scheduler::is_idle_task(t))

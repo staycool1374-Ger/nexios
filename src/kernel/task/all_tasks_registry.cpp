@@ -9,10 +9,10 @@ namespace kernel {
 // come first: a corrupted list pointer (e.g. a freed/overwritten node whose
 // pri_next_/pri_prev_ holds a low poison value such as 0x55) would otherwise
 // fault with a General-Protection Fault the moment we read t->magic.
+// Issue #323: delegate to the single arch-independent validator
+// (TaskControlBlock::is_valid) instead of re-spelling the kernel-half compare.
 static inline bool safe_tcb(const TaskControlBlock *t) noexcept {
-    if (reinterpret_cast<uint64_t>(t) < 0xFFFF800000000000ULL)
-        return false;
-    return t->magic == TaskControlBlock::TCB_MAGIC;
+    return TaskControlBlock::is_valid(t);
 }
 
 // Highest safe chain head at bucket index <= top (issue #255 H8: shared by
@@ -37,7 +37,7 @@ static void diag_check_tails(uint64_t prio, const TaskControlBlock *ptr,
                              const char *caller) noexcept {
     if (!ptr)
         return;
-    if (reinterpret_cast<uint64_t>(ptr) < 0xFFFF800000000000ULL) {
+    if (!TaskControlBlock::is_kernel_pointer(ptr)) {
         Logger::raw_write("[TAILS] CORRUPT by ");
         Logger::raw_write(caller);
         Logger::raw_write(": tails_[");

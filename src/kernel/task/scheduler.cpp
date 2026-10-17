@@ -497,7 +497,8 @@ uint64_t Scheduler::effective_priority(const TaskControlBlock *t) noexcept {
     arch::IrqGuard irq_guard{};
     if (t && t->get_sporadic_server()) {
         uintptr_t ss = reinterpret_cast<uintptr_t>(t->get_sporadic_server());
-        if (ss < 0xFFFF800000000000ULL)
+        if (!TaskControlBlock::is_kernel_pointer(
+                reinterpret_cast<const void *>(ss)))
             return t->priority;
         const uint64_t *vp = reinterpret_cast<const uint64_t *>(ss);
         if (*vp == 0xDDDDDDDDDDDDDDDDULL)
@@ -4051,7 +4052,7 @@ static bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
     }
     auto caddr = reinterpret_cast<uint64_t>(current);
     auto naddr = reinterpret_cast<uint64_t>(next);
-    if (caddr < 0xFFFF800000000000ULL) {
+    if (caddr < CONFIG_HHDM_OFFSET) {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": current low 0x");
@@ -4059,7 +4060,7 @@ static bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
         Logger::raw_write("\n");
         return false;
     }
-    if (naddr < 0xFFFF800000000000ULL) {
+    if (naddr < CONFIG_HHDM_OFFSET) {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": next low 0x");
@@ -4315,7 +4316,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                 uint64_t cr3 = 0;
                 asm volatile("mov %%cr3, %0" : "=r"(cr3));
                 uint64_t kva = reinterpret_cast<uint64_t>(current->kernel_stack);
-                const uint64_t HHDM = 0xFFFF800000000000ULL;
+                const uint64_t HHDM = CONFIG_HHDM_OFFSET;
                 uint64_t l4e = *reinterpret_cast<const uint64_t *>(
                     HHDM + (cr3 & 0xFFFFFFFFFF000ULL) +
                     ((kva >> 39) & 0x1FF) * 8);
