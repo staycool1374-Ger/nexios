@@ -16,4 +16,18 @@ namespace kernel::sched_debug {
 ///        relaxed atomics.
 extern uint64_t debug_tick_pc_[CONFIG_MAX_CPUS];
 
+/// @brief TEMP DEBUG (BUGS.md#020): detect a SporadicServer pointer that
+///        aliases a freed/poisoned MemPool block.  Single definition lives
+///        in scheduler_debug.cpp; scheduler.cpp observes it via using-decl.
+bool is_poisoned_block(const void *p) noexcept;
+
+#if defined(CONFIG_DEBUG)
+// Issue #299/#280 stall diagnostics: count timer-tick dispatcher entries
+// and actual switch_to_task calls (owned by the diagnostics tail in
+// scheduler_debug.cpp; incremented from on_tick/switch paths).
+extern uint64_t g_diag_rms_count;
+extern uint64_t g_diag_switch_count;
+extern uint64_t g_diag_tick_count;
+#endif
+
 }  // namespace kernel::sched_debug
