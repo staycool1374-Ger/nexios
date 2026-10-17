@@ -26,6 +26,7 @@
 #include <kernel/task/scheduler_admission_internal.hpp> // issue #323 admission
 #include <kernel/task/scheduler_debug_internal.hpp> // issue #323 debugger
 #include <kernel/task/scheduler_lifecycle_internal.hpp> // issue #323 lifecycle
+#include <kernel/task/scheduler_switch_internal.hpp> // issue #323 switch engine (shared decls)
 #include <kernel/task/scheduler_path.hpp>      // issue #347 Slice B
 #include <kernel/task/idle_monitor.hpp>
 #include <kernel/log/dmesg.hpp>
@@ -616,9 +617,8 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
     enqueue_ready(task);
 }
 
-// Forward declaration — defined later in this translation unit.
-static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
-                           sync::SpinLock *held_lock);
+// switch_to_task/charge_exec are declared in scheduler_switch_internal.hpp
+// (shared with the extracted scheduler_terminate.cpp TU).
 
 /// @brief Bill (ns_monotonic() - exec_stamp_ns) into the task's executed-ns
 ///        totals (issue #21 — feeds admission, WCET validation, SYS_TIMES).
@@ -628,7 +628,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
 ///        Caller must hold scheduler_lock_ (or run IRQ-off on the tick path)
 ///        so the add+restamp is atomic — never double-charge, never lose.
 /// @param t Task to charge (must be the running task or a terminating task).
-static void charge_exec(TaskControlBlock &t) noexcept {
+void charge_exec(TaskControlBlock &t) noexcept {
     const uint64_t now = arch::Timer::ns_monotonic();
     if (t.exec_stamp_ns == 0) {
         t.exec_stamp_ns = now;
@@ -653,116 +653,6 @@ static void charge_exec(TaskControlBlock &t) noexcept {
 /// @param t Task being dispatched.
 static void stamp_exec(TaskControlBlock &t) noexcept {
     t.exec_stamp_ns = arch::Timer::ns_monotonic();
-}
-
-errors::SchedulerError
-Scheduler::terminate_err(TaskControlBlock &task,
-                         uint64_t exit_code) noexcept {
-    arch::IrqGuard irq_guard{};
-    // Issue #197: refuse to terminate a task that is current on ANOTHER
-    // CPU (evaluated before taking scheduler_lock_ — leaf-only reads, no
-    // new lock takes). Freeing an AP-live stack poisons the running task
-    // (GPF in edf_remove / switch-corruption ENSURE under -smp 2).
-    // Self-termination always succeeds (exempted below). No mutation on
-    // refusal: no dequeue, no state write, no release, no reaper poke.
-    if (is_current_on_any_cpu(&task) && &task != current_task()) {
-        kernel::Logger::warn("sched: terminate id=%u refused (remote-current)",
-                             static_cast<unsigned>(task.id));
-        // Issue #234: fail-closed refusal enters the ring as WARN.
-        log::dmesg_push_sev(log::ErrorSubsystem::SCHED,
-                            log::kDmesgBase_SCHED + 14, log::LogSeverity::WARN,
-                            task.name, task.id);
-        return errors::SCHED_ERR_REMOTE_CURRENT;
-    }
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
-    charge_exec(task); // issue #21: bill the final partial quantum (no loss)
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    if (task.id == 6) {
-        auto *cur = current_task();
-        kernel::Logger::raw_write("[H2-TERM6] cur=");
-        kernel::Logger::print_dec(cur ? cur->id : 0u);
-        kernel::Logger::raw_write(" st=");
-        kernel::Logger::print_dec(static_cast<uint64_t>(task.state));
-        kernel::Logger::raw_write(" inrq=");
-        kernel::Logger::print_dec(task.in_ready_queue_ ? 1u : 0u);
-        kernel::Logger::raw_write(" rq_prio=");
-        kernel::Logger::print_dec(task.rq_priority_);
-        kernel::Logger::raw_write(" tick=");
-        kernel::Logger::print_dec(arch::Timer::ticks());
-        kernel::Logger::raw_write("\n");
-    }
-#endif
-    dequeue_ready(task);
-    task.state = TaskState::TERMINATED;
-    task.exit_code = exit_code;
-    // If the parent is blocked in waitpid for this child, wake it now so it
-    // does not deadlock waiting for a child that exited without sys_exit.
-    wake_waiting_parent(task);
-
-    // Release into the zombie list for deferred cleanup by the idle task.
-    // For non-self termination this is the final step.
-    // For self-termination we call it before the context switch: it removes
-    // the task from scheduler tables (all_tasks_, deadline_list_, id_table_)
-    // but does NOT free the kernel stack or TCB — those remain valid until
-    // idle's cleanup_step() calls cleanup() + MemPool::free().  The context
-    // switch only reads task.context for the save, so the table removal is
-    // safe before switch_to_task.
-    release_zombie(task);
-
-    // Issue #155: prompt the PID 1 reaper after every zombie birth
-    // (unconditional — spurious wakes are harmless under its
-    // level-triggered drain loop).  Placed after the list push above
-    // so wake-then-miss is impossible.  Same IrqGuard + scheduler_lock_
-    // region (global→leaf order: notify takes only its leaf lock).
-    // Deadlock-free by affinity clamping: set_affinity always clamps
-    // masks to up-CPUs, so the reaper's target is either here
-    // (lock-free enqueue_ready) or a booted AP (mailbox+IPI) — never
-    // the down-CPU direct-enqueue branch that would retake this lock.
-    if (task.id != 1) {
-        if (auto *reaper = Scheduler::find_task(1))
-            reaper->notify.notify(1);
-    }
-
-    // If the terminating task is the one currently on the CPU, arrange for a
-    // context switch to a valid successor on the next ISR.  Otherwise
-    // current_task() stays parked on a TERMINATED task and the running RSP
-    // is later saved into its dead context, which can wedge the scheduler in
-    // the idle loop (observed as the `all` suite hanging at the atomic
-    // context-switch tests).
-    if (&task == current_task()) {
-    // peek the highest-priority ready task without dequeuing it.
-    // next_task() would dequeue, but reschedule() never dispatches —
-    // it only requests a deferred switch (INV-4).  Dequeuing here would
-    // orphan the task until the next lazy rebuild, causing the calling
-    // test's tight `while (state != TERMINATED) reschedule();` loop to
-    // constantly dequeue → lazy-rebuild → dequeue (infinite livelock).
-    // Issue #19: consult the EDF queue first — it is invisible to the
-    // bitmap peek, and stranding an EDF successor wedges the same way.
-    auto *next = edf_peek_valid_own();
-    if (next == nullptr)
-        next = rq_own().peek_highest();
-    if (next && next != &task) {
-        switch_to_task(&task, *next, nullptr);
-    }
-    }
-    return errors::SCHED_ERR_OK;
-}
-
-void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
-    // Void legacy wrapper: refusal is fail-closed warn-only (all existing
-    // callers are own-CPU paths where refusal is unreachable). Fallible
-    // callers use terminate_err directly.
-    const errors::SchedulerError err = terminate_err(task, exit_code);
-    if (err != errors::SCHED_ERR_OK) {
-        kernel::Logger::warn("sched: terminate id=%u refused (err=%u)",
-                             static_cast<unsigned>(task.id),
-                             static_cast<unsigned>(err));
-        // Issue #234: refusal code enters the ring (canonical SCHED nr).
-        log::dmesg_push_sev(
-            log::ErrorSubsystem::SCHED,
-            log::kDmesgBase_SCHED + static_cast<uint64_t>(err),
-            log::LogSeverity::WARN, task.name, task.id);
-    }
 }
 
 void Scheduler::read_times(TaskControlBlock &task, TaskTimes &out) noexcept {
@@ -2121,8 +2011,8 @@ static uint16_t publish_pcid_for(TaskControlBlock &next) noexcept {
 }
 #endif
 
-static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
-                           sync::SpinLock *held_lock = nullptr) {
+void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+                    sync::SpinLock *held_lock = nullptr) {
 #if defined(CONFIG_DEBUG)
     ++g_diag_switch_count;
 #endif

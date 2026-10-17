@@ -3733,3 +3733,7 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-17 23:19:39 core PASSED: 578 FAILED: 0 TIME: 47497ms STATUS: STALL-RECOVERED-identical-binary-green
 2026-10-17 23:30:02 core PASSED: 577 FAILED: 1 TIME: 34000ms STATUS: FAIL-scheduler_add_duplicate_id-196-timing-flake-under-load-6-elapsed-approx-full-suite-run
 2026-10-17 23:30:02 core PASSED: 578 FAILED: 0 TIME: 47965ms STATUS: identical-binary-green
+2026-10-17 23:42:23 scheduler_core PASSED: 21 FAILED: 0 TIME: 1839ms
+2026-10-17 23:42:23 task_core PASSED: 7 FAILED: 0 TIME: 491ms
+2026-10-17 23:42:23 core PASSED: 577 FAILED: 1 TIME: 34000ms STATUS: FAIL-debug_launch_entry_trap_parks-552-known-H2-flake-host-load-4-elapsed-approx-full-suite-run
+2026-10-17 23:42:23 core PASSED: 578 FAILED: 0 TIME: 47929ms STATUS: identical-binary-green
