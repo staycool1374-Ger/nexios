@@ -3749,3 +3749,5 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-17 23:15:00 task_core PASSED: 7 FAILED: 0 TIME: 496ms
 2026-10-17 23:15:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1844ms STATUS: registry-strand-smoke
 2026-10-17 23:15:00 task_lifecycle PASSED: 9 FAILED: 0 TIME: 637ms
+2026-10-17 23:25:00 task_core PASSED: 7 FAILED: 0 TIME: 492ms STATUS: snapshot-strand
+2026-10-17 23:25:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1928ms STATUS: snapshot-strand-smoke
