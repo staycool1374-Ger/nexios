@@ -21,7 +21,8 @@
 ///        rate-monotonic dispatch, context switching, and test isolation.
 
 #include <kernel/task/scheduler.hpp>
-#include <kernel/task/scheduler_path.hpp> // issue #347 Slice B
+#include <kernel/task/scheduler_integrity.hpp> // issue #323 validators
+#include <kernel/task/scheduler_path.hpp>      // issue #347 Slice B
 #include <kernel/task/idle_monitor.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/elf/elf.hpp>
@@ -161,22 +162,11 @@ constexpr size_t IRET_SS_IDX = 168 / 8;     ///< SS.
 
 namespace kernel {
 
-// Architecture-aware stack pointer access.  Returns a reference so the
-// address-of usage `&task_stack_ptr(t)` (switch_to_task's save target) keeps
-// writing the live TCB field (audit-scheduler-tasks LOW: macro → inline fn).
-static inline uint64_t &task_stack_ptr(TaskControlBlock *t) noexcept {
-#if defined(CONFIG_ARCH_X86_64)
-    return t->context.rsp;
-#elif defined(CONFIG_ARCH_AARCH64)
-    return t->context.sp_el0;
-#elif defined(CONFIG_ARCH_RISCV64)
-    return t->context.sp;
-#else
-    static uint64_t dummy = 0;
-    (void)t;
-    return dummy;
-#endif
-}
+// Issue #323: the kernel-stack pointer accessor and the context-switch
+// validators live in scheduler_integrity.{hpp,cpp} (single home).  Import
+// them so the existing unqualified call sites in this TU stay unchanged.
+using sched_verify::task_stack_ptr;
+using sched_verify::validate_switch;
 
 // Deferred-switch event codes for the H2 ring (see kernel::debug::H2Event).
 inline constexpr uint64_t H2_EV_ARM      = 1;
@@ -3945,25 +3935,7 @@ static void report_corruption(const char *label) {
 #endif
 }
 
-static bool rsp_in_stack_range(uint64_t rsp, const TaskControlBlock *t,
-                               const char *label) {
-    auto base = reinterpret_cast<uint64_t>(t->kernel_stack);
-    auto top = t->kernel_stack_top;
-    if (rsp >= base && rsp <= top)
-        return true;
-    if (rsp < base)
-        return false;
-    Logger::raw_write("[SCHED] ");
-    Logger::raw_write(label);
-    Logger::raw_write(": task id=");
-    Logger::print_dec(t->id);
-    Logger::raw_write(" rsp=0x");
-    Logger::print_hex(rsp);
-    Logger::raw_write(" above stack top 0x");
-    Logger::print_hex(top);
-    Logger::raw_write("\n");
-    return false;
-}
+// Issue #323: rsp_in_stack_range() lives in scheduler_integrity.cpp.
 
 /// @brief Returns true when the live RSP belongs to the kernel boot stack
 ///        (kernel-image space), i.e. the physically-running harness.
@@ -4030,83 +4002,7 @@ static void restore_preempted_current(TaskControlBlock *current,
     }
 }
 
-static bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
-                            const char *label) {
-    if (!current) {
-        Logger::raw_write("[SCHED] ");
-        Logger::raw_write(label);
-        Logger::raw_write(": current=null\n");
-        return false;
-    }
-    if (!next) {
-        Logger::raw_write("[SCHED] ");
-        Logger::raw_write(label);
-        Logger::raw_write(": next=null\n");
-        return false;
-    }
-    if (current->magic != TaskControlBlock::TCB_MAGIC) {
-        Logger::raw_write("[SCHED] ");
-        Logger::raw_write(label);
-        Logger::raw_write(": current magic invalid\n");
-        return false;
-    }
-    auto caddr = reinterpret_cast<uint64_t>(current);
-    auto naddr = reinterpret_cast<uint64_t>(next);
-    if (caddr < CONFIG_HHDM_OFFSET) {
-        Logger::raw_write("[SCHED] ");
-        Logger::raw_write(label);
-        Logger::raw_write(": current low 0x");
-        Logger::print_hex(caddr);
-        Logger::raw_write("\n");
-        return false;
-    }
-    if (naddr < CONFIG_HHDM_OFFSET) {
-        Logger::raw_write("[SCHED] ");
-        Logger::raw_write(label);
-        Logger::raw_write(": next low 0x");
-        Logger::print_hex(naddr);
-        Logger::raw_write("\n");
-        return false;
-    }
-    if (current->magic != TaskControlBlock::TCB_MAGIC) {
-        Logger::raw_write("[SCHED] ");
-        Logger::raw_write(label);
-        Logger::raw_write(": current magic=0x");
-        Logger::print_hex(current->magic);
-        Logger::raw_write("\n");
-        return false;
-    }
-    if (next->magic != TaskControlBlock::TCB_MAGIC) {
-        Logger::raw_write("[SCHED] ");
-        Logger::raw_write(label);
-        Logger::raw_write(": next magic=0x");
-        Logger::print_hex(next->magic);
-        Logger::raw_write("\n");
-        return false;
-    }
-    if (!Scheduler::is_idle_task(next) &&
-        !rsp_in_stack_range(task_stack_ptr(next), next, label)) {
-        if (task_stack_ptr(next) <
-            reinterpret_cast<uint64_t>(next->kernel_stack)) {
-            return true;
-        }
-        Logger::raw_write("[SCHED] ");
-        Logger::raw_write(label);
-        Logger::raw_write(": current id=");
-        Logger::print_dec(current->id);
-        Logger::raw_write(" rsp=0x");
-        Logger::print_hex(task_stack_ptr(current));
-        Logger::raw_write(" state=");
-        Logger::print_dec(static_cast<uint64_t>(current->state));
-        Logger::raw_write(" kstack=[0x");
-        Logger::print_hex(reinterpret_cast<uint64_t>(current->kernel_stack));
-        Logger::raw_write("-0x");
-        Logger::print_hex(current->kernel_stack_top);
-        Logger::raw_write("]\n");
-        return false;
-    }
-    return true;
-}
+// Issue #323: validate_switch() lives in scheduler_integrity.cpp.
 
 // ---------------------------------------------------------------------------
 // switch_to_task

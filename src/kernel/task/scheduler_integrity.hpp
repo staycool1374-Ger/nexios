@@ -1,0 +1,74 @@
+#pragma once
+
+/*
+ * NexIOS RTOS — Development Roadmap / Kernel Core
+ * Copyright (C) 2026 Arnold Hasshold
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/// @file scheduler_integrity.hpp
+/// @brief Centralized scheduler context-switch validators (issue #323).
+///        Single home for the kernel-stack pointer accessor and the
+///        switch/iret-frame validation predicates that guard a deferred
+///        context switch, so scheduler.cpp no longer owns them privately.
+
+#include <types.hpp>
+#include <kernel/task/task.hpp>
+
+namespace kernel {
+
+/// @brief Scheduler integrity / context-switch validation (issue #323).
+///        Everything that answers "is this a safe pair/stack to publish a
+///        switch onto" lives here and is shared by the scheduler.
+namespace sched_verify {
+
+/// @brief Architecture-aware stack pointer access.  Returns a reference so
+///        the address-of usage `&task_stack_ptr(t)` (switch_to_task's save
+///        target) keeps writing the live TCB field (audit-scheduler-tasks
+///        LOW: macro → inline fn).
+inline uint64_t &task_stack_ptr(TaskControlBlock *t) noexcept {
+#if defined(CONFIG_ARCH_X86_64)
+    return t->context.rsp;
+#elif defined(CONFIG_ARCH_AARCH64)
+    return t->context.sp_el0;
+#elif defined(CONFIG_ARCH_RISCV64)
+    return t->context.sp;
+#else
+    static uint64_t dummy = 0;
+    (void)t;
+    return dummy;
+#endif
+}
+
+/// @brief True when @p rsp lies within @p t's kernel-stack range [base, top].
+///        Returns false (without logging) when @p rsp is below the base;
+///        logs the overshoot when @p rsp is above the top.  Diagnostic
+///        helper for validate_switch().
+bool rsp_in_stack_range(uint64_t rsp, const TaskControlBlock *t,
+                        const char *label);
+
+/// @brief Validate a context-switch pair before the deferred-switch publish
+///        (audit-scheduler-tasks LOW: the single home of the duplicated
+///        current/next validation).  Accepts only non-null, higher-half
+///        pointers carrying the TCB magic; for a non-idle @p next also
+///        requires the pre-saved RSP to lie inside its kernel stack.  Logs
+///        the first failure and returns false; the caller then reports the
+///        corruption.
+bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
+                     const char *label);
+
+} // namespace sched_verify
+
+} // namespace kernel
