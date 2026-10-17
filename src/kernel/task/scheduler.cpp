@@ -104,41 +104,8 @@ extern char _stack_start[];
 extern char _stack_end[];
 }
 
-/// @brief Validate an iret-frame candidate (audit-scheduler-tasks LOW: the
-///        duplicated frame validation in switch_to_task and
-///        switch_away_from_terminating).  A frame is valid only for a known
-///        CS (ring0 0x8 / ring3 0x1B), with interrupts enabled in RFLAGS,
-///        and — for ring0 — an RSP inside @p next's own kernel stack (or the
-///        linker boot stack when dispatching the harness).  A foreign RSP
-///        would iretq the task onto foreign memory (H2 hazard).
-/// @param next   The task whose frame is being validated.
-/// @param nbase  Next task's kernel-stack base VA.
-/// @param f_rflags RFLAGS field of the candidate frame.
-#if defined(CONFIG_ARCH_X86_64)
-static bool validate_iret_frame(const kernel::TaskControlBlock &next,
-                                uint64_t nbase, uint64_t f_rflags, uint64_t rip,
-                                uint64_t cs, uint64_t rsp,
-                                uint64_t ss) noexcept {
-    const bool ring0 = (cs == 0x8);
-    const bool ring3 = (cs == 0x1B);
-    if (rip == 0 || (!ring0 && !ring3))
-        return false;
-    if ((ring0 || ring3) && (f_rflags & 0x2) == 0)
-        return false;
-    if (ring3 && (ss != 0x23 || rsp == 0))
-        return false;
-    if (ring0) {
-        const bool in_own = rsp >= nbase && rsp <= next.kernel_stack_top;
-        const bool harness_boot =
-            (&next == kernel::Scheduler::get_harness_task() &&
-             rsp >= reinterpret_cast<uint64_t>(_stack_start) &&
-             rsp < reinterpret_cast<uint64_t>(_stack_end));
-        if (!in_own && !harness_boot)
-            return false;
-    }
-    return true;
-}
-#endif
+// Issue #323: validate_iret_frame() lives in scheduler_integrity.cpp.
+
 #include <kernel/task/sporadic_server.hpp>
 
 /// @brief Named constants for the iret-frame layout indices (magic-numeric
@@ -167,6 +134,11 @@ namespace kernel {
 // them so the existing unqualified call sites in this TU stay unchanged.
 using sched_verify::task_stack_ptr;
 using sched_verify::validate_switch;
+using sched_verify::report_corruption;
+using sched_verify::is_boot_stack_rsp;
+#if defined(CONFIG_ARCH_X86_64)
+using sched_verify::validate_iret_frame;
+#endif
 
 // Deferred-switch event codes for the H2 ring (see kernel::debug::H2Event).
 inline constexpr uint64_t H2_EV_ARM      = 1;
@@ -3927,23 +3899,8 @@ void Scheduler::cleanup_test_tasks() noexcept {
 // Corruption / validation helpers
 // ---------------------------------------------------------------------------
 
-static void report_corruption(const char *label) {
-    (void)label;
-    __atomic_fetch_add(&scheduler_corruption_count, 1, __ATOMIC_RELEASE);
-#ifdef CONFIG_DEBUG
-    ENSURE(false && "scheduler corruption detected — see log above");
-#endif
-}
-
-// Issue #323: rsp_in_stack_range() lives in scheduler_integrity.cpp.
-
-/// @brief Returns true when the live RSP belongs to the kernel boot stack
-///        (kernel-image space), i.e. the physically-running harness.
-static inline bool is_boot_stack_rsp(uint64_t rsp) noexcept {
-    const uint64_t base = reinterpret_cast<uint64_t>(_stack_start);
-    const uint64_t end = reinterpret_cast<uint64_t>(_stack_end);
-    return rsp >= base && rsp < end;
-}
+// Issue #323: report_corruption(), is_boot_stack_rsp(), rsp_in_stack_range(),
+// and validate_iret_frame() live in scheduler_integrity.cpp (sched_verify).
 
 /// @brief Restore scheduler state after a deferred-switch arm is cleared
 ///        WITHOUT being applied (CLR-RMS / CLR-SET / CLR-MISC symmetry).

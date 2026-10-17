@@ -69,6 +69,30 @@ bool rsp_in_stack_range(uint64_t rsp, const TaskControlBlock *t,
 bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
                      const char *label);
 
+/// @brief Bump @c scheduler_corruption_count and (in DEBUG) fail loudly.
+///        Called by the scheduler when a validator above returns false.
+void report_corruption(const char *label);
+
+/// @brief True when @p rsp belongs to the kernel boot stack
+///        (kernel-image space), i.e. the physically-running harness.
+bool is_boot_stack_rsp(uint64_t rsp) noexcept;
+
+#if defined(CONFIG_ARCH_X86_64)
+/// @brief Validate an iret-frame candidate (audit-scheduler-tasks LOW: the
+///        duplicated frame validation in switch_to_task and
+///        switch_away_from_terminating).  A frame is valid only for a known
+///        CS (ring0 0x8 / ring3 0x1B), with interrupts enabled in RFLAGS,
+///        and — for ring0 — an RSP inside @p next's own kernel stack (or the
+///        linker boot stack when dispatching the harness).  A foreign RSP
+///        would iretq the task onto foreign memory (H2 hazard).
+/// @param next   The task whose frame is being validated.
+/// @param nbase  Next task's kernel-stack base VA.
+/// @param f_rflags RFLAGS field of the candidate frame.
+bool validate_iret_frame(const TaskControlBlock &next, uint64_t nbase,
+                         uint64_t f_rflags, uint64_t rip, uint64_t cs,
+                         uint64_t rsp, uint64_t ss) noexcept;
+#endif
+
 } // namespace sched_verify
 
 } // namespace kernel
