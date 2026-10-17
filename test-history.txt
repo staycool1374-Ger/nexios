@@ -3708,3 +3708,9 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-17 21:02:51 debug_syscall PASSED: 26 FAILED: 0 TIME: 1974ms
 2026-10-17 21:02:51 core PASSED: 577 FAILED: 1 TIME: 47805ms STATUS: FAIL-debug_launch_entry_trap_parks-known-H2-flake-host-load-4
 2026-10-17 21:02:51 core PASSED: 578 FAILED: 0 TIME: 47647ms STATUS: identical-binary-rerun-green
+2026-10-17 21:14:49 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3248ms
+2026-10-17 21:14:49 task_lifecycle PASSED: 9 FAILED: 0 TIME: 649ms
+2026-10-17 21:14:49 ui_framebuffer PASSED: 6 FAILED: 0 TIME: 397ms
+2026-10-17 21:14:49 core PASSED: 578 FAILED: 0 TIME: 47678ms STATUS: STALL-RECOVERED-harness-retry-green
+2026-10-17 21:18:47 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3252ms STATUS: post-S3-comment-fix-rerun
+2026-10-17 21:18:47 task_lifecycle PASSED: 9 FAILED: 0 TIME: 643ms STATUS: post-S3-comment-fix-rerun
