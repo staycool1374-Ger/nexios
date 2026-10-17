@@ -534,15 +534,15 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
 #if defined(CONFIG_ARCH_X86_64)
     // The saved iret frame stores the (placeholder kernel) entry in two slots:
     // the iret RIP and the SysV rdi copy.  The placeholder is a kernel
-    // higher-half address (>= CONFIG_HHDM_OFFSET); the stub is a low user VA.
-    constexpr uint64_t kKernelHigherHalf = CONFIG_HHDM_OFFSET;
+    // higher-half address (TaskControlBlock::is_kernel_address()); the stub
+    // is a low user VA.
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *frame = reinterpret_cast<uint64_t *>(tcb.context.rsp);
     size_t slots = (tcb.kernel_stack_top - tcb.context.rsp) / sizeof(uint64_t);
 
     uint64_t original_entry = 0;
     for (size_t i = 0; i < slots; ++i) {
-        if (frame[i] >= kKernelHigherHalf) {
+        if (TaskControlBlock::is_kernel_address(frame[i])) {
             original_entry = frame[i];
             break;
         }
@@ -1988,8 +1988,8 @@ void TaskControlBlock::cleanup() noexcept {
     // (blocked_on_queue != nullptr) we must detach now — otherwise the
     // queue owner's cleanup() will walk a dangling pointer after we are
     // freed and poisoned.
-    if (blocked_on_queue && reinterpret_cast<uintptr_t>(blocked_on_queue) >=
-                                CONFIG_HHDM_OFFSET) {
+    if (blocked_on_queue &&
+        TaskControlBlock::is_kernel_pointer(blocked_on_queue)) {
         auto &q = *blocked_on_queue;
         if (TaskControlBlock::is_valid(q.blocked_senders_head) &&
             q.blocked_senders_head == this) {
@@ -2022,25 +2022,23 @@ void TaskControlBlock::cleanup() noexcept {
     // drain_zombie_list/cleanup_step), preserving the lock ordering of the
     // wake paths.  The higher-half range check mirrors the blocked_on_queue
     // validation above (objects live in kernel/HHDM space, never low VA).
-    if (waiting_on_mutex && reinterpret_cast<uintptr_t>(waiting_on_mutex) >=
-                                CONFIG_HHDM_OFFSET) {
+    if (waiting_on_mutex &&
+        TaskControlBlock::is_kernel_pointer(waiting_on_mutex)) {
         waiting_on_mutex->remove_waiter(*this);
         waiting_on_mutex = nullptr;
     }
     if (waiting_on_semaphore &&
-        reinterpret_cast<uintptr_t>(waiting_on_semaphore) >=
-            CONFIG_HHDM_OFFSET) {
+        TaskControlBlock::is_kernel_pointer(waiting_on_semaphore)) {
         waiting_on_semaphore->remove_waiter(*this);
         waiting_on_semaphore = nullptr;
     }
     if (waiting_on_eventgroup &&
-        reinterpret_cast<uintptr_t>(waiting_on_eventgroup) >=
-            CONFIG_HHDM_OFFSET) {
+        TaskControlBlock::is_kernel_pointer(waiting_on_eventgroup)) {
         waiting_on_eventgroup->remove_waiter(*this);
         waiting_on_eventgroup = nullptr;
     }
-    if (waiting_on_queue && reinterpret_cast<uintptr_t>(waiting_on_queue) >=
-                                CONFIG_HHDM_OFFSET) {
+    if (waiting_on_queue &&
+        TaskControlBlock::is_kernel_pointer(waiting_on_queue)) {
         waiting_on_queue->remove_waiter(*this);
         waiting_on_queue = nullptr;
     }
