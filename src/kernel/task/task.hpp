@@ -552,8 +552,12 @@ struct TaskControlBlock {
     RoRange ro_ranges_[kMaxRoRanges];
 
     /// @brief Maximum pages this task may allocate from PMM.  0 = unlimited.
+    ///        Write-once before publish (create paths); plain reads safe
+    ///        after (issue #375: the limit never mutates on a live task).
     uint64_t memory_budget_pages_;
-    /// @brief Current pages charged to this task.
+    /// @brief Current pages charged to this task (issue #375: §11.6
+    ///        all-or-nothing — every access via __atomic builtins; only
+    ///        pre-publish zeroing in create paths uses plain stores).
     uint64_t memory_used_pages_;
     /// @brief Idle-monitor P5a counters (issues #43/#284). Successful PMM
     ///        alloc calls attributed to this task (bumped beside every
@@ -561,6 +565,7 @@ struct TaskControlBlock {
     ///        credit_task_memory only — PMM::free_page is globally
     ///        unattributed by design, see spec §2.3). Ops, not pages:
     ///        page balance already lives in memory_used_pages_.
+    ///        Issue #375: same atomic discipline as memory_used_pages_.
     uint64_t mem_alloc_ops_ = 0;
     uint64_t mem_free_ops_ = 0;
     /// @brief Leak-heuristic snapshot state (issues #43/#284). Previous

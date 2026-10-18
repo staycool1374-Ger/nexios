@@ -1112,6 +1112,8 @@ struct SwSlots {
     static constinit uint64_t sporadic_task_count_;
     static constinit bool preempt_enabled_;
 #if CONFIG_MEMORY_BUDGET
+    // Issue #375: §11.6 all-or-nothing — every access via __atomic
+    // builtins (reserve CAS / release fetch-add / relaxed loads).
     static constinit uint64_t memory_budget_pages_;
 #endif
     static constinit bool suppress_terminated_log_;

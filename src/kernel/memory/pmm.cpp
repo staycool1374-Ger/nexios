@@ -361,10 +361,20 @@ PMM::OomOutcome PMM::run_oom_handler_locked(sync::IrqSpinLockGuard &lock) {
 void PMM::attribute_alloc_to_current(TaskControlBlock *cur, size_t count) {
     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
 #if CONFIG_MEMORY_BUDGET
-        cur->memory_used_pages_ += count;
+        // Issue #375: §11.6 all-or-nothing — the reap path reads these
+        // from another CPU, so every RMW is atomic.
+        __atomic_fetch_add(&cur->memory_used_pages_, count,
+                           __ATOMIC_RELAXED);
 #endif
-        if (cur->mem_alloc_ops_ < UINT64_MAX)
-            ++cur->mem_alloc_ops_;
+        uint64_t ops =
+            __atomic_load_n(&cur->mem_alloc_ops_, __ATOMIC_RELAXED);
+        while (ops < UINT64_MAX) {
+            if (__atomic_compare_exchange_n(&cur->mem_alloc_ops_, &ops,
+                                            ops + 1, false,
+                                            __ATOMIC_RELAXED,
+                                            __ATOMIC_RELAXED))
+                break;
+        }
     }
 }
 
@@ -377,10 +387,14 @@ bool PMM::is_over_budget(TaskControlBlock *cur, size_t count) {
         cur->memory_budget_pages_ == 0) {
         return false;
     }
+    // Issue #375: atomic snapshot of the charged counter (advisory
+    // pre-check; the charge itself re-validates — see charge_task_memory).
+    uint64_t used =
+        __atomic_load_n(&cur->memory_used_pages_, __ATOMIC_ACQUIRE);
     if (count <= 1) {
-        return cur->memory_used_pages_ >= cur->memory_budget_pages_;
+        return used >= cur->memory_budget_pages_;
     }
-    return cur->memory_used_pages_ + count > cur->memory_budget_pages_;
+    return used + count > cur->memory_budget_pages_;
 #else
     (void)cur;
     (void)count;
