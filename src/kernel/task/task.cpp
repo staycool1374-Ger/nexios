@@ -1942,6 +1942,12 @@ void TaskControlBlock::cleanup() noexcept {
         kernel::diag::dump_tcb_write_log("[CLEANUP] poisoned TCB");
         return;
     }
+    // Issue #373: a fully torn-down TCB must never re-run teardown.
+    // Direct re-cleanup (e.g. a double-drain) is a safe no-op; the
+    // pinned-deferred case never sets the flag (see complete_teardown).
+    if (teardown_completed_) {
+        return;
+    }
     state = TaskState::REAPED;
     kernel::task_step(kernel::TaskCleanupSteps::Validate); // issue #347 Slice C
 
@@ -1962,6 +1968,16 @@ void TaskControlBlock::cleanup() noexcept {
     // (MemPool::free on a pinned block is a no-op).
     if (kernel::MemPool::is_block_pinned(this))
         return;
+    complete_teardown();
+}
+
+void TaskControlBlock::complete_teardown() noexcept {
+    // Issue #373: deferred tail of cleanup() — runs ExitStats..Finalize
+    // exactly as cleanup() would after the pinned check. Only destroy()
+    // calls this, only on REAPED-with-resources-pending TCBs (pinned at
+    // first destroy, unpinned since). Table removal already happened on
+    // the first destroy; the Unregister block below re-runs the idempotent
+    // remove path (same as the normal unregister-then-remove_task order).
 
     // Issue #294: snapshot user-task exit stats before teardown frees
     // anything (post-mortem ring for `monstat user`). Scalar copy only,
@@ -2247,6 +2263,9 @@ void TaskControlBlock::cleanup() noexcept {
         Scheduler::reset_monitor_task();
 #endif
     kernel::task_step(kernel::TaskCleanupSteps::Finalize); // issue #347 Slice C
+    // Issue #373: teardown ran to completion — any further cleanup() or
+    // destroy() on this TCB is a safe no-op, never a re-teardown.
+    teardown_completed_ = true;
 }
 
 } // namespace kernel
@@ -2292,6 +2311,15 @@ void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
         if (tcb->state != TaskState::REAPED) {
             tcb->cleanup();
             Scheduler::remove_task(*tcb);
+        } else if (!tcb->teardown_completed_ &&
+                   !kernel::MemPool::is_block_pinned(tcb)) {
+            // Issue #373: REAPED-with-resources-pending — the first
+            // destroy ran on a pinned TCB (teardown skipped, block kept)
+            // and the block has since been unpinned. Complete the
+            // deferred resource teardown now. Table removal already
+            // happened on the first destroy and the tail's Unregister
+            // block is idempotent, so remove_task() must NOT run again.
+            tcb->complete_teardown();
         }
         // Baseline-owned (pinned) blocks are never freed: the snapshot
         // owns the block and restore rewinds it (cleanup() already skips

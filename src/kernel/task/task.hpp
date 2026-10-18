@@ -668,6 +668,14 @@ struct TaskControlBlock {
     /// on teardown — the on_tick scan skips disarmed tasks outright.
     bool wdog_armed = false;
 
+    /// @brief True once cleanup() ran ExitStats..Finalize to completion
+    ///        (issue #373). Distinguishes "REAPED-with-resources-pending"
+    ///        (pinned at first destroy: REAPED but teardown skipped) from
+    ///        "REAPED-after-full-teardown" (second destroy must be a safe
+    ///        no-op, never a re-teardown). False after every memset site;
+    ///        debug/release parity: plain bool, never CONFIG_DEBUG-gated.
+    bool teardown_completed_ = false;
+
     /// @brief Watchdog period in ticks (from SYS_WATCHDOG_CREATE arg0).
     uint64_t wdog_period_ticks = 0;
 
@@ -962,9 +970,12 @@ struct TaskControlBlock {
     /// @brief Destroys a TCB and returns its MemPool block (H-5: single
     ///        pool-aware teardown path replacing raw `delete` on RT error
     ///        paths — CODING_STYLE §4 forbids new/delete on RT paths).
-    ///        State-aware: a REAPED TCB (cleanup already run) is only freed;
-    ///        otherwise cleanup() + remove_task() run first.  No-op on nullptr.
-    ///        Mirrors operator delete() semantics exactly.
+    ///        State-aware three-way branch (issue #373): a live TCB runs
+    ///        cleanup() + remove_task(); a REAPED-with-resources-pending
+    ///        TCB (pinned at first destroy, unpinned since) completes the
+    ///        deferred teardown without re-running table removal; a
+    ///        REAPED-after-full-teardown TCB is only freed (safe no-op).
+    ///        No-op on nullptr. Mirrors operator delete() semantics exactly.
     static void destroy(TaskControlBlock *tcb) noexcept;
 
     /// @brief Save the current register context into this TCB.
@@ -977,6 +988,15 @@ struct TaskControlBlock {
     /// @brief Frees all resources owned by this task (FDs, pages, page tables).
     ///        Called by WAITPID after reaping a TERMINATED child.
     void cleanup() noexcept;
+
+    /// @brief Completes a teardown deferred by the pinned early-return
+    ///        (issue #373): runs ExitStats..Finalize exactly as cleanup()
+    ///        would after the pinned check, without re-running table
+    ///        removal (the first destroy already removed this task) and
+    ///        without touching scheduler membership beyond the idempotent
+    ///        unregister. Only destroy() calls this, only on
+    ///        REAPED-with-resources-pending TCBs.
+    void complete_teardown() noexcept;
 
     /// @brief Unregisters this TCB from the scheduler (tasks_[] / id_table_ /
     ///        ready queue) and returns its memory to the MemPool.

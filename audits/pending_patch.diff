@@ -1,253 +1,214 @@
-diff --git a/src/kernel/debug/debug_stop.cpp b/src/kernel/debug/debug_stop.cpp
-index 03a6b6a13..299964ff4 100644
---- a/src/kernel/debug/debug_stop.cpp
-+++ b/src/kernel/debug/debug_stop.cpp
-@@ -30,6 +30,7 @@
- #include <kernel/debug/debug_bind.hpp>
- #include <kernel/debug/debug_regs.hpp>
- #include <kernel/task/scheduler.hpp>
-+#include <kernel/task/scheduler_debug_internal.hpp>
- #include <kernel/task/sporadic_server.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/memory/vmm.hpp>
-@@ -52,6 +53,17 @@ static uint64_t snap_budget_of(const TaskControlBlock &tgt) noexcept {
-     if (!srv) {
-         return 0;
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 0040fe9af..80907d170 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -1942,6 +1942,12 @@ void TaskControlBlock::cleanup() noexcept {
+         kernel::diag::dump_tcb_write_log("[CLEANUP] poisoned TCB");
+         return;
      }
-+    // Issue #379 (kill-while-debugged): the death snapshot can observe a
-+    // sporadic-server pointer freed concurrently (0xDD-poisoned under
-+    // CONFIG_DEBUG) or otherwise outside the kernel half. Fail closed with
-+    // budget 0 — the DEATH event itself never depends on this advisory
-+    // read. Mirrors the on_tick SS-race guard (scheduler_tick.cpp).
-+    if (!TaskControlBlock::is_kernel_pointer(srv)) {
-+        return 0;
-+    }
-+    if (sched_debug::is_poisoned_block(srv)) {
-+        return 0;
-+    }
-     return srv->remaining_budget();
- }
- 
-@@ -747,6 +759,14 @@ void debug_publish_death(TaskControlBlock &dying) noexcept {
- #if !defined(CONFIG_DEBUG)
-     (void)dying;
- #else
-+    // Issue #379 (kill-while-debugged): a concurrent teardown may have
-+    // freed the TCB (0xDD-poisoned under CONFIG_DEBUG) before this
-+    // snapshot runs. is_valid reads mapped memory only (address check
-+    // first), so the check itself cannot fault; skip silently when id/gen
-+    // are unreadable — no addressable event exists to report.
-+    if (!TaskControlBlock::is_valid(&dying)) {
++    // Issue #373: a fully torn-down TCB must never re-run teardown.
++    // Direct re-cleanup (e.g. a double-drain) is a safe no-op; the
++    // pinned-deferred case never sets the flag (see complete_teardown).
++    if (teardown_completed_) {
 +        return;
 +    }
-     uint64_t debugger_id =
-         __atomic_load_n(&dying.debugger_id, __ATOMIC_ACQUIRE);
-     // Clear this target's shadows by id (tables are about to be freed —
-diff --git a/src/kernel/test/test_debug_syscall.cpp b/src/kernel/test/test_debug_syscall.cpp
-index 791a6af4b..3b8688bd4 100644
---- a/src/kernel/test/test_debug_syscall.cpp
-+++ b/src/kernel/test/test_debug_syscall.cpp
-@@ -1742,6 +1742,180 @@ JARVIS_TEST(debug_stop_snapshot_budget_zero_without_server,
-     JARVIS_TEST_PASS();
+     state = TaskState::REAPED;
+     kernel::task_step(kernel::TaskCleanupSteps::Validate); // issue #347 Slice C
+ 
+@@ -1962,6 +1968,16 @@ void TaskControlBlock::cleanup() noexcept {
+     // (MemPool::free on a pinned block is a no-op).
+     if (kernel::MemPool::is_block_pinned(this))
+         return;
++    complete_teardown();
++}
++
++void TaskControlBlock::complete_teardown() noexcept {
++    // Issue #373: deferred tail of cleanup() — runs ExitStats..Finalize
++    // exactly as cleanup() would after the pinned check. Only destroy()
++    // calls this, only on REAPED-with-resources-pending TCBs (pinned at
++    // first destroy, unpinned since). Table removal already happened on
++    // the first destroy; the Unregister block below re-runs the idempotent
++    // remove path (same as the normal unregister-then-remove_task order).
+ 
+     // Issue #294: snapshot user-task exit stats before teardown frees
+     // anything (post-mortem ring for `monstat user`). Scalar copy only,
+@@ -2247,6 +2263,9 @@ void TaskControlBlock::cleanup() noexcept {
+         Scheduler::reset_monitor_task();
+ #endif
+     kernel::task_step(kernel::TaskCleanupSteps::Finalize); // issue #347 Slice C
++    // Issue #373: teardown ran to completion — any further cleanup() or
++    // destroy() on this TCB is a safe no-op, never a re-teardown.
++    teardown_completed_ = true;
  }
  
-+// Runmode: kernel
-+// Testidea: watchdog-KILL of a debugger-attached server-backed target
-+//           publishes a DEATH stop-event with the live id/gen instead of
-+//           faulting on the torn-down sporadic server (issue #379:
-+//           snap_budget_of dereferenced a 0xDD-poisoned server after a
-+//           1-tick watchdog expiry raced debugger supervision).
-+// Input: spinner + init_sporadic_server(60, 1000, 0); attach (no park);
-+//        arm wdog period 5 under IrqGuard; tick-poll to TERMINATED/reaped.
-+// Expect: DEATH event with matching id/gen; snap_state TERMINATED;
-+//         detach ok; no GP/panic; zero ResourceTracker delta (harness).
-+// Depends: debug_publish_death, defer_kill, drain_zombie_list,
-+//          CONFIG_WATCHDOG_ACTION==3.
-+JARVIS_TEST(debug_death_watchdog_kill_while_debugged,
-+            "PRE: none | POST: none") {
-+#if CONFIG_WATCHDOG_ACTION != 3
-+    JARVIS_TEST_PASS();
-+#else
-+    uint64_t stub_phys = 0;
-+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
-+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
-+    t->init_sporadic_server(60, 1000, 0);
-+    JARVIS_ASSERT_FMT(t->get_sporadic_server() != nullptr, "server missing");
-+    const uint64_t want_id = t->id;
-+    const uint64_t want_gen = t->generation;
-+    uint64_t const scratch_phys = debug_map_scratch();
-+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
-+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
-+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
-+    {
-+        arch::IrqGuard guard{};
-+        t->wdog_period_ticks = 5;
-+        t->wdog_last_kick_tick = arch::Timer::ticks();
-+        t->wdog_expiry_tick = t->wdog_last_kick_tick + 5;
-+        t->wdog_armed = true;
-+        t->wdog_gen = 1;
-+    }
-+    const uint64_t start = arch::Timer::ticks();
-+    bool died = false;
-+    while (arch::Timer::ticks() - start < 500) {
-+        auto *live = Scheduler::find_task(want_id);
-+        if (live == nullptr || !TaskControlBlock::is_valid(live) ||
-+            live->state == TaskState::TERMINATED) {
-+            died = true;
-+            break;
-+        }
-+    }
-+    JARVIS_ASSERT_FMT(died, "watchdog did not kill target");
-+    Scheduler::drain_zombie_list();
-+    t = nullptr; // reaped + freed by the drain; no further TCB access
-+    uint64_t kind = 0;
-+    uint64_t addr = 0;
-+    uint64_t got_id = 0;
-+    uint64_t got_gen = 0;
-+    uint64_t snap_state = 0;
-+    JARVIS_ASSERT_FMT(debug_wait_event(h, kind, addr, &got_id, &got_gen,
-+                                       &snap_state, nullptr, nullptr),
-+                      "no DEATH event");
-+    JARVIS_ASSERT_FMT(kind == kKindDeath, "kind not DEATH: 0x%lx", kind);
-+    JARVIS_ASSERT_FMT(got_id == want_id && got_gen == want_gen,
-+                      "death id/gen mismatch: 0x%lx/0x%lx vs 0x%lx/0x%lx",
-+                      got_id, got_gen, want_id, want_gen);
-+    JARVIS_ASSERT_FMT(snap_state ==
-+                          static_cast<uint64_t>(TaskState::TERMINATED),
-+                      "snap_state not TERMINATED: 0x%lx", snap_state);
-+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
-+                      "dead detach failed");
-+    debug_unmap_scratch(scratch_phys);
-+    // The spinner page was mapped in the dead target's tables and is
-+    // already reclaimed by its teardown — freeing again would double-free.
-+    // The stub phys value is intentionally not freed here.
-+    (void)stub_phys;
-+    JARVIS_TEST_PASS();
-+#endif
-+}
+ } // namespace kernel
+@@ -2292,6 +2311,15 @@ void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
+         if (tcb->state != TaskState::REAPED) {
+             tcb->cleanup();
+             Scheduler::remove_task(*tcb);
++        } else if (!tcb->teardown_completed_ &&
++                   !kernel::MemPool::is_block_pinned(tcb)) {
++            // Issue #373: REAPED-with-resources-pending — the first
++            // destroy ran on a pinned TCB (teardown skipped, block kept)
++            // and the block has since been unpinned. Complete the
++            // deferred resource teardown now. Table removal already
++            // happened on the first destroy and the tail's Unregister
++            // block is idempotent, so remove_task() must NOT run again.
++            tcb->complete_teardown();
+         }
+         // Baseline-owned (pinned) blocks are never freed: the snapshot
+         // owns the block and restore rewinds it (cleanup() already skips
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 2e2401fbd..0c51422c7 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -668,6 +668,14 @@ struct TaskControlBlock {
+     /// on teardown — the on_tick scan skips disarmed tasks outright.
+     bool wdog_armed = false;
+ 
++    /// @brief True once cleanup() ran ExitStats..Finalize to completion
++    ///        (issue #373). Distinguishes "REAPED-with-resources-pending"
++    ///        (pinned at first destroy: REAPED but teardown skipped) from
++    ///        "REAPED-after-full-teardown" (second destroy must be a safe
++    ///        no-op, never a re-teardown). False after every memset site;
++    ///        debug/release parity: plain bool, never CONFIG_DEBUG-gated.
++    bool teardown_completed_ = false;
 +
-+// Runmode: kernel
-+// Testidea: death publish against a stale (freed-poisoned) sporadic-server
-+//           pointer fails closed with snap_budget == 0 while the DEATH
-+//           event itself still arrives (issue #379 guard pin).
-+// Input: spinner + server; attach; overwrite the cached server pointer
-+//        with the 0xDD MemPool poison sentinel; publish directly.
-+// Expect: DEATH event, matching id/gen, snap_state TERMINATED,
-+//         snap_budget == 0; no fault; server pointer restored before
-+//         teardown so the ResourceTracker delta stays zero.
-+// Depends: snap_budget_of poison/canonical guards, sel2 StopEvent copy.
-+JARVIS_TEST(debug_death_publish_poisoned_server_skips_budget,
-+            "PRE: none | POST: none") {
-+    uint64_t stub_phys = 0;
-+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
-+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
-+    t->init_sporadic_server(60, 1000, 0);
-+    auto *live_server = t->get_sporadic_server();
-+    JARVIS_ASSERT_FMT(live_server != nullptr, "server missing");
-+    const uint64_t want_id = t->id;
-+    const uint64_t want_gen = t->generation;
-+    uint64_t const scratch_phys = debug_map_scratch();
-+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
-+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
-+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
-+    t->sporadic_server = reinterpret_cast<decltype(live_server)>(
-+        0xDDDDDDDDDDDDDDDDULL);
-+    debug::debug_publish_death(*t);
-+    t->sporadic_server = live_server;
-+    uint64_t kind = 0;
-+    uint64_t addr = 0;
-+    uint64_t got_id = 0;
-+    uint64_t got_gen = 0;
-+    uint64_t snap_state = 0;
-+    uint64_t snap_budget = 0xAAAAAAAAAAAAAAAAULL;
-+    JARVIS_ASSERT_FMT(debug_wait_event(h, kind, addr, &got_id, &got_gen,
-+                                       &snap_state, nullptr, &snap_budget),
-+                      "no DEATH event");
-+    JARVIS_ASSERT_FMT(kind == kKindDeath, "kind not DEATH: 0x%lx", kind);
-+    JARVIS_ASSERT_FMT(got_id == want_id && got_gen == want_gen,
-+                      "death id/gen mismatch");
-+    JARVIS_ASSERT_FMT(snap_state ==
-+                          static_cast<uint64_t>(TaskState::TERMINATED),
-+                      "snap_state not TERMINATED: 0x%lx", snap_state);
-+    JARVIS_ASSERT_FMT(snap_budget == 0, "snap_budget not zero: 0x%lx",
-+                      snap_budget);
-+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
-+                      "detach failed");
-+    debug_unmap_scratch(scratch_phys);
-+    debug_free_spinner_page(t, stub_phys);
-+    debug_reap_child(t);
-+    JARVIS_TEST_PASS();
-+}
+     /// @brief Watchdog period in ticks (from SYS_WATCHDOG_CREATE arg0).
+     uint64_t wdog_period_ticks = 0;
+ 
+@@ -962,9 +970,12 @@ struct TaskControlBlock {
+     /// @brief Destroys a TCB and returns its MemPool block (H-5: single
+     ///        pool-aware teardown path replacing raw `delete` on RT error
+     ///        paths — CODING_STYLE §4 forbids new/delete on RT paths).
+-    ///        State-aware: a REAPED TCB (cleanup already run) is only freed;
+-    ///        otherwise cleanup() + remove_task() run first.  No-op on nullptr.
+-    ///        Mirrors operator delete() semantics exactly.
++    ///        State-aware three-way branch (issue #373): a live TCB runs
++    ///        cleanup() + remove_task(); a REAPED-with-resources-pending
++    ///        TCB (pinned at first destroy, unpinned since) completes the
++    ///        deferred teardown without re-running table removal; a
++    ///        REAPED-after-full-teardown TCB is only freed (safe no-op).
++    ///        No-op on nullptr. Mirrors operator delete() semantics exactly.
+     static void destroy(TaskControlBlock *tcb) noexcept;
+ 
+     /// @brief Save the current register context into this TCB.
+@@ -978,6 +989,15 @@ struct TaskControlBlock {
+     ///        Called by WAITPID after reaping a TERMINATED child.
+     void cleanup() noexcept;
+ 
++    /// @brief Completes a teardown deferred by the pinned early-return
++    ///        (issue #373): runs ExitStats..Finalize exactly as cleanup()
++    ///        would after the pinned check, without re-running table
++    ///        removal (the first destroy already removed this task) and
++    ///        without touching scheduler membership beyond the idempotent
++    ///        unregister. Only destroy() calls this, only on
++    ///        REAPED-with-resources-pending TCBs.
++    void complete_teardown() noexcept;
 +
-+// Runmode: kernel
-+// Testidea: death publish against an already-freed (poisoned) TCB skips
-+//           silently — no fault, no duplicate event (issue #379 guard pin).
-+// Input: spinner; attach; full reap (real DEATH published during cleanup,
-+//        then the TCB is freed + poisoned); publish against the dangling
-+//        TCB directly.
-+// Expect: exactly one DEATH event (the real one, matching id/gen);
-+//         the stale publish enqueues nothing (second poll is EAGAIN).
-+// Depends: debug_publish_death is_valid entry guard, sel2 StopEvent copy.
-+JARVIS_TEST(debug_death_publish_poisoned_tcb_no_fault,
-+            "PRE: none | POST: none") {
-+    uint64_t stub_phys = 0;
-+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
-+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
-+    const uint64_t want_id = t->id;
-+    const uint64_t want_gen = t->generation;
-+    uint64_t const scratch_phys = debug_map_scratch();
-+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
-+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
-+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
-+    TaskControlBlock *dead = t;
-+    debug_reap_child(t);
-+    t = nullptr; // freed + poisoned by the reap; no further TCB access
-+    debug::debug_publish_death(*dead);
-+    uint64_t kind = 0;
-+    uint64_t addr = 0;
-+    uint64_t got_id = 0;
-+    uint64_t got_gen = 0;
-+    JARVIS_ASSERT_FMT(debug_wait_event(h, kind, addr, &got_id, &got_gen),
-+                      "no DEATH event");
-+    JARVIS_ASSERT_FMT(kind == kKindDeath, "kind not DEATH: 0x%lx", kind);
-+    JARVIS_ASSERT_FMT(got_id == want_id && got_gen == want_gen,
-+                      "death id/gen mismatch");
-+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelPoll,
-+                                h, kDebugScratchVa) == Neg(kEagain),
-+                      "stale publish enqueued a duplicate event");
-+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
-+                      "dead detach failed");
-+    debug_unmap_scratch(scratch_phys);
-+    // The spinner page was mapped in the dead target's tables and is
-+    // already reclaimed by its teardown — freeing again would double-free.
-+    // The stub phys value is intentionally not freed here.
-+    (void)stub_phys;
-+    JARVIS_TEST_PASS();
-+}
-+
- // Testidea: Supervisor-grant mint + use (issue #239, spec §14): the
- //           harness, as launcher, grants its own child to itself and
- //           drives the full handle lifecycle on the granted slot.
-@@ -2338,6 +2512,9 @@ void register_debug_syscall_tests() {
-     JARVIS_REGISTER_TEST(debug_stop_poll_empty);
-     JARVIS_REGISTER_TEST(debug_stop_snapshot_budget_live);
-     JARVIS_REGISTER_TEST(debug_stop_snapshot_budget_zero_without_server);
-+    JARVIS_REGISTER_TEST(debug_death_watchdog_kill_while_debugged);
-+    JARVIS_REGISTER_TEST(debug_death_publish_poisoned_server_skips_budget);
-+    JARVIS_REGISTER_TEST(debug_death_publish_poisoned_tcb_no_fault);
-     JARVIS_REGISTER_TEST(debug_grant_mint_use);
-     JARVIS_REGISTER_TEST(debug_grant_denial_matrix);
-     JARVIS_REGISTER_TEST(debug_grant_revoke_parked_disposition);
+     /// @brief Unregisters this TCB from the scheduler (tasks_[] / id_table_ /
+     ///        ready queue) and returns its memory to the MemPool.
+     ///        Mandatory before the block is reused: a TCB freed via `delete`
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 35296d3d7..0087671be 100644
+index 0087671be..6ef537036 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -70,7 +70,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"syscall_core",         33,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70)
-     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
-     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
--    {"debug_syscall",         26,   26,      26     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295) + 2 snapshot-budget (#186 Goal 2); arch-neutral, x86_64 measured via TCOUNT
-+    {"debug_syscall",         29,   29,      29     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295) + 2 snapshot-budget (#186 Goal 2) + 3 death-publish guards (#379); arch-neutral, x86_64 measured via TCOUNT
+@@ -295,7 +295,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"core_task",           52,   0,       0      },  // task_* + fpu_invariants + kernel_top + per_cpu (#364; measured)
+     {"core_memory",         119,  0,       0      },  // all memory_* (#364; measured) + kernel-half runtime NX (#376)
+     {"core_syscall",        85,   0,       0      },  // syscall_* + debug_syscall + tls (#364; measured)
+-    {"core_tracing",        24,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361, +2 rollback fail-first/past-end)
++    {"core_tracing",        25,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361, +2 rollback fail-first/past-end, +1 destroy-after-teardown noop #373)
+     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
+     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
+     {"proc_elf",            131,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD + 4 drift (#340 P1/P2 + #348, unrecorded) + 4 libc_thread (#303 M12)
+diff --git a/src/kernel/test/test_task_path.cpp b/src/kernel/test/test_task_path.cpp
+index 1e624a76d..f8afc1235 100644
+--- a/src/kernel/test/test_task_path.cpp
++++ b/src/kernel/test/test_task_path.cpp
+@@ -29,6 +29,7 @@
+ #include <kernel/task/task.hpp>
+ #include <kernel/task/task_path.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/test/resource_tracker.hpp>
+ #include <kernel/core/path_tracer.hpp>
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/arch/hal/irq_guard.hpp>
+@@ -76,6 +77,12 @@ static void test_task_cleanup_full_path_segment() {
+ }
  
-     // process
-     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
+ static void test_task_cleanup_pinned_terminal() {
++    // Issue #373 regression: the unpin+destroy leg must complete the
++    // deferred resource teardown (kstack + PML4 + IPC objects) instead of
++    // freeing the block intact. Capture the tracker baseline before
++    // create so the post-teardown delta must be exactly zero.
++    test::ResourceCounters case_before;
++    test::ResourceTracker::instance().capture(case_before);
+     auto *tcb = TaskControlBlock::create(task_path_noop_entry, 20,
+                                          TaskControlBlock::NO_PERIOD);
+     JARVIS_ASSERT(tcb != nullptr);
+@@ -83,15 +90,55 @@ static void test_task_cleanup_pinned_terminal() {
+     bool pinned_ok = false;
+     {
+         arch::IrqGuard guard{};
++        // Tracker symmetry: destroy()'s teardown ends in
++        // track_task_remove, which pairs with the track_task_add in
++        // add_task. Drive a scheduler-managed TCB (added, never
++        // dispatched: remove_task runs inside this same guard).
++        Scheduler::add_task(*tcb);
+         path_reset();
+         TaskControlBlock::destroy(tcb); // pinned: teardown skipped, block kept
+         pinned_ok = path_validate(k_task_cleanup_pinned_expected);
+         path_reset();
+         MemPool::unpin_block(tcb);
+-        TaskControlBlock::destroy(tcb); // now frees the block
++        TaskControlBlock::destroy(tcb); // completes teardown, frees block
+         path_reset();
+     }
+     JARVIS_ASSERT(pinned_ok);
++    test::ResourceCounters case_after;
++    test::ResourceTracker::instance().capture(case_after);
++    JARVIS_ASSERT_EQ(case_before.pmm_pages_used, case_after.pmm_pages_used);
++    JARVIS_ASSERT_EQ(case_before.tasks, case_after.tasks);
++    JARVIS_ASSERT_EQ(case_before.msg_queues, case_after.msg_queues);
++    JARVIS_ASSERT_EQ(case_before.notifies, case_after.notifies);
++    JARVIS_ASSERT_EQ(case_before.event_groups, case_after.event_groups);
++}
++
++static void test_task_destroy_after_full_teardown_is_noop() {
++    // Issue #373 branch (c): destroy on a REAPED-after-full-teardown TCB
++    // is a safe no-op (magic 0xDD skip) — never a re-teardown. The second
++    // destroy must not fault, must not double-free, and must leave zero
++    // tracker delta.
++    test::ResourceCounters case_before;
++    test::ResourceTracker::instance().capture(case_before);
++    auto *tcb = TaskControlBlock::create(task_path_noop_entry, 20,
++                                         TaskControlBlock::NO_PERIOD);
++    JARVIS_ASSERT(tcb != nullptr);
++    {
++        arch::IrqGuard guard{};
++        // Tracker symmetry (see pinned test): add pairs with the
++        // track_task_remove in teardown. Never dispatched: destroy
++        // removes it inside this same guard.
++        Scheduler::add_task(*tcb);
++        TaskControlBlock::destroy(tcb); // full teardown, block freed
++        TaskControlBlock::destroy(tcb); // no-op: already freed, skip
++    }
++    test::ResourceCounters case_after;
++    test::ResourceTracker::instance().capture(case_after);
++    JARVIS_ASSERT_EQ(case_before.pmm_pages_used, case_after.pmm_pages_used);
++    JARVIS_ASSERT_EQ(case_before.tasks, case_after.tasks);
++    JARVIS_ASSERT_EQ(case_before.msg_queues, case_after.msg_queues);
++    JARVIS_ASSERT_EQ(case_before.notifies, case_after.notifies);
++    JARVIS_ASSERT_EQ(case_before.event_groups, case_after.event_groups);
+ }
+ 
+ static void test_task_cleanup_skip_detected() {
+@@ -176,6 +223,7 @@ void register_task_path_tests() {
+     JARVIS_REGISTER_TEST(task_create_path_segment);
+     JARVIS_REGISTER_TEST(task_cleanup_full_path_segment);
+     JARVIS_REGISTER_TEST(task_cleanup_pinned_terminal);
++    JARVIS_REGISTER_TEST(task_destroy_after_full_teardown_is_noop);
+     JARVIS_REGISTER_TEST(task_cleanup_skip_detected);
+     JARVIS_REGISTER_TEST(task_teardown_canonical_chain);
+     JARVIS_REGISTER_TEST(task_path_registry_math);
