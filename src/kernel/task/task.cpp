@@ -1909,6 +1909,10 @@ static void free_stack_pdpt(uint64_t pdpt_phys) noexcept {
 /// destroys IPC objects, and notifies the daemon manager. After this call the
 /// TCB must not be used except for MemPool::free().
 void TaskControlBlock::cleanup() noexcept {
+    // Issue #324 Tick 1: NO validate_task_ptr ENSURE here by design —
+    // post-snapshot-restore poisoned (0xDD) TCBs legitimately reach this
+    // entry and the is_valid skip below is their terminal handler (an
+    // ENSURE would fire on the path this guard exists to tolerate).
     if (!TaskControlBlock::is_valid(this)) {
         Logger::raw_write("[CLEANUP] skip poisoned TCB\n");
         kernel::diag::dump_tcb_write_log("[CLEANUP] poisoned TCB");
@@ -2252,6 +2256,9 @@ TaskError TaskControlBlock::clone_err(uint64_t *regs,
 }
 
 void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
+    // Issue #324 Tick 1: tri-state magic contract — TCB_MAGIC (normal),
+    // 0 (OOM-path partial TCB, free directly), 0xDD (already freed, skip).
+    // No validate_task_ptr ENSURE: states 0/0xDD are legitimate entries.
     if (!tcb)
         return;
     if (tcb->magic == TCB_MAGIC) {

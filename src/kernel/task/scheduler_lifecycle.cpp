@@ -696,8 +696,14 @@ void Scheduler::defer_kill(TaskControlBlock *task) noexcept {
 }
 
 void Scheduler::process_deferred_kills() noexcept {
-    // Called from the on_tick tail under scheduler_lock_; also gated so it
-    // only runs when the lock was acquired this tick (design §4.C VAR-08).
+    // Called from the on_tick gated tail (tick.cpp) with IrqGuard only:
+    // the adopt scope releases scheduler_lock_ before the tail, and the
+    // lock_acquired gate is freshness (the lock WAS taken this tick), not
+    // held.  Lock-free is REQUIRED here, not merely allowed: destroy()
+    // takes the global per item via remove_task(), whose no-reentrant-take
+    // ENSURE would fire on entry under lock.  Issue #324 Tick 1: the prior
+    // "under scheduler_lock_" comment was stale (same class as #369 T2b).
+    ENSURE(scheduler_lock_.holder() == nullptr);
     for (uint64_t i = 0; i < s_deferred_kill_count; ++i) {
         auto *task = s_deferred_kill_tasks[i];
         if (!task || task->magic != TaskControlBlock::TCB_MAGIC)
