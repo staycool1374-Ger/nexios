@@ -788,8 +788,10 @@ void Scheduler::on_tick() noexcept {
 
         // Issue #41: per-task software watchdog expiry scan — single
         // bounded pass, disarmed/generation-mismatched tasks skipped.
-        // Runs under the already-held scheduler_lock_ (same window as
-        // the pager scan above); KILL defers via defer_kill, never
+        // Runs lock-free after the dispatch window closes (issue #369 T2a:
+        // convicted — no lock held here; the scan loop itself takes no
+        // locks, though KILL arms reach wake_waiting_parent -> set_task_ready
+        // downstream with nothing held); KILL defers via defer_kill, never
         // inline.
         scan_watchdogs_locked(current_tick);
 

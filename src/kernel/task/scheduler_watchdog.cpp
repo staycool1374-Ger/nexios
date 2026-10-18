@@ -343,9 +343,14 @@ deadline_miss_handler(TaskControlBlock &task,
 }
 #endif
 
-// Issue #41: per-task watchdog expiry scan. Caller holds scheduler_lock_
-// (on_tick window). Single pass, no allocation, no blocking; expiry is
-// one-shot (disarm first) and termination defers via defer_kill.
+// Issue #41: per-task watchdog expiry scan. Lock-free by design (issue #369
+// T2a: convicted — the on_tick caller runs it after the dispatch window
+// closes, with no lock held; the scan loop itself (predicate/disarm/defer-
+// append) takes no locks, so no order inversion is possible there. KILL /
+// NOTIFY arms reach code that does take locks (wake_waiting_parent ->
+// set_task_ready takes the global; monitor notify is IPC) — safe: nothing
+// is held at those points. Single pass, no allocation, no blocking;
+// expiry is one-shot (disarm first) and termination defers via defer_kill.
 void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
     for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
         if (t->magic != TaskControlBlock::TCB_MAGIC)

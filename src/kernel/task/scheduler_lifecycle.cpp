@@ -679,8 +679,9 @@ void Scheduler::cleanup_test_tasks() noexcept {
 
 void Scheduler::defer_kill(TaskControlBlock *task) noexcept {
     ENSURE(validate_task_ptr(task, "defer_kill"));
-    // Callers always hold scheduler_lock_ (deadline_miss_handler runs under
-    // the on_tick/scan_deadlines guard) — see design §4.C VAR-08.
+    // Callers: watchdog/deadline KILL arms (scan or idle-seam fire paths),
+    // which may run without the global lock — append-only, lock-free;
+    // global→leaf order is unaffected (no lock taken here).
     if (s_deferred_kill_count < MAX_DEFERRED_KILLS) {
         s_deferred_kill_tasks[s_deferred_kill_count++] = task;
     } else {

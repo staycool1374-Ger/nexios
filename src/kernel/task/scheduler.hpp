@@ -1113,6 +1113,15 @@ struct SwSlots {
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static TestContext *test_context_;
 
+    /// @brief Canonical lock order (issue #369 T2, binding): scheduler_lock_
+    ///        > zombie_lock_ > wake_mailbox_lock_[cpu].  Ready-queue ops run
+    ///        under scheduler_lock_ (no rq-internal lock exists).  ISR paths
+    ///        take the OUTER/global lock try_lock-only (skip on contention,
+    ///        never block); leaf takes (e.g. mailbox_publish) may block under
+    ///        the documented IF=0 exclusion.  Leaf takes require global-held OR IRQs-off (never
+    ///        leaf→global: spinlocks are non-recursive).  holder() returns
+    ///        the locker RA or nullptr — use it for held/not-held checks,
+    ///        not cross-CPU owner identity.
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static sync::SpinLock scheduler_lock_;
     /// @brief Per-CPU O(1) ready queues (issue #25 C1).  Queue[CPU] holds

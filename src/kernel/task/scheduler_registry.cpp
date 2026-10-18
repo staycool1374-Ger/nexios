@@ -647,6 +647,7 @@ bool Scheduler::unregister_task(TaskControlBlock &task) noexcept {
     if (!scheduler_lock_.try_lock())
         return false;
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_, adopt_lock);
+    ENSURE(scheduler_lock_.holder() != nullptr); // issue #369 T2a: adopted global held before any leaf take below
 
     if (&task == current_task() && own_idle() && own_idle() != &task) {
         set_current_ptr(own_idle());
