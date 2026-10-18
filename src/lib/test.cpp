@@ -58,6 +58,11 @@ size_t Registry::class_count_ = 0;
 size_t Registry::expected_count_ = 0;
 const char *Registry::current_name_ = nullptr;
 
+// Issue #359 P0: TSC at run start (raw_counter never rewinds, unlike
+// Timer::ticks_ which snapshot_restore rewinds after every test).
+// Set by every run_* entry point next to its start_ns sample.
+static uint64_t g_run_start_tsc = 0;
+
 // PfA-A: the harness injects one TestContext so the scheduler's ISR-visible
 // test flags live here (not as scheduler globals).  Production boots with
 // Scheduler::get_test_context() == nullptr.
@@ -394,6 +399,7 @@ void run_all() {
     print_table_header();
 
     uint64_t start_ns = arch::Timer::ns();
+    g_run_start_tsc = arch::Timer::raw_counter();
 
     for (size_t i = 0; i < n; ++i) {
         auto& tc = Registry::tests()[i];
@@ -420,6 +426,7 @@ void run_safe() {
     print_table_header();
 
     uint64_t start_ns = arch::Timer::ns();
+    g_run_start_tsc = arch::Timer::raw_counter();
     size_t run_index = 0;
 
     for (size_t i = 0; i < n; ++i) {
@@ -500,6 +507,7 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
     }
 
     uint64_t start_ns = arch::Timer::ns();
+    g_run_start_tsc = arch::Timer::raw_counter();
     Logger::raw_write("[TEST_START] ns=");
     Logger::print_dec(start_ns);
     Logger::raw_write("\n");
@@ -861,6 +869,7 @@ void run_suite(const char* suite_name) {
     }
 
     uint64_t start_ns = arch::Timer::ns();
+    g_run_start_tsc = arch::Timer::raw_counter();
     size_t run = 0;
     print_table_header();
 
@@ -942,6 +951,14 @@ void print_report(uint64_t start_ns, uint64_t end_ns) {
     Logger::raw_write("  PASSED:          "); write_num(tp); Logger::raw_write("\n");
     Logger::raw_write("  FAILED:          "); write_num(tf); Logger::raw_write("\n");
     Logger::raw_write("==============================\n");
+    // Issue #359 P0: guest TSC cycles for the run, for host-side
+    // wall-truth analysis (wall ms per class is recorded host-side;
+    // TSC never rewinds, unlike Timer::ticks_ which snapshot_restore
+    // rewinds after every test).  Placed AFTER the closing ==== so the
+    // expect TEST SUMMARY regex (which ends at FAILED+====) keeps
+    // matching.
+    Logger::raw_write("  TSC_CYCLES:      "); write_num(arch::Timer::raw_counter() - g_run_start_tsc);
+    Logger::raw_write("\n");
 
     if (exp != tt) {
         Logger::raw_write("[WARN] Expected ");
