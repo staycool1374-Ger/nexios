@@ -92,20 +92,12 @@ Done roadmap archived in `prompts/README_done.md`.
 
 ### **v0.5.4 — Stabilization & Bugfixing**
 * **Scheduler Decomposition & Lifecycle:** scheduler split into 16 focused TUs (#323), task creation/lifecycle/cleanup audit with deferred-kill handshake (#324), scheduler post-split hardening (#369).
-* **VMM Transactions & Hardening:** transactional cap-maps with rollback (#325-A/B), NX posture + W^X kernel-half hardening (#325-D, #376), walk-geometry convergence (#378), deterministic fault injector + rollback tests (#361).
 * **Tracing & Modernization:** XOR→order-sensitive path-tracer fold (#347/#362), C++20 nodiscard/span/concepts sweep (#348), core aggregate split into 7 classes (#364), count reconciliation (#342).
-* **Release-Gate Fixes:** AP NXE triple-fault (#380), empty-class harness contract (#381), q35 monitor rewrite (#382) — found by the gate, fixed, re-gated green.
-* **Full Gates Green:** debug 26/26 (1836/1836), release 24/24 (89/89), `make build` Errors 0 (two TCG stall-recoveries + one deadline load-flake cleared by identical-binary reruns).
 
 ### **v0.5.3 — User Space Enhancements**
 * **Microkernel Services Live:** ramdiskd block service (8×2 MiB, chunked IPC, lazy mapping) with ramdisk_fs mount/file ops + loadelf/runelf support, 
 * **XMODEM Utilities:** host XMODEM/upload tooling, and the watchdogd supervision daemon.
 * **Userspace enhancements* initrd /bin hierarchy, sh PATH lookup + export, English shell strings + unified terminal core, and Rust no_std hello-world user ELF with pinned toolchain.
-
-### **v0.5.2 — User-ELF Bring-up to Run**
-* **End-to-End User ELF Execution:** `runelf` loads and runs general ELFs as strictly periodic user tasks with deadline registration, Liu-Leyland + memory-budget admission, TLS setup, and `/etc/rc` integration.
-* **Kernel Hygiene H1–H8:** pure-refactor cleanup across memory (PMM/VMM/MemPool), scheduler/task lifecycle, and sync primitives — zero functional change, SIL 3 PRE+POST approved per part.
-* **Debugger Surface:** `runelf --debug` integration, stop-event snapshot budget export, and the bare-metal debug-discipline audit (gaps filed as follow-ups).
 
 ---
 
