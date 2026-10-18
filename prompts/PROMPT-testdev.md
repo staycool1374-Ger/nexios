@@ -94,8 +94,8 @@ are consumed by a match-all rule at the end of the Makefile.
 **Examples:**
 ```
 make execute-test x86 debug selftest    # CI gate (safe class, fast)
-make test-full x86 debug                  # full debug suite (20 runs)
-make test-full x86 release                # full release suite (20 runs)
+make test-full x86 debug                  # full debug suite (26 runs)
+make test-full x86 release                # full release suite (26 runs)
 make execute-test x86 debug drivers       # specific aggregate
 ```
 
@@ -114,7 +114,7 @@ The serial log is `tee`'d to `/tmp/jarvis-serial.log`; the first `tee` pipe exit
 Both test steps use the host-side watchdog and expect-based parsing of the `TEST SUMMARY` block.
 
 ### Test Classes (defined in `test_registry.cpp`)
-Classes: `safe`, the 16 structural aggregates (`core ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench testrunner`, issue #173), the 4 scripted specials (`ahci_live iommu_live task_fpu task_tcb_log`), plus fine-grained file classes.
+Classes: `safe`, the 22 structural aggregates (`core_basic core_sync core_sched core_task core_memory core_syscall core_tracing ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench testrunner`, issues #173, #364), the 4 scripted specials (`ahci_live iommu_live task_fpu task_tcb_log`), plus fine-grained file classes.
 
 New test suites must be registered in at least one aggregate (via a `run_*_group()` helper in `test_registry.cpp`) and counted in `test_expected_counts.hpp`. If a suite belongs to a fine-grained file class, add it there too.
 
@@ -123,7 +123,7 @@ Ensure clean mapping within the appropriate class lambda:
 ```cpp
 void register_my_new_tests();
 ```
-Then add `register_my_new_tests();` to the `all` class and any domain class (e.g., `scheduler`, `memory`).
+Then add `register_my_new_tests();` to the owning aggregate lambda (via a `run_*_group()` helper) and any domain class (e.g., `scheduler`, `memory`).
 
 ### Known Test Patterns
 

@@ -70,7 +70,7 @@ verifies OS and user ELF authenticity and runs diagnostic time measurements.
 **Parameters:**
 - `<arch>` — `x86`|`x86_64`|`arm`|`aarch64`|`riscv`|`riscv64` (shorthand accepted, default: x86_64)
 - `<build>` — `debug`|`release`
-- `<class>` — `none` (interactive shell) | `selftest` (CI gate) | `<aggregate>` (16 structural classes, issue #173) | `<name>` (specific class). Full suite (`all` class removed): `make test-full [arch] [build]`
+- `<class>` — `none` (interactive shell) | `selftest` (CI gate) | `<aggregate>` (22 structural classes, issues #173, #364) | `<name>` (specific class). Full suite (`all` class removed): `make test-full [arch] [build]`
 
 **Key behaviours:**
 - Cross-arch: `run-release-mode arm` builds aarch64 release ELF and boots via `qemu-system-aarch64 -kernel`
@@ -85,7 +85,7 @@ make run-debug-mode                       # interactive x86_64 debug
 make run-release-mode                     # interactive x86_64 release
 make run-release-mode arm                 # interactive aarch64 release
 make run-release-mode riscv               # interactive riscv64 release
-make test-full x86 debug               # full debug suite (20 runs, one reboot each)
+make test-full x86 debug               # full debug suite (26 runs, one reboot each)
 make execute-test x86 release selftest    # CI gate
 ```
 
@@ -224,7 +224,7 @@ QEMU; use lldb instead.
 ### Targeted class verification (MANDATORY)
 - Verify kernel code changes using the **smallest applicable test class**, NOT `test-full`.
 - Examples: `storage` for VFS/IPC/daemon changes, `data_structures_buffer_pool` for buffer pool changes, `timing_core` for timer changes, etc.
-- `make test-full` runs 20 classes and takes **tens of minutes** — only use for full release validation.
+- `make test-full` runs 26 classes and takes **tens of minutes** — only use for full release validation.
 
 ### Full-suite log capture (MANDATORY)
 - When running `make test-full`, always capture the full output:

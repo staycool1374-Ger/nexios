@@ -586,7 +586,7 @@ help:
 	@echo "                       capability proc_elf storage servers drivers"
 	@echo "                       hal smp smp_multicpu deadline ui"
 	@echo "                       logging_debug random bench testrunner),"
-	@echo "                       auto-shutdown (120s, 250s for core_*/smp_multicpu)"
+	@echo "                       auto-shutdown (120s, 250s for core_*/smp_multicpu/ahci_live/iommu_live/deadline)"
 	@echo "           <name>   → specific test class, auto-shutdown (120s)"
 	@echo "  [A] make test-full [<arch> <build>]  Full suite: all 22 aggregates +"
 	@echo "         4 specials (ahci_live iommu_live task_fpu task_tcb_log),"

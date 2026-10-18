@@ -79,7 +79,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 
 **Pre-flight gate (abort on any failure):**
 - Verify `git status --porcelain` is clean
-- Run `make test-full x86_64 debug` — this launches the kernel in QEMU once per class and runs the full test base (16 aggregates + 4 specials, issue #173). Every class must pass (`[FAIL]` count = 0). Do **not** rely on a partial test run; confirm the script SUMMARY shows all 20 runs ok.
+- Run `make test-full x86_64 debug` — this launches the kernel in QEMU once per class and runs the full test base (22 aggregates + 4 specials, issues #173, #364). Every class must pass (`[FAIL]` count = 0). Do **not** rely on a partial test run; confirm the script SUMMARY shows all 26 runs ok.
 - Check `prompts/testcases-v$(KERNEL_VERSION).md` — if still `*Outline*` or any stubs remain, **abort**. If all tests implemented, delete the file.
 - Verify tag `v$(major).$(minor).$(patch)` does not exist: `git tag | grep "v$(major).$(minor).$(patch)"`
 
@@ -186,8 +186,8 @@ silently consumed by a match-all rule at the end of the Makefile.
 **Examples:**
 ```
 make execute-test x86_64 debug none           # interactive QEMU
-make test-full x86_64 debug                   # full debug suite (20 runs)
-make test-full x86_64 release                 # full release suite (20 runs)
+make test-full x86_64 debug                   # full debug suite (26 runs)
+make test-full x86_64 release                 # full release suite (26 runs)
 make execute-test x86_64 debug selftest       # CI gate
 make execute-test x86_64 debug drivers        # specific aggregate
 make debug-test x86_64 debug core tools/gdb/test-batch.gdb  # GDB panic capture
@@ -204,7 +204,7 @@ The serial log is captured via `tee` to `/tmp/jarvis-serial.log` for all automat
 |------|--------|---------|
 | Build | `make debug` | — |
 | Selftest gate | `make execute-test x86_64 debug selftest` (safe class) | `timeout 360` — Makefile expect timeout 120s |
-| Full suite | `make test-full x86_64 debug` (16 aggregates + 4 specials) | `timeout 300` per class via script |
+| Full suite | `make test-full x86_64 debug` (22 aggregates + 4 specials) | `timeout 300` per class via script |
 
 The full suite step runs only if selftest passes (`if: success()`). Both steps use the host-side watchdog and expect-based result parsing (extracts PLANNED/EXECUTED/FAILED from the TEST SUMMARY block).
 
