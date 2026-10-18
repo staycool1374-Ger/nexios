@@ -22,6 +22,10 @@
 
 #include <kernel/arch/keyboard.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/cpu_context.hpp>
+#include <kernel/driver/iocd.hpp>
+#include <kernel/ipc/ipc.hpp>
+#include <kernel/task/scheduler.hpp>
 
 namespace arch {
 
@@ -111,6 +115,15 @@ void Keyboard::handle_irq() {
     uint8_t scancode = inb(DATA_PORT);
 
     bool pressed = !(scancode & 0x80);
+    // Issue #340 P1: daemon-owned keyboard — forward the raw scancode
+    // and skip the ring push (never both: single-ownership invariant).
+    // try_forward fails closed (ISR context, daemon down, send refused)
+    // and the legacy path below preserves every keystroke.
+    if (kernel::iocd::is_keyboard_owned() &&
+        try_forward_to_iocd(scancode)) {
+        update_modifiers(scancode, pressed);
+        return;
+    }
     uint8_t code = scancode & 0x7F;
 
     update_modifiers(scancode, pressed);
@@ -136,6 +149,29 @@ void Keyboard::handle_irq() {
     char c = use_shift ? scancode_upper[code] : scancode_lower[code];
     if (c)
         push_ring(c);
+}
+
+/// @brief Forward a raw scancode to the iocd daemon (issue #340 P1).
+/// Task context only: ISR context (isr nesting nonzero), no daemon, or
+/// a refused NONBLOCK send all fail closed so the caller keeps the
+/// legacy ring push and no keystroke is lost.
+bool Keyboard::try_forward_to_iocd(uint8_t scancode) {
+    if (kernel::isr_nesting_own() != 0)
+        return false;
+    uint64_t pid = kernel::iocd::get_iocd_pid();
+    if (pid == 0)
+        return false;
+    kernel::iocd::Msg req{};
+    req.type = kernel::iocd::IOCD_IRQ_EVENT;
+    req.args[0] = 1; // IRQ line 1: keyboard
+    req.args[1] = scancode;
+    kernel::Message send{};
+    auto *cur = kernel::Scheduler::current_task();
+    send.sender_id = cur ? cur->id : 0;
+    send.type = kernel::iocd::IOCD_IRQ_EVENT;
+    send.data_size = sizeof(req);
+    __builtin_memcpy(send.data, &req, sizeof(req));
+    return kernel::IPC::send(pid, send, kernel::IpcFlags::NONBLOCK);
 }
 
 /// @brief Dequeue a single character from the input ring buffer.

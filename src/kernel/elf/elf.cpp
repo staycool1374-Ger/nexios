@@ -50,114 +50,64 @@
 namespace kernel {
 namespace elf {
 
-static constexpr uint64_t ELF_MAGIC = 0x00000000464C457FULL;
-
 /// @brief Validate an ELF64 header (magic, class, endianness, machine, bounds).
 /// @return true if the header is valid and safe to load.
-bool validate_header(const ELF64Header *hdr) {
-    if (!hdr)
-        return false;
-    if (reinterpret_cast<const uint32_t *>(hdr->ident)[0] !=
-        static_cast<uint32_t>(ELF_MAGIC))
-        return false;
-    if (hdr->ident[4] != 2)
-        return false; // 64-bit
-    if (hdr->ident[5] != 1)
-        return false; // little-endian
-    if (hdr->type != ET_EXEC && hdr->type != ET_DYN)
-        return false;
-#if defined(CONFIG_ARCH_AARCH64)
-    if (hdr->machine != 0xB7)
-        return false; // AArch64
-#elif defined(CONFIG_ARCH_RISCV64)
-    if (hdr->machine != 0xF3)
-        return false; // RISC-V (EM_RISCV)
-#else
-    if (hdr->machine != 0x3E)
-        return false; // x86_64 (default)
-#endif
-    if (hdr->version == 0)
-        return false;
-    if (hdr->phnum > 64)
-        return false;
-    if (hdr->ehsize < sizeof(ELF64Header))
-        return false;
-    if (hdr->phentsize < sizeof(ELF64ProgramHeader))
-        return false;
-    if (hdr->phnum > 0) {
-        // Check for arithmetic overflow in program header region end
-        uint64_t ph_end =
-            hdr->phoff + static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
-        if (ph_end < hdr->phoff)
-            return false; // overflow
-        // Ensure header fits within reasonable image size
-        if (ph_end > 1_MiB)
-            return false;
-    }
-    // Verify ident padding bytes are zero
-    for (int i = 7; i < 16; ++i) {
-        if (hdr->ident[i] != 0)
-            return false;
-    }
-    // Reject files with suspicious entry point
-    if (hdr->entry >= USER_SPACE_LIMIT && hdr->entry != 0)
-        return false;
-    return true;
-}
+// Compile-time goldens (issue #348-C, dmesg_catalog model): pin the
+// validators above at build time.  Runtime callers use them identically.
+namespace {
 
-/// @brief Validate a single program header segment.
-/// Checks bounds, permissions (W^X), size limits, and overflow safety.
-bool validate_segment(const ELF64ProgramHeader *phdr, uint64_t file_size) {
-    if (phdr->type != PT_LOAD)
-        return true;
-    // Basic size sanity
-    if (phdr->filesz > phdr->memsz)
-        return false;
-    // Overflow checks
-    if (phdr->offset + phdr->filesz < phdr->offset)
-        return false;
-    if (phdr->vaddr + phdr->memsz < phdr->vaddr)
-        return false;
-    if (phdr->vaddr + phdr->filesz < phdr->vaddr)
-        return false;
-    // VULN-H2: the segment's file-resident bytes must fit inside the actual
-    // file buffer.  Previously only a 4_MiB constant bounded phdr->offset;
-    // a crafted ELF could read past the PMM::alloc_contiguous() buffer.
-    if (file_size != 0 && phdr->offset + phdr->filesz > file_size)
-        return false;
-    // Must be within user space
-    if (phdr->vaddr >= USER_SPACE_LIMIT)
-        return false;
-    if (phdr->vaddr + phdr->memsz > USER_SPACE_LIMIT)
-        return false;
-    // Reject zero-size segments in memory
-    if (phdr->memsz == 0)
-        return false;
-    // Reject segments that are too large (> 64 MiB)
-    if (phdr->memsz > 64_MiB)
-        return false;
-    // Reject segments with suspicious alignment
-    if (phdr->align > 1_MiB)
-        return false;
-    // Validate file offset is within the image (cannot check exact size
-    // without file length,
-    // but ensure it's reasonable: less than a typical max ELF size)
-    if (phdr->offset > 4_MiB)
-        return false;
-    // W^X enforcement: segment should not be both writable AND executable
-    if ((phdr->flags & 2) && (phdr->flags & 1))
-        return false;
-    return true;
-}
+// Minimal valid header (machine selected per arch, like the validator).
+static constexpr ELF64Header kElfGoldenGood = [] {
+    ELF64Header hdr{};
+    hdr.ident[0] = 0x7F;
+    hdr.ident[1] = static_cast<uint8_t>('E');
+    hdr.ident[2] = static_cast<uint8_t>('L');
+    hdr.ident[3] = static_cast<uint8_t>('F');
+    hdr.ident[4] = 2; // 64-bit
+    hdr.ident[5] = 1; // little-endian
+    hdr.type = ET_EXEC;
+#if defined(CONFIG_ARCH_AARCH64)
+    hdr.machine = 0xB7;
+#elif defined(CONFIG_ARCH_RISCV64)
+    hdr.machine = 0xF3;
+#else
+    hdr.machine = 0x3E;
+#endif
+    hdr.version = 1;
+    hdr.entry = 0x400000ULL;
+    hdr.phoff = 64;
+    hdr.ehsize = sizeof(ELF64Header);
+    hdr.phentsize = sizeof(ELF64ProgramHeader);
+    hdr.phnum = 1;
+    return hdr;
+}();
+
+// Valid read-execute segment, valid read-only segment, W+X segment.
+static constexpr ELF64ProgramHeader kSegGoldenRx = {
+    1, 5, 0, 0x400000ULL, 0x400000ULL, 0x1000ULL, 0x1000ULL, 0x1000ULL};
+static constexpr ELF64ProgramHeader kSegGoldenR = {
+    1, 4, 0x1000ULL, 0x401000ULL, 0x401000ULL, 0x1000ULL, 0x1000ULL, 0x1000ULL};
+static constexpr ELF64ProgramHeader kSegGoldenWX = {
+    1, 3, 0, 0x400000ULL, 0x400000ULL, 0x1000ULL, 0x1000ULL, 0x1000ULL};
+
+static_assert(validate_header(&kElfGoldenGood), "golden header must pass");
+static_assert(!validate_segment(&kSegGoldenWX, 0x10000ULL),
+              "W+X segment must fail");
+static_assert(validate_segment(&kSegGoldenRx, 0x10000ULL),
+              "R+X segment must pass");
+static_assert(validate_segment(&kSegGoldenR, 0x10000ULL),
+              "read-only segment must pass");
+
+} // namespace
 
 /// @brief Round address up to the next page boundary.
 static uint64_t page_align_up(uint64_t addr) {
-    return (addr + 0xFFF) & ~0xFFFULL;
+    return (addr + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
 }
 
 /// @brief Round address down to the previous page boundary.
 static uint64_t page_align_down(uint64_t addr) {
-    return addr & ~0xFFFULL;
+    return addr & ~(arch::PAGE_SIZE - 1);
 }
 
 static constexpr size_t INITIAL_HEAP_PAGES = 4;
@@ -268,9 +218,18 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
         if (!seg_phys)
             return false;
         for (size_t page_idx = 0; page_idx < num_pages; ++page_idx) {
-            VMM::map_page_in_pml4(vaddr_base + page_idx * arch::PAGE_SIZE,
-                                  seg_phys + page_idx * arch::PAGE_SIZE, true,
-                                  pml4);
+            if (VMM::map_page_in_pml4_err(
+                    vaddr_base + page_idx * arch::PAGE_SIZE,
+                    seg_phys + page_idx * arch::PAGE_SIZE, true,
+                    pml4) != errors::VMM_ERR_OK) {
+                // Mid-load table OOM: the mapped prefix is reclaimed by
+                // the caller's free_user_pages teardown; free only the
+                // never-mapped suffix here (double-free otherwise).
+                for (size_t rest = page_idx; rest < num_pages; ++rest) {
+                    PMM::free_page(seg_phys + rest * arch::PAGE_SIZE);
+                }
+                return false;
+            }
         }
 
         uint64_t offset_in_region = phdr->vaddr - vaddr_base;
@@ -285,6 +244,16 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             memset(reinterpret_cast<void *>(zero_offset), 0,
                    phdr->memsz - phdr->filesz);
+        }
+
+        // Issue #271 P0: read-only segments map PTE-read-only through
+        // the shared primitive (first run included — otherwise the
+        // live task holds a writable alias to retained bytes).
+        // Content flowed via HHDM (perm-independent); canary install
+        // later uses HHDM phys too.
+        if (!(phdr->flags & PF_W)) {
+            VMM::remap_range_ro_in_pml4(pml4, vaddr_base, region_size,
+                                        (phdr->flags & PF_X) != 0);
         }
     }
     } // if (hdr)
@@ -334,10 +303,15 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
     // Guard page: leave first page unmapped, start mapping at +arch::PAGE_SIZE
     // VULN-H1: user stack is writable-only (never executable).
     for (size_t i = 0; i < ustack_pages; ++i) {
-        VMM::map_page_in_pml4(mem::STACK_VADDR + arch::PAGE_SIZE +
-                                  i * arch::PAGE_SIZE,
-                              ustack_phys + i * arch::PAGE_SIZE, true, false,
-                              pml4);
+        if (VMM::map_page_in_pml4_err(mem::STACK_VADDR + arch::PAGE_SIZE +
+                                          i * arch::PAGE_SIZE,
+                                      ustack_phys + i * arch::PAGE_SIZE, true,
+                                      pml4, false) != errors::VMM_ERR_OK) {
+            for (size_t rest = i; rest < ustack_pages; ++rest) {
+                PMM::free_page(ustack_phys + rest * arch::PAGE_SIZE);
+            }
+            return false;
+        }
     }
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -351,9 +325,15 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
 
     // VULN-H1: initial heap is writable-only (never executable).
     for (size_t i = 0; i < heap_pages; ++i) {
-        VMM::map_page_in_pml4(mem::HEAP_VADDR + i * arch::PAGE_SIZE,
-                              heap_phys + i * arch::PAGE_SIZE, true, false,
-                              pml4);
+        if (VMM::map_page_in_pml4_err(mem::HEAP_VADDR + i * arch::PAGE_SIZE,
+                                      heap_phys + i * arch::PAGE_SIZE, true,
+                                      pml4,
+                                      false) != errors::VMM_ERR_OK) {
+            for (size_t rest = i; rest < heap_pages; ++rest) {
+                PMM::free_page(heap_phys + rest * arch::PAGE_SIZE);
+            }
+            return false;
+        }
     }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + heap_phys), 0,
@@ -626,19 +606,34 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     tcb->pcid_ = arch::pcid_alloc();
 #endif
 
-    open_std_fds(*tcb);
+    if (!finalize_user_tcb_tail(tcb, hdr, ustack_phys, phdr_image,
+                                file_size)) {
+        tcb->cleanup();
+        delete tcb;
+        return nullptr;
+    }
 
+    // (text/data/bss sizes, canaries, entry frame now live in
+    // finalize_user_tcb_tail above.)
+    return tcb;
+}
+
+bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
+                            uint64_t ustack_phys, const uint8_t *phdr_image,
+                            uint64_t file_size) {
+    if (!tcb || !hdr || !phdr_image)
+        return false;
+    // Issue #271 P2: the rerun builder shares this tail, so std fds are
+    // wired here (single funnel) — first-run TCBs get byte-identical init.
+    open_std_fds(*tcb);
     tcb->user_stack_ = ustack_phys;
     tcb->user_stack_size_ = mem::STACK_SIZE;
     tcb->program_break_start = mem::HEAP_VADDR;
     tcb->program_break = mem::HEAP_VADDR + INITIAL_HEAP_SIZE;
 
     uint64_t user_rsp = setup_user_stack(ustack_phys, nullptr, nullptr);
-    if (user_rsp == 0) {
-        tcb->cleanup();
-        delete tcb;
-        return nullptr;
-    }
+    if (user_rsp == 0)
+        return false;
 
 #if defined(CONFIG_ARCH_X86_64)
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -714,7 +709,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     // silently — fail stop here, not at first dispatch.  (When user TLS
     // lands, this relaxes to the TLS-template contract.)
     ENSURE(tcb->tls_base_ == 0);
-    return tcb;
+    return true;
 }
 
 /// @brief Install v0.4.0 MP-3 segment-boundary canaries for a freshly loaded

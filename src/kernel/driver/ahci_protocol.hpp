@@ -23,8 +23,6 @@
 ///        Shared between kernel-mode driver and userspace (ring-3) driver
 ///        server. No kernel dependencies — standalone portable header.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel::ahci {

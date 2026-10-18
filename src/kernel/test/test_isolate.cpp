@@ -212,8 +212,14 @@ static size_t off_watchdogd_pid() {
     return off_iocd_pid() + sizeof(uint64_t);
 }
 
-static size_t off_bufpool() {
+// Issue #340 P1: keyboard-ownership routing flag (1 byte payload in a
+// uint64 slot to keep the offset chain aligned).
+static size_t off_kbd_owned() {
     return off_watchdogd_pid() + sizeof(uint64_t);
+}
+
+static size_t off_bufpool() {
+    return off_kbd_owned() + sizeof(uint64_t);
 }
 
 static constexpr uint64_t CANARY_BEFORE  = 0xCAFEBABE00000001ULL;
@@ -568,13 +574,17 @@ bool snapshot_create() {
         iocd::get_iocd_pid();
     *reinterpret_cast<uint64_t *>(g_snapshot + off_watchdogd_pid()) =
         watchdogd::get_watchdogd_pid();
+    // Issue #340 P1: snapshot the keyboard-ownership routing flag.
+    *reinterpret_cast<uint64_t *>(g_snapshot + off_kbd_owned()) =
+        iocd::is_keyboard_owned() ? 1ULL : 0ULL;
     Logger::info("[SNAP:SAVE] vfsd_pid=%u iocd_pid=%u watchdogd_pid=%u",
                  vfsd::get_vfsd_pid(), iocd::get_iocd_pid(),
                  watchdogd::get_watchdogd_pid());
 
     // ---- BufferPool ----
-    BufferPool::capture_state(g_snapshot + off_bufpool(),
-                              BufferPool::state_bytes());
+    BufferPool::capture_state(
+        kernel::Span<uint8_t>(g_snapshot + off_bufpool(),
+                              BufferPool::state_bytes()));
 
     // ---- User page content + canary guards ----
     {
@@ -1443,8 +1453,9 @@ void snapshot_restore(const char *test_name) {
     // The AP simply idles parked; nothing below waits on AP progress.
 
     // ---- BufferPool ----
-    BufferPool::restore_state(g_snapshot + off_bufpool(),
-                              BufferPool::state_bytes());
+    BufferPool::restore_state(
+        kernel::Span<const uint8_t>(g_snapshot + off_bufpool(),
+                                    BufferPool::state_bytes()));
 
     // ---- Resource Counters ----
     ResourceCounters saved;
@@ -1703,6 +1714,10 @@ void snapshot_restore(const char *test_name) {
         *reinterpret_cast<uint64_t *>(g_snapshot + off_iocd_pid()));
     watchdogd::set_watchdogd_pid(
         *reinterpret_cast<uint64_t *>(g_snapshot + off_watchdogd_pid()));
+    // Issue #340 P1: restore input routing with the daemon PIDs (a test
+    // aborting with ownership set must not reroute later tests).
+    iocd::set_keyboard_owned(
+        *reinterpret_cast<uint64_t *>(g_snapshot + off_kbd_owned()) != 0);
     Logger::info("[SNAP:RESTORE] vfsd_pid=%u iocd_pid=%u watchdogd_pid=%u",
                  vfsd::get_vfsd_pid(), iocd::get_iocd_pid(),
                  watchdogd::get_watchdogd_pid());

@@ -21,8 +21,6 @@
 /// @file udp.hpp
 /// @brief UDP protocol types and helpers.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace net {

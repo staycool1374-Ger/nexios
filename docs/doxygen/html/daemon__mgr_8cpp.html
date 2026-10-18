@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('daemon__mgr_8c
 <p>Daemon lifecycle manager implementation.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="daemon__mgr_8hpp_source.html">kernel/daemon/daemon_mgr.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="ramdiskd_8hpp_source.html">kernel/ramdisk/ramdiskd.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="elf_8hpp_source.html">kernel/elf/elf.hpp</a>&gt;</code><br />
@@ -168,6 +169,7 @@ Functions</h2></td></tr>
 <tr class="memdesc:aadff7e665c02eef5c3cf2d52db58b8bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset a daemon's restart count and PID so it can be restarted.  <br /></td></tr>
 <tr class="memitem:a978776a5839d1f7bbac1e5a22572afca" id="r_a978776a5839d1f7bbac1e5a22572afca"><td class="memItemLeft">const DaemonEntry &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#a978776a5839d1f7bbac1e5a22572afca">kernel::daemon::get_entry</a> (uint64_t index)</td></tr>
 <tr class="memdesc:a978776a5839d1f7bbac1e5a22572afca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a const reference to the i-th daemon entry.  <br /></td></tr>
+<tr class="memitem:ae3e4188f4434a72f6d12df9d801e03b1" id="r_ae3e4188f4434a72f6d12df9d801e03b1"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html#ae3e4188f4434a72f6d12df9d801e03b1">kernel::daemon::is_managed</a> (uint64_t pid)</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Daemon lifecycle manager implementation. </p>

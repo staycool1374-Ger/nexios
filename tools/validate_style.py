@@ -291,6 +291,10 @@ class MemoryChecker(Checker):
                     line_text = stripped
                     if line_text.startswith("//") or line_text.startswith("/*"):
                         continue
+                    # Attribute-prefixed declarations ([[nodiscard]] etc.)
+                    # push the symbol past the snippet window below; strip
+                    # attributes so declaration-skips keep working.
+                    line_text = re.sub(r"\[\[.*?\]\]\s*", "", line_text)
                     # Assembly-style ';' comment on the same line.
                     if ";" in line_text and line_text.split(";")[0].strip() == "":
                         continue
@@ -315,7 +319,8 @@ class MemoryChecker(Checker):
                         continue
                     # Skip function/method declarations of free/malloc.
                     if "free(" in snippet and (line_text.endswith("{") or line_text.endswith(");")
-                                              or line_text.endswith(",")):
+                                              or line_text.endswith(",")
+                                              or line_text.endswith("noexcept;")):
                         continue
                     # Skip constructor initializer lists (member init like : data(nullptr)).
                     if "free" in snippet and re.search(r":\s*\w+\s*\(", line_text):

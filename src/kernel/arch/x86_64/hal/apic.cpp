@@ -4,6 +4,7 @@
 #include <kernel/arch/msr.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
 #include <kernel/memory/address.hpp>
 #include <logger.hpp>
 
@@ -91,11 +92,17 @@ void APIC::enable_local() {
 }
 
 bool APIC::map_mmio() {
+    // Issue #366 Q1a: fail fast on table-OOM (was a silent drop).
     auto map = [](uint64_t phys) {
-        kernel::VMM::map_page(arch::HHDM_OFFSET + phys, phys, false);
+        return kernel::VMM::map_page_err(arch::HHDM_OFFSET + phys, phys,
+                                         false) == kernel::errors::VMM_ERR_OK;
     };
-    map(LAPIC_PHYS);
-    map(IOAPIC_PHYS);
+    if (!map(LAPIC_PHYS))
+        return false;
+    if (!map(IOAPIC_PHYS)) {
+        kernel::VMM::unmap_page(arch::HHDM_OFFSET + LAPIC_PHYS);
+        return false;
+    }
     return true;
 }
 

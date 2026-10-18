@@ -206,9 +206,9 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
                 msg.type = 0xEE;
                 msg.priority = 0;
                 msg.data_size = 0;
-                IPC::send(msg.sender_id, msg);
+                JARVIS_ASSERT(IPC::send(msg.sender_id, msg));
                 Message out;
-                IPC::recv(out);
+                JARVIS_ASSERT(IPC::recv(out));
                 sync::SpinLock lock;
                 lock.lock();
                 lock.unlock();

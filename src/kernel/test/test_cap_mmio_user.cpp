@@ -124,7 +124,7 @@ JARVIS_TEST(mmio_user_syscall_dispatch, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(mmio, cap::CapType::Mmio,
-                                cap::CAP_RIGHT_WRITE);
+                                cap::CapRights::WRITE);
             if (s < 0) {
                 mmio->release();
                 g_map_ret = 98;

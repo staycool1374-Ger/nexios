@@ -51,6 +51,11 @@ concept ValueType = !_is_reference_v<T>;
 template<typename T>
 concept ErrorEnum = __is_enum(T);
 
+/// @brief Any scoped/unscoped enumeration (issue #348-D: constrains
+///        kernel::to_underlying without dragging error-enum semantics).
+template<typename T>
+concept Enum = __is_enum(T);
+
 template<typename T>
 concept Lockable = requires(T t) {
     { t.lock() };

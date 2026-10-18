@@ -91,12 +91,21 @@ void check_section_markers() {
     if (_m_bss_end != kMagicBssEnd) {
         panic("INTEGRITY: .bss end marker corrupted");
     }
+// Issue #327: the stack markers bracket the real 16 KiB kernel_stack on
+// every arch (emitted from kernel.cpp, not only x86_64) — but the marker
+// objects themselves sit in the low-VMA .boot_stack region, unreachable
+// via adrp from higher-half .text on aarch64 (link break). The value
+// check stays out there; the span placement is asserted by
+// integrity_stack_markers_span on all arches. Live stacks remain guarded
+// by guard pages (see stack-guard spec).
+#if !defined(CONFIG_ARCH_AARCH64)
     if (_m_stack_before != kMagicStackBefore) {
         panic("INTEGRITY: stack before marker corrupted");
     }
     if (_m_stack_after != kMagicStackAfter) {
         panic("INTEGRITY: stack after marker corrupted");
     }
+#endif
 }
 
 /// @brief Reset CRC accumulator, offset, and completion flags for a fresh scan.

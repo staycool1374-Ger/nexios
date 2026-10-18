@@ -21,6 +21,7 @@
 /// helpers.
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -55,13 +56,20 @@ TaskControlBlock *syscall_task() {
 
 /// @brief MP-3 canary verification for the FULL syscall path (issue #92).
 ///        Checks the current user task's segment canaries; a mismatch latches
-///        g_canary_trip in test mode (returns false → the caller returns -1)
-///        or panics in production.  Runs ONLY on the FULL path — the FAST
-///        subset dereferences no user memory, so it is covered instead by the
-///        scheduler's context-switch / timer-tick canary sampling.
+///        g_canary_trip in test mode (returns false → the caller returns the
+///        ABI failure code) or panics in production. Runs ONLY on the FULL
+///        path — the FAST subset dereferences no user memory, so it is
+///        covered instead by the scheduler's context-switch / timer-tick
+///        canary sampling.
+/// @note H2 seam (issue #253): the test-mode latch below changes the failure
+///       policy (latch+return vs panic) and therefore stays a test-mode
+///       branch by owner decision — removing it would change behavior (S1
+///       forbids). It is strictly failure-policy, never control flow: the
+///       production panic path is untouched.
 /// @param regs Register save area (for the fault RIP in test-mode latch).
 /// @return true if canaries verified or no user task; false on a trip (caller
-///         returns -1).  Always true when CONFIG_CANARY_GUARD is disabled.
+///         returns the ABI failure code). Always true when
+///         CONFIG_CANARY_GUARD is disabled.
 bool canary_check_on_full_path(uint64_t *regs) {
 #if CONFIG_CANARY_GUARD
     auto *t = syscall_task();
@@ -94,10 +102,12 @@ bool syscall_is_user_task() {
 }
 
 /// @brief Open a vnode as a file descriptor in the current task's fd table.
+/// @return The fd index, or SYS_ERR_GENERIC_FAIL (ABI -1) when the table is
+///         full (issue #257 H6: named, never raw -1).
 int syscall_task_open(vfs::Vnode *vn, uint64_t flags) {
     int fd = syscall_task()->fd_table.alloc();
     if (fd < 0)
-        return -1;
+        return static_cast<int>(errors::SYS_ERR_GENERIC_FAIL);
     syscall_task()->fd_table.fds[fd].vnode = vn;
     syscall_task()->fd_table.fds[fd].offset = 0;
     syscall_task()->fd_table.fds[fd].flags = flags;
@@ -107,24 +117,26 @@ int syscall_task_open(vfs::Vnode *vn, uint64_t flags) {
 }
 
 /// @brief Resolve a path and open it as a file descriptor.
+/// @return The fd index, or SYS_ERR_GENERIC_FAIL (ABI -1) when resolution
+///         or creation fails (issue #257 H6).
 int syscall_path_open(const char *path, uint64_t flags) {
     vfs::Vnode *vn = vfs::resolve(path);
     if (!vn) {
         if (flags & vfs::O_CREAT) {
             if (vfs::create(path, vfs::S_IFREG) != 0)
-                return -1;
+                return static_cast<int>(errors::SYS_ERR_GENERIC_FAIL);
             vn = vfs::resolve(path);
         }
         if (!vn)
-            return -1;
+            return static_cast<int>(errors::SYS_ERR_GENERIC_FAIL);
     }
     return syscall_task_open(vn, flags);
 }
 
- uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
+uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
                          uint64_t arg2, uint64_t arg3, uint64_t *regs) {
     if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // Issue #225: every syscall proves a user-mode trap frame exists for
     // the caller (monotonic has_utrap_frame for debugger register reads).
@@ -153,21 +165,22 @@ int syscall_path_open(const char *path, uint64_t flags) {
         return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
 
     // FULL path: MP-3 canary verify of user segments (page-table reads, no
-    // locks).  Mismatch → controlled panic in production; test mode latches
-    // g_canary_trip and the syscall returns -1 so the harness survives.
+    // locks). Mismatch → controlled panic in production; test mode latches
+    // g_canary_trip and the syscall returns the ABI failure code so the
+    // harness survives.
     // Canary relocation (issue #92): this check now runs ONLY on the FULL
     // path; FAST members are covered by the context-switch / timer-tick
     // sampling in the scheduler (canary_check_in_scheduler_hooks).
     if (!canary_check_on_full_path(regs))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
 }
 
- uint64_t Syscall::handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
+uint64_t Syscall::handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
                               uint64_t arg2, uint64_t arg3, uint64_t *regs) {
     if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Issue #225: same U-trap proof as handle() (fast-path syscalls trap
     // identically; a yield-only spinner must still become readable).
     // Atomic: debugger data calls on other tasks load this flag (cf. S2).

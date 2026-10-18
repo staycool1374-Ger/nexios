@@ -237,6 +237,22 @@ struct TaskControlBlock {
     /// threads): no real period/deadline.  Stored in `period_ticks`.
     static constexpr uint64_t NO_PERIOD = 0xFFFFFFFFULL;
 
+    /// @brief True if `addr` lies in the kernel address half (issue #323:
+    ///        arch-independent pointer compare).  The kernel base is the
+    ///        arch-dependent CONFIG_HHDM_OFFSET.  Mirrors the kernel-half test
+    ///        in core/global_state.cpp.  (Other subsystems still carry raw
+    ///        arch-literal HHDM comparisons — e.g. memory/address.hpp; their
+    ///        migration is tracked under #323.)
+    static inline bool is_kernel_address(uint64_t addr) noexcept {
+        return addr >= CONFIG_HHDM_OFFSET;
+    }
+
+    /// @brief True if `p` lies in the kernel address half (see
+    ///        is_kernel_address()).
+    static inline bool is_kernel_pointer(const void *p) noexcept {
+        return is_kernel_address(reinterpret_cast<uint64_t>(p));
+    }
+
     /// @brief True if `t` is a live, valid TCB.
     ///        The address-range check MUST come first: a corrupted list
     ///        pointer (e.g. a freed/overwritten node whose runq_/pri_ links
@@ -246,7 +262,7 @@ struct TaskControlBlock {
     ///        CONFIG_DEBUG, so a freed/reused TCB fails this check and can be
     ///        skipped safely instead of being dereferenced into a #GP.
     static inline bool is_valid(const TaskControlBlock *t) noexcept {
-        if (reinterpret_cast<uint64_t>(t) < 0xFFFF800000000000ULL)
+        if (!is_kernel_pointer(t))
             return false;
         return t->magic == TCB_MAGIC;
     }

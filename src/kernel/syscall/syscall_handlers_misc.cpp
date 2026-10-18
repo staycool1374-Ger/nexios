@@ -21,6 +21,7 @@
 /// get_ticks, exit, etc.
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/kernel.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/log/dmesg.hpp>
@@ -69,12 +70,12 @@ uint64_t Syscall::sys_yield(uint64_t, uint64_t, uint64_t, uint64_t,
                             uint64_t *) {
     arch::io_wait();
     Scheduler::reschedule();
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_print(uint64_t, uint64_t, uint64_t, uint64_t,
                             uint64_t *) {
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_get_ticks(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -140,6 +141,8 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                 auto *p = Scheduler::task_at(i);
                 if (p && p->id == t->parent_id &&
                     (p->waiting_child_pid == t->id ||
+                     // Any-child wildcard (waitpid pid -1), not a failure
+                     // code — deliberately raw, see H6 note #257.
                      p->waiting_child_pid == static_cast<uint64_t>(-1))) {
                     // Write exit code to parent's user-space status pointer.
                     // We must switch to the parent's page table because
@@ -206,7 +209,7 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
             }
         }
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_gettod(uint64_t arg0, uint64_t, uint64_t, uint64_t,
@@ -214,7 +217,7 @@ uint64_t Syscall::sys_gettod(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto tv_ptr = checked(reinterpret_cast<Timeval *>(arg0));
     if (syscall_is_user_task() && !tv_ptr.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     uint64_t secs = arch::RTC::read_seconds();
     Timeval tv = {};
@@ -225,11 +228,11 @@ uint64_t Syscall::sys_gettod(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     // with AC=0 and faults on the user page under SMAP (issue #143).
     if (syscall_is_user_task()) {
         if (!safe_copy_to_user(tv_ptr.unsafe_ptr(), &tv, 1))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     } else {
         *tv_ptr.unsafe_ptr() = tv;
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_uname(uint64_t arg0, uint64_t, uint64_t, uint64_t,
@@ -237,11 +240,11 @@ uint64_t Syscall::sys_uname(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     // v0.4.0 MP-1 hardening: a null buffer must be rejected for ANY caller —
     // pre-MP-1 the boot identity map masked the write to address 0x0.
     if (arg0 == 0)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto uts_ptr = checked(reinterpret_cast<Utsname *>(arg0));
     if (syscall_is_user_task() && !uts_ptr.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     Utsname uts{};
     strlcpy(uts.sysname, "NexIOS", sizeof(uts.sysname));
@@ -255,17 +258,17 @@ uint64_t Syscall::sys_uname(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     // with AC=0 and faults on the user page under SMAP (issue #143).
     if (syscall_is_user_task()) {
         if (!safe_copy_to_user(uts_ptr.unsafe_ptr(), &uts, 1))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     } else {
         *uts_ptr.unsafe_ptr() = uts;
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_pause(uint64_t, uint64_t, uint64_t, uint64_t,
                             uint64_t *) {
     arch::hlt();
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_reboot(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -293,7 +296,7 @@ uint64_t Syscall::sys_brk(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     SpinLockGuard<sync::SpinLock> guard(brk_lock);
     auto *t = syscall_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // Query mode
     if (arg0 == 0)
@@ -305,12 +308,12 @@ uint64_t Syscall::sys_brk(uint64_t arg0, uint64_t, uint64_t, uint64_t,
 
     // Cannot expand beyond stack area
     if (arg0 > mem::STACK_VADDR)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // v0.4.0 MP-2: the guard page at STACK_VADDR must never become the heap
     // end — brk(STACK_VADDR) would make the next heap page the unmapped
     // guard, so reject it explicitly.
     if (arg0 == mem::STACK_VADDR)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     uint64_t old_break = t->program_break;
 
@@ -327,8 +330,9 @@ uint64_t Syscall::sys_brk(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                 continue;
             uint64_t phys = PMM::alloc_user_page();
             if (!phys)
-                return static_cast<uint64_t>(-1);
-            VMM::map_page_in_pml4(vaddr, phys, true, t->page_table_);
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+            // Issue #325-D: brk heap is data (never executable).
+            VMM::map_page_in_pml4(vaddr, phys, true, false, t->page_table_);
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys),
                              0, arch::PAGE_SIZE);
@@ -370,7 +374,7 @@ uint64_t Syscall::sys_getrlimit(uint64_t arg0, uint64_t arg1, uint64_t,
                                 uint64_t, uint64_t *) {
     auto *t = syscall_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     Rlimit rl = {};
     switch (arg0) {
@@ -387,65 +391,65 @@ uint64_t Syscall::sys_getrlimit(uint64_t arg0, uint64_t arg1, uint64_t,
         rl.rlim_max = vfs::MAX_FDS;
         break;
     default:
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto rl_ptr = checked(reinterpret_cast<Rlimit *>(arg1));
     if (syscall_is_user_task() && !rl_ptr.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // MP-4 (SMAP): local + safe_copy_to_user (stac-wrapped).  A successful
     // user copy must NOT fall through to the direct write below: it runs
     // with AC=0 and faults on the user page under SMAP (issue #143).
     if (syscall_is_user_task()) {
         if (!safe_copy_to_user(rl_ptr.unsafe_ptr(), &rl, 1))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     } else {
         *rl_ptr.unsafe_ptr() = rl;
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_setrlimit(uint64_t arg0, uint64_t arg1, uint64_t,
                                 uint64_t, uint64_t *) {
     auto *t = syscall_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto rl_ptr = checked(reinterpret_cast<const Rlimit *>(arg1));
     if (syscall_is_user_task() && !rl_ptr.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // MP-4 (SMAP): safe_copy_from_user (stac-wrapped).
     Rlimit rl{};
     if (syscall_is_user_task()) {
         if (!safe_copy_from_user(&rl, rl_ptr.unsafe_ptr(), 1))
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     } else {
         rl = *rl_ptr.unsafe_ptr();
     }
     (void)rl;
     (void)arg0;
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_getrandom(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                 uint64_t, uint64_t *) {
     // arg0 = buffer, arg1 = length, arg2 = flags (reserved, must be 0)
     if (arg2 != 0)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (arg1 == 0)
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK); // zero-length request: zero bytes produced (count).
     // v0.4.0 MP-1 hardening: reject a null buffer for ANY caller (the boot
     // identity map previously masked writes to address 0x0).
     if (arg0 == 0)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     if (syscall_is_user_task()) {
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto buf = checked(reinterpret_cast<uint8_t *>(arg0), arg1);
         if (!buf.valid())
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         // MP-4 (SMAP): random_fill is generic (kernel buffers elsewhere); the
         // user write is stac-wrapped with fault recovery.
         g_user_access_recover_ip =
@@ -465,7 +469,7 @@ uint64_t Syscall::sys_getrandom(uint64_t arg0, uint64_t arg1, uint64_t arg2,
 recover_rand:
     arch::clac();
     g_user_access_recover_ip = 0;
-    return static_cast<uint64_t>(-1);
+    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 }
 
 uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
@@ -473,10 +477,10 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     // arg0 = buffer, arg1 = size, arg2 = flags (0=read, 1=clear)
     if (arg2 == 1) {
         kernel::log::DmesgService::instance().clear();
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     if (arg0 == 0 || arg1 == 0)
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK); // empty read: zero bytes produced (count, not status).
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     char *user_buf = reinterpret_cast<char *>(arg0);
@@ -486,7 +490,7 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     if (syscall_is_user_task()) {
         auto buf = checked(user_buf, user_size);
         if (!buf.valid())
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         user_buf = buf.unsafe_ptr();
         // MP-4 (SMAP): arm fault recovery for the user writes inside the
         // for_each callback below.

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -148,6 +148,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a26ce5bbfe1af8c3aa136fb2f57743383"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the next directory entry from a cluster chain.  <br /></td></tr>
 <tr class="memitem:ae85fd58e1ca6c4db8cc25e966936083c" id="r_ae85fd58e1ca6c4db8cc25e966936083c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c">kernel::fat32::lookup_in_dir</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name, DirEntry &amp;entry)</td></tr>
 <tr class="memdesc:ae85fd58e1ca6c4db8cc25e966936083c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Look up a name in a directory cluster chain.  <br /></td></tr>
+<tr class="memitem:ae93a85e2f3b7cee00022a3e34747d9ac" id="r_ae93a85e2f3b7cee00022a3e34747d9ac"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1fat32.html#ae93a85e2f3b7cee00022a3e34747d9ac">kernel::fat32::lookup_in_dir_at</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name, DirEntry &amp;entry, uint64_t &amp;out_index)</td></tr>
+<tr class="memdesc:ae93a85e2f3b7cee00022a3e34747d9ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Look up a name, reporting the matched on-disk slot index. read_dir_entry leaves pos one past the returned slot (it increments before every true return, including via the skip-recursion), so the matched slot is pos - 1. pos &gt; 0 whenever we return true.  <br /></td></tr>
 <tr class="memitem:ab2b90c3fd678120edc03be6e4d00a917" id="r_ab2b90c3fd678120edc03be6e4d00a917"><td class="memItemLeft">int64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1fat32.html#ab2b90c3fd678120edc03be6e4d00a917">kernel::fat32::read_file</a> (Fat32Partition &amp;fs, uint32_t first_cluster, uint32_t file_size, uint64_t offset, uint64_t count, uint8_t *buffer)</td></tr>
 <tr class="memdesc:ab2b90c3fd678120edc03be6e4d00a917"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read data from a file's cluster chain.  <br /></td></tr>
 <tr class="memitem:acaa9ea1e7204014b1ee87d1b18e2786f" id="r_acaa9ea1e7204014b1ee87d1b18e2786f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1fat32.html#acaa9ea1e7204014b1ee87d1b18e2786f">kernel::fat32::free_cluster_chain</a> (Fat32Partition &amp;fs, uint32_t first_cluster)</td></tr>

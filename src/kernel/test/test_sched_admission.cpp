@@ -322,6 +322,48 @@ JARVIS_TEST(admission_fork_denied_no_leak, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: fork under an exhausted memory budget fails closed with no
+//           leak (issue #328): clone() charges the child's kernel stack
+//           against the global budget symmetric to create().
+// Input: drain the budget (reserve all), then fork from a dispatched
+//        aperiodic task; admission itself has no budget check, so the
+//        forker dispatches and sys_fork must return -1 from the clone
+//        reserve failure. Budget restored before asserts.
+// Expect: sys_fork → -1; budget fully restored; no ResourceTracker delta.
+// Depends: TaskControlBlock::clone budget reserve (issue #328)
+JARVIS_TEST(admission_memory_budget_denied_at_fork, "PRE: none | POST: none") {
+#if CONFIG_MEMORY_BUDGET
+    static volatile uint64_t g_fork_ret = 0;
+    g_fork_ret = 0;
+    auto *forker = TaskControlBlock::create(
+        []() {
+            uint64_t regs[22] = {};
+            g_fork_ret = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::FORK), 0, 0, 0, 0,
+                regs);
+        },
+        11, 0);
+    JARVIS_ASSERT(forker != nullptr);
+    Scheduler::add_task(*forker);
+    uint64_t avail = Scheduler::remaining_memory_budget();
+    JARVIS_ASSERT(avail > 0);
+    JARVIS_ASSERT(Scheduler::reserve_memory_pages(avail));
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(forker);
+    uint64_t fork_ret = g_fork_ret;
+    Scheduler::release_memory_pages(avail);
+    JARVIS_ASSERT(fork_ret == static_cast<uint64_t>(-1));
+    kernel::test::terminate_if_live(forker);
+    Scheduler::drain_zombie_list();
+#else
+    // Audit S3: budget APIs exist only under CONFIG_MEMORY_BUDGET (as does
+    // the gate itself) — opt-out builds trivially pass to keep the class
+    // count stable across configurations.
+#endif
+    JARVIS_TEST_PASS();
+}
+
 void register_sched_admission_tests() {
     Logger::info("Registering sched_admission tests");
     JARVIS_REGISTER_TEST(admission_lub_rejects_overrun);
@@ -332,4 +374,5 @@ void register_sched_admission_tests() {
     JARVIS_REGISTER_TEST(admission_exemptions_untracked);
     JARVIS_REGISTER_TEST(admission_fork_denied_no_leak);
     JARVIS_REGISTER_TEST(admission_fork_from_user_parent_admitted);
+    JARVIS_REGISTER_TEST(admission_memory_budget_denied_at_fork);
 }

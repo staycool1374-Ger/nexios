@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -158,6 +158,10 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:af74671733f31d9039d1c922b93cae50e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enables or disables framebuffer rendering.  <br /></td></tr>
 <tr class="memitem:a218b0fead5d0e1ee9b29ae73d357d168" id="r_a218b0fead5d0e1ee9b29ae73d357d168"><td class="memItemLeft">static Terminal *&#160;</td><td class="memItemRight"><a class="el" href="#a218b0fead5d0e1ee9b29ae73d357d168">instance</a> ()</td></tr>
 <tr class="memdesc:a218b0fead5d0e1ee9b29ae73d357d168"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the singleton terminal instance.  <br /></td></tr>
+<tr class="memitem:aac3e0afa3e55a840f0f2a220c77a96fc" id="r_aac3e0afa3e55a840f0f2a220c77a96fc"><td class="memItemLeft">static uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#aac3e0afa3e55a840f0f2a220c77a96fc">cols</a> ()</td></tr>
+<tr class="memdesc:aac3e0afa3e55a840f0f2a220c77a96fc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Text width in columns (issue #286 80-col discipline).  <br /></td></tr>
+<tr class="memitem:a558cdc637b74309250b5eadfb92e5330" id="r_a558cdc637b74309250b5eadfb92e5330"><td class="memItemLeft">static uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a558cdc637b74309250b5eadfb92e5330">rows</a> ()</td></tr>
+<tr class="memdesc:a558cdc637b74309250b5eadfb92e5330"><td class="mdescLeft">&#160;</td><td class="mdescRight">Text height in rows (status bar excluded).  <br /></td></tr>
 <tr class="memitem:af1905f5bdc857307c96e9d668c6938ab" id="r_af1905f5bdc857307c96e9d668c6938ab"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af1905f5bdc857307c96e9d668c6938ab">draw_status_bar</a> (const char *left, const char *right)</td></tr>
 <tr class="memdesc:af1905f5bdc857307c96e9d668c6938ab"><td class="mdescLeft">&#160;</td><td class="mdescRight">Draws or updates the persistent status bar at the bottom of the screen.  <br /></td></tr>
 <tr class="memitem:a50cec1566f383b8fba919b11eb9e50b3" id="r_a50cec1566f383b8fba919b11eb9e50b3"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a50cec1566f383b8fba919b11eb9e50b3">show_splash</a> ()</td></tr>
@@ -275,6 +279,34 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="classservice_1_1_terminal_a915d744db80ce07ee60c9aafe3789916_cgraph.png" border="0" usemap="#aclassservice_1_1_terminal_a915d744db80ce07ee60c9aafe3789916_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 1 -->
 </div>
+
+</div>
+</div>
+<a id="aac3e0afa3e55a840f0f2a220c77a96fc" name="aac3e0afa3e55a840f0f2a220c77a96fc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac3e0afa3e55a840f0f2a220c77a96fc">&#9670;&#160;</a></span>cols()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t service::Terminal::cols </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Text width in columns (issue #286 80-col discipline). </p>
+<dl class="section return"><dt>Returns</dt><dd>Framebuffer-derived columns, or 0 when uninitialised. </dd></dl>
 
 </div>
 </div>
@@ -503,6 +535,34 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="classservice_1_1_terminal_a86e177fe04cda56e97c27853fedfd996_cgraph.png" border="0" usemap="#aclassservice_1_1_terminal_a86e177fe04cda56e97c27853fedfd996_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 6 -->
 </div>
+
+</div>
+</div>
+<a id="a558cdc637b74309250b5eadfb92e5330" name="a558cdc637b74309250b5eadfb92e5330"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a558cdc637b74309250b5eadfb92e5330">&#9670;&#160;</a></span>rows()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t service::Terminal::rows </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Text height in rows (status bar excluded). </p>
+<dl class="section return"><dt>Returns</dt><dd>Framebuffer-derived rows, or 0 when uninitialised. </dd></dl>
 
 </div>
 </div>

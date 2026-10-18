@@ -8,6 +8,7 @@
 
 ## Active cautions (curated digest — read at session start; cap ~12 lines)
 
+- User-range byte math: guard `count <= LIMIT / sizeof(T)` BEFORE multiplying — `count*sizeof` wraps to 0 and passes the `size==0` early-true; fix every site sharing the idiom, and bump both fine + aggregate count rows (#337).
 - TCBs are memset-zeroed, never ctor-built: set every non-zero sentinel at all 4 memset sites (create/create_user/clone/elf finalize) plus a mechanical defense that never trusts the value (see #3).
 - Release the primitive lock BEFORE reschedule; every BLOCKED leaves the ready queue (INV-2); waits are bounded or scheduler-mediated; test bridge sequences guard add_task too (§11, #208).
 - Test waits use need_resched + hlt (wait_for_termination_safe); BLOCKED + dequeue_ready; bare pause-spins starve ticks under TCG. Rendezvous tests must wake on message arrivals, never on third-party timing (tick-dependent peers/killers hang under load); cyclic-capable walks get trip-count fail-stops, inserts unlink-first.
@@ -21,8 +22,14 @@
 - TEMP-DIAG fully reverted (grep-verified); QEMU reaped after every session; `-serial mon:stdio` eats typed bytes — TCP/file serial for E2E input.
 - Freeze ticks (IrqGuard) around ISR-observed measurements; expiries derive from the live clock, never fixed bases; relative-over-absolute timing asserts (≥3× headroom); watchdog kills get STATUS history rows.
 - Zero-S-line TIMEOUT + identical-binary rerun green = TCG stall, not regression (check host load first); debug-green never implies release-green (build release before any full gate).
-- Hunt-loop evidence is file-grade or it didn't happen: tee every loop to `/tmp/jarvis-hunt-<issue>-<YYYYMMDD-HHMMSS>.log`, record per-iteration PASS/TIMEOUT + load average inline, and post the file path + tally as an issue comment the same session (serial log is shared/singleton — raw output not tee'd is lost); never pipe make/test through `head` (SIGPIPE kills the run).
+- Hunt-loop evidence is file-grade or it didn't happen: tee every loop to `/tmp/jarvis-hunt-<issue>-<YYYYMMDD-HHMMSS>.log`, record per-iteration PASS/TIMEOUT + load average inline, and post the file path + tally as an issue comment the same session (serial log is shared/singleton — raw output not tee'd is lost); never pipe make/test through `head` (SIGPIPE kills the run). GDB stops the guest: one interrupt + full capture + detach, never touch a timed run; `call` lies on the TCG stub (raw reads only); S-lines live in debugcon, not serial.
+- Pure-move splits: boundary-asserted chunks, file-statics to the first-consumer shared home (never per-TU copies), using-decls for every bare cross-TU name, second-`namespace`-blocks closed before reopening (trust the compiler over stale LSP diagnostics); test class names must match the registry exactly (`Unknown test class` = zero tests + QEMU_EXIT stall).
+- Readdir lists only the underlying fs: mount points live solely in the VFS mount table, so every `ops->readdir` caller hides them — overlay at the VFS layer (resolve + vnode_identity_match, spelling-independent), never per-fs; synthesized entries need a resolve-fallback for type probes (#346).
+- Timeout wake is edge-triggered: one expiry → one READY wake (skip duplicate READY+queued re-wakes); EDF never returns current (self-pick guard) — both one-line guards, no new locks, stranded READY still rescued (#345).
 - TCG wall dilation is load-bearing: size every timeout tier from measured walls; re-verify flakes before bisecting.
+- Reverted ENSUREs are evidence, not failure: an entry ENSURE that fires on a legal path proves the contract — not the code — is wrong (defer_kill/flush/set_task_ready all assumed a held lock the lock-free tail doesn't hold). Revert immediately, document the true holder discipline, and re-verify; never narrow the test to protect the ENSURE. Take-site placement (at the guard, not the entry) is the correct form for conditional takes; try_lock-skip paths must NEVER get holder ENSUREs (skip is the design).
+- IRQ-window hoists need caller-side reentrancy analysis FIRST: proving "no ISR calls X" is insufficient — prove "no ISR path can reach a caller of X while the window is open" (reschedule runs unlocked by design, so timer ISRs nest fully). A hoist that widens any ISR-reachable window needs identical-binary goldens + full core before/after, and a revert on the first audit S1/S2.
+- test-history.txt is append-only evidence: never dedupe, never rewrite rows, never fill TIME from memory — a wrong-but-plausible entry is worse than a missing one (re-run to measure; mark unmeasurable runs TIME 0 with explicit STATUS).
 - Reap stray QEMUs after every session (tool-killed interactive runs survive reparented, burning ~25% CPU each, masquerading as load spells); recipe-only Makefile edits don't rebuild cpio/ISO — rm the artifacts to force repack.
 - Interactive user-task tests need a scripted handoff (`source`: loadelf/sleep/runelf/sleep — `fg` is a stub, /dev/tty shared); TCP-serial output before connect is lost (send CR first for a fresh prompt); convict user-space faults by pristine-binary control experiment, never by re-reading the derivation.
 - Cross-arch: link all three arches for shared-header edits; arch-guard test bodies; riscv low half is identity/MMIO (clone copies L0[0]); aarch64 needs HHDM aliases + 48-bit phys masks; S-mode cannot touch M-mode CSRs; riscv64 never folds __builtin_memcmp (no freestanding provider) — manual compares in tests.
@@ -31,8 +38,11 @@
 - Harness stall handling: retry a class ONCE on the zero-S-line stall signatures only (`RESULT: TIMEOUT`/`QEMU_EXIT`), never on a genuine test FAIL; mark `STALL-RECOVERED` only when the retry actually PASSes (guard the recovered tag on both the PASS arm and `nfail==0`), `STALL-UNRECOVERED` otherwise; size the outer per-class timeout for the doubled worst case (#322). Distinguish "no summary because it stalled" from "no summary because it crashed" before retrying.
 - reschedule() arms only, ticks switch: harness yields never bound a higher-prio peer's progress — deterministic cross-task tests mask the tick across wake→decision→act (peer frozen, observed state provable); polling for a mid-flight state cannot catch tick-driven jumps (#267).
 - Never switch ARCH mid-task: the arch-change clean wipes build/ (including any project-local toolchain); shared `find build` patterns must exclude non-build homes (a `*.d` DIRECTORY breaks DEPFILES -include) (#273).
+- Arm-or-skip symmetry: a silent-skip writer (walk-fail → return) must never pair with an always-armed record — map the span before install; page-aligned memsz deliberately skips DATA-after (anti-corruption), so regression fixtures use the exact live segment shape (#271).
 - Flat-store integrity: scrub the carve (not the grant) for pristine-zero; CRC32 the metadata region (verify at load) + each file's LIVE bytes (verify lazily, computed on close); verify the loaded dir array BEFORE publishing the cache (`cached ⇒ verified`) so a concurrent lookup never sees unverified bytes; a 96 B dir entry straddles a 512 B block — the store must split it (the naive "skip straddling entries" silently drops every entry ≥ index 5) (#318).
 - Pre-suite stall (#299/#280) is HARNESS STARVATION, not a dead tick or stuck dispatcher: `is_test_active()` gates BOTH the on_tick monitor-wake and the harness-nonpreempt protection, so the window before the suite is marked active leaves the prio-10 harness unprotected against the prio-127 monitor woken every tick. Mark the suite active (inject the test context + set_test_active) BEFORE `ensure_monitor()`/`snapshot_create()`. Distinguish starvation from a dead tick with counters: `ticks`/`rate_monotonic_schedule`/`switch_to_task` advancing = ticks alive (#300 is the dead-tick case: a task-context on_tick corrupts the APIC source).
+- VMM split/flag-day discipline (#363): pure-move splits verify by reconstruction (concatenated chunks == original bytes) with a shared-internal header up front for file-statics (per-TU copies would fork throttle counters); bulk renames need a post-pass token grep (`0xFFF` glues into `kPageOffsetMaskF...`); test leaf-phys extraction must use the canonical translation or production frame mask (NX survives `& ~0xFFF`); HAL reuse needs a bit-identity proof (attr SH/NS+AP diverges); new TUs need gen.mk regen; `-Werror` makes overload removal atomic (missed caller = build break).
+- Checked-unmap discipline (#366): reworked `_err` probes presence BEFORE delegating to the side-effecting void twin; cap-unmap twins skip revoked/IO checks (revoke path unmaps itself); revoke/teardown fold-and-ignore with `(void)` (no logging under registry locks — lock-order hazard), log-and-continue only on already-logging boot/teardown paths; hole-coverage tests ship in the same commit (probe-guarded, never unmap live kernel state); test-history rows carry measured times only (re-run, don't estimate).
 
 ## Entry format
 
@@ -44,6 +54,463 @@
 ```
 
 ## Entries
+
+### #362 — order-sensitive path-tracer fold (audit APPROVED, commit pending)
+
+- **Learned:** (1) XOR is order-blind by construction (a^b==b^a) — a
+  path-control scheme claiming "wrong order" detection must NOT use
+  XOR; use an order-sensitive fold `chain = chain*K + bit` (K odd
+  golden). (2) Expected values MUST be computed by the same constexpr
+  fold (`path_expected(...)`), never hand-derived — a hand value and
+  the runtime fold drift silently. (3) When the fold is not invertible,
+  break/resume validation becomes "chain unchanged since handoff"
+  (compare to the checkpoint), not a suffix-XOR. (4) Keep the
+  bit-distinctness static_assert (OR of enum bits == all-ones mask) —
+  a duplicated bit hides a skipped step; the fold-value asserts no
+  longer cover it. (5) A 2-arg API change needs a caller grep
+  (path_resume_validate had exactly one caller).
+- **Adapted:** `path_mix`/`path_expected` in path_tracer.hpp; 3
+  registries express expected via the fold; resume API 1-arg; new
+  reorder test; path_tracer 7/7, core 577/577, release 21/21, bench
+  38 cyc/step.
+- **Style re-surface:** constexpr helpers over hand-derived constants;
+  static_assert on enum bit-uniqueness.
+
+### #347 — XOR path tracing (CLOSED; A–E all APPROVED)
+
+- **Learned:** (1) XOR traces detect missing/duplicate steps, never
+  reordering — checkpoints between order-sensitive steps are the only
+  order proof. (2) Every traced function needs its own registry; a
+  step/insert anchor must be OUTSIDE the conditional block it marks.
+  (3) Instrumenting private functions forces a visibility decision
+  (map_phys_range_try → public; justified: no hidden state). (4)
+  Test TUs compile in release too — CONFIG_DEBUG-only symbols need
+  `#if` guards with a trivial release pass; debug-only vars in
+  mixed-branch code need `[[maybe_unused]]`. (5) Count rows: bump the
+  FINE row AND every aggregate that includes it (bench 27→28); aggregate
+  drift is warn-only but flagged. (6) Debug-only skip masks must be
+  compiled out in release. (7) Adding any TU perturbs timing and can
+  toggle the pre-existing reaper/zombie flake (zombie_count!=0 at
+  test_zombie_cleanup.cpp:126) — confirm against HEAD + standalone
+  before blaming the slice; host load ~3 correlates.
+- **Adapted:** new `path_tracer.{hpp,cpp}` + per-subsystem registries
+  (`scheduler_path`, `task_path`, `vmm_path`); 5 test classes
+  (path_tracer 6, scheduler_dispatch_path 4, task_path 5, vmm_path 4,
+  bench_path_tracer 1); core 576/576; release core 21/21; overhead
+  25 cyc/step (TCG). Follow-up #361 (safe rollback injector).
+- **Style re-surface:** [[nodiscard]] on validators; constinit state;
+  static_assert on enums/expected constants; release-safe test guards.
+
+### #347-D — VMM range-map segments (audit APPROVED, commit pending)
+
+- **Learned:** (1) Instrumenting a private function forces a visibility
+  decision — map_phys_range_try had to become public (judged safe: no
+  hidden state, explicit pml4). (2) A full-PMM-drain fixture to force a
+  mid-range alloc failure PAGE-FAULTED the kernel (freed an in-use
+  page) — do not drain the PMM outside the OOM tests' guard; filed
+  #361 for a safe injector. (3) Always fix a misleading coverage claim
+  rather than leave a docstring asserting coverage that does not exist.
+- **Adapted:** `vmm_path.hpp` (5 steps, 3 outcomes) + steps in
+  map_phys_range_try; vmm.hpp visibility; 4 tests; #361 follow-up.
+- **Style re-surface:** release build needs `[[maybe_unused]]` on
+  variables only used in CONFIG_DEBUG branches.
+
+### #347-C — task create/cleanup segments (audit APPROVED, commit pending)
+
+- **Learned:** (1) Step/insert anchors must sit OUTSIDE the conditional
+  blocks they mark — inserting after `parent->remove_child()` or
+  `waiting_on_queue = nullptr` put the step inside the `if`, so the
+  common path skipped it (chain 0x3FAF vs 0x3FFF; bits 4+6 missing).
+  (2) Invalid class name silently runs *something* and stalls — verify
+  the class exists in test_registry.cpp (zombie_cleanup ≠
+  scheduler_zombie). (3) A reproducible core QEMU_EXIT is not a
+  regression until reproduced on the committed baseline (git stash -u
+  + rebuild + same class); host-load stall cluster strikes here.
+  (4) Release build must be checked for new test files (TF_KERNEL
+  still compiles); guard debug-only symbol access with #if and give a
+  trivial release pass branch.
+- **Adapted:** `task_path.hpp` (5+14 bits, static_asserts) + 19 step
+  sites; 5 tests green; scheduler_zombie 5/5; core 572/572; release
+  ISO builds.
+- **Style re-surface:** N/A (build Errors 0).
+
+### #347-B — dispatch segments (audit APPROVED after 1 REJECT, commit pending)
+
+- **Learned:** (1) Test-task priorities: HIGHER number = higher
+  priority (prio-11 starves prio-10, #242) AND must stay within
+  CONFIG_PRIORITY_CEILING (127) — enqueue() indexes the level array
+  directly, so prio-200 wrote OOB and broke the whole RQ (picked
+  idle, chain 0). (2) Debug-only symbols in test TUs need
+  CONFIG_DEBUG guards in the TEST file too (auditor S2, release
+  compile break — rejected patch applied verbatim). (3) Capture
+  results → unwind (arm clear, candidate re-enqueue, hook clear,
+  drain) → assert LAST, or assert-abort leaks. (4) reaper flake:
+  zombie_count!=0 in core but 5/5 standalone + 567/567 retry =
+  stale-zombie timing, note and proceed.
+- **Adapted:** `scheduler_path.hpp` + 8 step sites (reschedule arm,
+  next_task select, 6× switch_to_task apply); 4 tests green;
+  release ISO builds.
+- **Style re-surface:** N/A (build Errors 0).
+
+### #347-A — PathTracer core (audit APPROVED, commit pending)
+
+- **Learned:** (1) XOR detects missing/duplicate steps, NEVER pure
+  permutation (a^b == b^a) — documented in the header; order proof
+  needs checkpoints between order-sensitive steps. (2) New .cpp
+  needs `rm mk/cpp-rules.*.gen.mk` (generated, git-ignored) or the
+  link fails with "No rule to make target". (3) `git add -N` new
+  files before `git diff main` or the audit patch silently omits
+  them. (4) "Error while processing" on ~every file is pre-existing
+  batch-tool noise, not a slice signal. (5) Aggregate count rows
+  stay drifted by convention (core 557 row vs 563 observed — green);
+  only fine rows must match.
+- **Adapted:** `src/kernel/core/path_tracer.{hpp,cpp}` + 6 tests
+  (path_tracer 6/6, core 563/563).
+- **Style re-surface:** N/A (new files clean; build Errors 0).
+
+### #348-F — verification sweep, closing #348
+
+- **Learned:** (1) Sweep discipline: re-run owning aggregates on the
+  FINAL tree even when slices were green (headers are ubiquitous).
+  (2) test-history rows need measured times — copied times are
+  fabrication; re-run rather than paste. (3) One core QEMU_EXIT in
+  the sweep (retry green) matches the session's flake cluster, not
+  new cause (no source changed since green runs). (4) Count rows:
+  fine rows bumped with tests; aggregate totals stay drifted by
+  convention (observed > row tolerated, verified not enforced).
+- **Adapted:** full gate sweep green (selftest/core/ipc/capability/
+  proc_elf + hrt/bench/stress/testrunner); counts reconciled
+  (20/11/13/6). #348 CLOSED (A–E + F, all audits APPROVED).
+- **Style re-surface:** N/A (verification only, no source change).
+
+### #348-E — constraints (audit APPROVED, commit pending)
+
+- **Learned:** (1) Constraints are review-cheap to audit (restrict-only
+  ⇒ behavior-neutral by construction when everything compiles).
+  (2) Overload sets need care: constraining one overload reshapes
+  resolution — verify pointer/integer/enum dispatch unchanged
+  (nearly dropped the T* overload mid-edit). (3) Evaluated-no-change
+  is a complete result for an audit tick (designated init already
+  modern). (4) Long core runs flake-cluster under host load
+  (zombie leftovers, partial reads, QEMU_EXIT) — re-run twice before
+  digging; isolated-class green + re-run green = proceed with note.
+- **Adapted:** 5 template constraints; designated-init evaluated.
+- **Style re-surface:** ad-hoc requires for single-use callables over
+  new concepts (no API without a second user).
+
+### #348-D2 — Span/bit primitives + bounded adoption (audit APPROVED)
+
+- **Learned:** (1) New-utility scope discipline: ship minimal API
+  (dropped subspan — logic without users), static_assert the rest,
+  adopt narrowly, document evaluated-skips like real decisions.
+  (2) `capture_state` IGNORING its size arg was a latent bug class —
+  Span+ENSURE fixed it for free. (3) #347-compat is a design input,
+  not an afterthought: stable VMM signatures + stateless primitives
+  keep the tracing design space open. (4) bit_cast does NOT replace
+  inttoptr idiom or explicit-endian shifts — say so explicitly or
+  someone will "clean them up" later.
+- **Adapted:** span.hpp + bit.hpp with goldens; 2 Span adoptions.
+- **Style re-surface:** transparency as a documented property for
+  future-traced code.
+
+### #348-D1 — enum-class migration (audit APPROVED, commit pending)
+
+- **Learned:** (1) Scoped-enum migration is compiler-complete under
+  -Werror: bulk rename + signature migration, iterate errors to zero.
+  (2) ABI boundaries convert explicitly (static_cast + legacy-semantics
+  comment); internals go fully typed. (3) `==0`/`!=0` and bare-`0`
+  args are the long tail — grep them, don't eyeball. (4) Core
+  QEMU_EXIT during task-creation bursts (pool8 draining, ~1000th
+  task) is an order/load flake signature: isolated class green +
+  re-run green + no migrated type on the path = proceed with note.
+- **Adapted:** Enum concept + to_underlying; CapRights/IpcFlags class
+  + ops + full migration; syscall boundary conversions.
+- **Style re-surface:** short enumerators on scoped enums; NONE = 0
+  sentinel instead of bare 0.
+
+### #348-C — compile-time (audit APPROVED, commit pending)
+
+- **Learned:** (1) Script value-semantics kill: `& ~0xFFF` → `& ~MASK`
+  where MASK already contains the `~` inverts every address — boot
+  triple-faults with zero serial. Bisect by stash-groups + clean
+  rebuild (rules out incremental staleness). (2) constexpr needs
+  bodies in headers (link users fail otherwise); in-class asserts
+  can't evaluate private members (incomplete-class) — drop or move
+  out with access. (3) evaluated-no-change is a valid slice outcome
+  (macros un-convertible; sv39 assert covered by runtime tests).
+  (4) riscv build catches what x86 can't (assert placement) — always
+  link all three before commit.
+- **Adapted:** constexpr validators + goldens; table mask + asserts;
+  enum anchors; HHDM/SSTATUS naming.
+- **Style re-surface:** masks need documented domains (table vs PTE);
+  scripts reviewed as code (again).
+
+### #348-B — low-risk attributes (audit APPROVED, commit pending)
+
+- **Learned:** (1) Scripted edits need diff-review before build:
+  one script stripped `static` from 3 tick locals (watchdog died —
+  gates caught it) and another injected `noexcept` at 4 call sites
+  (review caught it). Mechanical ≠ safe; always `git diff` scripts.
+  (2) `[[nodiscard]]`-style placement rules bite again: attributes lead
+  on statics; `constinit` needs static storage (automatics reject).
+  (3) `using enum` with zero applicable sites = no churn (same class
+  as the issue's own evaluated items). (4) Zombie-count tests are
+  timing-sensitive under load — one leftover-zombie flake, green on
+  re-run; re-run, don't chase.
+- **Adapted:** likely/unlikely legs; constinit trivial statics;
+  noexcept leaves+defs; checker noexcept-skip.
+- **Style re-surface:** hints never change semantics (verify by
+  reasoning, not testing); scripts reviewed as code.
+
+### #348-A — nodiscard (audit APPROVED, commit pending)
+
+- **Learned:** (1) `[[nodiscard]]` goes LEADING on statics
+  (`[[nodiscard]] static T f()`; mid-position is a hard error).
+  (2) -Werror makes the ignored-site set exhaustive by construction —
+  just iterate the build. (3) Assert-choices need loss analysis:
+  NONBLOCK contention sends MUST stay unchecked (fold or void), paired
+  benchmark loops fold into existing asserts. (4) The memory checker's
+  30-char snippet window breaks under attribute prefixes — strip
+  attributes first. (5) Real bugs surface: ramdisk regrant reported OK
+  on undelivered grants (now NOGRANT).
+- **Adapted:** nodiscard on all error/status decls; ~20 call sites
+  fixed; checker snippet fix.
+- **Style re-surface:** explicit discard needs a rationale comment;
+  benchmark purity is a valid rationale.
+
+### #325-F — shared-table/TLB audit (audit APPROVED, closing #325)
+
+- **Learned:** (1) Audit-first again: merge/TLB/PCID/free-vs-use were all
+  already coherent (ownership skips, CPU0 pin, switch-flush, pcid purge,
+  dead-table rule, closed #157/#158) — the deliverable is contract docs
+  + one immutability test, not code. Knowing when NOT to change code is
+  the audit's highest-value outcome. (2) Verify the full invariant
+  chain on paper before writing docs: map-flush + switch-flush + pin +
+  never-reactivate must ALL hold for local-only to suffice — one broken
+  link (e.g. exec without switch-flush) voids the contract.
+  (3) #325 full-cycle lessons: verify issue premises first (half the
+  charter was stale/half-done); caller-migration slices must run owning
+  aggregates; adjacent-type params need extra review; refusal-loop
+  drains + hang caps for OOM tests; refusal beats exact-need under SMP.
+- **Adapted:** merge/TLB/free-vs-use contract docs; pt_merge 5→6.
+  #325 CLOSED (A–F all APPROVED).
+- **Style re-surface:** contract docs carry the why-chain (§9); tests
+  mirror file conventions (synthetic kernel-owned tables).
+
+### #325-E — fork deep-copy audit (audit APPROVED, commit pending)
+
+- **Learned:** (1) Audit BEFORE assuming defect: flag parity + MMIO skip
+  were already correct verbatim on all arches — encoded as tests, zero
+  code change for 80% of the charter. (2) The real defect was the
+  quiet one: user huge entries copied BY VALUE = shared writable page
+  parent/child; unreachable + fail-closed is strictly safer than alias.
+  (3) OOM "partial state" needs the full teardown chain verified
+  (destroy→cleanup→free_user_pages + USER-ownership of every partial),
+  not just the caller's destroy call. (4) Hand-installed table entries
+  in tests orphan lower tables — capture + free bypassed levels
+  explicitly (free_user_pages only sees linked levels).
+- **Adapted:** huge fail-closed ×4 sites; OOM contract doc; 3 tests
+  (process_pml4_clone 10→13).
+- **Style re-surface:** fail-closed over alias (§5 reachability rule);
+  contract docs state the full invariant chain (§9).
+
+### #325-D — NX posture (audit APPROVED, commit pending)
+
+- **Learned:** (1) Policy defaults beat per-call discipline: flipping the
+  cap-map default to NX fixed 2 registries + pager with zero caller edits;
+  explicit opt-in (`executable=true`) keeps code paths possible.
+  (2) Walk-only inspectors (RO precedent) are the sanctioned way to pin
+  PTE bits from tests — no execution probes needed. (3) Migration
+  audit order: data-only void→5-arg flips are behavior-safe iff the
+  pages provably never execute (stacks/heaps/buffers); code/data-mixed
+  (ELF pins) must keep X — check segment content, not just the call.
+- **Adapted:** NX-default cap errs + bools; 6 data-site NX migrations;
+  `pte_is_executable_in_pml4`; cap_mmio 19→20.
+- **Style re-surface:** defaulted params preserve callers (§9 docs must
+  state behavior changes); arch-bit symmetry in inspectors.
+
+### #325-C — unmap naming + B swapped-arg catch
+
+- **Learned:** (1) Caller-migration slices must run the aggregates OWNING
+  the migrated callers: B ran cap_mmio/ipc/selftest/proc_elf but never
+  `capability`, missing a swapped-arg bug (u64↔bool against
+  (user,pml4,executable)) that mapped pager frames into pml4 0 — C's
+  aggregate run caught it. (2) Adjacent bool/u64 params defeat review;
+  the disabled swappable-params tidy check exists for exactly this.
+  (3) Present-to-zero leaves make kernel NULL-derefs silent (supervisor
+  present leaf) instead of #PF — the safety case for clear-leaf unmaps.
+  (4) Not-present is provable unprivileged: offset-read 0 post-unmap
+  (present-to-zero would yield the offset). (5) WARN-level +1 cap
+  residuals pre-date #325-C (bisected, no factory in diff) — filed #360,
+  PASS-with-WARN is not FAIL.
+- **Adapted:** clear-leaf cap-unmaps + convention docs; pager arg fix;
+  cap_mmio 18→19; #360 filed.
+- **Style re-surface:** flush discipline (primitive flushes on mutating
+  path only); Doxygen contract accuracy (§9).
+
+### #325-B — real error propagation + B0 PMM pool-head fix
+
+- **Learned:** (1) 100k takes from a 32k-page window PROVES a cycling free
+  list — arithmetic beats theory; hang-guard caps turn stalls into loud
+  failures. (2) `rebuild_free_list` reset `free_head_` but never
+  `pool_free_head_` despite the hpp promising both — doc-vs-code gaps are
+  real bugs; the OOM tests are now its regression proof. (3) Restoring a
+  boot huge entry RE-MAPS the VA (virt != 0 is correct post-restore).
+  (4) Kernel data mapped through a split PT is NOT freed by snapshot
+  rewind — manual PD save/restore+free is the sanctioned pattern
+  (cross_arch doctrine). (5) OOM-killer null + BSP IrqGuard + settle
+  rounds = deterministic pool exhaustion under SMP; table-pool exact-need
+  math is fragile (staleness/racers) — refusal-loops absorb both.
+  (6) Caller migration must preserve NX bit-for-bit: my first pass
+  silently flipped stack/heap to executable — caught pre-audit by
+  re-reading the 5-arg call.
+- **Adapted:** map_page_try/err real; executable param on in_pml4_err;
+  elf/loader/pager migrations; memory_page_tables 9→11, core 555→557;
+  A-test KEEP 3→4 (rollback was vacuous — clone eats one).
+- **Style re-surface:** checked arithmetic (§6) on every base+count;
+  Requires-preconditions (§9); bounded loops with hang-guard caps (§6).
+
+### #325-A — VMM cap-map transactions (commit pending, audit APPROVED)
+
+- **Learned:** (1) `alloc_page_table` falls back to the general pool when the
+  table pool is empty — pool-exhaustion tests must drain BOTH pools exactly
+  (table via `pool_used/total` + range check, general via intrusive HHDM
+  chain, O(1) storage). (2) First SIL 3 REJECT this cycle caught two REAL
+  arithmetic bugs of mine (phys wrap, mmio size roundup overflow) — the
+  auditor earns its keep; the diff-patch protocol (apply verbatim + fix S3s
+  + re-audit) works. (3) Shared range worker (`map_phys_range_try`)
+  kills loop duplication between frame/mmio cap-map — factor before the
+  auditor asks.
+- **Adapted:** REVOKED/EMPTY_RANGE codes; fallible `map_page_in_pml4_try` +
+  identical void wrapper; `_err` cap-map with rollback; cap_mmio 14→18.
+- **Style re-surface:** checked arithmetic (§6, UINT64_MAX guards on every
+  base+count), Requires-precondition docs (§9), bounded test loops (§6).
+
+### #327 — aarch64 stack-marker link break (stale issue premise)
+
+- **Learned:** (1) Verify issue premises against the tree before designing: the "empty span" claim died to one `grep` (`kernel_stack[16KiB]` in shared kernel.cpp) + `readelf` (spans 0x4028/0x4010/0x13F10) — the real defect was aarch64-only `adrp` reachability, a smaller fix than the issue scoped. (2) On aarch64, ANY reference to a low-VMA object (even address-of) emits a potentially out-of-range `adrp` — placement tests must use absolute linker symbols (immediate-materialized) instead. (3) Answering "are there placement tests" with a test that locks layout via immediates works on all arches without touching the checked values.
+- **Adapted:** aarch64-only value-check guard; `integrity_stack_markers_span` (memory 2→3, core 554→555); SIL 3 APPROVED (`report-20261015T152834Z`, S3-only).
+- **Style re-surface:** arch-guard symmetry (decl/def/call); minimal diff where nothing is broken (riscv untouched).
+
+### #319 — TSC calibration hygiene landing (wall truth deferred to #359)
+
+- **Learned:** (1) Under TCG the virtual TSC rate is workload-dependent (PIO exits retard it, pause-spins yield the vCPU, warm compute runs ~1GHz) while the PIT/APIC follow different virtual clocks — so no boot-time PIT scalar is wall-true for all regimes, and variance across boots (250M→363M) is environmental, not algorithmic. Prove it with host-timestamped markers (WALLMARK: ticks 0.8x, ns 4x, TSC 1G) + external E2E (`sleep 2` wall), never by more in-guest theorizing. (2) Revert discipline held twice: PIO-poll rewrite moved the number the wrong way (250M), warm recal read 3.76G with frozen mono — both reverted immediately, no stacking. (3) A test that cannot pass on the CI platform must warn-skip there (hypervisor CPUID bit, oneshot precedent), enforcing strictly only where trustworthy — a permanently-red gate is worse than an honest skip.
+- **Adapted:** programmed PIT + min-window + median calibration (same gates/fallback); hypervisor-gated `hrt_wall_accuracy_bound` (hrt 5→6, deadline 145→146); SIL 3 APPROVED (`report-20261015T150149Z`); remainder filed as #359 (v0.5.5).
+- **Style re-surface:** §5 fail-closed preserved (guards + fallback untouched); §6 named bounds reused (no new unbounded loops); §10 named sentinels for new constants.
+
+### #358 — readdir cursor-stride follow-up (overlay skipped live)
+
+- **Learned:** (1) Readdir `pos` is a per-hook CURSOR, not a yielded ordinal — initrd advances per raw cpio name, fat32 per raw slot (free/LFN skips included); any index derived as `pos - yielded_count` inflates and skips. Derive phase boundaries in cursor units (re-walk to the EOF cursor). (2) A fake that advances 1:1 per entry cannot catch cursor bugs — stride the fake (phantom slots) to lock real hook semantics; the negctrl then discriminates the exact shipped bug. (3) "No progress" reports need a stray-process check first: two orphaned QEMUs (aborted expect runs) held the disk lock and confused the session — reap + `Failed to get write lock` is the tell. Expect probes must `send "exit"` + expect eof so no strays survive.
+- **Adapted:** EOF-cursor boundary + stride-2 fake; live `ls` E2E probe (`/tmp/jarvis-358-ls.exp`); SIL 3 APPROVED zero findings (`report-2026-10-15T11-41-59Z`).
+- **Style re-surface:** §5 fail-closed on skew (pos < eof guard); §6 terminating walks (stuck-hook break kept); no new locks (§11 untouched).
+
+### #344 — dump-counts mux-chardev redirect fix
+
+- **Learned:** A `sed` substitution against a QEMU flag string fails silently when the flags evolve (mux `chardev:dbg` replaced `mon:stdio`) — the target then runs against unredirected output and reports "not found" instead of the real cause. Every flag-rewriting recipe needs a grep-guard per pattern plus a loud `ERROR + exit 1` when none matches; the coverage target already carried the correct idiom — grep the Makefile for the working precedent before inventing a new redirect.
+- **Adapted:** `_run_dump_counts_qemu` now tries `chardev:dbg` → `mon:stdio` → loud failure; SIL 3 APPROVED zero findings (`report-2026-10-15T06-57-55Z`).
+- **Style re-surface:** build-system changes still need retrieval artifacts + SIL 3 audit; reproduce-first applies to tooling too (the exact `grep: No such file` signature was captured pre-fix).
+
+### #346 — readdir mount-point overlay (ls hid /mnt, /mnt/ramdisk)
+
+- **Learned:** (1) `readdir` enumerates only the underlying fs's own entries while `resolve()` consults the mount table both ways — so mount points are traversable but never listed; the defect necessarily hid every mount (`/dev`, `/proc`, `/tmp` too), not just the reported two. (2) Vnode-identity matching (`resolve(parent)` + `vnode_identity_match`) makes the overlay spelling-independent (relative paths, `.`, trailing slashes need zero normalization) and path-free, so the same helper serves both `cmd_ls` (has path) and `sys_readdir` (fd only, no reverse map). (3) All in-tree readdir hooks share the ordinal-pos convention (+1/entry, untouched on EOF) — pos passthrough is safe, and the phase boundary is re-derived per call by re-walk. (4) A negative control (temporarily return EOF after phase 1) is a ~25 s run and proves the regression test discriminates — do it for every overlay-style fix.
+- **Adapted:** `vfs::readdir_merged()` (vfs.cpp/vfs.hpp) + both callers + resolve-fallback color probe; `vfs_readdir_lists_mount_points` test (storage 166→167); SIL 3 APPROVED (`report-2026-10-15T06-35-44Z`, 2 S3 notes dispositioned harmless).
+- **Style re-surface:** §5 fail-closed on reachable input (shrunk-dir early EOF, truncation guards); §10 named sentinels/bounds; §11 no locks across reschedule (helper holds none; mount table read unlocked like resolve()).
+
+### #271 P2 — rerun builder + shell gate done (issue stays open for P3)
+
+- **Learned:** (1) A shared finalizer tail is a contract: every field it assumes preset (kstack, page_table_, std fds) must be set by ALL callers — the rerun builder missed kstack and faulted on the entry-frame push (convicted via disassembly + register dump, not guessing). (2) Fresh writable pages must be allocated for RW segments before pin copy — the pre-check `virt_to_phys==0 → refuse` correctly caught the missing step with a site-distinct reason (generic reasons hide the site; distinct strings convicted it in one run). (3) Audit-grade teardown accounting: `page_table_=0`-before-destroy leaks the whole fresh space; drops must be epoch-guarded across supersede; doc claims must match implementation (tail returns false WITHOUT teardown).
+- **Adapted:** open_std_fds moved into shared tail (single funnel); unmap-without-free + destroy + epoch-guarded drops on all 13 failure paths; memsz cap, orphan-page free, count clamps; fd asserts in test. Re-audit APPROVED after verbatim rejected-patch application.
+- **Style re-surface:** site-distinct failure reasons (diagnosable first-try); shared-init-or-diverge (hand-rolled TCB init panics in teardown).
+
+### #271 P1 — retention + outcome tracking done (issue stays open for P2-P3)
+
+- **Learned:** (1) ISR-callable paths need IrqGuard+SpinLock: `report_user_task_end` runs from interrupt context (fault path) yet touches `ElfLoader::lock_` — plain SpinLock deadlocks (task holds lock, ISR preempts, spins forever). Every set-count site reachable from ISR now IrqGuard-masked. (2) Admission failure after `take_completed` adopted retention (task_refs=1) leaves stale `golden[].phys` dangling: destroy frees the phys via the TCB, but retention still points at it (UAF on next use / leak on abandon). Fix: `abandon_retention()` before destroy on the never-added path (zero/zero frees inline). (3) Staging vs retention two-stage (fill at load, adopt at take, abandon-first) keeps ineligible loads from polluting retention; request_load fail-before-free preserves a good retained set when a bad path fails validation.
+- **Adapted:** Retention struct (golden+pin+refs+ro baseline), staging/adopt/abandon, outcome enum+hooks, unmap_golden wiring before free_user_pages, shell note_launched after admission, snapshot coverage; tests lifecycle+balance; second audit APPROVED after S1 fixes.
+- **Style re-surface:** lock-then-copy staging (bounded walks only, never reschedule inside); outcome tracking via single funnel (report_user_task_end) never UNKNOWN for reported ends.
+
+### #340 — iocd keyboard delivery done P0-P2 (wave 3: 3/4, issue closed)
+
+- **Learned:** (1) Implicit routing (pid-gating) broke 7 legacy tests by starving the kernel ring — explicit ownership flag won on evidence; "simpler" without a switch is wrong when two consumers exist. (2) Daemon decode fires regardless of registration — self-registration would only add a forward-to-self loop; don't register what needs no routing (guard stayed as defense). (3) Tests that flip global routing must collect-then-clear-then-assert + snapshot-cover the flag (abort-leak safety). (4) Shell services can send_sync to daemons (fail-open, no retry) without liveness risk — precedent for future microkernel transitions.
+- **Adapted:** P0 daemon, P1 forward+flag, P2 shell helper + interactive default; all APPROVED; pushed, issue closed. MMIO/SERIAL stubs explicitly left for separate issues.
+- **Style re-surface:** never both paths (single-ownership invariant asserted, not just commented).
+
+### #271 P0 — VMM RO primitive + load application done (issue stays open for P1-P3)
+
+- **Learned:** (1) aarch64 EL0-RO = AP_USER|AP_RO (both bits) — clearing AP_USER gives no-EL0-access, not RO; verify encodings against the file's own constants, not memory. (2) Namespace-brace accounting: a leftover `} // namespace` silently closed `namespace kernel` — 12 cascade errors from one brace; always re-check block balance after restructuring edits. (3) Test out-param contracts: conditional-write out-params must be documented + never asserted on the negative path (second vacuous-assert catch this session). (4) Big features land phased (P0→P3) with the issue open and R-ticks pending — planner delegation first when no planner type exists (general subagent + schema).
+- **Adapted:** RO primitive + inspector + range helper, both load paths, pin test both paths; elf_loader 16/16; APPROVED; pushed.
+- **Style re-surface:** shared primitive for identical perms (first run included); trailing TLB flush at every map site.
+
+### #339 — in-tree strtok/strtok_r done (wave 3: 2/4)
+
+- **Learned:** (1) `src/libc` C files NEVER link into the kernel (kernel tests exercise `src/lib/string.hpp`) — a kernel unit test for libc would be undeclared AND unlinked; Ring-3 probe is the only honest vehicle. Check link topology before choosing test placement. (2) Suite-fail triage: tlb p99 assert + ioapic-setup stall + deadline outer TIMEOUT all cleared on identical-binary rerun = timer-sensitive cluster under back-to-back load, not regressions. (3) The stall-between-RUN_PRE-and-first-assert shape points at framework/setup, not the test body (which was 20ms-bounded).
+- **Adapted:** strtok + decls, probe block, tls asserts (no new tests/counts); full debug 18/20 + smp/deadline reruns green; APPROVED; pushed, issue closed. scanf/fprintf stay picolibc-only per issue.
+- **Style re-surface:** fail-closed NULL inputs; document thread-unsafety where it exists.
+
+### #338 — thread-local errno via TP cell done (wave 3: 1/4)
+
+- **Learned:** (1) No shared-VM threads exist (clone always deep-copies) + x86 Ring-3 cannot rdfsbase without CR4.FSGSBASE — both found by reading before designing; the design fell out (PCID/SMAP probe pattern). (2) Kernel-side translation impossibility arguments cut both ways: document WHY the layer was chosen. (3) crt0 changes move EVERY userspace image: layout-sensitive tests (stack_cookie DATA-padding assumption) flip — the test mirrored the kernel's own skip-zero invariant instead of over-constraining. (4) Full-suite STALLs (hal/smp/testrunner) all cleared standalone — pressure flakes; always rerun before bisecting. (5) Tracked .elf rebuilds must be committed (libc_verify.c.elf); ignored ones (vfsd, errno_probe) rebuild via make. (6) Second owner-commit race handled by clean rebase, never force-push.
+- **Adapted:** CR4 BSP+AP, libc TP-errno ×3 archs, crt0 registration, probe+harness, counts; full debug 17/20 + 3 reruns; APPROVED; pushed, issue closed.
+- **Style re-surface:** explicit intent, graceful-off CPU probes with loud messages.
+
+### #328 — clone memory-budget charge done (wave 2 complete)
+
+- **Learned:** (1) The global budget is decremented ONLY by create(); PMM allocs attribute to per-task counters instead — read both layers before designing the charge. (2) Reserve only what destroy() releases: over-charging without a matching release monotonically drains the budget (worse than the gap). Symmetry-with-create beat completeness. (3) add_task_err has no budget check (LUB/CPU only) — verified by reading before designing the drain-then-fork test. (4) Aggregate stalls pre-new-test (watchdog 20/145) with identical-binary pass on rerun = TCG flake; Deadline/Proc_elf aggregates flake ~1/3 under host load — always rerun before investigating.
+- **Adapted:** clone reserve + rollback symmetry, regression test, rows sched_admission 8→9 / deadline 144→145; APPROVED (3 S3 notes); pushed, issue closed.
+- **Style re-surface:** fail-closed nullptr + existing sys_fork -1 mapping (no new error paths).
+
+### Wave 1 verification (#331, #334, #335) — owner-fixed, verified + closed
+
+- **Learned:** (1) Before `issue_write update`, ALWAYS `issue_read get` the full body first — I reconstructed #334/#335 bodies from truncated excerpts and dropped the reporter's fix-hypothesis tails. Closed issues keep evidence comments, but the original text is unrecoverable. (2) `proc_elf` stalls at `loader_fault_dump_gated` (fault-dispatch, zero S-lines) with zero source delta between pass/stall/pass runs = H2 deferred-switch race family flake, not a regression; identical-binary rerun is the correct first move (passed 112/112 on 3rd run). (3) Owner batch-fix commits (`19d55cea1` for 3 issues) shift the role to verify-at-HEAD + close: elf_loader 15/15, task_metering 9/9, deadline 144/144, proc_elf 112/112.
+- **Adapted:** all three closed completed with HEAD gate evidence; stall rows recorded with STATUS: TIMEOUT (mandatory history includes abnormal runs).
+- **Style re-surface:** test-history rows required for EVERY run including stalls (PASSED: 0 FAILED: 0 + STATUS).
+
+### Wave 0 (#342, #343, #341) — gate hygiene + fail-closeds done
+
+- **Learned:** (1) `make execute-test dump-counts` is broken on x86_64 (mux chardev vs mon:stdio sed — filed #344); capture TCOUNT from stdout instead. (2) A "flag mismatch" fix can hide a second gate: #341's translation was correct but unobservable until the vfsd daemon's create-deny was found by reading — always trace the FULL path (stub→syscall→daemon→backend) before claiming E2E. Kernel-side translation was impossible (bit 0x200 ambiguous across libcs) — translate at the single owner above the boundary. (3) Daemon fd-table calls (fstat) can never succeed for user fds — authorization-only handlers are the correct shape (mirrors read/write). (4) Ring-3 probes that create files are safe under test_isolate (tmpfs reset between tests) but MUST unlink in-test; place early-print markers (512 B capture cap).
+- **Adapted:** #342 rows reconciled (APPROVED, zero findings); #343 zero-esz guard + probe (APPROVED); #341 translation + VFS_OPEN_CREATE /tmp policy + fstat fix + E2E (APPROVED, 2 S3 notes). All pushed, issues closed.
+- **Style re-surface:** explicit intent ops beat inferred intent (VFS_OPEN_CREATE vs ENOENT-inference); fail honest (ENOSYS) never silent.
+
+### #262 — VFS+daemons+ELF H1–H8 verification pass (9/9 #253 parts done)
+
+- **Learned:** (1) Audit handoffs must match the patch pathspec exactly — citing already-committed files (net.cpp under #260) in a new audit prompt earns a valid S3; generate the patch FIRST, then describe it from `git diff --stat`, never from memory. (2) S4 taxonomy verification = grep raw −1 INSIDE VfsError-typed returns (none found) + confirm boundary enums are actually referenced (vfs.cpp/fat32_fs.cpp use VFS_ERR_*) — internal int conventions with interface docs are compliant, not gaps. (3) History hygiene: awk-captured values carry `\r` from QEMU output — strip before appending, and never invent TIME values; re-run small classes to measure honestly.
+- **Adapted:** 14 dup guards; evidence on #262; SIL 3 APPROVED (1 S3 handoff note). All 9 #253 parts complete (#254–#262); #253 itself left open for owner close.
+- **Style re-surface:** TOCTOU/snapshot-order/CRC paths frozen by explicit verification, not just intent.
+
+### #261 — drivers+IOMMU H1–H8 verification pass (8/9 #253 parts done)
+
+- **Learned:** (1) Push can be rejected mid-cycle by an owner commit — `git fetch` + inspect first: a README-only fixup rebases cleanly under an untouched scope; never force-push. Record the rebase + new hash on the issue thread (audit reports reference patch content, which is unchanged, but hashes move). (2) Issue class names rot (`ahci_deep` → `drivers_ahci_deep`) — same registry-verification lesson as #258/#260, now third occurrence: treat every issue-quoted class name as unverified until grepped. (3) Driver poll loops already carry their M-1 tick-deadline bounds with rationale — H11.3 verification is read-and-confirm, not rewrite.
+- **Adapted:** 9 dup guards + 3 ahci WHY upgrades; evidence + correction comments on #261; SIL 3 APPROVED zero findings.
+- **Style re-surface:** probe-rollback order frozen (S2); ISR completion no-block/no-alloc; MMIO-KVA-only discipline untouched.
+
+### #260 — core/libs/services H1–H8 verification pass (last of the ordered sequence)
+
+- **Learned:** (1) "build" is not a test class (like buffer_pool) — verify every class name in test_registry.cpp before running; the issue's class list can be stale. (2) libc/services keep C/POSIX idioms by design: converting userspace −1/errno to kernel enums would BREAK the userspace ABI — H6 layering is a correctness rule, not just style. Vendored third-party loops (libfdt) are out of scope entirely. (3) Load-induced timing FAILs (tlb p99 bound, zombie-ordering) clear on identical-binary rerun like stalls do — record the failing assert + rerun tally as evidence, same standard; nondeterministic hang POINTS across attempts (34/94/0) are the signature of sickness, not code. (4) Tight poll loops self-inflict load (opencode + Terminal rendering topped ps) — back off polling when the host is sick.
+- **Adapted:** 8 dup guards + 2 WHY upgrades; evidence on #260; SIL 3 APPROVED zero findings. Ordered sequence #257→#260 complete (7/9 #253 parts done with prior #254–#256; remaining #261/#262 out of the ordered scope).
+- **Style re-surface:** user-task fault model ≠ kernel fault model (no ENSURE/locks imported to services); dmesg ring is infra (H7 applies to users, not the ring).
+
+### #259 — interrupts/arch/HAL/timers H1–H8 verification pass
+
+- **Learned:** (1) Audit-mature areas complete H1–H8 with micro-diffs — the review itself is the deliverable; forcing churn would manufacture risk. (2) Suite-first-class core TIMEOUTs are a harness-budget artifact (LTO relink + 129-file TIDY consume the 250 s expect budget before the guest runs), NOT kernel hangs — proven by identical-ISO standalone greens; read `/tmp/jarvis_classruns/<class>.log` head (build lines) vs tail (guest lines) to distinguish build-eaten-budget from guest-hang. (3) Arch-guarded test classes register zero tests off-target (expected-empty, like task_fpu) — verify guards in test_registry.cpp instead of burning watchdog timeouts; aarch64 link is pre-broken (relocation truncated, stash-convicted) — evidence belongs on #327, never inline-fixed under a hygiene gate.
+- **Adapted:** 18 dup-`#pragma once` removals (guard-count verified 1/file); evidence on #259 + #327; SIL 3 APPROVED zero findings.
+- **Style re-surface:** arch-guard byte-identical discipline; asm read-only (briefing §9); H11.3 bounded-or-mediated for every loop.
+
+### #258 — IPC+caps H1–H8 verification pass (audit-mature subsystem)
+
+- **Learned:** (1) A subsystem can complete H1–H8 with a near-empty diff: prior audit cycles (v0.4.9, #296–#298, #321) had already produced WHY-dense code, zero seams, named sentinels — the honest deliverable is verification + keeps, not churn (same precedent as #227 zero-change audits). (2) H6 must respect layering: int index-or-−1/count/handle-0 internals (cap slots, buffer handles) must NOT be migrated to the syscall ABI enum — slot-0 and count-0 are valid data, and the ABI contract (`encode_user_handle` −1) is documented at its single definition point. Inventory return-shape by TYPE (int/uint64_t/bool/size_t) before judging any literal. (3) `buffer_pool` is not a test class (zero tests registered → QEMU_EXIT) — the pool tests live in `data_structures_buffer_pool`; a wrong class name burns two watchdog timeouts, so verify class names in test_registry.cpp first.
+- **Adapted:** 4 dup-`#pragma once` removals; H4 shm div-by-zero filed as #343 (S1 forbids fixing in cleanup); evidence on #258; SIL 3 APPROVED zero findings.
+- **Style re-surface:** §10.5 named sentinels already in place (LIST_EMPTY/BUF_INVALID_*); keep ABI vocabulary at the boundary, internal conventions inside.
+
+### #257 — syscall H1–H8 pure refactor (first v0.5.4 cleanup part)
+
+- **Learned:** (1) Raw `-1/0` ABI returns migrate safely in two classes: failure-`-1` → a value-kept all-ones enumerator (`SYS_ERR_GENERIC_FAIL`), status-`0` → `SYS_ERR_OK` — but pid wildcards (`waitpid -1`), UINT64_MAX saturation, byte/record counts, and int-typed VFS-op zeros must be inventoried FIRST (grep by syntactic shape, judge each) or a mechanical replaceAll corrupts sentinels. (2) H2-vs-S1 collisions (canary-latch failure policy, `mark_vfs_touched` with test-side readers) resolve to KEEP + WHY-comment + report — never refactor the seam under a pure-refactor gate. (3) A stall cluster (suite-first-class TIMEOUTs + one standalone hang at a spinner test) under sustained host load convicts environmental via stash control (clean 553/553) + identical-binary green, even when the hang shape matches a known bug's hang — check `pmset -g therm` + desktop hogs (aerial video decode) before bisecting; the suite's later classes going green in the same run further exonerates the diff.
+- **Adapted:** `SYS_ERR_GENERIC_FAIL` + file-local `kEio` in-tree; keeps annotated at their sites; H8-decline rationale (per-site cleanup pairing) recorded on #257; evidence comment posted.
+- **Style re-surface:** §5 fail-closed preserved (values identical); §10.5 named sentinels; 80-col discipline on the verbose cast idiom (multiline ternaries); dead-artifact asm stays read-only without deletion approval.
+
+### #337 — CheckedPtr count*sizeof overflow rejection
+
+- **Learned:** (1) `count * sizeof(T)` in wrapping uint64 arithmetic can yield 0, and `is_user_range(addr, 0)` early-returns true — so `valid()` accepted an effectively unbounded range. The `count <= LIMIT / sizeof(T)` guard form is constexpr-friendly, freestanding-safe, and keeps `valid()` range-only (the 1 TiB in-range pin still passes). (2) The same wrapping idiom existed in `safe_copy_from_user`/`safe_copy_to_user` — fix every site sharing the idiom, not just the reported one. (3) The `core` aggregate embeds the pointer_isolation group, so enabling one test needs both the fine-row (4→5) and the aggregate (552→553) bump; the `core` run validates both.
+- **Adapted:** `count_fits_user_limit<T>` helper + fail-closed guards at all 3 sites (`checked_ptr.hpp`); regression enabled (`#if 1`) + registered; count rows bumped; SIL 3 APPROVED zero findings; issue evidence comment posted.
+- **Style re-surface:** §5 fail-closed on reachable input (return false, never ENSURE); §10.5 named bounds (`USER_SPACE_LIMIT`); aggregate/member count-row parity.
 
 ### #45 — deterministic boot, final increment (real WCET asserts)
 
@@ -731,7 +1198,42 @@
 - **Adapted:** rust-targets/x86_64-nexios.json + user/rust-hello + x86_64-gated make rule with fail-closed bootstrap guard + DEPFILES exclusion + docs/specs/rust-userspace.md; no kernel changes.
 - **Style re-surface:** rules hard-set their environment (RUSTUP_HOME/CARGO_HOME/PATH), never inherit dev-machine state; spec cites handler line numbers as ABI truth.
 
+### #271 closed — BSS-only RW pin gap (live-E2E canary trip)
+- **Learned:** (1) Silent-skip writers (`canary_write_at`: walk-fail → return) must never pair with an always-armed record: `install_segment_canaries` armed DATA-after from vaddr+memsz while the rerun builder mapped nothing for filesz-0 segments (no pin range) → trip at dispatch. Map the span BEFORE install; len-0 pin ranges copy nothing but still drive map+zero. (2) `in_padding` (slot ≥ vaddr+memsz) is an anti-corruption guard, not a bug: page-aligned memsz deliberately skips DATA-after (slot would overlap the image) — regression images must use the exact live shape (hey: 0x402e80/filesz-0/memsz-0x18), never a tidied page-aligned variant. (3) `register_<group>_tests()` is an explicit list — a new JARVIS_TEST silently runs nowhere until registered; the count bump then fails the gate (PLANNED mismatch convicts it). (4) Storage = pure VFS groups: an elf_loader-only diff cannot execute there — gate-order failure + identical-binary standalone green = flake by mechanism, documented not dismissed.
+- **Adapted:** `fill_staging_locked` records len-0 ranges (comment); `rerun_bss_only_data_canary` + counts 24→25/122→123; negative control (skip restored → FAIL) run before the fix commit.
+- **Style re-surface:** arm-or-skip symmetry (every record set needs a proven write path); exact-shape regression fixtures; explicit registration lists stay in sync with counts.
+
+### #345 hunt — per-tick daemon-wake starvation + EDF self-pick (tracker open, fix planned)
+- **Learned:** (1) Host pipe backpressure freezes the QEMU vCPU inside guest output (GDB: frozen in `Logger::putchar` + unresponsive stub) — but it CANNOT explain silent-spin wedges (a blocked pipe only stops a guest that is writing); fix = file backends, observer lag then only delays matching. (2) GDB `interrupt` STOPS the guest: repeated stop-read-detach cycles measure the observer, not the target (a "wedge" cleared into 6/6 PASS on resume) — one interrupt + full capture + detach, and never GDB-touch a run you intend to time. (3) GDB `call` returns garbage on the live TCG stub (two unmapped pointers); only raw register/memory reads + DWARF-via-GDB-python offsets are trustworthy. (4) Manual QEMU splits serial+debugcon — S-lines/RUN_PRE live in debugcon; watching serial alone fabricates a wedge. Preserve FULL serials (tail-30 loses beacon forensics). (5) Expect verdict "TIMEOUT" on a hot host with cool-host PASS = throughput collapse, not a hang; timeout tiers must be sized from measured walls. (6) A TEMP-DIAG tick beacon (read-only, IRQ-off, ≤1 line/50 ticks) convicted the wedge steady state over ~150k ticks ×6 wedges: Flavor A = per-tick #18 recv-timeout re-wake of watchdogd (`wdwake` 1:1, daemon `recv(timeout=10)`) + prio-20 dispatch + re-block starves prio-10 harness; top-flap 10↔20 pins the #242 breaker at 1; Flavor B = EDF self-pick on a never-yielding AUTO spinner (pick returns current through absolute EDF precedence, bitmap never consulted). Killed en route: aggregate-order leak, frozen ticks, IF, lost-switch, leaked lock, preempt flag, aliasing, dispatch-guard, CPU-index divergence. (7) Beacon fields from different ticks must NOT be compared naively — counters written at RMS-tail report the PREVIOUS tick at the next beacon (off-by-one fooled analysis twice); always align entry-state(N) with RMS-state(N-1) as inter-tick evolution.
+- **Adapted:** `QEMU_FLAGS_FILE` + `tools/qemu-file-log.sh` (spawn/eof verdict semantics preserved); hunt log convention `/tmp/jarvis-hunt-<issue>-<TS>.log` + per-iter full serial preservation; fix plan (consume-on-apply → resume-cancel → flap-robust breaker → EDF self-pick guard → supervision sizing) posted on #345.
+- **Style re-surface:** disprove before convict (sufficient≠necessary experiments); observer-effect accounting in every hunt loop; TEMP-DIAG reverted grep-verified before ship (zero markers/strings, build green).
+
+### #345 fix — edge-triggered #18 wake + EDF self-pick guard (closed)
+- **Learned:** (1) Level-triggered timeout re-apply (every tick while `armed && timed_out`) re-wakes a 10-tick watchdogd every tick (wdwake 1:1) — prio-20 dispatch starves prio-10 harness and pins breaker via top-flap 10↔20; fix = skip duplicate READY+queued re-wakes (already queued) — one wake per expiry, stranded READY (!in_queue) still rescued, generation guard preserved. (2) Absolute EDF precedence lets a never-yielding AUTO task with earliest expired deadline self-pick forever (`edf_preempt_candidate` returned current) — bitmap never consulted; fix = early `if (e == cur) return nullptr` to fall through to bitmap. Both are one-line guards, no new locks/alloc, no debug/release divergence.
+- **Adapted:** `scheduler.cpp` #18 loop duplicate-skip + `edf_preempt_candidate` self-pick guard; audit APPROVED; validation: task_watchdog 6/6 ×6, deadline 145/145, proc_elf 123/123 through file-backed harness.
+- **Style re-surface:** edge- vs level-triggered wake semantics (one expiry → one wake, not per-tick); current-never-queued and stranded-rescue invariants preserved.
+
 ### #336 — ship rust-hello ELF + source in committed initrd
 - **Learned:** (1) `execute-test` overwrites `initrd/tests/test-config.txt` with the class filter — any interactive E2E afterwards boots into the test runner (EOF, no prompt) until reset to `none` + cpio rebuild; always `cat` it before an interactive run. (2) Boot-initrd contents are safe to extend: all content tests use synthetic archives + restore, #274 resolves fixed paths, no listing-count asserts — but prove with storage+ui, not by reading. (3) Existence-guarded staging (`if [ -f ... ]`) keeps toolchain-less/arch/clean builds green while shipping more where available.
 - **Adapted:** two guarded cp lines in the CPIO rule (/bin/rust-hello.elf + /rust-hello sources); no test changes; no spec change.
 - **Style re-surface:** fail-loud beats best-effort in image staging (`&&` chains, missing tree files = make error).
+
+### #363 — VMM re-audit: split, masks, option-B W^X, per-arch codec TUs (closed)
+- **Learned:** (1) Pure-move splits verify mechanically: partition into chunks with a walk-up doc-attachment rule, assert tiling (no gaps), per-chunk signature/end/cut-depth checks, and reconstruction equality (concatenated chunks == original bytes) — stronger than review; the compiler then convicts cross-TU `static` deps (file-static helpers used across TUs → shared internal header with external linkage, never per-TU copies which would fork throttle counters). (2) Bulk-token replacement hygiene: `replaceAll` on short hex (`0xFFF`) glues tokens inside longer literals in comments (`kPageOffsetMaskF800...`) — always grep the token class after + review the diff (auditor-convicted S3). (3) NX-shape latent class: test helper `leaf & ~0xFFF` keeps bit 63 once NX exists — production `PAGE_FRAME_MASK` strips it for a reason; test phys-extraction must go through the canonical translation (`virt_to_phys_*`) or the production mask (generalizes the #206 x86-domain lesson to flag-carrying leaves). (4) Flag-day atomicity under `-Werror`: removing the overload turns every missed caller into a build break — enumerate with a depth-aware arg-count scanner (multi-line calls defeat `grep -c`) and classify code-vs-data per site before flipping. (5) HAL reuse needs bit-identity, not similarity: aarch64/riscv `attr_from_flags` add SH/NS + AP policy the VMM map path omits — declined with documented rationale in the header. (6) Arch-build staleness: new TUs need `rm mk/cpp-rules.<arch>.gen.mk` (stale explicit per-file rules); riscv-only breakage hides behind x86 guards (private `TABLE_MASK` in a header `static_assert` — made public with rationale); full-arch link may be pre-broken by another issue (bench `rdtsc`, #362) — validate owned objects, document the rest. (7) `is_table_entry` as the single leaf/table predicate centralizes the arch rule (level-gated); walk shapes stay shared as documented VMM-private residual (snapshot pairing, ENSURE, drop notes — policy, not encoding).
+- **Adapted:** 5 concern TUs + `vmm_internal.hpp` + 3 per-arch codec TUs (11 `vmm_arch_*` helpers, guards-in-file); masks (`PAGE_NX`→hal, `kPageOffsetMask/kHuge2M*/kPdptBlockBase*` + asserts); option-B migration (37 test sites + yield stub, overload removed) + `free_priv_window` NX fix; `pml4`-as-root doc note; 3 APPROVED audit reports (`report-2026-10-17T10-16-15Z/10-18-00Z/11-06-57Z`); test-history rows; #365 spun off for the PDPT-mask re-derivation (v0.5.5).
+- **Style re-surface:** constexpr helpers over hand-derived constants; fail-closed (NX default, huge-leaf refusal, no silent drops); no CONFIG_DEBUG behavior change; bounded loops preserved; static_assert pins on every new mask; per-site code/data justification for permission changes.
+
+### #366 — VMM audit hardening: flag accessors, contracts, checked unmaps (closed)
+- **Learned:** (1) Verify the premise before filing: read-accessors already existed — only the SET path was raw (2 spots + 1 test); the issue shrank from "add accessors" to "add setters + reroute 3 lines" because the tree was read first. (2) A reworked `_err` that delegates to a side-effecting void twin must probe presence FIRST (via the walk-only leaf lookup), or absent-VA calls arm test-touch flags / take the drop-note path for nothing — presence-check-then-delegate keeps the void twin's observable contract exactly. (3) Cap-unmap `_err` twins deliberately skip revoked/IO checks: unmap-after-revoke must work (the revoke path itself unmaps); document the asymmetry vs the map twins. (4) New `_err` APIs need hole-coverage tests at birth: the pre-existing `unmap_page_err(...)=OK` assertion encoded the old always-OK contract and would have masked the semantic change — extend it in the same commit (probe-guarded: never unmap live kernel state to force the OK path; cover OK on scratch PML4s). (5) Count-bump discipline: new test → `test_expected_counts.hpp` fine row + every aggregate row that runs the group (memory_vmm 13→14 AND core 577→578); `validate_class_count` convicts drift via dmesg, `validate_all_consistency` the coverage. (6) Lock-sensitive revoke/teardown paths get fold-and-ignore `(void)` + comment, never logging — Logger would introduce lock-order hazards under the registry/reaper locks; log-and-continue is only for lock-free boot/teardown paths that already log. (7) Test-history rows must carry measured `TIME_ELAPSED_MS` — never estimated walls; re-run with the timing grep rather than filling plausible numbers.
+- **Adapted:** `set_hhdm/identity_modified()` + 3 reroutes (grep-verified zero raw stores); 46 per-API Lock/Context/SMP contract notes (merge_kernel_half kept as the canonical example); 4 `_err` unmap twins (INVALID_ADDR/NOT_MAPPED/OK, two-pass mmio, no partial unmap); 9 boot maps → checked with per-site cleanup + PIC fail-open on APIC map failure; cap revoke/drain/teardown fold-and-ignore, ahci/dma log-and-continue, pager rollback untouched; `vmm_unmap_err_not_mapped` test; 2 APPROVED audit reports (`report-2026-10-17T16-09-16Z/16-12-41Z`); #365 stays deferred, no code.
+- **Style re-surface:** ENSURE only for impossible-by-design (boot OOM is reachable → return false, never panic — the plan's halt proposal was rejected on §5.1 grounds); fail-closed boot paths (`return 0`/`false` with cleanup); no `_err` propagation through idempotent teardown (fold-and-ignore where the slot/refcount, not the PTE, is authoritative).
+
+### #323 — scheduler.cpp decomposition into 17 thematic sub-TUs (closed)
+- **Learned:** (1) Pure-move protocol that survives audit: boundary asserts on first/last lines of every chunk (header numbers shift as strands land — always re-derive), bottom-to-top deletion, byte-identity spot-checks (gone-here/present-there greps). (2) File-static helpers used by moving code go to a shared internal-header home owned by the first consumer strand (current_sp/IRET_* → sched_switch; later strands import via using-decl) — never duplicate per-TU copies. (3) Member-function bodies move with zero lookup risk (member scope travels); free functions (weak handlers) and file-statics need closure analysis — dead CONFIG arms move byte-identical without resolving in the current config (H2_EV using-decl still added for the trace-ON config per audit check 6). (4) A moved second `namespace kernel { using...; }` block must close the outer namespace first, or the compiler reports "not in namespace enclosing" — and an edit that replaces the member's closing `}` with the namespace close silently eats a brace (convicted by build, fixed, brace-count verified). (5) `make execute-test` class names must match the registry exactly: `scheduler` is not a class (`Unknown test class` → zero tests → QEMU_EXIT stall); owning classes were scheduler_core/o1/atomic/preemption, deadline/*, task_*, core for the final gate. (6) Second audit pass is cheap and worth it: first-pass S1s on the switch strand (stranded H2 use, unclosed VMM include) were real latent defects fixed verbatim via rejected_patch.diff.
+- **Adapted:** scheduler.cpp 5854 → 234 lines (includes/usings, leftover core-state defs, ISR hook docs); 17 sub-TUs (switch, watchdog, registry, snapshot, snapshot_fields, tick, queue, admission, dispatch, debug, smp, lifecycle, auth, budget, id-table, terminate + snapshot); per-strand retrieval artifacts + independent SIL3 audits (2 REJECTED-first-pass with verbatim fixes, rest APPROVED); test-history rows for every class run incl. the host-load watchdog stall + identical-binary green rerun.
+- **Style re-surface:** minimal internal headers exist for pattern consistency even with no shared decls; moved bodies keep original comments (incl. dead-arm rationale); pointer comments only where defs vanish without a trace (shared homes, statics).
+
+### #369 — scheduler post-split hardening (T1–T5, closed)
+- **Learned:** (1) Holder-based entry ENSUREs need a per-site take-shape analysis: unconditional blocking take → entry ENSURE (provably safe: any locked caller deadlocks today); conditional take → ENSURE at the take site (set_task_ready taught this via a fired ENSURE on a legal locked-caller path); try_lock-skip paths → NO ENSURE (skip is the design). (2) Stale lock-held comments are load-bearing lies: verify every "caller holds X" claim against brace-parsed scope + runtime holder() before trusting it — the on_tick tail runs unlocked (adopt scope closes ~tick:710) while 6+ comments claimed otherwise. (3) IRQ-window hoists need caller-side reentrancy proof, not callee-side: the T3a dispatch_step hoist was rejected because reschedule() runs unlocked by design so timer ISRs nest fully — proving "no ISR calls X" is insufficient. (4) SwSlot ordering floor holds as designed: zero RELAXED stores anywhere; all 7 RELAXED loads are diagnostics/counter-bumps; per-CPU slots enforce own-CPU writes. (5) C++20 sweep without PGO should be nodiscard + provably-cold unlikely only — skip likely/constexpr-churn without measurement.
+- **Adapted:** validate_task_ptr + 30+ entry/take-site ENSUREs across 12 TUs (7 commits, all APPROVED, 2 REJECTED-first-pass with verbatim fixes: switch S1s, T3a S1); canonical lock-order table in scheduler.hpp; corrected 8 stale lock comments; T3 closed as surveyed-minimal (publish windows already minimal; CR0/FPU + release/guard + reschedule rationales documented as do-not-move).
+- **Style re-surface:** take-site ENSUREs sit immediately above the guard they protect with an issue-tagged rationale comment; reverted ENSUREs leave a comment explaining why the site is intentionally unguarded.

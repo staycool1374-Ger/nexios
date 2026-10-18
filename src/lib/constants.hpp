@@ -38,6 +38,10 @@ namespace arch {
 /// @brief Higher-half offset: convert physical → kernel-visible virtual.
 inline constexpr uint64_t HHDM_OFFSET = CONFIG_HHDM_OFFSET;
 
+/// @brief Upper bound (exclusive) of user-space virtual addresses.
+/// Lives here (not in checked_ptr.hpp) so validators like the ELF loader
+/// can use it without pulling the CheckedPtr machinery (issue #348-C).
+
 /// @brief Size of the PMM allocatable window — the linear-mapped RAM span
 /// the page allocator scans.  Must be covered by the architecture's MMU
 /// higher-half mapping (x86_64 identity window; aarch64/riscv64 map it
@@ -134,6 +138,15 @@ inline constexpr size_t   STACK_SIZE   = 64_KiB;
 inline constexpr size_t   HEAP_SIZE    = 1_MiB;
 
 } // namespace mem
+
+namespace kernel {
+
+/// @brief Upper bound (exclusive) of user-space virtual addresses.
+/// Lives here (not in checked_ptr.hpp) so validators like the ELF loader
+/// can use it without pulling the CheckedPtr machinery (issue #348-C).
+static constexpr uint64_t USER_SPACE_LIMIT = 0x0000800000000000ULL;
+
+} // namespace kernel
 
 // ---------------------------------------------------------------------------
 // Common error codes for POSIX-style kernel functions

@@ -21,8 +21,6 @@
 /// @file vfs_errors.hpp
 /// @brief VFS error code definitions and error-string conversion.
 
-#pragma once
-
 #include <types.hpp>
 #include <assert.hpp>
 

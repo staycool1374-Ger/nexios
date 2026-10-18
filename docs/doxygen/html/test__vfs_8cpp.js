@@ -3,6 +3,7 @@ var test__vfs_8cpp =
     [ "JARVIS_TEST", "test__vfs_8cpp.html#ac586c9ff140c1349a2766cb0bc674e74", null ],
     [ "JARVIS_TEST", "test__vfs_8cpp.html#a369f6d71a9064b69703286ed761ca42f", null ],
     [ "JARVIS_TEST", "test__vfs_8cpp.html#a5e7d5fad54cf3f8b35920048ba8325ca", null ],
+    [ "JARVIS_TEST", "test__vfs_8cpp.html#a2116853f3814a4caa8b3b98b01991bd4", null ],
     [ "JARVIS_TEST", "test__vfs_8cpp.html#aed5c005a0a147fc76c91b269b471d19f", null ],
     [ "JARVIS_TEST", "test__vfs_8cpp.html#a2fe5f59b6c84952f3d8202c9f244908c", null ],
     [ "JARVIS_TEST", "test__vfs_8cpp.html#a8a94a21bd3a8de5d73fe75208fca3545", null ],

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -146,6 +146,8 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a40d4650306ca6e046b2191e7e6b00bf8" id="r_a40d4650306ca6e046b2191e7e6b00bf8"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a40d4650306ca6e046b2191e7e6b00bf8">deadline_miss_count</a></td></tr>
 <tr class="memitem:a64ac58a847682a5727b3182b7060de3b" id="r_a64ac58a847682a5727b3182b7060de3b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a64ac58a847682a5727b3182b7060de3b">executed_ticks</a></td></tr>
 <tr class="memitem:a5220916172caf562cc65cb8143cc48d0" id="r_a5220916172caf562cc65cb8143cc48d0"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5220916172caf562cc65cb8143cc48d0">remaining_ticks</a></td></tr>
+<tr class="memitem:a720270e149d4a15a2dafc51580fd0cea" id="r_a720270e149d4a15a2dafc51580fd0cea"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a720270e149d4a15a2dafc51580fd0cea">exec_window_start_tick</a></td></tr>
+<tr class="memdesc:a720270e149d4a15a2dafc51580fd0cea"><td class="mdescLeft">&#160;</td><td class="mdescRight">PD_USE window phase (issue #331): rewinds with the snapshot so the window stays consistent with rewound ticks().  <br /></td></tr>
 <tr class="memitem:ac06af7f69711aa38a8eacdf18402b41a" id="r_ac06af7f69711aa38a8eacdf18402b41a"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ac06af7f69711aa38a8eacdf18402b41a">exit_code</a></td></tr>
 <tr class="memitem:acc617a3c02f77a652a45be6ccb81a0a6" id="r_acc617a3c02f77a652a45be6ccb81a0a6"><td class="memItemLeft">TaskContext&#160;</td><td class="memItemRight"><a class="el" href="#acc617a3c02f77a652a45be6ccb81a0a6">context</a></td></tr>
 <tr class="memdesc:acc617a3c02f77a652a45be6ccb81a0a6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Full register context (critical: rsp).  <br /></td></tr>
@@ -351,6 +353,22 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a720270e149d4a15a2dafc51580fd0cea" name="a720270e149d4a15a2dafc51580fd0cea"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a720270e149d4a15a2dafc51580fd0cea">&#9670;&#160;</a></span>exec_window_start_tick</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::Scheduler::TaskFields::exec_window_start_tick</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>PD_USE window phase (issue #331): rewinds with the snapshot so the window stays consistent with rewound ticks(). </p>
 
 </div>
 </div>

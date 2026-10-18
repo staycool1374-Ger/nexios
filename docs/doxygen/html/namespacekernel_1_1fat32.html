@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -129,6 +129,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a26ce5bbfe1af8c3aa136fb2f57743383"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the next directory entry from a cluster chain.  <br /></td></tr>
 <tr class="memitem:ae85fd58e1ca6c4db8cc25e966936083c" id="r_ae85fd58e1ca6c4db8cc25e966936083c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae85fd58e1ca6c4db8cc25e966936083c">lookup_in_dir</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name, DirEntry &amp;entry)</td></tr>
 <tr class="memdesc:ae85fd58e1ca6c4db8cc25e966936083c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Look up a name in a directory cluster chain.  <br /></td></tr>
+<tr class="memitem:ae93a85e2f3b7cee00022a3e34747d9ac" id="r_ae93a85e2f3b7cee00022a3e34747d9ac"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae93a85e2f3b7cee00022a3e34747d9ac">lookup_in_dir_at</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name, DirEntry &amp;entry, uint64_t &amp;out_index)</td></tr>
+<tr class="memdesc:ae93a85e2f3b7cee00022a3e34747d9ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Look up a name, reporting the matched on-disk slot index. read_dir_entry leaves pos one past the returned slot (it increments before every true return, including via the skip-recursion), so the matched slot is pos - 1. pos &gt; 0 whenever we return true.  <br /></td></tr>
 <tr class="memitem:ab2b90c3fd678120edc03be6e4d00a917" id="r_ab2b90c3fd678120edc03be6e4d00a917"><td class="memItemLeft">int64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab2b90c3fd678120edc03be6e4d00a917">read_file</a> (Fat32Partition &amp;fs, uint32_t first_cluster, uint32_t file_size, uint64_t offset, uint64_t count, uint8_t *buffer)</td></tr>
 <tr class="memdesc:ab2b90c3fd678120edc03be6e4d00a917"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read data from a file's cluster chain.  <br /></td></tr>
 <tr class="memitem:acaa9ea1e7204014b1ee87d1b18e2786f" id="r_acaa9ea1e7204014b1ee87d1b18e2786f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acaa9ea1e7204014b1ee87d1b18e2786f">free_cluster_chain</a> (Fat32Partition &amp;fs, uint32_t first_cluster)</td></tr>
@@ -303,6 +305,50 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ae93a85e2f3b7cee00022a3e34747d9ac" name="ae93a85e2f3b7cee00022a3e34747d9ac"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae93a85e2f3b7cee00022a3e34747d9ac">&#9670;&#160;</a></span>lookup_in_dir_at()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::fat32::lookup_in_dir_at </td>
+          <td>(</td>
+          <td class="paramtype">Fat32Partition &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>dir_cluster</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *</td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">DirEntry &amp;</td>          <td class="paramname"><span class="paramname"><em>entry</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_index</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Look up a name, reporting the matched on-disk slot index. read_dir_entry leaves pos one past the returned slot (it increments before every true return, including via the skip-recursion), so the matched slot is pos - 1. pos &gt; 0 whenever we return true. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1fat32_ae93a85e2f3b7cee00022a3e34747d9ac_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_ae93a85e2f3b7cee00022a3e34747d9ac_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
 <a id="a85225d8c344ad98eda0442d972d0eb31" name="a85225d8c344ad98eda0442d972d0eb31"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a85225d8c344ad98eda0442d972d0eb31">&#9670;&#160;</a></span>name_to_short_name()</h2>
 
@@ -327,7 +373,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1fat32_a85225d8c344ad98eda0442d972d0eb31_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_a85225d8c344ad98eda0442d972d0eb31_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -367,7 +413,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1fat32_a26ce5bbfe1af8c3aa136fb2f57743383_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_a26ce5bbfe1af8c3aa136fb2f57743383_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -417,7 +463,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1fat32_ab2b90c3fd678120edc03be6e4d00a917_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_ab2b90c3fd678120edc03be6e4d00a917_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -452,7 +498,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1fat32_ac33004927f3699ee2b024a9bdd066f60_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_ac33004927f3699ee2b024a9bdd066f60_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>

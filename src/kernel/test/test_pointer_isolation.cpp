@@ -134,7 +134,7 @@ JARVIS_TEST(pointer_isolation_count_edges, "PRE: none | POST: none") {
 // Depends: CheckedPtr::valid byte-size arithmetic
 // Disabled regression for the filed count*sizeof overflow issue:
 // enable when the primitive rejects overflowing counts.
-#if 0
+#if 1
 JARVIS_TEST(pointer_isolation_count_overflow_rejected,
             "PRE: none | POST: none") {
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -223,6 +223,7 @@ void register_pointer_isolation_tests() {
     Logger::info("Registering pointer-isolation tests");
     JARVIS_REGISTER_TEST(pointer_isolation_kernel_leak_rejected_at_every_entry);
     JARVIS_REGISTER_TEST(pointer_isolation_count_edges);
+    JARVIS_REGISTER_TEST(pointer_isolation_count_overflow_rejected);
     JARVIS_REGISTER_TEST(pointer_isolation_factory_and_fail_closed_elements);
     JARVIS_REGISTER_TEST(pointer_isolation_string_path_rejects_kernel);
 }

@@ -108,6 +108,17 @@ using namespace arch;
 // the boot context (IF=0, where reschedule()+hlt() would hang).
 static bool g_run_tests = false;
 
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_THREADED_IRQS
+// Issue #340 P1: threaded keyboard handler (IrqThread task context —
+// the ONLY context in which handle_irq may IPC-forward to iocd).
+// Named (not a lambda) so the single IPC-capable call site stays
+// grep-visible for audit. The non-threaded IDT path below runs in
+// ISR context where try_forward_to_iocd refuses by isr_nesting.
+static void keyboard_threaded_handler(uint64_t, uint64_t, uint64_t) {
+    arch::Keyboard::handle_irq();
+}
+#endif
+
 // ── init_task_main ──────────────────────────────────────────────────────
 // Init task entry point for PID 1.  Mounts fstab, runs /etc/rc, then
 // blocks as reaper.  Referenced by both the manual pre-test create (below)
@@ -502,8 +513,14 @@ void init_task_main() {
                 __builtin_memcpy(grant.data + 8, &kSupervisedPeriod,
                                  sizeof(uint64_t));
                 grant.data_size = 16;
-                kernel::IPC::send(kernel::watchdogd::get_watchdogd_pid(),
-                                  grant, 0);
+                if (!kernel::IPC::send(kernel::watchdogd::get_watchdogd_pid(),
+                                       grant, kernel::IpcFlags::NONE)) {
+                    // Best-effort supervise grant (issue #348-A): the
+                    // watchdog re-syncs via its supervision scan; boot
+                    // never blocks on a full queue here.
+                    kernel::Logger::warn(
+                        "init: watchdog supervise grant refused");
+                }
             }
         }
         // Issue #275: ramdisk storage grant — mint one FrameCap per
@@ -531,7 +548,11 @@ void init_task_main() {
                 grant.type = kernel::ramdiskd::RAMDISK_GRANT;
                 __builtin_memcpy(grant.data, handles, sizeof(handles));
                 grant.data_size = sizeof(handles);
-                kernel::IPC::send(rd_pid, grant, 0);
+                if (!kernel::IPC::send(rd_pid, grant, kernel::IpcFlags::NONE)) {
+                    // Best-effort grant delivery (issue #348-A): ramdiskd
+                    // serves NOGRANT until granted; boot continues.
+                    kernel::Logger::warn("init: ramdisk grant send refused");
+                }
                 // Issue #314: mount the flat file store once the grant is
                 // delivered (best-effort; a failed mount degrades to raw
                 // block access, boot never blocks on it).
@@ -642,12 +663,20 @@ void init_task_main() {
     // IrqThread task).  Only in interactive mode (no test suite): during the
     // test run keyboard input is unused and a persistent IrqThread task would
     // perturb snapshot-isolation task-count expectations.
+    // Issue #340 P1: the threaded handler runs handle_irq() in IrqThread
+    // task context, where try_forward_to_iocd may IPC-send to iocd. The
+    // non-threaded IDT path below runs in ISR context: handle_irq detects
+    // that via isr_nesting and takes the decode-only legacy branch (it
+    // must never IPC-send — §11.1). Named function (not a lambda) so the
+    // single IPC-capable call site stays grep-visible for audit.
+    // Issue #340 P2: route keyboard bytes through iocd in interactive
+    // mode only. Test runs keep legacy routing (decode tests inject
+    // straight into the hardware ring); the cross_boundary test sets
+    // ownership explicitly (snapshot-restored).
     if (!g_run_tests) {
+    kernel::iocd::set_keyboard_owned(true);
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_THREADED_IRQS
-    kernel::IrqThread::create(33, 50,
-                              [](uint64_t, uint64_t, uint64_t) {
-                                  arch::Keyboard::handle_irq();
-                              },
+    kernel::IrqThread::create(33, 50, keyboard_threaded_handler,
                               [](uint8_t vector) {
                                   // x86_64: send APIC EOI + PIC EOI
                                   if (arch::APIC::is_enabled())
@@ -1005,6 +1034,20 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         debug_write("[BOOT] PCID not supported by CPU — leaving off\n");
     }
 #endif
+#if defined(CONFIG_ARCH_X86_64)
+    // Issue #338: FSGSBASE (CR4 bit 16) — userspace RDFSBASE so Ring-3
+    // libc reads its thread-local block (errno) without a syscall.
+    // BSP-only probe here; APs mirror it in ap_main (smp.cpp).  Same
+    // CPU floor as the SMEP-era features above; without it the libc
+    // errno path faults (#UD), so an unsupported CPU cannot run
+    // userspace (loud by design — like SMAP-off above, but fatal).
+    if (arch::has_fsgsbase()) {
+        cr4 |= arch::CR4_FSGSBASE;
+        debug_write("[BOOT] FSGSBASE enabled\n");
+    } else {
+        debug_write("[BOOT] FSGSBASE not supported by CPU — no userspace\n");
+    }
+#endif
     arch::write_cr4(cr4);
 
 #endif
@@ -1184,10 +1227,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // AArch64/RISC-V use their interrupt controllers, initialised elsewhere).
 #if defined(CONFIG_ARCH_X86_64)
     if (arch::APIC::is_apic_supported()) {
-        arch::APIC::map_mmio();
-        arch::APIC::init();
-        // Issue #25 (Phase A): record the BSP LAPIC ID in its PerCpu page.
-        arch::per_cpu[0].lapic_id = arch::APIC::lapic_id();
+        // Issue #366 Q1a: fail open when the MMIO window cannot map
+        // (map_mmio reports table-OOM instead of silently dropping) —
+        // the legacy PIC path stays live, mirroring early_init.
+        if (arch::APIC::map_mmio()) {
+            arch::APIC::init();
+            // Issue #25 (Phase A): record the BSP LAPIC ID in its PerCpu page.
+            arch::per_cpu[0].lapic_id = arch::APIC::lapic_id();
+        }
     }
     // Issue #25 (Phase B1): scan the MADT for enabled local APICs (log
     // only — AP bring-up lands in Phase B3; single-CPU runs list 1 CPU).
@@ -1932,6 +1979,11 @@ const char *task_fault_cause(uint64_t vector) {
 
 void report_user_task_end(kernel::TaskControlBlock &task, bool clean,
                           uint64_t code_or_sig, uint64_t vector) {
+    // Issue #271 P1: outcome tracking for rerun retention (runs before
+    // the reporting gate below — tracking is not reporting). sys_exit
+    // arrives clean=true+code; fault paths clean=false+sig; paths that
+    // never report (integrity kills) stay UNKNOWN by design.
+    kernel::elf::ElfLoader::note_task_end(task.id, clean, code_or_sig);
     // User tasks outside test mode only: kernel-task churn (daemons,
     // reapers, test fixtures by the hundreds) would flood the console.
     if (!task.is_user_ || kernel::Scheduler::is_test_active())

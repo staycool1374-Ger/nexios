@@ -24,8 +24,6 @@
 ///        output. Output goes to serial via
 ///        Logger::raw_write/print_hex/print_dec.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {

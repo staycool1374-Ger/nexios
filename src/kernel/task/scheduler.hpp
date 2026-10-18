@@ -88,7 +88,7 @@ class Scheduler {
     ///        Defaults match the pre-refactor behaviour.
     static void init(const SchedulerConfig &cfg = SchedulerConfig{});
     /// @brief Error-returning overload for init().
-    static errors::SchedulerError init_err(
+    [[nodiscard]] static errors::SchedulerError init_err(
         const SchedulerConfig &cfg = SchedulerConfig{});
 
     /// @brief Injects the test-runner context (PfA-A).  Production keeps
@@ -129,7 +129,7 @@ class Scheduler {
     ///         This is the enforced admission path — the void add_task()
     ///         below retains advisory warn-only semantics for legacy callers
     ///         that cannot fail.
-    static errors::SchedulerError add_task_err(TaskControlBlock &task);
+    [[nodiscard]] static errors::SchedulerError add_task_err(TaskControlBlock &task);
     /// @brief Issue #20: WCET validity for one task (allocation-free, no
     ///        logging).  Caller must hold scheduler_lock_.
     /// @return SCHED_ERR_OK, or SCHED_ERR_WCET_INVALID when an explicit
@@ -157,7 +157,7 @@ class Scheduler {
     ///        the candidate is always counted (on cpu).  Caller must hold
     ///        scheduler_lock_.  Allocation-free, no logging.  This is the
     ///        hook a future CPU-pinning mode (#167) will reuse.
-    static errors::SchedulerError admission_check_cpu_locked(
+    [[nodiscard]] static errors::SchedulerError admission_check_cpu_locked(
         const TaskControlBlock &candidate, uint64_t cpu, uint64_t *out_util,
         uint32_t *out_bound) noexcept;
 
@@ -180,7 +180,7 @@ class Scheduler {
     /// @brief Error-returning overload for remove_task().
     /// @return SCHED_ERR_OK on success, SCHED_ERR_NOT_FOUND if task not in
     /// table.
-    static errors::SchedulerError remove_task_err(TaskControlBlock &task);
+    [[nodiscard]] static errors::SchedulerError remove_task_err(TaskControlBlock &task);
 
     /// @brief Returns the currently running task (RSP-authoritative).
     /// @return Pointer to the current TaskControlBlock.
@@ -524,7 +524,7 @@ class Scheduler {
     ///        current on ANOTHER CPU — freeing an AP-live stack poisons the
     ///        running task. Self-termination always succeeds. The void
     ///        terminate() above delegates and warns on refusal.
-    static errors::SchedulerError terminate_err(TaskControlBlock &task,
+    [[nodiscard]] static errors::SchedulerError terminate_err(TaskControlBlock &task,
                                                 uint64_t exit_code) noexcept;
     /// @brief Result of one idle authenticity re-verify slice (issue #46).
     enum class AuthStepResult : uint8_t {
@@ -601,7 +601,7 @@ class Scheduler {
     /// @param out_id Output parameter for the allocated ID.
     /// @return SCHED_ERR_OK on success, SCHED_ERR_TABLE_FULL if ID table is
     /// full.
-    static errors::SchedulerError alloc_id_err(uint64_t &out_id);
+    [[nodiscard]] static errors::SchedulerError alloc_id_err(uint64_t &out_id);
 
     /// @brief Returns the index of the current task (computed from pointer,
     ///         O(n) for snapshot compatibility; prefer current_task()
@@ -1113,6 +1113,15 @@ struct SwSlots {
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static TestContext *test_context_;
 
+    /// @brief Canonical lock order (issue #369 T2, binding): scheduler_lock_
+    ///        > zombie_lock_ > wake_mailbox_lock_[cpu].  Ready-queue ops run
+    ///        under scheduler_lock_ (no rq-internal lock exists).  ISR paths
+    ///        take the OUTER/global lock try_lock-only (skip on contention,
+    ///        never block); leaf takes (e.g. mailbox_publish) may block under
+    ///        the documented IF=0 exclusion.  Leaf takes require global-held OR IRQs-off (never
+    ///        leaf→global: spinlocks are non-recursive).  holder() returns
+    ///        the locker RA or nullptr — use it for held/not-held checks,
+    ///        not cross-CPU owner identity.
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static sync::SpinLock scheduler_lock_;
     /// @brief Per-CPU O(1) ready queues (issue #25 C1).  Queue[CPU] holds

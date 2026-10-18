@@ -84,7 +84,7 @@ void install_dest_cspace(TaskControlBlock *t, cap::CNode **dst_out,
     dst->cspace_id = 0x99;
     kernel::test::ResourceTracker::instance().track_cap_object_add();
     int s = cspace->install(dst, cap::CapType::CNode,
-                            cap::CAP_RIGHT_GRANT | cap::CAP_RIGHT_COPY);
+                            cap::CapRights::GRANT | cap::CapRights::COPY);
     if (s < 0) {
         dst->release();
         return;
@@ -132,7 +132,7 @@ JARVIS_TEST(sys_cap_grant_dispatch, "PRE: none | POST: none") {
         kernel::test::ResourceTracker::instance().track_cap_object_add();
 
         int ss = cspace->install(tgt, cap::CapType::Task,
-                                 cap::CAP_RIGHT_READ | cap::CAP_RIGHT_GRANT);
+                                 cap::CapRights::READ | cap::CapRights::GRANT);
         cap::CNode *dst = nullptr;
         int ds = -1;
         install_dest_cspace(cur, &dst, &ds);
@@ -186,7 +186,7 @@ JARVIS_TEST(sys_cap_copy_dispatch, "PRE: none | POST: none") {
         kernel::test::ResourceTracker::instance().track_cap_object_add();
 
         int ss = cspace->install(tgt, cap::CapType::Task,
-                                 cap::CAP_RIGHT_READ | cap::CAP_RIGHT_COPY);
+                                 cap::CapRights::READ | cap::CapRights::COPY);
         cap::CNode *dst = nullptr;
         int ds = -1;
         install_dest_cspace(cur, &dst, &ds);
@@ -239,7 +239,7 @@ JARVIS_TEST(sys_cap_revoke_dispatch, "PRE: none | POST: none") {
         tgt->mark_pool_backed();
         kernel::test::ResourceTracker::instance().track_cap_object_add();
 
-        int ss = cspace->install(tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+        int ss = cspace->install(tgt, cap::CapType::Task, cap::CapRights::READ);
         if (ss < 0) {
             tgt->release();
             return;
@@ -328,8 +328,8 @@ JARVIS_TEST(sys_cap_mint_dispatch, "PRE: none | POST: none") {
         kernel::test::ResourceTracker::instance().track_cap_object_add();
 
         int ss = cspace->install(tgt, cap::CapType::Task,
-                                 cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE |
-                                     cap::CAP_RIGHT_COPY);
+                                 cap::CapRights::READ | cap::CapRights::WRITE |
+                                     cap::CapRights::COPY);
         cap::CNode *dst = nullptr;
         int ds = -1;
         install_dest_cspace(cur, &dst, &ds);
@@ -345,7 +345,7 @@ JARVIS_TEST(sys_cap_mint_dispatch, "PRE: none | POST: none") {
                                cspace->slot_gen(static_cast<uint32_t>(ds)));
         g_ret = Syscall::handle(
             static_cast<uint64_t>(SyscallNumber::CAP_MINT), sh, dh,
-            static_cast<uint64_t>(cap::CAP_RIGHT_WRITE), 0, nullptr);
+            static_cast<uint64_t>(cap::CapRights::WRITE), 0, nullptr);
         g_dst_occ = cap::occupied_count(dst);
         teardown_dest_cspace(cur, dst, ds);
         cspace->remove(static_cast<uint32_t>(ss));
@@ -404,7 +404,7 @@ JARVIS_TEST(sys_cap_wrong_type_returns_minus1, "PRE: none | POST: none") {
         tgt->mark_pool_backed();
         kernel::test::ResourceTracker::instance().track_cap_object_add();
 
-        int ss = cspace->install(tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+        int ss = cspace->install(tgt, cap::CapType::Task, cap::CapRights::READ);
         if (ss < 0) {
             tgt->release();
             return;
@@ -426,7 +426,7 @@ JARVIS_TEST(sys_cap_wrong_type_returns_minus1, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: A capability lacking the required right is rejected.
 // Input: task installs a Task cap WITHOUT COPY; dispatches SYS_CAP_COPY
-// Expect: -1 (CAP_RIGHT_COPY missing on destination)
+// Expect: -1 (CapRights::COPY missing on destination)
 // Depends: kernel::Syscall, kernel::cap
 JARVIS_TEST(sys_cap_rights_denied_returns_minus1, "PRE: none | POST: none") {
     static uint64_t g_ret = 0;
@@ -445,7 +445,7 @@ JARVIS_TEST(sys_cap_rights_denied_returns_minus1, "PRE: none | POST: none") {
         tgt->mark_pool_backed();
         kernel::test::ResourceTracker::instance().track_cap_object_add();
 
-        int ss = cspace->install(tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+        int ss = cspace->install(tgt, cap::CapType::Task, cap::CapRights::READ);
         if (ss < 0) {
             tgt->release();
             return;
@@ -486,7 +486,7 @@ JARVIS_TEST(sys_cap_revoke_cleanup_zero_delta, "PRE: none | POST: none") {
         tgt->mark_pool_backed();
         kernel::test::ResourceTracker::instance().track_cap_object_add();
 
-        int ss = cspace->install(tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+        int ss = cspace->install(tgt, cap::CapType::Task, cap::CapRights::READ);
         if (ss < 0) {
             tgt->release();
             return;

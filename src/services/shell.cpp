@@ -131,6 +131,43 @@ void shell_input_timeout_fire(void *context) {
     shell_input_notify().notify(1);
 }
 
+// Issue #340 P2: central keyboard/serial input poll. Order: serial
+// (separate source, always first) → iocd daemon (keyboard bytes routed
+// there when owned) → hardware ring, but ONLY when the daemon is down
+// (pid 0 or send_sync refused): when the daemon is up the ring is empty
+// by the single-ownership invariant, and draining it would risk double
+// delivery. Never blocks on the daemon beyond one send_sync round-trip
+// (fail-open); shell liveness never depends on iocd.
+bool shell_try_get_key(char &out) {
+    if (arch::Serial::poll_getchar(out))
+        return true;
+    uint64_t pid = kernel::iocd::get_iocd_pid();
+    if (pid != 0) {
+        kernel::iocd::Msg req{};
+        req.type = kernel::iocd::IOCD_KEYBOARD_READ;
+        auto *cur = kernel::Scheduler::current_task();
+        req.args[0] = cur ? cur->id : 0;
+        kernel::Message send{};
+        send.sender_id = req.args[0];
+        send.type = kernel::iocd::IOCD_KEYBOARD_READ;
+        send.data_size = sizeof(req);
+        __builtin_memcpy(send.data, &req, sizeof(req));
+        kernel::Message reply{};
+        if (kernel::IPC::send_sync(pid, send, reply) &&
+            reply.data_size >= sizeof(kernel::iocd::Reply)) {
+            kernel::iocd::Reply rpl{};
+            __builtin_memcpy(&rpl, reply.data, sizeof(rpl));
+            if (rpl.result == 1) {
+                out = static_cast<char>(rpl.data[0]);
+                return true;
+            }
+            return false; // daemon up, queue empty: ring empty by invariant
+        }
+        // send_sync refused (daemon dying): fall through to hardware.
+    }
+    return arch::Keyboard::getchar(out);
+}
+
 void shell_idle_nap(uint64_t timeout_us) {
     if (!shell_input_inited) {
         new (shell_input_notify_buf) kernel::sync::Notify();
@@ -495,12 +532,9 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
         char c = 0;
         // Issue #245: poll the UART first on every architecture (the old
         // x86-only COM1 inline poll never ran on aarch64/riscv64), then
-        // fall back to the (PS/2-backed, x86-only) Keyboard path.
-        bool got_char = arch::Serial::poll_getchar(c);
-
-        if (!got_char) {
-            got_char = arch::Keyboard::getchar(c);
-        }
+        // the iocd-routed keyboard, then the hardware ring fallback
+        // (issue #340: single helper owns the order + fallback).
+        bool got_char = shell_try_get_key(c);
 
         if (!got_char) {
             // Async background output arrived?  Move to a fresh line and
@@ -1668,9 +1702,7 @@ void Shell::cmd_top(int argc, const char** argv) {
         bool quit = false;
         while (arch::Timer::ticks() < deadline) {
             char c = 0;
-            bool got = arch::Serial::poll_getchar(c); // issue #245
-            if (!got)
-                got = arch::Keyboard::getchar(c);
+            bool got = shell_try_get_key(c); // issues #245 + #340
             if (got && (c == 'q' || c == 'Q')) {
                 quit = true;
                 break;
@@ -2192,9 +2224,7 @@ void Shell::cmd_monstat(int argc, const char** argv) {
     size_t pos = 0;
     for (;;) {
         char c = 0;
-        bool got = arch::Serial::poll_getchar(c);
-        if (!got)
-            got = arch::Keyboard::getchar(c);
+        bool got = shell_try_get_key(c); // issues #245 + #340
         if (!got) {
             shell_idle_nap(20000);
             continue;
@@ -2696,8 +2726,14 @@ void Shell::cmd_runelf(int argc, const char** argv) {
     kernel::TaskControlBlock* task =
         kernel::elf::ElfLoader::take_completed();
     if (!task) {
-        shell_error("runelf", "no elf loaded");
-        return;
+        // Issue #271 P2: second runelf without loadelf — build from
+        // retention when CLEAN/0/static/IDLE, else refuse with reason.
+        const char *rr = nullptr;
+        task = kernel::elf::ElfLoader::try_rerun(&rr);
+        if (!task) {
+            shell_error("runelf", rr ? rr : "no elf loaded");
+            return;
+        }
     }
     if (debug) {
         // Issue #231 (§9.3): shell-as-launcher claim needs parenthood
@@ -2771,7 +2807,7 @@ void Shell::cmd_runelf(int argc, const char** argv) {
                              sizeof(uint64_t));
             grant.data_size = 16;
             if (!kernel::IPC::send(debugd_pid, grant,
-                                   kernel::IPC_NONBLOCK)) {
+                                   kernel::IpcFlags::NONBLOCK)) {
                 kernel::debug::debug_launch_undo(*task, dbg_handle);
                 kernel::elf::ElfLoader::destroy_completed_tcb(task);
                 shell_error("runelf", "grant undeliverable");
@@ -2788,6 +2824,12 @@ void Shell::cmd_runelf(int argc, const char** argv) {
     if (admit != kernel::errors::SCHED_ERR_OK) {
         if (debug)
             kernel::debug::debug_launch_undo(*task, dbg_handle);
+        // Issue #271 P1: the taken TCB's add failed — its take already
+        // adopted retention (task_refs=1). Without this the golden phys
+        // are freed under the TCB but retained stale in retention
+        // (UAF on next use / leak on abandon). Drop the never-added
+        // ref: free at zero/zero, otherwise the live mapper keeps it.
+        kernel::elf::ElfLoader::abandon_retention();
         kernel::elf::ElfLoader::destroy_completed_tcb(task);
         kernel::Logger::warn("runelf: admission denied: %s",
                              kernel::errors::error_string(admit));
@@ -2799,6 +2841,11 @@ void Shell::cmd_runelf(int argc, const char** argv) {
         shell_error("runelf", "admission denied");
         return;
     }
+    // Issue #271 P1: arm outcome tracking for this launch. Arming after
+    // admission (add_task) guarantees we never track a never-added TCB
+    // (an aborted launch must not shadow the prior CLEAN outcome: P2
+    // rerun gate checks CLEAN + code 0).
+    kernel::elf::ElfLoader::note_launched(task->id);
 
     Terminal::set_fg(COLOR_GREEN);
     Terminal::write("Started task #");
@@ -3296,8 +3343,7 @@ void Shell::cmd_read(int argc, const char** argv) {
     size_t pos = 0;
     for (;;) {
         char c = 0;
-        bool got = arch::Serial::poll_getchar(c); // issue #245: UART source
-        if (!got) got = arch::Keyboard::getchar(c);
+        bool got = shell_try_get_key(c); // issues #245 + #340: UART source
         if (!got) {
             // Same idle nap as readline (read builtin efficiency).
             shell_idle_nap(20000);
@@ -3734,11 +3780,35 @@ void Shell::cmd_ls(int argc, const char** argv) {
 
     uint64_t pos = 0;
     kernel::vfs::Dirent dent;
-    while (vn->ops->readdir(*vn, pos, dent) == 0) {
+    while (kernel::vfs::readdir_merged(*vn, pos, dent) == 0) {
         if (dent.d_name[0] == '\0') continue;
         if (str_cmp(dent.d_name, ".") == 0 || str_cmp(dent.d_name, "..") == 0) continue;
 
         auto* child = vn->ops->lookup(*vn, dent.d_name);
+        if (!child) {
+            // Mount-table overlay (#346): synthesized entries (e.g. a
+            // child mount shadowing the directory) are invisible to the
+            // underlying lookup — fall back to a full resolve for the
+            // type probe so mount points still highlight as directories.
+            char dir_abs[256];
+            auto* self_task = kernel::Scheduler::current_task();
+            const char* cwd_str =
+                (self_task && self_task->cwd[0]) ? self_task->cwd : "/";
+            build_canonical_path(cwd_str, path, dir_abs, sizeof(dir_abs));
+            char child_abs[256];
+            size_t abs_idx = 0;
+            while (dir_abs[abs_idx] && abs_idx < sizeof(child_abs) - 1) {
+                child_abs[abs_idx] = dir_abs[abs_idx];
+                ++abs_idx;
+            }
+            if (abs_idx > 1) child_abs[abs_idx++] = '/';
+            size_t name_idx = 0;
+            while (dent.d_name[name_idx] && abs_idx < sizeof(child_abs) - 1) {
+                child_abs[abs_idx++] = dent.d_name[name_idx++];
+            }
+            child_abs[abs_idx] = '\0';
+            child = kernel::vfs::resolve(child_abs);
+        }
         if (child) {
             if (child->mode & kernel::vfs::S_IFDIR) {
                 Terminal::set_fg(COLOR_DIR);
@@ -4022,9 +4092,7 @@ void Shell::cmd_less(int argc, const char** argv) {
                     Terminal::write("--More--");
                     char c = 0;
                     for (;;) {
-                        bool got = arch::Serial::poll_getchar(c); // #245
-                        if (!got)
-                            got = arch::Keyboard::getchar(c);
+                        bool got = shell_try_get_key(c); // #245 + #340
                         if (got && (c == 'q' || c == 'Q')) {
                             Terminal::putchar('\n');
                             kernel::vfs::release(vn); // issue #268
@@ -4042,9 +4110,7 @@ void Shell::cmd_less(int argc, const char** argv) {
 
     char c = 0;
     for (;;) {
-        bool got = arch::Serial::poll_getchar(c); // issue #245: UART source
-        if (!got)
-            got = arch::Keyboard::getchar(c);
+        bool got = shell_try_get_key(c); // issues #245 + #340: UART source
         if (got && (c == 'q' || c == 'Q')) {
             Terminal::putchar('\n');
             kernel::vfs::release(vn); // issue #268

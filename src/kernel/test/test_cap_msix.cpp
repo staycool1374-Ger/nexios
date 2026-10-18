@@ -256,32 +256,32 @@ JARVIS_TEST(msix_cap_install_lookup_revoke, "PRE: none | POST: none") {
     cap::CNode *cs = cur->get_cspace();
     auto *msix = cap::MsixCap::create(bdf, 0);
     JARVIS_ASSERT(msix != nullptr);
-    int s = cs->install(msix, cap::CapType::Msix, cap::CAP_RIGHT_WRITE);
+    int s = cs->install(msix, cap::CapType::Msix, cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t h = cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
                                     cs->slot_gen(static_cast<uint32_t>(s)));
 
     KernelObject *obj =
-        cap::lookup(cs, h, cap::CapType::Msix, cap::CAP_RIGHT_WRITE);
+        cap::lookup(cs, h, cap::CapType::Msix, cap::CapRights::WRITE);
     JARVIS_ASSERT(obj != nullptr);
     JARVIS_ASSERT(obj == static_cast<KernelObject *>(msix));
     obj->release();
 
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Frame,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Irq,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Msix,
-                              cap::CAP_RIGHT_GRANT) == nullptr);
+                              cap::CapRights::GRANT) == nullptr);
     uint64_t stale =
         cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
                            cs->slot_gen(static_cast<uint32_t>(s)) + 1);
     JARVIS_ASSERT(cap::lookup(cs, stale, cap::CapType::Msix,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
 
     JARVIS_ASSERT(cap::revoke(cs, h));
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Msix,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
     JARVIS_ASSERT(msix->revoked());
     // Revoke re-masks the entry (fail-closed).
     JARVIS_ASSERT(msix->entry_masked());
@@ -325,7 +325,7 @@ JARVIS_TEST(msix_register_dispatch_happy, "PRE: none | POST: none") {
                 Scheduler::terminate(*cur, 0);
                 return;
             }
-            int s = cs->install(msix, cap::CapType::Msix, cap::CAP_RIGHT_WRITE);
+            int s = cs->install(msix, cap::CapType::Msix, cap::CapRights::WRITE);
             if (s < 0) {
                 msix->release();
                 g_reg_ret = 98;
@@ -382,8 +382,8 @@ JARVIS_TEST(msix_register_validation_matrix, "PRE: none | POST: none") {
                 Scheduler::terminate(*cur, 0);
                 return;
             }
-            int s1 = cs->install(msix, cap::CapType::Msix, cap::CAP_RIGHT_WRITE);
-            int s2 = cs->install(msix, cap::CapType::Msix, cap::CAP_RIGHT_READ);
+            int s1 = cs->install(msix, cap::CapType::Msix, cap::CapRights::WRITE);
+            int s2 = cs->install(msix, cap::CapType::Msix, cap::CapRights::READ);
             if (s1 < 0 || s2 < 0) {
                 msix->release();
                 Scheduler::terminate(*cur, 0);
@@ -470,7 +470,7 @@ JARVIS_TEST(msix_wait_pending_immediate, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(msix, cap::CapType::Msix,
-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                                cap::CapRights::WRITE | cap::CapRights::READ);
             if (s < 0) {
                 msix->release();
                 g_wait_ret = 98;
@@ -545,7 +545,7 @@ JARVIS_TEST(msix_wait_blocking_wakeup, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(msix, cap::CapType::Msix,
-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                                cap::CapRights::WRITE | cap::CapRights::READ);
             if (s < 0) {
                 msix->release();
                 g_wait_ret = 98;
@@ -627,7 +627,7 @@ JARVIS_TEST(msix_wait_revoked_mid_wait, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(msix, cap::CapType::Msix,
-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                                cap::CapRights::WRITE | cap::CapRights::READ);
             if (s < 0) {
                 msix->release();
                 g_wait_ret = 98;
@@ -718,7 +718,7 @@ JARVIS_TEST(msix_notify_delivery, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(msix, cap::CapType::Msix,
-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                                cap::CapRights::WRITE | cap::CapRights::READ);
             if (s < 0) {
                 msix->release();
                 g_notify_val = 98;
@@ -812,7 +812,7 @@ JARVIS_TEST(msix_task_died_drain, "PRE: none | POST: none") {
             }
             s_tbl = msix->tbl_;
             int s = cs->install(msix, cap::CapType::Msix,
-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                                cap::CapRights::WRITE | cap::CapRights::READ);
             if (s < 0) {
                 msix->release();
                 g_wait_ret = 98;

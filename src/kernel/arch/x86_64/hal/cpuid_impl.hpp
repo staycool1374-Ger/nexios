@@ -72,6 +72,9 @@ inline constexpr uint32_t CPUID_ECX1_PCID = 1u << 17;
 inline constexpr uint32_t CPUID_EBX7_RDSEED = 1u << 18;
 /// @brief INVPCID feature bit (EBX, leaf 7, subleaf 0).
 inline constexpr uint32_t CPUID_EBX7_INVPCID = 1u << 10;
+/// @brief FSGSBASE feature bit (EBX, leaf 7, subleaf 0): userspace
+/// RDFSBASE/WRFSBASE (issue #338 — thread-local errno reads its TP).
+inline constexpr uint32_t CPUID_EBX7_FSGSBASE = 1u << 0;
 
 /// @brief Check if the CPU has an x87 FPU.
 /// @return true if the FPU feature bit is set.
@@ -107,6 +110,11 @@ inline bool has_invpcid() {
 /// @return true if the RDSEED feature bit (leaf 7, subleaf 0) is set.
 inline bool has_rdseed() {
     return (cpuid(7, 0).ebx & CPUID_EBX7_RDSEED) != 0;
+}
+/// @brief Check if the CPU supports FSGSBASE (userspace FS-base access).
+/// @return true if the FSGSBASE feature bit (leaf 7, subleaf 0) is set.
+inline bool has_fsgsbase() {
+    return (cpuid(7, 0).ebx & CPUID_EBX7_FSGSBASE) != 0;
 }
 /// @brief TSC-deadline timer feature bit (ECX, leaf 1).
 inline constexpr uint32_t CPUID_ECX1_TSC_DEADLINE = 1u << 24;

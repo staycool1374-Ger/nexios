@@ -21,8 +21,6 @@
 /// @file buffer_pool_errors.hpp
 /// @brief Buffer pool error codes (X-macro table with human-readable strings).
 
-#pragma once
-
 #include <types.hpp>
 #include <assert.hpp>
 
@@ -47,6 +45,9 @@ enum BufPoolError : uint64_t {
     BUFPOOL_ERROR_CODES
 #undef X
 };
+
+/// @brief OK anchor (issue #348-C): success is zero by convention.
+static_assert(BUF_ERR_OK == 0, "error OK must be 0");
 
 /// @brief Return a human-readable string for a buffer pool error code.
 template <> inline const char *error_string(BufPoolError e) {

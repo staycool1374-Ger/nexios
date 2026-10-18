@@ -24,8 +24,6 @@
 ///        and portable DMA channel abstraction for kernel and userspace
 ///        drivers.
 
-#pragma once
-
 #include <types.hpp>
 #include <constants.hpp>
 #include <kernel/arch/pci.hpp>

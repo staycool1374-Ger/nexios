@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -171,38 +171,40 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('timer__wheel_8
 <div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1time_1_1_timer_wheel.html#ad3a26df7cdf858c1c1952d212cb6e248">cancel</a>(<span class="keyword">const</span> <a class="code hl_struct" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html">Handle</a>&amp; handle) <span class="keyword">noexcept</span>;</div>
 <div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    <span class="keyword">static</span> uint32_t <a class="code hl_function" href="classkernel_1_1time_1_1_timer_wheel.html#a1d8f447f26e546b9beff76cee76693fe">on_tick</a>(uint64_t now_ns, uint32_t cpu) <span class="keyword">noexcept</span>;</div>
 <div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    <span class="keyword">static</span> uint32_t <a class="code hl_function" href="classkernel_1_1time_1_1_timer_wheel.html#af2983ada4c25cb427780046ed2d4a5c1">live_count</a>(uint32_t cpu) <span class="keyword">noexcept</span>;</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1time_1_1_timer_wheel.html#a62a163f1c173368852db45fb5d94c0ec">snapshot_reset</a>() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>;</div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span> </div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>  private:</div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    struct Slot {</div>
-<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>        <span class="keywordtype">bool</span> armed;</div>
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>        uint32_t generation;</div>
-<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>        uint64_t expiry_ns;</div>
-<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>        <a class="code hl_typedef" href="classkernel_1_1time_1_1_timer_wheel.html#a8e0c163853b1a0d016d5b5cb677c30f8">ExpireCallback</a> callback;</div>
-<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>        <span class="keywordtype">void</span>* context;</div>
-<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>        uint32_t next_free;</div>
-<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    };</div>
-<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    <span class="keyword">struct </span>CpuWheel {</div>
-<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>        Slot slots[<a class="code hl_variable" href="classkernel_1_1time_1_1_timer_wheel.html#a0fb270e7f370cdd09ab5c9236d7be4fa">kMaxTimersPerCpu</a>];</div>
-<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>        uint32_t free_head;</div>
-<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>        uint32_t live_count;</div>
-<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>    };</div>
-<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span></div>
-<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> ensure_init_locked() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>;</div>
-<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span> </div>
-<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>    static <a class="code hl_namespace" href="namespacekernel_1_1sync.html">sync</a>::SpinLock lock_;</div>
-<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>    static CpuWheel wheels_[<a class="code hl_define" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>];</div>
-<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>    static <span class="keywordtype">bool</span> initialized_;</div>
-<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>};</div>
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1time_1_1_timer_wheel.html#a59ee814f836cf2206ed330c5419a393b">is_live</a>(<span class="keyword">const</span> <a class="code hl_struct" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html">Handle</a>&amp; handle) <span class="keyword">noexcept</span>;</div>
+<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1time_1_1_timer_wheel.html#a62a163f1c173368852db45fb5d94c0ec">snapshot_reset</a>() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>;</div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span> </div>
+<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>  private:</div>
+<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    struct Slot {</div>
+<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>        <span class="keywordtype">bool</span> armed;</div>
+<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>        uint32_t generation;</div>
+<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>        uint64_t expiry_ns;</div>
+<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>        <a class="code hl_typedef" href="classkernel_1_1time_1_1_timer_wheel.html#a8e0c163853b1a0d016d5b5cb677c30f8">ExpireCallback</a> callback;</div>
+<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>        <span class="keywordtype">void</span>* context;</div>
+<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span>        uint32_t next_free;</div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>    };</div>
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    <span class="keyword">struct </span>CpuWheel {</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>        Slot slots[<a class="code hl_variable" href="classkernel_1_1time_1_1_timer_wheel.html#a0fb270e7f370cdd09ab5c9236d7be4fa">kMaxTimersPerCpu</a>];</div>
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>        uint32_t free_head;</div>
+<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>        uint32_t live_count;</div>
+<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>    };</div>
+<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span></div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> ensure_init_locked() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>;</div>
+<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span> </div>
+<div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>    static <a class="code hl_namespace" href="namespacekernel_1_1sync.html">sync</a>::SpinLock lock_;</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>    static CpuWheel wheels_[<a class="code hl_define" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>];</div>
+<div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>    static <span class="keywordtype">bool</span> initialized_;</div>
+<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>};</div>
 </div>
-<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span> </div>
-<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>} <span class="comment">// namespace time</span></div>
-<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span> </div>
+<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>} <span class="comment">// namespace time</span></div>
+<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>} <span class="comment">// namespace kernel</span></div>
 <div class="ttc" id="aaarch64_2serial_8cpp_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div></div>
 <div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html">kernel::time::TimerWheel</a></div><div class="ttdoc">Per-CPU event-timer wheel with generation-tagged handles.</div><div class="ttdef"><b>Definition</b> timer_wheel.hpp:39</div></div>
 <div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_a0fb270e7f370cdd09ab5c9236d7be4fa"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#a0fb270e7f370cdd09ab5c9236d7be4fa">kernel::time::TimerWheel::kMaxTimersPerCpu</a></div><div class="ttdeci">static constexpr uint32_t kMaxTimersPerCpu</div><div class="ttdoc">Timer slots per CPU (static bound; scan is O(1)-amortized).</div><div class="ttdef"><b>Definition</b> timer_wheel.hpp:42</div></div>
 <div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_a1d8f447f26e546b9beff76cee76693fe"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#a1d8f447f26e546b9beff76cee76693fe">kernel::time::TimerWheel::on_tick</a></div><div class="ttdeci">static uint32_t on_tick(uint64_t now_ns, uint32_t cpu) noexcept</div><div class="ttdoc">Tick hook: fire due expiries for one CPU (bounded). ISR-safe: try-lock, skip on contention (fires nex...</div><div class="ttdef"><b>Definition</b> timer_wheel.cpp:115</div></div>
-<div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_a62a163f1c173368852db45fb5d94c0ec"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#a62a163f1c173368852db45fb5d94c0ec">kernel::time::TimerWheel::snapshot_reset</a></div><div class="ttdeci">static void snapshot_reset() noexcept</div><div class="ttdoc">Disarm everything, invalidate all handles (test isolation). Bumps every generation so pre-reset handl...</div><div class="ttdef"><b>Definition</b> timer_wheel.cpp:198</div></div>
+<div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_a59ee814f836cf2206ed330c5419a393b"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#a59ee814f836cf2206ed330c5419a393b">kernel::time::TimerWheel::is_live</a></div><div class="ttdeci">static bool is_live(const Handle &amp;handle) noexcept</div><div class="ttdoc">Is an arm receipt still live (introspection/test only)? Mirrors cancel()&#39;s validation: true iff the s...</div><div class="ttdef"><b>Definition</b> timer_wheel.cpp:198</div></div>
+<div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_a62a163f1c173368852db45fb5d94c0ec"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#a62a163f1c173368852db45fb5d94c0ec">kernel::time::TimerWheel::snapshot_reset</a></div><div class="ttdeci">static void snapshot_reset() noexcept</div><div class="ttdoc">Disarm everything, invalidate all handles (test isolation). Bumps every generation so pre-reset handl...</div><div class="ttdef"><b>Definition</b> timer_wheel.cpp:208</div></div>
 <div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_a786266be3075e6ba1d64d05b08a98109"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#a786266be3075e6ba1d64d05b08a98109">kernel::time::TimerWheel::kInvalidSlot</a></div><div class="ttdeci">static constexpr uint32_t kInvalidSlot</div><div class="ttdoc">Free-list terminator / invalid slot marker.</div><div class="ttdef"><b>Definition</b> timer_wheel.hpp:47</div></div>
 <div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_a8e0c163853b1a0d016d5b5cb677c30f8"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#a8e0c163853b1a0d016d5b5cb677c30f8">kernel::time::TimerWheel::ExpireCallback</a></div><div class="ttdeci">void(*)(void *) ExpireCallback</div><div class="ttdoc">Expiry callback: runs in tick context, must be non-blocking and must not reschedule,...</div><div class="ttdef"><b>Definition</b> timer_wheel.hpp:52</div></div>
 <div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_a9616a8d40a4849120b18fd12c430fc3c"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#a9616a8d40a4849120b18fd12c430fc3c">kernel::time::TimerWheel::kInvalidGeneration</a></div><div class="ttdeci">static constexpr uint32_t kInvalidGeneration</div><div class="ttdoc">Generation value that is never issued (fail-closed stale).</div><div class="ttdef"><b>Definition</b> timer_wheel.hpp:49</div></div>

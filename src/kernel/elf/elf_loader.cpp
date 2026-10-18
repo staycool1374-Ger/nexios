@@ -33,6 +33,9 @@
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+#include <kernel/arch/x86_64/hal/pcid.hpp>
+#endif
 #include <kernel/arch/timer.hpp>
 #include <services/terminal/terminal.hpp>
 #include <kernel/core/global_state.hpp>
@@ -84,6 +87,8 @@ uint8_t ElfLoader::chunk_buf_[ElfLoader::kChunkSize] = {};
 TaskControlBlock *ElfLoader::loader_tcb_ = nullptr;
 TaskControlBlock *ElfLoader::completed_tcb_ = nullptr;
 uint64_t ElfLoader::completed_entry_ = 0;
+ElfLoader::Retention ElfLoader::retention_ = {};
+ElfLoader::Retention ElfLoader::staging_ = {};
 char ElfLoader::msg_buf_[16][160] = {};
 uint32_t ElfLoader::msg_idx_ = 0;
 DepResolveContext ElfLoader::dep_ctx_ = {};
@@ -140,6 +145,7 @@ LoadResult ElfLoader::request_load(const char *path) {
         cur->fd_table.free(probe);
     }
 
+    arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(lock_);
     if (state_ != LoadState::IDLE)
         return LoadResult::ALREADY_LOADING;
@@ -155,6 +161,9 @@ LoadResult ElfLoader::request_load(const char *path) {
         completed_tcb_ = nullptr;
         completed_entry_ = 0;
     }
+    // Untaken completion gone: its staging goes with it (post-take
+    // retention is untouched — completed_tcb_ is null after take).
+    staging_ = Retention{};
     file_size_ = fsize;
 
     copy_bounded(path_, path, kMaxPath);
@@ -195,13 +204,760 @@ LoadState ElfLoader::state() {
 
 const char *ElfLoader::current_path() { return path_; }
 
+namespace {
+
+// PF_X covering a VA in packed phdrs (loader layout: table at
+// sizeof(ELF64Header) regardless of file phoff). False when no PT_LOAD
+// covers the page (then the page is not a golden candidate anyway).
+bool exec_for_va(const uint8_t *phdr_image, uint16_t phnum, uint64_t phentsize,
+                 uint64_t va) {
+    for (uint16_t i = 0; i < phnum; ++i) {
+        auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+            phdr_image + sizeof(ELF64Header) + (uint64_t)i * phentsize);
+        if (!phdr || phdr->type != PT_LOAD)
+            continue;
+        uint64_t base = phdr->vaddr & ~(arch::PAGE_SIZE - 1);
+        uint64_t top = phdr->vaddr + phdr->memsz;
+        if (va >= base && va < top)
+            return (phdr->flags & PF_X) != 0;
+    }
+    return false;
+}
+
+// Copy a VA range out of a user table via HHDM. False on any hole
+// (fail closed — the range is only complete when fully mapped).
+bool copy_user_range(uint64_t pml4, uint64_t vaddr, uint64_t len,
+                     uint8_t *out) {
+    uint64_t off = 0;
+    while (off < len) {
+        uint64_t va = vaddr + off;
+        uint64_t page_off = va & (arch::PAGE_SIZE - 1);
+        uint64_t chunk = arch::PAGE_SIZE - page_off;
+        if (chunk > len - off)
+            chunk = len - off;
+        uint64_t phys =
+            VMM::virt_to_phys_in_pml4(va & ~(arch::PAGE_SIZE - 1), pml4);
+        if (!phys)
+            return false;
+        __builtin_memcpy(
+            out + off,
+            reinterpret_cast<const void *>(arch::HHDM_OFFSET + phys +
+                                           page_off),
+            chunk);
+        off += chunk;
+    }
+    return true;
+}
+
+} // namespace
+
+// Abandon retention: clear refs + pin. Golden phys are freed ONLY when
+// no live mapper holds them (task_refs == 0); a live mapper's teardown
+// frees them through its normal path later. Never negative.
+void ElfLoader::abandon_retention_locked() {
+    if (!retention_.valid)
+        return;
+    if (retention_.task_refs == 0) {
+        for (size_t i = 0; i < retention_.golden_pages; ++i) {
+            if (retention_.golden[i].phys)
+                PMM::free_page(retention_.golden[i].phys);
+        }
+    }
+    retention_ = Retention{};
+}
+
+// Fill staging from a just-completed load (all loader state is this
+// load's here). Ineligible (dynamic / over caps / walk hole) leaves
+// staging invalid — silent by design (has_retained() == false tells;
+// the rerun path reports). Bounded: no reschedule inside.
+void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
+    staging_ = Retention{};
+    if (!tcb || !tcb->page_table_)
+        return;
+    bool has_dynamic = false;
+    for (uint16_t i = 0; i < hdr_.phnum; ++i) {
+        auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+            phdr_image_ + sizeof(ELF64Header) +
+            (uint64_t)i * hdr_.phentsize);
+        if (phdr && phdr->type == PT_DYNAMIC) {
+            has_dynamic = true;
+            break;
+        }
+    }
+    if (has_dynamic)
+        return; // excluded entirely: no pin, no golden, no refs.
+    // R5 note: dynamic images are refused explicitly at LOAD time by
+    // the dep backend ("failed: ..." with reason verbs — verified live:
+    // a synthetic ET_EXEC+PT_DYNAMIC fails closed there), so nothing is
+    // ever retained and try_rerun's "no elf loaded" is accurate, not
+    // misleading. The kDynamic gate below stays as defense-in-depth.
+    TaskControlBlock::RoRange ros[TaskControlBlock::kMaxRoRanges] = {};
+    uint64_t n = collect_ro_ranges(
+        kernel::Span<const uint8_t>(phdr_image_, sizeof(phdr_image_)),
+        sizeof(ELF64Header), hdr_.phnum, hdr_.phentsize, file_size_, ros);
+    if (n == (uint64_t)-1 || n > TaskControlBlock::kMaxRoRanges)
+        return;
+    // Golden walk: every mapped page covering the RO ranges.
+    size_t gp = 0;
+    size_t rp = 0;
+    for (uint64_t r = 0; r < n; ++r) {
+        uint64_t base = ros[r].vaddr & ~(arch::PAGE_SIZE - 1);
+        uint64_t top = ros[r].vaddr + ros[r].len;
+        uint64_t end = (top + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
+        if (rp >= kMaxGoldenRanges)
+            return;
+        staging_.ranges[rp].vaddr = base;
+        staging_.ranges[rp].page_count = 0;
+        for (uint64_t va = base; va < end; va += arch::PAGE_SIZE) {
+            if (gp >= kMaxGoldenPages)
+                return;
+            uint64_t phys =
+                VMM::virt_to_phys_in_pml4(va, tcb->page_table_);
+            if (!phys)
+                return; // hole: fail closed (cannot happen post-load)
+            staging_.golden[gp].phys = phys;
+            staging_.golden[gp].executable =
+                exec_for_va(phdr_image_, hdr_.phnum, hdr_.phentsize, va);
+            ++gp;
+            ++staging_.ranges[rp].page_count;
+        }
+        ++rp;
+    }
+    staging_.golden_pages = gp;
+    staging_.range_count = rp;
+    // Writable pin: RW file bytes only (never BSS tails), bounded.
+    size_t pin_off = 0;
+    size_t pr = 0;
+    for (uint16_t i = 0; i < hdr_.phnum; ++i) {
+        auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+            phdr_image_ + sizeof(ELF64Header) +
+            (uint64_t)i * hdr_.phentsize);
+        if (!phdr || phdr->type != PT_LOAD || !(phdr->flags & PF_W))
+            continue;
+        // NOTE: no filesz==0 skip — a BSS-only RW segment still needs
+        // its memsz span mapped+zeroed in the rerun build (canary slots
+        // and program break live there); len 0 simply copies nothing.
+        if (pin_off + phdr->filesz > kMaxRerunWritableBytes)
+            return;
+        // S3 hardening: cap the BSS span too — an enormous RW memsz
+        // would otherwise drive allocate-until-OOM in the builder.
+        // Bound total mapped span the same as file bytes.
+        if (phdr->memsz > kMaxRerunWritableBytes)
+            return;
+        if (pr >= kMaxPinRanges)
+            return;
+        if (!copy_user_range(tcb->page_table_, phdr->vaddr, phdr->filesz,
+                             staging_.pin_buf + pin_off))
+            return;
+        staging_.pin_ranges[pr].vaddr = phdr->vaddr;
+        staging_.pin_ranges[pr].pin_off = pin_off;
+        staging_.pin_ranges[pr].len = phdr->filesz;
+        staging_.pin_ranges[pr].memsz = phdr->memsz;
+        ++pr;
+        pin_off += phdr->filesz;
+    }
+    staging_.pin_len = pin_off;
+    staging_.pin_count = pr;
+    // Retained #46 original (compare, never re-adopt) + canary slot.
+    staging_.ro_crc32 = tcb->ro_crc32_;
+    size_t rc = tcb->ro_seg_count_ < TaskControlBlock::kMaxRoRanges
+                    ? (size_t)tcb->ro_seg_count_
+                    : TaskControlBlock::kMaxRoRanges;
+    for (size_t i = 0; i < rc; ++i)
+        staging_.ro_ranges[i] = tcb->ro_ranges_[i];
+    staging_.ro_count = rc;
+    uint64_t slot = 0;
+    if (text_canary_slot(phdr_image_, sizeof(ELF64Header), hdr_.phnum,
+                         hdr_.phentsize, file_size_, &slot))
+        staging_.canary_slot = slot;
+    copy_bounded(staging_.path, path_, kMaxPath);
+    staging_.file_size = file_size_;
+    staging_.entry = hdr_.entry;
+    staging_.hdr = hdr_;
+    staging_.hdr.phoff = sizeof(ELF64Header);
+    __builtin_memcpy(staging_.phdr_image, phdr_image_,
+                     sizeof(staging_.phdr_image));
+    staging_.has_dynamic = false;
+    staging_.valid = true;
+}
+
+// Move staging into retention (newest take wins). Abandon-first covers
+// ineligible staging too (a new take supersedes unconditionally).
+void ElfLoader::adopt_staging_locked() {
+    abandon_retention_locked();
+    if (!staging_.valid) {
+        staging_ = Retention{};
+        return;
+    }
+    retention_ = staging_;
+    retention_.task_refs = 1; // taken TCB maps the set
+    retention_.retained = true;
+    retention_.outcome = RunOutcome::UNKNOWN;
+    retention_.outcome_code = 0;
+    retention_.outcome_task = 0;
+    staging_ = Retention{};
+}
+
+// Drop one task ref; free golden phys at zero/zero (nobody owns them:
+// retention dropped while task refs remain means a live mapper owns
+// them through its own teardown later).
+void ElfLoader::drop_task_ref_locked() {
+    if (!retention_.valid || retention_.task_refs == 0)
+        return;
+    --retention_.task_refs;
+    if (retention_.task_refs == 0 && !retention_.retained) {
+        for (size_t i = 0; i < retention_.golden_pages; ++i) {
+            if (retention_.golden[i].phys)
+                PMM::free_page(retention_.golden[i].phys);
+        }
+        retention_ = Retention{};
+    }
+}
+
+// try_rerun bumped task_refs at the gate; a concurrent adopt swaps the
+// whole Retention (new epoch). Dropping against the new set corrupts its
+// count (1->0 while the new mapper is live -> a later abandon frees live
+// golden). Drop only when our epoch is still current; an abandoned
+// (invalid) retention needs no drop, a replaced one owns no ref of ours.
+void ElfLoader::drop_builder_ref_locked(uint64_t epoch) {
+    if (retention_.valid && retention_.epoch == epoch)
+        drop_task_ref_locked();
+}
+
+void ElfLoader::unmap_golden(TaskControlBlock *tcb) {
+    if (!tcb || !tcb->page_table_)
+        return;
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (!retention_.valid || retention_.task_refs == 0)
+        return;
+    // Walk retained ranges over this table; unmap pages whose phys
+    // matches the retained slot (a non-mapper's table never matches).
+    // Fork children deep-copy (private phys), so they never match and
+    // never disturb the count — no clone hook needed.
+    size_t idx = 0;
+    bool mapped = false;
+    for (size_t r = 0; r < retention_.range_count; ++r) {
+        for (size_t p = 0; p < retention_.ranges[r].page_count; ++p) {
+            uint64_t va =
+                retention_.ranges[r].vaddr + p * arch::PAGE_SIZE;
+            uint64_t phys =
+                VMM::virt_to_phys_in_pml4(va, tcb->page_table_);
+            if (phys != 0 && idx < retention_.golden_pages &&
+                phys == retention_.golden[idx].phys) {
+                VMM::unmap_page_in_pml4(va, tcb->page_table_);
+                mapped = true;
+            }
+            ++idx;
+        }
+    }
+    if (mapped)
+        drop_task_ref_locked();
+}
+
+// Unwind helper for try_rerun failure paths: unmap any retained-golden
+// pages from the fresh table (they stay owned by retention/live mapper),
+// then free the fresh-only pages + PML4. Caller drops its builder ref
+// separately via drop_task_ref_locked. Assumes lock_ held + IRQ-masked.
+void ElfLoader::unmap_fresh_golden_locked(uint64_t pml4,
+                                             const GoldenRange *ranges,
+                                             size_t range_count) {
+    if (!pml4 || !ranges)
+        return;
+    // Unmap every mapped page in OUR ranges unconditionally: the fresh
+    // table maps golden phys exactly here by construction (stack/heap/
+    // pin went elsewhere), so no phys matching against possibly-
+    // superseded retention state is needed.
+    for (size_t r = 0; r < range_count && r < kMaxGoldenRanges; ++r) {
+        for (size_t p = 0; p < ranges[r].page_count; ++p) {
+            uint64_t va = ranges[r].vaddr + p * arch::PAGE_SIZE;
+            if (VMM::virt_to_phys_in_pml4(va, pml4))
+                VMM::unmap_page_in_pml4(va, pml4);
+        }
+    }
+}
+
+void ElfLoader::fail_fresh_build_locked(uint64_t pml4,
+                                          const GoldenRange *ranges,
+                                          size_t range_count) {
+    if (!pml4)
+        return;
+    unmap_fresh_golden_locked(pml4, ranges, range_count);
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+}
+
+TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
+    static const char kNoElf[] = "no elf loaded";
+    static const char kDynamic[] = "dynamic image needs reload";
+    static const char kNotClean[] = "last run not clean, reload required";
+    static const char kBusy[] = "loader busy";
+    static const char kRebuildPml4[] = "rebuild failed: pml4";
+    static const char kRebuildKstack[] = "rebuild failed: kstack";
+    static const char kRebuildGolden[] = "rebuild failed: golden-map";
+    static const char kRebuildStack[] = "rebuild failed: stack";
+    static const char kRebuildHeap[] = "rebuild failed: heap";
+    static const char kRebuildPin[] = "rebuild failed: pin";
+    static const char kRebuildTcb[] = "rebuild failed: tcb-alloc";
+    static const char kRebuildFinal[] = "rebuild failed: finalize";
+    static const char kRebuildScan[] = "rebuild failed: rescan";
+    static const char kRebuildSup[] = "rebuild failed: superseded";
+    // Small stack view: big arrays (golden phys, phdr_image, pin_buf)
+    // are streamed from retention_ directly. A concurrent adopt/abandon
+    // (only via take/reset/release, same-thread callers in practice) is
+    // caught by the epoch re-check at publish; torn mid-build reads can
+    // only cause a fail-closed refuse, never a fault (retention_ is
+    // always mapped kernel memory).
+    struct View {
+        GoldenRange ranges[kMaxGoldenRanges] = {};
+        size_t range_count = 0;
+        size_t golden_pages = 0;
+        PinRange pin_ranges[kMaxPinRanges] = {};
+        size_t pin_count = 0;
+        ELF64Header hdr = {};
+        char path[kMaxPath] = {};
+        uint64_t file_size = 0;
+        TaskControlBlock::RoRange ro_ranges[TaskControlBlock::kMaxRoRanges] = {};
+        size_t ro_count = 0;
+        uint32_t ro_crc32 = 0;
+        uint64_t canary_slot = 0;
+        uint64_t epoch = 0;
+    };
+    View view{};
+    {
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> guard(lock_);
+        if (state_ != LoadState::IDLE) {
+            if (reason) *reason = kBusy;
+            return nullptr;
+        }
+        if (!retention_.valid) {
+            if (reason) *reason = kNoElf;
+            return nullptr;
+        }
+        if (retention_.has_dynamic) {
+            if (reason) *reason = kDynamic;
+            return nullptr;
+        }
+        if (retention_.outcome != RunOutcome::CLEAN ||
+            retention_.outcome_code != 0) {
+            if (reason) *reason = kNotClean;
+            return nullptr;
+        }
+        // Bump first: abandon cannot free golden phys while we build.
+        retention_.task_refs++;
+        view.epoch = retention_.epoch;
+        view.range_count = retention_.range_count;
+        for (size_t i = 0; i < view.range_count && i < kMaxGoldenRanges; ++i)
+            view.ranges[i] = retention_.ranges[i];
+        view.golden_pages = retention_.golden_pages;
+        view.pin_count = retention_.pin_count;
+        for (size_t i = 0; i < view.pin_count && i < kMaxPinRanges; ++i)
+            view.pin_ranges[i] = retention_.pin_ranges[i];
+        view.hdr = retention_.hdr;
+        for (size_t i = 0; i < kMaxPath; ++i) {
+            view.path[i] = retention_.path[i];
+            if (!retention_.path[i]) break;
+        }
+        view.file_size = retention_.file_size;
+        view.ro_count = retention_.ro_count;
+        for (size_t i = 0; i < view.ro_count &&
+                            i < TaskControlBlock::kMaxRoRanges; ++i)
+            view.ro_ranges[i] = retention_.ro_ranges[i];
+        view.ro_crc32 = retention_.ro_crc32;
+        view.canary_slot = retention_.canary_slot;
+    }
+    // Fresh address space.
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    if (!pml4) {
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> guard(lock_);
+        drop_builder_ref_locked(view.epoch); // release our builder ref
+        if (reason) *reason = kRebuildPml4;
+        return nullptr;
+    }
+    VMM::assert_kernel_half_converged(pml4);
+    // Map golden RO pages. Golden phys stream from retention_ (8-byte
+    // aligned reads); a torn mix from a concurrent supersede is caught
+    // by the epoch re-check at publish -> fail-closed refuse.
+    size_t gidx = 0;
+    for (size_t r = 0; r < view.range_count && r < kMaxGoldenRanges; ++r) {
+        for (size_t p = 0; p < view.ranges[r].page_count; ++p) {
+            uint64_t va = view.ranges[r].vaddr + p * arch::PAGE_SIZE;
+            bool map_ok = true;
+            if (gidx < view.golden_pages) {
+                uint64_t gphys = retention_.golden[gidx].phys;
+                bool gexec = retention_.golden[gidx].executable;
+                if (gphys) {
+                    VMM::map_page_ro_in_pml4(va, gphys, gexec, pml4);
+                    map_ok = (VMM::virt_to_phys_in_pml4(va, pml4) != 0);
+                } else {
+                    map_ok = false;
+                }
+            } else {
+                map_ok = false;
+            }
+            if (!map_ok) {
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_builder_ref_locked(view.epoch);
+                if (reason) *reason = kRebuildGolden;
+                return nullptr;
+            }
+            ++gidx;
+        }
+    }
+    // Allocate user stack + heap (fresh).
+    uint64_t ustack_phys = 0;
+    // Reuse loader helper: maps stack/heap into pml4.
+    // alloc_user_stack_and_heap is static in elf.cpp, not visible here,
+    // so duplicate the mapping via VMM directly: allocate and map.
+    // Minimal: allocate stack pages and heap pages via PMM and map.
+    // Use PMM::alloc_user_contiguous for stack, heap.
+    // Stack
+    {
+        size_t stack_pages = (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
+        uint64_t sphys = PMM::alloc_user_contiguous(stack_pages);
+        if (!sphys) {
+            arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> guard(lock_);
+            fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+            drop_builder_ref_locked(view.epoch);
+            if (reason) *reason = kRebuildStack;
+            return nullptr;
+        }
+        for (size_t i = 0; i < stack_pages; ++i) {
+            // Issue #325-D: rebuild stack is data (never executable).
+            if (VMM::map_page_in_pml4_err(
+                    mem::STACK_VADDR + arch::PAGE_SIZE + i * arch::PAGE_SIZE,
+                    sphys + i * arch::PAGE_SIZE, true, pml4,
+                    false) != errors::VMM_ERR_OK) {
+                for (size_t rest = i; rest < stack_pages; ++rest) {
+                    PMM::free_page(sphys + rest * arch::PAGE_SIZE);
+                }
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_builder_ref_locked(view.epoch);
+                if (reason) *reason = kRebuildStack;
+                return nullptr;
+            }
+        }
+        ustack_phys = sphys;
+        // Zero stack via HHDM
+        for (size_t i = 0; i < stack_pages; ++i) {
+            __builtin_memset(reinterpret_cast<void*>(arch::HHDM_OFFSET + sphys + i * arch::PAGE_SIZE), 0, arch::PAGE_SIZE);
+        }
+    }
+    // Heap (initial)
+    {
+        size_t heap_pages = 4; // 16 KiB initial heap like load_segments_and_stack
+        uint64_t hphys = PMM::alloc_user_contiguous(heap_pages);
+        if (!hphys) {
+            arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> guard(lock_);
+            fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+            drop_builder_ref_locked(view.epoch);
+            if (reason) *reason = kRebuildHeap;
+            return nullptr;
+        }
+        for (size_t i = 0; i < heap_pages; ++i) {
+            // Issue #325-D: rebuild heap is data (never executable).
+            if (VMM::map_page_in_pml4_err(mem::HEAP_VADDR + i * arch::PAGE_SIZE,
+                                          hphys + i * arch::PAGE_SIZE, true,
+                                          pml4,
+                                          false) != errors::VMM_ERR_OK) {
+                for (size_t rest = i; rest < heap_pages; ++rest) {
+                    PMM::free_page(hphys + rest * arch::PAGE_SIZE);
+                }
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_builder_ref_locked(view.epoch);
+                if (reason) *reason = kRebuildHeap;
+                return nullptr;
+            }
+        }
+        __builtin_memset(reinterpret_cast<void*>(arch::HHDM_OFFSET + hphys), 0, heap_pages * arch::PAGE_SIZE);
+    }
+    // Allocate fresh writable pages for RW segments (full memsz span,
+    // zeroed incl. BSS tails), then copy pin file bytes into them.
+    for (size_t i = 0; i < view.pin_count && i < kMaxPinRanges; ++i) {
+        uint64_t base = view.pin_ranges[i].vaddr & ~(arch::PAGE_SIZE - 1);
+        uint64_t top = view.pin_ranges[i].vaddr + view.pin_ranges[i].memsz;
+        uint64_t end = (top + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
+        for (uint64_t va = base; va < end; va += arch::PAGE_SIZE) {
+            uint64_t wp = PMM::alloc_user_page();
+            if (!wp) {
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_builder_ref_locked(view.epoch);
+                if (reason) *reason = kRebuildPin;
+                return nullptr;
+            }
+            if (VMM::map_page_in_pml4_err(va, wp, true, pml4) !=
+                errors::VMM_ERR_OK) {
+                // Silent map failure: free the orphan page, then fail.
+                PMM::free_page(wp);
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_builder_ref_locked(view.epoch);
+                if (reason) *reason = kRebuildPin;
+                return nullptr;
+            }
+            __builtin_memset(reinterpret_cast<void*>(arch::HHDM_OFFSET + wp),
+                             0, arch::PAGE_SIZE);
+        }
+    }
+    // Copy writable pin bytes. Pin bytes stream from retention_
+    // (torn mix on concurrent supersede -> epoch refuse at publish).
+    for (size_t i = 0; i < view.pin_count && i < kMaxPinRanges; ++i) {
+        uint64_t va = view.pin_ranges[i].vaddr;
+        uint64_t off = view.pin_ranges[i].pin_off;
+        uint64_t len = view.pin_ranges[i].len;
+        uint64_t phys = VMM::virt_to_phys_in_pml4(va & ~(arch::PAGE_SIZE-1), pml4);
+        if (!phys) {
+            arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> guard(lock_);
+            fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+            drop_builder_ref_locked(view.epoch);
+            if (reason) *reason = kRebuildPin;
+            return nullptr;
+        }
+        // May span pages; copy via HHDM per page chunk
+        uint64_t remaining = len;
+        uint64_t cur_va = va;
+        uint64_t cur_off = off;
+        while (remaining > 0) {
+            uint64_t page_va = cur_va & ~(arch::PAGE_SIZE-1);
+            uint64_t page_off = cur_va & (arch::PAGE_SIZE-1);
+            uint64_t chunk = arch::PAGE_SIZE - page_off;
+            if (chunk > remaining) chunk = remaining;
+            uint64_t p = VMM::virt_to_phys_in_pml4(page_va, pml4);
+            if (!p) {
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+                drop_builder_ref_locked(view.epoch);
+                if (reason) *reason = kRebuildPin;
+                return nullptr;
+            }
+            __builtin_memcpy(reinterpret_cast<void*>(arch::HHDM_OFFSET + p + page_off),
+                             retention_.pin_buf + cur_off, chunk);
+            cur_va += chunk;
+            cur_off += chunk;
+            remaining -= chunk;
+        }
+    }
+    // Build TCB via finalize path: reuse elf::load finalizer helpers
+    // For now, allocate TCB directly and minimally initialize.
+    auto *tcb = static_cast<TaskControlBlock*>(kernel::MemPool::alloc(sizeof(TaskControlBlock)));
+    if (!tcb) {
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> guard(lock_);
+        fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+        drop_builder_ref_locked(view.epoch);
+        if (reason) *reason = kRebuildTcb;
+        return nullptr;
+    }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
+    __builtin_memset(tcb, 0, sizeof(TaskControlBlock));
+#pragma GCC diagnostic pop
+    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+    tcb->tls_base_ = 0; // issue #74: fresh image starts with no TLS
+    tcb->wdog_armed = false;
+    tcb->wdog_period_ticks = 0;
+    tcb->wdog_last_kick_tick = 0;
+    tcb->wdog_expiry_tick = 0;
+    tcb->wdog_gen = 0;
+    tcb->magic = TaskControlBlock::TCB_MAGIC;
+    tcb->id = Scheduler::alloc_id();
+    tcb->state = TaskState::READY;
+    tcb->priority = 2;
+    tcb->period_ticks = 0;
+    tcb->base_priority = 2;
+    tcb->executed_ticks = 0;
+    tcb->exec_ns_total = 0;
+    tcb->exec_period_ns = 0;
+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331
+    tcb->exec_stamp_ns = 0;
+    tcb->wcet_observed_ns = 0;
+    tcb->mem_alloc_ops_ = 0;
+    tcb->mem_free_ops_ = 0;
+    tcb->mem_prev_outstanding_ = 0;
+    tcb->mem_prev_used_ = 0;
+    tcb->mem_leak_streak_ = 0;
+    tcb->sched_policy = SchedPolicy::AUTO;
+    tcb->edf_exempt = false;
+    tcb->edf_next_ = nullptr;
+    tcb->edf_prev_ = nullptr;
+    tcb->in_edf_queue_ = false;
+    tcb->ready_deferred_ = false;
+    tcb->remaining_ticks = 0;
+    tcb->deadline_ticks = arch::Timer::ticks();
+    tcb->page_table_ = 0;
+    tcb->stack_phys_ = 0;
+    tcb->kernel_stack = nullptr;
+    tcb->kernel_stack_top = 0;
+    tcb->user_stack_ = 0;
+    tcb->user_stack_size_ = 0;
+    tcb->program_break_start = 0;
+    tcb->program_break = 0;
+    tcb->buf_list_head = -1;
+    tcb->fpu_used = false;
+    tcb->sporadic_server = nullptr;
+
+    init_task_common(*tcb);
+
+    size_t kstack_pages =
+        (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
+    uint64_t kstack_phys = PMM::alloc_contiguous(kstack_pages);
+    if (!kstack_phys) {
+        // No page_table_ yet: destroy handles IPC/fds/cwd teardown.
+        destroy_completed_tcb(tcb);
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> guard(lock_);
+        fail_fresh_build_locked(pml4, view.ranges, view.range_count);
+        drop_builder_ref_locked(view.epoch);
+        if (reason) *reason = kRebuildKstack;
+        return nullptr;
+    }
+    tcb->stack_phys_ = kstack_phys;
+    uint64_t kstack_virt = arch::HHDM_OFFSET + kstack_phys;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_virt);
+    tcb->kernel_stack_top = kstack_virt + TaskControlBlock::STACK_SIZE;
+
+    tcb->page_table_ = pml4;
+    tcb->is_user_ = true;
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+    tcb->pcid_ = arch::pcid_alloc();
+#endif
+    // Full init via shared finalizer (identical to first-run TCBs:
+    // std fds, user stack frame, canaries, sizes, TLS guard).
+    // hdr/phdr_image stream from retention_ (epoch-checked at publish).
+    // The tail returns false without teardown on failure, so unmap OUR
+    // golden (else blind free below takes retained phys), then destroy
+    // owns kstack/IPC/fds/fresh-pages/MemPool teardown.
+    // destroy does not touch refs; drop our builder ref after.
+    if (!finalize_user_tcb_tail(tcb, &view.hdr, ustack_phys,
+                                retention_.phdr_image, view.file_size)) {
+        // finalize failed partway (kstack/frame/canaries): unmap OUR
+        // golden (else blind free below takes retained phys), then
+        // destroy owns kstack/IPC/fds/fresh-pages/MemPool teardown.
+        // destroy does not touch refs; drop our builder ref after.
+        {
+            arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> guard(lock_);
+            unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
+                                      view.range_count);
+            drop_builder_ref_locked(view.epoch);
+        }
+        destroy_completed_tcb(tcb);
+        if (reason) *reason = kRebuildFinal;
+        return nullptr;
+    }
+    // Rescan-compare: re-walk RO ranges (canary slot carved) against
+    // the retained baseline. Catches decay since retention; never
+    // re-adopts (compare-only per spec).
+    {
+        uint32_t acc = CRC32::INITIAL;
+        bool scan_ok = true;
+        for (size_t i = 0; i < view.ro_count && i < TaskControlBlock::kMaxRoRanges && scan_ok; ++i) {
+            uint64_t vs = view.ro_ranges[i].vaddr;
+            uint64_t ve = vs + view.ro_ranges[i].len;
+            uint64_t cs = view.canary_slot;
+            uint64_t ce = cs + 8;
+            // Head before slot.
+            if (cs != 0 && vs < cs && cs < ve) {
+                if (!crc_user_range(pml4, vs, cs - vs, acc))
+                    scan_ok = false;
+                vs = ce;
+            } else if (cs != 0 && cs <= vs && vs < ce) {
+                vs = ce; // range starts inside slot: skip head
+            }
+            if (scan_ok && vs < ve) {
+                if (!crc_user_range(pml4, vs, ve - vs, acc))
+                    scan_ok = false;
+            }
+        }
+        if (!scan_ok || CRC32::finalize(acc) != view.ro_crc32) {
+            // Decay (or torn-pin mix): unmap OUR golden first so the
+            // blind free in destroy cannot take retained phys, then
+            // destroy + drop our builder ref.
+            {
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
+                                          view.range_count);
+                drop_builder_ref_locked(view.epoch);
+            }
+            destroy_completed_tcb(tcb);
+            if (reason) *reason = kRebuildScan;
+            return nullptr;
+        }
+    }
+    // Carry retained RO baseline (compare, never re-adopt) + UNVERIFIED.
+    for (size_t i = 0; i < TaskControlBlock::kMaxRoRanges; ++i) {
+        if (i < view.ro_count) {
+            tcb->ro_ranges_[i] = view.ro_ranges[i];
+        }
+    }
+    tcb->ro_seg_count_ = view.ro_count;
+    tcb->ro_crc32_ = view.ro_crc32;
+    tcb->ro_verify_state_ = TaskControlBlock::RoVerifyState::UNVERIFIED;
+    // Copy name from retention path leaf
+    {
+        const char *slash = view.path;
+        const char *p = view.path;
+        while (*p) { if (*p=='/') slash=p+1; ++p; }
+        size_t n=0; while (slash[n] && n+1 < CONFIG_TASK_NAME_LEN) { tcb->name[n]=slash[n]; ++n; }
+        tcb->name[n]='\0';
+    }
+    // Publish: re-validate epoch (no supersede/abandon mid-build).
+    // Our builder ref was bumped at the gate and is already counted.
+    bool still_current = false;
+    {
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> guard(lock_);
+        still_current =
+            retention_.valid && retention_.epoch == view.epoch;
+    }
+    if (!still_current) {
+        // Superseded while we built: unmap OUR golden (view ranges are
+        // what WE mapped, regardless of current retention), then destroy
+        // owns the rest; drop our builder ref explicitly since destroy
+        // never touches refs.
+        {
+            arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> guard(lock_);
+            unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
+                                      view.range_count);
+            drop_builder_ref_locked(view.epoch);
+        }
+        destroy_completed_tcb(tcb);
+        if (reason) *reason = kRebuildSup;
+        return nullptr;
+    }
+    return tcb;
+}
+
 TaskControlBlock *ElfLoader::take_completed() {
+    arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(lock_);
     auto *t = completed_tcb_;
     completed_tcb_ = nullptr;
     // completed_entry_ intentionally NOT cleared: it stays latched to
     // the taken TCB until the next load/release/reset (the shell reads
     // it after take_completed for the entry breakpoint).
+    // Issue #271 P1: move staging into retention (newest take wins,
+    // even when the new load is ineligible — abandon covers that).
+    if (t != nullptr)
+        adopt_staging_locked();
     return t;
 }
 
@@ -211,11 +967,62 @@ uint64_t ElfLoader::completed_entry() noexcept {
 }
 
 void ElfLoader::release_completed() {
+    arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(lock_);
     if (completed_tcb_) {
         destroy_completed_tcb(completed_tcb_);
         completed_tcb_ = nullptr;
         completed_entry_ = 0;
+    }
+    // Untaken completion gone: its staging goes with it. Post-take
+    // retention is untouched (completed_tcb_ is null after take).
+    staging_ = Retention{};
+}
+
+void ElfLoader::abandon_retention() {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    abandon_retention_locked();
+    staging_ = Retention{};
+}
+
+bool ElfLoader::has_retained() noexcept {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    return retention_.valid;
+}
+
+ElfLoader::RunOutcome ElfLoader::retained_outcome() {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (!retention_.valid)
+        return RunOutcome::UNKNOWN;
+    return retention_.outcome;
+}
+
+void ElfLoader::note_launched(uint64_t task_id) {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (!retention_.valid)
+        return;
+    retention_.outcome = RunOutcome::UNKNOWN;
+    retention_.outcome_code = 0;
+    retention_.outcome_task = task_id;
+}
+
+void ElfLoader::note_task_end(uint64_t task_id, bool clean, uint64_t code) {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (!retention_.valid)
+        return;
+    if (retention_.outcome_task != task_id)
+        return; // never launched (or a different task): stay UNKNOWN
+    if (clean) {
+        retention_.outcome = RunOutcome::CLEAN;
+        retention_.outcome_code = code;
+    } else {
+        retention_.outcome = RunOutcome::FAULTED;
+        retention_.outcome_code = code;
     }
 }
 
@@ -240,9 +1047,11 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
         // Issue #95: release shared libs (unmap shared RO + drop
         // refcounts) BEFORE the blind free_user_pages below.
         kernel::elf::release_task_libs(tcb);
-        // free_user_pages reclaims ALL user pages in the PML4 — including the
-        // user stack and heap (mapped there by alloc_user_stack_and_heap).  Do
-        // NOT free tcb->user_stack_ separately (double-free).
+        // Issue #271 P1: the never-scheduled path has no task teardown
+        // that could have freed golden pages (cleanup() owns that for
+        // scheduled paths). The untaken completion's golden refs are
+        // request_load's destroy (above); this path never touches
+        // retention (vanilla two-step destroy).
         VMM::free_user_pages(tcb->page_table_);
         PMM::free_page(tcb->page_table_);
         tcb->page_table_ = 0;
@@ -285,6 +1094,7 @@ void ElfLoader::reset() {
         request_cancel();
         wait_loader_idle();
     }
+    arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(lock_);
     if (completed_tcb_) {
         // Issue #77 step 3: a completed TCB was built by
@@ -296,6 +1106,10 @@ void ElfLoader::reset() {
         completed_tcb_ = nullptr;
         completed_entry_ = 0;
     }
+    // Issue #271 P1: reset abandons retention (live-map guard inside:
+    // pages mapped by a live run are NOT freed) and drops staging.
+    abandon_retention_locked();
+    staging_ = Retention{};
     cancel_requested_ = false;
 }
 
@@ -354,7 +1168,7 @@ void ElfLoader::task_main() {
     }
 }
 
-bool ElfLoader::cancel_pending(uint64_t generation) {
+bool ElfLoader::cancel_pending(uint64_t generation) noexcept {
     return state() == LoadState::CANCELED || cancel_requested_ ||
            load_generation_ != generation;
 }
@@ -746,12 +1560,26 @@ void ElfLoader::run_load() {
                 cleanup_and_idle();
                 return;
             }
-            VMM::map_page_in_pml4(vaddr, phys, true, pml4_);
+            if (VMM::map_page_in_pml4_err(vaddr, phys, true, pml4_) !=
+                errors::VMM_ERR_OK) {
+                post_event(0xDB05, " failed: page-table OOM", 0,
+                           PostKind::OTHER);
+                PMM::free_page(phys);
+                cleanup_and_idle();
+                return;
+            }
             uint8_t *page = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
                                                         phys);
             __builtin_memset(page, 0, kChunkSize);
             if (copy_len > 0)
                 __builtin_memcpy(page + dst_off, chunk_buf_, copy_len);
+            // Issue #271 P0: read-only segment pages map PTE-read-only
+            // through the shared primitive (content flowed via HHDM,
+            // perm-independent; canary install later uses HHDM phys).
+            if (!(phdr->flags & PF_W)) {
+                VMM::map_page_ro_in_pml4(vaddr, phys,
+                                         (phdr->flags & PF_X) != 0, pml4_);
+            }
 
             ++page_in_seg_;
             if (cancel_pending(gen)) {
@@ -1003,6 +1831,14 @@ void ElfLoader::run_load() {
     // Issue #231: latch the entry VA with the retained completion so a
     // later load cannot move it under the TCB the shell is about to take.
     completed_entry_ = hdr_.entry;
+    // Issue #271 P1: stage rerun retention from this load (loader state
+    // is this load's here; take moves it). Scoped lock: bounded walks
+    // only, never reschedule (run_load is otherwise lock-free).
+    {
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> stage_guard(lock_);
+        fill_staging_locked(tcb);
+    }
     // Ownership transfer complete: the TCB holds refcounts (released
     // at task death); drop the request-local records + retained buffers
     // WITHOUT releasing (that would steal the task's references).

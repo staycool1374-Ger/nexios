@@ -21,8 +21,6 @@
 /// @file arp.hpp
 /// @brief ARP (Address Resolution Protocol) — IPv4 → MAC resolution.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/net/ether.hpp>
 

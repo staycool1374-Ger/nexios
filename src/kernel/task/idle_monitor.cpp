@@ -41,8 +41,9 @@ namespace {
 bool scan_candidate(const TaskControlBlock *t) noexcept {
     if (!t)
         return false;
-    if (reinterpret_cast<uint64_t>(t) < 0xFFFF800000000000ULL)
-        return false;
+    // Issue #323: is_valid() already performs the kernel-half range check
+    // (TaskControlBlock::is_kernel_pointer) before touching t->magic, so the
+    // former duplicated literal compare here is redundant.
     if (!TaskControlBlock::is_valid(t))
         return false;
     if (Scheduler::is_idle_task(t))
@@ -54,9 +55,11 @@ bool scan_candidate(const TaskControlBlock *t) noexcept {
 
 /// @brief Advance a chunked scan over the registry from @p cursor.
 /// @tparam Visit Callable (TaskControlBlock*) -> void, pure reads +
-///         flag sets only (M3/M6).
+///         flag sets only (M3/M6).  Ad-hoc requires (issue #348-E):
+///         any callable taking TaskControlBlock*, returning anything.
 /// @return Progress; cursor wraps to head at the end (wrapped=true).
 template <typename Visit>
+    requires requires(Visit visit, TaskControlBlock *task) { visit(task); }
 IdleScanProgress scan_chunk(IdleScanCursor &cursor, uint64_t budget,
                             Visit visit) noexcept {
     IdleScanProgress progress = {};
@@ -94,7 +97,7 @@ IdleScanProgress idle_scan_stack(IdleScanCursor &cursor,
         idle_publish_stack_low_water(t->kstack_low_water_,
                                      t->kernel_stack_top,
                                      t->stack_low_water_bytes);
-        if (!user_ok || !kstack_ok) {
+        if (!user_ok || !kstack_ok) [[unlikely]] {
             // Existing escalation path only (spec §3 E1): production
             // fail-stops here exactly as the guard-page #PF path does.
             // The scanner itself kills/reaps/reprioritizes nothing (M6).

@@ -126,7 +126,8 @@ JARVIS_TEST(ipc_send_sync_no_cli, "PRE: none | POST: none") {
             reply.type = 99;
             reply.priority = 0;
             reply.data_size = 0;
-            IPC::send(msg.sender_id, reply);
+            if (!IPC::send(msg.sender_id, reply))
+                return;
         },
         11, 10);
     JARVIS_ASSERT(receiver != nullptr);

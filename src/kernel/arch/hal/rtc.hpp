@@ -21,8 +21,6 @@
 /// @file rtc.hpp
 /// @brief Real-Time Clock (CMOS RTC on x86_64, platform RTC on AArch64/RISC-V).
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/nexios_config.h>
 

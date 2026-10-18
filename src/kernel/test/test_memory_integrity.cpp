@@ -34,6 +34,7 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/memory/integrity.hpp>
+#include <kernel/core/global_state.hpp>
 
 using namespace kernel;
 
@@ -92,8 +93,28 @@ JARVIS_TEST(integrity_crc_scan_completes_and_matches,
     JARVIS_TEST_PASS();
 }
 
-void register_memory_integrity_tests() {
-    Logger::info("Registering memory integrity tests");
+// Runmode: kernel
+// Testidea: The _stack_start/_stack_end span brackets the real 16 KiB
+//           kernel_stack on every arch (issue #327: the "empty span"
+//           premise was stale — the producer moved to shared kernel.cpp).
+//           Address arithmetic only: the absolute symbols materialize as
+//           immediates (no adrp), so this links on all arches, including
+//           aarch64 where the marker objects themselves are unreachable.
+// Input: Linker symbols _stack_start/_stack_end.
+// Expect: span >= 16 KiB on all arches (markers + full stack inside).
+// Depends: linker boot_stack regions, _stack_start/_stack_end
+JARVIS_TEST(integrity_stack_markers_span, "PRE: vfsd, iocd | POST: none") {
+    const uint64_t span_start =
+        reinterpret_cast<uint64_t>(&_stack_start);
+    const uint64_t span_end = reinterpret_cast<uint64_t>(&_stack_end);
+    JARVIS_ASSERT(span_end > span_start);
+    const uint64_t span_bytes = span_end - span_start;
+    JARVIS_ASSERT(span_bytes >= 16384ULL);
+    JARVIS_TEST_PASS();
+}
+
+void register_memory_integrity_tests() {    Logger::info("Registering memory integrity tests");
     JARVIS_REGISTER_TEST(integrity_section_markers_intact);
     JARVIS_REGISTER_TEST(integrity_crc_scan_completes_and_matches);
+    JARVIS_REGISTER_TEST(integrity_stack_markers_span); // #327
 }

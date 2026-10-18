@@ -2,8 +2,6 @@
 #include <time.h>
 #include <errno.h>
 
-extern int errno;
-
 /// @brief §2 error predicate (picolib_stubs.c map_err shape): map a raw
 /// syscall return to errno/-1.
 static long map_err(long ret) {

@@ -22,8 +22,6 @@
 /// @brief Helpers used by syscall handlers — current task, path resolution, fd
 /// management.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/vfs/vfs.hpp>

@@ -132,9 +132,9 @@ void iommu_map_happy_entry() {
         return;
     }
 
-    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
+    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
     int s2 = cs->install(fc, cap::CapType::Frame,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     if (s1 < 0 || s2 < 0) {
         dma->release();
         fc->release();
@@ -192,10 +192,10 @@ void iommu_map_matrix_entry() {
         Scheduler::terminate(*cur, 0);
         return;
     }
-    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
-    int s2 = cs->install(ro_dma, cap::CapType::IoMmuDma, cap::CAP_RIGHT_READ);
+    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
+    int s2 = cs->install(ro_dma, cap::CapType::IoMmuDma, cap::CapRights::READ);
     int s3 = cs->install(fc, cap::CapType::Frame,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     if (s1 < 0 || s2 < 0 || s3 < 0) {
         dma->release();
         ro_dma->release();
@@ -274,9 +274,9 @@ void iommu_unmap_dispatch_entry() {
         Scheduler::terminate(*cur, 0);
         return;
     }
-    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
+    int s1 = cs->install(dma, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
     int s2 = cs->install(fc, cap::CapType::Frame,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
+                         cap::CapRights::READ | cap::CapRights::WRITE);
     if (s1 < 0 || s2 < 0) {
         dma->release();
         fc->release();
@@ -377,20 +377,20 @@ JARVIS_TEST(iommu_cap_create_install_lookup_revoke, "PRE: none | POST: none") {
     JARVIS_ASSERT(root != 0);
 
     cap::CNode *cs = cur->get_cspace();
-    int s = cs->install(dma, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
+    int s = cs->install(dma, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t h = cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
                                     cs->slot_gen(static_cast<uint32_t>(s)));
 
     KernelObject *obj =
-        cap::lookup(cs, h, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
+        cap::lookup(cs, h, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
     JARVIS_ASSERT(obj == static_cast<KernelObject *>(dma));
     obj->release();
     // Wrong type / missing rights refuse.
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Frame,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::IoMmuDma,
-                              cap::CAP_RIGHT_READ) == nullptr);
+                              cap::CapRights::READ) == nullptr);
 
     // Revoke destroys the domain BEFORE publishing the revoke.
     JARVIS_ASSERT(cap::revoke(cs, h));

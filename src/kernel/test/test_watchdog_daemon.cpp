@@ -147,7 +147,7 @@ JARVIS_TEST(daemon_cross_arm_kick, "PRE: none | POST: none") {
             }
             uint32_t gen = 0;
             int idx = cs->install(cap, cap::CapType::Wdog,
-                                  cap::CAP_RIGHT_WRITE, &gen);
+                                  cap::CapRights::WRITE, &gen);
             if (idx < 0) {
                 cap->dispose();
                 return;

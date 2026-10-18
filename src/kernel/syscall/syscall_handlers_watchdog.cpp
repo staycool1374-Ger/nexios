@@ -62,7 +62,7 @@ TaskControlBlock *resolve_watchdog_target(uint64_t pid, uint64_t cap_handle) {
     if (src == nullptr)
         return nullptr;
     KernelObject *obj = cap::lookup(src, cap_handle, cap::CapType::Wdog,
-                                    cap::CAP_RIGHT_WRITE);
+                                    cap::CapRights::WRITE);
     if (obj == nullptr)
         return nullptr;
     auto *wdog = static_cast<cap::WdogCap *>(obj);
@@ -99,7 +99,7 @@ uint64_t arm_watchdog(uint64_t period, TaskControlBlock *t) {
         if (t->wdog_gen == 0)
             t->wdog_gen = 1;
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 } // namespace
@@ -145,7 +145,7 @@ uint64_t Syscall::sys_watchdog_kick(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                   : now + t->wdog_period_ticks;
         t->wdog_last_kick_tick = now;
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 } // namespace kernel

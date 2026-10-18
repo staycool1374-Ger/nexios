@@ -22,6 +22,8 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/arch/cpuid.hpp>
+#include <kernel/arch/io.hpp>
 #include <kernel/nexios_config.h>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/apic.hpp>
@@ -29,6 +31,11 @@
 #endif
 
 using namespace kernel;
+
+#if defined(CONFIG_ARCH_X86_64)
+/// @brief CPUID leaf 1 ECX hypervisor-present bit (issue #319).
+static constexpr uint32_t k_ecx_hypervisor_present = 1U << 31;
+#endif
 
 // Runmode: kernel
 // Testidea: calibrate() leaves a nonzero unified frequency (fail-closed).
@@ -171,6 +178,62 @@ JARVIS_TEST(hrt_oneshot_remaining_ns, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: ns_monotonic() tracks the IRQ tick domain within tolerance
+// (issue #319: TSC miscalibration made wall time run ~2.75x fast).
+// Input: Spin until ticks() advances 2000 (≈2 s at CONFIG_TICK_HZ),
+//        sampling ns_monotonic(); 60-nominal-s cap guarantees termination.
+// Expect: mono delta within ±25% of ticks*1e9/CONFIG_TICK_HZ on
+//         trustworthy TSCs; warn-skip under a hypervisor (TCG virtual
+//         TSC/PIT wall agreement is unenforceable there — see #319).
+// Depends: arch::Timer::ticks/ns_monotonic/tsc_freq_hz, arch::pause
+JARVIS_TEST(hrt_wall_accuracy_bound, "PRE: none | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
+    // CPUID leaf 1 ECX bit 31: hypervisor present. PIT-vs-TSC wall
+    // agreement cannot be enforced on a virtual TSC (issue #319); the
+    // E2E transfer gate remains the wall validator there.
+    if ((arch::cpuid(1).ecx & k_ecx_hypervisor_present) != 0) {
+        Logger::warn("HRT wall accuracy skipped (virtualized TSC)");
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
+    const uint64_t freq_now = arch::Timer::tsc_freq_hz();
+    JARVIS_ASSERT(freq_now != 0);
+    const uint64_t tick_start = arch::Timer::ticks();
+    const uint64_t mono_start = arch::Timer::ns_monotonic();
+    const uint64_t tsc_start = arch::rdtsc();
+    constexpr uint64_t k_wait_ticks = 2000;
+    constexpr uint64_t k_ns_cap = 60000000000ULL;
+    uint64_t mono_end = mono_start;
+    while (arch::Timer::ticks() - tick_start < k_wait_ticks) {
+        arch::pause();
+        mono_end = arch::Timer::ns_monotonic();
+        if (mono_end - mono_start >= k_ns_cap)
+            break;
+    }
+    const uint64_t tick_delta = arch::Timer::ticks() - tick_start;
+    mono_end = arch::Timer::ns_monotonic();
+    const uint64_t mono_delta = mono_end - mono_start;
+    // Ground-truth virtual TSC rate over the same wall-true tick window
+    // (issue #319 diagnosis readout only): tsc units per tick-second.
+    const uint64_t tsc_delta = arch::rdtsc() - tsc_start;
+    uint64_t true_hz = 0;
+    if (tick_delta != 0)
+        true_hz = (tsc_delta * CONFIG_TICK_HZ) / tick_delta;
+    JARVIS_ASSERT(tick_delta >= k_wait_ticks || mono_delta >= k_ns_cap);
+    const uint64_t expected_ns =
+        (tick_delta * 1000000000ULL) / CONFIG_TICK_HZ;
+    const uint64_t lo_bound = (expected_ns * 3ULL) / 4ULL;
+    const uint64_t hi_bound = (expected_ns * 5ULL) / 4ULL;
+    JARVIS_ASSERT_FMT(mono_delta >= lo_bound && mono_delta <= hi_bound,
+                      "wall accuracy: mono=%lx exp=%lx cal=%lx true=%lx ticks=%lx",
+                      (unsigned long)mono_delta, (unsigned long)expected_ns,
+                      (unsigned long)freq_now, (unsigned long)true_hz,
+                      (unsigned long)tick_delta);
+    JARVIS_TEST_PASS();
+}
+
 void register_hrt_monotonic_tests() {
     Logger::info("Registering hrt_monotonic tests");
     JARVIS_REGISTER_TEST(hrt_freq_nonzero_after_calibrate);
@@ -178,4 +241,5 @@ void register_hrt_monotonic_tests() {
     JARVIS_REGISTER_TEST(hrt_active_source_valid);
     JARVIS_REGISTER_TEST(hrt_test_ticks_determinism);
     JARVIS_REGISTER_TEST(hrt_oneshot_remaining_ns);
+    JARVIS_REGISTER_TEST(hrt_wall_accuracy_bound); // #319
 }

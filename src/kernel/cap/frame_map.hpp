@@ -52,7 +52,7 @@ class FrameUserMap {
 
     /// @brief Unmaps the mapping at @p va if it belongs to @p task.
     /// @return true when a mapping was removed.
-    static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
+    [[nodiscard]] static bool unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept;
 
     /// @brief Immediately removes every live mapping backed by @p fc
     ///        (revocation closure).  Called from FrameCap::dispose/revoke
@@ -73,7 +73,7 @@ class FrameUserMap {
 
     /// @brief Whether @p task currently owns the mapping at @p va (test
     ///        accessor).
-    static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
+    [[nodiscard]] static bool is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept;
 
   private:
     static constexpr size_t kMaxMaps = CONFIG_CAP_MAX_FRAME_MAPS;

@@ -22,8 +22,6 @@
 /// @brief Hardware random number generation — dispatches to
 /// architecture-specific implementations.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/nexios_config.h>
 

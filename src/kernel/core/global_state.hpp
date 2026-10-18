@@ -40,6 +40,7 @@
 ///   - NetState       : NIC instance pointer, RANGE_CHECKED.
 
 #include <types.hpp>
+#include <concepts.hpp>
 #include <kernel/boot/bootinfo.hpp>
 #include <kernel/syscall/syscall.hpp>
 
@@ -111,9 +112,11 @@ void audit_write(const char *name, bool accepted) noexcept;
 ///        into @p target.  Returns false (and skips the store) when the write
 ///        is illegitimate.  The caller must hold the same exclusion the
 ///        variable normally uses (the setter documents the required lock).
-/// @tparam T        Value type (scalar / pointer / enum).
+/// @tparam T        Value type (scalar / pointer / enum — enforced
+///                  TriviallyCopiable so struct misuse fails at the call
+///                  site, issue #348-E).
 /// @param name     Debug name for the audit ring.
-template <typename T>
+template <kernel::TriviallyCopiable T>
 bool verify_and_write(T &target, const T &value, WriteClass cls,
                       const WriteContext &ctx, const char *name) noexcept {
     bool accepted = true;

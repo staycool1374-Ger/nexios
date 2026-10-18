@@ -30,6 +30,7 @@
 
 #include <kernel/multiboot2.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
 #include <constants.hpp>
 
 namespace kernel::iommu::acpi {
@@ -46,12 +47,12 @@ namespace {
 uint64_t acpi_map(uint64_t phys) {
     uint64_t page = phys & ~static_cast<uint64_t>(arch::PAGE_SIZE - 1);
     uint64_t va = arch::HHDM_OFFSET + page;
-    kernel::VMM::map_page(va, page, false);
-    // map_page is void; verify the leaf PTE landed (present + phys match).
-    uint64_t pt = kernel::VMM::virt_to_phys_in_pml4(
-        va, kernel::VMM::get_kernel_pml4());
-    if (pt == 0)
-        return 0; // mapping did not take effect — fail closed
+    // Issue #366 Q1a: checked map replaces the void-map + verify-load
+    // pair (identical fail-closed contract: 0 on any failure).
+    if (kernel::VMM::map_page_err(va, page, false) !=
+        kernel::errors::VMM_ERR_OK) {
+        return 0;
+    }
     return arch::HHDM_OFFSET + phys;
 }
 

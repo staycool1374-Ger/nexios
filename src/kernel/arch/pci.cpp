@@ -23,6 +23,7 @@
 #include <kernel/arch/pci.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
 #include <kernel/memory/address.hpp>
 #include <logger.hpp>
 
@@ -753,7 +754,15 @@ bool pci_msix_table_info(PciBdf bdf, PciMsixTableInfo &out) {
     uint64_t map_start = msix_page_align_down(table_phys);
     uint64_t map_end = msix_page_align_up(table_end);
     for (uint64_t page = map_start; page < map_end; page += arch::PAGE_SIZE) {
-        VMM::map_page(kernel::HHDM_OFFSET + page, page, /*user=*/false);
+        // Issue #366 Q1a: fail fast on table-OOM (was a silent drop).
+        if (VMM::map_page_err(kernel::HHDM_OFFSET + page, page,
+                              /*user=*/false) !=
+            kernel::errors::VMM_ERR_OK) {
+            for (uint64_t u = map_start; u < page; u += arch::PAGE_SIZE) {
+                VMM::unmap_page(kernel::HHDM_OFFSET + u);
+            }
+            return false;
+        }
     }
 
     out.bir = bir;

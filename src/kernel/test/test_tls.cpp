@@ -35,6 +35,12 @@
 #include <kernel/task/task.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/msr.hpp>
+#include <kernel/arch/io.hpp>
+#include <kernel/arch/timer.hpp>
+#include <kernel/elf/elf_loader.hpp>
+#include <kernel/memory/vmm.hpp>
+#include <kernel/vfs/vfs.hpp>
+#include <kernel/test/test_isolate.hpp>
 #include <kernel/nexios_config.h>
 #include <constants.hpp>
 #include "test_sched_helpers.hpp"
@@ -543,6 +549,182 @@ JARVIS_TEST(tls_no_stale_slot_after_cancel, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+#if defined(CONFIG_ARCH_X86_64)
+// Issue #338 Ring-3 proof: the in-tree errno-probe ELF (embedded,
+// x86_64 only — the initrd is not mounted in test boot) runs crt0's
+// TLS_SET + the errno macro from userspace. A faulting TP (FSGSBASE
+// off, unregistered block) dies before printing, so the exact marker
+// plus clean exit proves the whole chain. Dispatched twice: the
+// second task must also observe a zero-initialized cell (no
+// cross-task contamination).
+extern "C" {
+extern const uint8_t _binary_errno_probe_img_start[];
+extern const uint8_t _binary_errno_probe_img_end[];
+}
+
+namespace {
+
+constexpr const char *kErrnoImagePath = "/tmp/errno_probe.elf";
+constexpr const char *kErrnoStdoutPath = "/tmp/errno_stdout.txt";
+constexpr uint64_t kErrnoJoinSpins = 10000000ULL;
+
+uint64_t write_errno_image() {
+    kernel::test::mark_vfs_touched();
+    size_t size = static_cast<size_t>(_binary_errno_probe_img_end -
+                                      _binary_errno_probe_img_start);
+    if (size == 0)
+        return 0;
+    if (vfs::create(kErrnoImagePath, 0) != 0)
+        return 0;
+    vfs::Vnode *file = vfs::resolve(kErrnoImagePath);
+    if (file == nullptr || file->ops == nullptr ||
+        file->ops->write == nullptr) {
+        vfs::unlink(kErrnoImagePath);
+        return 0;
+    }
+    size_t off = 0;
+    while (off < size) {
+        size_t chunk = size - off;
+        if (chunk > 4096)
+            chunk = 4096;
+        int64_t written = file->ops->write(
+            *file, _binary_errno_probe_img_start + off, chunk, off);
+        if (written <= 0) {
+            vfs::unlink(kErrnoImagePath);
+            return 0;
+        }
+        off += static_cast<size_t>(written);
+    }
+    return (off == size) ? size : 0ULL;
+}
+
+void cleanup_errno_files() {
+    kernel::test::mark_vfs_touched();
+    vfs::unlink(kErrnoImagePath);
+    vfs::unlink(kErrnoStdoutPath);
+}
+
+bool errno_contains(const char *buf, const char *needle) {
+    for (size_t i = 0; buf[i] != '\0'; ++i) {
+        size_t j = 0;
+        for (; needle[j] != '\0'; ++j) {
+            if (buf[i + j] != needle[j])
+                break;
+        }
+        if (needle[j] == '\0')
+            return true;
+    }
+    return false;
+}
+
+// One dispatch: stage, load, wire stdout to a tmpfs capture, run to
+// EXIT, read the marker back. Returns true on clean exit (code 0);
+// fills capture (NUL-terminated, possibly truncated).
+bool run_errno_probe(char *capture, size_t cap) {
+    if (write_errno_image() == 0)
+        return false;
+    elf::ElfLoader::reset();
+    if (elf::ElfLoader::request_load(kErrnoImagePath) !=
+        elf::LoadResult::OK) {
+        cleanup_errno_files();
+        return false;
+    }
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    if (t == nullptr || t->page_table_ == 0 || !t->is_user_) {
+        if (t != nullptr)
+            elf::ElfLoader::destroy_completed_tcb(t);
+        cleanup_errno_files();
+        return false;
+    }
+    if (!t->fd_table.fds[1].used) {
+        elf::ElfLoader::destroy_completed_tcb(t);
+        cleanup_errno_files();
+        return false;
+    }
+    kernel::test::mark_vfs_touched();
+    if (vfs::create(kErrnoStdoutPath, 0) != 0) {
+        elf::ElfLoader::destroy_completed_tcb(t);
+        cleanup_errno_files();
+        return false;
+    }
+    vfs::Vnode *stdout_vnode = vfs::resolve(kErrnoStdoutPath);
+    if (stdout_vnode == nullptr) {
+        elf::ElfLoader::destroy_completed_tcb(t);
+        cleanup_errno_files();
+        return false;
+    }
+    t->fd_table.fds[1].vnode = stdout_vnode;
+    t->fd_table.fds[1].offset = 0;
+    t->fd_table.fds[1].flags = 0;
+    t->priority = 11;
+    t->base_priority = 11;
+    {
+        arch::IrqGuard ig{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    for (uint64_t i = 0;
+         i < kErrnoJoinSpins && t->state != TaskState::TERMINATED; ++i)
+        arch::pause();
+    bool clean = (t->state == TaskState::TERMINATED && t->exit_code == 0);
+    size_t pos = 0;
+    {
+        vfs::Vnode *cap_file = vfs::resolve(kErrnoStdoutPath);
+        if (cap_file != nullptr && cap_file->ops != nullptr &&
+            cap_file->ops->read != nullptr) {
+            while (pos + 1 < cap) {
+                int64_t rd = cap_file->ops->read(
+                    *cap_file, reinterpret_cast<uint8_t *>(capture + pos),
+                    1, pos);
+                if (rd <= 0)
+                    break;
+                pos += static_cast<size_t>(rd);
+            }
+        }
+    }
+    capture[pos] = '\0';
+    if (TaskControlBlock::is_valid(t) &&
+        (t->state != TaskState::TERMINATED || t->exit_code == 0))
+        Scheduler::terminate(*t, 0);
+    Scheduler::drain_zombie_list();
+    cleanup_errno_files();
+    return clean;
+}
+
+} // namespace
+#endif // CONFIG_ARCH_X86_64
+
+// Runmode: kernel
+// Testidea: Issue #338 — thread-local errno works from Ring 3: crt0
+//           publishes the block (TLS_SET), errno reads TP+0. The same
+//           dispatch also covers issue #339 (in-tree strtok/strtok_r
+//           from Ring 3 via the STRTOK_PROBE marker).
+// Input: Dispatch the embedded probe twice; each run prints
+//        ERRNO_PROBE: <fresh> <roundtrip> <cleared> + STRTOK_PROBE.
+// Expect: Both runs exit 0 with "ERRNO_PROBE: 0 42 0" (fresh cell,
+//        42 round-trips, write-back clears; second task unaffected
+//        by the first) and "STRTOK_PROBE: 1" (a/b/c tokenized).
+// Depends: CR4.FSGSBASE + crt0 TLS_SET + errno macro (issue #338);
+//          strtok/strtok_r (issue #339)
+JARVIS_TEST(tls_errno_ring3_cell, "PRE: vfsd | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
+    char first[64]{};
+    char second[64]{};
+    bool clean_first = run_errno_probe(first, sizeof(first));
+    bool clean_second = run_errno_probe(second, sizeof(second));
+    JARVIS_ASSERT(clean_first);
+    JARVIS_ASSERT(clean_second);
+    JARVIS_ASSERT(errno_contains(first, "ERRNO_PROBE: 0 42 0"));
+    JARVIS_ASSERT(errno_contains(second, "ERRNO_PROBE: 0 42 0"));
+    JARVIS_ASSERT(errno_contains(first, "STRTOK_PROBE: 1"));
+    JARVIS_ASSERT(errno_contains(second, "STRTOK_PROBE: 1"));
+#else
+    // x86_64-only image (RDFSBASE proof runs on TCG-x86_64).
+#endif
+    JARVIS_TEST_PASS();
+}
+
 void register_tls_tests() {
     Logger::info("Registering TLS tests");
     JARVIS_REGISTER_TEST(tls_set_zero_clears);
@@ -557,4 +739,7 @@ void register_tls_tests() {
     JARVIS_REGISTER_TEST(tls_cancel_clears_slot);
     JARVIS_REGISTER_TEST(tls_second_publish_site);
     JARVIS_REGISTER_TEST(tls_no_stale_slot_after_cancel);
+#if defined(CONFIG_ARCH_X86_64)
+    JARVIS_REGISTER_TEST(tls_errno_ring3_cell); // issue #338
+#endif
 }

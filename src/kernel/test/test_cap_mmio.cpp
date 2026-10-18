@@ -26,6 +26,8 @@
 
 #include <test.hpp>
 #include <logger.hpp>
+#include <scope_guard.hpp>
+#include <kernel/arch/irq_guard.hpp>
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/cap_types.hpp>
 #include <kernel/cap/mmio.hpp>
@@ -91,7 +93,7 @@ void ioport_grant_happy_entry() {
         Scheduler::terminate(*cur, 0);
         return;
     }
-    int s = cs->install(mmio, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+    int s = cs->install(mmio, cap::CapType::Mmio, cap::CapRights::WRITE);
     if (s < 0) {
         mmio->release();
         g_grant_ret = 98;
@@ -221,35 +223,35 @@ JARVIS_TEST(mmio_cap_install_lookup_revoke, "PRE: none | POST: none") {
     auto *mmio = cap::MmioCap::create(0x1000000, 0x1000,
                                       arch::PciBarType::MEMORY_32);
     JARVIS_ASSERT(mmio != nullptr);
-    int s = cs->install(mmio, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+    int s = cs->install(mmio, cap::CapType::Mmio, cap::CapRights::WRITE);
     JARVIS_ASSERT(s >= 0);
     uint64_t h = cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
                                     cs->slot_gen(static_cast<uint32_t>(s)));
 
     // Correct type + WRITE -> pinned target.
     KernelObject *obj =
-        cap::lookup(cs, h, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+        cap::lookup(cs, h, cap::CapType::Mmio, cap::CapRights::WRITE);
     JARVIS_ASSERT(obj != nullptr);
     JARVIS_ASSERT(obj == static_cast<KernelObject *>(mmio));
     obj->release();
 
     // Wrong type.
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Frame,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
     // Missing rights.
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Mmio,
-                              cap::CAP_RIGHT_GRANT) == nullptr);
+                              cap::CapRights::GRANT) == nullptr);
     // Stale generation.
     uint64_t stale =
         cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
                            cs->slot_gen(static_cast<uint32_t>(s)) + 1);
     JARVIS_ASSERT(cap::lookup(cs, stale, cap::CapType::Mmio,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
 
     // Revoke invalidates.
     JARVIS_ASSERT(cap::revoke(cs, h));
     JARVIS_ASSERT(cap::lookup(cs, h, cap::CapType::Mmio,
-                              cap::CAP_RIGHT_WRITE) == nullptr);
+                              cap::CapRights::WRITE) == nullptr);
     JARVIS_ASSERT(mmio->revoked());
 
     cs->remove(static_cast<uint32_t>(s));
@@ -367,8 +369,8 @@ JARVIS_TEST(ioport_grant_validation_matrix, "PRE: none | POST: none") {
             Scheduler::terminate(*cur, 0);
             return;
         }
-        int s1 = cs->install(mmio, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
-        int s2 = cs->install(ro, cap::CapType::Mmio, cap::CAP_RIGHT_READ);
+        int s1 = cs->install(mmio, cap::CapType::Mmio, cap::CapRights::WRITE);
+        int s2 = cs->install(ro, cap::CapType::Mmio, cap::CapRights::READ);
         if (s1 < 0 || s2 < 0) {
             mmio->release();
             ro->release();
@@ -514,6 +516,327 @@ JARVIS_TEST(ioport_pool_exhaustion_fails_closed, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: map_mmio_from_cap_err success path returns OK and resolves
+// Input: 1-page memory BAR, scratch PML4
+// Expect: VMM_ERR_OK; virt_to_phys resolves; unmap clears
+// Depends: kernel::cap::MmioCap, kernel::memory::VMM
+JARVIS_TEST(mmio_map_err_success_roundtrip, "PRE: none | POST: none") {
+    uint64_t phys = PMM::alloc_page();
+    JARVIS_ASSERT(phys != 0);
+    auto *mmio = cap::MmioCap::create(phys, arch::PAGE_SIZE,
+                                      arch::PciBarType::MEMORY_32);
+    JARVIS_ASSERT(mmio != nullptr);
+
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+    constexpr uint64_t VA = 0x500000ULL;
+
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT_EQ(phys, VMM::virt_to_phys_in_pml4(VA, pml4));
+    VMM::unmap_mmio_from_cap(mmio, VA, pml4);
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(VA, pml4));
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    mmio->release();
+    PMM::free_page(phys);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: map_frame_from_cap_err maps every frame of a FrameCap
+// Input: 2 contiguous user pages wrapped in a FrameCap, scratch PML4
+// Expect: VMM_ERR_OK; both pages resolve; per-page unmap clears
+// Depends: kernel::cap::FrameCap, kernel::memory::VMM
+JARVIS_TEST(frame_map_err_success_roundtrip, "PRE: none | POST: none") {
+    uint64_t phys = PMM::alloc_user_contiguous(2);
+    JARVIS_ASSERT(phys != 0);
+    auto *fc = cap::FrameCap::create(phys, 2, true);
+    JARVIS_ASSERT(fc != nullptr);
+
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+    constexpr uint64_t VA = 0x500000ULL;
+
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT_EQ(phys, VMM::virt_to_phys_in_pml4(VA, pml4));
+    JARVIS_ASSERT_EQ(phys + arch::PAGE_SIZE,
+                     VMM::virt_to_phys_in_pml4(VA + arch::PAGE_SIZE, pml4));
+    VMM::unmap_frame_from_cap(VA, pml4);
+    VMM::unmap_frame_from_cap(VA + arch::PAGE_SIZE, pml4);
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(VA, pml4));
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    fc->release(); // dispose returns the wrapped frames to the PMM
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: cap-map err validation matrix — every refusal carries its code
+// Input: null/revoked/zero/misaligned/wrap-around/IO-bar caps
+// Expect: INVALID_ADDR, REVOKED, EMPTY_RANGE as documented; no mappings
+// Depends: kernel::cap::FrameCap, kernel::cap::MmioCap, kernel::memory::VMM
+JARVIS_TEST(cap_map_err_validation_matrix, "PRE: none | POST: none") {
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+    constexpr uint64_t VA = 0x500000ULL;
+
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(nullptr, VA, false, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(nullptr, VA, false, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+
+    uint64_t phys = PMM::alloc_page();
+    JARVIS_ASSERT(phys != 0);
+    auto *mmio = cap::MmioCap::create(phys, arch::PAGE_SIZE,
+                                      arch::PciBarType::MEMORY_32);
+    JARVIS_ASSERT(mmio != nullptr);
+    mmio->size = 0; // zero range (public field; dispose frees no memory)
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_EMPTY_RANGE);
+    mmio->size = arch::PAGE_SIZE;
+    const uint64_t saved_size = mmio->size;
+    mmio->size = UINT64_MAX; // roundup would wrap, restored below
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    mmio->size = saved_size;
+    mmio->revoke();
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_REVOKED);
+
+    auto *io = cap::MmioCap::create(0x3F8, 8, arch::PciBarType::IO);
+    JARVIS_ASSERT(io != nullptr);
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(io, VA, false, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+
+    uint64_t uphys = PMM::alloc_user_contiguous(1);
+    JARVIS_ASSERT(uphys != 0);
+    auto *fc = cap::FrameCap::create(uphys, 1, true);
+    JARVIS_ASSERT(fc != nullptr);
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA + 1, true, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    const size_t saved_count = fc->count;
+    fc->count = static_cast<size_t>(-1); // wrap-around range, restored below
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    fc->count = saved_count;
+    fc->count = 0; // zero frame
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_EMPTY_RANGE);
+    fc->count = saved_count;
+    const uint64_t saved_phys = fc->phys;
+    fc->phys = UINT64_MAX - arch::PAGE_SIZE / 2; // phys wrap, restored below
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    fc->phys = saved_phys;
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    io->release();
+    mmio->release();
+    fc->release();
+    PMM::free_page(phys);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: mid-range OOM rolls back the mapped prefix (all-or-nothing)
+// Input: 513-page MMIO range crossing a PT boundary; both PMM pools
+//        drained exactly (table pool via pool_used/total into a small
+//        static stash, general pool via an intrusive HHDM chain with O(1)
+//        storage), KEEP tables freed back
+// Expect: VMM_ERR_PAGE_ALLOC; all 513 pages unmapped; no PMM/table leak
+// Depends: kernel::cap::MmioCap, kernel::memory::VMM, kernel::memory::PMM
+JARVIS_TEST(mmio_map_err_rollback_oom, "PRE: none | POST: none") {
+    // Deterministic OOM: null the OOM-killer for the drain+probe window
+    // (test_resource_exhaustion doctrine) — otherwise the handler kills
+    // user tasks mid-drain and the reaper frees pages under the probe.
+    PMM::OOMHandler saved_oom = PMM::get_oom_handler();
+    PMM::set_oom_handler(nullptr);
+    auto oom_restore = ScopeGuard([&]() { PMM::set_oom_handler(saved_oom); });
+    // Unified refusal-loop drain (same doctrine as
+    // map_page_err_oom_writes_nothing): alloc_page_table serves the table
+    // pool first, then falls back across the whole window, so ONE loop
+    // dries every pool bitmap-wide.  Settle rounds absorb SMP racers.
+    // IRQs off shrinks the racer window to the AP tick.
+    arch::IrqGuard drain_guard;
+    // Rebuild free lists from the bitmap FIRST (B0: pre-existing pool-list
+    // cycles spin an unbounded drain forever; with the fix this yields a
+    // bitmap-fresh list and the drain below terminates).
+    PMM::rebuild_free_list();
+    uint64_t chain_head = 0;
+    for (int settle = 0; settle < 3; ++settle) {
+        size_t took = 0;
+        uint64_t take_page = 0;
+        // Hang guard: the window holds < 32768 pages; more takes means a
+        // cycling free list (fail loud, never stall the harness).
+        size_t take_cap = 0;
+        while ((take_page = PMM::alloc_page_table()) != 0) {
+            JARVIS_ASSERT_FMT(take_cap < 100000,
+                              "drain takes exceed window (cycling list?)");
+            ++take_cap;
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                      take_page);
+            *link = chain_head;
+            chain_head = take_page;
+            ++took;
+        }
+        if (took == 0) {
+            break;
+        }
+    }
+#if defined(CONFIG_ARCH_RISCV64)
+    constexpr size_t KEEP_TABLES = 3; // clone PML4 + L1 + first L2 (L2b fails)
+#else
+    constexpr size_t KEEP_TABLES = 4; // clone PML4 + PDPT + PD + first PT
+                                      // (second PT fails → 512-page prefix
+                                      // mapped then rolled back)
+#endif
+    for (size_t keep = 0; keep < KEEP_TABLES; ++keep) {
+        JARVIS_ASSERT(chain_head != 0);
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                  chain_head);
+        const uint64_t next_head = *link;
+        PMM::free_page(chain_head);
+        chain_head = next_head;
+    }
+
+    constexpr uint64_t VA = 0x400000ULL; // 2 MiB-aligned: 512 pages fill one
+                                        // PT, page 512 needs the next PT
+    constexpr size_t NPAGES = 513;
+    auto *mmio = cap::MmioCap::create(0x1000000, NPAGES * arch::PAGE_SIZE,
+                                      arch::PciBarType::MEMORY_32);
+    JARVIS_ASSERT(mmio != nullptr);
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_PAGE_ALLOC);
+    for (size_t page_idx = 0; page_idx < NPAGES; ++page_idx) {
+        JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(
+                                   VA + page_idx * arch::PAGE_SIZE, pml4));
+    }
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    mmio->release();
+    while (chain_head != 0) {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                  chain_head);
+        const uint64_t next_head = *link;
+        PMM::free_page(chain_head);
+        chain_head = next_head;
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: unmap_* clears the leaf (not-present), not map-with-zero
+// Input: 1 frame page + 1 MMIO page mapped, then unmapped via the cap
+//         unmap primitives
+// Expect: post-unmap virt(VA)==0 AND virt(VA+0x123)==0 — a present-to-zero
+//         leaf (the pre-#325-C encoding) would resolve the offset to 0x123
+// Depends: kernel::memory::VMM unmap convention (issue #325-C)
+JARVIS_TEST(cap_unmap_clears_present_bit, "PRE: none | POST: none") {
+    constexpr uint64_t VA = 0x500000ULL;
+    constexpr uint64_t OFF = 0x123ULL;
+
+    uint64_t fphys = PMM::alloc_user_contiguous(1);
+    JARVIS_ASSERT(fphys != 0);
+    auto *fc = cap::FrameCap::create(fphys, 1, true);
+    JARVIS_ASSERT(fc != nullptr);
+    uint64_t phys = PMM::alloc_page();
+    JARVIS_ASSERT(phys != 0);
+    auto *mmio = cap::MmioCap::create(phys, arch::PAGE_SIZE,
+                                      arch::PciBarType::MEMORY_32);
+    JARVIS_ASSERT(mmio != nullptr);
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT_EQ(fphys + OFF,
+                     VMM::virt_to_phys_in_pml4(VA + OFF, pml4));
+    VMM::unmap_frame_from_cap(VA, pml4);
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(VA, pml4));
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(VA + OFF, pml4));
+
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT_EQ(phys + OFF,
+                     VMM::virt_to_phys_in_pml4(VA + OFF, pml4));
+    VMM::unmap_mmio_from_cap(mmio, VA, pml4);
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(VA, pml4));
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(VA + OFF, pml4));
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    fc->release();
+    mmio->release();
+    PMM::free_page(phys);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: NX policy pinning — cap-mapped memory is non-executable by
+//           default; explicit executable round-trips through the leaf bit
+// Input: frame + MMIO maps (default), explicit true/false via _err,
+//         unmapped VA probe
+// Expect: defaults + explicit-false read non-executable on all arches
+//         (x86 NX63 / aarch64 UXN / riscv64 ~X); explicit-true reads
+//         executable; unmapped reads false
+// Depends: kernel::memory::VMM NX policy (issue #325-D)
+JARVIS_TEST(cap_map_nx_policy_pinning, "PRE: none | POST: none") {
+    constexpr uint64_t VA = 0x500000ULL;
+    uint64_t fphys = PMM::alloc_user_contiguous(1);
+    JARVIS_ASSERT(fphys != 0);
+    auto *fc = cap::FrameCap::create(fphys, 1, true);
+    JARVIS_ASSERT(fc != nullptr);
+    uint64_t phys = PMM::alloc_page();
+    JARVIS_ASSERT(phys != 0);
+    auto *mmio = cap::MmioCap::create(phys, arch::PAGE_SIZE,
+                                      arch::PciBarType::MEMORY_32);
+    JARVIS_ASSERT(mmio != nullptr);
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(VA, pml4));
+    VMM::unmap_frame_from_cap(VA, pml4);
+
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(VA, pml4));
+    VMM::unmap_mmio_from_cap(mmio, VA, pml4);
+
+    JARVIS_ASSERT(VMM::map_frame_from_cap_err(fc, VA, true, pml4, true) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(VMM::pte_is_executable_in_pml4(VA, pml4));
+    VMM::unmap_frame_from_cap(VA, pml4);
+
+    JARVIS_ASSERT(VMM::map_mmio_from_cap_err(mmio, VA, false, pml4, false) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(VA, pml4));
+    VMM::unmap_mmio_from_cap(mmio, VA, pml4);
+
+    JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(VA, pml4));
+
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    fc->release();
+    mmio->release();
+    PMM::free_page(phys);
+    JARVIS_TEST_PASS();
+}
+
 #if defined(CONFIG_ARCH_X86_64)
 // Runmode: kernel
 // Testidea: Revoking an IO MmioCap retroactively re-masks the granted port
@@ -540,7 +863,7 @@ JARVIS_TEST(ioport_revoke_clears_live_bits, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(mmio, cap::CapType::Mmio,
-                                cap::CAP_RIGHT_WRITE);
+                                cap::CapRights::WRITE);
             if (s < 0) {
                 mmio->release();
                 Scheduler::terminate(*cur, 0);
@@ -621,8 +944,8 @@ JARVIS_TEST(ioport_revoke_other_cap_keeps_bits, "PRE: none | POST: none") {
                 Scheduler::terminate(*cur, 0);
                 return;
             }
-            int sa = cs->install(a, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
-            int sb = cs->install(b, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+            int sa = cs->install(a, cap::CapType::Mmio, cap::CapRights::WRITE);
+            int sb = cs->install(b, cap::CapType::Mmio, cap::CapRights::WRITE);
             if (sa < 0 || sb < 0) {
                 a->release();
                 b->release();
@@ -716,7 +1039,7 @@ JARVIS_TEST(ioport_ledger_full_fails_closed, "PRE: none | POST: none") {
                     return;
                 }
                 slots[i] = cs->install(caps[i], cap::CapType::Mmio,
-                                       cap::CAP_RIGHT_WRITE);
+                                       cap::CapRights::WRITE);
                 if (slots[i] < 0) {
                     caps[i]->release();
                     for (int j = 0; j < i; ++j)
@@ -823,6 +1146,12 @@ void register_cap_mmio_tests() {
     JARVIS_REGISTER_TEST(mmio_cap_create_io_bar_bounds);
     JARVIS_REGISTER_TEST(mmio_cap_install_lookup_revoke);
     JARVIS_REGISTER_TEST(mmio_map_memory_bar_roundtrip);
+    JARVIS_REGISTER_TEST(mmio_map_err_success_roundtrip);
+    JARVIS_REGISTER_TEST(frame_map_err_success_roundtrip);
+    JARVIS_REGISTER_TEST(cap_map_err_validation_matrix);
+    JARVIS_REGISTER_TEST(mmio_map_err_rollback_oom);
+    JARVIS_REGISTER_TEST(cap_unmap_clears_present_bit);
+    JARVIS_REGISTER_TEST(cap_map_nx_policy_pinning);
     JARVIS_REGISTER_TEST(ioport_grant_dispatch_happy);
     JARVIS_REGISTER_TEST(ioport_grant_validation_matrix);
     JARVIS_REGISTER_TEST(ioport_switch_applies_and_restores);

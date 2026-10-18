@@ -77,21 +77,21 @@ JARVIS_TEST(ramdisk_chunk_roundtrip, "PRE: none | POST: none") {
     cap::CNode node;
     uint32_t gen = 0;
     int s = node.install(ut, cap::CapType::Untyped,
-                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE, &gen);
+                         cap::CapRights::READ | cap::CapRights::WRITE, &gen);
     JARVIS_ASSERT(s >= 0);
     uint64_t sh = cap::encode_handle(node.cspace_id,
                                      static_cast<uint32_t>(s), gen);
     uint32_t frame_gen = 0;
     int r = cap::retype(&node, sh, cap::CapType::Frame,
                         fixture_pages * arch::PAGE_SIZE,
-                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE,
+                        cap::CapRights::READ | cap::CapRights::WRITE,
                         &frame_gen);
     JARVIS_ASSERT(r >= 0);
     KernelObject *target = cap::lookup(
         &node,
         cap::encode_handle(node.cspace_id, static_cast<uint32_t>(r),
                            frame_gen),
-        cap::CapType::Frame, cap::CAP_RIGHT_READ);
+        cap::CapType::Frame, cap::CapRights::READ);
     JARVIS_ASSERT(target != nullptr);
     auto *fc = static_cast<cap::FrameCap *>(target);
     const uint64_t base = arch::HHDM_OFFSET + fc->phys;
@@ -167,7 +167,7 @@ JARVIS_TEST(ramdisk_grant_fail_closed, "PRE: ramdiskd | POST: none") {
         JARVIS_ASSERT(handles[i] != static_cast<uint64_t>(-1));
         KernelObject *obj =
             cap::lookup(dcs, handles[i], cap::CapType::Frame,
-                        cap::CAP_RIGHT_READ);
+                        cap::CapRights::READ);
         JARVIS_ASSERT(obj != nullptr);
         obj->release();
     }
@@ -249,7 +249,7 @@ JARVIS_TEST(ramdisk_regrant_pushes_handles, "PRE: ramdiskd | POST: none") {
             cap::lookup(dcs,
                         cap::encode_handle(dcs->cspace_id, fresh[i],
                                            dcs->slot_gen(fresh[i])),
-                        cap::CapType::Frame, cap::CAP_RIGHT_READ);
+                        cap::CapType::Frame, cap::CapRights::READ);
         JARVIS_ASSERT(obj != nullptr);
         obj->release();
         dcs->remove(fresh[i]);

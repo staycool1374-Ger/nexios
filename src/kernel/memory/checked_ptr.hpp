@@ -19,14 +19,13 @@
  */
 
 #include <types.hpp>
+#include <constants.hpp>
 #include <string.hpp>
 #include <concepts.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/hal/io.hpp>
 
 namespace kernel {
-
-static constexpr uint64_t USER_SPACE_LIMIT = 0x0000800000000000ULL;
 
 /// @brief Recovery address for safe user memory access.
 ///        Non-zero while we are inside a user memory copy attempt.
@@ -54,6 +53,17 @@ extern "C" constinit uint64_t g_user_access_recover_ip;
             goto label;                                                      \
         }                                                                    \
     } while (0)
+
+/// @brief Check if an element count fits the user range without overflow.
+/// @return False when count * sizeof(T) would wrap or exceed the user
+///         half (issue #337); the multiplication below is then safe.
+/// @note Reachable exhaustion (hostile/huge counts) fails closed with
+///       false — never ENSURE (see CODING_STYLE.md §5).
+template <typename T>
+    requires kernel::TriviallyCopiable<T>
+static inline constexpr bool count_fits_user_limit(uint64_t count) {
+    return count <= (USER_SPACE_LIMIT / sizeof(T));
+}
 
 /// @brief Check if a memory range lies entirely within user space.
 /// @return true if the range is valid user-space memory.
@@ -97,6 +107,8 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
     /// @brief Check if the pointer is valid (non-null, within user space).
     /// @note Zero-size operations with null pointer are valid (no-op).
     bool valid() const {
+        if (!count_fits_user_limit<T>(count_))
+            return false;
         if (count_ == 0)
             return true;
         if (addr_ == 0)
@@ -294,6 +306,8 @@ recover_str:
 template <kernel::TriviallyCopiable T>
 static inline bool safe_copy_from_user(T *dst, const T *src,
                                        uint64_t count) {
+    if (!count_fits_user_limit<T>(count))
+        return false;
     if (!is_user_range(src, count * sizeof(T)))
         return false;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_from);
@@ -318,6 +332,8 @@ recover_from:
 template <kernel::TriviallyCopiable T>
 static inline bool safe_copy_to_user(T *dst, const T *src,
                                      uint64_t count) {
+    if (!count_fits_user_limit<T>(count))
+        return false;
     if (!is_user_range(dst, count * sizeof(T)))
         return false;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_to);

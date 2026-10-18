@@ -224,8 +224,8 @@ JARVIS_TEST(waitpid_cr3_switch_on_status_write, "PRE: none | POST: none") {
 
     // Map parent_page at TEST_VA in parent's PML4, child_page at TEST_VA in
     // child's PML4
-    VMM::map_page_in_pml4(TEST_VA, parent_page, true, parent_pml4);
-    VMM::map_page_in_pml4(TEST_VA, child_page, true, child_pml4);
+    VMM::map_page_in_pml4(TEST_VA, parent_page, true, false, parent_pml4);
+    VMM::map_page_in_pml4(TEST_VA, child_page, true, false, child_pml4);
 
     // Verify the mappings are correct
     uint64_t phys_in_parent = VMM::virt_to_phys_in_pml4(TEST_VA, parent_pml4);

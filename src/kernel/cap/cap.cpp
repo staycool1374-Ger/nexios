@@ -91,7 +91,7 @@ void CNode::revoke() noexcept {
     }
 }
 
-int CNode::install(KernelObject *obj, CapType type, uint32_t rights,
+int CNode::install(KernelObject *obj, CapType type, CapRights rights,
                     uint32_t *gen_out) noexcept {
     if (!obj || type == CapType::Null)
         return -1;
@@ -125,7 +125,7 @@ void CNode::remove(uint32_t idx) noexcept {
         target = slots[idx].obj;
         slots[idx].obj = nullptr;
         slots[idx].type = CapType::Null;
-        slots[idx].rights = 0;
+        slots[idx].rights = CapRights::NONE;
         ++slots[idx].gen; // invalidate stale handles for a recycled slot
         slots[idx].occupied = false;
         kernel::test::ResourceTracker::instance().track_cap_slot_remove();
@@ -157,11 +157,11 @@ void CNode::clear_grant(uint32_t idx) noexcept {
     if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
         !slots[idx].occupied)
         return;
-    slots[idx].rights &= ~CAP_RIGHT_GRANT;
+    slots[idx].rights &= ~CapRights::GRANT;
 }
 
 KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
-                     uint32_t need_rights) noexcept {
+                     CapRights need_rights) noexcept {
     if (!cspace)
         return nullptr;
     const uint32_t idx = handle_slot(handle);
@@ -210,7 +210,7 @@ bool revoke(CNode *cspace, uint64_t handle) noexcept {
         target = slot.obj;
         slot.obj = nullptr;
         slot.type = CapType::Null;
-        slot.rights = 0;
+        slot.rights = CapRights::NONE;
         ++slot.gen;
         slot.occupied = false;
         kernel::test::ResourceTracker::instance().track_cap_slot_remove();
@@ -243,15 +243,16 @@ size_t occupied_count(const CNode *cspace) noexcept {
 ///        Forwards an optional generation out-slot to the dst install
 ///        (issue #266: lets syscall returns encode with no TOCTOU).
 int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
-                   uint32_t rights, uint32_t *gen_out = nullptr) noexcept {
+                   CapRights rights, uint32_t *gen_out = nullptr) noexcept {
     if (!src || !dst || src == dst)
         return -1;
     // lookup() returns the target with acquire() already taken.
-    KernelObject *target = lookup(src, src_handle, CapType::Null, 0);
+    KernelObject *target = lookup(src, src_handle, CapType::Null,
+                                    CapRights::NONE);
     if (!target)
         return -1;
     CapType type = CapType::Null;
-    uint32_t src_rights = 0;
+    CapRights src_rights = CapRights::NONE;
     uint32_t src_gen = 0;
     {
         SpinLockGuard<sync::SpinLock> guard(src->lock_);
@@ -271,7 +272,7 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
     }
     // Reduce the granted rights by the requested mask AND the source rights
     // (a copy can never widen rights).
-    const uint32_t effective = rights & src_rights;
+    const CapRights effective = rights & src_rights;
     int installed = dst->install(target, type, effective, gen_out);
     target->release();
     return installed;
@@ -280,21 +281,21 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
 int copy(CNode *src, uint64_t src_handle, CNode *dst,
          uint32_t *gen_out) noexcept {
     return do_copy_pinned(src, src_handle, dst,
-                          CAP_RIGHT_READ | CAP_RIGHT_WRITE | CAP_RIGHT_COPY |
-                              CAP_RIGHT_GRANT,
+                          CapRights::READ | CapRights::WRITE | CapRights::COPY |
+                              CapRights::GRANT,
                           gen_out);
 }
 
 int grant(CNode *src, uint64_t src_handle, CNode *dst,
           uint32_t *gen_out) noexcept {
-    // Requires CAP_RIGHT_GRANT on the source slot.
+    // Requires CapRights::GRANT on the source slot.
     KernelObject *target =
-        lookup(src, src_handle, CapType::Null, CAP_RIGHT_GRANT);
+        lookup(src, src_handle, CapType::Null, CapRights::GRANT);
     if (!target)
         return -1;
     // Capture the type/rights under the lock, then clear GRANT (mint-once).
     CapType type = CapType::Null;
-    uint32_t rights = 0;
+    CapRights rights = CapRights::NONE;
     uint32_t src_gen = 0;
     {
         SpinLockGuard<sync::SpinLock> guard(src->lock_);
@@ -319,7 +320,7 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
     return installed;
 }
 
-int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
+int mint(CNode *src, uint64_t src_handle, CNode *dst, CapRights rights_mask,
          uint32_t badge, uint32_t *gen_out) noexcept {
     (void)badge; // badge re-branding lands with endpoint integration (Phase 4)
     return do_copy_pinned(src, src_handle, dst, rights_mask, gen_out);

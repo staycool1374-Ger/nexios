@@ -21,8 +21,6 @@
 /// @file fat32_fs.hpp
 /// @brief FAT32 VFS filesystem integration (mount, root vnode).
 
-#pragma once
-
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/fat32.hpp>
 

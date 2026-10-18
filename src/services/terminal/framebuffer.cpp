@@ -22,6 +22,7 @@
 #include <kernel/multiboot2.hpp>
 #endif
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
 #include <assert.hpp>
 #include <constants.hpp>
 
@@ -49,8 +50,22 @@ bool Framebuffer::init() {
     uint64_t fb_start = info_.addr & ~0xFFFULL;
     uint64_t fb_end = (info_.addr + fb_size + 0xFFF) & ~0xFFFULL;
     for (uint64_t page = fb_start; page < fb_end; page += 0x1000) {
-        kernel::VMM::map_page(page, page, false);
-        kernel::VMM::map_page(arch::HHDM_OFFSET + page, page, false);
+        // Issue #366 Q1a: fail fast on table-OOM (was a silent drop);
+        // unmap both windows of the already-mapped prefix (void unmaps).
+        if (kernel::VMM::map_page_err(page, page, false) !=
+                kernel::errors::VMM_ERR_OK ||
+            kernel::VMM::map_page_err(arch::HHDM_OFFSET + page, page,
+                                      false) != kernel::errors::VMM_ERR_OK) {
+            for (uint64_t u = fb_start; u < page; u += 0x1000) {
+                kernel::VMM::unmap_page(u);
+                kernel::VMM::unmap_page(arch::HHDM_OFFSET + u);
+            }
+            // The current page's identity map may have landed while its
+            // HHDM twin failed (or vice versa) — unmapping an absent VA
+            // is a no-op, so clear unconditionally (audit S3, #366).
+            kernel::VMM::unmap_page(page);
+            return false;
+        }
     }
 
     info_.addr = arch::HHDM_OFFSET + info_.addr;

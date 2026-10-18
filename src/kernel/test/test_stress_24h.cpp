@@ -110,7 +110,7 @@ bool ipc_burst(uint64_t n) {
         msg.sender_id = cur->id;
         msg.type = i & 0xFF;
         msg.data_size = 0;
-        if (!IPC::send(cur->id, msg, IPC_NONBLOCK))
+        if (!IPC::send(cur->id, msg, IpcFlags::NONBLOCK))
             return false;
         Message out;
         if (!IPC::recv(out))

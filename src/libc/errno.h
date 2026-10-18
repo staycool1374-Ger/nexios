@@ -18,7 +18,25 @@
 
 #pragma once
 
-extern int errno;
+/// @brief Per-task control block (issue #338 — thread-local errno).
+/// Lives in task-private memory; the kernel loads its address into the
+/// TP register on every dispatch (TLS_SET at crt0 startup, inherited
+/// across fork by address-space copy). errno sits at offset 0 so
+/// __errno_location() is a single TP read + dereference with no layout
+/// dependency beyond this header. Future thread-private state grows
+/// here (never reorder existing fields).
+struct nexios_tcb {
+    int errno_value;
+};
+
+/// @brief Address of the calling task's errno cell (TP + 0).
+/// Never NULL after crt0 startup (block registered before main).
+int *__errno_location(void);
+
+/// @brief Thread-local errno (issue #338): each task reads its own
+/// TP-published cell. Plain `errno = x` / `errno` uses keep working
+/// through the dereference.
+#define errno (*__errno_location())
 
 #define EPERM   1
 #define ENOENT  2

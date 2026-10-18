@@ -269,8 +269,8 @@ static void unblock_sender_rollback(MessageQueue &q,
                                     TaskControlBlock &task) noexcept;
 
 /// @brief Send a message to a destination task (blocks if queue is full, unless
-/// IPC_NONBLOCK).
-bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
+/// IpcFlags::NONBLOCK).
+bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
     auto *tcb = Scheduler::find_task(dest_id);
     if (!tcb || tcb->state == TaskState::TERMINATED)
         return false;
@@ -278,7 +278,7 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
     // If the queue is already full, either return immediately (NONBLOCK)
     // or block the sender until space becomes available.
     if (tcb->msg_queue.is_full_locked()) {
-        if (flags & IPC_NONBLOCK)
+        if ((flags & IpcFlags::NONBLOCK) != IpcFlags::NONE)
             return false;
 
         auto *cur = Scheduler::current_task();
@@ -332,8 +332,11 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
     if (!ok) {
         if (transferred) {
             auto *cur = Scheduler::current_task();
+            // Best-effort rollback (issue #348-A): on failure the buffer
+            // stays with tcb and is reclaimed at task teardown
+            // (BufferPool::unmap_all) — never leaked, never double-owned.
             if (cur)
-                BufferPool::transfer(msg.buf_handle, *tcb, *cur); // rollback
+                (void)BufferPool::transfer(msg.buf_handle, *tcb, *cur);
         }
         return false;
     }
@@ -378,7 +381,7 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
 }
 
 /// @brief Receive a message from the calling task's own queue.
-bool IPC::recv(Message &msg) {
+bool IPC::recv(Message &msg) noexcept {
     auto *cur = Scheduler::current_task();
     if (!cur)
         return false;
@@ -392,8 +395,8 @@ bool IPC::recv(Message &msg) {
 
 /// @brief Send through a capability-gated endpoint.  The endpoint's message
 ///        queue is the transport (no task-ID ambient authority).  Blocks on a
-///        full queue unless IPC_NONBLOCK; wakes the bound receiver.
-bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
+///        full queue unless IpcFlags::NONBLOCK; wakes the bound receiver.
+bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) noexcept {
     if (!ep)
         return false;
     if (ep->revoked())
@@ -410,7 +413,7 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
         return false;
 
     if (ep->q.is_full_locked()) {
-        if (flags & IPC_NONBLOCK)
+        if ((flags & IpcFlags::NONBLOCK) != IpcFlags::NONE)
             return false;
         if (!cur)
             return false;
@@ -459,7 +462,7 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
 
 /// @brief Receive from a capability-gated endpoint into the calling task's
 ///        own queue.  Non-blocking: returns false on an empty endpoint queue.
-bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
+bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept {
     if (!ep)
         return false;
     if (!ep->q.pop(msg))
@@ -480,7 +483,7 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
 ///        unchanged from the v1 contract (dest-death reply preservation,
 ///        #11 oversized-stays-queued clamp, arrival-triggered wake).
 bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-                    uint32_t reply_max_size) {
+                    uint32_t reply_max_size) noexcept {
     // Send the request message
     if (!send(dest_id, msg))
         return false;

@@ -47,7 +47,7 @@ namespace kernel::errors {
 ///        Use this for conditions that should *never* fail.
 #define ENSURE(cond) \
     do { \
-        if (!(cond)) { \
+        if (!(cond)) [[unlikely]] { \
             panic("ENSURE failed: " #cond " at " __FILE__ ":" \
                   EXPAND_AND_STRINGIFY(__LINE__)); \
         } \

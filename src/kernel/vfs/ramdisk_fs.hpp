@@ -32,8 +32,6 @@
 /// Integrity verification is client-side re-read (no stored checksum in
 /// v1; bit-rot detection is out of scope — see docs/specs/ramdisk_fs.md).
 
-#pragma once
-
 #include <kernel/vfs/vfs.hpp>
 
 namespace kernel {

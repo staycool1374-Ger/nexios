@@ -98,7 +98,7 @@ JARVIS_TEST(harness_priority_ordered_wakeup,
         Message msg{};
         msg.type = IPC_MSG_TYPE_TEST;
         msg.priority = 0;
-        IPC::send(rcv_id, msg, IPC_NONBLOCK);
+        JARVIS_ASSERT(IPC::send(rcv_id, msg, IpcFlags::NONBLOCK));
     }
 
     // Send one more — should block (queue full), then wake when receiver drains
@@ -109,7 +109,7 @@ JARVIS_TEST(harness_priority_ordered_wakeup,
 
     // Current task blocks here; receiver runs, drains queue, wakes us.
     // After waking, the queue has space and our message is delivered.
-    bool ok = IPC::send(rcv_id, block_msg, 0);
+    bool ok = IPC::send(rcv_id, block_msg, IpcFlags::NONE);
     JARVIS_ASSERT_FMT(ok, "Priority-ordered wakeup should complete send");
 
     // Let receiver drain remaining messages
@@ -165,7 +165,7 @@ JARVIS_TEST(harness_blocked_sender_wakes,
         Message msg{};
         msg.type = IPC_MSG_TYPE_TEST;
         msg.priority = 0;
-        IPC::send(rcv_id, msg, IPC_NONBLOCK);
+        JARVIS_ASSERT(IPC::send(rcv_id, msg, IpcFlags::NONBLOCK));
     }
 
     // Send one more — should block (queue full)
@@ -174,7 +174,7 @@ JARVIS_TEST(harness_blocked_sender_wakes,
     block_msg.type = IPC_MSG_TYPE_TEST;
     block_msg.priority = 0;
 
-    if (!IPC::send(rcv_id, block_msg, 0)) {
+    if (!IPC::send(rcv_id, block_msg, IpcFlags::NONE)) {
         // If IPC::send returns false (e.g. OOM), the test failed
         JARVIS_ASSERT_FMT(false, "Blocking send failed");
     }
@@ -370,7 +370,7 @@ JARVIS_TEST(harness_hhdm_user_page_bounds,
 
         // Free the buffer back to the pool (kernel worker's buffer).
         if (g_handle != 0) {
-            BufferPool::free(*sender, g_handle);
+            JARVIS_ASSERT(BufferPool::free(*sender, g_handle));
         }
 
         // Clean up tasks (this frees page-table pages back to PMM free list)

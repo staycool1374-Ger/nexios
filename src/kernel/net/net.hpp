@@ -21,8 +21,6 @@
 /// @file net.hpp
 /// @brief Network stack core — NIC interface, packet dispatch.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/net/ether.hpp>
 #include <kernel/net/arp.hpp>

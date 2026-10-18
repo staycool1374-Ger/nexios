@@ -206,6 +206,113 @@ JARVIS_TEST(vfs_mount_unmount, "PRE: vfsd, iocd | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: Verifies readdir_merged overlays child mount points that the
+//           underlying readdir cannot see (issue #346: ls hid /mnt and
+//           /mnt/ramdisk while cd worked).
+// Input: Fake parent fs (one underlying entry) at /VFS_LS_PARENT plus a
+//        fake child mount at /VFS_LS_PARENT/LS_CHILD; merged walk of the
+//        parent.
+// Expect: Both the underlying entry and the child mount leaf appear
+//         exactly once; walk ends with VFS_INVALID.
+// Depends: kernel::vfs::readdir_merged, mount, resolve
+static Vnode fake_ls_parent_root;
+static Vnode fake_ls_child_root;
+
+static int fake_ls_parent_readdir(Vnode &self, uint64_t &pos,
+                                  Dirent &dent) {
+    (void)self;
+    if (pos != 0)
+        return VFS_INVALID;
+    const char *base_name = "LS_BASE_TXT";
+    size_t name_idx = 0;
+    while (base_name[name_idx] != '\0' && name_idx < sizeof(dent.d_name) - 1) {
+        dent.d_name[name_idx] = base_name[name_idx];
+        ++name_idx;
+    }
+    dent.d_name[name_idx] = '\0';
+    dent.d_ino = 7;
+    // Issue #358: stride the cursor past a phantom slot, modeling
+    // the real hooks (initrd raw cpio index, fat32 free/LFN slots).
+    // A yielded-count phase boundary would compute mount_index 1 here
+    // and skip the child — the EOF-cursor boundary must yield 0.
+    pos += 2;
+    return 0;
+}
+
+static const VnodeOps fake_ls_parent_ops = {
+    nullptr, // read
+    nullptr, // write
+    nullptr, // open
+    nullptr, // close
+    nullptr, // lseek
+    nullptr, // fstat
+    nullptr, // ioctl
+    fake_ls_parent_readdir,
+    nullptr, // lookup
+    nullptr, // mkdir
+    nullptr, // unlink
+    nullptr, // create
+};
+
+static Vnode *fake_ls_parent_get_root() {
+    return &fake_ls_parent_root;
+}
+
+static Vnode *fake_ls_child_get_root() {
+    return &fake_ls_child_root;
+}
+
+static kernel::vfs::Filesystem fake_ls_parent_fs = {.name = "fakelsparent",
+                                                    .get_root =
+                                                        fake_ls_parent_get_root};
+static kernel::vfs::Filesystem fake_ls_child_fs = {.name = "fakelschild",
+                                                   .get_root =
+                                                       fake_ls_child_get_root};
+
+JARVIS_TEST(vfs_readdir_lists_mount_points, "PRE: vfsd, iocd | POST: none") {
+    fake_ls_parent_root = Vnode{};
+    fake_ls_parent_root.ops = &fake_ls_parent_ops;
+    fake_ls_parent_root.mode = vfs::S_IFDIR;
+    fake_ls_parent_root.ino = 41;
+    fake_ls_child_root = Vnode{};
+    fake_ls_child_root.mode = vfs::S_IFDIR;
+    fake_ls_child_root.ino = 42;
+
+    JARVIS_ASSERT_EQ(0, vfs::mount(fake_ls_parent_fs, "/VFS_LS_PARENT"));
+    JARVIS_ASSERT_EQ(0, vfs::mount(fake_ls_child_fs,
+                                   "/VFS_LS_PARENT/LS_CHILD"));
+
+    Vnode *parent_vn = vfs::resolve("/VFS_LS_PARENT");
+    JARVIS_ASSERT(parent_vn != nullptr);
+
+    uint64_t walk_pos = 0;
+    Dirent walk_dent{};
+    bool saw_base = false;
+    bool saw_child = false;
+    uint64_t entry_total = 0;
+    while (vfs::readdir_merged(*parent_vn, walk_pos, walk_dent) == 0) {
+        if (strcmp(walk_dent.d_name, "LS_BASE_TXT") == 0) {
+            JARVIS_ASSERT(!saw_base);
+            saw_base = true;
+        } else if (strcmp(walk_dent.d_name, "LS_CHILD") == 0) {
+            JARVIS_ASSERT(!saw_child);
+            saw_child = true;
+        } else {
+            JARVIS_ASSERT_FMT(false, "unexpected entry %s",
+                              walk_dent.d_name);
+        }
+        ++entry_total;
+        JARVIS_ASSERT(entry_total <= 8);
+    }
+    JARVIS_ASSERT(saw_base);
+    JARVIS_ASSERT(saw_child);
+    JARVIS_ASSERT_EQ(2, entry_total);
+    vfs::release(parent_vn); // issue #268: owned resolve result
+
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Verifies vfs::mkdir creates a directory at a valid path.
 // Input: vfs::mkdir("/mnt/NEWDIR_TEST", 0)
 // Expect: Returns 0, vfs::resolve finds the new directory with S_IFDIR
@@ -577,6 +684,7 @@ void register_vfs_tests() {
     JARVIS_REGISTER_TEST(vfs_resolve_relative_path);
     JARVIS_REGISTER_TEST(vfs_resolve_dotdot);
     JARVIS_REGISTER_TEST(vfs_mount_unmount);
+    JARVIS_REGISTER_TEST(vfs_readdir_lists_mount_points); // #346
     JARVIS_REGISTER_TEST(vfs_mkdir_valid);
     JARVIS_REGISTER_TEST(vfs_mkdir_nonexistent_parent);
     JARVIS_REGISTER_TEST(vfs_mkdir_parent_not_dir);

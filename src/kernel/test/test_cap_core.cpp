@@ -90,7 +90,7 @@ JARVIS_TEST(cnode_install_acquires_ref, "PRE: none | POST: none") {
     cap::CNode node;
     TestTarget tgt;
     JARVIS_ASSERT_EQ(1U, tgt.refcount());
-    int idx = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int idx = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(idx >= 0);
     JARVIS_ASSERT_EQ(2U, tgt.refcount());
     JARVIS_ASSERT_EQ(1U, cap::occupied_count(&node));
@@ -110,7 +110,7 @@ JARVIS_TEST(cnode_release_drops_ref, "PRE: none | POST: none") {
     TestTarget::g_dispose_count = 0;
     cap::CNode node;
     TestTarget tgt;
-    int idx = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int idx = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(idx >= 0);
     node.remove(static_cast<uint32_t>(idx));
     JARVIS_ASSERT_EQ(1U, tgt.refcount());
@@ -134,7 +134,7 @@ JARVIS_TEST(cnode_dispose_frees_pool_block, "PRE: none | POST: none") {
     cap::CNode *node = cap::CNode::create(0xAB);
     JARVIS_ASSERT(node != nullptr);
     JARVIS_ASSERT(node->is_pool_backed());
-    int idx = node->install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int idx = node->install(&tgt, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(idx >= 0);
     JARVIS_ASSERT_EQ(1U, tgt.refcount() - 1U);
 
@@ -157,7 +157,7 @@ JARVIS_TEST(cnode_revoke_refuses_acquire, "PRE: none | POST: none") {
     TestTarget::g_revoke_count = 0;
     cap::CNode node;
     TestTarget tgt;
-    int idx = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int idx = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(idx >= 0);
     node.revoke();
     JARVIS_ASSERT_EQ(1U, TestTarget::g_revoke_count);
@@ -179,9 +179,9 @@ JARVIS_TEST(cnode_cascade_revoke_marks_children, "PRE: none | POST: none") {
     cap::CNode parent;
     cap::CNode child;
     TestTarget leaf;
-    int cidx = child.install(&leaf, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int cidx = child.install(&leaf, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(cidx >= 0);
-    int pidx = parent.install(&child, cap::CapType::CNode, cap::CAP_RIGHT_READ);
+    int pidx = parent.install(&child, cap::CapType::CNode, cap::CapRights::READ);
     JARVIS_ASSERT(pidx >= 0);
 
     parent.revoke();
@@ -219,7 +219,7 @@ JARVIS_TEST(handle_decode_valid, "PRE: none | POST: none") {
 JARVIS_TEST(handle_decode_out_of_range_fails, "PRE: none | POST: none") {
     cap::CNode node;
     TestTarget tgt;
-    int idx = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int idx = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(idx >= 0);
     // Slot index is masked to CAP_SLOT_BITS (power-of-two table), so a
     // decodable slot is always in-range; the authority boundary is the
@@ -228,7 +228,7 @@ JARVIS_TEST(handle_decode_out_of_range_fails, "PRE: none | POST: none") {
         cap::encode_handle(static_cast<uint32_t>(node.cspace_id + 1u),
                            static_cast<uint32_t>(idx), 0);
     KernelObject *got =
-        cap::lookup(&node, foreign, cap::CapType::Task, cap::CAP_RIGHT_READ);
+        cap::lookup(&node, foreign, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(got == nullptr);
     node.remove(static_cast<uint32_t>(idx));
     JARVIS_TEST_PASS();
@@ -244,7 +244,7 @@ JARVIS_TEST(handle_decode_stale_gen_fails, "PRE: none | POST: none") {
     cap::CNode node;
     TestTarget tgt;
     TestTarget tgt2;
-    int idx = node.install(&tgt, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int idx = node.install(&tgt, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(idx >= 0);
     uint32_t old_gen = node.slot_gen(static_cast<uint32_t>(idx));
     uint64_t old_handle =
@@ -252,12 +252,12 @@ JARVIS_TEST(handle_decode_stale_gen_fails, "PRE: none | POST: none") {
 
     // remove bumps gen; reinstall same slot with a new target
     node.remove(static_cast<uint32_t>(idx));
-    int idx2 = node.install(&tgt2, cap::CapType::Task, cap::CAP_RIGHT_READ);
+    int idx2 = node.install(&tgt2, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT_EQ(idx, idx2);
     JARVIS_ASSERT(node.slot_gen(static_cast<uint32_t>(idx2)) != old_gen);
 
     KernelObject *got =
-        cap::lookup(&node, old_handle, cap::CapType::Task, cap::CAP_RIGHT_READ);
+        cap::lookup(&node, old_handle, cap::CapType::Task, cap::CapRights::READ);
     JARVIS_ASSERT(got == nullptr);
     node.remove(static_cast<uint32_t>(idx2));
     JARVIS_TEST_PASS();

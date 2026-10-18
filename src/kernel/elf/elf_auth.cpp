@@ -34,14 +34,23 @@
 namespace kernel {
 namespace elf {
 
-uint64_t collect_ro_ranges(const uint8_t *phdr_image, uint64_t phdr_buf_off,
-                           uint16_t phnum, uint64_t phentsize,
-                           uint64_t file_size, TaskControlBlock::RoRange *out,
-                           uint64_t max_ranges) noexcept {
+uint64_t collect_ro_ranges(kernel::Span<const uint8_t> image,
+                           uint64_t phdr_buf_off, uint16_t phnum,
+                           uint64_t phentsize, uint64_t file_size,
+                           kernel::Span<TaskControlBlock::RoRange> out) noexcept {
     uint64_t count = 0;
     for (uint16_t i = 0; i < phnum; ++i) {
+        // Overflow-safe offset (issue #348-D2): wrap or out-of-image
+        // entries are skipped, never read.
+        const uint64_t stride =
+            static_cast<uint64_t>(i) * phentsize + phdr_buf_off;
+        if (stride < phdr_buf_off)
+            continue; // wrapped
+        if (stride > image.size() ||
+            sizeof(ELF64ProgramHeader) > image.size() - stride)
+            continue; // outside the image
         auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
-            phdr_image + phdr_buf_off + static_cast<uint64_t>(i) * phentsize);
+            image.data() + stride);
         if (!phdr || phdr->type != PT_LOAD)
             continue;
         if (!validate_segment(phdr, file_size))
@@ -50,7 +59,7 @@ uint64_t collect_ro_ranges(const uint8_t *phdr_image, uint64_t phdr_buf_off,
             continue;
         if (phdr->filesz == 0)
             continue;
-        if (count >= max_ranges)
+        if (count >= out.size())
             return static_cast<uint64_t>(-1); // overflow: fail closed
         out[count].vaddr = phdr->vaddr;
         out[count].len = phdr->filesz;
@@ -120,9 +129,9 @@ bool snapshot_ro_baseline(uint64_t pml4, const uint8_t *phdr_image,
     if (!tcb)
         return false;
     TaskControlBlock::RoRange ranges[TaskControlBlock::kMaxRoRanges];
-    uint64_t n = collect_ro_ranges(phdr_image, phdr_buf_off, phnum, phentsize,
-                                   file_size, ranges,
-                                   TaskControlBlock::kMaxRoRanges);
+    uint64_t n =
+        collect_ro_ranges(kernel::Span<const uint8_t>(phdr_image, file_size),
+                          phdr_buf_off, phnum, phentsize, file_size, ranges);
     if (n == static_cast<uint64_t>(-1))
         return false; // more RO ranges than the TCB snapshot holds
     // Carve the TEXT before-canary slot out (the canary subsystem owns

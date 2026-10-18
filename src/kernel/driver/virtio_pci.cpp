@@ -22,6 +22,7 @@
 #include <kernel/arch/virtio.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/arch/pci.hpp>
+#include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
 #include <logger.hpp>
 #include <lib/atomic.hpp>
 
@@ -51,7 +52,14 @@ bool virtio_map_mmio(uint8_t bar, uint32_t offset, uint32_t length,
     uint64_t map_end = page_align_up(region_end);
 
     for (uint64_t page = map_start; page < map_end; page += PAGE_SIZE) {
-        VMM::map_page(HHDM_OFFSET + page, page, false);
+        // Issue #366 Q1a: fail fast on table-OOM (was a silent drop).
+        if (VMM::map_page_err(HHDM_OFFSET + page, page, false) !=
+            kernel::errors::VMM_ERR_OK) {
+            for (uint64_t u = map_start; u < page; u += PAGE_SIZE) {
+                VMM::unmap_page(HHDM_OFFSET + u);
+            }
+            return false;
+        }
     }
 
     mmio_out.phys_addr = region_start;

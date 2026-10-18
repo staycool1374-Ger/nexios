@@ -1,7 +1,11 @@
 # NexIOS RTOS — autonomous test runner (expect driver)
-# Usage: expect run-test.exp <timeout_sec> <verdict_log> <serial_log> <qemu_cmd...>
-# Matches the kernel's TEST SUMMARY block, writes a machine-readable verdict
-# to <verdict_log>, and exits 0 on PASS / 1 on FAIL|TIMEOUT|QEMU_EXIT.
+# Usage: expect run-test.exp <timeout_sec> <verdict_log> <serial_log> <spawn_cmd...>
+# The spawned command is normally `sh tools/qemu-file-log.sh <serial> <com1>
+# <qemu> [args...]` (issue #345: QEMU writes file backends so no host pipe can
+# stall the vCPU; the wrapper tails <serial_log> for matching and exits when
+# QEMU dies, preserving eof semantics). Matches the kernel's TEST SUMMARY
+# block, writes a machine-readable verdict to <verdict_log>, and exits 0 on
+# PASS / 1 on FAIL|TIMEOUT|QEMU_EXIT.
 #
 # Expected-panic handling (issue #181):
 #   The TEST SUMMARY block is authoritative — it decides the verdict whenever

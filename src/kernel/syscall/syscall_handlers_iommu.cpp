@@ -25,6 +25,7 @@
 /// IOMMU translation support).  No blocking; caps pinned via cap::lookup.
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/cap/cap.hpp>
@@ -72,9 +73,9 @@ uint32_t validate_iommu_pair(cap::CNode *cs, uint64_t frame_handle,
     if (cap::handle_gen(frame_handle) != s.gen)
         return 0;
     uint32_t flags = 0;
-    if ((s.rights & cap::CAP_RIGHT_READ) != 0)
+    if ((s.rights & cap::CapRights::READ) != cap::CapRights::NONE)
         flags |= iommu::vtd::kSlEntryRead;
-    if ((s.rights & cap::CAP_RIGHT_WRITE) != 0)
+    if ((s.rights & cap::CapRights::WRITE) != cap::CapRights::NONE)
         flags |= iommu::vtd::kSlEntryWrite;
     return flags;
 }
@@ -87,30 +88,30 @@ uint64_t Syscall::sys_iommu_map(uint64_t dma_handle, uint64_t frame_handle,
 #if defined(CONFIG_ARCH_X86_64)
     cap::CNode *cs = current_cspace();
     if (!cs)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Presence gate at entry: absent IOMMU fails gracefully (no table
     // exists to program; kernel DMA is untouched).
     if (!iommu::IoMmuManager::probe())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // WRITE on the DMA cap = the arming authority (issue #2/#3 pattern).
     KernelObject *dma_obj = cap::lookup(
-        cs, dma_handle, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
+        cs, dma_handle, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
     if (!dma_obj)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *dma = static_cast<cap::IoMmuDmaCap *>(dma_obj);
 
-    KernelObject *fobj = cap::lookup(cs, frame_handle, cap::CapType::Frame, 0);
+    KernelObject *fobj = cap::lookup(cs, frame_handle, cap::CapType::Frame, cap::CapRights::NONE);
     if (!fobj) {
         dma_obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
     uint32_t flags = validate_iommu_pair(cs, frame_handle, fobj, dma);
     if (flags == 0) {
         fobj->release();
         dma_obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
     bool ok = iommu::IoMmuManager::map_frame(dma->domain_idx_,
@@ -118,11 +119,13 @@ uint64_t Syscall::sys_iommu_map(uint64_t dma_handle, uint64_t frame_handle,
                                              flags);
     fobj->release();
     dma_obj->release();
-    return ok ? 0 : static_cast<uint64_t>(-1);
+    return ok
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 #else
     (void)dma_handle;
     (void)frame_handle;
-    return static_cast<uint64_t>(-1);
+    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 #endif
 }
 
@@ -131,38 +134,40 @@ uint64_t Syscall::sys_iommu_unmap(uint64_t dma_handle, uint64_t frame_handle,
 #if defined(CONFIG_ARCH_X86_64)
     cap::CNode *cs = current_cspace();
     if (!cs)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (!iommu::IoMmuManager::probe())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     KernelObject *dma_obj = cap::lookup(
-        cs, dma_handle, cap::CapType::IoMmuDma, cap::CAP_RIGHT_WRITE);
+        cs, dma_handle, cap::CapType::IoMmuDma, cap::CapRights::WRITE);
     if (!dma_obj)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *dma = static_cast<cap::IoMmuDmaCap *>(dma_obj);
 
-    KernelObject *fobj = cap::lookup(cs, frame_handle, cap::CapType::Frame, 0);
+    KernelObject *fobj = cap::lookup(cs, frame_handle, cap::CapType::Frame, cap::CapRights::NONE);
     if (!fobj) {
         dma_obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
     uint32_t flags = validate_iommu_pair(cs, frame_handle, fobj, dma);
     if (flags == 0) {
         fobj->release();
         dma_obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
     bool ok = iommu::IoMmuManager::unmap_frame(
         dma->domain_idx_, *static_cast<cap::FrameCap *>(fobj));
     fobj->release();
     dma_obj->release();
-    return ok ? 0 : static_cast<uint64_t>(-1);
+    return ok
+               ? static_cast<uint64_t>(errors::SYS_ERR_OK)
+               : static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 #else
     (void)dma_handle;
     (void)frame_handle;
-    return static_cast<uint64_t>(-1);
+    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 #endif
 }
 

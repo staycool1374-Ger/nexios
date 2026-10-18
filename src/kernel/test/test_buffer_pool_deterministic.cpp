@@ -90,7 +90,7 @@ JARVIS_TEST(buffer_pool_deterministic_exhaustion_returns_zero,
         uint32_t idx = static_cast<uint32_t>(handles[i] & 0xFFFFFFFFULL);
         uint32_t gen = BufferPool::entries[idx].generation;
         uint64_t h = (static_cast<uint64_t>(gen) << 32) | idx;
-        BufferPool::free(*task, h);
+        JARVIS_ASSERT(BufferPool::free(*task, h));
     }
     JARVIS_TEST_PASS();
 }

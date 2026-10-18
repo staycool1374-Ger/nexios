@@ -32,6 +32,7 @@
 ///        9 = stop-request (Ctrl-C hook, issue #232).
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -49,6 +50,7 @@ namespace {
 // Linux errno numerics (cf. sys_unimplemented ENOSYS = 38).
 constexpr uint64_t kEperm = 1;
 constexpr uint64_t kEsrch = 3;
+constexpr uint64_t kEio = 5;
 constexpr uint64_t kEbadf = 9;
 constexpr uint64_t kEagain = 11;
 constexpr uint64_t kEfault = 14;
@@ -110,7 +112,7 @@ uint64_t debug_resolve(uint64_t caller_id, uint64_t handle,
         return static_cast<uint64_t>(-static_cast<int64_t>(kEsrch));
     slot_out = &slot;
     tgt_out = tgt;
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 /// @brief Debuggable-state gate: user tasks only (kernel tasks EPERM).
@@ -213,7 +215,7 @@ static uint64_t handoff_mint(uint64_t shell_id, TaskControlBlock *tgt,
             __atomic_store_n(&tgt->debug_stop_requested, true,
                              __ATOMIC_RELEASE);
         handle_out = (static_cast<uint64_t>(gen) << 32) | i;
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
 }
@@ -310,7 +312,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
                     __atomic_fetch_sub(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
                     owned.target_gen = 0;
                     debug::debug_drop_target(dead_id, dead_gen);
-                    return 0;
+                    return static_cast<uint64_t>(errors::SYS_ERR_OK);
                 }
             }
             return err;
@@ -338,7 +340,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
             __atomic_store_n(&tgt->debug_stop_va, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&tgt->debug_rearm_va, 0, __ATOMIC_RELEASE);
             (void)Scheduler::terminate_err(*tgt, tgt->exit_code);
-            return 0;
+            return static_cast<uint64_t>(errors::SYS_ERR_OK);
         }
         // Clean park, breakpoint, or step stop: resume first while
         // debugger_id is still set (the resume guard requires a live id
@@ -354,7 +356,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
         __atomic_fetch_sub(&g_live_binding_count, 1u, __ATOMIC_RELAXED);
         slot->target_gen = 0;
         __atomic_store_n(&tgt->debugger_id, 0, __ATOMIC_RELEASE);
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     if (sel == 1) {
         // Launcher-claim path: caller must be the target's parent.
@@ -479,7 +481,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
                     &g_debug_gen, 1u, __ATOMIC_RELAXED));
             slot.gen = burn;
             debug::debug_drop_target(dead_id, dead_gen);
-            return 0;
+            return static_cast<uint64_t>(errors::SYS_ERR_OK);
         }
         debug_apply_disposition(*tgt);
         debug::debug_drop_target(tgt->id, tgt->generation);
@@ -496,7 +498,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
                     &g_debug_gen, 1u, __ATOMIC_RELAXED));
             slot.gen = burn;
         }
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     // Control selectors (issue #226 — no new syscall numbers, ABI frozen):
     // 2 = poll one stop event into the caller buffer (arg2 = ubuf);
@@ -522,8 +524,8 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
         auto *dst = reinterpret_cast<uint8_t *>(arg2);
         if (!safe_copy_to_user(dst, reinterpret_cast<const uint8_t *>(&event),
                                sizeof(event)))
-            return static_cast<uint64_t>(-5); // EIO: caller buffer
-        return 0;
+            return static_cast<uint64_t>(-static_cast<int64_t>(kEio)); // caller buffer
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     if (sel >= 3 && sel <= 6) {
         SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
@@ -540,7 +542,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
             // target's tables — no park needed, never torn reads.
             bool ok = (sel == 3) ? debug::debug_bp_insert(*tgt, arg2)
                                  : debug::debug_bp_clear(*tgt, arg2);
-            return ok ? 0
+            return ok ? static_cast<uint64_t>(errors::SYS_ERR_OK)
                       : static_cast<uint64_t>(-static_cast<int64_t>(kEinval));
         }
         // Step/continue need a parked target; a runnable target arms the
@@ -548,7 +550,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
         if (tgt->state == TaskState::RUNNING ||
             tgt->state == TaskState::READY) {
             if (sel == 6)
-                return 0; // already running: continue is a no-op
+                return static_cast<uint64_t>(errors::SYS_ERR_OK); // already running: continue is a no-op
             __atomic_store_n(&tgt->debug_stop_requested, true,
                              __ATOMIC_RELEASE);
             return static_cast<uint64_t>(-static_cast<int64_t>(kEagain));
@@ -579,9 +581,9 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
             tgt->state == TaskState::READY) {
             __atomic_store_n(&tgt->debug_stop_requested, true,
                              __ATOMIC_RELEASE);
-            return 0;
+            return static_cast<uint64_t>(errors::SYS_ERR_OK);
         }
-        return 0; // parked/terminated-adjacent: no-op, stays stopped
+        return static_cast<uint64_t>(errors::SYS_ERR_OK); // parked/terminated-adjacent: no-op, stays stopped
     }
     return static_cast<uint64_t>(-static_cast<int64_t>(kEbadf));
 }
@@ -727,7 +729,7 @@ void debug_drain_debugger(TaskControlBlock &dying) noexcept {
 size_t debug_collect_owned(uint64_t debugger_id, uint64_t *ids_out,
                              uint32_t *gens_out, size_t cap) noexcept {
     if (ids_out == nullptr || gens_out == nullptr || cap == 0)
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK); // nothing collectible (count, not status).
     SpinLockGuard<sync::SpinLock> guard(g_bind_lock);
     size_t n = 0;
     for (size_t i = 0; i < kDebugBindings && n < cap; ++i) {
@@ -783,7 +785,7 @@ uint64_t debug_data_begin(uint64_t caller_id, uint64_t handle,
     if (!__atomic_load_n(&tgt->has_utrap_frame, __ATOMIC_ACQUIRE))
         return static_cast<uint64_t>(-static_cast<int64_t>(kEagain));
     tgt_out = tgt;
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_task_debug_read_regs(uint64_t handle, uint64_t ubuf,
@@ -808,7 +810,7 @@ uint64_t Syscall::sys_task_debug_read_regs(uint64_t handle, uint64_t ubuf,
     if (!safe_copy_to_user(dst, reinterpret_cast<const uint8_t *>(blob),
                            bytes))
         return static_cast<uint64_t>(-static_cast<int64_t>(kEfault));
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_task_debug_write_regs(uint64_t handle, uint64_t ubuf,
@@ -832,7 +834,7 @@ uint64_t Syscall::sys_task_debug_write_regs(uint64_t handle, uint64_t ubuf,
         return static_cast<uint64_t>(-static_cast<int64_t>(kEagain));
     if (!debug::debug_write_regs(*tgt, blob, kQwords))
         return static_cast<uint64_t>(-static_cast<int64_t>(kEagain));
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_task_debug_read_mem(uint64_t handle, uint64_t uva,
@@ -922,7 +924,7 @@ uint64_t Syscall::sys_task_debug_write_mem(uint64_t handle, uint64_t uva,
             if (n > sizeof(stage))
                 n = sizeof(stage);
             if (!safe_copy_from_user(stage, src + off, n))
-                return static_cast<uint64_t>(-5); // EIO: caller buffer
+                return static_cast<uint64_t>(-static_cast<int64_t>(kEio)); // caller buffer
             for (uint64_t i = 0; i < n; ++i)
                 dst[off + i] = stage[i];
             off += n;

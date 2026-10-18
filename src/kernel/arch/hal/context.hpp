@@ -22,8 +22,6 @@
 /// @brief Architecture-specific CPU context (register save area) and context
 /// switching.
 
-#pragma once
-
 #include <types.hpp>
 #include <constants.hpp>
 

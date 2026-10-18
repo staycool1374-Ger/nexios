@@ -240,7 +240,7 @@ JARVIS_TEST(kstack_slot_snapshot_restore_safe, "PRE: none | POST: none") {
     // Corrupt the slot's stack PTE through the kernel PML4's window entry.
     uint64_t evil_phys = PMM::alloc_page();
     JARVIS_ASSERT(evil_phys != 0);
-    VMM::map_page_in_pml4(stack_va, evil_phys, false,
+    VMM::map_page_in_pml4(stack_va, evil_phys, false, false,
                           VMM::get_kernel_pml4());
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(stack_va,
                                             VMM::get_kernel_pml4()) ==

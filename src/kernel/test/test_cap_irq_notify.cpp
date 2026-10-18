@@ -96,7 +96,7 @@ void irq_notify_waiter_entry(bool wait_for_inject) {
         return;
     }
     int s = cs->install(irq, cap::CapType::Irq,
-                        cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                        cap::CapRights::WRITE | cap::CapRights::READ);
     if (s < 0) {
         irq->release();
         g_wait_ret = 98;
@@ -175,7 +175,7 @@ JARVIS_TEST(irq_notify_mode_validation, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(irq, cap::CapType::Irq,
-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                                cap::CapRights::WRITE | cap::CapRights::READ);
             if (s < 0) {
                 irq->release();
                 g_reg_ret = 98;
@@ -239,7 +239,7 @@ JARVIS_TEST(irq_notify_pending_immediate, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(irq, cap::CapType::Irq,
-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                                cap::CapRights::WRITE | cap::CapRights::READ);
             if (s < 0) {
                 irq->release();
                 g_wait_ret = 98;
@@ -343,7 +343,7 @@ JARVIS_TEST(irq_notify_wait_syscall_refused, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(irq, cap::CapType::Irq,
-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                                cap::CapRights::WRITE | cap::CapRights::READ);
             if (s < 0) {
                 irq->release();
                 g_wait_ret = 98;
@@ -411,7 +411,7 @@ JARVIS_TEST(irq_notify_revoke_wakes_waiter, "PRE: none | POST: none") {
                 return;
             }
             int s = cs->install(irq, cap::CapType::Irq,
-                                cap::CAP_RIGHT_WRITE | cap::CAP_RIGHT_READ);
+                                cap::CapRights::WRITE | cap::CapRights::READ);
             if (s < 0) {
                 irq->release();
                 g_wait_ret = 98;

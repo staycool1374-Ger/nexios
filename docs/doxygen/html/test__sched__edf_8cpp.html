@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -147,7 +147,6 @@ Functions</h2></td></tr>
 <tr class="memitem:a9ca5c3675fc0160b843114f856fd6dae" id="r_a9ca5c3675fc0160b843114f856fd6dae"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a9ca5c3675fc0160b843114f856fd6dae">JARVIS_TEST</a> (edf_preempts_fixed, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a68d557c13c55093ca1321446e9d7d69e" id="r_a68d557c13c55093ca1321446e9d7d69e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a68d557c13c55093ca1321446e9d7d69e">JARVIS_TEST</a> (edf_equal_deadlines_no_thrash, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:ab65afa03d36377427647314d3dc0c19b" id="r_ab65afa03d36377427647314d3dc0c19b"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ab65afa03d36377427647314d3dc0c19b">JARVIS_TEST</a> (edf_exempt_daemon_stays_fixed, &quot;PRE: none | POST: none&quot;)</td></tr>
-<tr class="memitem:a58a00b8f6903c3cb38dbc22a739aed1c" id="r_a58a00b8f6903c3cb38dbc22a739aed1c"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a58a00b8f6903c3cb38dbc22a739aed1c">JARVIS_TEST</a> (edf_missed_deadline_recovers, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:aad7206d82b12c8e13e2dcaad96c8e058" id="r_aad7206d82b12c8e13e2dcaad96c8e058"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aad7206d82b12c8e13e2dcaad96c8e058">register_sched_edf_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -155,7 +154,7 @@ Functions</h2></td></tr>
 <p>DRIVEN: dispatch order is observed through REAL dispatched tasks — the harness never calls <a class="el" href="classkernel_1_1_scheduler.html#a852663edfb9d43d51ca280727c2295a3" title="Selects the next task to run according to RM policy.">Scheduler::next_task()</a>/on_tick() to fake a decision and never mutates task deadline/priority fields. Global EDF (finite deadline, non-exempt) is exercised directly; exemptions mirror the taskdefs spawn sites. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a22bafe0d9a923810bb8f41d9f50dd301" name="a22bafe0d9a923810bb8f41d9f50dd301"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a22bafe0d9a923810bb8f41d9f50dd301">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a22bafe0d9a923810bb8f41d9f50dd301">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -182,7 +181,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a4d5e7634af6495dd2143e3a0b345c6de" name="a4d5e7634af6495dd2143e3a0b345c6de"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4d5e7634af6495dd2143e3a0b345c6de">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a4d5e7634af6495dd2143e3a0b345c6de">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -209,7 +208,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a8e67e5f92317afb634504673bb68abdb" name="a8e67e5f92317afb634504673bb68abdb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8e67e5f92317afb634504673bb68abdb">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a8e67e5f92317afb634504673bb68abdb">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -236,7 +235,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a68d557c13c55093ca1321446e9d7d69e" name="a68d557c13c55093ca1321446e9d7d69e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a68d557c13c55093ca1321446e9d7d69e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a68d557c13c55093ca1321446e9d7d69e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -263,7 +262,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="ab65afa03d36377427647314d3dc0c19b" name="ab65afa03d36377427647314d3dc0c19b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab65afa03d36377427647314d3dc0c19b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ab65afa03d36377427647314d3dc0c19b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -289,35 +288,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a58a00b8f6903c3cb38dbc22a739aed1c" name="a58a00b8f6903c3cb38dbc22a739aed1c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a58a00b8f6903c3cb38dbc22a739aed1c">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/7]</span></h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">JARVIS_TEST </td>
-          <td>(</td>
-          <td class="paramtype">edf_missed_deadline_recovers</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__sched__edf_8cpp_a58a00b8f6903c3cb38dbc22a739aed1c_cgraph.png" border="0" usemap="#atest__sched__edf_8cpp_a58a00b8f6903c3cb38dbc22a739aed1c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
-</div>
-
-</div>
-</div>
 <a id="a9ca5c3675fc0160b843114f856fd6dae" name="a9ca5c3675fc0160b843114f856fd6dae"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9ca5c3675fc0160b843114f856fd6dae">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a9ca5c3675fc0160b843114f856fd6dae">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -338,7 +310,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sched__edf_8cpp_a9ca5c3675fc0160b843114f856fd6dae_cgraph.png" border="0" usemap="#atest__sched__edf_8cpp_a9ca5c3675fc0160b843114f856fd6dae_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -361,7 +333,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sched__edf_8cpp_aad7206d82b12c8e13e2dcaad96c8e058_cgraph.png" border="0" usemap="#atest__sched__edf_8cpp_aad7206d82b12c8e13e2dcaad96c8e058_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 7 -->
 </div>
 
 </div>

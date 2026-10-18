@@ -29,6 +29,7 @@
 /// Non-x86_64 builds return -1 (no user-deliverable PIC vectors).
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/cap/cap.hpp>
@@ -95,22 +96,22 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
 #if defined(CONFIG_ARCH_X86_64)
     cap::CNode *src = current_cspace();
     if (!src)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // The caller must hold an IrqCap OR MsixCap with WRITE (the right to arm
     // delivery).
     bool is_msix = false;
     KernelObject *obj =
-        lookup_irq_like(src, cap_handle, cap::CAP_RIGHT_WRITE, is_msix);
+        lookup_irq_like(src, cap_handle, cap::CapRights::WRITE, is_msix);
     if (!obj)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     auto *t = Scheduler::current_task();
     int16_t reg_idx = -1;
     uint8_t vector = 0;
     if (!t || !irq_like_fields(obj, is_msix, reg_idx, vector)) {
         obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
     // arg1 = delivery mode (issue #7): 0 = WAIT (blocking sys_irq_wait),
@@ -121,7 +122,7 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
     // 0x100 -> WAIT) would otherwise defeat arm()'s fail-closed rejection.
     if (arg1 != 0ULL && arg1 != 1ULL) {
         obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     auto mode = static_cast<IrqDeliveryMode>(arg1);
 
@@ -135,15 +136,15 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
     // legitimate owner; fail closed, never ENSURE).
     if (!IrqDelivery::arm(reg_idx, *obj, vector, *t, mode)) {
         obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
     obj->release();
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 #else
     (void)cap_handle;
     (void)arg1;
-    return static_cast<uint64_t>(-1);
+    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 #endif
 }
 
@@ -152,27 +153,27 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
 #if defined(CONFIG_ARCH_X86_64)
     cap::CNode *src = current_cspace();
     if (!src)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     // READ is the right to observe (wait on) the IRQ delivery.
     bool is_msix = false;
     KernelObject *obj =
-        lookup_irq_like(src, cap_handle, cap::CAP_RIGHT_READ, is_msix);
+        lookup_irq_like(src, cap_handle, cap::CapRights::READ, is_msix);
     if (!obj)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
     auto *t = Scheduler::current_task();
     int16_t reg_idx = -1;
     uint8_t vector = 0;
     if (!t || !irq_like_fields(obj, is_msix, reg_idx, vector)) {
         obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     IrqRegistration *r = IrqDelivery::find(vector);
     if (!r || r->recipient != t) {
         // Not armed for this task — the recipient must match the waiter.
         obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
     // Blocked wait (Semaphore::wait() pattern): consume a pending IRQ if one
@@ -195,7 +196,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
             r->recipient != t ||
             r->delivery_mode != IrqDeliveryMode::WAIT) {
             obj->release();
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
         if (r->pending > 0 && r->armed) {
             --r->pending;
@@ -204,7 +205,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
         }
         if (!r->armed) {
             obj->release();
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
         r->waiter = t;
         r->waiter_gen = t->generation;
@@ -231,7 +232,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
         t->state = TaskState::RUNNING;
         Scheduler::enqueue_ready(*t);
         obj->release();
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
     // Woken: consume the pending IRQ (or fail closed if disarmed/revoked).
@@ -242,7 +243,10 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
     // nor clear another task's waiter registration (that would leave the
     // foreign waiter BLOCKED forever — a lost wakeup).  Only our own waiter
     // entry is cleared.
-    uint64_t result = static_cast<uint64_t>(-1);
+    // Fail-closed default: stays GENERIC_FAIL unless a pending IRQ for OUR
+    // vector is consumed below (issue #2 slot-reuse re-validation).
+    uint64_t result =
+        static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     {
         SpinLockGuard<sync::SpinLock> guard(r->lock_);
         if (r->occupied && r->vector == vector && r->owner == obj &&
@@ -262,7 +266,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
     return result;
 #else
     (void)cap_handle;
-    return static_cast<uint64_t>(-1);
+    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 #endif
 }
 

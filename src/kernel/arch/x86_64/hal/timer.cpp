@@ -43,6 +43,8 @@ static constexpr uint64_t k_tsc_min_hz = 50000000ULL;
 static constexpr uint64_t k_tsc_max_hz = 100000000000ULL;
 /// @brief Fail-closed TSC frequency when calibration finds nothing.
 static constexpr uint64_t k_fallback_tsc_hz = 2000000000ULL;
+/// @brief Minimum PIT clocks per calibration sample (tearing floor).
+static constexpr uint32_t k_cal_min_clocks = 200U;
 
 /// @brief Convert coarse ticks to nanoseconds without 64-bit overflow.
 /// @param tick_count Coarse tick count.
@@ -192,15 +194,35 @@ void Timer::handle_irq(uint64_t ip) {
 }
 
 /// @brief Calibrate the TSC frequency using the PIT as a reference.
-/// Performs up to CONFIG_HRT_CALIBRATION_RETRIES iterations with increasing
-/// measurement windows and picks the first result that falls in a plausible
-/// range (50 MHz – 100 GHz). Bounded in wall time by
-/// CONFIG_HRT_CALIBRATION_TIMEOUT_MS at a 50 MHz floor; on failure the
-/// fail-closed 2 GHz default applies. Resolves the HRT source label.
+/// Programs the PIT to the assumed reference first (mode-3 square wave
+/// with the exact divisor below — whatever mode/divisor firmware left
+/// behind no longer matters), then takes up to
+/// CONFIG_HRT_CALIBRATION_RETRIES samples of growing windows and keeps
+/// the median of the plausible, sufficiently long ones (50 MHz – 100 GHz,
+/// at least k_cal_min_clocks PIT clocks to outrun latch tearing).
+/// Bounded in wall time by CONFIG_HRT_CALIBRATION_TIMEOUT_MS at a 50 MHz
+/// floor; with no usable sample the fail-closed 2 GHz default applies.
+/// Resolves the HRT source label.
 /// @param frequency_hz The PIT frequency used as the timing reference.
 void Timer::calibrate_tsc(uint32_t frequency_hz) {
-    uint32_t divisor = PIT_BASE_FREQ / frequency_hz;
     calibrated_ = true;
+    if (frequency_hz == 0) {
+        tsc_freq_hz_ = k_fallback_tsc_hz;
+        resolve_source();
+        return;
+    }
+    // Program the reference the math assumes: the latch counter then
+    // decrements by 2 per input clock (the doubling below) over a known
+    // divisor (the wraparound term needs no firmware trust).
+    set_frequency(frequency_hz);
+    const uint32_t divisor = PIT_BASE_FREQ / frequency_hz;
+    if (divisor == 0) {
+        tsc_freq_hz_ = k_fallback_tsc_hz;
+        resolve_source();
+        return;
+    }
+    uint64_t samples[CONFIG_HRT_CALIBRATION_RETRIES];
+    size_t sample_count = 0;
     const uint64_t cal_start = rdtsc();
     const uint64_t timeout_ticks =
         (uint64_t)CONFIG_HRT_CALIBRATION_TIMEOUT_MS *
@@ -231,18 +253,35 @@ void Timer::calibrate_tsc(uint32_t frequency_hz) {
             count_delta = c0 + (divisor - c1);
         }
 
-        if (count_delta > 0 && tsc_delta > 0) {
-            uint64_t pit_ticks = (uint64_t)count_delta * 2;
-            tsc_freq_hz_ = (tsc_delta * PIT_BASE_FREQ) / pit_ticks;
-            if (tsc_freq_hz_ >= k_tsc_min_hz &&
-                tsc_freq_hz_ <= k_tsc_max_hz) {
-                resolve_source();
-                return;
-            }
+        // Mode-3 double-decrement: one latch unit is two input clocks.
+        // Short spans stay out (latch tearing dominates); the retries grow
+        // the window instead of accepting the first plausible noise.
+        if (count_delta < k_cal_min_clocks || tsc_delta == 0) {
+            continue;
+        }
+        const uint64_t pit_ticks = (uint64_t)count_delta * 2ULL;
+        const uint64_t freq = (tsc_delta * PIT_BASE_FREQ) / pit_ticks;
+        if (freq >= k_tsc_min_hz && freq <= k_tsc_max_hz) {
+            samples[sample_count++] = freq;
         }
     }
 
-    tsc_freq_hz_ = k_fallback_tsc_hz;
+    if (sample_count == 0) {
+        tsc_freq_hz_ = k_fallback_tsc_hz;
+        resolve_source();
+        return;
+    }
+    // Insertion sort on a bounded stack array; lower-middle median.
+    for (size_t sort_idx = 1; sort_idx < sample_count; ++sort_idx) {
+        const uint64_t sort_key = samples[sort_idx];
+        size_t place_idx = sort_idx;
+        while (place_idx > 0 && samples[place_idx - 1] > sort_key) {
+            samples[place_idx] = samples[place_idx - 1];
+            --place_idx;
+        }
+        samples[place_idx] = sort_key;
+    }
+    tsc_freq_hz_ = samples[(sample_count - 1) / 2];
     resolve_source();
 }
 

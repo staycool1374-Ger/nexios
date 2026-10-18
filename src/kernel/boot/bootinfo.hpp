@@ -22,8 +22,6 @@
 /// @brief Boot information structure — memory regions, DTB, multiboot, command
 /// line.
 
-#pragma once
-
 #include <types.hpp>
 
 /// Maximum number of memory regions that can be reported.

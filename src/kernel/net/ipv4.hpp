@@ -21,8 +21,6 @@
 /// @file ipv4.hpp
 /// @brief IPv4 protocol types and helpers.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace net {

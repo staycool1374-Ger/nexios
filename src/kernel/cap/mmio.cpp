@@ -205,7 +205,7 @@ uint64_t MmioUserMap::map(kernel::TaskControlBlock &task, cap::MmioCap &mmio) {
     return va;
 }
 
-bool MmioUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) {
+bool MmioUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept {
     // Find the slot by VA under the lock; ownership + generation revalidated
     // (a recycled task id or stale VA must not unmap another task's mapping).
     int16_t idx = -1;
@@ -277,7 +277,9 @@ void MmioUserMap::invalidate_cap(cap::MmioCap *mmio) {
             hit = true;
         }
         if (hit) {
-            VMM::unmap_mmio_from_cap(match, va, pml4);
+            // Issue #366 Q2b: fold-and-ignore (revoke races a live unmap;
+            // holes benign — same rationale as FrameUserMap).
+            (void)VMM::unmap_mmio_from_cap_err(match, va, pml4);
             match->release(); // drop the slot's pin (outside the lock)
         }
     }
@@ -301,7 +303,9 @@ void MmioUserMap::drain_task(kernel::TaskControlBlock &task) {
             hit = true;
         }
         if (hit) {
-            VMM::unmap_mmio_from_cap(mmio, va, pml4);
+            // Issue #366 Q2b: fold-and-ignore — teardown must never fail
+            // on holes (task death mid-map).
+            (void)VMM::unmap_mmio_from_cap_err(mmio, va, pml4);
             mmio->release(); // drop the slot's pin (outside the lock)
         }
     }
@@ -356,7 +360,7 @@ size_t MmioUserMap::live_count() {
     return n;
 }
 
-bool MmioUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) {
+bool MmioUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept {
     SpinLockGuard<sync::SpinLock> guard(s_lock_);
     for (size_t i = 0; i < kMaxMaps; ++i)
         if (s_slots_[i].occupied && s_slots_[i].va == va &&

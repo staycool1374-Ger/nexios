@@ -21,8 +21,6 @@
 /// @file ipc.hpp
 /// @brief Priority-based IPC — send, recv, events, notifications.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/sync/spinlock.hpp>
@@ -35,9 +33,26 @@ class Endpoint;
 
 /// @brief Flags for IPC::send().
 // NOLINTNEXTLINE(performance-enum-size)
-enum IpcFlags : uint64_t {
-    IPC_NONBLOCK = 1 << 0,
+enum class IpcFlags : uint64_t {
+    NONE = 0,          ///< blocking send (default).
+    NONBLOCK = 1 << 0, ///< fail immediately when the queue is full.
 };
+
+/// @brief Bitwise-or for IPC flags.
+[[nodiscard]] constexpr IpcFlags operator|(IpcFlags lhs,
+                                           IpcFlags rhs) noexcept {
+    return static_cast<IpcFlags>(kernel::to_underlying(lhs) |
+                                 kernel::to_underlying(rhs));
+}
+/// @brief Bitwise-and for IPC flags (test/mask).
+[[nodiscard]] constexpr IpcFlags operator&(IpcFlags lhs,
+                                           IpcFlags rhs) noexcept {
+    return static_cast<IpcFlags>(kernel::to_underlying(lhs) &
+                                 kernel::to_underlying(rhs));
+}
+
+static_assert(kernel::to_underlying(IpcFlags::NONBLOCK) == 1ULL,
+              "flag bit positions are ABI");
 
 /// @brief regs[] indices of the 6 fastpath payload words (issue #11, paper
 ///        §3.2): rsi(4), rdi(5), r8(7), r9(8), r10(9), r11(10).
@@ -97,10 +112,10 @@ class IPC {
     static void init();
 
     /// @brief Sends a message to a destination task.
-    static bool send(uint64_t dest_id, const Message &msg, uint64_t flags = 0);
+    [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, IpcFlags flags = IpcFlags::NONE) noexcept;
 
     /// @brief Receives a message from the calling task's own queue.
-    static bool recv(Message &msg);
+    [[nodiscard]] static bool recv(Message &msg) noexcept;
 
     /// @brief Sends and blocks until a reply arrives.
     ///        Reply matching (issue #296): only a queued message whose
@@ -111,8 +126,8 @@ class IPC {
     ///        fits this budget (issue #11 fastpath); an oversized matching
     ///        reply stays queued with immediate false (no block).  Zero keeps
     ///        the full-path contract (consume the matching reply).
-    static bool send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-                          uint32_t reply_max_size = 0);
+    [[nodiscard]] static bool send_sync(uint64_t dest_id, const Message &msg, Message &reply,
+                          uint32_t reply_max_size = 0) noexcept;
 
     /// @brief Returns the message queue for a given task ID.
     static MessageQueue &queue(uint64_t task_id);
@@ -122,13 +137,13 @@ class IPC {
     ///        task-ID ambient authority is used.  Blocks on a full endpoint
     ///        queue unless IPC_NONBLOCK.  @p ep must be pinned (a live
     ///        capability lookup result).
-    static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
-                             uint64_t flags = 0);
+    [[nodiscard]] static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
+                             IpcFlags flags = IpcFlags::NONE) noexcept;
 
     /// @brief Receives a message from a capability-gated endpoint into the
     ///        calling task's own queue.  Returns false if the endpoint queue
     ///        is empty.
-    static bool recv_via_cap(cap::Endpoint *ep, Message &msg);
+    [[nodiscard]] static bool recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept;
 
     /// @brief Wheel callback arming a bounded receive's expiry (issue #18).
     /// Flag-only: validates the TCB and generation, sets recv_timed_out.
@@ -148,7 +163,7 @@ class IPC {
     /// @param task Waiting task (non-null, current task).
     /// @param timeout_ticks Budget in coarse ticks (0 = forever).
     /// @return true when armed or when no arm is needed (timeout 0).
-    static bool recv_wait_arm(TaskControlBlock &task,
+    [[nodiscard]] static bool recv_wait_arm(TaskControlBlock &task,
                               uint64_t timeout_ticks) noexcept;
 
     /// @brief Cancel the calling task's receive timeout (idempotent).

@@ -87,6 +87,7 @@ void register_spinlock_stress_tests();
 void register_atomic_context_switch_tests();
 void register_bench_syscall_latency_tests();
 void register_bench_irq_latency_tests();
+void register_bench_path_tracer_tests(); // issue #347 Slice E
 void register_apic_timer_tests();
 void register_apic_tpr_tests();
 void register_jitter_tests();
@@ -129,6 +130,10 @@ void register_kernel_top_tests();
 void register_per_cpu_tests();
 void register_sync_err_api_tests();
 void register_checked_ptr_api_tests();
+void register_path_tracer_tests(); // issue #347 Slice A
+void register_sched_dispatch_path_tests(); // issue #347 Slice B
+void register_task_path_tests(); // issue #347 Slice C
+void register_vmm_path_tests(); // issue #347 Slice D
 void register_memory_integrity_tests();
 void register_shell_commands_tests();
 void register_services_framework_tests();
@@ -478,6 +483,12 @@ static void run_per_cpu_group() { register_per_cpu_tests(); }
 static void run_memory_checked_ptr_api_group() {
     register_checked_ptr_api_tests();
 }
+static void run_path_tracer_group() { register_path_tracer_tests(); }
+static void run_sched_dispatch_path_group() {
+    register_sched_dispatch_path_tests();
+}
+static void run_task_path_group() { register_task_path_tests(); }
+static void run_vmm_path_group() { register_vmm_path_tests(); }
 static void run_memory_integrity_group() {
     register_memory_integrity_tests();
 }
@@ -604,6 +615,9 @@ static void run_bench_syscall_group() {
     register_bench_syscall_latency_tests();
 }
 static void run_bench_irq_group() { register_bench_irq_latency_tests(); }
+static void run_bench_path_tracer_group() {
+    register_bench_path_tracer_tests();
+}
 static void run_bench_jitter_group() { register_jitter_tests(); }
 static void run_bench_microkernel_group() {
     register_microkernel_transition_tests();
@@ -837,6 +851,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
      []() { run_synchronization_err_api_group(); }},
     {"memory_checked_ptr_api",
      []() { run_memory_checked_ptr_api_group(); }},
+    {"path_tracer", []() { run_path_tracer_group(); }}, // issue #347
+    {"scheduler_dispatch_path",
+     []() { run_sched_dispatch_path_group(); }}, // issue #347 Slice B
+    {"task_path", []() { run_task_path_group(); }}, // issue #347 Slice C
+    {"vmm_path", []() { run_vmm_path_group(); }}, // issue #347 Slice D
     // -- Phase 6 (issue #303): canary + isolation pins --
     {"stack_cookie", []() { run_stack_cookie_group(); }},
     {"pointer_isolation", []() { run_pointer_isolation_group(); }},
@@ -974,6 +993,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"bench_context_switch", []() { run_cs_bench_group(); }},
     {"bench_syscall", []() { run_bench_syscall_group(); }},
     {"bench_irq", []() { run_bench_irq_group(); }},
+    {"bench_path_tracer",
+     []() { run_bench_path_tracer_group(); }}, // issue #347 Slice E
     {"bench_jitter", []() { run_bench_jitter_group(); }},
     {"bench_microkernel", []() { run_bench_microkernel_group(); }},
 
@@ -1054,6 +1075,10 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_memory_determinism_group();
          run_memory_checked_ptr_group();
          run_memory_checked_ptr_api_group();
+         run_path_tracer_group(); // issue #347 Slice A (core primitive)
+         run_sched_dispatch_path_group(); // issue #347 Slice B (dispatch)
+         run_task_path_group(); // issue #347 Slice C (create/cleanup)
+         run_vmm_path_group(); // issue #347 Slice D (map/rollback)
          run_stack_cookie_group();      // issue #303
          run_pointer_isolation_group(); // issue #303
          run_memory_integrity_group();
@@ -1277,6 +1302,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_cs_bench_group();       // issue #303
          run_bench_syscall_group();
          run_bench_irq_group();
+         run_bench_path_tracer_group(); // issue #347 Slice E
          run_bench_jitter_group();
          run_bench_microkernel_group();
          run_bench_wcet_memory_group();

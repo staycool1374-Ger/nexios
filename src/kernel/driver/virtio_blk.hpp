@@ -21,8 +21,6 @@
 /// @file virtio_blk.hpp
 /// @brief Virtio block driver — modern (Virtio 1.0) PCI transport.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/arch/virtio.hpp>
 #include <kernel/driver/block_device.hpp>

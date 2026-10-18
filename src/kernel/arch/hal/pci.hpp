@@ -22,8 +22,6 @@
 /// @brief PCI config space access — CF8/CFC port I/O (x86_64) and ECAM
 /// (AArch64, RISC-V).
 
-#pragma once
-
 #include <types.hpp>
 
 namespace arch {

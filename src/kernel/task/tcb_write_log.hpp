@@ -1,5 +1,6 @@
 #pragma once
 #include <types.hpp>
+#include <concepts.hpp>
 
 // Freestanding build has no <cstddef>; provide offsetof via the compiler
 // builtin so the TCB_WRITE macro works when CONFIG_TCB_WRITE_LOG is enabled.
@@ -49,7 +50,11 @@ template <typename T>
 inline uint64_t to_u64(T *p) {
     return reinterpret_cast<uint64_t>(p);
 }
+/// @brief Generic fallback for integer and enum field values (issue
+///        #348-E: constrained so struct misuse fails at the call site,
+///        not inside the cast).
 template <typename T>
+    requires kernel::Integral<T> || kernel::Enum<T>
 inline uint64_t to_u64(T v) {
     return static_cast<uint64_t>(v);
 }

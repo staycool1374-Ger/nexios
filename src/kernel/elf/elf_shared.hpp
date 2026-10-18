@@ -22,8 +22,6 @@
 /// @brief Shared-object / dynamic linking structures (issue #95).
 ///        DT_NEEDED resolution, GOT/PLT fixups, relocation handling.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/sync/spinlock.hpp>
 

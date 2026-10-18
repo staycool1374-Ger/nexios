@@ -21,8 +21,6 @@
 /// @file devfs.hpp
 /// @brief Device filesystem (devfs) declaration.
 
-#pragma once
-
 #include <kernel/vfs/vfs.hpp>
 
 namespace kernel {

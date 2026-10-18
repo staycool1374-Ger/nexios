@@ -21,8 +21,6 @@
 /// @file ipc_errors.hpp
 /// @brief IPC error codes (X-macro table with human-readable strings).
 
-#pragma once
-
 #include <types.hpp>
 #include <assert.hpp>
 
@@ -47,6 +45,9 @@ enum IpcError : uint64_t {
     IPC_ERROR_CODES
 #undef X
 };
+
+/// @brief OK anchor (issue #348-C): success is zero by convention.
+static_assert(IPC_ERR_OK == 0, "error OK must be 0");
 
 /// @brief Return a human-readable string for an IPC error code.
 template <> inline const char *error_string(IpcError e) {

@@ -299,7 +299,7 @@ static inline void bp_check_guard() {
 #endif
 }
 
-int32_t BufferPool::validate(uint64_t handle) {
+int32_t BufferPool::validate(uint64_t handle) noexcept {
     if (handle == 0)
         return BufferPool::BUF_INVALID_HANDLE;
     uint32_t idx = static_cast<uint32_t>(handle & 0xFFFFFFFFULL);
@@ -318,7 +318,7 @@ int32_t BufferPool::validate(uint64_t handle) {
 /// @brief Allocate a buffer, map it at virtual address @p va in the given
 /// task's space.
 /// @return handle, or 0 on failure.
-uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
+uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
     bp_check_guard();
     // v0.4.0 MP-1: every task owns a private PML4, so this address-space gate
     // is effectively always open — kernel driver tasks (is_user_ == false)
@@ -341,7 +341,8 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
     ENSURE(PMM::is_user_page(phys) &&
            "BufferPool::alloc: page not user-owned before map_page_in_pml4");
 
-    VMM::map_page_in_pml4(va, phys, true, task.page_table_);
+    // Issue #325-D: IPC buffers are data (never executable).
+    VMM::map_page_in_pml4(va, phys, true, false, task.page_table_);
 
     entries[idx].phys_addr = phys;
     entries[idx].generation =
@@ -357,7 +358,7 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
 
 /// @brief Free a buffer: unmap, free the physical page, return entry to pool.
 /// @return true on success.
-bool BufferPool::free(TaskControlBlock &task, uint64_t handle) {
+bool BufferPool::free(TaskControlBlock &task, uint64_t handle) noexcept {
     bp_check_guard();
     int32_t idx = validate(handle);
     if (idx < 0)
@@ -384,7 +385,7 @@ bool BufferPool::free(TaskControlBlock &task, uint64_t handle) {
 /// populated PTE (mapping the same VA twice silently overwrites PTEs and a
 /// later free() deletes another buffer's PTE).
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
+bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) noexcept {
     bp_check_guard();
     int32_t idx = validate(handle);
     if (idx < 0)
@@ -403,7 +404,9 @@ bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
     if (VMM::virt_to_phys_in_pml4(va, task.page_table_) != 0)
         return false;
 
-    VMM::map_page_in_pml4(va, entries[idx].phys_addr, true, task.page_table_);
+    // Issue #325-D: IPC buffers are data (never executable).
+    VMM::map_page_in_pml4(va, entries[idx].phys_addr, true, false,
+                          task.page_table_);
 
     entries[idx].owner_task = static_cast<uint32_t>(task.id);
     entries[idx].mapped_va = va;
@@ -415,7 +418,7 @@ bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
 }
 
 /// @brief Unmap a buffer (PTE clear, list remove) without freeing the page.
-bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) {
+bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) noexcept {
     bp_check_guard();
     int32_t idx = validate(handle);
     if (idx < 0)
@@ -434,7 +437,7 @@ bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) {
 
 /// @brief Transfer buffer ownership from one task to another (IPC send path).
 bool BufferPool::transfer(uint64_t handle, TaskControlBlock &from,
-                          TaskControlBlock &to) {
+                          TaskControlBlock &to) noexcept {
     bp_check_guard();
     int32_t idx = validate(handle);
     if (idx < 0)
@@ -457,36 +460,38 @@ bool BufferPool::transfer(uint64_t handle, TaskControlBlock &from,
 }
 
 /// @brief Snapshot pool state into a flat buffer (test isolation).
-void BufferPool::capture_state(uint8_t *dst, size_t max_bytes) {
-    (void)max_bytes;
-    __builtin_memcpy(dst, entries, sizeof(entries));
-    dst += sizeof(entries);
-    __builtin_memcpy(dst, &free_head_, sizeof(free_head_));
-    dst += sizeof(free_head_);
-    __builtin_memcpy(dst, &next_cookie_, sizeof(next_cookie_));
-    dst += sizeof(next_cookie_);
-    __builtin_memcpy(dst, &pool_count_, sizeof(pool_count_));
-    dst += sizeof(pool_count_);
+void BufferPool::capture_state(kernel::Span<uint8_t> dst) {
+    ENSURE(dst.size() >= state_bytes());
+    uint8_t *at = dst.data();
+    __builtin_memcpy(at, entries, sizeof(entries));
+    at += sizeof(entries);
+    __builtin_memcpy(at, &free_head_, sizeof(free_head_));
+    at += sizeof(free_head_);
+    __builtin_memcpy(at, &next_cookie_, sizeof(next_cookie_));
+    at += sizeof(next_cookie_);
+    __builtin_memcpy(at, &pool_count_, sizeof(pool_count_));
+    at += sizeof(pool_count_);
     // pool_pages_ must be captured too: without it, snapshot_restore leaves the
     // pool holding whatever phys the LAST test cached, while the rewound PMM
     // bitmap frees those pages — the pool double-books free pages and the
     // ResourceTracker drifts (+1..+3 PMM pages per buffer_pool test, +128 when
     // the whole pool is replaced).  v0.3.11 root cause.
-    __builtin_memcpy(dst, pool_pages_, sizeof(pool_pages_));
+    __builtin_memcpy(at, pool_pages_, sizeof(pool_pages_));
 }
 
 /// @brief Restore pool state from a flat buffer (test isolation).
-void BufferPool::restore_state(const uint8_t *src, size_t max_bytes) {
-    (void)max_bytes;
-    __builtin_memcpy(entries, src, sizeof(entries));
-    src += sizeof(entries);
-    __builtin_memcpy(&free_head_, src, sizeof(free_head_));
-    src += sizeof(free_head_);
-    __builtin_memcpy(&next_cookie_, src, sizeof(next_cookie_));
-    src += sizeof(next_cookie_);
-    __builtin_memcpy(&pool_count_, src, sizeof(pool_count_));
-    src += sizeof(pool_count_);
-    __builtin_memcpy(pool_pages_, src, sizeof(pool_pages_));
+void BufferPool::restore_state(kernel::Span<const uint8_t> src) {
+    ENSURE(src.size() >= state_bytes());
+    const uint8_t *at = src.data();
+    __builtin_memcpy(entries, at, sizeof(entries));
+    at += sizeof(entries);
+    __builtin_memcpy(&free_head_, at, sizeof(free_head_));
+    at += sizeof(free_head_);
+    __builtin_memcpy(&next_cookie_, at, sizeof(next_cookie_));
+    at += sizeof(next_cookie_);
+    __builtin_memcpy(&pool_count_, at, sizeof(pool_count_));
+    at += sizeof(pool_count_);
+    __builtin_memcpy(pool_pages_, at, sizeof(pool_pages_));
 }
 
 /// @brief Unmap and free all buffers owned by a task (called from

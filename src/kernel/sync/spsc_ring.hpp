@@ -22,12 +22,14 @@
 /// @brief Lock-free single-producer single-consumer ring buffer template.
 
 #include <types.hpp>
+#include <concepts.hpp>
 #include <lib/atomic.hpp>
 
 /// @brief Lock-free single-producer single-consumer ring buffer.
-/// @tparam T  Element type.
+/// @tparam T  Element type (must be trivially copyable: elements cross
+///         the producer/consumer boundary by value, issue #348-E).
 /// @tparam N  Capacity (must be a power of two).
-template <typename T, size_t N> class SPSCRing {
+template <kernel::TriviallyCopiable T, size_t N> class SPSCRing {
     static_assert(N > 0 && (N & (N - 1)) == 0, "N must be power of 2");
 
     static constexpr size_t MASK = N - 1;

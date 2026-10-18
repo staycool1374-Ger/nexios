@@ -22,8 +22,6 @@
 /// @brief CPU identification — dispatches to architecture-specific cpuid
 /// implementations.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/nexios_config.h>
 

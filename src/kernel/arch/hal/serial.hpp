@@ -21,8 +21,6 @@
 /// @file serial.hpp
 /// @brief Serial port (UART) driver — architecture-agnostic interface.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace arch {

@@ -21,8 +21,6 @@
 /// @file syscall.hpp
 /// @brief System call interface and dispatcher.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {
@@ -150,7 +148,7 @@ using SyscallHandler = uint64_t (*)(uint64_t arg0, uint64_t arg1, uint64_t arg2,
 
 /// @brief v0.4.0 MP-3 canary-trip latch.  Set by the syscall canary verify
 ///        when a segment canary mismatch is detected in test mode; the
-///        syscall then returns -1 so the harness survives.
+///        syscall then returns SYS_ERR_GENERIC_FAIL so the harness survives.
 struct CanaryTrip {
     uint64_t task_id;
     uint8_t segment;
@@ -180,7 +178,8 @@ class Syscall {
     /// @param number Syscall number (see SyscallNumber).
     /// @param arg0-3 Arguments passed from user space.
     /// @param regs Pointer to register save area.
-    /// @return The syscall return value, or -1 for an out-of-range number.
+    /// @return The syscall return value, or SYS_ERR_GENERIC_FAIL for an
+    ///         out-of-range number.
     static uint64_t handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
                                 uint64_t arg2, uint64_t arg3,
                                 uint64_t *regs = nullptr);
@@ -221,10 +220,9 @@ class Syscall {
                                sizeof(k_syscall_fast) /
                                    sizeof(k_syscall_fast[0]));
 
-  private:
+   private:
     static inline bool s_fastpath_enabled_ = true;
 
-  private:
     static uint64_t sys_yield(uint64_t, uint64_t, uint64_t, uint64_t,
                               uint64_t *);
     static uint64_t sys_send(uint64_t, uint64_t, uint64_t, uint64_t,

@@ -22,8 +22,6 @@
 /// @brief Interrupt Descriptor Table (x86_64) / interrupt vector dispatch for
 /// all architectures.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/nexios_config.h>
 

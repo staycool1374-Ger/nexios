@@ -78,6 +78,17 @@ class ElfLoader {
                                                        // yields per chunk so
                                                        // daemons stay on-time
     static constexpr size_t kMaxPath = 128;
+    /// @brief Writable-byte pin bound for rerun retention (issue #271):
+    ///        images with more RW file bytes are loadable but never
+    ///        retained (explicit refusal at rerun).
+    static constexpr uint64_t kMaxRerunWritableBytes = 1 * 1024 * 1024;
+    /// @brief Golden-page bound: RO bytes beyond the #46 scan cap are
+    ///        never retained (same cap, same fail-closed).
+    static constexpr size_t kMaxGoldenPages =
+        static_cast<size_t>(1024 * 1024 * 4) / 4096;
+    /// @brief One retained set max (R6): take overwrites, never appends.
+    static constexpr size_t kMaxGoldenRanges = 8;
+    static constexpr size_t kMaxPinRanges = 8;
 
     /// @brief Create the background loader task (idempotent).  Called from
     ///        kernel.cpp before the test runner so the TCB is in the snapshot
@@ -116,6 +127,59 @@ class ElfLoader {
     ///        future runelf failure paths.
     static void release_completed();
 
+    /// @brief Whether a rerunnable retention exists (issue #271 P1):
+    ///        a valid set adopted at take, not yet superseded/reset/
+    ///        released. Rerun refuses unless this is true (P2 checks the
+    ///        outcome gate on top).
+    [[nodiscard]] static bool has_retained() noexcept;
+
+    /// @brief Outcome of the retained set's last launch (issue #271 P1).
+    enum class RunOutcome : uint8_t {
+        UNKNOWN = 0, ///< Never launched, or ended by an untracked path.
+        CLEAN = 1,   ///< Exited via sys_exit (code recorded).
+        FAULTED = 2, ///< Killed by fault/auth-kill/death path.
+    };
+
+    /// @brief Record a launch of the retained set's task (issue #271 P1).
+    /// Call after successful add_task of a taken/retained TCB; arms
+    /// outcome tracking for this task id. Unknown ids in note_task_end
+    /// stay UNKNOWN (never launched).
+    static void note_launched(uint64_t task_id);
+
+    /// @brief Record the end of a tracked launch (issue #271 P1).
+    /// sys_exit passes clean=true + the exit code; fault/auth-kill/
+    /// death paths pass clean=false. Calls for untracked ids are
+    /// ignored. Rerun requires CLEAN + code 0 (checked at build).
+    static void note_task_end(uint64_t task_id, bool clean, uint64_t code);
+
+    /// @brief Current outcome of the retained set (tests + P2 gate).
+    static RunOutcome retained_outcome();
+
+    /// @brief Drop the never-added taker's task ref after an admission
+    ///        failure (shell runelf denials; future pcall sites). Public
+    ///        so shell.cpp can call it outside the elf namespace;
+    ///        IRQ-masked; bounded; never reschedule inside.
+    static void abandon_retention();
+
+    /// @brief Try to build a rerun TCB from retention (issue #271 P2).
+    /// Checks IDLE + valid + static + CLEAN/0; on success returns a
+    /// fresh TCB (caller owns it, must set settled params before
+    /// add_task like take_completed). On failure returns nullptr and
+    /// sets *reason to a static message (no elf loaded / dynamic /
+    /// not clean / busy / rebuild failed). IRQ-masked for the gate;
+    /// allocations/mappings run unlocked (may reschedule only via
+    /// explicit reschedule points outside the lock).
+    static TaskControlBlock *try_rerun(const char **reason);
+
+    /// @brief Unmap every retained-golden page from @p tcb's table and
+    ///        drop that task's set ref (issue #271 P1). Never frees here:
+    ///        pages are freed only when retention refs == 0 AND task
+    ///        refs == 0 (freed inline at that transition). Called from
+    ///        task teardown paths BEFORE blind free_user_pages (which
+    ///        then naturally skips the unmapped pages). Lock-atomic;
+    ///        IRQ-masked; never held across reschedule.
+    static void unmap_golden(TaskControlBlock *tcb);
+
     /// @brief Test/API contract: if a load is in flight, request cancel; the
     ///        caller MUST then wait_loader_idle().  Releases any completed
     ///        TCB and re-inits the wake semaphore (drops stale counts).
@@ -137,7 +201,7 @@ class ElfLoader {
 
     /// @brief Per-validation-step cancel check (issue #95: shared by the
     ///        dep-resolve backend in elf_shared.cpp).
-    static bool cancel_pending(uint64_t generation);
+    [[nodiscard]] static bool cancel_pending(uint64_t generation) noexcept;
 
     /// @brief Current load generation for DepResolveContext setup.
     static uint64_t generation() { return load_generation_; }
@@ -174,6 +238,83 @@ class ElfLoader {
     static TaskControlBlock *loader_tcb_;
     static TaskControlBlock *completed_tcb_;
     static uint64_t completed_entry_;
+    // Issue #271 P1: retained golden set (at most one). Adopted at
+    // take_completed from the taken TCB's live mappings (never during
+    // COPYING); abandoned on take-overwrite/reset/release. Golden phys
+    // are owned by mapping tasks, never by retention: the list + refs
+    // decide frees (zero/zero frees inline in the ref-drop). The pin
+    // (bounded RW file-byte copy) is retention-owned static storage.
+    struct GoldenPage {
+        uint64_t phys = 0;
+        bool executable = false;
+    };
+    struct GoldenRange {
+        uint64_t vaddr = 0;
+        uint64_t page_count = 0;
+    };
+    struct PinRange {
+        uint64_t vaddr = 0;    // destination VA in the fresh build
+        uint64_t pin_off = 0;  // offset into pin_buf_
+        uint64_t len = 0;      // file bytes (never BSS tail)
+        uint64_t memsz = 0;    // full RW span incl. BSS tail (fresh-mapped + zeroed)
+    };
+    struct Retention {
+        bool valid = false;
+        char path[kMaxPath] = {};
+        uint64_t file_size = 0;
+        uint64_t entry = 0;
+        // Packed header image for rerun finalization: real header with
+        // phoff rewritten to sizeof(ELF64Header) + packed table, so
+        // install_segment_canaries (hdr->phoff based) reads correctly.
+        ELF64Header hdr = {};
+        uint8_t phdr_image[sizeof(ELF64Header) +
+                           64 * sizeof(ELF64ProgramHeader)] = {};
+        bool has_dynamic = false;
+        GoldenPage golden[kMaxGoldenPages] = {};
+        size_t golden_pages = 0;
+        GoldenRange ranges[kMaxGoldenRanges] = {};
+        size_t range_count = 0;
+        uint8_t pin_buf[kMaxRerunWritableBytes] = {};
+        size_t pin_len = 0;
+        PinRange pin_ranges[kMaxPinRanges] = {};
+        size_t pin_count = 0;
+        uint64_t task_refs = 0; // live tasks mapping the set
+        uint64_t epoch = 0;     // bumped on every adopt/abandon (builder race detector)
+        bool retained = false;  // retention holds a ref
+        RunOutcome outcome = RunOutcome::UNKNOWN;
+        uint64_t outcome_code = 0;
+        uint64_t outcome_task = 0;
+        uint32_t ro_crc32 = 0; // retained #46 original (compare, never adopt)
+        TaskControlBlock::RoRange ro_ranges[TaskControlBlock::kMaxRoRanges] = {};
+        size_t ro_count = 0;
+        uint64_t canary_slot = 0; // TEXT before-canary VA (P2 re-scan carve)
+    };
+    static Retention retention_;
+    static Retention staging_;
+    // Issue #271 P1: retention internals. All assume lock_ held +
+    // IRQ-masked by the caller; never reschedule inside (bounded walks
+    // and struct copies only; PMM frees mirror the destroy-under-lock
+    // precedent in reset()).
+    static void abandon_retention_locked();
+    static void fill_staging_locked(TaskControlBlock *tcb);
+    static void adopt_staging_locked();
+    static void drop_task_ref_locked();
+    // Drop the try_rerun builder ref ONLY if retention still refers to
+    // the epoch the builder snapshotted: a concurrent adopt swaps the
+    // whole Retention (new epoch, new owner), and an unconditional drop
+    // would corrupt the new set's count. Assumes lock_ held + IRQ-masked.
+    static void drop_builder_ref_locked(uint64_t epoch);
+    // Unwind a half-built rerun table: unmap retained-golden VAs (no ref
+    // change — caller drops separately), free the rest, free the PML4.
+    // Assumes lock_ held + IRQ-masked by the caller.
+    static void fail_fresh_build_locked(uint64_t pml4,
+                                          const GoldenRange *ranges,
+                                          size_t range_count);
+    // Unmap-only half of the above (no frees): for post-TCB failure
+    // paths where destroy_completed_tcb owns the frees. Assumes lock_.
+    static void unmap_fresh_golden_locked(uint64_t pml4,
+                                          const GoldenRange *ranges,
+                                          size_t range_count);
     static char msg_buf_[16][160];
     static uint32_t msg_idx_;
     // Issue #95: per-request dep-resolve context (loader single-owner;

@@ -21,6 +21,7 @@
 /// timer_create (multiplex), timerfd_create (issue #76, v0.5.0).
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -94,7 +95,7 @@ void timerfd_close(vfs::Vnode &self) {
 int timerfd_fstat(vfs::Vnode &, vfs::VfsStat &vfs_stat) {
     vfs_stat.st_size = 0;
     vfs_stat.st_mode = vfs::S_IFCHR;
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK); // VFS-op convention (int): 0 is success here, not an ABI code.
 }
 
 const vfs::VnodeOps timerfd_ops = {
@@ -191,14 +192,14 @@ uint64_t Syscall::sys_clock_gettime(uint64_t arg0, uint64_t arg1, uint64_t,
     if (!copy_timespec_out(out_ptr.unsafe_ptr(), is_user, split)) {
         return kNeg(time::kPosixErrFault);
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
                                 uint64_t, uint64_t *) {
     auto *cur = syscall_task();
     if (cur == nullptr) {
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     const bool is_user = syscall_is_user_task();
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -214,7 +215,7 @@ uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
     // Zero timeout returns immediately: no arm, no block (§11.3 — no
     // infinite-wait encoding exists on this call).
     if (total_ns == 0) {
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     if (!time::PosixTime::sleep_arm(*cur, total_ns)) {
         return kNeg(time::kPosixErrAgain);
@@ -285,14 +286,14 @@ uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
         }
         return kNeg(time::kPosixErrIntr);
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                    uint64_t arg3, uint64_t *) {
     auto *cur = syscall_task();
     if (cur == nullptr) {
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     const bool is_user = syscall_is_user_task();
     const uint64_t op = arg0;
@@ -320,7 +321,7 @@ uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         } else {
             *out_ptr = timer_id;
         }
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     if (op == static_cast<uint64_t>(time::PosixTimerOp::SETTIME)) {
         const bool is_timerfd = (arg3 & 0x1ULL) != 0;
@@ -354,7 +355,7 @@ uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
             if (armed != 0) {
                 return kNeg(-armed);
             }
-            return 0;
+            return static_cast<uint64_t>(errors::SYS_ERR_OK);
         }
         const int timerfd_fd = static_cast<int>(arg1);
         auto *desc = cur->fd_table.get(timerfd_fd);
@@ -369,7 +370,7 @@ uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         if (armed != 0) {
             return kNeg(-armed);
         }
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     if (op == static_cast<uint64_t>(time::PosixTimerOp::GETTIME)) {
         if (arg2 == 0) {
@@ -399,7 +400,7 @@ uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         } else {
             *out_ptr = local;
         }
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     if (op == static_cast<uint64_t>(time::PosixTimerOp::DELETE)) {
         const int64_t deleted = time::PosixTime::timer_delete(
@@ -407,7 +408,7 @@ uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         if (deleted != 0) {
             return kNeg(-deleted);
         }
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     return kNeg(time::kPosixErrInvalid);
 }
@@ -416,7 +417,7 @@ uint64_t Syscall::sys_timerfd_create(uint64_t arg0, uint64_t arg1, uint64_t,
                                      uint64_t, uint64_t *) {
     auto *cur = syscall_task();
     if (cur == nullptr) {
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     const uint64_t flags = arg1;
     const uint64_t known_flags = static_cast<uint64_t>(vfs::O_NONBLOCK);
@@ -443,7 +444,7 @@ uint64_t Syscall::sys_timerfd_create(uint64_t arg0, uint64_t arg1, uint64_t,
     if (node == nullptr) {
         time::PosixTime::timerfd_slot_free(index, slot_gen, cur->id,
                                            cur->generation);
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     node->ops = &timerfd_ops;
     node->ino = static_cast<uint64_t>(index);
@@ -473,7 +474,7 @@ uint64_t timerfd_read_entry(vfs::Vnode &node, uint8_t *buffer, uint64_t count,
                             bool nonblock) {
     auto *cur = syscall_task();
     if (cur == nullptr) {
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     if (count < 8) {
         return kNeg(time::kPosixErrInvalid);

@@ -501,7 +501,7 @@ JARVIS_TEST(process_clone_child_table_independent, "PRE: none | POST: none") {
     parent->user_stack_size_ = 32_KiB;
     uint64_t phys = PMM::alloc_user_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, phys, true, parent->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->page_table_);
 
     Scheduler::add_task(*parent);
     Scheduler::reschedule();
@@ -548,7 +548,7 @@ JARVIS_TEST(process_clone_teardown_zero_delta, "PRE: none | POST: none") {
     parent->user_stack_size_ = 32_KiB;
     uint64_t phys = PMM::alloc_user_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, phys, true, parent->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->page_table_);
 
     Scheduler::add_task(*parent);
     Scheduler::reschedule();

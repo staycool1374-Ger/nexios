@@ -21,6 +21,7 @@
 /// kill, etc.
 
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -39,10 +40,10 @@ namespace kernel {
 uint64_t Syscall::sys_fork(uint64_t, uint64_t, uint64_t, uint64_t,
                            uint64_t *regs) {
     if (!regs)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *child = TaskControlBlock::clone(regs);
     if (!child)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Issue #20: fork goes through the enforced admission gate.  On denial
     // the child was never registered, so destroy() teardown is safe
     // (remove paths no-op on absent entries); the parent is unaffected and
@@ -50,7 +51,7 @@ uint64_t Syscall::sys_fork(uint64_t, uint64_t, uint64_t, uint64_t,
     errors::SchedulerError adm = Scheduler::add_task_err(*child);
     if (adm != errors::SCHED_ERR_OK) {
         TaskControlBlock::destroy(child);
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     return child->id;
 }
@@ -65,7 +66,7 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                            : nullptr;
     auto *cur = syscall_task();
     if (!cur)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Issue #221: a user trap must not return to userspace until the wait
     // resolves — returning -1 immediately fails single-shot waiters (the
     // fork-marker parent prints WAITPID-FAILED).  Kernel callers hlt-loop
@@ -78,6 +79,8 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         for (uint64_t i = 0; i < count; ++i) {
             auto *t = Scheduler::task_at(i);
             if (t && t->parent_id == cur->id) {
+                // (uint64_t)-1 is the any-child wildcard (waitpid pid -1),
+                // not a failure code — deliberately raw, see H6 note #257.
                 if (target_pid == static_cast<uint64_t>(-1) ||
                     t->id == target_pid) {
                     child = t;
@@ -86,7 +89,7 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
             }
         }
         if (!child)
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         if (child->state == TaskState::TERMINATED) {
             if (status_ptr) {
                 // MP-4 (SMAP): user write via safe_copy_to_user
@@ -94,7 +97,7 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                 uint64_t code = child->exit_code;
                 if (syscall_is_user_task()) {
                     if (!safe_copy_to_user(status.unsafe_ptr(), &code, 1))
-                        return static_cast<uint64_t>(-1);
+                        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
                 } else {
                     *status_ptr = code;
                 }
@@ -107,7 +110,8 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
             return cid;
         }
         if (arg2 & 1)
-            return 0;
+            return static_cast<uint64_t>(errors::SYS_ERR_OK); // WNOHANG with nothing reaped: zero pids ready
+                      // (POSIX waitpid count, not status — keep numeric).
         cur->waiting_child_pid = target_pid;
         // MP-4 (SMAP): the stored status pointer is written later by
         // Scheduler::wake_waiting_parent under the parent's CR3.  For user
@@ -119,13 +123,13 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
             VMM::virt_to_phys_in_pml4(
                 reinterpret_cast<uint64_t>(status.unsafe_ptr()),
                 cur->page_table_) == 0) {
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
         cur->waiting_child_status = status_ptr;
         Scheduler::dequeue_ready(*cur);
         cur->state = TaskState::BLOCKED;
         if (!syscall_is_user_task())
-            return static_cast<uint64_t>(-1);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         // User trap: wait in-trap until woken (waiting flag cleared and
         // state changed by the wake path), then re-scan — the child is
         // TERMINATED and collected above (the reaper defers parented
@@ -217,16 +221,16 @@ uint64_t Syscall::sys_exec(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                            uint64_t, uint64_t *regs) {
     kernel::test::mark_vfs_touched();
     if (!syscall_is_user_task())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     vfs::Vnode *vn = nullptr;
     char path_buf[SYSCALL_MAX_PATH];
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     if (!strncpy_from_user(path_buf, reinterpret_cast<const char *>(arg0),
                            SYSCALL_MAX_PATH))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     vn = vfs::resolve(path_buf);
     if (!vn)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *argv = reinterpret_cast<const char *const *>(arg1);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -236,21 +240,21 @@ uint64_t Syscall::sys_exec(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     uint64_t str_total = 0;
     if (!validate_argv_envp(argv, true, &str_total)) {
         vfs::release(vn); // issue #268: vn already owned here
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     if (!validate_argv_envp(envp, true, &str_total)) {
         vfs::release(vn); // issue #268
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     if (vn->size == 0 || vn->size > 512_KiB) {
         vfs::release(vn); // issue #268
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     size_t file_pages = (static_cast<size_t>(vn->size) + 4095) / 4096;
     uint64_t file_phys = PMM::alloc_contiguous(file_pages);
     if (!file_phys) {
         vfs::release(vn); // issue #268
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     uint8_t *file_buf =
@@ -261,7 +265,7 @@ uint64_t Syscall::sys_exec(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     if (r <= 0 || static_cast<uint64_t>(r) != want_size) {
         for (size_t i = 0; i < file_pages; ++i)
             PMM::free_page(file_phys + i * 4096);
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     auto *hdr = reinterpret_cast<const elf::ELF64Header *>(file_buf);
     // VULN-H2: pass the actual bytes read so validate_segment bounds
@@ -270,11 +274,11 @@ uint64_t Syscall::sys_exec(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                 static_cast<uint64_t>(r))) {
         for (size_t i = 0; i < file_pages; ++i)
             PMM::free_page(file_phys + i * 4096);
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
     for (size_t i = 0; i < file_pages; ++i)
         PMM::free_page(file_phys + i * 4096);
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
@@ -282,14 +286,14 @@ uint64_t Syscall::sys_kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     uint64_t target_pid = arg0;
     uint64_t sig = arg1;
     if (sig >= MAX_SIGNAL_HANDLERS)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // SIG_NONE (signal 0) is the null signal — POSIX existence check, no
     // delivery
     if (sig == static_cast<uint64_t>(kernel::Signal::SIG_NONE))
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     auto *t = Scheduler::find_task(target_pid);
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (t == syscall_task()) {
         if (signal_is_fatal(sig) || !t->has_signal_handler(sig)) {
             t->state = TaskState::TERMINATED;
@@ -307,26 +311,26 @@ uint64_t Syscall::sys_kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
         if (t->state == TaskState::BLOCKED && t->sleep_armed)
             Scheduler::set_task_ready(*t);
     }
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_signal(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
                              uint64_t *) {
     auto *t = syscall_task();
     if (!t)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint64_t sig = arg0;
     if (sig >= MAX_SIGNAL_HANDLERS)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (signal_is_fatal(sig))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // SIG_NONE cannot be caught or ignored
     if (sig == static_cast<uint64_t>(kernel::Signal::SIG_NONE))
-        return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_OK);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto handler = reinterpret_cast<sighandler_t>(arg1);
     t->set_signal_handler(sig, handler);
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 /// @brief Set a task's CPU affinity mask (issue #61).
@@ -338,12 +342,12 @@ uint64_t Syscall::sys_set_affinity(uint64_t arg0, uint64_t arg1, uint64_t,
                                    uint64_t, uint64_t *) {
     auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
     if (t == nullptr)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Issue #23: destination-CPU admission denial propagates as -1
     // (fail-closed); clamp/no-op paths still succeed with 0.
     if (Scheduler::set_affinity_err(*t, arg1) != errors::SCHED_ERR_OK)
-        return static_cast<uint64_t>(-1);
-    return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 /// @brief Get a task's CPU affinity mask (issue #61).
@@ -352,7 +356,7 @@ uint64_t Syscall::sys_get_affinity(uint64_t arg0, uint64_t, uint64_t,
                                    uint64_t, uint64_t *) {
     auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
     if (t == nullptr)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     return Scheduler::get_affinity(*t);
 }
 
@@ -366,23 +370,23 @@ uint64_t Syscall::sys_times(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
                             uint64_t *) {
     auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
     if (t == nullptr)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *out = reinterpret_cast<TaskTimes *>(arg1);
     auto chk = checked(out, 1);
     if (!chk.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     TaskTimes kt{};
     Scheduler::read_times(*t, kt);
     if (!safe_copy_to_user(chk.unsafe_ptr(), &kt, 1))
-        return static_cast<uint64_t>(-1);
-    return 0;
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_sigreturn(uint64_t, uint64_t, uint64_t, uint64_t,
                                 uint64_t *regs) {    auto *t = syscall_task();
     if (!t || !regs)
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint64_t user_rsp = regs[20];
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *frame = reinterpret_cast<const SignalFrame *>(
@@ -390,19 +394,19 @@ uint64_t Syscall::sys_sigreturn(uint64_t, uint64_t, uint64_t, uint64_t,
         reinterpret_cast<uint64_t *>(user_rsp));
     auto chk = checked(frame, 1);
     if (!chk.valid())
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // MP-4 (SMAP): copy the frame to a kernel local (stac-wrapped) instead of
     // dereferencing user memory directly.
     kernel::SignalFrame kf{};
     if (!safe_copy_from_user(&kf, frame, 1))
-        return static_cast<uint64_t>(-1);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     regs[17] = kf.saved_rip;
     regs[20] = kf.saved_rsp;
     regs[19] = kf.saved_rflags;
     regs[18] = kf.saved_cs;
     regs[21] = kf.saved_ss;
     regs[0] = 0;
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 } // namespace kernel

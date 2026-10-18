@@ -59,12 +59,12 @@ JARVIS_TEST(vmm_map_already_mapped, "PRE: none | POST: none") {
     uint64_t va = 0x400000ULL;  // user-space address (PML4 entry 0)
     uint64_t phys1 = PMM::alloc_page();
     JARVIS_ASSERT(phys1 != 0);
-    VMM::map_page_in_pml4(va, phys1, false, pml4);
+    VMM::map_page_in_pml4(va, phys1, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == phys1);
 
     uint64_t phys2 = PMM::alloc_page();
     JARVIS_ASSERT(phys2 != 0);
-    VMM::map_page_in_pml4(va, phys2, false, pml4);
+    VMM::map_page_in_pml4(va, phys2, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == phys2);
 
     VMM::free_user_pages(pml4);
@@ -83,7 +83,7 @@ JARVIS_TEST(vmm_map_page_null_phys, "PRE: none | POST: none") {
     uint64_t pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(pml4 != 0);
     uint64_t va = 0x401000ULL;  // user-space address (PML4 entry 0)
-    VMM::map_page_in_pml4(va, 0, false, pml4);
+    VMM::map_page_in_pml4(va, 0, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == 0);
     VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
@@ -213,11 +213,11 @@ JARVIS_TEST(vmm_huge_page_split_corner, "PRE: none | POST: none") {
     uint64_t va = 0x200000;
     uint64_t phys = PMM::alloc_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(va, phys, false, pml4);
+    VMM::map_page_in_pml4(va, phys, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == phys);
     uint64_t phys2 = PMM::alloc_page();
     JARVIS_ASSERT(phys2 != 0);
-    VMM::map_page_in_pml4(va + 0x1000, phys2, false, pml4);
+    VMM::map_page_in_pml4(va + 0x1000, phys2, false, false, pml4);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va + 0x1000, pml4) == phys2);
     VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
@@ -242,7 +242,7 @@ JARVIS_TEST(vmm_free_user_pages_skips_kernel_owned_entries,
     JARVIS_ASSERT(pml4 != 0);
     uint64_t user_page = PMM::alloc_user_page();
     JARVIS_ASSERT(user_page != 0);
-    VMM::map_page_in_pml4(0x8000000000ULL, user_page, true, pml4);
+    VMM::map_page_in_pml4(0x8000000000ULL, user_page, true, false, pml4);
     VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
     JARVIS_TEST_PASS();
@@ -259,7 +259,7 @@ JARVIS_TEST(vmm_free_user_pages_fork_stack_scenario, "PRE: none | POST: none") {
     JARVIS_ASSERT(pml4 != 0);
     uint64_t stack_page = PMM::alloc_user_page();
     JARVIS_ASSERT(stack_page != 0);
-    VMM::map_page_in_pml4(mem::STACK_VADDR, stack_page, true, pml4);
+    VMM::map_page_in_pml4(mem::STACK_VADDR, stack_page, true, false, pml4);
     VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
     JARVIS_TEST_PASS();
@@ -480,7 +480,14 @@ JARVIS_TEST(vmm_err_wrappers_and_queries, "PRE: none | POST: none") {
     JARVIS_ASSERT(VMM::map_page_err(0x2000, 0x2001, false) ==
                   errors::VMM_ERR_INVALID_ADDR);
     JARVIS_ASSERT(VMM::unmap_page_err(0x1001) == errors::VMM_ERR_INVALID_ADDR);
-    JARVIS_ASSERT(VMM::unmap_page_err(0x7FFF00000000ULL) == errors::VMM_ERR_OK);
+    // Holes report NOT_MAPPED (issue #366 Q2b). Probe first: the harness
+    // owns the kernel table, so only assert on a VA that is provably
+    // unmapped here (unmapping live kernel state to force the OK path is
+    // out of scope — covered on scratch PML4s below).
+    if (VMM::virt_to_phys(0x7FFF00000000ULL) == 0) {
+        JARVIS_ASSERT(VMM::unmap_page_err(0x7FFF00000000ULL) ==
+                      errors::VMM_ERR_NOT_MAPPED);
+    }
     JARVIS_ASSERT(VMM::virt_to_phys_err(0x1001, out) ==
                   errors::VMM_ERR_INVALID_ADDR);
     JARVIS_ASSERT(VMM::virt_to_phys_err(0x7FFF00000000ULL, out) ==
@@ -578,6 +585,79 @@ JARVIS_TEST(vmm_cap_frame_mmio_paths, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: _err unmap twins report holes without clearing (issue #366 Q2b).
+// Input: Scratch PML4; misaligned bases, unmapped VAs, null caps, mapped
+//        frame/mmio ranges; a revoked frame cap (unmap must still work).
+// Expect: INVALID_ADDR on misaligned/null; NOT_MAPPED on holes (missing
+//         table, clear leaf — double unmap included); OK clears exactly
+//         one leaf/range and verifies via virt_to_phys.
+// Depends: VMM::unmap_page/frame/mmio_from_cap_err, FrameCap/MmioCap
+JARVIS_TEST(vmm_unmap_err_not_mapped, "PRE: none | POST: none") {
+    using errors::VmmError;
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+    constexpr uint64_t kVa = 0x406000ULL;
+    // Misaligned base.
+    JARVIS_ASSERT(VMM::unmap_page_in_pml4_err(kVa + 1, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    // Hole: no tables yet.
+    JARVIS_ASSERT(VMM::unmap_page_in_pml4_err(kVa, pml4) ==
+                  errors::VMM_ERR_NOT_MAPPED);
+    // Map one leaf, unmap OK, unmap again NOT_MAPPED. USER-owned data
+    // page: reclaimed by free_user_pages below (never freed manually —
+    // the kernel-owned alloc_page + user=true combo would trip the
+    // map-time ENSURE and leak through the user-owned teardown).
+    uint64_t phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(phys != 0);
+    JARVIS_ASSERT(VMM::map_page_in_pml4_err(kVa, phys, true, pml4, false) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(VMM::unmap_page_in_pml4_err(kVa, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(kVa, pml4) == 0);
+    JARVIS_ASSERT(VMM::unmap_page_in_pml4_err(kVa, pml4) ==
+                  errors::VMM_ERR_NOT_MAPPED);
+    // Frame-cap twin: null cap, hole, mapped, revoked-still-works.
+    JARVIS_ASSERT(VMM::unmap_frame_from_cap_err(nullptr, kVa, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    uint64_t fphys = PMM::alloc_page();
+    JARVIS_ASSERT(fphys != 0);
+    auto *frame = cap::FrameCap::create(fphys, 1, false);
+    JARVIS_ASSERT(frame != nullptr);
+    JARVIS_ASSERT(VMM::unmap_frame_from_cap_err(frame, kVa, pml4) ==
+                  errors::VMM_ERR_NOT_MAPPED);
+    JARVIS_ASSERT(VMM::map_frame_from_cap(frame, kVa, false, pml4));
+    // Revoked caps still unmap present leaves (no revoked check by
+    // design — the revoke path itself unmaps revoked caps; audit S3).
+    frame->revoke();
+    JARVIS_ASSERT(VMM::unmap_frame_from_cap_err(frame, kVa, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(kVa, pml4) == 0);
+    JARVIS_ASSERT(VMM::unmap_frame_from_cap_err(frame, kVa, pml4) ==
+                  errors::VMM_ERR_NOT_MAPPED);
+    frame->release();
+    // Mmio-cap twin: null cap, hole, mapped range, double unmap.
+    JARVIS_ASSERT(VMM::unmap_mmio_from_cap_err(nullptr, kVa, pml4) ==
+                  errors::VMM_ERR_INVALID_ADDR);
+    uint64_t dev_phys = (PMM::total_memory() + 0x100000ULL) & ~0xFFFULL;
+    auto *mmio = cap::MmioCap::create(dev_phys, arch::PAGE_SIZE,
+                                      arch::PciBarType::MEMORY_32);
+    JARVIS_ASSERT(mmio != nullptr);
+    JARVIS_ASSERT(VMM::unmap_mmio_from_cap_err(mmio, kVa, pml4) ==
+                  errors::VMM_ERR_NOT_MAPPED);
+    JARVIS_ASSERT(VMM::map_mmio_from_cap(mmio, kVa, true, pml4));
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(kVa, pml4) == dev_phys);
+    JARVIS_ASSERT(VMM::unmap_mmio_from_cap_err(mmio, kVa, pml4) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(kVa, pml4) == 0);
+    JARVIS_ASSERT(VMM::unmap_mmio_from_cap_err(mmio, kVa, pml4) ==
+                  errors::VMM_ERR_NOT_MAPPED);
+    mmio->release();
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
+    JARVIS_TEST_PASS();
+}
+
 void register_vmm_tests() {
     Logger::info("Registering VMM tests");
     JARVIS_REGISTER_TEST(vmm_unmap_already_unmapped);
@@ -594,5 +674,6 @@ void register_vmm_tests() {
     JARVIS_REGISTER_TEST(vmm_free_user_pages_skips_kernel_owned_entries);
     JARVIS_REGISTER_TEST(vmm_free_user_pages_fork_stack_scenario);
     JARVIS_REGISTER_TEST(vmm_err_wrappers_and_queries);
+    JARVIS_REGISTER_TEST(vmm_unmap_err_not_mapped);
     JARVIS_REGISTER_TEST(vmm_cap_frame_mmio_paths);
 }

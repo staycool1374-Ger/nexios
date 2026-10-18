@@ -21,8 +21,6 @@
 /// @file ether.hpp
 /// @brief Ethernet frame types and constants.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace net {

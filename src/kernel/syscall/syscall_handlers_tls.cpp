@@ -64,7 +64,7 @@ uint64_t Syscall::sys_tls_set(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     }
     if (Scheduler::set_tls_base_err(*t, arg0) != errors::SCHED_ERR_OK)
         return static_cast<uint64_t>(-errors::SYS_ERR_SCHED_NO_CURRENT);
-    return 0;
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 } // namespace kernel

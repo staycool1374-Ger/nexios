@@ -31,7 +31,9 @@ namespace kernel::errors {
     X(PAGE_ALLOC, 1, "Failed to allocate page table page")                     \
     X(PML4_ALLOC, 2, "Failed to allocate PML4 page for clone")                 \
     X(INVALID_ADDR, 3, "Invalid virtual address")                              \
-    X(NOT_MAPPED, 4, "Virtual address not mapped")
+    X(NOT_MAPPED, 4, "Virtual address not mapped")                             \
+    X(REVOKED, 5, "Capability revoked")                                        \
+    X(EMPTY_RANGE, 6, "Empty frame range")
 
 /// @brief Error codes for the Virtual Memory Manager.
 // NOLINTNEXTLINE(performance-enum-size)
@@ -40,6 +42,9 @@ enum VmmError : uint64_t {
     VMM_ERROR_CODES
 #undef X
 };
+
+/// @brief OK anchor (issue #348-C): success is zero by convention.
+static_assert(VMM_ERR_OK == 0, "error OK must be 0");
 
 /// @brief Return a human-readable string for a VMM error code.
 template <> inline const char *error_string(VmmError e) {

@@ -17,8 +17,8 @@ struct ExpectedCounts {
 
 static constexpr ExpectedCounts k_expected_counts[] = {
     // Class name           x86_64  aarch64  riscv64
-    {"safe",                136,    0,       0      },  // curated TF_RELEASE subset (85 executed, +49 TF_KERNEL incl. ata_pio_absent_drive_init_false, issue #66) + 2 CRC32 lib tests (#126)
-    {"selftest",            136,    0,       0      },  // same as safe
+    {"safe",                147,    0,       0      },  // curated TF_RELEASE subset (85 executed, +49 TF_KERNEL incl. ata_pio_absent_drive_init_false, issue #66) + 2 CRC32 lib tests (#126) + 11 pre-existing aggregate drift at HEAD (member groups grew incl. checked_ptr #337; subset never re-reconciled; reconciled #342)
+    {"selftest",            147,    0,       0      },  // same as safe (reconciled #342)
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
 
     // basic
@@ -75,13 +75,13 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // process
     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
-    {"elf_loader",            15,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp)
+    {"elf_loader",            25,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp + #271 P0 RO-perm pin + P1 retention/balance + P2 byte-identity/refusals + P3 decay/canary/supersede/fork + BSS-only DATA-canary live-E2E follow-up)
     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)
     {"process_signals",       8,    0,       0      },  // signal delivery/handling
     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
     {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
-    {"process_pml4_clone",   10,    0,       0      },  // fork deep-copy page tables (7 + 3 MP-7 named)
-    {"pt_merge",              5,    0,       0      },  // kernel-half merge (issue #96): equivalence, idempotent, late-mapping, allocates-nothing, mismatch-detected
+    {"process_pml4_clone",   13,    0,       0      },  // fork deep-copy page tables (7 + 3 MP-7 named)
+    {"pt_merge",              6,    0,       0      },  // kernel-half merge (issue #96): equivalence, idempotent, late-mapping, allocates-nothing, mismatch-detected
     {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
 
     // cap — capability-based access control (CSpace)
@@ -90,14 +90,14 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_syscall",           9,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch + returned-handle roundtrip (issue #266)
     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
     {"cap_untyped",          18,    0,       0      },  // Untyped allocator + sub-range carve/child split (issue #1)
-    {"cap_mmio",              14,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3) + revocation-closure (issue #8)
+    {"cap_mmio",              20,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3) + revocation-closure (issue #8)
     {"cap_mmio_user",         9,   0,       0      },  // user MMIO map/unmap syscalls + registry (0.4.2 issue #8)
     {"cap_irq",               12,   0,       0      },  // IRQ caps + user-space delivery (0.4.2 issue #2)
     {"cap_irq_notify",        7,   0,       0      },  // IRQ→IPC Notify bridge, NOTIFY mode (0.4.2 issue #7)
     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery (0.4.2 issue #10)
     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
     {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
-    {"cap_shm",               6,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup + frame_create validation (#134)
+    {"cap_shm",               7,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup + frame_create validation (#134) + zero-esz pop/push rejection (#343)
     {"cap_death",             9,    0,       0      },  // async task-death notifications (issue #105 Part B): roundtrip, crash reason, fan-in, after-death, supervisor-drain, full, exactly-once, unwatch, nonblock
     {"cap_pager",             15,   0,       0      },  // external pager protocol (issue #107 + dispatch rejects #134): authority, recv, classification, recover-IP, roundtrip, map-after-timeout, abort-poison, timeout, dead-drain, client-death, revoke, deadlock-out, smap/canary + recv-empty/abort-unregister dispatch
     {"ipc_fastpath",          14,   0,       0      },  // in-register IPC fastpath (issue #11): mask membership, ABI layout, pop_clamped parity, oversize-reject, roundtrip, recv-oversized-stays, send_sync-oversized-reply, full-queue-block, empty-block, send_sync roundtrip, authority, no-user-deref canary, latency, hybrid queue
@@ -117,7 +117,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
     {"smp_bringup",            5,   0,       0      },  // AP bring-up (issue #25 Phase B4 + #153): blob layout, staged block memcmp, parked count == MADT APs, mb2 intact + relocated
     {"sched_affinity",         7,    0,       0      },  // CPU affinity (issue #25 Phase C1): default mask, lowest-bit targeting, empty/user clamps, re-queue, is_idle + set_affinity_err OK (issue #23)
-    {"smp_sched",              10,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move + queue fanout (0-AP trivial pass) + 5 per-CPU admission/migration tests (issue #23)
+    {"smp_sched",              13,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move + queue fanout (0-AP trivial pass) + 5 per-CPU admission/migration tests (issue #23) + 3 drain/remote-refuse/quiesce-nesting (issue #197, row bump missed in 32b3017c6; reconciled #342)
     {"lapic",                6,   0,       0      },  // Local APIC (issue #85 module 2): enabled contract, ID stability, one-shot/periodic zero boundaries, bounded one-shot, EOI safety
     {"ioapic",               5,   0,       0      },  // I/O APIC (issue #85 module 3): boot routing liveness, mask/unmask cycle, invalid-IRQ reject, idempotence, lines sweep
     {"core_isolation",       5,   0,       0      },  // Core isolation (issue #85 module 5): slot stride, BSP slot, write isolation, AP-slot envelope, PML4 valid
@@ -165,7 +165,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"memory_slab",           5,    0,       0      },  // Slab reclaim tests
     {"memory_safety",        11,    0,       0      },  // MemPool/PMM invariants + MP-2 red zones + MP-3 canaries
     {"stack_cookie",          4,    0,       0      },  // MP-3 contract pins: SSP-off, derivation, pure verify, kstack round-trip (#303)
-    {"pointer_isolation",     4,    0,       0      },  // kernel-leak rejection at every entry + count edges + factory (#303)
+    {"pointer_isolation",     5,    0,       0      },  // kernel-leak rejection at every entry + count edges + count overflow (#337) + factory (#303)
     {"memory_determinism",    4,    0,       0      },  // PMM exhaustion + no-dynamic-alloc neutral cycles (v0.3.8)
     {"memory_checked_ptr",    4,    0,       0      },  // Checked pointer + signal frame tests
     {"memory_resource_exhaustion", 5, 0,      0      },  // FdTable, TaskLimit, MaxBuffers, MempoolFrag, PmmExhaustion
@@ -177,10 +177,10 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"memory_static_pools",   4,    0,       0      },  // MemPool::reserve only (no PMM gating without CONFIG_STATIC_POOLS_ONLY)
 #endif
     {"memory_no_op_new",      6,    0,       0      },  // no operator new/delete, all MemPool / placement-new
-    {"memory_page_tables",    9,    0,       0      },  // page-table pool, budget, no sharing
+    {"memory_page_tables",    11,   0,       0      },  // page-table pool, budget, no sharing
     {"memory_kernel_isolation", 6,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s + teardown validation (issue #199)
     {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
-    {"memory_vmm",           13,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60)
+    {"memory_vmm",           14,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60) + unmap-err holes (#366)
 
     // wcet / deadline
     {"wcet_overrun",          2,    0,       0      },  // WcetOverrunDetectionFires + DeadlineMissWithinWcet
@@ -232,11 +232,15 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"kernel_top",            22, 0,       0      },  // Top-level kernel (#131): histogram + random + IrqThread (#144, unknown-vec/sync-ack/guard) + datetime + global_state accessors (#136)
     {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
     {"memory_checked_ptr_api", 10,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views + non-#PF vector gate (#252)
-    {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
+    {"memory_integrity",      3,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127) + stack-marker span placement (#327)
     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
     {"shell_commands",       34,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source + runelf argv pin (#77) + --debug flag pin (#231) + --debug spawn success (#295, replaces refusal pin) + --debug no-image refusal (#295 audit)
     {"services_framework",    7,    0,       0      },  // services framework (issue #125): terminal colors, length-bounded write, cursor/splash, fb gate, scroll, program registry bounds
     {"ui_framebuffer",        6,    0,       0      },  // framebuffer init/putpixel/clear/scroll + terminated-line render pin (#269)
+    {"path_tracer",           7,    0,       0      },  // PathTracer core primitive (issue #347 Slice A, #362): chain math, missing/duplicate/reorder detection, checkpoint/resume, scoped-enum steps, reset
+    {"scheduler_dispatch_path", 4, 0,      0      },  // dispatch segments (issue #347 Slice B): reschedule arm, next_task select, skip-one-step negative, registry math
+    {"task_path",             5,    0,       0      },  // task create/cleanup segments (issue #347 Slice C): create path, full 14-block cleanup, pinned terminal, skip-one-step negative, registry math
+    {"vmm_path",              4,    0,       0      },  // VMM map/rollback segments (issue #347 Slice D): range-map reject, success, skip-one-step negative, registry math (rollback = inspection only, follow-up #361)
 
     // random
     {"random_core",           7,    0,       0      },  // RNG smoke/non-repeating
@@ -266,45 +270,46 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"bench_context_switch",  1,    0,       0      },  // task<->task p99 distribution, TF_BENCH (#303)
     {"bench_syscall",         3,    0,       0      },  // syscall latency (TF_BENCH)
     {"bench_irq",             3,    0,       0      },  // IRQ latency histogram (TF_BENCH)
+    {"bench_path_tracer",     1,    0,       0      },  // path-tracer per-step fold overhead (issue #347 Slice E, #362), TF_BENCH
     {"bench_jitter",          2,    0,       0      },  // schedule-to-schedule jitter
     {"bench_microkernel",     5,    0,       0      },  // minimal privileged surface / isolation / jitter / drift
 
     // hrt — hard real-time measurement under QEMU -icount (issue #101)
     {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
     {"stress_24h",            2,    0,       0      },  // soak driver SHORT horizon + liveness (#303)
-    {"hrt_monotonic",         5,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16)
+    {"hrt_monotonic",         6,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16) + wall accuracy bound (#319)
     {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
     {"task_metering",         9,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21) + blocked-window reset/wcet-keep (#331)
     {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
-    {"sched_admission",       8,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny/fork-user-parent-admitted (issues #20, #312)
+    {"sched_admission",       9,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny/fork-user-parent-admitted (issues #20, #312) + budget-denied-at-fork (#328)
     {"sched_admission_verify", 7,   0,       0      },  // admission journeys: taskdefs-budgets/defer-retry/mode-parity/bg-guard/percpu-epsilon/budget-roundtrip/boot-parity (issue #24)
     {"aperiodic_servers",     7,    0,       0      },  // DS/BG modes: idle-preserve/topup/bursts/bg-priority/no-edf/admission-budgets/compat-default (issue #22)
 
     // Structural/semantic aggregates (issue #173).  Values are filled
     // from measured `dump-counts` output; 0 disables validation.
-    {"core",                552,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 4 pointer_isolation + 2 release_build (issue #303) + 64 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled)
+    {"core",                578,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 1 ring3 errno cell (#338) + 1 stack-marker span (#327) + 2 map_page_err (#325-B) + 64 pre-existing aggregate drift at HEAD + 20 path-tracer groups: path_tracer 7 + scheduler_dispatch_path 4 + task_path 5 + vmm_path 4 (#347/#362) + 1 unmap-err hole (#366)
     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
-    {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
-    {"proc_elf",            111,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 6 pre-existing aggregate drift at HEAD
-    {"libc_verify",          7,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77)
+    {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
+    {"proc_elf",            123,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD
+    {"libc_verify",          8,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77) + Ring-3 create/trunc flag-translation probe (#341)
     {"libc_stdio",            5,    0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (#303, x86_64-only)
     {"libc_malloc",           5,    0,       0      },  // malloc0/align/calloc/realloc+OOM/cycle-no-leak (#303, x86_64-only)
     {"libc_string",           3,    0,       0      },  // ring3 exact+sweep + kernel api sweep (#303)
     {"libc_syscall",          4,    0,       0      },  // image size + getpid + write-cross + no-corruption (#303, x86_64-only)
-    {"cross_boundary",        2,    0,       0      },  // ring3 vfsd chain + iocd register/forward (#303, x86_64-only)
-    {"storage",             166,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333)
+    {"cross_boundary",        3,    0,       0      },  // ring3 vfsd chain + iocd register/forward (#303, x86_64-only) + iocd keyboard-read delivery (#340 P0)
+    {"storage",             167,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333) + 1 readdir mount overlay (#346)
     {"servers",             66,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333)
-    {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
+    {"drivers",             107,  0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173) + 13 pre-existing aggregate drift at HEAD (member fine rows all match the dump: 8+12+16+11+19+13+10+18; aggregate never re-reconciled; reconciled #342)
     {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
-    {"deadline",            144,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 pre-existing aggregate drift at HEAD
+    {"deadline",            146,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 budget-denied-at-fork (#328) + 1 wall accuracy bound (#319) + 1 pre-existing aggregate drift at HEAD
     {"ui",                  73,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
     {"random",              17,   0,       0      },  // random_* (issue #173)
-    {"bench",               27,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303)
+    {"bench",               28,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303) + 1 path_tracer overhead (#347-E)
     {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls, rescued (issue #61, wired up #173)
-    {"tls",                 12,   12,      12     },  // TLS_SET + publish/apply (issue #74)
+    {"tls",                 13,   12,      12     },  // TLS_SET + publish/apply (issue #74) + Ring-3 errno cell probe, x86_64-only (#338)
 };
 
 static constexpr size_t k_expected_count_size =

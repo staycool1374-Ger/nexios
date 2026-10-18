@@ -21,11 +21,13 @@
 /// cleanup.
 
 #include <kernel/task/task.hpp>
+#include <kernel/task/task_path.hpp> // issue #347 Slice C
 #include <kernel/task/exit_record.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/time/posix_time.hpp>
 #include <kernel/elf/elf_shared.hpp>
+#include <kernel/elf/elf_loader.hpp>
 #include <kernel/task/tcb_write_log.hpp>
 #include <kernel/task/sporadic_server.hpp>
 #include <kernel/debug/dump.hpp>
@@ -60,6 +62,12 @@
 #include <kernel/cap/frame_map.hpp>
 #include <kernel/irq_delivery.hpp>
 #include <assert.hpp>
+
+#if defined(CONFIG_DEBUG)
+// Fault-injection mask for task_step() (issue #347 Slice C, declared in
+// task_path.hpp). Test-only; absent in release.
+uint64_t kernel::g_test_skip_task_step = 0;
+#endif
 
 // BUGS.md#020: ring buffer of recently-created tasks so that when a wild
 // write plants a task's `entry` (code address) into some other field, the
@@ -238,9 +246,9 @@ void TaskControlBlock::detach_all_objects(bool keep_cspace) noexcept {
         KernelObject *obj = task_obj_head_;
         // Poison guard: a pool-rewound block's first qword is 0xDDDD... under
         // CONFIG_DEBUG.  A live object's first qword is its vptr (a kernel-high
-        // ≥ 0xFFFF800000000000 address), which passes the low-address check.
-        // Stop the walk rather than following garbage links.
-        if (reinterpret_cast<uintptr_t>(obj) < 0xFFFF800000000000ULL ||
+        // address, at/above arch::HHDM_OFFSET), which passes the low-address
+        // check.  Stop the walk rather than following garbage links.
+        if (reinterpret_cast<uintptr_t>(obj) < arch::HHDM_OFFSET ||
             *reinterpret_cast<const uint64_t *>(obj) == 0xDDDDDDDDDDDDDDDDULL) {
             break;
         }
@@ -521,20 +529,22 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
         PMM::free_page(stub_phys);
         return false;
     }
-    VMM::map_page_in_pml4(kUserYieldStubVa, stub_phys, true, tcb.page_table_);
+    // Issue #363 option-B: stub is executed in user mode — explicit CODE.
+    VMM::map_page_in_pml4(kUserYieldStubVa, stub_phys, true, true,
+                          tcb.page_table_);
 
 #if defined(CONFIG_ARCH_X86_64)
     // The saved iret frame stores the (placeholder kernel) entry in two slots:
     // the iret RIP and the SysV rdi copy.  The placeholder is a kernel
-    // higher-half address (>= 0xFFFF800000000000); the stub is a low user VA.
-    constexpr uint64_t kKernelHigherHalf = 0xFFFF800000000000ULL;
+    // higher-half address (TaskControlBlock::is_kernel_address()); the stub
+    // is a low user VA.
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *frame = reinterpret_cast<uint64_t *>(tcb.context.rsp);
     size_t slots = (tcb.kernel_stack_top - tcb.context.rsp) / sizeof(uint64_t);
 
     uint64_t original_entry = 0;
     for (size_t i = 0; i < slots; ++i) {
-        if (frame[i] >= kKernelHigherHalf) {
+        if (TaskControlBlock::is_kernel_address(frame[i])) {
             original_entry = frame[i];
             break;
         }
@@ -957,6 +967,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
 #endif
 
     memset(tcb, 0, sizeof(TaskControlBlock));
+    kernel::task_step(kernel::TaskCreateSteps::Alloc); // issue #347 Slice C
 
     TCB_WRITE(tcb, magic, TCB_MAGIC);
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
@@ -1022,6 +1033,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     tcb->mem_prev_used_ = 0;
     tcb->mem_leak_streak_ = 0;
     init_task_common(*tcb);
+    kernel::task_step(kernel::TaskCreateSteps::ZeroInit); // issue #347 Slice C
 
     uint64_t stack_size = stack_size_for_priority(priority);
     size_t stack_pages = (stack_size + 4095) / arch::PAGE_SIZE;
@@ -1051,6 +1063,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     }
 
     tcb->stack_phys_ = stack_phys;
+    kernel::task_step(kernel::TaskCreateSteps::StackAlloc); // issue #347 Slice C
     // ------------------------------------------------------------------
     // Kernel-stack guard page discipline (ASIL-D requirement)
     // ------------------------------------------------------------------
@@ -1126,6 +1139,7 @@ done_stack:
         TaskControlBlock::destroy(tcb);
         return nullptr;
     }
+    kernel::task_step(kernel::TaskCreateSteps::Pml4Clone); // issue #347 Slice C
 
     // PMM does not zero freed pages (it poison-fills them, e.g. with 0x0b),
     // so a stack allocated from recycled memory can retain stale poison in
@@ -1194,10 +1208,15 @@ done_stack:
     stack -= 37;
     __builtin_memset(stack, 0, 37 * 8);
     stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
-    stack[32] = (1ULL << 5) | (1ULL << 8); // SSTATUS: SPIE=1, SPP=1 (S-mode)
+    // SSTATUS bits (issue #348-C): SPIE=1 (prior interrupt enable),
+    // SPP=1 (trap returns to S-mode).
+    constexpr uint64_t SSTATUS_SPIE = 1ULL << 5;
+    constexpr uint64_t SSTATUS_SPP = 1ULL << 8;
+    stack[32] = SSTATUS_SPIE | SSTATUS_SPP;
     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
 #endif
 
+    kernel::task_step(kernel::TaskCreateSteps::FrameBuild); // issue #347 Slice C
     return tcb;
 }
 
@@ -1331,8 +1350,10 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     // Guard page: leave first page unmapped, start mapping at +arch::PAGE_SIZE
     uint64_t user_stack_virt = mem::STACK_VADDR + arch::PAGE_SIZE;
     for (size_t i = 0; i < user_stack_pages; ++i) {
+        // Issue #325-D: user stacks are data (never executable).
         VMM::map_page_in_pml4(user_stack_virt + i * arch::PAGE_SIZE,
-                              ustack_phys + i * arch::PAGE_SIZE, true, pml4);
+                              ustack_phys + i * arch::PAGE_SIZE, true, false,
+                              pml4);
     }
 
     tcb->user_stack_ = ustack_phys;
@@ -1558,9 +1579,30 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
 
     // Allocate and set up kernel stack
     size_t stack_pages = (STACK_SIZE + 4095) / arch::PAGE_SIZE;
+#if CONFIG_MEMORY_BUDGET
+    // Issue #328: charge the child's kernel stack against the global
+    // budget, symmetric to create(). Fail-closed before any allocation;
+    // later failure paths destroy() the TCB, which releases exactly
+    // these pages (stack_phys_ set below), so no rollback is needed
+    // here. User-stack/PML4/table pages stay uncharged — create_user()
+    // charges nothing either, and destroy() has no matching release
+    // for them (charging without release would drain the budget).
+    if (!Scheduler::reserve_memory_pages(stack_pages)) {
+        Logger::warn("TCB::clone: budget OOM for %zu-page stack",
+                     stack_pages);
+        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
+                            log::kDmesgBase_TASK + 1, log::LogSeverity::ERROR,
+                            "TCB stack budget OOM", stack_pages);
+        TaskControlBlock::destroy(tcb);
+        return nullptr;
+    }
+#endif
     uint64_t kstack_phys = PMM::alloc_contiguous(stack_pages);
     if (!kstack_phys) {
         ASSERT(errors::TaskError::TASK_ERR_STACK_ALLOC);
+#if CONFIG_MEMORY_BUDGET
+        Scheduler::release_memory_pages(stack_pages);
+#endif
         TaskControlBlock::destroy(tcb);
         return nullptr;
     }
@@ -1743,9 +1785,10 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
         // +arch::PAGE_SIZE
         uint64_t user_stack_virt = mem::STACK_VADDR + arch::PAGE_SIZE;
         for (size_t i = 0; i < ustack_pages; ++i) {
+            // Issue #325-D: user stacks are data (never executable).
             VMM::map_page_in_pml4(user_stack_virt + i * arch::PAGE_SIZE,
                                   ustack_phys + i * arch::PAGE_SIZE, true,
-                                  new_pml4);
+                                  false, new_pml4);
             // Copy physical page content via kernel mapping
             uint64_t src_virt =
                 arch::HHDM_OFFSET + parent->user_stack_ + i * arch::PAGE_SIZE;
@@ -1872,12 +1915,14 @@ void TaskControlBlock::cleanup() noexcept {
         return;
     }
     state = TaskState::REAPED;
+    kernel::task_step(kernel::TaskCleanupSteps::Validate); // issue #347 Slice C
 
     // Issue #41: disarm the watchdog at teardown (bump the generation so
     // a recycled TCB slot can never match a stale expiry).
     wdog_armed = false;
     wdog_expiry_tick = 0;
     ++wdog_gen;
+    kernel::task_step(kernel::TaskCleanupSteps::WatchdogDisarm); // issue #347 Slice C
     if (wdog_gen == 0)
         wdog_gen = 1;
 
@@ -1896,6 +1941,7 @@ void TaskControlBlock::cleanup() noexcept {
     // Placed after the pinned early-return (baseline never recorded)
     // and before unregister (PIDs still valid for daemon exclusion).
     kernel::idle_record_task_exit(*this, arch::Timer::ticks());
+    kernel::task_step(kernel::TaskCleanupSteps::ExitStats); // issue #347 Slice C
 
     // Unregister from the scheduler's live tables so we never leave a dangling
     // tasks_[]/id_table_ entry that aliases a later allocation (which
@@ -1910,6 +1956,7 @@ void TaskControlBlock::cleanup() noexcept {
         arch::IrqGuard irq_guard{};
         Scheduler::unregister_task(*this);
     }
+    kernel::task_step(kernel::TaskCleanupSteps::Unregister); // issue #347 Slice C
 
     // Remove self from parent's child list if we have a parent
     if (parent_id != 0) {
@@ -1919,6 +1966,7 @@ void TaskControlBlock::cleanup() noexcept {
         }
         parent_id = 0;
     }
+    kernel::task_step(kernel::TaskCleanupSteps::ParentUnbind); // issue #347 Slice C
 
     // Cancel a wheel-armed bounded receive (issue #18) before detaching
     // from queues: an armed timer firing after this TCB is freed would run
@@ -1935,14 +1983,15 @@ void TaskControlBlock::cleanup() noexcept {
     // registrations held by this task. Same lock position as the recv
     // cancel above (no scheduler lock held — death-drain §12.3).
     time::PosixTime::drain_owner(*this);
+    kernel::task_step(kernel::TaskCleanupSteps::TimerDrain); // issue #347 Slice C
 
     // Remove self from any message queue's blocked-senders list *before*
     // freeing any resources.  If we are blocked on another task's queue
     // (blocked_on_queue != nullptr) we must detach now — otherwise the
     // queue owner's cleanup() will walk a dangling pointer after we are
     // freed and poisoned.
-    if (blocked_on_queue && reinterpret_cast<uintptr_t>(blocked_on_queue) >=
-                                0xFFFF800000000000ULL) {
+    if (blocked_on_queue &&
+        TaskControlBlock::is_kernel_pointer(blocked_on_queue)) {
         auto &q = *blocked_on_queue;
         if (TaskControlBlock::is_valid(q.blocked_senders_head) &&
             q.blocked_senders_head == this) {
@@ -1975,28 +2024,27 @@ void TaskControlBlock::cleanup() noexcept {
     // drain_zombie_list/cleanup_step), preserving the lock ordering of the
     // wake paths.  The higher-half range check mirrors the blocked_on_queue
     // validation above (objects live in kernel/HHDM space, never low VA).
-    if (waiting_on_mutex && reinterpret_cast<uintptr_t>(waiting_on_mutex) >=
-                                0xFFFF800000000000ULL) {
+    if (waiting_on_mutex &&
+        TaskControlBlock::is_kernel_pointer(waiting_on_mutex)) {
         waiting_on_mutex->remove_waiter(*this);
         waiting_on_mutex = nullptr;
     }
     if (waiting_on_semaphore &&
-        reinterpret_cast<uintptr_t>(waiting_on_semaphore) >=
-            0xFFFF800000000000ULL) {
+        TaskControlBlock::is_kernel_pointer(waiting_on_semaphore)) {
         waiting_on_semaphore->remove_waiter(*this);
         waiting_on_semaphore = nullptr;
     }
     if (waiting_on_eventgroup &&
-        reinterpret_cast<uintptr_t>(waiting_on_eventgroup) >=
-            0xFFFF800000000000ULL) {
+        TaskControlBlock::is_kernel_pointer(waiting_on_eventgroup)) {
         waiting_on_eventgroup->remove_waiter(*this);
         waiting_on_eventgroup = nullptr;
     }
-    if (waiting_on_queue && reinterpret_cast<uintptr_t>(waiting_on_queue) >=
-                                0xFFFF800000000000ULL) {
+    if (waiting_on_queue &&
+        TaskControlBlock::is_kernel_pointer(waiting_on_queue)) {
         waiting_on_queue->remove_waiter(*this);
         waiting_on_queue = nullptr;
     }
+    kernel::task_step(kernel::TaskCleanupSteps::SyncDetach); // issue #347 Slice C
 
     // Notify the daemon manager so registered daemon PIDs are reset to 0.
     // Must run before msg_queue is destroyed so blocked senders get fast-fail
@@ -2021,6 +2069,7 @@ void TaskControlBlock::cleanup() noexcept {
     // from the authoritative table, never assumed.
     kernel::debug::debug_publish_death(*this);
     kernel::debug::debug_drain_debugger(*this);
+    kernel::task_step(kernel::TaskCleanupSteps::Notify); // issue #347 Slice C
 
     for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
         if (fd_table.fds[i].used) {
@@ -2037,6 +2086,7 @@ void TaskControlBlock::cleanup() noexcept {
             fd_table.fds[i].vnode = nullptr;
         }
     }
+    kernel::task_step(kernel::TaskCleanupSteps::VfsDrain); // issue #347 Slice C
 
     // v0.4.0 MP-1: keyed on the authoritative is_user_ flag — a kernel task
     // owns a private kernel-half PML4 but never a user stack.
@@ -2076,6 +2126,7 @@ void TaskControlBlock::cleanup() noexcept {
         kstack_slot_va_ = 0;
         kstack_slot_size_ = 0;
     }
+    kernel::task_step(kernel::TaskCleanupSteps::MemFree); // issue #347 Slice C
 
     if (page_table_) {
         // Free any zero-copy buffers owned by this task before tearing down
@@ -2109,6 +2160,10 @@ void TaskControlBlock::cleanup() noexcept {
         // free_user_pages() skips kernel-owned table/data pages via
         // PMM::is_user_page, so a partially deep-copied address space (OOM
         // during clone) is fully reclaimed here — no leak.
+        // Issue #271 P1: unmap retained golden pages first so the blind
+        // free below skips them (pages owned by mapping tasks, retention
+        // decides frees at zero/zero).
+        kernel::elf::ElfLoader::unmap_golden(this);
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
         // Issue #156: release the PCID before the address space goes
         // away (keyed on the live TCB, never after free; 0 is a no-op
@@ -2126,6 +2181,7 @@ void TaskControlBlock::cleanup() noexcept {
 #endif // CONFIG_ARCH_X86_64
         page_table_ = 0;
     }
+    kernel::task_step(kernel::TaskCleanupSteps::PageTeardown); // issue #347 Slice C
 
     msg_queue.~MessageQueue();
     kernel::test::ResourceTracker::instance().track_msg_queue_remove();
@@ -2134,6 +2190,7 @@ void TaskControlBlock::cleanup() noexcept {
     kernel::test::ResourceTracker::instance().track_notify_remove();
 
     event_group.~EventGroup();
+    kernel::task_step(kernel::TaskCleanupSteps::IpcDestroy); // issue #347 Slice C
     kernel::test::ResourceTracker::instance().track_event_group_remove();
 
     // Release the task's I/O permission bitmap slot (x86_64, issue #3)
@@ -2151,6 +2208,7 @@ void TaskControlBlock::cleanup() noexcept {
     if (cwd_vnode)
         vfs::vnode_ref_dec(cwd_vnode);
     cwd_vnode = nullptr;
+    kernel::task_step(kernel::TaskCleanupSteps::CapRelease); // issue #347 Slice C
     kernel::test::ResourceTracker::instance().track_task_remove();
     // If this block was the deadline-monitor task's TCB, clear the scheduler's
     // pointer so s_monitor_task_ can never dangle into a reused block (the
@@ -2160,6 +2218,7 @@ void TaskControlBlock::cleanup() noexcept {
     if (this == Scheduler::get_monitor_task())
         Scheduler::reset_monitor_task();
 #endif
+    kernel::task_step(kernel::TaskCleanupSteps::Finalize); // issue #347 Slice C
 }
 
 } // namespace kernel

@@ -29,6 +29,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/vmm_errors.hpp> // issue #366 Q2b: checked unmaps
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <constants.hpp>
@@ -273,8 +274,11 @@ void unmap_acquired_ro(uint64_t pml4, const DepResolveContext *ctx,
     }
     for (uint64_t i = 0; i < n; ++i) {
         if ((slot->writable_mask & (1ULL << i)) == 0) {
-            VMM::unmap_page_in_pml4(slot->load_base + i * arch::PAGE_SIZE,
-                                    pml4);
+            // Issue #366 Q2b: fold-and-ignore — the release is
+            // refcount-authoritative (see release() below), not the PTE;
+            // a hole (never-mapped window, double release path) is benign.
+            (void)VMM::unmap_page_in_pml4_err(
+                slot->load_base + i * arch::PAGE_SIZE, pml4);
         }
     }
 }
@@ -295,7 +299,9 @@ void release_task_libs(TaskControlBlock *tcb) {    if (!tcb || tcb->needed_lib_c
             }
             for (uint64_t p = 0; p < n; ++p) {
                 if ((slot->writable_mask & (1ULL << p)) == 0) {
-                    VMM::unmap_page_in_pml4(
+                    // Issue #366 Q2b: fold-and-ignore (same rationale as
+                    // unmap_acquired_ro above).
+                    (void)VMM::unmap_page_in_pml4_err(
                         slot->load_base + p * arch::PAGE_SIZE,
                         tcb->page_table_);
                 }

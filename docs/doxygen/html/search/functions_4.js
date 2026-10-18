@@ -57,7 +57,7 @@ var searchData=
   ['dequeue_5fready_54',['dequeue_ready',['../classkernel_1_1_scheduler.html#afe8481a5993e14cbd94b81c4f64bd7d0',1,'kernel::Scheduler']]],
   ['destroy_55',['destroy',['../structkernel_1_1_task_control_block.html#ab52ff8402135c9d2a8ac6df1c5346f5e',1,'kernel::TaskControlBlock']]],
   ['destroy_5fcompleted_5ftcb_56',['destroy_completed_tcb',['../classkernel_1_1elf_1_1_elf_loader.html#a4c2fef2ceece51afc3092a2a8ac33495',1,'kernel::elf::ElfLoader']]],
-  ['detach_5fall_5fobjects_57',['detach_all_objects',['../structkernel_1_1_task_control_block.html#a2253e45004a974042ea8badc8f83c835',1,'kernel::TaskControlBlock']]],
+  ['detach_5fall_5fobjects_57',['detach_all_objects',['../structkernel_1_1_task_control_block.html#a2bd5299b5e323853e9079f629a348578',1,'kernel::TaskControlBlock']]],
   ['detach_5fobject_58',['detach_object',['../structkernel_1_1_task_control_block.html#ace1c87fa76b4e7545a78703fc32f598d',1,'kernel::TaskControlBlock']]],
   ['devfs_5finit_59',['devfs_init',['../namespacekernel_1_1vfs.html#af07f68076c35369863e1297a548c9f94',1,'kernel::vfs']]],
   ['dismiss_60',['dismiss',['../class_scope_guard.html#a447e707e447974723ef0350d89fdcef7',1,'ScopeGuard']]],

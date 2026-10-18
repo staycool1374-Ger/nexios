@@ -22,8 +22,6 @@
 /// @brief Model-Specific Register (MSR) read/write (x86_64) / no-op stubs
 /// (AArch64, RISC-V).
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/nexios_config.h>
 

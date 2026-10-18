@@ -21,8 +21,6 @@
 /// @file fat32.hpp
 /// @brief FAT32 on-disk structures, partition class, and directory helpers.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/driver/block_device.hpp>
 

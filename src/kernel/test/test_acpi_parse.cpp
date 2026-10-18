@@ -54,7 +54,7 @@ bool ensure_mb2_readable(uint64_t *mapped_pages_out, size_t *count_out) {
     // not the table the CPU is walking here).
     uint64_t active_pml4 = VMM::current_pml4();
     uint64_t base_page = multiboot_info_ptr & ~0xFFFULL;
-    VMM::map_page_in_pml4(base_page, base_page, false, active_pml4);
+    VMM::map_page_in_pml4(base_page, base_page, false, false, active_pml4);
     uint64_t pt = VMM::virt_to_phys_in_pml4(base_page, active_pml4);
     if (pt != base_page)
         return false; // mapping did not take — leave nothing behind
@@ -76,7 +76,7 @@ bool ensure_mb2_readable(uint64_t *mapped_pages_out, size_t *count_out) {
             *count_out = 0;
             return false;
         }
-        VMM::map_page_in_pml4(page, page, false, active_pml4);
+        VMM::map_page_in_pml4(page, page, false, false, active_pml4);
         uint64_t check = VMM::virt_to_phys_in_pml4(page, active_pml4);
         if (check != page) {
             drop_mb2_mapping(mapped_pages_out, *count_out);

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
    </div>
   </td>
  </tr>
@@ -150,6 +150,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a1d8f447f26e546b9beff76cee76693fe"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tick hook: fire due expiries for one CPU (bounded). ISR-safe: try-lock, skip on contention (fires next tick instead). Fires at most kMaxExpirePerTick earliest-due callbacks; the lock is released before callbacks run (re-entrant arm/cancel safe).  <br /></td></tr>
 <tr class="memitem:af2983ada4c25cb427780046ed2d4a5c1" id="r_af2983ada4c25cb427780046ed2d4a5c1"><td class="memItemLeft">static uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#af2983ada4c25cb427780046ed2d4a5c1">live_count</a> (uint32_t cpu) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:af2983ada4c25cb427780046ed2d4a5c1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Armed entry count for one CPU (introspection/test only).  <br /></td></tr>
+<tr class="memitem:a59ee814f836cf2206ed330c5419a393b" id="r_a59ee814f836cf2206ed330c5419a393b"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a59ee814f836cf2206ed330c5419a393b">is_live</a> (const <a class="el" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html">Handle</a> &amp;handle) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a59ee814f836cf2206ed330c5419a393b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Is an arm receipt still live (introspection/test only)? Mirrors <a class="el" href="#ad3a26df7cdf858c1c1952d212cb6e248" title="Cancel an armed expiry (O(1)). Stale handles (wrong generation, disarmed slot) fail closed.">cancel()</a>'s validation: true iff the slot is armed with the same generation. A stale handle (cancelled slot, a slot reused with a bumped generation, or an out-of-range handle) reads false.  <br /></td></tr>
 <tr class="memitem:a62a163f1c173368852db45fb5d94c0ec" id="r_a62a163f1c173368852db45fb5d94c0ec"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a62a163f1c173368852db45fb5d94c0ec">snapshot_reset</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a62a163f1c173368852db45fb5d94c0ec"><td class="mdescLeft">&#160;</td><td class="mdescRight">Disarm everything, invalidate all handles (test isolation). Bumps every generation so pre-reset handles fail closed.  <br /></td></tr>
 </table><table class="memberdecls">
@@ -272,6 +274,40 @@ Static Public Attributes</h2></td></tr>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>true when an armed entry was cancelled. </dd></dl>
+
+</div>
+</div>
+<a id="a59ee814f836cf2206ed330c5419a393b" name="a59ee814f836cf2206ed330c5419a393b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a59ee814f836cf2206ed330c5419a393b">&#9670;&#160;</a></span>is_live()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::time::TimerWheel::is_live </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html">Handle</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>handle</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Is an arm receipt still live (introspection/test only)? Mirrors <a class="el" href="#ad3a26df7cdf858c1c1952d212cb6e248" title="Cancel an armed expiry (O(1)). Stale handles (wrong generation, disarmed slot) fail closed.">cancel()</a>'s validation: true iff the slot is armed with the same generation. A stale handle (cancelled slot, a slot reused with a bumped generation, or an out-of-range handle) reads false. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">handle</td><td>Receipt from <a class="el" href="#ae3dcf5f24986e4e77bbd10ab010901b8" title="Arm a one-shot expiry (O(1)). Fail-closed: false on invalid cpu, null callback/context-out,...">arm()</a>. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true when the slot is still armed with that generation. </dd></dl>
 
 </div>
 </div>

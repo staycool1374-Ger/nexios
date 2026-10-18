@@ -144,6 +144,13 @@ class ArchPageTable {
     /// @brief Number of entries per page-table level.
     static constexpr uint64_t ENTRIES = 512;
 
+    // ─── PTE flag constants (x86_64 leaf encoding) ─────────────────────────
+    /// @brief No-execute (bit 63). Set when executable=false (VULN-H1 5-arg
+    ///        contract; issue #325-D NX policy). Masks that strip addresses
+    ///        (e.g. VMM PAGE_FRAME_MASK) must clear this bit: without it a
+    ///        leaf PTE wraps HHDM_OFFSET + phys to a non-canonical address.
+    static constexpr uint64_t NX = 1ULL << 63;
+
     // ─── Page-table index constants (x86_64 4-level paging) ───────────────
     static constexpr uint64_t PML4_SHIFT = 39;
     static constexpr uint64_t PDPT_SHIFT = 30;

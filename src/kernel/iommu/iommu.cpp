@@ -37,6 +37,7 @@
 #include <kernel/iommu/dmar.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <constants.hpp>
@@ -445,9 +446,15 @@ bool IoMmuManager::probe_hardware() {
         return false; // no DMAR / no DRHD — software-only path
     }
     g_mmio_base = info.unit.base_phys;
-    // Map the remapping unit's MMIO page (APIC pattern).
-    kernel::VMM::map_page(arch::HHDM_OFFSET + g_mmio_base, g_mmio_base,
-                          false);
+    // Map the remapping unit's MMIO page (APIC pattern). Issue #366 Q1a:
+    // fail fast on table-OOM (was a silent drop); nothing acquired yet.
+    if (kernel::VMM::map_page_err(arch::HHDM_OFFSET + g_mmio_base,
+                                  g_mmio_base,
+                                  false) != kernel::errors::VMM_ERR_OK) {
+        g_mmio_base = 0;
+        g_probe_result = 2;
+        return false;
+    }
     uint32_t ver = mmio_read32(vtd::mmio::kVerReg);
     // VER_REG is non-zero on every VT-d unit; the encoding differs between
     // QEMU (0x10) and real hardware (e.g. 0x100 = v1.0), so only reject an

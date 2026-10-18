@@ -21,8 +21,6 @@
 /// @file vfsd.hpp
 /// @brief VFS daemon IPC message types and PID tracking.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {
@@ -44,6 +42,11 @@ static constexpr uint64_t VFS_READDIR = 109;
 static constexpr uint64_t VFS_MKDIR = 110;
 static constexpr uint64_t VFS_UNLINK = 111;
 static constexpr uint64_t VFS_RMDIR = 112;
+// Issue #341: create-intent open. The kernel's sys_open O_CREAT branch is
+// the ONLY caller that authorizes a not-yet-existing path; it uses this
+// op (never VFS_OPEN) so the daemon can tell creation apart from plain
+// open. Any future VFS_OPEN caller on a missing path must use this op.
+static constexpr uint64_t VFS_OPEN_CREATE = 113;
 
 struct Msg {
     uint64_t sender_id; ///< Task ID of the sender.

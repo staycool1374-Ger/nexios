@@ -21,8 +21,6 @@
 /// @file procfs.hpp
 /// @brief Process filesystem (procfs) declaration.
 
-#pragma once
-
 #include <kernel/vfs/vfs.hpp>
 
 namespace kernel {

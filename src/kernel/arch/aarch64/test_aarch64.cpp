@@ -1059,7 +1059,7 @@ JARVIS_TEST(aarch64_deep_copy_user_descriptors_valid) {
     JARVIS_ASSERT(user_page != 0);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + user_page) = 0x5A;
-    VMM::map_page_in_pml4(TEST_VA, user_page, true, parent_pml4);
+    VMM::map_page_in_pml4(TEST_VA, user_page, true, false, parent_pml4);
 
     // MP-7 fork semantics: deep copy, never shared tables.
     JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));

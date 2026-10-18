@@ -138,3 +138,36 @@ char* strdup(const char* s) {
     }
     return p;
 }
+
+// Issue #339: reentrant tokenizer. NULL delim/saveptr fail closed
+// (POSIX leaves NULL-delim undefined); empty tokens are skipped like
+// consecutive delimiters; end-of-string parks saveptr at 0.
+char* strtok_r(char* s, const char* delim, char** saveptr) {
+    if (!delim || !saveptr)
+        return 0;
+    char* cur = s ? s : *saveptr;
+    if (!cur)
+        return 0;
+    cur += strspn(cur, delim);
+    if (*cur == '\0') {
+        *saveptr = 0;
+        return 0;
+    }
+    char* tok = cur;
+    cur += strcspn(cur, delim);
+    if (*cur == '\0') {
+        *saveptr = 0;
+    } else {
+        *cur = '\0';
+        *saveptr = cur + 1;
+    }
+    return tok;
+}
+
+// Issue #339: classic strtok over a process-private save cell (NOT
+// thread-safe — threaded code must use strtok_r; safe under fork since
+// the cell copies with the address space).
+char* strtok(char* s, const char* delim) {
+    static char* save = 0;
+    return strtok_r(s, delim, &save);
+}

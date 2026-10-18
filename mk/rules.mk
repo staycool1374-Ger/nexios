@@ -250,9 +250,9 @@ userspace/%.c.elf: userspace/%.c $(LIBC_A) build/libc/crt0.o
 # -nostartfiles via CCFLAGS -nostdlib, no specs, no toolchain crt
 # files). Order-only sysroot edge: readiness gates the link but
 # sysroot mtime never forces an ELF rebuild.
-$(PICOLIBC_ELF): userspace/picolibc/%.c.elf: userspace/picolibc/%.c $(PICOLIBC_GLUE) build/libc/picolib_stubs.o | $(PICOLIBC_SYSROOT)/lib/libc.a $(PICOLIBC_SYSROOT)/lib/libm.a
+$(PICOLIBC_ELF): userspace/picolibc/%.c.elf: userspace/picolibc/%.c $(PICOLIBC_GLUE) build/libc/picolib_stubs.o build/libc/errno.o | $(PICOLIBC_SYSROOT)/lib/libc.a $(PICOLIBC_SYSROOT)/lib/libm.a
 	@printf '  %-7s %s\n' 'CC' '$@'
-	$(CC) $(CCFLAGS) -I $(PICOLIBC_SYSROOT)/include -o $@ build/libc/crt0.o $< $(PICOLIBC_GLUE) build/libc/picolib_stubs.o -L $(PICOLIBC_SYSROOT)/lib -lc -lm
+	$(CC) $(CCFLAGS) -I $(PICOLIBC_SYSROOT)/include -o $@ build/libc/crt0.o $< $(PICOLIBC_GLUE) build/libc/picolib_stubs.o build/libc/errno.o -L $(PICOLIBC_SYSROOT)/lib -lc -lm
 
 $(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c | $(PICOLIBC_SYSROOT)/lib/libc.a $(PICOLIBC_SYSROOT)/lib/libm.a
 	@printf '  %-7s %s\n' 'CC' '$@'
@@ -350,6 +350,33 @@ $(VERIFY_IMG_OBJ): $(VERIFY_IMG_STRIPPED)
 	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_size=_binary_libc_verify_img_size \
 	    $< $@
 
+# Issue #338: the errno-probe ELF is embedded for the kernel test (same
+# initrd-not-mounted reason as #75). x86_64 only — the Ring-3 TP read
+# (RDFSBASE) is proven on TCG-x86_64; other archs ship the probe in
+# /bin via the generic rule, untested.
+ifeq ($(ARCH),x86_64)
+ERRNO_IMG_OBJ := build/initrd/errno_probe_img.o
+ERRNO_IMG_SRC := userspace/errno_probe.c.elf
+ERRNO_IMG_STRIPPED := build/initrd/errno_probe_stripped.elf
+else
+ERRNO_IMG_OBJ :=
+ERRNO_IMG_SRC :=
+ERRNO_IMG_STRIPPED :=
+endif
+
+$(ERRNO_IMG_STRIPPED): $(ERRNO_IMG_SRC)
+	@mkdir -p $(dir $@)
+	cp $< $@
+	$(X86_64_TRIPLET)strip $@
+
+$(ERRNO_IMG_OBJ): $(ERRNO_IMG_STRIPPED)
+	@mkdir -p $(dir $@)
+	$(OBJCOPY) -I binary -O $(OBJCOPY_FMT) -B $(OBJCOPY_ARCH) \
+	    --redefine-sym _binary_build_initrd_errno_probe_stripped_elf_start=_binary_errno_probe_img_start \
+	    --redefine-sym _binary_build_initrd_errno_probe_stripped_elf_end=_binary_errno_probe_img_end \
+	    --redefine-sym _binary_build_initrd_errno_probe_stripped_elf_size=_binary_errno_probe_img_size \
+	    $< $@
+
 # Issue #104: the fork-marker ELF is embedded for the EL0/U-mode smoke
 # tests (same initrd-not-mounted reason as above). aarch64 + riscv64 (issue
 # #206 M2) — the program is built by the generic userspace/%.c.elf rule with
@@ -381,18 +408,18 @@ $(FORK_MARKER_OBJ): $(FORK_MARKER_STRIPPED)
 	    --redefine-sym _binary_build_initrd_fork_marker_stripped_elf_size=_binary_fork_marker_img_size \
 	    $< $@
 
-$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
+$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(ERRNO_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
 	@mkdir -p $(dir $@)
 	@printf '  %-7s %s\n' 'LD' 'kernel-debug.elf'
-	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(ERRNO_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
 	@python3 tools/patch_code_crc.py $@
 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
 
-$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
+$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(ERRNO_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
 	@mkdir -p $(dir $@)
 	@printf '  %-7s %s\n' 'LD' 'kernel.elf'
-	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(ERRNO_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
 	@python3 tools/patch_code_crc.py $@
 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"

@@ -21,8 +21,6 @@
 /// @file pipe.hpp
 /// @brief Pipe (anonymous FIFO) creation API.
 
-#pragma once
-
 #include <types.hpp>
 
 namespace kernel {

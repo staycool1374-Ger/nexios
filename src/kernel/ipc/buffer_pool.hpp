@@ -22,10 +22,9 @@
 /// @brief Zero-copy buffer pool — allocate, transfer, map, free buffers via
 /// handles.
 
-#pragma once
-
 #include <types.hpp>
 #include <constants.hpp>
+#include <span.hpp>
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/ipc/buffer_pool_errors.hpp>
@@ -68,28 +67,28 @@ class BufferPool {
     /// @brief Allocate a buffer, map it at @p virt_addr in the given
     /// task's address space.
     /// @return handle, or 0 on failure.
-    static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr);
+    [[nodiscard]] static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr) noexcept;
 
     /// @brief Free a buffer: unmap, deref, return to pool.
-    static bool free(TaskControlBlock &task, uint64_t handle);
+    [[nodiscard]] static bool free(TaskControlBlock &task, uint64_t handle) noexcept;
 
     /// @brief Map an existing (transferred) buffer at @p virt_addr in
     /// the caller's space.
-    static bool map(TaskControlBlock &task, uint64_t handle,
-                    uint64_t virt_addr);
+    [[nodiscard]] static bool map(TaskControlBlock &task, uint64_t handle,
+                    uint64_t virt_addr) noexcept;
 
     /// @brief Unmap a buffer without freeing it.
-    static bool unmap(TaskControlBlock &task, uint64_t handle);
+    [[nodiscard]] static bool unmap(TaskControlBlock &task, uint64_t handle) noexcept;
 
     /// @brief Transfer ownership to another task (used by IPC send).
-    static bool transfer(uint64_t handle, TaskControlBlock &from,
-                         TaskControlBlock &target_task);
+    [[nodiscard]] static bool transfer(uint64_t handle, TaskControlBlock &from,
+                         TaskControlBlock &target_task) noexcept;
 
     /// @brief Unmap all buffers owned by a task (called from cleanup/exec).
     static void unmap_all(TaskControlBlock &task);
 
     /// @brief Validate a handle and return its index, or -1.
-    static int32_t validate(uint64_t handle);
+    [[nodiscard]] static int32_t validate(uint64_t handle) noexcept;
 
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static Entry entries[MAX_BUFFERS];
@@ -104,9 +103,12 @@ class BufferPool {
 
     /// @name Test-isolation helpers (snapshot / restore)
     /// @brief Copy all entries + free_head + next_cookie into flat buffer.
-    static void capture_state(uint8_t *dst, size_t max_bytes);
+    /// @param dst Destination view; must hold at least state_bytes()
+    ///        (ENSUREd — snapshot sizing bugs fail closed, issue #348-D2).
+    static void capture_state(kernel::Span<uint8_t> dst);
     /// @brief Restore entries + free_head + next_cookie from flat buffer.
-    static void restore_state(const uint8_t *src, size_t max_bytes);
+    /// @param src Source view; must hold at least state_bytes() (ENSUREd).
+    static void restore_state(kernel::Span<const uint8_t> src);
     /// @brief Bytes needed for BufferPool state capture.
     static constexpr size_t state_bytes() {
         return sizeof(entries) + sizeof(free_head_) + sizeof(next_cookie_) +

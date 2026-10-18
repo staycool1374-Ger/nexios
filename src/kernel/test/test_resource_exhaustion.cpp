@@ -193,14 +193,14 @@ TEST_CLASS(MaxBuffersExhaustion) {
     uint32_t old_idx = static_cast<uint32_t>(handles[512] & 0xFFFFFFFFULL);
     CT_ASSERT(new_idx == old_idx);
 
-    BufferPool::free(*task, h);
+    CT_ASSERT(BufferPool::free(*task, h));
 
     // Cleanup all remaining
     for (int i = 0; i < alloc_count; ++i) {
         if (i == 512)
             continue;
         if (handles[i] != 0) {
-            BufferPool::free(*task, handles[i]);
+            CT_ASSERT(BufferPool::free(*task, handles[i]));
         }
     }
 

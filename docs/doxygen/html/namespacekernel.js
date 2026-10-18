@@ -11,6 +11,7 @@ var namespacekernel =
       [ "ensure_running", "namespacekernel_1_1daemon.html#a13c5b38a9f9303f1f5fd4f57fb244cfd", null ],
       [ "get_entry", "namespacekernel_1_1daemon.html#a978776a5839d1f7bbac1e5a22572afca", null ],
       [ "init", "namespacekernel_1_1daemon.html#a0a2e6431675517acca87d324b2cff80e", null ],
+      [ "is_managed", "namespacekernel_1_1daemon.html#ae3e4188f4434a72f6d12df9d801e03b1", null ],
       [ "notify_death", "namespacekernel_1_1daemon.html#a92ec4786a10d49508858cb50f5a83ce3", null ],
       [ "register_daemon", "namespacekernel_1_1daemon.html#a805ce70d7458d932a10b9f7aec27fde1", null ],
       [ "reset_clear_daemons", "namespacekernel_1_1daemon.html#af8c94939f398ca91404fdf9f7aef8171", null ],
@@ -66,6 +67,7 @@ var namespacekernel =
       [ "format_short_name", "namespacekernel_1_1fat32.html#ad96c400fa4e603f70ae0ecd41241cbbf", null ],
       [ "free_cluster_chain", "namespacekernel_1_1fat32.html#acaa9ea1e7204014b1ee87d1b18e2786f", null ],
       [ "lookup_in_dir", "namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c", null ],
+      [ "lookup_in_dir_at", "namespacekernel_1_1fat32.html#ae93a85e2f3b7cee00022a3e34747d9ac", null ],
       [ "name_to_short_name", "namespacekernel_1_1fat32.html#a85225d8c344ad98eda0442d972d0eb31", null ],
       [ "read_dir_entry", "namespacekernel_1_1fat32.html#a26ce5bbfe1af8c3aa136fb2f57743383", null ],
       [ "read_file", "namespacekernel_1_1fat32.html#ab2b90c3fd678120edc03be6e4d00a917", null ],
@@ -117,6 +119,14 @@ var namespacekernel =
       [ "virtio_net_probe", "namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406", null ]
     ] ],
     [ "profiling", "namespacekernel_1_1profiling.html", "namespacekernel_1_1profiling" ],
+    [ "ramdiskd", "namespacekernel_1_1ramdiskd.html", [
+      [ "boot_allocate", "namespacekernel_1_1ramdiskd.html#a7fab16cb0ac911120903505f0e8420c8", null ],
+      [ "get_ramdiskd_pid", "namespacekernel_1_1ramdiskd.html#aea99d9e364a047a1ee745f3e576941ba", null ],
+      [ "grant_storage", "namespacekernel_1_1ramdiskd.html#a7399d91009f4b5c6291e2ac98640b63a", null ],
+      [ "is_ramdiskd_task", "namespacekernel_1_1ramdiskd.html#a8f3ac42fd60f44bb7f2196a5b3e5f180", null ],
+      [ "regrant", "namespacekernel_1_1ramdiskd.html#a2470dc94f6491a4f071d38f86aa94b73", null ],
+      [ "set_ramdiskd_pid", "namespacekernel_1_1ramdiskd.html#a6596be5d5c7bfbb3ee58fc96ffb1c237", null ]
+    ] ],
     [ "shm", "namespacekernel_1_1shm.html", "namespacekernel_1_1shm" ],
     [ "smp", "namespacekernel_1_1smp.html", [
       [ "ap_count", "namespacekernel_1_1smp.html#ab58969d3c15f3181c4317a6491b56b12", null ],

@@ -31,6 +31,7 @@
 #include <kernel/arch/hal/idt.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/ipc/ipc.hpp>
@@ -113,7 +114,8 @@ AhciDriver::~AhciDriver() {
         port_write(p, PORT_IS, 0xFFFFFFFF); // ack any pending status
     }
 
-    // Stop ports and free memory
+    // Stop ports and free memory — quiesce DMA first so no in-flight
+    // command writes into pages after they are freed.
     for (uint8_t p = 0; p < port_count_; ++p) {
         port_write(p, PORT_CMD, 0);
         for (uint8_t s = 0; s < AHCI_MAX_CMDS; ++s) {
@@ -121,7 +123,13 @@ AhciDriver::~AhciDriver() {
                 size_t pages =
                     (sizeof(ahci::CmdTable) + PAGE_SIZE - 1) / PAGE_SIZE;
                 for (size_t i = 0; i < pages; ++i) {
-                    VMM::unmap_page(ct_phys_[p][s] + i * PAGE_SIZE);
+                    // Issue #366 Q2b: log-and-continue on holes (teardown
+                    // must complete); the free below is unconditional.
+                    if (VMM::unmap_page_err(ct_phys_[p][s] + i * PAGE_SIZE) !=
+                        kernel::errors::VMM_ERR_OK) {
+                        Logger::error("ahci: teardown unmap miss ct %u:%u",
+                                      p, s);
+                    }
                     PMM::free_page(ct_phys_[p][s] + i * PAGE_SIZE);
                 }
             }
@@ -134,12 +142,20 @@ AhciDriver::~AhciDriver() {
                 (sizeof(ahci::CmdHeader) * AHCI_MAX_CMDS + PAGE_SIZE - 1) /
                 PAGE_SIZE;
             for (size_t i = 0; i < pages; ++i) {
-                VMM::unmap_page(cl_phys_[p] + i * PAGE_SIZE);
+                // Issue #366 Q2b: log-and-continue (see above).
+                if (VMM::unmap_page_err(cl_phys_[p] + i * PAGE_SIZE) !=
+                    kernel::errors::VMM_ERR_OK) {
+                    Logger::error("ahci: teardown unmap miss cl %u", p);
+                }
                 PMM::free_page(cl_phys_[p] + i * PAGE_SIZE);
             }
         }
         if (rfis_phys_[p]) {
-            VMM::unmap_page(rfis_phys_[p]);
+            // Issue #366 Q2b: log-and-continue (see above).
+            if (VMM::unmap_page_err(rfis_phys_[p]) !=
+                kernel::errors::VMM_ERR_OK) {
+                Logger::error("ahci: teardown unmap miss rfis %u", p);
+            }
             PMM::free_page(rfis_phys_[p]);
         }
     }
@@ -170,7 +186,8 @@ bool AhciDriver::port_wait_ready(uint8_t port, uint64_t timeout_us) {
 }
 
 bool AhciDriver::port_init(uint8_t port) {
-    // Check port status
+    // An offline port has no device — skip init instead of programming
+    // command tables nobody will complete.
     uint32_t ssts = port_read(port, PORT_SSTS);
     uint8_t det = ssts & SSTS_DET_MASK;
     if (det != SSTS_DET_ONLINE) {
@@ -215,7 +232,14 @@ bool AhciDriver::port_init(uint8_t port) {
                                     "ahci command list OOM", port);
         return false;
     }
-    VMM::map_page(HHDM_OFFSET + cl_phys_[port], cl_phys_[port], false);
+    // Issue #366 Q1a: fail fast on table-OOM (was a silent drop).
+    if (VMM::map_page_err(HHDM_OFFSET + cl_phys_[port], cl_phys_[port],
+                          false) != kernel::errors::VMM_ERR_OK) {
+        Logger::error("ahci: port %u failed to map command list", port);
+        PMM::free_page(cl_phys_[port]);
+        cl_phys_[port] = 0;
+        return false;
+    }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     cl_virt_[port] =
         reinterpret_cast<ahci::CmdHeader *>(HHDM_OFFSET + cl_phys_[port]);
@@ -233,7 +257,16 @@ bool AhciDriver::port_init(uint8_t port) {
         cl_phys_[port] = 0;
         return false;
     }
-    VMM::map_page(HHDM_OFFSET + rfis_phys_[port], rfis_phys_[port], false);
+    // Issue #366 Q1a: fail fast on table-OOM (was a silent drop).
+    if (VMM::map_page_err(HHDM_OFFSET + rfis_phys_[port], rfis_phys_[port],
+                          false) != kernel::errors::VMM_ERR_OK) {
+        Logger::error("ahci: port %u failed to map RFIS", port);
+        PMM::free_page(rfis_phys_[port]);
+        rfis_phys_[port] = 0;
+        PMM::free_page(cl_phys_[port]);
+        cl_phys_[port] = 0;
+        return false;
+    }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     rfis_virt_[port] =
         reinterpret_cast<ahci::ReceivedFis *>(HHDM_OFFSET + rfis_phys_[port]);
@@ -250,8 +283,14 @@ bool AhciDriver::port_init(uint8_t port) {
         for (uint8_t r = 0; r < AHCI_MAX_CMDS; ++r) {
             if (ct_phys_[port][r]) {
                 for (size_t i = 0; i < ct_pages; ++i) {
-                    VMM::unmap_page(HHDM_OFFSET + ct_phys_[port][r] +
-                                    i * PAGE_SIZE);
+                    // Issue #366 Q2b: log-and-continue (rollback must
+                    // complete); the free below is unconditional.
+                    if (VMM::unmap_page_err(HHDM_OFFSET + ct_phys_[port][r] +
+                                            i * PAGE_SIZE) !=
+                        kernel::errors::VMM_ERR_OK) {
+                        Logger::error("ahci: rollback unmap miss ct %u",
+                                      port);
+                    }
                     PMM::free_page(ct_phys_[port][r] + i * PAGE_SIZE);
                 }
                 ct_phys_[port][r] = 0;
@@ -262,12 +301,20 @@ bool AhciDriver::port_init(uint8_t port) {
             }
         }
         if (cl_phys_[port]) {
-            VMM::unmap_page(HHDM_OFFSET + cl_phys_[port]);
+            // Issue #366 Q2b: log-and-continue (see above).
+            if (VMM::unmap_page_err(HHDM_OFFSET + cl_phys_[port]) !=
+                kernel::errors::VMM_ERR_OK) {
+                Logger::error("ahci: rollback unmap miss cl %u", port);
+            }
             PMM::free_page(cl_phys_[port]);
             cl_phys_[port] = 0;
         }
         if (rfis_phys_[port]) {
-            VMM::unmap_page(HHDM_OFFSET + rfis_phys_[port]);
+            // Issue #366 Q2b: log-and-continue (see above).
+            if (VMM::unmap_page_err(HHDM_OFFSET + rfis_phys_[port]) !=
+                kernel::errors::VMM_ERR_OK) {
+                Logger::error("ahci: rollback unmap miss rfis %u", port);
+            }
             PMM::free_page(rfis_phys_[port]);
             rfis_phys_[port] = 0;
         }
@@ -281,8 +328,17 @@ bool AhciDriver::port_init(uint8_t port) {
             return false;
         }
         for (size_t i = 0; i < ct_pages; ++i) {
-            VMM::map_page(HHDM_OFFSET + ct_phys_[port][s] + i * PAGE_SIZE,
-                          ct_phys_[port][s] + i * PAGE_SIZE, false);
+            // Issue #366 Q1a: fail fast on table-OOM via the existing
+            // rollback (was a silent drop).
+            if (VMM::map_page_err(HHDM_OFFSET + ct_phys_[port][s] +
+                                      i * PAGE_SIZE,
+                                  ct_phys_[port][s] + i * PAGE_SIZE,
+                                  false) != kernel::errors::VMM_ERR_OK) {
+                Logger::error("ahci: port %u failed to map cmd table %u",
+                              port, s);
+                rollback();
+                return false;
+            }
         }
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         ct_virt_[port][s] =
@@ -418,7 +474,8 @@ bool AhciDriver::start_cmd(uint8_t port, uint8_t slot, uint8_t ata_cmd,
     ch->ctbau =
         static_cast<uint32_t>((ct_phys_[port][slot] >> 32) & 0xFFFFFFFF);
 
-    // Ensure writes are visible before issuing command
+    // Fence: command-table writes must be visible to the HBA before the
+    // CI doorbell — otherwise it DMAs stale descriptors.
     kernel::atomic_fence();
 
     // Issue command
@@ -860,7 +917,16 @@ bool AhciDriver::init() {
     uint64_t abar_end =
         ((abar_phys_ + abar_size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1));
     for (uint64_t page = abar_start; page < abar_end; page += PAGE_SIZE) {
-        VMM::map_page(HHDM_OFFSET + page, page, false);
+        // Issue #366 Q1a: fail fast on table-OOM (was a silent drop);
+        // unmap the already-mapped prefix (void unmaps stay).
+        if (VMM::map_page_err(HHDM_OFFSET + page, page, false) !=
+            kernel::errors::VMM_ERR_OK) {
+            Logger::error("ahci: ABAR map failed at 0x%lx", page);
+            for (uint64_t u = abar_start; u < page; u += PAGE_SIZE) {
+                VMM::unmap_page(HHDM_OFFSET + u);
+            }
+            return false;
+        }
     }
     abar_virt_ = HHDM_OFFSET + abar_phys_;
 

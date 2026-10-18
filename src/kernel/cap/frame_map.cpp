@@ -147,7 +147,7 @@ uint64_t FrameUserMap::map(kernel::TaskControlBlock &task, cap::FrameCap &fc) {
     return va;
 }
 
-bool FrameUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) {
+bool FrameUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) noexcept {
     // Find the slot by VA under the lock; ownership + generation revalidated
     // (a recycled task id or stale VA must not unmap another task's mapping).
     int16_t idx = -1;
@@ -181,8 +181,14 @@ bool FrameUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) {
     // this slot (and release its pin) while we unmap outside the lock.  Only
     // the path that observes the occupied true->false transition releases the
     // slot's pin — releasing unconditionally is a double-release.
-    for (size_t i = 0; i < pages; ++i)
-        VMM::unmap_frame_from_cap(va + i * arch::PAGE_SIZE, pml4);
+    for (size_t i = 0; i < pages; ++i) {
+        // Issue #366 Q2b: fold-and-ignore — a hole (already unmapped by a
+        // concurrent invalidate, or a never-mapped tail) is benign here;
+        // the slot protocol, not the PTE, is authoritative, and the pin
+        // below is released exactly once on the slot transition.
+        (void)VMM::unmap_frame_from_cap_err(fc, va + i * arch::PAGE_SIZE,
+                                            pml4);
+    }
     bool cleared = false;
     {
         SpinLockGuard<sync::SpinLock> guard(s_lock_);
@@ -228,8 +234,12 @@ void FrameUserMap::invalidate_cap(cap::FrameCap *fc) {
         if (hit) {
             // Clear EVERY page of a multi-page mapping (map_frame_from_cap
             // mapped fc->count pages; unmap_frame_from_cap clears one PTE).
+            // Issue #366 Q2b: fold-and-ignore — a hole (concurrent unmap
+            // already cleared the PTE) is benign; slot occupancy, not the
+            // PTE, is authoritative here.
             for (size_t j = 0; j < pages; ++j)
-                VMM::unmap_frame_from_cap(va + j * arch::PAGE_SIZE, pml4);
+                (void)VMM::unmap_frame_from_cap_err(
+                    match, va + j * arch::PAGE_SIZE, pml4);
             match->release(); // drop the slot's pin (outside the lock)
         }
     }
@@ -259,8 +269,13 @@ void FrameUserMap::drain_task(kernel::TaskControlBlock &task) {
             // Clear EVERY page of a multi-page mapping before the owning
             // task's PML4 is freed (map_frame_from_cap mapped fc->count
             // pages; unmap_frame_from_cap clears one PTE).
+            // Issue #366 Q2b: fold-and-ignore — teardown must never fail
+            // on holes (task death mid-map); the slot was already marked
+            // unoccupied under the lock.
             for (size_t j = 0; j < pages; ++j)
-                VMM::unmap_frame_from_cap(va + j * arch::PAGE_SIZE, pml4);
+                (void)VMM::unmap_frame_from_cap_err(fc,
+                                                    va + j * arch::PAGE_SIZE,
+                                                    pml4);
             fc->release(); // drop the slot's pin (outside the lock)
         }
     }
@@ -317,7 +332,7 @@ size_t FrameUserMap::live_count() {
     return n;
 }
 
-bool FrameUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) {
+bool FrameUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) noexcept {
     SpinLockGuard<sync::SpinLock> guard(s_lock_);
     for (size_t i = 0; i < kMaxMaps; ++i)
         if (s_slots_[i].occupied && s_slots_[i].va == va &&

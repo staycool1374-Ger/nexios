@@ -21,8 +21,6 @@
 /// @file keyboard.hpp
 /// @brief PS/2 keyboard driver (x86_64) / no-op stubs (AArch64, RISC-V).
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/sync/spsc_ring.hpp>
 #include <kernel/nexios_config.h>
@@ -47,6 +45,14 @@ class Keyboard {
     /// @param[out] c Output character.
     /// @return true if a character was available.
     static bool getchar(char &c);
+    /// @brief Forward a raw scancode to the iocd daemon (issue #340 P1).
+    /// Task context only: returns false in ISR context (never IPC-sends
+    /// from an interrupt), when no daemon runs, or when the send is
+    /// refused — the caller falls back to the legacy ring path.
+    /// @param scancode Raw PS/2 set-1 byte (press or release).
+    /// @return true when the daemon accepted it (caller must skip the
+    ///         ring push — never both), false otherwise.
+    static bool try_forward_to_iocd(uint8_t scancode);
     /// @brief Read multiple characters into a buffer (non-blocking).
     /// @param buf Output buffer.
     /// @param len Maximum number of characters to read.

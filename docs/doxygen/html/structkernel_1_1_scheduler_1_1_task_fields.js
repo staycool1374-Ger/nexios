@@ -11,6 +11,7 @@ var structkernel_1_1_scheduler_1_1_task_fields =
     [ "edf_exempt", "structkernel_1_1_scheduler_1_1_task_fields.html#a00d9fba27f08499499eb1fe397a20cff", null ],
     [ "edf_next", "structkernel_1_1_scheduler_1_1_task_fields.html#a46a67df21dda58b1f1b3d7e2e2f874f1", null ],
     [ "edf_prev", "structkernel_1_1_scheduler_1_1_task_fields.html#a1fd45030d04709d36f055fbea992cb54", null ],
+    [ "exec_window_start_tick", "structkernel_1_1_scheduler_1_1_task_fields.html#a720270e149d4a15a2dafc51580fd0cea", null ],
     [ "executed_ticks", "structkernel_1_1_scheduler_1_1_task_fields.html#a64ac58a847682a5727b3182b7060de3b", null ],
     [ "exit_code", "structkernel_1_1_scheduler_1_1_task_fields.html#ac06af7f69711aa38a8eacdf18402b41a", null ],
     [ "id", "structkernel_1_1_scheduler_1_1_task_fields.html#a07e1d4833f77b1a0063ff8052e7643a3", null ],
