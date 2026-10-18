@@ -803,6 +803,20 @@ class VMM {
                                                size_t page_count, bool user,
                                                uint64_t pml4_phys,
                                                bool executable);
+#if defined(CONFIG_DEBUG)
+    /// @brief Arms the test-only table-alloc fault injector (issue #361).
+    ///        The n-th table allocation attempt of the next
+    ///        map_phys_range_try() call fails instead of allocating.
+    ///        1-based; 0 disarms.  Single-shot: firing disarms.
+    ///        Test-only; absent in release.  Caller must hold IrqGuard.
+    static void test_arm_table_alloc_fail_at(size_t alloc_index) noexcept;
+    /// @brief Disarms the injector unconditionally (issue #361).  Test-only.
+    static void test_disarm_table_alloc_fail() noexcept;
+#endif
+    /// @brief Clears injector state for snapshot restore (issue #361).
+    ///        Unconditional decl so test_isolate.cpp needs no #if;
+    ///        release def is a no-op.
+    static void test_table_alloc_fail_snapshot_reset() noexcept;
   private:
     /// @brief Walks or creates a page-table entry at the given level.
     /// @param table Pointer to the current-level page table.
@@ -812,6 +826,14 @@ class VMM {
     /// @return Pointer to the next-level table, or nullptr.
     static uint64_t *get_table(uint64_t *table, size_t index, bool create,
                                bool user_alloc = false);
+#if defined(CONFIG_DEBUG)
+    /// @brief Resets the per-call countdown at range-map entry (issue #361).
+    ///        Called by map_phys_range_try(); not for direct test use.
+    static void test_table_alloc_fail_begin_call() noexcept;
+    /// @brief Returns true when the imminent alloc must fail (issue #361).
+    ///        Call only where an alloc is about to happen.  Test-only.
+    [[nodiscard]] static bool test_maybe_fail_table_alloc() noexcept;
+#endif
     /// @brief Walk to the leaf PTE for a VA without allocating
     ///        (issue #271 P0 — shared by the RO primitive + inspector).
     /// @return Pointer to the leaf entry, or nullptr on any missing

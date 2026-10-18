@@ -118,6 +118,7 @@ JARVIS_TEST(page_tables_free_pages_on_cleanup, "PRE: none | POST: none") {
     t->cleanup();
     JARVIS_ASSERT(t->page_table_ == 0);
     JARVIS_ASSERT(t->user_stack_ == 0);
+    delete t; // free the TCB block (cleanup only tears down resources)
     JARVIS_TEST_PASS();
 }
 

@@ -42,6 +42,11 @@ bool VMM::identity_modified_ = false;
 // Fault-injection mask for vmm_step() (issue #347 Slice D, declared in
 // vmm_path.hpp). Test-only; absent in release.
 uint64_t g_test_skip_vmm_step = 0;
+// Countdown state for the test-only table-alloc fault injector
+// (issue #361; VMM:: API declared in vmm.hpp). Test-only; absent in
+// release. fail_at == 0 means disarmed; firing is single-shot.
+static size_t g_test_table_fail_at = 0;
+static size_t g_test_table_fail_remaining = 0;
 #endif
 
 /// @brief Initialise the VMM: capture current PML4, zero residual bootloader
@@ -134,8 +139,47 @@ void VMM::init() {
 /// WCET: intentional flat walk/split (bounded depth, at most one table
 /// alloc per call); a failed alloc returns nullptr and the caller drops
 /// the mapping through note_silent_drop_once (never retries in a loop).
+#if defined(CONFIG_DEBUG)
+// Test-only table-alloc fault injector (issue #361).  Countdown covers
+// allocation ATTEMPTS only: every gate sits after the presence/split-need
+// checks, immediately before the PMM::alloc_* call, so present-table hits
+// never consume the countdown and fail-at-n is deterministic.
+void VMM::test_arm_table_alloc_fail_at(size_t alloc_index) noexcept {
+    g_test_table_fail_at = alloc_index;
+    g_test_table_fail_remaining = alloc_index;
+}
+
+void VMM::test_disarm_table_alloc_fail() noexcept {
+    g_test_table_fail_at = 0;
+    g_test_table_fail_remaining = 0;
+}
+
+void VMM::test_table_alloc_fail_begin_call() noexcept {
+    g_test_table_fail_remaining = g_test_table_fail_at;
+}
+
+bool VMM::test_maybe_fail_table_alloc() noexcept {
+    if (g_test_table_fail_at == 0 || g_test_table_fail_remaining == 0)
+        return false;
+    --g_test_table_fail_remaining;
+    if (g_test_table_fail_remaining == 0) {
+        g_test_table_fail_at = 0; // single-shot: firing disarms
+        return true;
+    }
+    return false;
+}
+#endif
+
+void VMM::test_table_alloc_fail_snapshot_reset() noexcept {
+#if defined(CONFIG_DEBUG)
+    g_test_table_fail_at = 0;
+    g_test_table_fail_remaining = 0;
+#endif
+}
+
 uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
                          bool user_alloc) {
+
     if (table[index] & PAGE_PRESENT) {
         // Arch child-table decode (issue #363 P2: Sv39 PTE codec vs
         // frame mask).
@@ -145,6 +189,10 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
         } else if (vmm_arch_split_needed(table[index])) {
             if (!create)
                 return nullptr;
+#if defined(CONFIG_DEBUG)
+            if (test_maybe_fail_table_alloc()) // issue #361: injected fault
+                return nullptr;
+#endif
             uint64_t new_page = PMM::alloc_page_table();
             if (!new_page)
                 return nullptr;
@@ -167,6 +215,10 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
     if (!create)
         return nullptr;
 
+#if defined(CONFIG_DEBUG)
+    if (test_maybe_fail_table_alloc()) // issue #361: injected fault
+        return nullptr;
+#endif
     uint64_t new_page =
         user_alloc ? PMM::alloc_user_page() : PMM::alloc_page_table();
     if (!new_page)

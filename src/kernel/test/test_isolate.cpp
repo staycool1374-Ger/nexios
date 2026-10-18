@@ -946,6 +946,11 @@ void snapshot_restore(const char *test_name) {
     // Reset the event-timer wheel (issue #17) so a test that armed timers
     // can never leak a live entry or a reusable handle into the next cycle.
     kernel::time::TimerWheel::snapshot_reset();
+    // Reset the VMM table-alloc fault injector (issue #361) so an armed
+    // injector can never leak into the next cycle (single-shot fire and
+    // RAII-guard teardown already disarm; this is the abort backstop).
+    // Unconditional call — release def is a no-op.
+    VMM::test_table_alloc_fail_snapshot_reset();
     // Reset the POSIX timer/timerfd registries + clock anchor (issue #76)
     // so timer slots, waiter registrations, and the REALTIME latch never
     // leak across snapshot cycles (wheel reset above already disarmed all

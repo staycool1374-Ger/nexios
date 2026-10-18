@@ -48,6 +48,7 @@
 - One-shot safety arms must retain, never rely on re-detection (#324): a disarming scan or TERMINATED-skipping scan never re-fires, so a spared kill intent is lost until reap — compact-and-retain with a generation guard; same handshake closes lock-free check-then-act races (skip is the safe direction).
 - Harness task is persistent suite state (#360): keep its CNode across snapshot_restore (daemon parity, #275) + pre-create it before the baseline capture, or every harness ensure_cspace mints a +1 CNode residual; kept pointers stay safe because the pool rewind resets slot bytes to baseline-empty.
 - Never re-create what the factory installs (#371): create() ships a private cloned PML4 (MP-1.2) — a manual re-clone orphans the factory page (+1 PMM/test); drop creator refs on every cap path (creator/slot/pin ledger — a missing release reads as +1 Cap/MemPool, #360/#371).
+- Fault injection must fail ATTEMPTS, never presence (#361): countdown gates go immediately before PMM::alloc_*, after presence/split-need checks, or present-table hits consume the count nondeterministically; per-call reset + single-shot auto-disarm + RAII guard + snapshot_reset backstop; free_pages_ref deltas are measured post-teardown (frames freed after capture read +N, not zero).
 - Checkout-scoping is naming-convention only (#372): TAG = dir basename, so same-basename checkouts in different parents still collide — keep dirnames unique per host; GDB :1234 stub is NOT namespaced (debug-test/rr-replay from two checkouts fight over the port).
 - Aggregate splits are pure regroups: script-count moved groups (each exactly once), Σ(new dump-counts)==old value, measured beats hand sums; pre-QEMU SIGTERM with zero guest output is a transient harness kill — identical rerun green, record both rows (#364).
 
@@ -61,6 +62,12 @@
 ```
 
 ## Entries
+
+### #361 — deterministic table-alloc fault injector + runtime rollback test (audit APPROVED, commit pending)
+
+- **Learned:** (1) A partial-failure injector must gate allocation ATTEMPTS (post presence/split-need checks, pre-alloc) — gating lookups makes consumption order-dependent and nondeterministic. (2) A never-installed VA inside a boot huge window still resolves via the huge entry: asserting it clear mistakes the baseline mapping for a rollback leak — prove non-installation via the untouched PD slot instead. (3) PMM-delta captures that precede frame frees must expect +N (freed-after-capture), not zero; print each conjunct separately before folding into one assert, or a single FAIL line hides which limb broke.
+- **Adapted:** VMM injector API (arm/disarm/begin/maybe + snapshot reset, x86_64 _try-path 3 gates, release no-op/absent) + vmm_map_range_rollback_segment (arm(2) across a 2 MiB boundary) + count rows (vmm_path 5, core_tracing 22); gates green incl. release-build-clean. Report `audits/report-2026-10-18T13-15-11Z.md`.
+- **Style re-surface:** [[nodiscard]] on the status-returning gate; Doxygen on the VMM API decls; release/test-behavior parity (§6: gate code compiled out, trivial-pass branches).
 
 ### #371 — capability residual WARNs (PMM +1 x5, small-cap +1) (audits APPROVED, commit landed)
 

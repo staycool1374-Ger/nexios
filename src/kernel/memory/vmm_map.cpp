@@ -226,6 +226,10 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
     }
 
     if (vmm_arch_split_needed(pd[pd_idx])) {
+#if defined(CONFIG_DEBUG)
+        if (VMM::test_maybe_fail_table_alloc()) // issue #361: injected fault
+            return errors::VMM_ERR_PAGE_ALLOC;
+#endif
         uint64_t new_pt_phys = PMM::alloc_user_page();
         if (!new_pt_phys) [[unlikely]] {
             note_silent_drop_once("[MAP-DROP] split ", virt_addr);

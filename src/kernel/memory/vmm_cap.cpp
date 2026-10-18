@@ -50,6 +50,9 @@ errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
                                              size_t page_count, bool user,
                                              uint64_t pml4_phys,
                                              bool executable) {
+#if defined(CONFIG_DEBUG)
+    test_table_alloc_fail_begin_call(); // issue #361: per-call countdown
+#endif
     if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0 ||
         (phys_addr & (arch::PAGE_SIZE - 1)) != 0) {
         vmm_step(VmmMapSteps::Reject); // issue #347 Slice D
