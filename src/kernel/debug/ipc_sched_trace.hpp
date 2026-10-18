@@ -115,3 +115,18 @@ inline void fmt_str(char *buf, int &pos, const char *s) {
     } while (0)
 
 #endif // CONFIG_DEBUG_IPC_SCHED
+
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+// Deferred-switch H2 event ring (issue #368): the single definition of
+// h2_record/h2_dump_ring lives in task/scheduler_debug.cpp (TU-local ring
+// storage, external-linkage functions).  Declared here so every H2_REC user
+// (global_state.cpp, scheduler*.cpp via core/global_state.hpp) sees it.
+namespace kernel::debug {
+/// @brief Append one deferred-switch event to the H2 ring (debug-only).
+/// @param ev Event class (H2_EV_* in core/global_state.hpp).
+/// @param a/b/c Event payload words (meaning selected by ev).
+void h2_record(uint64_t ev, uint64_t a, uint64_t b, uint64_t c) noexcept;
+/// @brief Dump the H2 ring to the debug console (GDB/post-hang use).
+void h2_dump_ring() noexcept;
+} // namespace kernel::debug
+#endif // CONFIG_DEBUG_IPC_SCHED

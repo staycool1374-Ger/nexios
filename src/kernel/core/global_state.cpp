@@ -30,6 +30,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_errors.hpp>
+#include <kernel/task/scheduler_integrity.hpp> // issue #368: task_stack_ptr
 #include <lib/constants.hpp>
 
 // Boot stack bounds (linker symbols).
@@ -285,7 +286,7 @@ extern "C" void scheduler_on_context_switch() noexcept {
 
     if (id == 1) {
 
-        uint64_t nsp = task_stack_ptr(t);
+        uint64_t nsp = sched_verify::task_stack_ptr(t);
 
         const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
 
@@ -321,7 +322,7 @@ extern "C" void scheduler_on_context_switch() noexcept {
 
     kernel::Logger::raw_write(" tick=");
 
-    kernel::Logger::print_dec(kernel::Timer::ticks());
+    kernel::Logger::print_dec(arch::Timer::ticks());
 
     kernel::Logger::raw_write("\n");
 
@@ -345,7 +346,7 @@ extern "C" void scheduler_on_context_switch() noexcept {
 
 #if defined(CONFIG_DEBUG_IPC_SCHED)
 
-    current_cpu().last_switch_tick = kernel::Timer::ticks();
+    current_cpu().last_switch_tick = arch::Timer::ticks();
 
 #endif
 
@@ -371,7 +372,7 @@ extern "C" void scheduler_diag_pre_save() noexcept {
     kernel::Logger::print_dec(
         __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED));
     kernel::Logger::raw_write(" tick=");
-    kernel::Logger::print_dec(kernel::Timer::ticks());
+    kernel::Logger::print_dec(arch::Timer::ticks());
     kernel::Logger::raw_write("\n");
 #else
     (void)0;
@@ -401,7 +402,7 @@ extern "C" void scheduler_diag_depth_skip() noexcept {
     kernel::Logger::raw_write(" if=");
     kernel::Logger::print_dec((rfl & 0x200) ? 1u : 0u);
     kernel::Logger::raw_write(" tick=");
-    kernel::Logger::print_dec(kernel::Timer::ticks());
+    kernel::Logger::print_dec(arch::Timer::ticks());
     kernel::Logger::raw_write("\n");
 #else
     (void)0;
@@ -445,7 +446,7 @@ extern "C" void scheduler_diag_rsp_abort() noexcept {
     kernel::Logger::raw_write(" if=");
     kernel::Logger::print_dec((rfl & 0x200) ? 1u : 0u);
     kernel::Logger::raw_write(" tick=");
-    kernel::Logger::print_dec(kernel::Timer::ticks());
+    kernel::Logger::print_dec(arch::Timer::ticks());
     kernel::Logger::raw_write("\n");
 #else
     (void)0;
@@ -486,7 +487,7 @@ extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
         kernel::Logger::raw_write(" if=");
         kernel::Logger::print_dec((rfl & 0x200) ? 1u : 0u);
         kernel::Logger::raw_write(" tick=");
-        kernel::Logger::print_dec(kernel::Timer::ticks());
+        kernel::Logger::print_dec(arch::Timer::ticks());
         kernel::Logger::raw_write("\n");
     }
 #endif
