@@ -98,6 +98,13 @@ uint64_t VMM::vmm_arch_encode_ro(uint64_t leaf, bool executable) {
     return leaf & ~PAGE_WRITE;
 }
 
+uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
+    // Issue #376: kernel text stays executable — set X cleared by the
+    // data-default 5-arg map (W was already cleared by encode_ro).
+    // Kernel-half only.
+    return leaf | PAGE_EXEC;
+}
+
 bool VMM::vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out) {
     bool ro = ((leaf & PAGE_READ) != 0) && ((leaf & PAGE_WRITE) == 0);
     if (executable_out != nullptr)

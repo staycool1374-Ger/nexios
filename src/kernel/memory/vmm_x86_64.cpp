@@ -52,10 +52,21 @@ bool VMM::vmm_arch_split_needed(uint64_t entry) {
 
 void VMM::vmm_arch_split_fill(uint64_t *new_table, uint64_t src_entry) {
     uint64_t huge_base = src_entry & kHuge2MBaseMask;
-    uint64_t base_flags = src_entry & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
+    // Issue #376 (boot W^X): carry NX into the split leaves. A post-harden
+    // split of an NX page must not silently re-execute it; RO (W-clear) was
+    // already carried by the mask. PAT/PWT/PCD/G are left at the boot
+    // default (not present on boot huge entries by construction).
+    uint64_t base_flags = src_entry & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER |
+                                       arch::ArchPageTable::NX);
     for (size_t i = 0; i < 512; ++i) {
         new_table[i] = (huge_base + i * 0x1000) | base_flags;
     }
+}
+
+uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
+    // Issue #376: text stays executable — clear NX set by the data-default
+    // 5-arg map. Kernel-half only; never applied to user pages.
+    return leaf & ~arch::ArchPageTable::NX;
 }
 
 uint64_t VMM::vmm_arch_table_link(uint64_t new_phys) {

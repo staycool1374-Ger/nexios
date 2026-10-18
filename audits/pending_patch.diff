@@ -1,539 +1,492 @@
-diff --git a/src/kernel/driver/iocd.hpp b/src/kernel/driver/iocd.hpp
-index 690bf09d7..a44b83813 100644
---- a/src/kernel/driver/iocd.hpp
-+++ b/src/kernel/driver/iocd.hpp
-@@ -33,6 +33,7 @@ static constexpr uint64_t IOCD_MMIO_UNMAP = 203;
- static constexpr uint64_t IOCD_KEYBOARD_READ = 204;
- static constexpr uint64_t IOCD_SERIAL_READ = 205;
- static constexpr uint64_t IOCD_SERIAL_WRITE = 206;
-+static constexpr uint64_t IOCD_UNREGISTER_DEVICE = 207;
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index eb69d5457..4a6ef1a52 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -1578,6 +1578,10 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+     // all boot-time map_page work (drivers, kslot window) is done, and no
+     // task exists yet.  Fork/exec converge toward the live root; drift
+     // from this baseline is diagnosed, never fatal (paper §4 row 2).
++    // Issue #376 (boot-text W^X): harden boot-established image
++    // permissions (text RX / rodata RO+NX / data+bss RW+NX) BEFORE the
++    // snapshot so the template and all later clones inherit them.
++    kernel::VMM::harden_kernel_half();
+     kernel::VMM::snapshot_kernel_template();
+     boot_mark(kernel::BootStage::TABLE_REBUILD);
+ #if defined(CONFIG_DEBUG)
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index cf21d5f11..080cb8af0 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -129,6 +129,82 @@ void VMM::init() {
+ #endif
+ }
  
- /// @brief IOCD IPC request message.
- struct Msg {
-@@ -40,6 +41,23 @@ struct Msg {
-     uint64_t args[7]; ///< Type-specific arguments.
- };
- 
-+/// @brief MMIO policy protocol (issue #303 item 4). The daemon authorizes
-+///        WHICH registered driver may use WHICH bar index; the kernel
-+///        still enforces WHAT gets mapped via MEMORY-type MmioCaps, and
-+///        MmioUserMap::drain_task owns PTE teardown on task exit.
-+///        - MMIO_MAP: args[0]=client pid (self-asserted, same trust model
-+///          as KEYBOARD_READ), args[1]=bar index in [0, 4). Reply 0 on
-+///          grant (idempotent reuse), -1 on unregistered pid, out-of-range
-+///          bar, or full grant table.
-+///        - MMIO_UNMAP: args[0]=client pid, args[1]=bar index. Reply 0 on
-+///          release, -1 when no live record exists.
-+///        - UNREGISTER_DEVICE: args[0]=pid. Removes the registration and
-+///          drops its grant records (device exit path); -1 if unknown.
-+///        Routing caveat: the daemon replies to args[0], never to the IPC
-+///        sender (same self-asserted trust model as KEYBOARD_READ). A
-+///        request with a bogus args[0] strands the requester's send_sync
-+///        — callers must always pass their own live pid.
++extern "C" {
++// Linker section bounds (4K-aligned starts on all arches; see
++// linker/linker_{x86_64,aarch64,riscv64}.ld). Mirrors the integrity.hpp
++// _text_start/_text_end declaration idiom.
++extern uint64_t _text_start[];
++extern uint64_t _text_end[];
++extern uint64_t _rodata_start[];
++extern uint64_t _rodata_end[];
++extern uint64_t _data_start[];
++extern uint64_t _bss_end[];
++}
 +
- /// @brief IOCD IPC reply message.
- struct Reply {
-     int64_t result;   ///< Return code (negative on error).
-diff --git a/src/kernel/test/test_driver.cpp b/src/kernel/test/test_driver.cpp
-index e5a672c8d..262136c82 100644
---- a/src/kernel/test/test_driver.cpp
-+++ b/src/kernel/test/test_driver.cpp
-@@ -23,7 +23,17 @@
- #include <logger.hpp>
- #include <string.hpp>
- #include <kernel/driver/driver.hpp>
-+#include <kernel/driver/iocd.hpp>
- #include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/ipc/ipc.hpp>
-+#include <kernel/cap/cap.hpp>
-+#include <kernel/cap/cap_types.hpp>
-+#include <kernel/cap/mmio.hpp>
-+#include <kernel/memory/pmm.hpp>
-+#include <kernel/memory/vmm.hpp>
-+#include <kernel/syscall/syscall.hpp>
-+#include <kernel/test/test_sched_helpers.hpp>
- #include <kernel/arch/serial.hpp>
- #include <kernel/arch/keyboard.hpp>
++void VMM::harden_kernel_half() {
++    // Issue #376 (boot-text W^X epic remainder): convert the RWX
++    // boot-established mappings over the image to text RX / rodata RO+NX /
++    // data+bss RW+NX. Runs once at end of bring-up (single-threaded BSP,
++    // IRQs off, PMM up) BEFORE snapshot_kernel_template() so the template
++    // and every later clone inherit hardened flags by value. Identity map
++    // and non-image HHDM (boot code/stack, AP trampoline, boot structs)
++    // stay RWX by design. Any mapping failure panics: a half-hardened root
++    // must never boot.
++    const uint64_t pml4 = kernel_pml4_;
++    if (pml4 == 0)
++        panic("VMM: harden with null kernel PML4");
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint64_t text_start = reinterpret_cast<uint64_t>(_text_start);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint64_t text_end = reinterpret_cast<uint64_t>(_text_end);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint64_t rodata_start = reinterpret_cast<uint64_t>(_rodata_start);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint64_t rodata_end = reinterpret_cast<uint64_t>(_rodata_end);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint64_t data_start = reinterpret_cast<uint64_t>(_data_start);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint64_t bss_end = reinterpret_cast<uint64_t>(_bss_end);
++    if (!(text_start < text_end && text_end <= rodata_start &&
++          rodata_start < rodata_end && rodata_end <= data_start &&
++          data_start < bss_end))
++        panic("VMM: harden section bounds disordered");
++
++    // Per-page worker: resolve phys (unmapped holes panic — the image is
++    // contiguous), install a 4K non-user leaf via try (splits boot huge
++    // entries; split fills preserve flags), then encode the region bits.
++    // text: RX (RO encode keeps X via the kernel_text_exec hook);
++    // rodata: RO+NX; data+bss: RW+NX (no RO step).
++    auto harden_page = [&](uint64_t va, bool exec, bool read_only) {
++        const uint64_t phys = virt_to_phys_in_pml4(va, pml4);
++        if (phys == 0)
++            panic("VMM: harden unmapped image page");
++        // Text installs executable (RWX window, never NX — an NX window
++        // on the live text would triple-fault the next fetch after the
++        // map's internal TLB flush); rodata/data install non-executable
++        // (never executed, window safe). The RO encode then clears W.
++        if (map_page_in_pml4_try(va, phys, false, exec, pml4) !=
++            errors::VMM_ERR_OK)
++            panic("VMM: harden map failed");
++        uint64_t *leaf = pte_leaf_in_pml4(va, pml4);
++        if (leaf == nullptr)
++            panic("VMM: harden leaf missing after map");
++        if (read_only)
++            *leaf = vmm_arch_encode_ro(*leaf, exec);
++        if (exec)
++            *leaf = vmm_arch_kernel_text_exec(*leaf);
++        arch::ArchPageTable::tlb_flush(va);
++    };
++
++    for (uint64_t va = text_start; va < text_end; va += arch::PAGE_SIZE)
++        harden_page(va, true, true);
++    for (uint64_t va = rodata_start; va < rodata_end; va += arch::PAGE_SIZE)
++        harden_page(va, false, true);
++    for (uint64_t va = data_start; va < bss_end; va += arch::PAGE_SIZE)
++        harden_page(va, false, false);
++    arch::ArchPageTable::tlb_flush_all();
++}
++
+ /// @brief Walk or create a page-table entry at the current level.
+ /// @param table     Pointer to the current-level page table.
+ /// @param index     Entry index within @p table.
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index b9b2fe659..09dddd0f7 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -205,6 +205,21 @@ class VMM {
+     /// @note Concurrency/caller contract (issue #366): Lock: none.
+     ///       Context: boot-only (single call). SMP: boot-single-CPU.
+     static void snapshot_kernel_template();
++    /// @brief Harden boot-established kernel-half permissions to W^X
++    ///        (issue #376 epic remainder): text RX, rodata RO+NX, data/bss
++    ///        RW+NX over the linker section ranges. Splits boot huge/block
++    ///        entries to 4K as needed (split fills preserve flags, see the
++    ///        arch notes), then applies per-page bits. TLB flushed per
++    ///        page as each leaf reaches its final state, plus one full
++    ///        flush at the end. Call ONCE at end of bring-up after PMM/VMM
++    ///        init and
++    ///        BEFORE snapshot_kernel_template() so the template and every
++    ///        later clone_kernel_pml4 inherit hardened flags by value.
++    ///        Panics on any mapping failure (a half-hardened root must
++    ///        never boot). Single-threaded BSP, IRQs off; no locks taken.
++    /// @note Concurrency/caller contract (issue #366): Lock: none.
++    ///       Context: boot-only (single call). SMP: boot-single-CPU.
++    static void harden_kernel_half();
+     /// @brief True when @p a_pml4 and @p b_pml4 agree on every kernel-half
+     ///        entry (256..511), compared recursively through shared
+     ///        tables (present+equal u64, or both-absent, at each level).
+@@ -863,6 +878,14 @@ class VMM {
+     static uint64_t vmm_arch_encode_ro(uint64_t leaf, bool executable);
+     static bool vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out);
+     static bool vmm_arch_leaf_is_executable(uint64_t leaf);
++    /// @brief Ensure EL1/kernel-mode executability on a kernel-half leaf
++    ///        (issue #376 boot-text W^X). The 5-arg map path installs
++    ///        non-executable kernel leaves by policy (slice-1 data default),
++    ///        so the harden pass restores X on text leaves through this
++    ///        hook after the RO encode. Kernel-half only — never applied
++    ///        to user pages (aarch64 keeps PXN there as ret2usr backstop).
++    ///        x86_64 clears NX; aarch64 clears UXN+PXN; riscv64 sets X.
++    static uint64_t vmm_arch_kernel_text_exec(uint64_t leaf);
+     static uint64_t vmm_arch_block_base(uint64_t entry, bool huge);
+     /// @brief Walk geometry shims (issue #378): table levels from the root
+     ///        (4 on x86_64/aarch64, 3 on Sv39 riscv64) + the per-level VA
+diff --git a/src/kernel/memory/vmm_aarch64.cpp b/src/kernel/memory/vmm_aarch64.cpp
+index f196c9807..bce7946af 100644
+--- a/src/kernel/memory/vmm_aarch64.cpp
++++ b/src/kernel/memory/vmm_aarch64.cpp
+@@ -52,8 +52,12 @@ bool VMM::vmm_arch_split_needed(uint64_t entry) {
  
-@@ -98,13 +108,147 @@ JARVIS_TEST(serial_driver_in_iocd, "PRE: iocd | POST: none") {
+ void VMM::vmm_arch_split_fill(uint64_t *new_table, uint64_t src_entry) {
+     uint64_t huge_base = src_entry & kHuge2MBaseMask;
++    // Issue #376 (boot W^X): carry UXN/PXN (already) plus the AP access
++    // bits. A post-harden split of an AP_RO block must not silently
++    // re-widen it to AP_RW; same-block EL0 accessibility rides along.
+     uint64_t base_flags = src_entry & (PAGE_PRESENT | PAGE_AF | PAGE_UXN |
+-                                       PAGE_PXN | PAGE_ATTR_NORMAL);
++                                       PAGE_PXN | PAGE_ATTR_NORMAL |
++                                       PAGE_AP_USER | PAGE_AP_RO);
+     for (size_t i = 0; i < 512; ++i) {
+         // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set) — bit1=0 at L3
+         // is a block-at-invalid-level encoding and faults as a
+@@ -85,12 +89,17 @@ uint64_t VMM::vmm_arch_encode_map_leaf(uint64_t phys, bool user,
+                                         bool executable) {
+     // Same base shape as the kernel leaf; the NX policy adds UXN.
+     uint64_t out = PAGE_PRESENT | PAGE_TABLE | PAGE_AF | PAGE_ATTR_NORMAL;
+-    if (user)
++    if (user) {
+         out |= PAGE_AP_USER | PAGE_PXN;
+-    else
++        if (!executable)
++            out |= PAGE_UXN; // UXN — not executable at EL0
++    } else if (!executable) {
++        // Kernel data default (slice-1 MMIO policy): neither EL0 nor EL1
++        // may fetch. Kernel + executable (boot-text harden only — no
++        // other caller uses this combination) sets neither UXN nor PXN
++        // so EL1 can fetch; PXN must stay clear or EL1 faults.
+         out |= PAGE_UXN | PAGE_PXN;
+-    if (!executable)
+-        out |= PAGE_UXN; // UXN — not executable at EL0
++    }
+     return phys | out;
+ }
+ 
+@@ -101,9 +110,22 @@ uint64_t VMM::vmm_arch_encode_ro(uint64_t leaf, bool executable) {
+     return leaf | PAGE_AP_RO;
+ }
+ 
++uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
++    // Issue #376: kernel text stays EL1-executable — clear UXN+PXN set by
++    // the data-default 5-arg map. Kernel-half only; user pages keep PXN
++    // as the ret2usr backstop (this hook never runs on them).
++    return leaf & ~(PAGE_UXN | PAGE_PXN);
++}
++
+ bool VMM::vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out) {
+-    bool ro = (leaf & (PAGE_AP_USER | PAGE_AP_RO)) ==
+-              (PAGE_AP_USER | PAGE_AP_RO);
++    // Issue #376 boot-text W^X: AP[1] (PAGE_AP_RO) alone selects
++    // read-only on ARMv8 (AP=10 is EL1-RO, AP=11 is EL1+EL0-RO).
++    // Requiring AP_USER as well misreports EL1-only RO kernel leaves
++    // (hardened text/rodata, AP=10) as writable, failing the
++    // kernel_half_boot_wx_pins text/rodata asserts on aarch64 despite
++    // correct hardware state. User RO leaves (AP=11) still read true;
++    // user/kernel RW leaves (AP=00/01) still read false.
++    bool ro = (leaf & PAGE_AP_RO) != 0;
+     if (executable_out != nullptr)
+         *executable_out = (leaf & PAGE_UXN) == 0;
+     return ro;
+diff --git a/src/kernel/memory/vmm_riscv64.cpp b/src/kernel/memory/vmm_riscv64.cpp
+index 0f40818bc..77499ad78 100644
+--- a/src/kernel/memory/vmm_riscv64.cpp
++++ b/src/kernel/memory/vmm_riscv64.cpp
+@@ -98,6 +98,13 @@ uint64_t VMM::vmm_arch_encode_ro(uint64_t leaf, bool executable) {
+     return leaf & ~PAGE_WRITE;
+ }
+ 
++uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
++    // Issue #376: kernel text stays executable — set X cleared by the
++    // data-default 5-arg map (W was already cleared by encode_ro).
++    // Kernel-half only.
++    return leaf | PAGE_EXEC;
++}
++
+ bool VMM::vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out) {
+     bool ro = ((leaf & PAGE_READ) != 0) && ((leaf & PAGE_WRITE) == 0);
+     if (executable_out != nullptr)
+diff --git a/src/kernel/memory/vmm_x86_64.cpp b/src/kernel/memory/vmm_x86_64.cpp
+index c9a585e98..b43a9a653 100644
+--- a/src/kernel/memory/vmm_x86_64.cpp
++++ b/src/kernel/memory/vmm_x86_64.cpp
+@@ -52,12 +52,23 @@ bool VMM::vmm_arch_split_needed(uint64_t entry) {
+ 
+ void VMM::vmm_arch_split_fill(uint64_t *new_table, uint64_t src_entry) {
+     uint64_t huge_base = src_entry & kHuge2MBaseMask;
+-    uint64_t base_flags = src_entry & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
++    // Issue #376 (boot W^X): carry NX into the split leaves. A post-harden
++    // split of an NX page must not silently re-execute it; RO (W-clear) was
++    // already carried by the mask. PAT/PWT/PCD/G are left at the boot
++    // default (not present on boot huge entries by construction).
++    uint64_t base_flags = src_entry & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER |
++                                       arch::ArchPageTable::NX);
+     for (size_t i = 0; i < 512; ++i) {
+         new_table[i] = (huge_base + i * 0x1000) | base_flags;
+     }
+ }
+ 
++uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
++    // Issue #376: text stays executable — clear NX set by the data-default
++    // 5-arg map. Kernel-half only; never applied to user pages.
++    return leaf & ~arch::ArchPageTable::NX;
++}
++
+ uint64_t VMM::vmm_arch_table_link(uint64_t new_phys) {
+     return new_phys | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+ }
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 80907d170..6c8b16631 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -711,9 +711,17 @@ static void map_kstack_page(uint64_t virt, uint64_t phys) {
+         return;
+     constexpr uint64_t P = 1ULL << 0; // PAGE_PRESENT
+     constexpr uint64_t W = 1ULL << 1; // PAGE_WRITE
++#if defined(CONFIG_ARCH_X86_64)
++    // Issue #376 (boot-text W^X): kernel stacks are data — RW+NX.
++    // x86-only window (other arches use the HHDM fallback, out of scope).
++    constexpr uint64_t NX = 1ULL << 63;
++    const uint64_t leaf_flags = P | W | NX;
++#else
++    const uint64_t leaf_flags = P | W;
++#endif
+     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                             s_kstack_pt_pages[pt_idx]);
+-    pt[entry] = phys | P | W;
++    pt[entry] = phys | leaf_flags;
+     asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
+ }
+ 
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 3b3965f29..ae9c4ccd2 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -177,7 +177,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"memory_static_pools",   4,    0,       0      },  // MemPool::reserve only (no PMM gating without CONFIG_STATIC_POOLS_ONLY)
+ #endif
+     {"memory_no_op_new",      6,    0,       0      },  // no operator new/delete, all MemPool / placement-new
+-    {"memory_page_tables",    12,   0,       0      },  // page-table pool, budget, no sharing + kernel-half runtime NX (#376)
++    {"memory_page_tables",    13,   0,       0      },  // page-table pool, budget, no sharing + kernel-half runtime NX (#376) + boot W^X pins (#376)
+     {"memory_kernel_isolation", 6,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s + teardown validation (issue #199)
+     {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
+     {"memory_vmm",           14,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60) + unmap-err holes (#366)
+@@ -293,7 +293,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"core_sync",           93,   0,       0      },  // all synchronization_* incl. pip/pcp/pi_donation/err_api (#364; measured)
+     {"core_sched",          112,  0,       0      },  // all scheduler_* (#364; measured)
+     {"core_task",           52,   0,       0      },  // task_* + fpu_invariants + kernel_top + per_cpu (#364; measured)
+-    {"core_memory",         119,  0,       0      },  // all memory_* (#364; measured) + kernel-half runtime NX (#376)
++    {"core_memory",         120,  0,       0      },  // all memory_* (#364; measured) + kernel-half runtime NX (#376) + boot W^X pins (#376)
+     {"core_syscall",        85,   0,       0      },  // syscall_* + debug_syscall + tls (#364; measured)
+     {"core_tracing",        25,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361, +2 rollback fail-first/past-end, +1 destroy-after-teardown noop #373)
+     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
+diff --git a/src/kernel/test/test_page_tables.cpp b/src/kernel/test/test_page_tables.cpp
+index 13c309df9..d4eab64e3 100644
+--- a/src/kernel/test/test_page_tables.cpp
++++ b/src/kernel/test/test_page_tables.cpp
+@@ -429,6 +429,60 @@ JARVIS_TEST(kernel_half_runtime_map_nx, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
  }
  
-+namespace {
-+
-+/// @brief Daemon round-trip from any kernel task context (fixture-safe:
-+///        takes the sender pid explicitly since the daemon replies to
-+///        args[0]). Returns the reply result, or -99 on transport failure.
-+int64_t drv_mmio_roundtrip(uint64_t self_pid, uint64_t type, uint64_t bar) {
-+    const uint64_t iocd_pid = kernel::iocd::get_iocd_pid();
-+    if (iocd_pid == 0)
-+        return -99;
-+    kernel::iocd::Msg req{};
-+    req.type = type;
-+    req.args[0] = self_pid;
-+    req.args[1] = bar;
-+    kernel::Message send{};
-+    send.sender_id = self_pid;
-+    send.type = type;
-+    send.data_size = sizeof(req);
-+    __builtin_memcpy(send.data, &req, sizeof(req));
-+    kernel::Message reply{};
-+    if (!kernel::IPC::send_sync(iocd_pid, send, reply))
-+        return -99;
-+    if (reply.data_size < sizeof(kernel::iocd::Reply))
-+        return -99;
-+    kernel::iocd::Reply rpl{};
-+    __builtin_memcpy(&rpl, reply.data, sizeof(rpl));
-+    return rpl.result;
++extern "C" {
++// Linker image bounds (4K-aligned starts; see linker/linker_*.ld).
++// Mirrors the integrity.hpp _text_start idiom.
++extern uint64_t _text_start[];
++extern uint64_t _rodata_start[];
++extern uint64_t _data_start[];
++extern uint64_t _bss_end[];
 +}
 +
-+uint64_t g_drv_phys = 0;
-+uint64_t g_drv_map_va = 0;
-+uint64_t g_drv_sys_unmap = 0;
-+int64_t g_drv_reg = -99;
-+int64_t g_drv_map = -99;
-+int64_t g_drv_unmap = -99;
-+int64_t g_drv_unreg = -99;
++// Runmode: kernel
++// Testidea: boot-established kernel-half image permissions are W^X
++//           (issue #376 epic remainder, VMM::harden_kernel_half): text RX,
++//           rodata RO+NX, data/bss RW+NX. Sample VAs come straight from the
++//           linker symbols; arch dispatch lives in the inspectors.
++// Input: live kernel PML4 + section VAs.
++// Expect: text RO + executable (also the inspector's positive control);
++//         rodata RO + non-executable; data/bss non-RO + non-executable.
++//         No mapping changes (walk-only), PMM delta zero.
++// Depends: harden_kernel_half, pte_is_ro_in_pml4,
++//          pte_is_executable_in_pml4.
++// Note: the x86 kslot window (RW+NX via map_kstack_page) has no stable VA
++// in the test harness (HHDM fallback when in_test_harness), so no slot
++// assert here — every x86 task creation post-harden maps its stack NX,
++// and a faulting stack would triple-fault the suite instantly.
++JARVIS_TEST(kernel_half_boot_wx_pins, "PRE: none | POST: none") {
++    const uint64_t pml4 = VMM::get_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint64_t text_va = reinterpret_cast<uint64_t>(_text_start);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint64_t rodata_va = reinterpret_cast<uint64_t>(_rodata_start);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint64_t data_va = reinterpret_cast<uint64_t>(_data_start);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint64_t bss_va = reinterpret_cast<uint64_t>(_bss_end) - 8;
 +
-+} // namespace
++    bool exec = false;
++    JARVIS_ASSERT_FMT(VMM::pte_is_ro_in_pml4(text_va, pml4, &exec),
++                      "text not RO");
++    JARVIS_ASSERT_FMT(exec, "text not executable");
++    JARVIS_ASSERT_FMT(VMM::pte_is_ro_in_pml4(rodata_va, pml4, &exec),
++                      "rodata not RO");
++    JARVIS_ASSERT_FMT(!exec, "rodata executable");
++    JARVIS_ASSERT_FMT(!VMM::pte_is_ro_in_pml4(data_va, pml4, nullptr),
++                      "data RO");
++    JARVIS_ASSERT_FMT(!VMM::pte_is_executable_in_pml4(data_va, pml4),
++                      "data executable");
++    JARVIS_ASSERT_FMT(!VMM::pte_is_ro_in_pml4(bss_va, pml4, nullptr),
++                      "bss RO");
++    JARVIS_ASSERT_FMT(!VMM::pte_is_executable_in_pml4(bss_va, pml4),
++                      "bss executable");
++    JARVIS_TEST_PASS();
++}
 +
- // Runmode: kernel
--// Testidea: STUB - Verifies the driver server can access MMIO regions via
--// capability-based permissions
--// Input: None (stub)
--// Expect: JARVIS_TEST_PASS() (stub, no actual assertion yet)
--// Depends: Driver server, capability system, MMIO
-+// Testidea: Driver MMIO end-to-end across both layers (issue #303 item
-+//           4): a fixture driver registers with the live iocd, gets a
-+//           policy grant for bar 0, installs a REAL MEMORY MmioCap for a
-+//           PMM test page, maps it via SYS_MMIO_MAP in its own cspace,
-+//           then unwinds everything (UNMAP, daemon UNMAP, UNREGISTER).
-+//           The daemon authorizes WHO/WHICH (policy); the kernel
-+//           enforces WHAT via caps — no cap passes through the daemon
-+//           (documented split; kernel PTE teardown stays with drain_task).
-+// Input: dispatched fixture task drives register → daemon-MAP → cap
-+//        install → SYS_MMIO_MAP → SYS_MMIO_UNMAP → daemon-UNMAP →
-+//        UNREGISTER; harness joins and asserts.
-+// Expect: all daemon results 0; VA in the user MMIO window; sys unmap 0;
-+//         MmioUserMap live_count 0; zero tracker delta (harness).
-+// Depends: iocd policy handler, MmioCap, MmioUserMap, live IPC.
- JARVIS_TEST(driver_server_mmio_via_caps, "PRE: iocd | POST: none") {
-+    g_drv_phys = PMM::alloc_user_page();
-+    JARVIS_ASSERT(g_drv_phys != 0);
-+    g_drv_map_va = 0;
-+    g_drv_sys_unmap = 0;
-+    g_drv_reg = -99;
-+    g_drv_map = -99;
-+    g_drv_unmap = -99;
-+    g_drv_unreg = -99;
-+
-+    auto *t = TaskControlBlock::create(
-+        []() {
-+            auto *cur = Scheduler::current_task();
-+            const uint64_t self = cur ? cur->id : 0;
-+            // Policy leg: register + grant over live IPC.
-+            iocd::Msg reg{};
-+            reg.type = iocd::IOCD_REGISTER_DEVICE;
-+            reg.args[0] = self;
-+            reg.args[1] = 0;
-+            __builtin_memcpy(&reg.args[2], "drv-mmio", 9);
-+            Message sreg{};
-+            sreg.sender_id = self;
-+            sreg.type = iocd::IOCD_REGISTER_DEVICE;
-+            sreg.data_size = sizeof(reg);
-+            __builtin_memcpy(sreg.data, &reg, sizeof(reg));
-+            Message rreg{};
-+            if (IPC::send_sync(iocd::get_iocd_pid(), sreg, rreg) &&
-+                rreg.data_size >= sizeof(iocd::Reply)) {
-+                iocd::Reply rr{};
-+                __builtin_memcpy(&rr, rreg.data, sizeof(rr));
-+                g_drv_reg = rr.result;
-+            }
-+            g_drv_map = drv_mmio_roundtrip(self, iocd::IOCD_MMIO_MAP, 0);
-+            // Mechanism leg: real cap + syscall dispatch in own cspace.
-+            if (g_drv_reg == 0 && g_drv_map == 0 && cur != nullptr) {
-+                cur->ensure_cspace();
-+                cap::CNode *cs = cur->get_cspace();
-+                auto *mmio = cap::MmioCap::create(
-+                    g_drv_phys, arch::PAGE_SIZE,
-+                    arch::PciBarType::MEMORY_32);
-+                if (mmio != nullptr) {
-+                    int s = cs->install(mmio, cap::CapType::Mmio,
-+                                        cap::CapRights::WRITE);
-+                    if (s >= 0) {
-+                        uint64_t h = cap::encode_handle(
-+                            cs->cspace_id, static_cast<uint32_t>(s),
-+                            cs->slot_gen(static_cast<uint32_t>(s)));
-+                        g_drv_map_va = Syscall::handle(
-+                            static_cast<uint64_t>(SyscallNumber::MMIO_MAP),
-+                            h, 0, 0, 0, nullptr);
-+                        if (g_drv_map_va != static_cast<uint64_t>(-1)) {
-+                            g_drv_sys_unmap = Syscall::handle(
-+                                static_cast<uint64_t>(
-+                                    SyscallNumber::MMIO_UNMAP),
-+                                g_drv_map_va, 0, 0, 0, nullptr);
-+                        }
-+                        cs->remove(static_cast<uint32_t>(s));
-+                    }
-+                    mmio->release();
-+                }
-+            }
-+            g_drv_unmap =
-+                drv_mmio_roundtrip(self, iocd::IOCD_MMIO_UNMAP, 0);
-+            g_drv_unreg = drv_mmio_roundtrip(
-+                self, iocd::IOCD_UNREGISTER_DEVICE, 0);
-+            Scheduler::terminate(*cur, 0);
-+        },
-+        11, 10);
-+    JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT(t->get_page_table() != 0);
-+    Scheduler::add_task(*t);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
-+    Scheduler::drain_zombie_list();
-+
-+    JARVIS_ASSERT_FMT(g_drv_reg == 0, "register: %ld", g_drv_reg);
-+    JARVIS_ASSERT_FMT(g_drv_map == 0, "daemon MAP: %ld", g_drv_map);
-+    JARVIS_ASSERT_FMT(g_drv_map_va != static_cast<uint64_t>(-1),
-+                      "SYS_MMIO_MAP failed");
-+    JARVIS_ASSERT_FMT(
-+        g_drv_map_va >= CONFIG_USER_MMIO_VA_BASE,
-+        "VA 0x%lx outside user MMIO window", g_drv_map_va);
-+    JARVIS_ASSERT_FMT(g_drv_sys_unmap == 0, "SYS_MMIO_UNMAP: %lu",
-+                      g_drv_sys_unmap);
-+    JARVIS_ASSERT_FMT(g_drv_unmap == 0, "daemon UNMAP: %ld", g_drv_unmap);
-+    JARVIS_ASSERT_FMT(g_drv_unreg == 0, "UNREGISTER: %ld", g_drv_unreg);
-+    JARVIS_ASSERT_EQ(static_cast<size_t>(0), cap::MmioUserMap::live_count());
-+    PMM::free_page(g_drv_phys);
-     JARVIS_TEST_PASS();
+ void register_page_tables_tests() {
+     Logger::info("Registering page tables tests");
+     JARVIS_REGISTER_TEST(page_tables_alloc_from_pool);
+@@ -443,4 +497,5 @@ void register_page_tables_tests() {
+     JARVIS_REGISTER_TEST(map_page_err_validation_and_success);
+     JARVIS_REGISTER_TEST(map_page_err_oom_writes_nothing);
+     JARVIS_REGISTER_TEST(kernel_half_runtime_map_nx);
++    JARVIS_REGISTER_TEST(kernel_half_boot_wx_pins);
  }
- 
-diff --git a/src/kernel/test/test_iocd.cpp b/src/kernel/test/test_iocd.cpp
-index 5c63a2c4d..953839955 100644
---- a/src/kernel/test/test_iocd.cpp
-+++ b/src/kernel/test/test_iocd.cpp
-@@ -31,6 +31,39 @@
- 
- using namespace kernel;
- 
-+namespace {
-+
-+// Raw iocd round-trip over live IPC: sends type with (pid, bar) args,
-+// returns the daemon's reply result, or -99 on transport failure (which
-+// fails every == -1/== 0 assertion below with a visible value).
-+int64_t iocd_policy_roundtrip(uint64_t type, uint64_t pid, uint64_t bar) {
-+    auto *cur = Scheduler::current_task();
-+    if (cur == nullptr)
-+        return -99;
-+    const uint64_t iocd_pid = iocd::get_iocd_pid();
-+    if (iocd_pid == 0)
-+        return -99;
-+    iocd::Msg req{};
-+    req.type = type;
-+    req.args[0] = pid;
-+    req.args[1] = bar;
-+    Message send{};
-+    send.sender_id = cur->id;
-+    send.type = type;
-+    send.data_size = sizeof(req);
-+    __builtin_memcpy(send.data, &req, sizeof(req));
-+    Message reply{};
-+    if (!IPC::send_sync(iocd_pid, send, reply))
-+        return -99;
-+    if (reply.data_size < sizeof(iocd::Reply))
-+        return -99;
-+    iocd::Reply rpl{};
-+    __builtin_memcpy(&rpl, reply.data, sizeof(rpl));
-+    return rpl.result;
-+}
-+
-+} // namespace
-+
- // Runmode: kernel
- // Testidea: IOCD boots and registers with the kernel
- // Input: None (boot sequence)
-@@ -69,20 +102,120 @@ JARVIS_TEST(iocd_serial_irq_to_event, "PRE: none | POST: iocd") {
- }
- 
- // Runmode: kernel
--// Testidea: STUB - MMIO region unmapped when task exits
--// Input: None (stub test)
--// Expect: Passes (stub)
--// Depends: kernel/task, kernel/ipc, kernel/driver
--JARVIS_TEST(iocd_mmio_unmap_on_exit, "PRE: none | POST: iocd") {
-+// Testidea: MMIO grant lifecycle against the live daemon (issue #303
-+//           item 4): register → MAP → reuse → UNMAP → UNMAP-fails →
-+//           UNREGISTER (device exit drops grants) → MAP/UNMAP fail.
-+// Input: harness registers itself ("test-mmio"), MAPs bar 0 over live
-+//        IPC, releases, unregisters. State collected before asserts;
-+//        the unregister restores the daemon (zero slot/record residue).
-+// Expect: register 0; MAP 0; re-MAP 0 (idempotent reuse); UNMAP 0;
-+//         second UNMAP -1; UNREGISTER 0; post-exit MAP -1, UNMAP -1.
-+// Depends: iocd MMIO policy handler + UNREGISTER_DEVICE + live IPC.
-+JARVIS_TEST(iocd_mmio_unmap_on_exit, "PRE: vfsd, iocd | POST: iocd") {
-+    auto *me = Scheduler::current_task();
-+    JARVIS_ASSERT(me != nullptr);
-+    const uint64_t pid = me->id;
-+
-+    // Register self (slot freed by the UNREGISTER leg below).
-+    iocd::Msg reg{};
-+    reg.type = iocd::IOCD_REGISTER_DEVICE;
-+    reg.args[0] = pid;
-+    reg.args[1] = 0;
-+    __builtin_memcpy(&reg.args[2], "test-mmio", 10);
-+    Message sreg{};
-+    sreg.sender_id = pid;
-+    sreg.type = iocd::IOCD_REGISTER_DEVICE;
-+    sreg.data_size = sizeof(reg);
-+    __builtin_memcpy(sreg.data, &reg, sizeof(reg));
-+    Message rreg{};
-+    JARVIS_ASSERT(IPC::send_sync(iocd::get_iocd_pid(), sreg, rreg));
-+    iocd::Reply reg_reply{};
-+    __builtin_memcpy(&reg_reply, rreg.data, sizeof(reg_reply));
-+    JARVIS_ASSERT_FMT(reg_reply.result == 0, "register failed: %ld",
-+                      reg_reply.result);
-+
-+    const int64_t map_first =
-+        iocd_policy_roundtrip(iocd::IOCD_MMIO_MAP, pid, 0);
-+    const int64_t map_reuse =
-+        iocd_policy_roundtrip(iocd::IOCD_MMIO_MAP, pid, 0);
-+    const int64_t unmap_once =
-+        iocd_policy_roundtrip(iocd::IOCD_MMIO_UNMAP, pid, 0);
-+    const int64_t unmap_again =
-+        iocd_policy_roundtrip(iocd::IOCD_MMIO_UNMAP, pid, 0);
-+    const int64_t unreg =
-+        iocd_policy_roundtrip(iocd::IOCD_UNREGISTER_DEVICE, pid, 0);
-+    const int64_t map_after_exit =
-+        iocd_policy_roundtrip(iocd::IOCD_MMIO_MAP, pid, 0);
-+    const int64_t unmap_after_exit =
-+        iocd_policy_roundtrip(iocd::IOCD_MMIO_UNMAP, pid, 0);
-+
-+    JARVIS_ASSERT_FMT(map_first == 0, "MAP failed: %ld", map_first);
-+    JARVIS_ASSERT_FMT(map_reuse == 0, "re-MAP failed: %ld", map_reuse);
-+    JARVIS_ASSERT_FMT(unmap_once == 0, "UNMAP failed: %ld", unmap_once);
-+    JARVIS_ASSERT_FMT(unmap_again == -1, "second UNMAP not -1: %ld",
-+                      unmap_again);
-+    JARVIS_ASSERT_FMT(unreg == 0, "UNREGISTER failed: %ld", unreg);
-+    JARVIS_ASSERT_FMT(map_after_exit == -1, "post-exit MAP not -1: %ld",
-+                      map_after_exit);
-+    JARVIS_ASSERT_FMT(unmap_after_exit == -1, "post-exit UNMAP not -1: %ld",
-+                      unmap_after_exit);
-     JARVIS_TEST_PASS();
- }
- 
- // Runmode: kernel
--// Testidea: STUB - Unauthorized MMIO map attempt is rejected
--// Input: None (stub test)
--// Expect: Passes (stub)
--// Depends: kernel/task, kernel/ipc, kernel/driver
--JARVIS_TEST(iocd_unauthorized_mmio_rejected, "PRE: none | POST: iocd") {
-+// Testidea: MMIO policy fail-closed against the live daemon (issue #303
-+//           item 4): out-of-range bar, record-less UNMAP, and MAP after
-+//           the pid leaves the registry all return -1 with zero daemon
-+//           state change. NOTE: args[0] is always the live harness pid —
-+//           the daemon replies to args[0], never to the IPC sender, so a
-+//           bogus args[0] would strand this task's send_sync (documented
-+//           in iocd.hpp; same self-asserted trust model as KEYBOARD_READ).
-+// Input: MAP bar 0xFF; UNMAP bar 0 (no record); REGISTER self →
-+//        UNREGISTER self → MAP bar 0 (unregistered again).
-+// Expect: all replies -1 except the register/unregister pair (0/0); the
-+//         transient registration is removed — pollution-free.
-+// Depends: iocd MMIO policy handler + live IPC.
-+JARVIS_TEST(iocd_unauthorized_mmio_rejected, "PRE: vfsd, iocd | POST: iocd") {
-+    auto *me = Scheduler::current_task();
-+    JARVIS_ASSERT(me != nullptr);
-+    const uint64_t pid = me->id;
-+
-+    const int64_t bad_bar =
-+        iocd_policy_roundtrip(iocd::IOCD_MMIO_MAP, pid, 0xFF);
-+    const int64_t no_record =
-+        iocd_policy_roundtrip(iocd::IOCD_MMIO_UNMAP, pid, 0);
-+
-+    // Transient registration round-trip (slot freed immediately).
-+    iocd::Msg reg{};
-+    reg.type = iocd::IOCD_REGISTER_DEVICE;
-+    reg.args[0] = pid;
-+    reg.args[1] = 0;
-+    __builtin_memcpy(&reg.args[2], "test-rej", 9);
-+    Message sreg{};
-+    sreg.sender_id = pid;
-+    sreg.type = iocd::IOCD_REGISTER_DEVICE;
-+    sreg.data_size = sizeof(reg);
-+    __builtin_memcpy(sreg.data, &reg, sizeof(reg));
-+    Message rreg{};
-+    int64_t reg_result = -99;
-+    if (IPC::send_sync(iocd::get_iocd_pid(), sreg, rreg) &&
-+        rreg.data_size >= sizeof(iocd::Reply)) {
-+        iocd::Reply rr{};
-+        __builtin_memcpy(&rr, rreg.data, sizeof(rr));
-+        reg_result = rr.result;
-+    }
-+    const int64_t unreg =
-+        iocd_policy_roundtrip(iocd::IOCD_UNREGISTER_DEVICE, pid, 0);
-+    const int64_t map_after_exit =
-+        iocd_policy_roundtrip(iocd::IOCD_MMIO_MAP, pid, 0);
-+
-+    JARVIS_ASSERT_FMT(bad_bar == -1, "out-of-range MAP not -1: %ld", bad_bar);
-+    JARVIS_ASSERT_FMT(no_record == -1, "record-less UNMAP not -1: %ld",
-+                      no_record);
-+    JARVIS_ASSERT_FMT(reg_result == 0, "register failed: %ld", reg_result);
-+    JARVIS_ASSERT_FMT(unreg == 0, "UNREGISTER failed: %ld", unreg);
-+    JARVIS_ASSERT_FMT(map_after_exit == -1, "post-exit MAP not -1: %ld",
-+                      map_after_exit);
-     JARVIS_TEST_PASS();
- }
- 
-diff --git a/userspace/iocd.c b/userspace/iocd.c
-index 11d1935dd..2c6a6097a 100644
---- a/userspace/iocd.c
-+++ b/userspace/iocd.c
-@@ -13,6 +13,7 @@
- #define IOCD_KEYBOARD_READ   204
- #define IOCD_SERIAL_READ     205
- #define IOCD_SERIAL_WRITE    206
-+#define IOCD_UNREGISTER_DEVICE 207
- 
- #define MAX_DEVICES 16
- 
-@@ -36,6 +37,74 @@ static uint64_t g_my_id = 0;
- static struct DeviceEntry g_devices[MAX_DEVICES];
- static size_t g_device_count = 0;
- 
-+/* Issue #303 item 4: MMIO policy layer. The daemon authorizes WHICH
-+ * registered driver may use WHICH bar index; the kernel still enforces
-+ * WHAT gets mapped via MEMORY-type MmioCaps (drain_task owns PTE
-+ * teardown on task exit — authoritative, already covered by cap_mmio*).
-+ * Bar indices are the capability namespace [0, IOCD_MAX_BARS); the
-+ * physical inventory lives kernel-side when PCI delegation lands, so no
-+ * phys table is kept here. Grant records are static bounded (no malloc,
-+ * dispatch-loop-only access like the kbd queue above). */
-+#define IOCD_MAX_BARS 4
-+#define IOCD_MAX_GRANTS 8
-+
-+struct IocdGrant {
-+    uint64_t pid;
-+    uint64_t bar;
-+    int live;
-+};
-+
-+static struct IocdGrant g_grants[IOCD_MAX_GRANTS];
-+static size_t g_grant_count = 0;
-+
-+static int iocd_pid_registered(uint64_t pid) {
-+    if (pid == 0)
-+        return 0;
-+    for (size_t i = 0; i < g_device_count; ++i) {
-+        if (g_devices[i].pid == pid)
-+            return 1;
-+    }
-+    return 0;
-+}
-+
-+static int iocd_grant_find(uint64_t pid, uint64_t bar) {
-+    for (size_t i = 0; i < g_grant_count; ++i) {
-+        if (g_grants[i].live && g_grants[i].pid == pid &&
-+            g_grants[i].bar == bar)
-+            return 1;
-+    }
-+    return 0;
-+}
-+
-+static int iocd_grant_add(uint64_t pid, uint64_t bar) {
-+    if (g_grant_count >= IOCD_MAX_GRANTS)
-+        return 0;
-+    g_grants[g_grant_count].pid = pid;
-+    g_grants[g_grant_count].bar = bar;
-+    g_grants[g_grant_count].live = 1;
-+    ++g_grant_count;
-+    return 1;
-+}
-+
-+static int iocd_grant_remove(uint64_t pid, uint64_t bar) {
-+    for (size_t i = 0; i < g_grant_count; ++i) {
-+        if (g_grants[i].live && g_grants[i].pid == pid &&
-+            g_grants[i].bar == bar) {
-+            g_grants[i].live = 0;
-+            return 1;
-+        }
-+    }
-+    return 0;
-+}
-+
-+/* Drop every grant held by pid (device exit/unregister path). */
-+static void iocd_grants_drop_pid(uint64_t pid) {
-+    for (size_t i = 0; i < g_grant_count; ++i) {
-+        if (g_grants[i].live && g_grants[i].pid == pid)
-+            g_grants[i].live = 0;
-+    }
-+}
-+
- /* Issue #340 P0: set-1 scancode tables (values copied from
-  * src/kernel/arch/x86_64/keyboard.cpp scancode_lower/scancode_upper —
-  * the daemon cannot include kernel headers; hal_keyboard_decode pins
-@@ -162,13 +231,54 @@ static int iocd_handle_irq_event(struct IocdMsg* msg, struct IocdReply* reply) {
- }
- 
- static int iocd_handle_mmio_map(struct IocdMsg* msg, struct IocdReply* reply) {
--    (void)msg;
--    reply->result = -1;
-+    /* Issue #303 item 4: policy gate — the sender self-identifies via
-+     * args[0] (same trust model as KEYBOARD_READ; authentication stays
-+     * kernel-side via MmioCaps). Registered device + in-range bar +
-+     * no live duplicate → record, 0. Idempotent reuse returns 0. */
-+    uint64_t pid = msg->args[0];
-+    uint64_t bar = msg->args[1];
-+    if (!iocd_pid_registered(pid) || bar >= IOCD_MAX_BARS) {
-+        reply->result = -1;
-+        return 0;
-+    }
-+    if (iocd_grant_find(pid, bar)) {
-+        reply->result = 0;
-+        return 0;
-+    }
-+    if (!iocd_grant_add(pid, bar)) {
-+        reply->result = -1;
-+        return 0;
-+    }
-+    reply->result = 0;
-     return 0;
- }
- 
- static int iocd_handle_mmio_unmap(struct IocdMsg* msg, struct IocdReply* reply) {
--    (void)msg;
-+    /* Issue #303 item 4: release a live record; unknown (pid, bar) fails
-+     * closed. Kernel-side PTE teardown on task exit is authoritative. */
-+    if (!iocd_grant_remove(msg->args[0], msg->args[1])) {
-+        reply->result = -1;
-+        return 0;
-+    }
-+    reply->result = 0;
-+    return 0;
-+}
-+
-+static int iocd_handle_unregister_device(struct IocdMsg* msg,
-+                                         struct IocdReply* reply) {
-+    /* Issue #303 item 4: device exit path — remove the registration
-+     * (swap-with-last, order irrelevant) and drop its grant records so
-+     * no stale authorization survives the device. Unknown pid → -1. */
-+    uint64_t pid = msg->args[0];
-+    for (size_t i = 0; i < g_device_count; ++i) {
-+        if (g_devices[i].pid == pid) {
-+            g_devices[i] = g_devices[g_device_count - 1];
-+            --g_device_count;
-+            iocd_grants_drop_pid(pid);
-+            reply->result = 0;
-+            return 0;
-+        }
-+    }
-     reply->result = -1;
-     return 0;
- }
-@@ -207,6 +317,7 @@ static int iocd_dispatch(struct IocdMsg* msg, struct IocdReply* reply) {
-         case IOCD_IRQ_EVENT:       return iocd_handle_irq_event(msg, reply);
-         case IOCD_MMIO_MAP:        return iocd_handle_mmio_map(msg, reply);
-         case IOCD_MMIO_UNMAP:      return iocd_handle_mmio_unmap(msg, reply);
-+        case IOCD_UNREGISTER_DEVICE: return iocd_handle_unregister_device(msg, reply);
-         case IOCD_KEYBOARD_READ:   return iocd_handle_keyboard_read(msg, reply);
-         case IOCD_SERIAL_READ:     return iocd_handle_serial_read(msg, reply);
-         case IOCD_SERIAL_WRITE:    return iocd_handle_serial_write(msg, reply);
+diff --git a/src/kernel/test/test_vmm.cpp b/src/kernel/test/test_vmm.cpp
+index 79ad37664..35b0399f3 100644
+--- a/src/kernel/test/test_vmm.cpp
++++ b/src/kernel/test/test_vmm.cpp
+@@ -270,16 +270,18 @@ JARVIS_TEST(vmm_free_user_pages_fork_stack_scenario, "PRE: none | POST: none") {
+ // Testidea: Regression test for bug #3 — verify map_page splits a 2 MiB huge
+ // page in the kernel HHDM and correctly maps a 4 KiB target page while
+ // preserving neighbouring translations.
+-// Input: Virtual address at HHDM_OFFSET+0x802000 inside a 2 MiB huge page;
+-// allocate a different physical page and map it via map_page.
++// Input: Virtual address at HHDM_OFFSET+0x2082000 inside a 2 MiB huge page;
++// allocate a different physical page and map it via map_page. The fixture
++// lives above the hardened image range (issue #376: PD entries covering
++// the image are split to 4K at boot, so low HHDM VAs are no longer huge).
+ // Expect: After map, target resolves to new physical page; neighbouring
+ // pages still resolve correctly via the newly allocated page table; original
+ // mapping is restored.
+ // Depends: PMM, VMM, arch
+ // v0.3.6: re-enabled with HHDM PD save/restore + hhdm_modified_ flag.
+ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
+-    constexpr uint64_t test_vaddr = arch::HHDM_OFFSET + 0x802000;
+-    constexpr uint64_t huge_page_base = arch::HHDM_OFFSET + 0x800000;
++    constexpr uint64_t test_vaddr = arch::HHDM_OFFSET + 0x2082000;
++    constexpr uint64_t huge_page_base = arch::HHDM_OFFSET + 0x2080000;
+     uint64_t const PAGE_PRESENT = 1ULL << 0;
+     uint64_t const PAGE_HUGE = 1ULL << 7;
+     uint64_t kernel_pml4 = arch::read_cr3();
+@@ -300,16 +302,16 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
+     // Resolve physical address from the 2MB huge page entry directly:
+     // phys_base = (entry & ~0x1FFFFF), then add page offset.
+     uint64_t before = (pd[pd_idx] & ~0x1FFFFFULL) + (test_vaddr & 0x1FFFFFULL);
+-    JARVIS_ASSERT(before == 0x802000);
++    JARVIS_ASSERT(before == 0x2082000);
+     uint64_t before_base = (pd[pd_idx] & ~0x1FFFFFULL) +
+                            (huge_page_base & 0x1FFFFFULL);
+-    JARVIS_ASSERT(before_base == 0x800000);
++    JARVIS_ASSERT(before_base == 0x2080000);
+     uint64_t before_neighbour = (pd[pd_idx] & ~0x1FFFFFULL) +
+                                 ((huge_page_base + 0x1000) & 0x1FFFFFULL);
+-    JARVIS_ASSERT(before_neighbour == 0x801000);
++    JARVIS_ASSERT(before_neighbour == 0x2081000);
+     uint64_t test_phys = PMM::alloc_page();
+     JARVIS_ASSERT(test_phys != 0);
+-    JARVIS_ASSERT(test_phys != 0x802000);
++    JARVIS_ASSERT(test_phys != 0x2082000);
+     // Issue #200: HHDM PD surgery is IRQ-critical (spec
+     // docs/_archive/hhdm-snapshot-restore.md §5.1) — mask the timer ISR
+     // and task preemption across map..manual-restore (see
+@@ -322,7 +324,8 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
+     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
+     size_t pt_idx = static_cast<size_t>((test_vaddr & (0x1FFULL << 12)) >> 12);
+     // Split-inherited entries keep the boot huge entry's flags verbatim
+-    // (PRESENT|WRITE — boot sets no XD on huge DATA entries); only the
++    // (PRESENT|WRITE — boot sets no XD on huge DATA entries, and the
++    // split_fill NX/AP carry only preserves bits already set); only the
+     // explicitly (re)mapped leaf carries NX (issue #376 slice 1).
+     constexpr uint64_t X64_PT_FLAGS = (1ULL << 0) | (1ULL << 1);
+     constexpr uint64_t X64_MAPPED_FLAGS =
+@@ -330,16 +333,16 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
+     JARVIS_ASSERT(pt[pt_idx] == (test_phys & ~0xFFFULL) + X64_MAPPED_FLAGS);
+     // The huge page base and neighbour should still resolve via the PT page
+     size_t base_pt_idx = static_cast<size_t>((huge_page_base & (0x1FFULL << 12)) >> 12);
+-    JARVIS_ASSERT(pt[base_pt_idx] == (0x800000 & ~0xFFFULL) + X64_PT_FLAGS);
++    JARVIS_ASSERT(pt[base_pt_idx] == (0x2080000 & ~0xFFFULL) + X64_PT_FLAGS);
+     size_t neigh_pt_idx = static_cast<size_t>(((huge_page_base + 0x1000) & (0x1FFULL << 12)) >> 12);
+-    JARVIS_ASSERT(pt[neigh_pt_idx] == (0x801000 & ~0xFFFULL) + X64_PT_FLAGS);
++    JARVIS_ASSERT(pt[neigh_pt_idx] == (0x2081000 & ~0xFFFULL) + X64_PT_FLAGS);
+     VMM::unmap_page(test_vaddr);
+     // After unmap: PT entry in the just-created PT page should be cleared.
+     // The unmap_page guard returns early for kernel VAs during tests, so
+     // manually clear it.  The PD restore in snapshot_restore will clean up.
+     pt[pt_idx] = 0;
+-    VMM::map_page(test_vaddr, 0x802000, false);
+-    JARVIS_ASSERT(pt[pt_idx] == (0x802000 & ~0xFFFULL) + X64_MAPPED_FLAGS);
++    VMM::map_page(test_vaddr, 0x2082000, false);
++    JARVIS_ASSERT(pt[pt_idx] == (0x2082000 & ~0xFFFULL) + X64_MAPPED_FLAGS);
+     pt_phys = pd[pd_idx] & ~0xFFFULL;
+     JARVIS_ASSERT(!(pd[pd_idx] & PAGE_HUGE));
+     PMM::free_page(pt_phys);
+@@ -352,7 +355,9 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
+ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
+     uint64_t kernel_pml4 = VMM::get_kernel_pml4();
+     JARVIS_ASSERT(kernel_pml4 != 0);
+-    uint64_t v = arch::HHDM_OFFSET + 0x900000;
++    // Fixture above the hardened image range (issue #376: low HHDM PD
++    // entries covering the image are split at boot, no longer huge).
++    uint64_t v = arch::HHDM_OFFSET + 0x2300000;
+     uint64_t cr3 = arch::read_cr3();
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + (cr3 & ~0xFFFULL));
+     size_t pml4_i = static_cast<size_t>((v & (0x1FFULL << 39)) >> 39);
+@@ -383,7 +388,7 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
+     JARVIS_ASSERT(pt[pt_idx] == (p & ~0xFFFULL) + X64_PT_FLAGS_2);
+     VMM::unmap_page(v);
+     JARVIS_ASSERT(pt[pt_idx] == 0);
+-    VMM::map_page(v, 0x900000, false);
++    VMM::map_page(v, 0x2300000, false);
+     pt_phys = pd[pd_i] & ~0xFFFULL;
+     PMM::free_page(pt_phys);
+     pd[pd_i] = saved_pd_entry;
+@@ -410,9 +415,9 @@ JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
+     JARVIS_ASSERT(!VMM::take_identity_modified());
+     JARVIS_ASSERT(!VMM::hhdm_was_modified());
+     // Set via the real setter: map a scratch HHDM page (2 MiB huge
+-    // page at HHDM+0xA00000, same save/split/restore pattern as the
+-    // regression test above).
+-    constexpr uint64_t scratch_va = arch::HHDM_OFFSET + 0xA02000;
++    // page at HHDM+0x2400000, same save/split/restore pattern as the
++    // regression test above; above the hardened image range, issue #376).
++    constexpr uint64_t scratch_va = arch::HHDM_OFFSET + 0x2402000;
+     uint64_t const PAGE_PRESENT = 1ULL << 0;
+     uint64_t const PAGE_HUGE = 1ULL << 7;
+     uint64_t kernel_pml4 = arch::read_cr3();
+@@ -451,7 +456,7 @@ JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
+     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                             (pd[pd_i] & ~0xFFFULL));
+     pt[pt_i] = 0;
+-    VMM::map_page(scratch_va, 0xA02000, false);
++    VMM::map_page(scratch_va, 0x2402000, false);
+     uint64_t pt_phys = pd[pd_i] & ~0xFFFULL;
+     PMM::free_page(pt_phys);
+     pd[pd_i] = saved_pd_entry;

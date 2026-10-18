@@ -429,6 +429,60 @@ JARVIS_TEST(kernel_half_runtime_map_nx, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+extern "C" {
+// Linker image bounds (4K-aligned starts; see linker/linker_*.ld).
+// Mirrors the integrity.hpp _text_start idiom.
+extern uint64_t _text_start[];
+extern uint64_t _rodata_start[];
+extern uint64_t _data_start[];
+extern uint64_t _bss_end[];
+}
+
+// Runmode: kernel
+// Testidea: boot-established kernel-half image permissions are W^X
+//           (issue #376 epic remainder, VMM::harden_kernel_half): text RX,
+//           rodata RO+NX, data/bss RW+NX. Sample VAs come straight from the
+//           linker symbols; arch dispatch lives in the inspectors.
+// Input: live kernel PML4 + section VAs.
+// Expect: text RO + executable (also the inspector's positive control);
+//         rodata RO + non-executable; data/bss non-RO + non-executable.
+//         No mapping changes (walk-only), PMM delta zero.
+// Depends: harden_kernel_half, pte_is_ro_in_pml4,
+//          pte_is_executable_in_pml4.
+// Note: the x86 kslot window (RW+NX via map_kstack_page) has no stable VA
+// in the test harness (HHDM fallback when in_test_harness), so no slot
+// assert here — every x86 task creation post-harden maps its stack NX,
+// and a faulting stack would triple-fault the suite instantly.
+JARVIS_TEST(kernel_half_boot_wx_pins, "PRE: none | POST: none") {
+    const uint64_t pml4 = VMM::get_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t text_va = reinterpret_cast<uint64_t>(_text_start);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t rodata_va = reinterpret_cast<uint64_t>(_rodata_start);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t data_va = reinterpret_cast<uint64_t>(_data_start);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t bss_va = reinterpret_cast<uint64_t>(_bss_end) - 8;
+
+    bool exec = false;
+    JARVIS_ASSERT_FMT(VMM::pte_is_ro_in_pml4(text_va, pml4, &exec),
+                      "text not RO");
+    JARVIS_ASSERT_FMT(exec, "text not executable");
+    JARVIS_ASSERT_FMT(VMM::pte_is_ro_in_pml4(rodata_va, pml4, &exec),
+                      "rodata not RO");
+    JARVIS_ASSERT_FMT(!exec, "rodata executable");
+    JARVIS_ASSERT_FMT(!VMM::pte_is_ro_in_pml4(data_va, pml4, nullptr),
+                      "data RO");
+    JARVIS_ASSERT_FMT(!VMM::pte_is_executable_in_pml4(data_va, pml4),
+                      "data executable");
+    JARVIS_ASSERT_FMT(!VMM::pte_is_ro_in_pml4(bss_va, pml4, nullptr),
+                      "bss RO");
+    JARVIS_ASSERT_FMT(!VMM::pte_is_executable_in_pml4(bss_va, pml4),
+                      "bss executable");
+    JARVIS_TEST_PASS();
+}
+
 void register_page_tables_tests() {
     Logger::info("Registering page tables tests");
     JARVIS_REGISTER_TEST(page_tables_alloc_from_pool);
@@ -443,4 +497,5 @@ void register_page_tables_tests() {
     JARVIS_REGISTER_TEST(map_page_err_validation_and_success);
     JARVIS_REGISTER_TEST(map_page_err_oom_writes_nothing);
     JARVIS_REGISTER_TEST(kernel_half_runtime_map_nx);
+    JARVIS_REGISTER_TEST(kernel_half_boot_wx_pins);
 }

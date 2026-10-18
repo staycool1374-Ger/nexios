@@ -711,9 +711,17 @@ static void map_kstack_page(uint64_t virt, uint64_t phys) {
         return;
     constexpr uint64_t P = 1ULL << 0; // PAGE_PRESENT
     constexpr uint64_t W = 1ULL << 1; // PAGE_WRITE
+#if defined(CONFIG_ARCH_X86_64)
+    // Issue #376 (boot-text W^X): kernel stacks are data — RW+NX.
+    // x86-only window (other arches use the HHDM fallback, out of scope).
+    constexpr uint64_t NX = 1ULL << 63;
+    const uint64_t leaf_flags = P | W | NX;
+#else
+    const uint64_t leaf_flags = P | W;
+#endif
     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                             s_kstack_pt_pages[pt_idx]);
-    pt[entry] = phys | P | W;
+    pt[entry] = phys | leaf_flags;
     asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
 }
 

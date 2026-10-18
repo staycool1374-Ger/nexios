@@ -1578,6 +1578,10 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // all boot-time map_page work (drivers, kslot window) is done, and no
     // task exists yet.  Fork/exec converge toward the live root; drift
     // from this baseline is diagnosed, never fatal (paper §4 row 2).
+    // Issue #376 (boot-text W^X): harden boot-established image
+    // permissions (text RX / rodata RO+NX / data+bss RW+NX) BEFORE the
+    // snapshot so the template and all later clones inherit them.
+    kernel::VMM::harden_kernel_half();
     kernel::VMM::snapshot_kernel_template();
     boot_mark(kernel::BootStage::TABLE_REBUILD);
 #if defined(CONFIG_DEBUG)
