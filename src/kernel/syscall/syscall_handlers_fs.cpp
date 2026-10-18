@@ -386,7 +386,7 @@ uint64_t Syscall::sys_write(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         uint64_t page_va = user_va & ~0xFFFULL;
         uint64_t page_off = user_va & 0xFFFULL;
         if (page_off + count <= 4096) {
-            uint64_t phys = VMM::virt_to_phys_in_pml4(page_va, cur->page_table_);
+            uint64_t phys = VMM::virt_to_phys_in_pml4(page_va, cur->get_page_table());
             if (phys == 0)
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             auto *kaddr = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +

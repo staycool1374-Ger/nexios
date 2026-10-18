@@ -427,7 +427,30 @@ struct TaskControlBlock {
     uint64_t kstack_slot_va_;
     /// @brief Total slot size (stack + guard page).  0 if HHDM.
     uint64_t kstack_slot_size_;
+
+  private:
+    /// @brief Root physical address of the task's private PML4 (issue #377).
+    ///        Privatized: the factory installs exactly once (MP-1.2), exec
+    ///        swaps, teardown clears.  Raw writes orphaned the factory PML4
+    ///        (+1 PMM, issue #371) — all writes go through install /
+    ///        swap / clear below, all reads through get_page_table().
     uint64_t page_table_;
+
+  public:
+    /// @brief Read the task's PML4 root (0 = none installed yet).
+    [[nodiscard]] uint64_t get_page_table() const noexcept {
+        return page_table_;
+    }
+    /// @brief Install the factory PML4 on a fresh TCB (issue #377).
+    ///        ENSUREs the slot is empty: a second install without an
+    ///        intervening free orphans a live table (the #371 shape).
+    void install_page_table(uint64_t pml4) noexcept;
+    /// @brief Exec-style live swap (issue #377): replaces a live table.
+    ///        The caller frees the old table (exec frees after the swap so
+    ///        the running task never observes a dead root).
+    void swap_page_table(uint64_t new_pml4) noexcept;
+    /// @brief Teardown clear (issue #377): the caller freed the table.
+    void clear_page_table() noexcept;
     /// @brief Process-context identifier for TLB tagging (issue #156,
     ///        x86_64 only).  0 = untagged (kernel tasks + unsupported
     ///        CPUs); user tasks hold an allocated 1..4095.  Owned by the

@@ -278,7 +278,7 @@ void unmap_acquired_ro(uint64_t pml4, const DepResolveContext *ctx,
 ///        teardown would double-free), then release refcounts and clear
 ///        the task list.  Runs before page-table teardown in TCB::cleanup
 ///        and destroy_completed_tcb paths.
-/// @param tcb Task whose lib list to drain (pml4 = tcb->page_table_).
+/// @param tcb Task whose lib list to drain (pml4 = tcb->get_page_table()).
 void release_task_libs(TaskControlBlock *tcb);
 
 /// @brief Shared library state machine (for background loader extension).

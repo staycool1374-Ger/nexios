@@ -1968,7 +1968,7 @@ static void monstat_show_detail(const kernel::TaskControlBlock *t) {
     Terminal::write("/");
     print_uint(t->bss_size_);
     Terminal::write(" pt=");
-    print_hex64(t->page_table_);
+    print_hex64(t->get_page_table());
     Terminal::write(" pcid=");
     print_uint(t->pcid_);
     Terminal::write(" tls=");

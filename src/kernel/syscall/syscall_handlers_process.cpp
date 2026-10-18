@@ -122,7 +122,7 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         if (syscall_is_user_task() && status.unsafe_ptr() &&
             VMM::virt_to_phys_in_pml4(
                 reinterpret_cast<uint64_t>(status.unsafe_ptr()),
-                cur->page_table_) == 0) {
+                cur->get_page_table()) == 0) {
             return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
         cur->waiting_child_status = status_ptr;

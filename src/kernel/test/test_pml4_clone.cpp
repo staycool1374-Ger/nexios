@@ -503,9 +503,9 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
             g_leaf_diff = 0;
 
             auto *pv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                    (self->page_table_ & ~0xFFFULL));
+                                                    (self->get_page_table() & ~0xFFFULL));
             auto *cv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                    (child->page_table_ & ~0xFFFULL));
+                                                    (child->get_page_table() & ~0xFFFULL));
             auto *kv = reinterpret_cast<uint64_t *>(
                 arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
 
@@ -588,9 +588,9 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
             }
 
             uint64_t p_leaf =
-                VMM::virt_to_phys_in_pml4(PROBE_VA, self->page_table_);
+                VMM::virt_to_phys_in_pml4(PROBE_VA, self->get_page_table());
             uint64_t c_leaf =
-                VMM::virt_to_phys_in_pml4(PROBE_VA, child->page_table_);
+                VMM::virt_to_phys_in_pml4(PROBE_VA, child->get_page_table());
             if (c_leaf == 0 || c_leaf == p_leaf) {
                 g_leaf_diff = 0;
             } else {
@@ -601,7 +601,7 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
             delete child;
 
             // Parent mapping survives the child's teardown.
-            if (VMM::virt_to_phys_in_pml4(PROBE_VA, self->page_table_) ==
+            if (VMM::virt_to_phys_in_pml4(PROBE_VA, self->get_page_table()) ==
                 p_leaf) {
                 g_parent_ok = 1;
             } else {
@@ -616,7 +616,7 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
     parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
     uint64_t phys = PMM::alloc_user_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->get_page_table());
 
     Scheduler::add_task(*parent);
     Scheduler::reschedule();
@@ -667,12 +667,12 @@ JARVIS_TEST(fork_free_user_pages_child_deepcopy, "PRE: none | POST: none") {
                 return;
             size_t pml4_idx = (PROBE_VA >> PML4_SHIFT) & 0x1FF;
             auto *pv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                    (self->page_table_ & ~0xFFFULL));
+                                                    (self->get_page_table() & ~0xFFFULL));
             uint64_t parent_pdpt = pv[pml4_idx] & ~0xFFFULL;
             uint64_t parent_leaf =
-                VMM::virt_to_phys_in_pml4(PROBE_VA, self->page_table_);
+                VMM::virt_to_phys_in_pml4(PROBE_VA, self->get_page_table());
             uint64_t child_leaf =
-                VMM::virt_to_phys_in_pml4(PROBE_VA, child->page_table_);
+                VMM::virt_to_phys_in_pml4(PROBE_VA, child->get_page_table());
             if (child_leaf == 0 || child_leaf == parent_leaf) {
                 g_leaf_diff = 0;
             } else {
@@ -690,7 +690,7 @@ JARVIS_TEST(fork_free_user_pages_child_deepcopy, "PRE: none | POST: none") {
             } else {
                 g_parent_entry_ok = 0;
             }
-            if (VMM::virt_to_phys_in_pml4(PROBE_VA, self->page_table_) ==
+            if (VMM::virt_to_phys_in_pml4(PROBE_VA, self->get_page_table()) ==
                 parent_leaf) {
                 g_parent_leaf_ok = 1;
             } else {
@@ -705,7 +705,7 @@ JARVIS_TEST(fork_free_user_pages_child_deepcopy, "PRE: none | POST: none") {
     parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
     uint64_t phys = PMM::alloc_user_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->get_page_table());
 
     Scheduler::add_task(*parent);
     Scheduler::reschedule();
@@ -730,7 +730,7 @@ JARVIS_TEST(fork_free_user_pages_child_deepcopy, "PRE: none | POST: none") {
 // Input: a REAL dispatched kernel task (prio 11) with a user-like TCB calls
 // clone(); capture the child's page_table_.
 // Expect: build succeeds with the field removed (static_assert passes);
-// child->page_table_ != 0 and != parent->page_table_; the child stack
+// child->get_page_table() != 0 and != parent->get_page_table(); the child stack
 // exists; teardown leaves zero task delta.
 // Depends: kernel::TaskControlBlock, kernel::Scheduler
 JARVIS_TEST(fork_page_table_shared_flag_absent, "PRE: none | POST: none") {
@@ -747,7 +747,7 @@ JARVIS_TEST(fork_page_table_shared_flag_absent, "PRE: none | POST: none") {
             auto *child = TaskControlBlock::clone(regs);
             if (child == nullptr)
                 return;
-            g_child_pt = child->page_table_;
+            g_child_pt = child->get_page_table();
             g_child_stack = child->user_stack_;
             g_child_ok = (g_child_pt != 0 && g_child_stack != 0) ? 1 : 0;
             child->cleanup();
@@ -755,7 +755,7 @@ JARVIS_TEST(fork_page_table_shared_flag_absent, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(parent != nullptr);
-    g_parent_pt = parent->page_table_;
+    g_parent_pt = parent->get_page_table();
     parent->is_user_ = true;           // simulate a user parent for clone()
     parent->user_stack_ = 0x80000000;  // mark as user-like for clone path
     parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed

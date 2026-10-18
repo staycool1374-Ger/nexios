@@ -927,7 +927,7 @@ JARVIS_TEST(elf_shared_loader_success_handoff, "PRE: isolate | POST: none") {
     elf::ElfLoader::wait_loader_idle();
     auto *t = elf::ElfLoader::take_completed();
     JARVIS_ASSERT(t != nullptr);
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
     JARVIS_ASSERT(t->needed_lib_count == 2);
     {
         bool has_a = false;
@@ -943,7 +943,7 @@ JARVIS_TEST(elf_shared_loader_success_handoff, "PRE: isolate | POST: none") {
         JARVIS_ASSERT(has_a && has_b);
     }
     bool ok = false;
-    JARVIS_ASSERT(read_target_u64(t->page_table_, kExecGot, &ok) ==
+    JARVIS_ASSERT(read_target_u64(t->get_page_table(), kExecGot, &ok) ==
                   0x510100);
     JARVIS_ASSERT(ok);
     elf::ElfLoader::destroy_completed_tcb(t);

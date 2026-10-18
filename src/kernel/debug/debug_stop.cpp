@@ -138,12 +138,12 @@ bp_insn_len(uint64_t va, const TaskControlBlock &target) noexcept {
 [[maybe_unused]] bool bp_write_at(TaskControlBlock &target, uint64_t va,
                                     const uint8_t *bytes,
                                     size_t len) noexcept {
-    if (len == 0 || len > 4 || target.page_table_ == 0)
+    if (len == 0 || len > 4 || target.get_page_table() == 0)
         return false;
     uint64_t page_off = va & 0xFFFULL;
     if (page_off + len > 0x1000ULL)
         return false; // never straddle a page (all bp insns fit)
-    uint64_t phys = VMM::virt_to_phys_in_pml4(va, target.page_table_);
+    uint64_t phys = VMM::virt_to_phys_in_pml4(va, target.get_page_table());
     if (phys == 0)
         return false;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -168,12 +168,12 @@ bp_insn_len(uint64_t va, const TaskControlBlock &target) noexcept {
 /// @brief Read @p len bytes at @p va through the target's tables.
 [[maybe_unused]] bool bp_read_at(TaskControlBlock &target, uint64_t va,
                                    uint8_t *out, size_t len) noexcept {
-    if (len == 0 || len > 4 || target.page_table_ == 0)
+    if (len == 0 || len > 4 || target.get_page_table() == 0)
         return false;
     uint64_t page_off = va & 0xFFFULL;
     if (page_off + len > 0x1000ULL)
         return false;
-    uint64_t phys = VMM::virt_to_phys_in_pml4(va, target.page_table_);
+    uint64_t phys = VMM::virt_to_phys_in_pml4(va, target.get_page_table());
     if (phys == 0)
         return false;
     // Walk result is the exact phys (see bp_write_at note) — no page_off.

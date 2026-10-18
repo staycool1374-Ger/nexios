@@ -65,7 +65,7 @@ JARVIS_TEST(task_cleanup_frees_resources, "PRE: none | POST: none") {
 JARVIS_TEST(task_create_user_page_table, "PRE: none | POST: none") {
     auto *tcb = TaskControlBlock::create_user([]() {}, 1, 10, 32_KiB);
     JARVIS_ASSERT(tcb != nullptr);
-    JARVIS_ASSERT(tcb->page_table_ != 0);
+    JARVIS_ASSERT(tcb->get_page_table() != 0);
     JARVIS_ASSERT(tcb->user_stack_ != 0);
     JARVIS_ASSERT_EQ(32_KiB, tcb->user_stack_size_);
 
@@ -96,7 +96,7 @@ JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
             auto *child = TaskControlBlock::clone(regs);
             if (child == nullptr)
                 return;
-            g_child_pt = child->page_table_;
+            g_child_pt = child->get_page_table();
             // v0.4.0 MP-7: page_table_shared_ removed — deep copy means the
             // child's PML4 must differ from the parent's.
             g_child_shared = (g_child_pt != g_parent_pt) ? 0 : 1;
@@ -107,7 +107,7 @@ JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(parent != nullptr);
-    g_parent_pt = parent->page_table_;
+    g_parent_pt = parent->get_page_table();
     parent->is_user_ = true;           // simulate a user parent for clone()
     parent->user_stack_ = 0x80000000;  // mark as user-like for clone path
     parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
@@ -165,7 +165,7 @@ JARVIS_TEST(task_elf_load_inits_ipc_objects, "PRE: none | POST: none") {
 // the parent's page table (deep copy ensures independence).
 // Input: A REAL dispatched kernel task (prio 11) with a cloned PML4 calls
 //        clone(); the child is cleaned up in the running task's own context.
-// Expect: parent->page_table_ unchanged and non-null after child cleanup
+// Expect: parent->get_page_table() unchanged and non-null after child cleanup
 // Depends: kernel::TaskControlBlock, kernel::Scheduler
 JARVIS_TEST(task_fork_child_cleanup_preserves_parent_pages,
             "PRE: none | POST: none") {
@@ -181,12 +181,12 @@ JARVIS_TEST(task_fork_child_cleanup_preserves_parent_pages,
             auto *child = TaskControlBlock::clone(regs);
             if (child == nullptr)
                 return;
-            uint64_t parent_pml4 = self->page_table_;
+            uint64_t parent_pml4 = self->get_page_table();
             // delete calls cleanup() internally
             delete child;
-            g_parent_pt = self->page_table_;
-            g_preserved = (parent_pml4 != 0 && self->page_table_ != 0 &&
-                           self->page_table_ == parent_pml4)
+            g_parent_pt = self->get_page_table();
+            g_preserved = (parent_pml4 != 0 && self->get_page_table() != 0 &&
+                           self->get_page_table() == parent_pml4)
                               ? 1
                               : 0;
         },

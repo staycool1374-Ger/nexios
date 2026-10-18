@@ -390,9 +390,9 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
     if (p->waiting_child_status) {
         uint64_t old_cr3 = 0;
         bool switched = false;
-        if (p->page_table_ && arch::read_cr3() != p->page_table_) {
+        if (p->get_page_table() && arch::read_cr3() != p->get_page_table()) {
             old_cr3 = arch::read_cr3();
-            arch::write_cr3(p->page_table_);
+            arch::write_cr3(p->get_page_table());
             switched = true;
         }
         // MP-4 (SMAP): the status page is a user page pre-certified MAPPED by

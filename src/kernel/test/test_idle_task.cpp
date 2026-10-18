@@ -60,7 +60,7 @@ JARVIS_TEST(idle_task_runs_in_ring3, "PRE: none | POST: none") {
         auto *t = Scheduler::task_at(i);
         if (t && t->priority == 0 && t->user_stack_ != 0 &&
             t != Scheduler::get_idle_task()) {
-            JARVIS_ASSERT(t->page_table_ != VMM::get_kernel_pml4());
+            JARVIS_ASSERT(t->get_page_table() != VMM::get_kernel_pml4());
             JARVIS_ASSERT(t->kernel_stack != nullptr);
             JARVIS_TEST_PASS();
             return;

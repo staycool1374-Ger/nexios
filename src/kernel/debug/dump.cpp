@@ -344,7 +344,7 @@ void dump_task_info(uint64_t task_id) {
     L::raw_write("\n");
 
     // memory / page tables
-    pkv("page_table", t->page_table_);
+    pkv("page_table", t->get_page_table());
 
     // ready-queue status
     L::raw_write("[DUMP]   in_ready_queue: ");
@@ -505,7 +505,7 @@ void dump_all_tasks() {
         L::raw_write(rsp_in_stack ? "yes" : "NO");
         L::raw_write("\n");
 
-        pkv("pgtable", t->page_table_);
+        pkv("pgtable", t->get_page_table());
 
         L::raw_write("[DUMP]   rq: ");
         L::raw_write(t->in_ready_queue_ ? "yes" : "no");

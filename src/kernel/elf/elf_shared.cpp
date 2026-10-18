@@ -303,7 +303,7 @@ void release_task_libs(TaskControlBlock *tcb) {    if (!tcb || tcb->needed_lib_c
                     // unmap_acquired_ro above).
                     (void)VMM::unmap_page_in_pml4_err(
                         slot->load_base + p * arch::PAGE_SIZE,
-                        tcb->page_table_);
+                        tcb->get_page_table());
                 }
             }
             SharedLibCache::instance().release(tcb->needed_libs[i]);

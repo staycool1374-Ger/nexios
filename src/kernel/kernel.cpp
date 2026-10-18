@@ -2092,7 +2092,7 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
         user_rsp &= ~0xFULL;
 
         uint64_t frame_phys =
-            kernel::VMM::virt_to_phys_in_pml4(user_rsp, task->page_table_);
+            kernel::VMM::virt_to_phys_in_pml4(user_rsp, task->get_page_table());
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto *frame = reinterpret_cast<kernel::SignalFrame *>(
             arch::HHDM_OFFSET + frame_phys);

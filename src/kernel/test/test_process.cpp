@@ -453,7 +453,7 @@ JARVIS_TEST(process_remove_child_clears_parent_id, "PRE: none | POST: none") {
 // parent's mapping intact.
 // Input: parent kernel task with a USER page mapped at PROBE_VA; lambda
 // clones, verifies table/leaf independence, cleans the child up.
-// Expect: child->page_table_ != parent->page_table_; child leaf != parent
+// Expect: child->get_page_table() != parent->get_page_table(); child leaf != parent
 // leaf; after child cleanup the parent's leaf still resolves to the original
 // frame.
 // Depends: test, scheduler, task, VMM, PMM
@@ -475,10 +475,10 @@ JARVIS_TEST(process_clone_child_table_independent, "PRE: none | POST: none") {
             if (child == nullptr)
                 return;
             uint64_t child_leaf =
-                VMM::virt_to_phys_in_pml4(PROBE_VA, child->page_table_);
+                VMM::virt_to_phys_in_pml4(PROBE_VA, child->get_page_table());
             g_parent_leaf =
-                VMM::virt_to_phys_in_pml4(PROBE_VA, self->page_table_);
-            g_pt_diff = (child->page_table_ != self->page_table_) ? 1 : 0;
+                VMM::virt_to_phys_in_pml4(PROBE_VA, self->get_page_table());
+            g_pt_diff = (child->get_page_table() != self->get_page_table()) ? 1 : 0;
             g_leaf_diff = (child_leaf != 0 && child_leaf != g_parent_leaf)
                               ? 1
                               : 0;
@@ -488,7 +488,7 @@ JARVIS_TEST(process_clone_child_table_independent, "PRE: none | POST: none") {
 
             // Parent mapping intact after child teardown.
             g_parent_ok =
-                (VMM::virt_to_phys_in_pml4(PROBE_VA, self->page_table_) ==
+                (VMM::virt_to_phys_in_pml4(PROBE_VA, self->get_page_table()) ==
                  g_parent_leaf)
                     ? 1
                     : 0;
@@ -501,7 +501,7 @@ JARVIS_TEST(process_clone_child_table_independent, "PRE: none | POST: none") {
     parent->user_stack_size_ = 32_KiB;
     uint64_t phys = PMM::alloc_user_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->get_page_table());
 
     Scheduler::add_task(*parent);
     Scheduler::reschedule();
@@ -548,7 +548,7 @@ JARVIS_TEST(process_clone_teardown_zero_delta, "PRE: none | POST: none") {
     parent->user_stack_size_ = 32_KiB;
     uint64_t phys = PMM::alloc_user_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->get_page_table());
 
     Scheduler::add_task(*parent);
     Scheduler::reschedule();
@@ -578,11 +578,11 @@ JARVIS_TEST(process_kernel_half_private, "PRE: none | POST: none") {
         delete t;
     });
     JARVIS_ASSERT(t->is_user_ == false);
-    JARVIS_ASSERT(t->page_table_ != 0);
-    JARVIS_ASSERT(t->page_table_ != VMM::get_kernel_pml4());
+    JARVIS_ASSERT(t->get_page_table() != 0);
+    JARVIS_ASSERT(t->get_page_table() != VMM::get_kernel_pml4());
 
     auto *priv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                              (t->page_table_ & ~0xFFFULL));
+                                              (t->get_page_table() & ~0xFFFULL));
     auto *kern = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {

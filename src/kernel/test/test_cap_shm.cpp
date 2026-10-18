@@ -136,7 +136,7 @@ JARVIS_TEST(frame_user_map_unmap_roundtrip, "PRE: none | POST: none") {
     // a second manual clone here would orphan the factory PML4 (+1 PMM,
     // issue #371).  Ring 0 execution is unaffected (kernel half is copied);
     // cleanup frees the clone.
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
     Scheduler::add_task(*t);
     Scheduler::reschedule();
 
@@ -154,9 +154,9 @@ JARVIS_TEST(frame_user_map_unmap_roundtrip, "PRE: none | POST: none") {
     // Multi-page closure: SYS_FRAME_UNMAP must clear EVERY page of a
     // multi-page mapping, not just the region base (otherwise a later cap
     // dispose leaves live user PTEs aliasing freed physical memory).
-    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(va, t->page_table_));
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(va, t->get_page_table()));
     JARVIS_ASSERT_EQ(
-        0ULL, VMM::virt_to_phys_in_pml4(va + arch::PAGE_SIZE, t->page_table_));
+        0ULL, VMM::virt_to_phys_in_pml4(va + arch::PAGE_SIZE, t->get_page_table()));
     JARVIS_ASSERT_EQ(static_cast<size_t>(0), cap::FrameUserMap::live_count());
     kernel::test::terminate_and_drain(*t);
     JARVIS_TEST_PASS();
@@ -283,7 +283,7 @@ JARVIS_TEST(shm_ring_producer_consumer, "PRE: none | POST: none") {
         20, 10);
     JARVIS_ASSERT(producer != nullptr);
     // Factory PML4 from create() (see above); no second manual clone.
-    JARVIS_ASSERT(producer->page_table_ != 0);
+    JARVIS_ASSERT(producer->get_page_table() != 0);
     Scheduler::add_task(*producer);
     Scheduler::reschedule();
 
@@ -304,7 +304,7 @@ JARVIS_TEST(shm_ring_producer_consumer, "PRE: none | POST: none") {
     // Zero-copy proof: the mapped VA in the producer's PML4 resolves to the
     // same physical frame the producer wrote.  Runs while the producer's
     // cloned PML4 is still alive (task is parked, not drained).
-    uint64_t mapped = VMM::virt_to_phys_in_pml4(va, producer->page_table_);
+    uint64_t mapped = VMM::virt_to_phys_in_pml4(va, producer->get_page_table());
     JARVIS_ASSERT(mapped != 0);
     JARVIS_ASSERT(mapped == phys);
 
@@ -382,7 +382,7 @@ JARVIS_TEST(shm_ring_task_death_drain, "PRE: none | POST: none") {
         30, 10);
     JARVIS_ASSERT(t != nullptr);
     // Factory PML4 from create() (see above); no second manual clone.
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(t);
@@ -449,7 +449,7 @@ JARVIS_TEST(shm_ring_revocation_cleanup, "PRE: none | POST: none") {
         11, 10);
     JARVIS_ASSERT(t != nullptr);
     // Factory PML4 from create() (see above); no second manual clone.
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
 
     size_t base = cap::FrameUserMap::live_count();
     Scheduler::add_task(*t);

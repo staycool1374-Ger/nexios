@@ -110,11 +110,11 @@ JARVIS_TEST(kernel_priv_pml4_clone_kernel_half_present,
         delete t;
     });
 
-    JARVIS_ASSERT(t->page_table_ != 0);
-    JARVIS_ASSERT(t->page_table_ != VMM::get_kernel_pml4());
+    JARVIS_ASSERT(t->get_page_table() != 0);
+    JARVIS_ASSERT(t->get_page_table() != VMM::get_kernel_pml4());
 
     auto *priv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                              (t->page_table_ & ~0xFFFULL));
+                                              (t->get_page_table() & ~0xFFFULL));
     auto *kern = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
 
@@ -165,7 +165,7 @@ JARVIS_TEST(kernel_priv_cross_task_data_isolation,
     JARVIS_ASSERT(a != nullptr && b != nullptr);
 
     auto cleanup_a = ScopeGuard([&]() {
-        free_priv_window(a->page_table_);
+        free_priv_window(a->get_page_table());
         a->cleanup();
         delete a;
     });
@@ -175,18 +175,18 @@ JARVIS_TEST(kernel_priv_cross_task_data_isolation,
     });
 
     // Distinct private PML4s, none aliasing the boot kernel PML4.
-    JARVIS_ASSERT(a->page_table_ != 0);
-    JARVIS_ASSERT(b->page_table_ != 0);
-    JARVIS_ASSERT(a->page_table_ != b->page_table_);
-    JARVIS_ASSERT(a->page_table_ != VMM::get_kernel_pml4());
-    JARVIS_ASSERT(b->page_table_ != VMM::get_kernel_pml4());
+    JARVIS_ASSERT(a->get_page_table() != 0);
+    JARVIS_ASSERT(b->get_page_table() != 0);
+    JARVIS_ASSERT(a->get_page_table() != b->get_page_table());
+    JARVIS_ASSERT(a->get_page_table() != VMM::get_kernel_pml4());
+    JARVIS_ASSERT(b->get_page_table() != VMM::get_kernel_pml4());
 
     // Map one private page in A's kernel-half private-data window.
     uint64_t priv_phys = PMM::alloc_page();
     JARVIS_ASSERT(priv_phys != 0);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + priv_phys)[0] = 0x00;
-    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, false, a->page_table_);
+    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, false, a->get_page_table());
 
     // Dispatch A: the lambda writes 0xAA through the private VA (with A's
     // PML4 active as CR3, see kernel_priv_cr3_switch_on_dispatch).
@@ -194,10 +194,10 @@ JARVIS_TEST(kernel_priv_cross_task_data_isolation,
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(a);
     JARVIS_ASSERT(g_written == 1);
-    JARVIS_ASSERT(g_cr3_in_a == a->page_table_);
+    JARVIS_ASSERT(g_cr3_in_a == a->get_page_table());
 
     // A's mapping resolves; the frame holds what A wrote.
-    uint64_t resolved = VMM::virt_to_phys_in_pml4(PRIV_BASE, a->page_table_);
+    uint64_t resolved = VMM::virt_to_phys_in_pml4(PRIV_BASE, a->get_page_table());
     JARVIS_ASSERT(resolved == priv_phys);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     JARVIS_ASSERT(reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + priv_phys)[0] == 0xAA);
@@ -206,13 +206,13 @@ JARVIS_TEST(kernel_priv_cross_task_data_isolation,
     // PRIV_BASE under B's PML4 would #PF and panic in the kernel handler
     // (kernel.cpp CPU-EXCEPTION path), so the walk result of 0 is the
     // equivalent proof: hardware translation would fail with a page fault.
-    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(PRIV_BASE, b->page_table_) == 0);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(PRIV_BASE, b->get_page_table()) == 0);
 
     // Both tasks expose zero user entries.
     auto *pml4_a = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                (a->page_table_ & ~0xFFFULL));
+                                                (a->get_page_table() & ~0xFFFULL));
     auto *pml4_b = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                (b->page_table_ & ~0xFFFULL));
+                                                (b->get_page_table() & ~0xFFFULL));
     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
         JARVIS_ASSERT(pml4_a[i] == 0);
         JARVIS_ASSERT(pml4_b[i] == 0);
@@ -226,7 +226,7 @@ JARVIS_TEST(kernel_priv_cross_task_data_isolation,
 // kernel task's lambda equals that task's page_table_.  The harness itself
 // runs on the boot kernel PML4 (its CR3 is only switched away on dispatch).
 // Input: Create kernel task A with a lambda recording read_cr3(); dispatch.
-// Expect: g_cr3_in_a == a->page_table_; harness read_cr3() ==
+// Expect: g_cr3_in_a == a->get_page_table(); harness read_cr3() ==
 // VMM::get_kernel_pml4().
 // Depends: kernel::task::Scheduler, kernel::memory::VMM
 JARVIS_TEST(kernel_priv_cr3_switch_on_dispatch, "PRE: none | POST: none") {
@@ -245,7 +245,7 @@ JARVIS_TEST(kernel_priv_cr3_switch_on_dispatch, "PRE: none | POST: none") {
     kernel::test::wait_for_termination_safe(a);
 
     JARVIS_ASSERT(g_cr3 != 0);
-    JARVIS_ASSERT(g_cr3 == a->page_table_);
+    JARVIS_ASSERT(g_cr3 == a->get_page_table());
 
     // Harness (test body): the active CR3 is EITHER the boot kernel PML4 or
     // the harness's own private kernel-half PML4 (MP-1.2 gives every kernel
@@ -255,7 +255,7 @@ JARVIS_TEST(kernel_priv_cr3_switch_on_dispatch, "PRE: none | POST: none") {
     uint64_t harness_cr3 = arch::read_cr3();
     auto *harness = Scheduler::get_harness_task();
     JARVIS_ASSERT(harness_cr3 == VMM::get_kernel_pml4() ||
-                  (harness && harness->page_table_ == harness_cr3));
+                  (harness && harness->get_page_table() == harness_cr3));
     JARVIS_TEST_PASS();
 }
 
@@ -273,7 +273,7 @@ JARVIS_TEST(kernel_priv_teardown_frees_pml4_stack,
 
     auto *t = TaskControlBlock::create([]() {}, 11, 10);
     JARVIS_ASSERT(t != nullptr);
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(t);
@@ -288,7 +288,7 @@ JARVIS_TEST(kernel_priv_teardown_frees_pml4_stack,
 // Runmode: kernel
 // Testidea: Issue #199 — the private-window teardown clears the PML4 slot,
 // unmaps the VA, and reclaims every page (zero PMM delta).
-// Input: Create task A, map PRIV_BASE in A->page_table_, teardown under
+// Input: Create task A, map PRIV_BASE in A->get_page_table(), teardown under
 // IrqGuard, verify slot/translation/delta
 // Expect: pml4 slot == 0, virt_to_phys == 0, free_pages_ref unchanged
 // Depends: kernel::VMM, kernel::PMM, free_priv_window
@@ -298,14 +298,14 @@ JARVIS_TEST(kernel_priv_teardown_clears_pml4_slot_and_reclaims,
 
     auto *task_a = TaskControlBlock::create([]() {}, 11, 10);
     JARVIS_ASSERT(task_a != nullptr);
-    JARVIS_ASSERT(task_a->page_table_ != 0);
-    JARVIS_ASSERT(task_a->page_table_ != VMM::get_kernel_pml4());
+    JARVIS_ASSERT(task_a->get_page_table() != 0);
+    JARVIS_ASSERT(task_a->get_page_table() != VMM::get_kernel_pml4());
 
     uint64_t priv_phys = PMM::alloc_page();
     JARVIS_ASSERT(priv_phys != 0);
-    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, false, task_a->page_table_);
+    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, false, task_a->get_page_table());
     JARVIS_ASSERT_FMT(
-        VMM::virt_to_phys_in_pml4(PRIV_BASE, task_a->page_table_) == priv_phys,
+        VMM::virt_to_phys_in_pml4(PRIV_BASE, task_a->get_page_table()) == priv_phys,
         "PRIV_BASE must resolve after map");
 
     {
@@ -313,16 +313,16 @@ JARVIS_TEST(kernel_priv_teardown_clears_pml4_slot_and_reclaims,
         // the slot clear and the TLB flush could observe the torn window.
         // NOTE: free_priv_window already reclaims the leaf data page.
         arch::IrqGuard teardown_guard;
-        free_priv_window(task_a->page_table_);
+        free_priv_window(task_a->get_page_table());
         arch::ArchPageTable::tlb_flush(PRIV_BASE);
     }
 
     JARVIS_ASSERT_FMT(
-        VMM::virt_to_phys_in_pml4(PRIV_BASE, task_a->page_table_) == 0,
+        VMM::virt_to_phys_in_pml4(PRIV_BASE, task_a->get_page_table()) == 0,
         "PRIV_BASE must not resolve after teardown");
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(
-        arch::HHDM_OFFSET + (task_a->page_table_ & ~0xFFFULL));
+        arch::HHDM_OFFSET + (task_a->get_page_table() & ~0xFFFULL));
     constexpr size_t PRIV_SLOT = (CONFIG_KERNEL_PRIV_DATA_BASE >> 39) & 0x1FF;
     JARVIS_ASSERT_FMT(pml4[PRIV_SLOT] == 0, "PML4 priv slot must be clear");
 
@@ -350,22 +350,22 @@ JARVIS_TEST(kernel_priv_teardown_double_free_safe,
 
     uint64_t priv_phys = PMM::alloc_page();
     JARVIS_ASSERT(priv_phys != 0);
-    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, false, task_a->page_table_);
+    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, false, task_a->get_page_table());
     {
         // NOTE: free_priv_window already reclaims the leaf data page.
         arch::IrqGuard teardown_guard;
-        free_priv_window(task_a->page_table_);
+        free_priv_window(task_a->get_page_table());
         arch::ArchPageTable::tlb_flush(PRIV_BASE);
     }
 
     uint64_t free_after_first = PMM::free_pages_ref();
     {
         arch::IrqGuard second_guard;
-        free_priv_window(task_a->page_table_);
+        free_priv_window(task_a->get_page_table());
         arch::ArchPageTable::tlb_flush(PRIV_BASE);
     }
     JARVIS_ASSERT_FMT(
-        VMM::virt_to_phys_in_pml4(PRIV_BASE, task_a->page_table_) == 0,
+        VMM::virt_to_phys_in_pml4(PRIV_BASE, task_a->get_page_table()) == 0,
         "PRIV_BASE must stay unmapped after double teardown");
     JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_after_first,
                       "second teardown must not free anything");

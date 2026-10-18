@@ -751,9 +751,9 @@ JARVIS_TEST(riscv64_umode_ecall_smoke, "PRE: none | POST: none") {
     // Map our pages into the task's tables (create_user maps its own
     // stack + yield stub elsewhere; our VAs don't collide).
     VMM::map_page_in_pml4(kUmodeStubVa, stub_phys, true, true,
-                          t->page_table_);
+                          t->get_page_table());
     VMM::map_page_in_pml4(kUmodeDataVa, data_phys, true, false,
-                          t->page_table_);
+                          t->get_page_table());
     // Point the initial frame past create_user's yield stub.
     auto *frame = reinterpret_cast<uint64_t *>(t->context.sp);
     frame[31] = kUmodeStubVa;  // SEPC slot (OFF_SEPC=248, idx 31)
@@ -761,10 +761,10 @@ JARVIS_TEST(riscv64_umode_ecall_smoke, "PRE: none | POST: none") {
     // Fail fast if the map didn't land (else the U-fetch fault below
     // misattributes a mapping bug to the trap path).
     JARVIS_ASSERT_FMT(
-        VMM::virt_to_phys_in_pml4(kUmodeStubVa, t->page_table_) == stub_phys,
+        VMM::virt_to_phys_in_pml4(kUmodeStubVa, t->get_page_table()) == stub_phys,
         "stub VA not mapped in task tables");
     JARVIS_ASSERT_FMT(
-        VMM::virt_to_phys_in_pml4(kUmodeDataVa, t->page_table_) == data_phys,
+        VMM::virt_to_phys_in_pml4(kUmodeDataVa, t->get_page_table()) == data_phys,
         "data VA not mapped in task tables");
 
     {
@@ -904,17 +904,17 @@ JARVIS_TEST(riscv64_ecall_dispatch_cookies, "PRE: none | POST: none") {
     JARVIS_ASSERT(Scheduler::set_sched_policy(*t, SchedPolicy::FIXED));
 
     VMM::map_page_in_pml4(kUmodeStubVa, stub_phys, true, true,
-                          t->page_table_);
+                          t->get_page_table());
     VMM::map_page_in_pml4(kUmodeDataVa, data_phys, true, false,
-                          t->page_table_);
+                          t->get_page_table());
     auto *frame = reinterpret_cast<uint64_t *>(t->context.sp);
     frame[31] = kUmodeStubVa;  // SEPC slot (OFF_SEPC=248, idx 31)
 
     JARVIS_ASSERT_FMT(
-        VMM::virt_to_phys_in_pml4(kUmodeStubVa, t->page_table_) == stub_phys,
+        VMM::virt_to_phys_in_pml4(kUmodeStubVa, t->get_page_table()) == stub_phys,
         "stub VA not mapped in task tables");
     JARVIS_ASSERT_FMT(
-        VMM::virt_to_phys_in_pml4(kUmodeDataVa, t->page_table_) == data_phys,
+        VMM::virt_to_phys_in_pml4(kUmodeDataVa, t->get_page_table()) == data_phys,
         "data VA not mapped in task tables");
 
     {
@@ -1295,7 +1295,7 @@ JARVIS_TEST(riscv64_elf_ecall_smoke, "PRE: none | POST: none") {
         "request_load failed");
     elf::ElfLoader::wait_loader_idle();
     TaskControlBlock *t = elf::ElfLoader::take_completed();
-    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 && t->is_user_,
                       "take_completed failed");
     t->priority = 11;
     t->base_priority = 11;

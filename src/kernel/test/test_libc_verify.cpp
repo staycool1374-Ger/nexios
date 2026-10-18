@@ -201,11 +201,11 @@ VerifyOutcome run_verify_impl(bool admitted) {
     // the task PML4 (catches loader mapping failures early; the data
     // page address is link-layout-specific and intentionally not
     // pinned here).
-    if (t != nullptr && t->page_table_ != 0) {
+    if (t != nullptr && t->get_page_table() != 0) {
         uint64_t p_text =
-            VMM::virt_to_phys_in_pml4(0x400000, t->page_table_);
+            VMM::virt_to_phys_in_pml4(0x400000, t->get_page_table());
         uint64_t p_stack = VMM::virt_to_phys_in_pml4(
-            mem::STACK_VADDR + 4096, t->page_table_);
+            mem::STACK_VADDR + 4096, t->get_page_table());
         if (p_text == 0 || p_stack == 0) {
             elf::ElfLoader::destroy_completed_tcb(t);
             cleanup_image_file();
@@ -213,7 +213,7 @@ VerifyOutcome run_verify_impl(bool admitted) {
             return out;
         }
     }
-    if (t == nullptr || t->page_table_ == 0 || !t->is_user_) {
+    if (t == nullptr || t->get_page_table() == 0 || !t->is_user_) {
         if (t != nullptr)
             elf::ElfLoader::destroy_completed_tcb(t);
         cleanup_image_file();

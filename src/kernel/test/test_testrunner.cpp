@@ -526,7 +526,7 @@ JARVIS_TEST(harness_buffer_unmap_stale_safe,
     Scheduler::set_sched_policy(*task, SchedPolicy::FIXED);
     // v0.4.0 MP-1: create() already assigned a private kernel-half PML4 —
     // do NOT overwrite it (that would leak the create()-allocated page).
-    if (!task->page_table_) { JARVIS_TEST_PASS(); return; }
+    if (!task->get_page_table()) { JARVIS_TEST_PASS(); return; }
     Scheduler::add_task(*task);
 
     // Phase 1: Allocate a buffer — this builds PDPT/PD/PT entries.  Drive the
@@ -556,7 +556,7 @@ JARVIS_TEST(harness_buffer_unmap_stale_safe,
     constexpr uint64_t PT_W = 1ULL << 1;
     constexpr uint64_t PT_U = 1ULL << 2;
     auto *pml4 = reinterpret_cast<uint64_t *>(
-        arch::HHDM_OFFSET + (task->page_table_ & ~0xFFFULL));
+        arch::HHDM_OFFSET + (task->get_page_table() & ~0xFFFULL));
     size_t pml4_idx = (va >> 39) & 0x1FF;
     uint64_t pdpt_phys = pml4[pml4_idx] & ~0xFFFULL;
 

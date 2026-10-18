@@ -70,7 +70,7 @@ JARVIS_TEST(mmio_user_map_dispatch_returns_user_va, "PRE: none | POST: none") {
 
     SimpleTaskPtr t = make_user_fixture();
     JARVIS_ASSERT(t.get() != nullptr);
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
 
     auto *mmio = cap::MmioCap::create(g_dev_phys, arch::PAGE_SIZE,
                                       arch::PciBarType::MEMORY_32);
@@ -86,10 +86,10 @@ JARVIS_TEST(mmio_user_map_dispatch_returns_user_va, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(static_cast<size_t>(1), cap::MmioUserMap::live_count());
 
     // The mapping resolves to the device phys in the task's user PML4.
-    JARVIS_ASSERT_EQ(g_dev_phys, VMM::virt_to_phys_in_pml4(va, t->page_table_));
+    JARVIS_ASSERT_EQ(g_dev_phys, VMM::virt_to_phys_in_pml4(va, t->get_page_table()));
 
     JARVIS_ASSERT(cap::MmioUserMap::unmap(*t, va));
-    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(va, t->page_table_));
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(va, t->get_page_table()));
     JARVIS_ASSERT_EQ(static_cast<size_t>(0), cap::MmioUserMap::live_count());
 
     mmio->release();
@@ -152,7 +152,7 @@ JARVIS_TEST(mmio_user_syscall_dispatch, "PRE: none | POST: none") {
     // a second manual clone here would orphan the factory PML4 (+1 PMM,
     // issue #371).  Ring 0 execution is unaffected (kernel half is copied);
     // cleanup frees the clone.
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(t);
@@ -294,12 +294,12 @@ JARVIS_TEST(mmio_user_revoke_invalidates_mapping, "PRE: none | POST: none") {
     JARVIS_ASSERT(mmio != nullptr);
     uint64_t va = cap::MmioUserMap::map(*t, *mmio);
     JARVIS_ASSERT(va != static_cast<uint64_t>(-1));
-    JARVIS_ASSERT_EQ(g_dev_phys, VMM::virt_to_phys_in_pml4(va, t->page_table_));
+    JARVIS_ASSERT_EQ(g_dev_phys, VMM::virt_to_phys_in_pml4(va, t->get_page_table()));
 
     mmio->revoke(); // must unmap the PTE + free the slot
     JARVIS_ASSERT_EQ(static_cast<size_t>(0), cap::MmioUserMap::live_count());
     JARVIS_ASSERT(!cap::MmioUserMap::is_owner(*t, va));
-    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(va, t->page_table_));
+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(va, t->get_page_table()));
 
     mmio->release();
     PMM::free_page(g_dev_phys);

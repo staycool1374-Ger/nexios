@@ -631,7 +631,7 @@ bool run_errno_probe(char *capture, size_t cap) {
     }
     elf::ElfLoader::wait_loader_idle();
     TaskControlBlock *t = elf::ElfLoader::take_completed();
-    if (t == nullptr || t->page_table_ == 0 || !t->is_user_) {
+    if (t == nullptr || t->get_page_table() == 0 || !t->is_user_) {
         if (t != nullptr)
             elf::ElfLoader::destroy_completed_tcb(t);
         cleanup_errno_files();

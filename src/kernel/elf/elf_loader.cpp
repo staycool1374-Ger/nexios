@@ -272,7 +272,7 @@ void ElfLoader::abandon_retention_locked() {
 // the rerun path reports). Bounded: no reschedule inside.
 void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
     staging_ = Retention{};
-    if (!tcb || !tcb->page_table_)
+    if (!tcb || !tcb->get_page_table())
         return;
     bool has_dynamic = false;
     for (uint16_t i = 0; i < hdr_.phnum; ++i) {
@@ -312,7 +312,7 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
             if (gp >= kMaxGoldenPages)
                 return;
             uint64_t phys =
-                VMM::virt_to_phys_in_pml4(va, tcb->page_table_);
+                VMM::virt_to_phys_in_pml4(va, tcb->get_page_table());
             if (!phys)
                 return; // hole: fail closed (cannot happen post-load)
             staging_.golden[gp].phys = phys;
@@ -346,7 +346,7 @@ void ElfLoader::fill_staging_locked(TaskControlBlock *tcb) {
             return;
         if (pr >= kMaxPinRanges)
             return;
-        if (!copy_user_range(tcb->page_table_, phdr->vaddr, phdr->filesz,
+        if (!copy_user_range(tcb->get_page_table(), phdr->vaddr, phdr->filesz,
                              staging_.pin_buf + pin_off))
             return;
         staging_.pin_ranges[pr].vaddr = phdr->vaddr;
@@ -425,7 +425,7 @@ void ElfLoader::drop_builder_ref_locked(uint64_t epoch) {
 }
 
 void ElfLoader::unmap_golden(TaskControlBlock *tcb) {
-    if (!tcb || !tcb->page_table_)
+    if (!tcb || !tcb->get_page_table())
         return;
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(lock_);
@@ -442,10 +442,10 @@ void ElfLoader::unmap_golden(TaskControlBlock *tcb) {
             uint64_t va =
                 retention_.ranges[r].vaddr + p * arch::PAGE_SIZE;
             uint64_t phys =
-                VMM::virt_to_phys_in_pml4(va, tcb->page_table_);
+                VMM::virt_to_phys_in_pml4(va, tcb->get_page_table());
             if (phys != 0 && idx < retention_.golden_pages &&
                 phys == retention_.golden[idx].phys) {
-                VMM::unmap_page_in_pml4(va, tcb->page_table_);
+                VMM::unmap_page_in_pml4(va, tcb->get_page_table());
                 mapped = true;
             }
             ++idx;
@@ -799,7 +799,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
     tcb->ready_deferred_ = false;
     tcb->remaining_ticks = 0;
     tcb->deadline_ticks = arch::Timer::ticks();
-    tcb->page_table_ = 0;
+    tcb->clear_page_table();
     tcb->stack_phys_ = 0;
     tcb->kernel_stack = nullptr;
     tcb->kernel_stack_top = 0;
@@ -832,7 +832,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
     tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_virt);
     tcb->kernel_stack_top = kstack_virt + TaskControlBlock::STACK_SIZE;
 
-    tcb->page_table_ = pml4;
+    tcb->install_page_table(pml4);
     tcb->is_user_ = true;
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
     tcb->pcid_ = arch::pcid_alloc();
@@ -853,7 +853,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
         {
             arch::IrqGuard irq_guard{};
             SpinLockGuard<sync::SpinLock> guard(lock_);
-            unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
+            unmap_fresh_golden_locked(tcb->get_page_table(), view.ranges,
                                       view.range_count);
             drop_builder_ref_locked(view.epoch);
         }
@@ -892,7 +892,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
             {
                 arch::IrqGuard irq_guard{};
                 SpinLockGuard<sync::SpinLock> guard(lock_);
-                unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
+                unmap_fresh_golden_locked(tcb->get_page_table(), view.ranges,
                                           view.range_count);
                 drop_builder_ref_locked(view.epoch);
             }
@@ -935,7 +935,7 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
         {
             arch::IrqGuard irq_guard{};
             SpinLockGuard<sync::SpinLock> guard(lock_);
-            unmap_fresh_golden_locked(tcb->page_table_, view.ranges,
+            unmap_fresh_golden_locked(tcb->get_page_table(), view.ranges,
                                       view.range_count);
             drop_builder_ref_locked(view.epoch);
         }
@@ -1042,7 +1042,7 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
     // and track_task_remove assume add_task ran).  Free the resources directly,
     // mirroring cleanup()'s frees but skipping all scheduler + task-accounting
     // interactions.
-    if (tcb->page_table_) {
+    if (tcb->get_page_table()) {
         kernel::BufferPool::unmap_all(*tcb);
         // Issue #95: release shared libs (unmap shared RO + drop
         // refcounts) BEFORE the blind free_user_pages below.
@@ -1052,9 +1052,9 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
         // scheduled paths). The untaken completion's golden refs are
         // request_load's destroy (above); this path never touches
         // retention (vanilla two-step destroy).
-        VMM::free_user_pages(tcb->page_table_);
-        PMM::free_page(tcb->page_table_);
-        tcb->page_table_ = 0;
+        VMM::free_user_pages(tcb->get_page_table());
+        PMM::free_page(tcb->get_page_table());
+        tcb->clear_page_table();
     }
     if (tcb->stack_phys_) {
         size_t pages = (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;

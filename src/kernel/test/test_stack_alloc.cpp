@@ -61,16 +61,16 @@ JARVIS_TEST(stack_alloc_user_task_has_guard_page, "PRE: none | POST: none") {
         t->cleanup();
         delete t;
     });
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
 
     uint64_t guard_phys = VMM::virt_to_phys_in_pml4(mem::STACK_VADDR,
-                                                     t->page_table_);
+                                                     t->get_page_table());
     JARVIS_ASSERT_FMT(guard_phys == 0,
                       "Guard page at 0x%lx mapped to 0x%lx (expected unmapped)",
                       mem::STACK_VADDR, guard_phys);
 
     uint64_t stack_phys = VMM::virt_to_phys_in_pml4(
-        mem::STACK_VADDR + arch::PAGE_SIZE, t->page_table_);
+        mem::STACK_VADDR + arch::PAGE_SIZE, t->get_page_table());
     JARVIS_ASSERT_FMT(stack_phys != 0,
                       "Stack base at 0x%lx unmapped (expected mapped)",
                       mem::STACK_VADDR + arch::PAGE_SIZE);
@@ -336,9 +336,9 @@ JARVIS_TEST(stack_alloc_user_stack_phys_freed_on_cleanup,
     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
     JARVIS_ASSERT(t != nullptr);
     JARVIS_ASSERT(t->user_stack_ != 0);
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
     t->cleanup();
-    JARVIS_ASSERT(t->page_table_ == 0);
+    JARVIS_ASSERT(t->get_page_table() == 0);
     JARVIS_ASSERT(t->user_stack_ == 0);
     JARVIS_TEST_PASS();
 }

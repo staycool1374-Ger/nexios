@@ -566,7 +566,7 @@ bool PagerRegistry::delegate_fault(kernel::TaskControlBlock &client,
             sl.fault.fault_flags = error_code;
             sl.fault.deadline_tick =
                 arch::Timer::ticks() + CONFIG_PAGER_FAULT_TIMEOUT_TICKS;
-            sl.fault.client_pml4 = client.page_table_;
+            sl.fault.client_pml4 = client.get_page_table();
             sl.pending = true;
             pager_id = sl.pager_id;
             pager_gen = sl.pager_gen;
