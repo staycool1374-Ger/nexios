@@ -43,7 +43,8 @@ constexpr size_t kBenchSteps = 100000;
 // Input: kBenchSteps path_step() calls on the own-CPU chain.
 // Expect: mean cycles/step under a loose TCG-tolerant bound; validate
 //         cost reported alongside. TF_BENCH (never a correctness gate).
-// Depends: kernel::path_step, arch::rdtsc
+// Depends: kernel::path_step, arch::Timer::raw_counter (cross-arch;
+//         x86 rdtsc / aarch64 cntpct / riscv rdtime — issue #367)
 JARVIS_TEST(bench_path_trace_step_overhead, "PRE: none | POST: none") {
     path_reset();
 
@@ -53,19 +54,19 @@ JARVIS_TEST(bench_path_trace_step_overhead, "PRE: none | POST: none") {
     }
     path_reset();
 
-    uint64_t t0 = arch::rdtsc();
+    uint64_t t0 = arch::Timer::raw_counter();
     for (size_t i = 0; i < kBenchSteps; ++i) {
         path_step(1ULL << (i & 63));
     }
-    uint64_t step_cycles = arch::rdtsc() - t0;
+    uint64_t step_cycles = arch::Timer::raw_counter() - t0;
     uint64_t step_per = step_cycles / kBenchSteps;
     path_reset();
 
-    t0 = arch::rdtsc();
+    t0 = arch::Timer::raw_counter();
     for (size_t i = 0; i < kBenchSteps; ++i) {
         (void)path_validate(0);
     }
-    uint64_t val_per = (arch::rdtsc() - t0) / kBenchSteps;
+    uint64_t val_per = (arch::Timer::raw_counter() - t0) / kBenchSteps;
 
     Logger::raw_write("[BENCH-PATH] step=");
     Logger::print_dec(step_per);
