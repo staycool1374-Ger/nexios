@@ -19,14 +19,10 @@
 /// @file test_vmm_path.cpp
 /// @brief VMM map/rollback segment tests (issue #347 Slice D): successful
 ///        transactional range map, validation-reject, skip-one-step
-///        negative, registry math. Drives VMM::map_phys_range_try() with
-///        the slot reset/capture under IrqGuard. The Rollback branch is
-///        instrumented and validated by inspection only: the sole clean
-///        trigger is a mid-range table-allocation failure, which needs a
-///        full PMM drain; a drain-based fixture page-faulted the running
-///        kernel (freed an in-use page), so it is not driven here. Filed
-///        as a follow-up to add a safe deterministic partial-failure
-///        injector.
+///        negative, runtime rollback via the deterministic table-alloc
+///        fault injector (issue #361), registry math. Drives
+///        VMM::map_phys_range_try() with the slot reset/capture under
+///        IrqGuard.
 
 #include <test.hpp>
 #include <logger.hpp>
@@ -102,6 +98,21 @@ static uint64_t *scratch_pd(size_t &out_idx) {
     return scratch_pd_at(kVmmScratchVa, out_idx);
 }
 
+#if defined(CONFIG_DEBUG)
+/// @brief RAII injector arm (issue #361): disarms on scope exit, so an
+///        assert-abort (JARVIS_ASSERT returns) cannot leak armed state.
+struct VmmTableFailGuard {
+    explicit VmmTableFailGuard(size_t fail_at) {
+        VMM::test_arm_table_alloc_fail_at(fail_at);
+    }
+    ~VmmTableFailGuard() {
+        VMM::test_disarm_table_alloc_fail();
+    }
+    VmmTableFailGuard(const VmmTableFailGuard &) = delete;
+    VmmTableFailGuard &operator=(const VmmTableFailGuard &) = delete;
+};
+#endif
+
 static void test_vmm_map_range_success_segment() {
     const uint64_t phys = PMM::alloc_contiguous(2);
     JARVIS_ASSERT(phys != 0);
@@ -172,6 +183,75 @@ static void test_vmm_map_range_skip_detected() {
     JARVIS_ASSERT(skip_ok);
 }
 
+/// @brief Rollback positive test (issue #361): with the injector armed to
+///        fail the 2nd table allocation, a 2-page range straddling a 2 MiB
+///        boundary maps page 0 (split PT allocated) then fails page 1.
+///        Expect VMM_ERR_PAGE_ALLOC + the Rollback chain, both VAs
+///        unmapped, the second PD slot untouched, and zero PMM delta.
+///        Debug-only; trivial pass elsewhere (count-row pin).
+static void test_vmm_map_range_rollback_segment() {
+    bool rollback_ok = true; // not applicable without the debug injection
+#if defined(CONFIG_DEBUG)
+    // va1 is 2 MiB-aligned (kVmmScratchVa already is); va0 is the last
+    // page of the previous PD slot. Both PD entries are boot huge pages.
+    const uint64_t va1 = kVmmScratchVa;
+    const uint64_t va0 = va1 - arch::PAGE_SIZE;
+    size_t idx0 = 0;
+    uint64_t *pd0 = scratch_pd_at(va0, idx0);
+    size_t idx1 = 0;
+    uint64_t *pd1 = scratch_pd_at(va1, idx1);
+    JARVIS_ASSERT(pd0 == pd1);
+    JARVIS_ASSERT(idx1 == idx0 + 1);
+    const uint64_t boot0 = pd0[idx0];
+    const uint64_t boot1 = pd1[idx1];
+    JARVIS_ASSERT(boot0 != 0);
+    JARVIS_ASSERT(boot1 != 0);
+
+    const uint64_t phys = PMM::alloc_contiguous(2);
+    JARVIS_ASSERT(phys != 0);
+    const uint64_t pmm_before = PMM::free_pages_ref();
+
+    bool chain_ok = false;
+    bool cleared_ok = false;
+    bool prefix_ok = false;
+    bool untouched_ok = false;
+    {
+        arch::IrqGuard guard{}; // issue #200: HHDM PD surgery is IRQ-critical
+        VmmTableFailGuard fail_at_second(2); // alloc #1 (va0 PT) succeeds,
+                                             // alloc #2 (va1 PT) fails
+        path_reset();
+        const errors::VmmError err = VMM::map_phys_range_try(
+            va0, phys, 2, false, VMM::get_kernel_pml4(), false);
+        chain_ok = (err == errors::VMM_ERR_PAGE_ALLOC) &&
+                   path_validate(k_vmm_map_rollback_expected);
+        // Only va0 can read clear: it was mapped then rolled back. va1
+        // was never installed, so it still resolves through the
+        // untouched boot huge entry (which untouched_ok pins below) —
+        // asserting it clear would mistake the baseline mapping for a
+        // rollback leak.
+        cleared_ok = (VMM::virt_to_phys(va0) == 0);
+        // The prefix really installed (else this test would be vacuous):
+        // only then is there a split PT to restore and free.
+        prefix_ok = (pd0[idx0] != boot0);
+        if (prefix_ok) {
+            const uint64_t split_pt = pd0[idx0] & kX86TableFrameMask;
+            pd0[idx0] = boot0;
+            arch::ArchPageTable::tlb_flush(va0);
+            PMM::free_page(split_pt);
+        }
+        untouched_ok = (pd1[idx1] == boot1);
+        path_reset();
+    }
+    PMM::free_page(phys);
+    PMM::free_page(phys + arch::PAGE_SIZE);
+    // pmm_before covers the 2 device frames; both are released above, so
+    // the free count must land exactly 2 above the capture.
+    rollback_ok = chain_ok && cleared_ok && prefix_ok && untouched_ok &&
+                  (PMM::free_pages_ref() == pmm_before + 2);
+#endif
+    JARVIS_ASSERT(rollback_ok);
+}
+
 #endif // CONFIG_ARCH_X86_64
 
 } // namespace
@@ -182,5 +262,6 @@ void register_vmm_path_tests() {
 #if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(vmm_map_range_success_segment);
     JARVIS_REGISTER_TEST(vmm_map_range_skip_detected);
+    JARVIS_REGISTER_TEST(vmm_map_range_rollback_segment);
 #endif
 }

@@ -29,6 +29,18 @@
 /// Terminal paths: validation failures record Reject + Done only (no
 /// Validate). Slot is shared with the dispatch/task registries — tests own
 /// reset and must hold IF=0 across reset → drive → capture.
+///
+/// Table-alloc fault injector contract (issue #361, test-only, absent in
+/// release): VMM::test_arm_table_alloc_fail_at(n) makes the n-th table
+/// allocation attempt of the next map_phys_range_try() call fail instead
+/// of allocating (1-based; 0 disarms; firing is single-shot and disarms).
+/// Countdown covers attempts only — the 3 gates sit after presence/
+/// split-need checks, immediately before the PMM::alloc_* calls
+/// (get_table split + fresh sites, map_page_in_pml4_try split site), so
+/// present-table hits never consume it. map_phys_range_try() resets the
+/// countdown per call. Arm/disarm/snapshot-reset backstop the armed
+/// window; the whole arm → drive → capture → teardown sequence must run
+/// under one IrqGuard on the BSP test thread.
 
 #pragma once
 

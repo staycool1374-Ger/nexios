@@ -3838,3 +3838,10 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 14:45:06 core_tracing PASSED: 21 FAILED: 0 TIME: 1374ms STATUS: 1xWARN-task_cleanup_pinned_terminal-preexisting-followup
 2026-10-18 14:47:21 capability PASSED: 155 FAILED: 0 TIME: 11290ms
 2026-10-18 14:47:55 selftest PASSED: 147 FAILED: 0 TIME: 11899ms
+2026-10-18 15:09:11 vmm_path PASSED: 5 FAILED: 0 TIME: 328ms
+2026-10-18 15:09:39 core_tracing PASSED: 22 FAILED: 0 TIME: 1402ms STATUS: 1xWARN-task_cleanup_pinned_terminal-preexisting-#373
+2026-10-18 15:10:12 capability PASSED: 155 FAILED: 0 TIME: 10255ms
+2026-10-18 15:10:34 memory_page_tables PASSED: 11 FAILED: 0 TIME: 761ms STATUS: WARN-page_tables_free_pages_MemPool8-fixed-next-run
+2026-10-18 15:11:52 vmm_path PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-0-tests-debug-only-class
+2026-10-18 15:12:59 memory_page_tables PASSED: 11 FAILED: 0 TIME: 747ms
+2026-10-18 15:13:28 selftest PASSED: 147 FAILED: 0 TIME: 11497ms
