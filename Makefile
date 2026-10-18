@@ -1256,9 +1256,12 @@ TEST_END_TS := /tmp/test-end-$(CHECKOUT_TAG).timestamp
 # the stdio-mux console triple for file backends (debugcon carries the Logger
 # verdict stream during test runs; COM1 is forensics-only; the monitor is
 # unused by the harness).  Covers all QEMU_FLAGS variants (base, iommu_live,
-# ahci_live) since they share the token spellings.
+# ahci_live); note the spellings differ (base: `-monitor chardev:dbg`, q35:
+# `-mon chardev=dbg` — issue #382), so both are rewritten.  The q35 `-mon`
+# form maps to the proven `-monitor none` (`-mon none` is rejected by QEMU:
+# chardev "none" not found).
 comma := ,
-QEMU_FLAGS_FILE = $(subst -mon chardev=dbg,-mon none,$(subst -monitor chardev:dbg,-monitor none,$(subst -serial chardev:dbg,-serial file:$(TEST_COM1_LOG),$(subst -chardev stdio$(comma)id=dbg$(comma)mux=on,-chardev file$(comma)path=$(TEST_SERIAL_LOG)$(comma)id=dbg,$(QEMU_FLAGS))))) $(QEMU_NAME_FLAG)
+QEMU_FLAGS_FILE = $(subst -mon chardev=dbg,-monitor none,$(subst -monitor chardev:dbg,-monitor none,$(subst -serial chardev:dbg,-serial file:$(TEST_COM1_LOG),$(subst -chardev stdio$(comma)id=dbg$(comma)mux=on,-chardev file$(comma)path=$(TEST_SERIAL_LOG)$(comma)id=dbg,$(QEMU_FLAGS))))) $(QEMU_NAME_FLAG)
 
 # Timing model (single source of truth, correctly scaled):
 #   - expect waits up to TEST_TIMEOUT_* for the kernel's TEST SUMMARY.
