@@ -39,6 +39,7 @@ using sched_verify::validate_task_ptr;
 errors::SchedulerError
 Scheduler::terminate_err(TaskControlBlock &task,
                          uint64_t exit_code) noexcept {
+
     ENSURE(validate_task_ptr(&task, "terminate_err"));
     arch::IrqGuard irq_guard{};
     // Issue #197: refuse to terminate a task that is current on ANOTHER
@@ -56,6 +57,7 @@ Scheduler::terminate_err(TaskControlBlock &task,
                             task.name, task.id);
         return errors::SCHED_ERR_REMOTE_CURRENT;
     }
+    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     charge_exec(task); // issue #21: bill the final partial quantum (no loss)
 #if defined(CONFIG_DEBUG_IPC_SCHED)

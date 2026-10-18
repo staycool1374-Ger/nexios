@@ -39,6 +39,8 @@ using sched_verify::task_stack_ptr;
 using sched_verify::validate_task_ptr;
 
 void Scheduler::read_times(TaskControlBlock &task, TaskTimes &out) noexcept {
+
+    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "read_times"));
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);

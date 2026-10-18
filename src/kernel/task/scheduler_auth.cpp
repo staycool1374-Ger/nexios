@@ -36,6 +36,7 @@ static constexpr uint64_t kAuthSlicePages = 2;
 Scheduler::AuthStepResult Scheduler::auth_verify_step(uint64_t &out_task_id,
                                                       char *out_name,
                                                       uint64_t name_len) noexcept {
+
     out_task_id = 0;
     if (out_name && name_len > 0)
         out_name[0] = '\0';
@@ -58,7 +59,8 @@ Scheduler::AuthStepResult Scheduler::auth_verify_step(uint64_t &out_task_id,
     uint32_t cand_baseline = 0;
     uint64_t cand_total = 0;
     {
-        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+        ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
         uint64_t n = all_tasks_.size();
         for (uint64_t i = 0; i < n; ++i) {
             TaskControlBlock *t = task_at(i);
@@ -93,7 +95,8 @@ Scheduler::AuthStepResult Scheduler::auth_verify_step(uint64_t &out_task_id,
     if (cand_off >= cand_total && cand_total > 0) {
         // Unreachable: commit finalizes exactly at total.  Defensive
         // restart (re-verify from scratch) rather than a false kill.
-        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+        ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
         if (TaskControlBlock::is_valid(cand) &&
             cand->page_table_ == cand_pml4) {
             cand->ro_verify_off_ = 0;
@@ -146,7 +149,8 @@ Scheduler::AuthStepResult Scheduler::auth_verify_step(uint64_t &out_task_id,
     bool kill = false;
     bool verified = false;
     {
-        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+        ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
         if (!TaskControlBlock::is_valid(cand) ||
             cand->page_table_ != cand_pml4 ||
             cand->ro_verify_state_ !=

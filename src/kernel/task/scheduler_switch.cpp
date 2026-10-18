@@ -819,6 +819,8 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
 }
 
 void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept {
+
+    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     TaskControlBlock *next;
 
     // Scope for scheduler_lock_ — released before the IRQ-guarded publish step.

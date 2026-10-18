@@ -408,6 +408,8 @@ uint64_t Scheduler::queue_depth(uint64_t cpu) noexcept {
 
 bool Scheduler::set_sched_policy(TaskControlBlock &task,
                                  SchedPolicy policy) noexcept {
+
+    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "set_sched_policy"));
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
@@ -425,6 +427,8 @@ bool Scheduler::set_sched_policy(TaskControlBlock &task,
 }
 
 void Scheduler::set_edf_exempt(TaskControlBlock &task, bool exempt) noexcept {
+
+    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "set_edf_exempt"));
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
@@ -454,6 +458,7 @@ void Scheduler::assign_deadline_priority(TaskControlBlock &task) noexcept {
     if (prio == task.priority)
         return;
     arch::IrqGuard irq_guard{};
+    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     task.priority = prio;
     task.base_priority = prio;

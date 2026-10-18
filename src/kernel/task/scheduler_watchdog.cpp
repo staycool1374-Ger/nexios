@@ -91,6 +91,8 @@ note_pinned_watchdog_expiry(const TaskControlBlock &task,
 
 #if CONFIG_DEADLINE_MONITOR_TASK
 void Scheduler::scan_deadlines() noexcept {
+
+    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
 #if CONFIG_DEADLINE_MISS_DETECTION
     // Scan every live task rather than only deadline_list_.  A task's deadline
@@ -386,6 +388,8 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
 // whichever observes the expiry first.
 void Scheduler::fire_stall_watchdog(TaskControlBlock &task,
                                      uint64_t now) noexcept {
+
+    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "fire_stall_watchdog"));
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     if (!watchdog_due(task, now))
