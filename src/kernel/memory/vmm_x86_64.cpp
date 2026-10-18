@@ -63,7 +63,11 @@ uint64_t VMM::vmm_arch_table_link(uint64_t new_phys) {
 }
 
 uint64_t VMM::vmm_arch_encode_kernel_leaf(uint64_t phys, bool user) {
-    uint64_t flags = PAGE_PRESENT | PAGE_WRITE;
+    // Issue #376 slice 1: runtime kernel-half maps are data (MMIO, DMA,
+    // ACPI, framebuffer — enumerated audit, no X consumer), so they map
+    // non-executable.  NXE is enabled at boot (boot.asm LME|NXE).  Boot-
+    // established text/HHDM mappings stay RWX (epic remainder, see #376).
+    uint64_t flags = PAGE_PRESENT | PAGE_WRITE | arch::ArchPageTable::NX;
     if (user)
         flags |= PAGE_USER;
     return phys | flags;

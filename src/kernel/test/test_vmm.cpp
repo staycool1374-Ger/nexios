@@ -321,8 +321,13 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
     uint64_t pt_phys = pd[pd_idx] & ~0xFFFULL;
     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
     size_t pt_idx = static_cast<size_t>((test_vaddr & (0x1FFULL << 12)) >> 12);
-    constexpr uint64_t X64_PT_FLAGS = (1ULL << 0) | (1ULL << 1); // PRESENT|WRITE
-    JARVIS_ASSERT(pt[pt_idx] == (test_phys & ~0xFFFULL) + X64_PT_FLAGS);
+    // Split-inherited entries keep the boot huge entry's flags verbatim
+    // (PRESENT|WRITE — boot sets no XD on huge DATA entries); only the
+    // explicitly (re)mapped leaf carries NX (issue #376 slice 1).
+    constexpr uint64_t X64_PT_FLAGS = (1ULL << 0) | (1ULL << 1);
+    constexpr uint64_t X64_MAPPED_FLAGS =
+        (1ULL << 0) | (1ULL << 1) | (1ULL << 63); // PRESENT|WRITE|NX
+    JARVIS_ASSERT(pt[pt_idx] == (test_phys & ~0xFFFULL) + X64_MAPPED_FLAGS);
     // The huge page base and neighbour should still resolve via the PT page
     size_t base_pt_idx = static_cast<size_t>((huge_page_base & (0x1FFULL << 12)) >> 12);
     JARVIS_ASSERT(pt[base_pt_idx] == (0x800000 & ~0xFFFULL) + X64_PT_FLAGS);
@@ -334,7 +339,7 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
     // manually clear it.  The PD restore in snapshot_restore will clean up.
     pt[pt_idx] = 0;
     VMM::map_page(test_vaddr, 0x802000, false);
-    JARVIS_ASSERT(pt[pt_idx] == (0x802000 & ~0xFFFULL) + X64_PT_FLAGS);
+    JARVIS_ASSERT(pt[pt_idx] == (0x802000 & ~0xFFFULL) + X64_MAPPED_FLAGS);
     pt_phys = pd[pd_idx] & ~0xFFFULL;
     JARVIS_ASSERT(!(pd[pd_idx] & PAGE_HUGE));
     PMM::free_page(pt_phys);
@@ -372,7 +377,9 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
     uint64_t pt_phys = pd[pd_i] & ~0xFFFULL;
     uint64_t pt_idx = static_cast<size_t>((v & (0x1FFULL << 12)) >> 12);
     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
-    constexpr uint64_t X64_PT_FLAGS_2 = (1ULL << 0) | (1ULL << 1);
+    // Issue #376 slice 1: the explicitly mapped leaf carries NX.
+    constexpr uint64_t X64_PT_FLAGS_2 =
+        (1ULL << 0) | (1ULL << 1) | (1ULL << 63); // PRESENT|WRITE|NX
     JARVIS_ASSERT(pt[pt_idx] == (p & ~0xFFFULL) + X64_PT_FLAGS_2);
     VMM::unmap_page(v);
     JARVIS_ASSERT(pt[pt_idx] == 0);

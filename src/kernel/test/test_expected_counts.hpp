@@ -177,7 +177,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"memory_static_pools",   4,    0,       0      },  // MemPool::reserve only (no PMM gating without CONFIG_STATIC_POOLS_ONLY)
 #endif
     {"memory_no_op_new",      6,    0,       0      },  // no operator new/delete, all MemPool / placement-new
-    {"memory_page_tables",    11,   0,       0      },  // page-table pool, budget, no sharing
+    {"memory_page_tables",    12,   0,       0      },  // page-table pool, budget, no sharing + kernel-half runtime NX (#376)
     {"memory_kernel_isolation", 6,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s + teardown validation (issue #199)
     {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
     {"memory_vmm",           14,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60) + unmap-err holes (#366)
