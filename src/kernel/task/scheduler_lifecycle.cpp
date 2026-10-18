@@ -535,31 +535,32 @@ void Scheduler::reap_orphans() noexcept {
         if (can_reap && MemPool::is_block_pinned(t))
             can_reap = false;
         if (!can_reap) {
-            bool parent_found = false;
-            for (TaskIter it(0);;) {
-                auto *p = it.next();
-                if (!p)
-                    break;
-                if (p->id == t->parent_id) {
-                    parent_found = true;
-                    const bool terminated =
-                        (p->state == TaskState::TERMINATED);
-                    // Issue #221: reap only when the parent is dead.  A live
-                    // parent owns its un-reaped children (Unix zombie
-                    // semantics): the waitpid in-trap wait re-scans on wake
-                    // and must find the TERMINATED child still linked —
-                    // reaping it first makes the rescan miss (WAITPID-FAILED
-                    // on an already-satisfied wait).  Fire-and-forget children
-                    // linger until the parent exits (bounded: parent lifetime,
-                    // MAX_TASKS cap); adoption above re-homes them to init on
-                    // the way.  A parent blocked in waitpid is covered too
-                    // (live ⇒ deferred regardless of waiting state).
-                    can_reap = terminated;
-                    break;
-                }
-            }
-            if (!parent_found)
+            // Issue #324 Tick 12 (JRVS-SCHED-006 remainder): O(1)-ish
+            // parent lookup via the id table instead of a full TaskIter
+            // scan — the scan made reap O(n^2) worst case on the tick path.
+            // id_table and all_tasks_ stay in sync on every add/remove path,
+            // so the verdict matches the scan on all consistent states
+            // (pairing e.g. release_zombie lifecycle:74-75).
+            auto *p = Scheduler::id_table_find(t->parent_id);
+            if (p != nullptr) {
+                const bool terminated =
+                    (p->state == TaskState::TERMINATED);
+                // Issue #221: reap only when the parent is dead.  A live
+                // parent owns its un-reaped children (Unix zombie
+                // semantics): the waitpid in-trap wait re-scans on wake
+                // and must find the TERMINATED child still linked —
+                // reaping it first makes the rescan miss (WAITPID-FAILED
+                // on an already-satisfied wait).  Fire-and-forget children
+                // linger until the parent exits (bounded: parent lifetime,
+                // MAX_TASKS cap); adoption above re-homes them to init on
+                // the way.  A parent blocked in waitpid is covered too
+                // (live ⇒ deferred regardless of waiting state).
+                can_reap = terminated;
+            } else {
+                // Parent left the tables (dead and unregistered, or never
+                // registered): the child is an orphan — reap it.
                 can_reap = true;
+            }
         }
 
         if (!can_reap)
