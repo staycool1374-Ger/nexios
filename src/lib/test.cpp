@@ -32,6 +32,7 @@
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/driver/iocd.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/qemu_debugcon.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/timer.hpp>
 
@@ -370,6 +371,12 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
     size_t n = Registry::count();
     if (n == 0) {
         Logger::warn("No tests registered");
+        // Issue #381: the harness watches the debugcon stream, but Logger
+        // routes to UART while the suite is inactive (set_test_active
+        // happens below, after this early return).  Mirror the notice to
+        // the debugcon so the empty-class detector can see it (no-op off
+        // x86_64, where the harness already watches serial).
+        arch::QemuDebugcon::write("No tests registered\n");
         return;
     }
 
