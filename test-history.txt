@@ -4064,4 +4064,4 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-18 22:05:03 random PASSED: 17 FAILED: 0 TIME: 1106ms STATUS: ticks-line-verify
 2026-10-18 22:06:52 deadline PASSED: 147 FAILED: 0 TIME: 30637ms STATUS: RERUN-green-after-2x-FAIL-load-flake
 2026-10-18 22:09:32 hrt_monotonic PASSED: 6 FAILED: 0 TIME: 407ms STATUS: #359-P0
-2026-10-18 22:11:07 timing_core PASSED: 24 FAILED: 0 TIME: 0ms STATUS: #359-P0-wall-sample
+2026-10-18 22:11:07 timing_core PASSED: 19 FAILED: 0 TIME: 1781ms STATUS: #359-P0-wall-sample (1 WARN-residual)
