@@ -193,4 +193,16 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
   dynamic rate. Consequences: `hrt_wall_accuracy_bound` warn-skips on
   hypervisor; `OVERALL_CAP_S` stays 3600; suite summaries carry
   `TSC_CYCLES` (rewind-proof, unlike snapshot-rewound `ticks_`) for
-  host-side guest-vs-wall analysis. Accuracy gate is KVM/HW.
+   host-side guest-vs-wall analysis. Accuracy gate is KVM/HW.
+- **Per-arch verdict (issue #384, 2026-10-19):** aarch64 (`cntpct_el0`
+  @ 62.5 MHz) and riscv64 (`rdtime` @ 10 MHz) reproduce the TCG
+  unenforceability (`hrt_wall_accuracy_bound` +28%/+27.6% over the
+  ±25% band where x86 warn-skips); no CPUID hypervisor-bit
+  equivalent exists off-x86 (QE: per-arch skip design on `testbed`).
+  No kernel timer stubs on any arch (`calibrate`/`raw_counter`/
+  `rdtsc`/oneshot all real; riscv64 `remaining_ns()` hard-0 is an
+  S-mode hardware constraint, documented as specified behavior).
+  Bare metal is the only wall-accuracy gate on all arches, no TCG
+  accuracy enforcement anywhere. `timing_core` off-x86 is blocked
+  by the #356 task-spawn fault (ELR/sepc=0 at first test-task
+  spawn, daemons degraded).

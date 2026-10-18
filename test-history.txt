@@ -4065,3 +4065,9 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-18 22:06:52 deadline PASSED: 147 FAILED: 0 TIME: 30637ms STATUS: RERUN-green-after-2x-FAIL-load-flake
 2026-10-18 22:09:32 hrt_monotonic PASSED: 6 FAILED: 0 TIME: 407ms STATUS: #359-P0
 2026-10-18 22:11:07 timing_core PASSED: 19 FAILED: 0 TIME: 1781ms STATUS: #359-P0-wall-sample (1 WARN-residual)
+2026-10-18 23:47:33 hrt_monotonic PASSED: 6 FAILED: 0 TIME: 405ms STATUS: #384-P0-x86-baseline
+2026-10-18 23:49:08 timing_core PASSED: 19 FAILED: 0 TIME: 1776ms STATUS: #384-P0-x86-baseline
+2026-10-18 23:49:56 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 2734ms STATUS: #384-P0-aarch64-ungated-wall-bound-fails-under-TCG
+2026-10-18 23:52:24 timing_core PASSED: 0 FAILED: 0 TIME: 134s STATUS: PANIC-EL1sync-ESR0x86000004-ELR0-first-test-task-spawn-vfsd-iocd-degraded
+2026-10-18 23:53:28 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 2724ms STATUS: #384-P0-riscv64-ungated-wall-bound-fails-under-TCG
+2026-10-19 00:00:41 timing_core PASSED: 0 FAILED: 0 TIME: 0 STATUS: PANIC-riscv64-scause0xC-sepc0-first-test-task-spawn-vfsd-iocd-degraded

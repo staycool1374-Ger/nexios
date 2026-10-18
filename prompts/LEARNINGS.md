@@ -26,6 +26,7 @@
 - Hunt-loop evidence is file-grade or it didn't happen: tee every loop to `/tmp/jarvis-hunt-<issue>-<YYYYMMDD-HHMMSS>.log`, record per-iteration PASS/TIMEOUT + load average inline, and post the file path + tally as an issue comment the same session (serial log is shared/singleton — raw output not tee'd is lost); never pipe make/test through `head` (SIGPIPE kills the run). GDB stops the guest: one interrupt + full capture + detach, never touch a timed run; `call` lies on the TCG stub (raw reads only); S-lines live in debugcon, not serial.
 - Pure-move splits: boundary-asserted chunks, file-statics to the first-consumer shared home (never per-TU copies), using-decls for every bare cross-TU name, second-`namespace`-blocks closed before reopening (trust the compiler over stale LSP diagnostics); test class names must match the registry exactly (`Unknown test class` = zero tests + QEMU_EXIT stall).
 - Wall-truth telemetry: use rewind-proof raw TSC (`ticks_` is snapshot-rewound); additive summary lines go AFTER the expect `====` terminator; unobservable targets get DOCUMENT decisions, not servos (#359).
+- Virtualized wall accuracy gates nothing on any arch (aarch64 +28%, riscv64 +27.6% over) — bare metal only; verify numbers in the raw serial capture, never the expect-processed stream (#384).
 - Readdir lists only the underlying fs: mount points live solely in the VFS mount table, so every `ops->readdir` caller hides them — overlay at the VFS layer (resolve + vnode_identity_match, spelling-independent), never per-fs; synthesized entries need a resolve-fallback for type probes (#346).
 - Timeout wake is edge-triggered: one expiry → one READY wake (skip duplicate READY+queued re-wakes); EDF never returns current (self-pick guard) — both one-line guards, no new locks, stranded READY still rescued (#345).
 - TCG wall dilation is load-bearing: size every timeout tier from measured walls; re-verify flakes before bisecting.
@@ -68,6 +69,12 @@
 ```
 
 ## Entries
+
+### #384 — per-arch wall-time truth (docs-only close, audit APPROVED, issue CLOSED)
+
+- **Learned:** (1) Virtualized wall measurement gates nothing on any arch: aarch64 +28% / riscv64 +27.6% over the ±25% band where x86 warn-skips — bare metal is the only quality gate, no TCG accuracy enforcement anywhere. (2) Survey before instrumenting: the Timer HAL is complete x3 with zero kernel stubs (`calibrate`/`raw_counter`/`rdtsc`/oneshot all real); riscv64 `remaining_ns()` hard-0 is an S-mode hardware constraint, not a stub. (3) A pre-first-test panic (ELR/sepc=0 at task spawn, daemons degraded) is a subsystem-routing signal — evidence went to #356 (process parity), not the timing issue. (4) Authoritative numbers live in the raw serial capture: x86 file-backed vs `-kernel` pty (where `\r` overwrites digits in the expect-processed view) — verify in the raw stream, never trust processed output. (5) Additive telemetry without a live consumer question is scope creep: the `TSC_FREQ_HZ` line died with its cancelled campaign.
+- **Adapted:** gotcha #19 + deadline.md §7 per-arch verdict (OVERALL_CAP_S stays 3600); QE handoff (5 missing-test items) on #384; spawn evidence on #356. Gates: x86 hrt 6/6 + timing 19/19; off-x86 hrt 5/6 (expected ungated fails); timing panics → #356. Audit APPROVED zero findings (`audits/report-2026-10-18T22-05-51Z.md`).
+- **Style re-surface:** docs-only changes still need audit + retrieval artifacts; test-history TIME measured or TIME 0 with explicit STATUS (corrected a from-memory 2734→2724 ms row same-cycle — wrong-but-plausible is worse than missing).
 
 ### #359 — TCG wall-time truth decided DOCUMENT + TSC_CYCLES telemetry (audit APPROVED, committed, issue CLOSED)
 
