@@ -45,11 +45,16 @@ namespace sched_lifecycle {
 // P5a: Deferred-kill list.
 constinit TaskControlBlock *s_deferred_kill_tasks[MAX_DEFERRED_KILLS] = {};
 constinit uint64_t s_deferred_kill_count = 0;
+// Issue #324 Tick 11: parallel generation snapshot (ABA guard on TCB slot
+// reuse — see process_deferred_kills).  TU-local: only defer_kill and
+// process_deferred_kills below use it.
+static constinit uint32_t s_deferred_kill_gens[MAX_DEFERRED_KILLS] = {};
 
 }  // namespace sched_lifecycle
 
 using sched_lifecycle::MAX_DEFERRED_KILLS;
 using sched_lifecycle::s_deferred_kill_count;
+using sched_lifecycle::s_deferred_kill_gens;
 using sched_lifecycle::s_deferred_kill_tasks;
 using sched_queue::edf_ready_;
 using sched_queue::edf_remove;
@@ -692,6 +697,7 @@ void Scheduler::defer_kill(TaskControlBlock *task) noexcept {
     // which may run without the global lock — append-only, lock-free;
     // global→leaf order is unaffected (no lock taken here).
     if (s_deferred_kill_count < MAX_DEFERRED_KILLS) {
+        s_deferred_kill_gens[s_deferred_kill_count] = task->generation;
         s_deferred_kill_tasks[s_deferred_kill_count++] = task;
     } else {
         Logger::warn("[DMD] deferred-kill list full, task %lu not added",
@@ -712,14 +718,25 @@ void Scheduler::process_deferred_kills() noexcept {
     // ENSURE would fire on entry under lock.  Issue #324 Tick 1: the prior
     // "under scheduler_lock_" comment was stale (same class as #369 T2b).
     ENSURE(scheduler_lock_.holder() == nullptr);
+    // Issue #324 Tick 11: compact-and-retain (matches the drain/flush spare
+    // pattern).  Both KILL arms are one-shot — the watchdog scan disarms on
+    // fire, the deadline scan skips TERMINATED — so a spared AP-live entry
+    // would otherwise lose the kill until reap.  Retained entries re-check
+    // the generation snapshot below (ABA guard on slot reuse).
+    uint64_t kept = 0;
     for (uint64_t i = 0; i < s_deferred_kill_count; ++i) {
         auto *task = s_deferred_kill_tasks[i];
-        if (!task || task->magic != TaskControlBlock::TCB_MAGIC)
+        const uint32_t gen = s_deferred_kill_gens[i];
+        if (!task || task->magic != TaskControlBlock::TCB_MAGIC ||
+            task->generation != gen)
             continue;
         // Issue #197: spare AP-live tasks (never free a live stack) —
-        // skip this entry; a still-missed deadline re-fires defer_kill
-        // on the next scan, so no kill intent is lost.
+        // retain the entry (compacted); the kill completes once the task
+        // deschedules.
         if (is_current_on_any_cpu(task)) {
+            s_deferred_kill_tasks[kept] = task;
+            s_deferred_kill_gens[kept] = gen;
+            ++kept;
             continue;
         }
 
@@ -739,7 +756,7 @@ void Scheduler::process_deferred_kills() noexcept {
                      task->name);
         TaskControlBlock::destroy(task);
     }
-    s_deferred_kill_count = 0;
+    s_deferred_kill_count = kept;
 }
 
 }  // namespace kernel
