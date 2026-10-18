@@ -299,6 +299,7 @@ void register_cs_bench_tests();
 void register_libc_stdio_tests();
 void register_libc_malloc_tests();
 void register_libc_string_tests();
+void register_libc_thread_tests();
 void register_libc_syscall_tests();
 void register_cross_boundary_tests();
 void register_stress_24h_tests();
@@ -607,6 +608,7 @@ static void run_cs_bench_group() { register_cs_bench_tests(); }
 static void run_libc_stdio_group() { register_libc_stdio_tests(); }
 static void run_libc_malloc_group() { register_libc_malloc_tests(); }
 static void run_libc_string_group() { register_libc_string_tests(); }
+static void run_libc_thread_group() { register_libc_thread_tests(); }
 static void run_libc_syscall_group() { register_libc_syscall_tests(); }
 static void run_cross_boundary_group() { register_cross_boundary_tests(); }
 static void run_stress_24h_group() { register_stress_24h_tests(); }
@@ -747,6 +749,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"libc_stdio", []() { run_libc_stdio_group(); }},
     {"libc_malloc", []() { run_libc_malloc_group(); }},
     {"libc_string", []() { run_libc_string_group(); }},
+    {"libc_thread", []() { run_libc_thread_group(); }},
     {"libc_syscall", []() { run_libc_syscall_group(); }},
     {"cross_boundary", []() { run_cross_boundary_group(); }},
     {"elf_shared", []() { run_elf_shared_group(); }},
@@ -1171,6 +1174,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_libc_stdio_group();   // issue #303
          run_libc_malloc_group();  // issue #303
          run_libc_string_group();  // issue #303
+         run_libc_thread_group();  // issue #303
          run_libc_syscall_group(); // issue #303
          run_cross_boundary_group(); // issue #303
      }},
