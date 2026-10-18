@@ -56,7 +56,7 @@ inline uint64_t &task_stack_ptr(TaskControlBlock *t) noexcept {
 ///        Returns false (without logging) when @p rsp is below the base;
 ///        logs the overshoot when @p rsp is above the top.  Diagnostic
 ///        helper for validate_switch().
-bool rsp_in_stack_range(uint64_t rsp, const TaskControlBlock *t,
+[[nodiscard]] bool rsp_in_stack_range(uint64_t rsp, const TaskControlBlock *t,
                         const char *label);
 
 /// @brief Validate a context-switch pair before the deferred-switch publish
@@ -66,7 +66,7 @@ bool rsp_in_stack_range(uint64_t rsp, const TaskControlBlock *t,
 ///        requires the pre-saved RSP to lie inside its kernel stack.  Logs
 ///        the first failure and returns false; the caller then reports the
 ///        corruption.
-bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
+[[nodiscard]] bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
                      const char *label);
 
 /// @brief Validate a task pointer at a Scheduler:: entry point (issue #369
@@ -77,7 +77,7 @@ bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
 ///        by address: the object may still be poisoned, which is exactly
 ///        what the magic check catches (spec §D5: magic holds until
 ///        remove_task/unregister_task).
-bool validate_task_ptr(const TaskControlBlock *t,
+[[nodiscard]] bool validate_task_ptr(const TaskControlBlock *t,
                        const char *label) noexcept;
 
 /// @brief Bump @c scheduler_corruption_count and (in DEBUG) fail loudly.
@@ -86,7 +86,7 @@ void report_corruption(const char *label);
 
 /// @brief True when @p rsp belongs to the kernel boot stack
 ///        (kernel-image space), i.e. the physically-running harness.
-bool is_boot_stack_rsp(uint64_t rsp) noexcept;
+[[nodiscard]] bool is_boot_stack_rsp(uint64_t rsp) noexcept;
 
 #if defined(CONFIG_ARCH_X86_64)
 /// @brief Validate an iret-frame candidate (audit-scheduler-tasks LOW: the
@@ -99,7 +99,7 @@ bool is_boot_stack_rsp(uint64_t rsp) noexcept;
 /// @param next   The task whose frame is being validated.
 /// @param nbase  Next task's kernel-stack base VA.
 /// @param f_rflags RFLAGS field of the candidate frame.
-bool validate_iret_frame(const TaskControlBlock &next, uint64_t nbase,
+[[nodiscard]] bool validate_iret_frame(const TaskControlBlock &next, uint64_t nbase,
                          uint64_t f_rflags, uint64_t rip, uint64_t cs,
                          uint64_t rsp, uint64_t ss) noexcept;
 #endif

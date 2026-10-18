@@ -609,7 +609,7 @@ void Scheduler::remove_task(TaskControlBlock &task) {
 
     ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
-    if (task.magic != TaskControlBlock::TCB_MAGIC) {
+    if (task.magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
         Logger::error("remove_task: TCB %p magic=0x%lx (expected 0x%lx)",
                       &task, (uint64_t)task.magic,
                       (uint64_t)TaskControlBlock::TCB_MAGIC);
@@ -739,9 +739,9 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
     ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "add_task_err"));
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
-    if (all_tasks_.size() >= MAX_TASKS)
+    if (all_tasks_.size() >= MAX_TASKS) [[unlikely]]
         return SCHED_ERR_TABLE_FULL;
-    if (id_table_find(task.id) != nullptr)
+    if (id_table_find(task.id) != nullptr) [[unlikely]]
         return SCHED_ERR_DUPLICATE_ID;
     // Issue #20: enforced admission BEFORE any mutation — a denial leaves
     // tables, queues, and the ResourceTracker untouched (fail-closed); the
@@ -788,7 +788,7 @@ SchedulerError Scheduler::remove_task_err(TaskControlBlock &task) {
     ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "remove_task_err"));
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
-    if (id_table_find(task.id) == nullptr)
+    if (id_table_find(task.id) == nullptr) [[unlikely]]
         return SCHED_ERR_NOT_FOUND;
     all_tasks_.remove(task);
     deadline_list_.remove(task);

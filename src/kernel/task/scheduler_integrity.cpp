@@ -54,19 +54,19 @@ bool rsp_in_stack_range(uint64_t rsp, const TaskControlBlock *t,
 
 bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
                      const char *label) {
-    if (!current) {
+    if (!current) [[unlikely]] {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": current=null\n");
         return false;
     }
-    if (!next) {
+    if (!next) [[unlikely]] {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": next=null\n");
         return false;
     }
-    if (current->magic != TaskControlBlock::TCB_MAGIC) {
+    if (current->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": current magic invalid\n");
@@ -74,7 +74,7 @@ bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
     }
     auto caddr = reinterpret_cast<uint64_t>(current);
     auto naddr = reinterpret_cast<uint64_t>(next);
-    if (caddr < CONFIG_HHDM_OFFSET) {
+    if (caddr < CONFIG_HHDM_OFFSET) [[unlikely]] {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": current low 0x");
@@ -82,7 +82,7 @@ bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
         Logger::raw_write("\n");
         return false;
     }
-    if (naddr < CONFIG_HHDM_OFFSET) {
+    if (naddr < CONFIG_HHDM_OFFSET) [[unlikely]] {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": next low 0x");
@@ -90,7 +90,7 @@ bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
         Logger::raw_write("\n");
         return false;
     }
-    if (current->magic != TaskControlBlock::TCB_MAGIC) {
+    if (current->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": current magic=0x");
@@ -98,7 +98,7 @@ bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
         Logger::raw_write("\n");
         return false;
     }
-    if (next->magic != TaskControlBlock::TCB_MAGIC) {
+    if (next->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": next magic=0x");
@@ -140,14 +140,14 @@ void report_corruption(const char *label) {
 
 bool validate_task_ptr(const TaskControlBlock *t,
                        const char *label) noexcept {
-    if (!t) {
+    if (!t) [[unlikely]] {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": task=null\n");
         return false;
     }
     auto addr = reinterpret_cast<uint64_t>(t);
-    if (addr < CONFIG_HHDM_OFFSET) {
+    if (addr < CONFIG_HHDM_OFFSET) [[unlikely]] {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": task low 0x");
@@ -155,7 +155,7 @@ bool validate_task_ptr(const TaskControlBlock *t,
         Logger::raw_write("\n");
         return false;
     }
-    if (t->magic != TaskControlBlock::TCB_MAGIC) {
+    if (t->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);
         Logger::raw_write(": task magic=0x");
