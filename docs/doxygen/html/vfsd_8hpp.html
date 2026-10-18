@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,42 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('vfsd_8hpp.html
 
 <p>VFS daemon IPC message types and PID tracking.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for vfsd.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="vfsd_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2vfs_2vfsd_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="vfsd_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2vfs_2vfsd_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="vfsd_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Avfsd_3A_3AMsg" id="r_kernel_3A_3Avfsd_3A_3AMsg"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfsd_1_1_msg.html">kernel::vfsd::Msg</a></td></tr>
+<tr class="memitem:kernel_3A_3Avfsd_3A_3AReply" id="r_kernel_3A_3Avfsd_3A_3AReply"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1vfsd_1_1_reply.html">kernel::vfsd::Reply</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Avfsd" id="r_kernel_3A_3Avfsd"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfsd.html">kernel::vfsd</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:acec8fc6583c65a737e190937b9062703" id="r_acec8fc6583c65a737e190937b9062703"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfsd.html#acec8fc6583c65a737e190937b9062703">kernel::vfsd::set_vfsd_pid</a> (uint64_t pid)</td></tr>
+<tr class="memdesc:acec8fc6583c65a737e190937b9062703"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record the PID of the VFS daemon task.  <br /></td></tr>
+<tr class="memitem:aa0df972eac82190a35e45b47576066a7" id="r_aa0df972eac82190a35e45b47576066a7"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfsd.html#aa0df972eac82190a35e45b47576066a7">kernel::vfsd::get_vfsd_pid</a> ()</td></tr>
+<tr class="memdesc:aa0df972eac82190a35e45b47576066a7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the recorded VFS daemon PID.  <br /></td></tr>
+<tr class="memitem:a488cc7b15c3330b8558e1035654be4ba" id="r_a488cc7b15c3330b8558e1035654be4ba"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfsd.html#a488cc7b15c3330b8558e1035654be4ba">kernel::vfsd::is_vfsd_task</a> ()</td></tr>
+<tr class="memdesc:a488cc7b15c3330b8558e1035654be4ba"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if the current task is the VFS daemon.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>VFS daemon IPC message types and PID tracking. </p>
 </div></div><!-- contents -->

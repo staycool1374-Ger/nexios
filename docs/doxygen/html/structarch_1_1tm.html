@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.2.21</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structarch_1_1
 </div><!--header-->
 <div class="contents">
 
+<p>Broken-down calendar time (compatible with struct tm).  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="hal_2rtc_8hpp_source.html">rtc.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for arch::tm:</div>
@@ -129,140 +132,169 @@ Collaboration diagram for arch::tm:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:a14ddbedbed58c49b2a9095568349c123" id="r_a14ddbedbed58c49b2a9095568349c123"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a14ddbedbed58c49b2a9095568349c123">tm_sec</a></td></tr>
-<tr class="memitem:a8375d54a3d41d1a1a2d4bf61985334a7" id="r_a8375d54a3d41d1a1a2d4bf61985334a7"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a8375d54a3d41d1a1a2d4bf61985334a7">tm_min</a></td></tr>
-<tr class="memitem:a0fc6b13ea1490e14d8fa10187b9a8b35" id="r_a0fc6b13ea1490e14d8fa10187b9a8b35"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a0fc6b13ea1490e14d8fa10187b9a8b35">tm_hour</a></td></tr>
-<tr class="memitem:add6675e0964d9eadf8a9a91a95ec4bad" id="r_add6675e0964d9eadf8a9a91a95ec4bad"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#add6675e0964d9eadf8a9a91a95ec4bad">tm_mday</a></td></tr>
-<tr class="memitem:a35a190730c92f572a78e38e17666d56e" id="r_a35a190730c92f572a78e38e17666d56e"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a35a190730c92f572a78e38e17666d56e">tm_mon</a></td></tr>
-<tr class="memitem:a4fd48692e51a5edf93cb580f13bcdb8f" id="r_a4fd48692e51a5edf93cb580f13bcdb8f"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a4fd48692e51a5edf93cb580f13bcdb8f">tm_year</a></td></tr>
-<tr class="memitem:afa724798c0cdea4ec9e754a1175f00bb" id="r_afa724798c0cdea4ec9e754a1175f00bb"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#afa724798c0cdea4ec9e754a1175f00bb">tm_wday</a></td></tr>
-<tr class="memitem:a7d41831e44b58c6eb304361f402fc34c" id="r_a7d41831e44b58c6eb304361f402fc34c"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a7d41831e44b58c6eb304361f402fc34c">tm_yday</a></td></tr>
-<tr class="memitem:aa332c06bdbc182e63f825b3e3ff99947" id="r_aa332c06bdbc182e63f825b3e3ff99947"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#aa332c06bdbc182e63f825b3e3ff99947">tm_isdst</a></td></tr>
+<tr class="memitem:a4d098a9a5c03a00b2ee61e10851de81e" id="r_a4d098a9a5c03a00b2ee61e10851de81e"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a4d098a9a5c03a00b2ee61e10851de81e">tm_sec</a></td></tr>
+<tr class="memdesc:a4d098a9a5c03a00b2ee61e10851de81e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Seconds (0–59).  <br /></td></tr>
+<tr class="memitem:af414eb7c86cc3099595211eee4d4211b" id="r_af414eb7c86cc3099595211eee4d4211b"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#af414eb7c86cc3099595211eee4d4211b">tm_min</a></td></tr>
+<tr class="memdesc:af414eb7c86cc3099595211eee4d4211b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Minutes (0–59).  <br /></td></tr>
+<tr class="memitem:a3e7ca4e37f1abcaf56b8a916c38eb9fe" id="r_a3e7ca4e37f1abcaf56b8a916c38eb9fe"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a3e7ca4e37f1abcaf56b8a916c38eb9fe">tm_hour</a></td></tr>
+<tr class="memdesc:a3e7ca4e37f1abcaf56b8a916c38eb9fe"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hours (0–23).  <br /></td></tr>
+<tr class="memitem:ab8d8904bad43b0c8b96e61941c5b5310" id="r_ab8d8904bad43b0c8b96e61941c5b5310"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#ab8d8904bad43b0c8b96e61941c5b5310">tm_mday</a></td></tr>
+<tr class="memdesc:ab8d8904bad43b0c8b96e61941c5b5310"><td class="mdescLeft">&#160;</td><td class="mdescRight">Day of month (1–31).  <br /></td></tr>
+<tr class="memitem:a112ac36fa2f593777138a417cf031e17" id="r_a112ac36fa2f593777138a417cf031e17"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a112ac36fa2f593777138a417cf031e17">tm_mon</a></td></tr>
+<tr class="memdesc:a112ac36fa2f593777138a417cf031e17"><td class="mdescLeft">&#160;</td><td class="mdescRight">Month (0–11).  <br /></td></tr>
+<tr class="memitem:a33adf78fd6476b2120ce3b9c4a852053" id="r_a33adf78fd6476b2120ce3b9c4a852053"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a33adf78fd6476b2120ce3b9c4a852053">tm_year</a></td></tr>
+<tr class="memdesc:a33adf78fd6476b2120ce3b9c4a852053"><td class="mdescLeft">&#160;</td><td class="mdescRight">Years since 1900.  <br /></td></tr>
+<tr class="memitem:afe81a8c46f1c693c43f259b288859f4f" id="r_afe81a8c46f1c693c43f259b288859f4f"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#afe81a8c46f1c693c43f259b288859f4f">tm_wday</a></td></tr>
+<tr class="memdesc:afe81a8c46f1c693c43f259b288859f4f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Day of week (0 = Sunday).  <br /></td></tr>
+<tr class="memitem:a93a0ba77cc23796df84405dcbcc57eb1" id="r_a93a0ba77cc23796df84405dcbcc57eb1"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a93a0ba77cc23796df84405dcbcc57eb1">tm_yday</a></td></tr>
+<tr class="memdesc:a93a0ba77cc23796df84405dcbcc57eb1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Day of year (0–365).  <br /></td></tr>
+<tr class="memitem:a5645ca0580c8ab2c24f6c2965d9c9f9c" id="r_a5645ca0580c8ab2c24f6c2965d9c9f9c"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a5645ca0580c8ab2c24f6c2965d9c9f9c">tm_isdst</a></td></tr>
+<tr class="memdesc:a5645ca0580c8ab2c24f6c2965d9c9f9c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Daylight-saving flag.  <br /></td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
-<a id="a0fc6b13ea1490e14d8fa10187b9a8b35" name="a0fc6b13ea1490e14d8fa10187b9a8b35"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0fc6b13ea1490e14d8fa10187b9a8b35">&#9670;&#160;</a></span>tm_hour</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Broken-down calendar time (compatible with struct tm). </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a id="a3e7ca4e37f1abcaf56b8a916c38eb9fe" name="a3e7ca4e37f1abcaf56b8a916c38eb9fe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3e7ca4e37f1abcaf56b8a916c38eb9fe">&#9670;&#160;</a></span>tm_hour</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int arch::tm::tm_hour</td>
+          <td class="memname">int tm::tm_hour</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Hours (0–23). </p>
+
 </div>
 </div>
-<a id="aa332c06bdbc182e63f825b3e3ff99947" name="aa332c06bdbc182e63f825b3e3ff99947"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa332c06bdbc182e63f825b3e3ff99947">&#9670;&#160;</a></span>tm_isdst</h2>
+<a id="a5645ca0580c8ab2c24f6c2965d9c9f9c" name="a5645ca0580c8ab2c24f6c2965d9c9f9c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5645ca0580c8ab2c24f6c2965d9c9f9c">&#9670;&#160;</a></span>tm_isdst</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int arch::tm::tm_isdst</td>
+          <td class="memname">int tm::tm_isdst</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Daylight-saving flag. </p>
+
 </div>
 </div>
-<a id="add6675e0964d9eadf8a9a91a95ec4bad" name="add6675e0964d9eadf8a9a91a95ec4bad"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#add6675e0964d9eadf8a9a91a95ec4bad">&#9670;&#160;</a></span>tm_mday</h2>
+<a id="ab8d8904bad43b0c8b96e61941c5b5310" name="ab8d8904bad43b0c8b96e61941c5b5310"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab8d8904bad43b0c8b96e61941c5b5310">&#9670;&#160;</a></span>tm_mday</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int arch::tm::tm_mday</td>
+          <td class="memname">int tm::tm_mday</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Day of month (1–31). </p>
+
 </div>
 </div>
-<a id="a8375d54a3d41d1a1a2d4bf61985334a7" name="a8375d54a3d41d1a1a2d4bf61985334a7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8375d54a3d41d1a1a2d4bf61985334a7">&#9670;&#160;</a></span>tm_min</h2>
+<a id="af414eb7c86cc3099595211eee4d4211b" name="af414eb7c86cc3099595211eee4d4211b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af414eb7c86cc3099595211eee4d4211b">&#9670;&#160;</a></span>tm_min</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int arch::tm::tm_min</td>
+          <td class="memname">int tm::tm_min</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Minutes (0–59). </p>
+
 </div>
 </div>
-<a id="a35a190730c92f572a78e38e17666d56e" name="a35a190730c92f572a78e38e17666d56e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a35a190730c92f572a78e38e17666d56e">&#9670;&#160;</a></span>tm_mon</h2>
+<a id="a112ac36fa2f593777138a417cf031e17" name="a112ac36fa2f593777138a417cf031e17"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a112ac36fa2f593777138a417cf031e17">&#9670;&#160;</a></span>tm_mon</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int arch::tm::tm_mon</td>
+          <td class="memname">int tm::tm_mon</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Month (0–11). </p>
+
 </div>
 </div>
-<a id="a14ddbedbed58c49b2a9095568349c123" name="a14ddbedbed58c49b2a9095568349c123"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a14ddbedbed58c49b2a9095568349c123">&#9670;&#160;</a></span>tm_sec</h2>
+<a id="a4d098a9a5c03a00b2ee61e10851de81e" name="a4d098a9a5c03a00b2ee61e10851de81e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4d098a9a5c03a00b2ee61e10851de81e">&#9670;&#160;</a></span>tm_sec</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int arch::tm::tm_sec</td>
+          <td class="memname">int tm::tm_sec</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Seconds (0–59). </p>
+
 </div>
 </div>
-<a id="afa724798c0cdea4ec9e754a1175f00bb" name="afa724798c0cdea4ec9e754a1175f00bb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#afa724798c0cdea4ec9e754a1175f00bb">&#9670;&#160;</a></span>tm_wday</h2>
+<a id="afe81a8c46f1c693c43f259b288859f4f" name="afe81a8c46f1c693c43f259b288859f4f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afe81a8c46f1c693c43f259b288859f4f">&#9670;&#160;</a></span>tm_wday</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int arch::tm::tm_wday</td>
+          <td class="memname">int tm::tm_wday</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Day of week (0 = Sunday). </p>
+
 </div>
 </div>
-<a id="a7d41831e44b58c6eb304361f402fc34c" name="a7d41831e44b58c6eb304361f402fc34c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7d41831e44b58c6eb304361f402fc34c">&#9670;&#160;</a></span>tm_yday</h2>
+<a id="a93a0ba77cc23796df84405dcbcc57eb1" name="a93a0ba77cc23796df84405dcbcc57eb1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a93a0ba77cc23796df84405dcbcc57eb1">&#9670;&#160;</a></span>tm_yday</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int arch::tm::tm_yday</td>
+          <td class="memname">int tm::tm_yday</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Day of year (0–365). </p>
+
 </div>
 </div>
-<a id="a4fd48692e51a5edf93cb580f13bcdb8f" name="a4fd48692e51a5edf93cb580f13bcdb8f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4fd48692e51a5edf93cb580f13bcdb8f">&#9670;&#160;</a></span>tm_year</h2>
+<a id="a33adf78fd6476b2120ce3b9c4a852053" name="a33adf78fd6476b2120ce3b9c4a852053"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a33adf78fd6476b2120ce3b9c4a852053">&#9670;&#160;</a></span>tm_year</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int arch::tm::tm_year</td>
+          <td class="memname">int tm::tm_year</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Years since 1900. </p>
 
 </div>
 </div>

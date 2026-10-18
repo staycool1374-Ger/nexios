@@ -43,7 +43,6 @@ var namespacenet =
     [ "ETH_FRAME_MAX", "namespacenet.html#a4eb0cbea0baea33fc20fbe5f9ee00efd", null ],
     [ "ETH_HEADER_LEN", "namespacenet.html#ae87d8a50d8ebd248c81b97cc7d2ede0f", null ],
     [ "ETH_MTU", "namespacenet.html#a91dabda33ebaa24d5c6b90c149a09112", null ],
-    [ "g_nic", "namespacenet.html#aad3a329be80ed3a001c29a1cec8e7fa4", null ],
     [ "ICMP_HEADER_LEN", "namespacenet.html#ad99c8a4c765e5f577ee8a344497288f4", null ],
     [ "ICMP_TYPE_ECHO_REPLY", "namespacenet.html#a39c804ae1186c1ddefcd5915588042d1", null ],
     [ "ICMP_TYPE_ECHO_REQUEST", "namespacenet.html#afeda5127c2c4b0f02bd99a52a48c94d9", null ],

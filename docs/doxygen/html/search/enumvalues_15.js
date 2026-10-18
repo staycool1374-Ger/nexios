@@ -1,7 +1,19 @@
 var searchData=
 [
-  ['wait_0',['WAIT',['../namespacekernel.html#a39a8b332edefebba052488078097a45bad5cc6a0064b5c25ba37826aa3fda910c',1,'kernel']]],
-  ['waiting_1',['WAITING',['../namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3ca1869d56535e8b1449a6da54ff5e11f50',1,'kernel']]],
-  ['warn_2',['WARN',['../namespacekernel_1_1log.html#a3715d6ea36d8e40a6fb2320b3a4eacfca32bd8a1db2275458673903bdb84cb277',1,'kernel::log::WARN'],['../namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2a32bd8a1db2275458673903bdb84cb277',1,'kernel::WARN']]],
-  ['wdog_3',['Wdog',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a4feec37b15db5f0a2684cf4a23c5ec3b',1,'kernel::cap']]]
+  ['validate_0',['Validate',['../namespacekernel.html#a746bd09a61cf9ab0f4fc4ba88c9f84e2aad3d06d03d94223fa652babc913de686',1,'kernel::Validate'],['../namespacekernel.html#ad70275577c5bd4a37c1c5d01a850b233aad3d06d03d94223fa652babc913de686',1,'kernel::Validate'],['../namespacekernel.html#aa6c3b797a7f9c5f662f307dfd8af3704aad3d06d03d94223fa652babc913de686',1,'kernel::Validate']]],
+  ['validating_1',['VALIDATING',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5aff9726ecf722ce2a076e7cf705a073f7',1,'kernel::elf']]],
+  ['verified_2',['VERIFIED',['../classkernel_1_1_scheduler.html#aafa9966e76c491b9409a666d5dfd260da2778dde25400a8e3df508c90229d2657',1,'kernel::Scheduler::VERIFIED'],['../structkernel_1_1_task_control_block.html#a5a15a3d081ace9f33de0cea3d09f551fa2778dde25400a8e3df508c90229d2657',1,'kernel::TaskControlBlock::VERIFIED']]],
+  ['verifying_3',['VERIFYING',['../structkernel_1_1_task_control_block.html#a5a15a3d081ace9f33de0cea3d09f551fa4ea687957de9caaad1e098e3e95aae9e',1,'kernel::TaskControlBlock']]],
+  ['vfs_4',['VFS',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa296c58c4afa6e6c1d159f7d0d6cc864c',1,'kernel::log']]],
+  ['vfs_5ferror_5fcodes_5',['VFS_ERROR_CODES',['../namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafeae0d11a6f736e71b8c93a94be5a6bf596',1,'kernel::errors']]],
+  ['vfsdrain_6',['VfsDrain',['../namespacekernel.html#aa6c3b797a7f9c5f662f307dfd8af3704a131709116e28cd7ad1e82e826dbc2b12',1,'kernel']]],
+  ['virt_5ferror_7',['VIRT_ERROR',['../namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630aa4637fbe447629a1a593161d20af0f89',1,'arch']]],
+  ['virtio_5fblk_5fs_5fioerr_8',['VIRTIO_BLK_S_IOERR',['../namespacekernel_1_1block.html#a1b8885384f857a7a96f07598de9a83d9a232c1ad54f6ad5d9878b23bea3cb5fc3',1,'kernel::block']]],
+  ['virtio_5fblk_5fs_5fok_9',['VIRTIO_BLK_S_OK',['../namespacekernel_1_1block.html#a1b8885384f857a7a96f07598de9a83d9a468cf9e67f4ecd98e4c97db2885591bc',1,'kernel::block']]],
+  ['virtio_5fblk_5fs_5funsup_10',['VIRTIO_BLK_S_UNSUP',['../namespacekernel_1_1block.html#a1b8885384f857a7a96f07598de9a83d9a3c8b96c7fbd1a03f1e0569ceee25e6bb',1,'kernel::block']]],
+  ['virtio_5fblk_5ft_5fflush_11',['VIRTIO_BLK_T_FLUSH',['../namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3ac15f8cfa6a966c44bd850dac6a3dda3d',1,'kernel::block']]],
+  ['virtio_5fblk_5ft_5fin_12',['VIRTIO_BLK_T_IN',['../namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3af6426ba276b201c84082f50995f35028',1,'kernel::block']]],
+  ['virtio_5fblk_5ft_5fout_13',['VIRTIO_BLK_T_OUT',['../namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3a2d1e65aa48eb46505250b4ea949bbe24',1,'kernel::block']]],
+  ['vmm_14',['VMM',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aaa7170792bc4a2bfbe1d1946911eb1d15',1,'kernel::log']]],
+  ['vmm_5ferror_5fcodes_15',['VMM_ERROR_CODES',['../namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074da6317a158a3baf1810a442eafb77a6998',1,'kernel::errors']]]
 ];

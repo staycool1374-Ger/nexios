@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('syscall__handl
 <p>POSIX time/timer syscalls: clock_gettime, nanosleep, timer_create (multiplex), timerfd_create (issue #76, v0.5.0).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="syscall_8hpp_source.html">kernel/syscall/syscall.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="syscall__errors_8hpp_source.html">kernel/syscall/syscall_errors.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="syscall__helpers_8hpp_source.html">kernel/syscall/syscall_helpers.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
@@ -142,13 +143,13 @@ Include dependency graph for syscall_handlers_posix_time.cpp:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a39fa71941abf971947793936af03c774" id="r_a39fa71941abf971947793936af03c774"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a39fa71941abf971947793936af03c774">kernel::is_timerfd_vnode</a> (const vfs::Vnode *node)</td></tr>
+<tr class="memitem:a39fa71941abf971947793936af03c774" id="r_a39fa71941abf971947793936af03c774"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a39fa71941abf971947793936af03c774">kernel::is_timerfd_vnode</a> (const <a class="el" href="structkernel_1_1vfs_1_1_vnode.html">vfs::Vnode</a> *node)</td></tr>
 <tr class="memdesc:a39fa71941abf971947793936af03c774"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when a vnode is a timerfd (ops-pointer identity — never parses private_data of foreign vnodes). External linkage for the sys_read branch; timerfd_ops itself stays TU-local.  <br /></td></tr>
-<tr class="memitem:aa583fe65545291d14aa9afd4b95f2576" id="r_aa583fe65545291d14aa9afd4b95f2576"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aa583fe65545291d14aa9afd4b95f2576">kernel::timerfd_read_entry</a> (vfs::Vnode &amp;node, uint8_t *buffer, uint64_t count, bool nonblock)</td></tr>
+<tr class="memitem:aa583fe65545291d14aa9afd4b95f2576" id="r_aa583fe65545291d14aa9afd4b95f2576"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aa583fe65545291d14aa9afd4b95f2576">kernel::timerfd_read_entry</a> (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">vfs::Vnode</a> &amp;node, uint8_t *buffer, uint64_t count, bool nonblock)</td></tr>
 <tr class="memdesc:aa583fe65545291d14aa9afd4b95f2576"><td class="mdescLeft">&#160;</td><td class="mdescRight">Blocking timerfd read helper (sys_read branch target).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>

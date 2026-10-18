@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -123,6 +123,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__cap__mmi
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scope__guard_8hpp_source.html">scope_guard.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="irq__guard_8hpp_source.html">kernel/arch/irq_guard.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="cap_8hpp_source.html">kernel/cap/cap.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="cap__types_8hpp_source.html">kernel/cap/cap_types.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="mmio_8hpp_source.html">kernel/cap/mmio.hpp</a>&gt;</code><br />
@@ -157,14 +159,128 @@ Functions</h2></td></tr>
 <tr class="memitem:a962fc0c101b7fe7e0ffa449339156f31" id="r_a962fc0c101b7fe7e0ffa449339156f31"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a962fc0c101b7fe7e0ffa449339156f31">JARVIS_TEST</a> (ioport_switch_applies_and_restores, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a2949e7e2d80a4cffc82e524265e2f6ff" id="r_a2949e7e2d80a4cffc82e524265e2f6ff"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a2949e7e2d80a4cffc82e524265e2f6ff">JARVIS_TEST</a> (ioport_task_cleanup_releases_slot_and_remasks, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:aca8e90bcd57e985f8c8459a5db267827" id="r_aca8e90bcd57e985f8c8459a5db267827"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aca8e90bcd57e985f8c8459a5db267827">JARVIS_TEST</a> (ioport_pool_exhaustion_fails_closed, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a9e5a2eb6eeb7021a9e176de289c33d8e" id="r_a9e5a2eb6eeb7021a9e176de289c33d8e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a9e5a2eb6eeb7021a9e176de289c33d8e">JARVIS_TEST</a> (mmio_map_err_success_roundtrip, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:ade06096c8f94afc2b8fe8c5f3eaf8a53" id="r_ade06096c8f94afc2b8fe8c5f3eaf8a53"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ade06096c8f94afc2b8fe8c5f3eaf8a53">JARVIS_TEST</a> (frame_map_err_success_roundtrip, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a61c95a8a5757463c573b1ce9106f7856" id="r_a61c95a8a5757463c573b1ce9106f7856"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a61c95a8a5757463c573b1ce9106f7856">JARVIS_TEST</a> (cap_map_err_validation_matrix, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:ac594c3ea60e855cfd80e3652761e456d" id="r_ac594c3ea60e855cfd80e3652761e456d"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ac594c3ea60e855cfd80e3652761e456d">JARVIS_TEST</a> (mmio_map_err_rollback_oom, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a3343be3c031e84f81009d6526be77fb0" id="r_a3343be3c031e84f81009d6526be77fb0"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a3343be3c031e84f81009d6526be77fb0">JARVIS_TEST</a> (cap_unmap_clears_present_bit, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a9a1e9562d48c643b6749363998d25415" id="r_a9a1e9562d48c643b6749363998d25415"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a9a1e9562d48c643b6749363998d25415">JARVIS_TEST</a> (cap_map_nx_policy_pinning, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a8a263ffb965e127797f2ab880dcdd650" id="r_a8a263ffb965e127797f2ab880dcdd650"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8a263ffb965e127797f2ab880dcdd650">register_cap_mmio_tests</a> ()</td></tr>
 <tr class="memdesc:a8a263ffb965e127797f2ab880dcdd650"><td class="mdescLeft">&#160;</td><td class="mdescRight">Registers all MMIO-cap / I/O-delegation test cases (issues #3/#8).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>MMIO caps + fine-grained I/O delegation tests (issue #3): MmioCap lifecycle, capability-gated MMIO mapping, TSS I/O bitmap layout, sys_ioport_grant dispatch + validation, per-task bitmap switch/cleanup. Ring-3 #GP on denied ports is NOT testable from the ring-0 harness — the tests assert bitmap state, TSS descriptor layout and owner bookkeeping instead. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a61c95a8a5757463c573b1ce9106f7856" name="a61c95a8a5757463c573b1ce9106f7856"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a61c95a8a5757463c573b1ce9106f7856">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/15]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">cap_map_err_validation_matrix</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__cap__mmio_8cpp_a61c95a8a5757463c573b1ce9106f7856_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_a61c95a8a5757463c573b1ce9106f7856_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a9a1e9562d48c643b6749363998d25415" name="a9a1e9562d48c643b6749363998d25415"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9a1e9562d48c643b6749363998d25415">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/15]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">cap_map_nx_policy_pinning</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__cap__mmio_8cpp_a9a1e9562d48c643b6749363998d25415_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_a9a1e9562d48c643b6749363998d25415_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="a3343be3c031e84f81009d6526be77fb0" name="a3343be3c031e84f81009d6526be77fb0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3343be3c031e84f81009d6526be77fb0">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/15]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">cap_unmap_clears_present_bit</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__cap__mmio_8cpp_a3343be3c031e84f81009d6526be77fb0_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_a3343be3c031e84f81009d6526be77fb0_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="ade06096c8f94afc2b8fe8c5f3eaf8a53" name="ade06096c8f94afc2b8fe8c5f3eaf8a53"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade06096c8f94afc2b8fe8c5f3eaf8a53">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/15]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">frame_map_err_success_roundtrip</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__cap__mmio_8cpp_ade06096c8f94afc2b8fe8c5f3eaf8a53_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_ade06096c8f94afc2b8fe8c5f3eaf8a53_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
 <a id="a92da999d5bfdd001ff86bc1788609cb4" name="a92da999d5bfdd001ff86bc1788609cb4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a92da999d5bfdd001ff86bc1788609cb4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/9]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a92da999d5bfdd001ff86bc1788609cb4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/15]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -185,13 +301,13 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__cap__mmio_8cpp_a92da999d5bfdd001ff86bc1788609cb4_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_a92da999d5bfdd001ff86bc1788609cb4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
 </div>
 <a id="a491f606db24be9674d1c998c4be788d4" name="a491f606db24be9674d1c998c4be788d4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a491f606db24be9674d1c998c4be788d4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/9]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a491f606db24be9674d1c998c4be788d4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/15]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -212,13 +328,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__cap__mmio_8cpp_a491f606db24be9674d1c998c4be788d4_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_a491f606db24be9674d1c998c4be788d4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
 </div>
 <a id="aca8e90bcd57e985f8c8459a5db267827" name="aca8e90bcd57e985f8c8459a5db267827"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aca8e90bcd57e985f8c8459a5db267827">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/9]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aca8e90bcd57e985f8c8459a5db267827">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/15]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -239,13 +355,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__cap__mmio_8cpp_aca8e90bcd57e985f8c8459a5db267827_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_aca8e90bcd57e985f8c8459a5db267827_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
 </div>
 <a id="a962fc0c101b7fe7e0ffa449339156f31" name="a962fc0c101b7fe7e0ffa449339156f31"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a962fc0c101b7fe7e0ffa449339156f31">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/9]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a962fc0c101b7fe7e0ffa449339156f31">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/15]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -266,13 +382,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__cap__mmio_8cpp_a962fc0c101b7fe7e0ffa449339156f31_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_a962fc0c101b7fe7e0ffa449339156f31_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
 </div>
 <a id="a2949e7e2d80a4cffc82e524265e2f6ff" name="a2949e7e2d80a4cffc82e524265e2f6ff"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2949e7e2d80a4cffc82e524265e2f6ff">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/9]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a2949e7e2d80a4cffc82e524265e2f6ff">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/15]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -293,13 +409,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__cap__mmio_8cpp_a2949e7e2d80a4cffc82e524265e2f6ff_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_a2949e7e2d80a4cffc82e524265e2f6ff_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
 </div>
 <a id="aba35d6fefcf9a72a4259ae8b66d7d67e" name="aba35d6fefcf9a72a4259ae8b66d7d67e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aba35d6fefcf9a72a4259ae8b66d7d67e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/9]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aba35d6fefcf9a72a4259ae8b66d7d67e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/15]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -320,13 +436,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__cap__mmio_8cpp_aba35d6fefcf9a72a4259ae8b66d7d67e_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_aba35d6fefcf9a72a4259ae8b66d7d67e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
 </div>
 <a id="a13d5a1ea6247894d6cbd78289fd9c4be" name="a13d5a1ea6247894d6cbd78289fd9c4be"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a13d5a1ea6247894d6cbd78289fd9c4be">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/9]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a13d5a1ea6247894d6cbd78289fd9c4be">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[11/15]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -347,13 +463,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__cap__mmio_8cpp_a13d5a1ea6247894d6cbd78289fd9c4be_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_a13d5a1ea6247894d6cbd78289fd9c4be_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
 </div>
 <a id="a3dd76fa77f3c528c31386af240a83d9a" name="a3dd76fa77f3c528c31386af240a83d9a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3dd76fa77f3c528c31386af240a83d9a">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/9]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a3dd76fa77f3c528c31386af240a83d9a">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[12/15]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -374,13 +490,67 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__cap__mmio_8cpp_a3dd76fa77f3c528c31386af240a83d9a_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_a3dd76fa77f3c528c31386af240a83d9a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 12 -->
+</div>
+
+</div>
+</div>
+<a id="ac594c3ea60e855cfd80e3652761e456d" name="ac594c3ea60e855cfd80e3652761e456d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac594c3ea60e855cfd80e3652761e456d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[13/15]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">mmio_map_err_rollback_oom</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__cap__mmio_8cpp_ac594c3ea60e855cfd80e3652761e456d_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_ac594c3ea60e855cfd80e3652761e456d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 13 -->
+</div>
+
+</div>
+</div>
+<a id="a9e5a2eb6eeb7021a9e176de289c33d8e" name="a9e5a2eb6eeb7021a9e176de289c33d8e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9e5a2eb6eeb7021a9e176de289c33d8e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[14/15]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">mmio_map_err_success_roundtrip</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__cap__mmio_8cpp_a9e5a2eb6eeb7021a9e176de289c33d8e_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_a9e5a2eb6eeb7021a9e176de289c33d8e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 14 -->
 </div>
 
 </div>
 </div>
 <a id="ae66b3b658d2feb3ab720739acaa0df3e" name="ae66b3b658d2feb3ab720739acaa0df3e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae66b3b658d2feb3ab720739acaa0df3e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/9]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ae66b3b658d2feb3ab720739acaa0df3e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[15/15]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -401,7 +571,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__cap__mmio_8cpp_ae66b3b658d2feb3ab720739acaa0df3e_cgraph.png" border="0" usemap="#atest__cap__mmio_8cpp_ae66b3b658d2feb3ab720739acaa0df3e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 15 -->
 </div>
 
 </div>

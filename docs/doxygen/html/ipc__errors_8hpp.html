@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,133 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ipc__errors_8h
 
 <p>IPC error codes (X-macro table with human-readable strings).  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="assert_8hpp_source.html">assert.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for ipc_errors.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="ipc__errors_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2ipc_2ipc__errors_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="ipc__errors_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2ipc_2ipc__errors_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="ipc__errors_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Aerrors" id="r_kernel_3A_3Aerrors"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html">kernel::errors</a></td></tr>
+<tr class="memdesc:namespacekernel_1_1errors"><td class="mdescLeft">&#160;</td><td class="mdescRight">Primary template for per-module error-string lookup. Each module that defines error codes specialises this template (e.g. &lt;<a class="el" href="task__errors_8hpp.html" title="Task module error codes and string lookup.">kernel/task/task_errors.hpp</a>&gt;). <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:aae450ac95271dd8237665cad82a4c0e4" id="r_aae450ac95271dd8237665cad82a4c0e4"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aae450ac95271dd8237665cad82a4c0e4">IPC_ERROR_CODES</a></td></tr>
+<tr class="memitem:a3e2fb76eadf55aca2104b61591c1d165" id="r_a3e2fb76eadf55aca2104b61591c1d165"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3e2fb76eadf55aca2104b61591c1d165">X</a>(<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>,  num,  msg)</td></tr>
+<tr class="memitem:a47fb9cc75ae083f1d9af376bdbf18c9c" id="r_a47fb9cc75ae083f1d9af376bdbf18c9c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a47fb9cc75ae083f1d9af376bdbf18c9c">X</a>(<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>,  num,  msg)</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:ad1f7fbc5e0a7a7fc2ade1589e27236ff" id="r_ad1f7fbc5e0a7a7fc2ade1589e27236ff"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html#ad1f7fbc5e0a7a7fc2ade1589e27236ff">kernel::errors::IpcError</a> : uint64_t { <a class="el" href="namespacekernel_1_1errors.html#ad1f7fbc5e0a7a7fc2ade1589e27236ffaee4229bc9e7639f279456c8ed5ce0c25">kernel::errors::IPC_ERROR_CODES</a>
+ }</td></tr>
+<tr class="memdesc:ad1f7fbc5e0a7a7fc2ade1589e27236ff"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> subsystem error codes.  <a href="namespacekernel_1_1errors.html#ad1f7fbc5e0a7a7fc2ade1589e27236ff">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a26384cea11f53e3295e727adc4d0e947" id="r_a26384cea11f53e3295e727adc4d0e947"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a26384cea11f53e3295e727adc4d0e947 template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html#a26384cea11f53e3295e727adc4d0e947">kernel::errors::error_string</a> (<a class="el" href="namespacekernel_1_1errors.html#ad1f7fbc5e0a7a7fc2ade1589e27236ff">IpcError</a> e)</td></tr>
+<tr class="memdesc:a26384cea11f53e3295e727adc4d0e947"><td class="mdescLeft">&#160;</td><td class="mdescRight">OK anchor (issue #348-C): success is zero by convention.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>IPC error codes (X-macro table with human-readable strings). </p>
-</div></div><!-- contents -->
+</div><a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
+<a id="aae450ac95271dd8237665cad82a4c0e4" name="aae450ac95271dd8237665cad82a4c0e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aae450ac95271dd8237665cad82a4c0e4">&#9670;&#160;</a></span>IPC_ERROR_CODES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define IPC_ERROR_CODES</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="buffer__pool__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165">X</a>(OK, 0, <span class="stringliteral">&quot;OK&quot;</span>)                                                             \</div>
+<div class="line">X(NO_QUEUE, 1, <span class="stringliteral">&quot;No message queue for task&quot;</span>)                                \</div>
+<div class="line">X(QUEUE_FULL, 2, <span class="stringliteral">&quot;Message queue is full&quot;</span>)                                  \</div>
+<div class="line">X(QUEUE_EMPTY, 3, <span class="stringliteral">&quot;Message queue is empty&quot;</span>)                                \</div>
+<div class="line">X(NO_DEST, 4, <span class="stringliteral">&quot;Destination task not found&quot;</span>)                                \</div>
+<div class="line">X(NO_REPLY, 5, <span class="stringliteral">&quot;No reply received (send_sync)&quot;</span>)                            \</div>
+<div class="line">X(TIMEOUT, 6, <span class="stringliteral">&quot;Operation timed out&quot;</span>)                                       \</div>
+<div class="line">X(INVALID_MSG, 7, <span class="stringliteral">&quot;Invalid message format&quot;</span>)                                \</div>
+<div class="line">X(NO_BUFFER, 8, <span class="stringliteral">&quot;No buffer available for zero-copy&quot;</span>)                       \</div>
+<div class="line">X(INVALID_ARGS, 9, <span class="stringliteral">&quot;Invalid arguments&quot;</span>)</div>
+<div class="ttc" id="abuffer__pool__errors_8hpp_html_a3e2fb76eadf55aca2104b61591c1d165"><div class="ttname"><a href="buffer__pool__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165">X</a></div><div class="ttdeci">#define X(name, num, msg)</div><div class="ttdef"><b>Definition</b> buffer_pool_errors.hpp:44</div></div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a47fb9cc75ae083f1d9af376bdbf18c9c" name="a47fb9cc75ae083f1d9af376bdbf18c9c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a47fb9cc75ae083f1d9af376bdbf18c9c">&#9670;&#160;</a></span>X <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define X</td>
+          <td>(</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>num</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>msg</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">case</span> IPC_ERR_##<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>:                                                       \</div>
+<div class="line">    <span class="keywordflow">return</span> msg;</div>
+<div class="ttc" id="afat32_8hpp_html_a30308c9b983377042fd2cc8900454fb1"><div class="ttname"><a href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></div><div class="ttdeci">uint8_t name[11]</div><div class="ttdoc">8.3 short name (space-padded).</div><div class="ttdef"><b>Definition</b> fat32.hpp:0</div></div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a3e2fb76eadf55aca2104b61591c1d165" name="a3e2fb76eadf55aca2104b61591c1d165"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3e2fb76eadf55aca2104b61591c1d165">&#9670;&#160;</a></span>X <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define X</td>
+          <td>(</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>num</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>msg</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line">IPC_ERR_##<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a> = (num),</div>
+</div><!-- fragment -->
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

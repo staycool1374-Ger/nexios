@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,34 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('fat32__fs_8hpp
 
 <p>FAT32 VFS filesystem integration (mount, root vnode).  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="fat32_8hpp_source.html">kernel/vfs/fat32.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for fat32_fs.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="fat32__fs_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2vfs_2fat32__fs_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="fat32__fs_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2vfs_2fat32__fs_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="fat32__fs_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Avfs" id="r_kernel_3A_3Avfs"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html">kernel::vfs</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a739270d15fe1ac6f5a0e21d0c2e20123" id="r_a739270d15fe1ac6f5a0e21d0c2e20123"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#a739270d15fe1ac6f5a0e21d0c2e20123">kernel::vfs::mount_fat32</a> (const char *mount_point)</td></tr>
+<tr class="memdesc:a739270d15fe1ac6f5a0e21d0c2e20123"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structkernel_1_1vfs_1_1_mount.html">Mount</a> the FAT32 filesystem at the given mount point.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>FAT32 VFS filesystem integration (mount, root vnode). </p>
 </div></div><!-- contents -->

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classkernel_1_
 </div><!--header-->
 <div class="contents">
 
+<p>Mock block device backed by physical memory or an external buffer.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="block__device_8hpp_source.html">block_device.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Inheritance diagram for kernel::block::MockBlockDevice:</div>
@@ -137,19 +140,28 @@ Collaboration diagram for kernel::block::MockBlockDevice:</div>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a431fb18bfd095e5efa8b3f98720b7e3b" id="r_a431fb18bfd095e5efa8b3f98720b7e3b"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a431fb18bfd095e5efa8b3f98720b7e3b">MockBlockDevice</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sector_count_)</td></tr>
 <tr class="memdesc:a431fb18bfd095e5efa8b3f98720b7e3b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocate writable storage via <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>.  <br /></td></tr>
-<tr class="memitem:a94338a75b59928eafa582a98ac51c186" id="r_a94338a75b59928eafa582a98ac51c186"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a94338a75b59928eafa582a98ac51c186">MockBlockDevice</a> (const <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *external_data, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sector_count_, bool read_only)</td></tr>
-<tr class="memdesc:a94338a75b59928eafa582a98ac51c186"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wrap an existing buffer (may be read-only).  <br /></td></tr>
+<tr class="memitem:aad0f87de509d6e1edf2f29ac00448923" id="r_aad0f87de509d6e1edf2f29ac00448923"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aad0f87de509d6e1edf2f29ac00448923">MockBlockDevice</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *external_data, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sector_count_, bool read_only)</td></tr>
+<tr class="memdesc:aad0f87de509d6e1edf2f29ac00448923"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wrap an existing buffer (may be read-only).  <br /></td></tr>
 <tr class="memitem:a4febebbdfb230e0186a0dc3cea5a4d7f" id="r_a4febebbdfb230e0186a0dc3cea5a4d7f"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a4febebbdfb230e0186a0dc3cea5a4d7f">~MockBlockDevice</a> ()</td></tr>
+<tr class="memdesc:a4febebbdfb230e0186a0dc3cea5a4d7f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free the backing memory if it was PMM-allocated.  <br /></td></tr>
 <tr class="memitem:a40c741cb67366ab86e82f5c178973c20" id="r_a40c741cb67366ab86e82f5c178973c20"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a40c741cb67366ab86e82f5c178973c20">read_sector</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lba, <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buffer) override</td></tr>
+<tr class="memdesc:a40c741cb67366ab86e82f5c178973c20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read a sector from the backing buffer.  <br /></td></tr>
 <tr class="memitem:abd5625d73de2742f08bd34618b788e36" id="r_abd5625d73de2742f08bd34618b788e36"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abd5625d73de2742f08bd34618b788e36">write_sector</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lba, const <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buffer) override</td></tr>
+<tr class="memdesc:abd5625d73de2742f08bd34618b788e36"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a sector to the backing buffer.  <br /></td></tr>
 <tr class="memitem:a2c1dcfda3dbd79955d6db9d3ea82793a" id="r_a2c1dcfda3dbd79955d6db9d3ea82793a"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2c1dcfda3dbd79955d6db9d3ea82793a">sector_count</a> () const override</td></tr>
+<tr class="memdesc:a2c1dcfda3dbd79955d6db9d3ea82793a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total number of sectors.  <br /></td></tr>
 <tr class="memitem:ac13533e9634e6bceeeea71fa4181b493" id="r_ac13533e9634e6bceeeea71fa4181b493"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac13533e9634e6bceeeea71fa4181b493">sector_size</a> () const override</td></tr>
+<tr class="memdesc:ac13533e9634e6bceeeea71fa4181b493"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of each sector in bytes.  <br /></td></tr>
 <tr class="memitem:ac719baee4294c876514ce78b7e397ccd" id="r_ac719baee4294c876514ce78b7e397ccd"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac719baee4294c876514ce78b7e397ccd">is_read_only</a> () const override</td></tr>
+<tr class="memdesc:ac719baee4294c876514ce78b7e397ccd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether the device reports as read-only.  <br /></td></tr>
 <tr class="memitem:ae24edafc94232b75f331de14e324d4e0" id="r_ae24edafc94232b75f331de14e324d4e0"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ae24edafc94232b75f331de14e324d4e0">raw_buffer</a> ()</td></tr>
+<tr class="memdesc:ae24edafc94232b75f331de14e324d4e0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Access the raw backing buffer (only when owned, i.e. PMM-allocated).  <br /></td></tr>
 <tr class="inherit_header pub_methods_classkernel_1_1block_1_1_block_device"><td colspan="2">Public Member Functions inherited from <a class="el" href="classkernel_1_1block_1_1_block_device.html">kernel::block::BlockDevice</a></td></tr>
 <tr class="memitem:acf49f308065355d5afbed60fbf10bf08 pub_methods_classkernel_1_1block_1_1_block_device" id="r_acf49f308065355d5afbed60fbf10bf08"><td class="memItemLeft">virtual&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_block_device.html#acf49f308065355d5afbed60fbf10bf08">~BlockDevice</a> ()=default</td></tr>
 </table>
-<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Mock block device backed by physical memory or an external buffer. </p>
+</div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a431fb18bfd095e5efa8b3f98720b7e3b" name="a431fb18bfd095e5efa8b3f98720b7e3b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a431fb18bfd095e5efa8b3f98720b7e3b">&#9670;&#160;</a></span>MockBlockDevice() <span class="overload">[1/2]</span></h2>
 
@@ -166,6 +178,13 @@ Public Member Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Allocate writable storage via <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>. </p>
+<p>Construct a writable mock device, allocating backing storage via <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">sector_count_</td><td>Number of 512-byte sectors to allocate. </td></tr>
+  </table>
+  </dd>
+</dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -175,8 +194,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a94338a75b59928eafa582a98ac51c186" name="a94338a75b59928eafa582a98ac51c186"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a94338a75b59928eafa582a98ac51c186">&#9670;&#160;</a></span>MockBlockDevice() <span class="overload">[2/2]</span></h2>
+<a id="aad0f87de509d6e1edf2f29ac00448923" name="aad0f87de509d6e1edf2f29ac00448923"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aad0f87de509d6e1edf2f29ac00448923">&#9670;&#160;</a></span>MockBlockDevice() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -184,7 +203,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">kernel::block::MockBlockDevice::MockBlockDevice </td>
           <td>(</td>
-          <td class="paramtype">const <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>external_data</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>external_data</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -200,6 +219,15 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Wrap an existing buffer (may be read-only). </p>
+<p>Construct a mock device wrapping an existing buffer (optionally read-only).</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">external_data</td><td>Pointer to the backing data. </td></tr>
+    <tr><td class="paramname">sector_count_</td><td>Number of sectors. </td></tr>
+    <tr><td class="paramname">read_only</td><td>If true, write_sector will fail. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -217,6 +245,8 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Free the backing memory if it was PMM-allocated. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -250,6 +280,8 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Whether the device reports as read-only. </p>
+
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a095720dc5cc42bb71113753a74159922">kernel::block::BlockDevice</a>.</p>
 
 </div>
@@ -276,6 +308,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Access the raw backing buffer (only when owned, i.e. PMM-allocated). </p>
 
 </div>
 </div>
@@ -305,6 +339,17 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Read a sector from the backing buffer. </p>
+<p>Copy sector data from the backing buffer into the caller's buffer.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lba</td><td>Logical block address. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Output buffer (must be at least BLOCK_SIZE bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a6caeec0ca8f2b83f8bbaa29eeb74ea25">kernel::block::BlockDevice</a>.</p>
 <div class="dynheader">
@@ -339,6 +384,8 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Total number of sectors. </p>
+
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#acce1608b55153216bf752ee1fd9211b0">kernel::block::BlockDevice</a>.</p>
 
 </div>
@@ -365,6 +412,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Size of each sector in bytes. </p>
 
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a23f79506430cc318765da0aa8cbaab8c">kernel::block::BlockDevice</a>.</p>
 
@@ -396,6 +445,17 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Write a sector to the backing buffer. </p>
+<p>Copy sector data from the caller's buffer into the backing buffer.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lba</td><td>Logical block address. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Input buffer (must be at least BLOCK_SIZE bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success, false if read-only or out of range. </dd></dl>
 
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a7b5cf59b19211ba94309727e73ffef60">kernel::block::BlockDevice</a>.</p>
 <div class="dynheader">

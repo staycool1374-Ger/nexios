@@ -1,11 +1,22 @@
 var searchData=
 [
-  ['deadlinelist_0',['DeadlineList',['../classkernel_1_1_deadline_list.html',1,'kernel']]],
-  ['deathnotify_1',['DeathNotify',['../classkernel_1_1ipc_1_1_death_notify.html',1,'kernel::ipc']]],
-  ['deathrecord_2',['DeathRecord',['../structkernel_1_1ipc_1_1_death_record.html',1,'kernel::ipc']]],
-  ['defaultdeleter_3',['DefaultDeleter',['../struct_default_deleter.html',1,'']]],
-  ['deventry_4',['DevEntry',['../structkernel_1_1vfs_1_1_dev_entry.html',1,'kernel::vfs']]],
-  ['dmarinfo_5',['DmarInfo',['../structkernel_1_1iommu_1_1dmar_1_1_dmar_info.html',1,'kernel::iommu::dmar']]],
-  ['dmesgrecord_6',['DmesgRecord',['../structkernel_1_1log_1_1catalog_1_1_dmesg_record.html',1,'kernel::log::catalog']]],
-  ['dmesgservice_7',['DmesgService',['../classkernel_1_1log_1_1_dmesg_service.html',1,'kernel::log']]]
+  ['daemonentry_0',['DaemonEntry',['../structkernel_1_1daemon_1_1_daemon_entry.html',1,'kernel::daemon']]],
+  ['deadlinelist_1',['DeadlineList',['../classkernel_1_1_deadline_list.html',1,'kernel']]],
+  ['deathnotify_2',['DeathNotify',['../classkernel_1_1ipc_1_1_death_notify.html',1,'kernel::ipc']]],
+  ['deathrecord_3',['DeathRecord',['../structkernel_1_1ipc_1_1_death_record.html',1,'kernel::ipc']]],
+  ['defaultdeleter_4',['DefaultDeleter',['../struct_default_deleter.html',1,'']]],
+  ['depresolvecontext_5',['DepResolveContext',['../structkernel_1_1elf_1_1_dep_resolve_context.html',1,'kernel::elf']]],
+  ['deventry_6',['DevEntry',['../structkernel_1_1vfs_1_1_dev_entry.html',1,'kernel::vfs']]],
+  ['dirent_7',['Dirent',['../structkernel_1_1vfs_1_1_dirent.html',1,'kernel::vfs']]],
+  ['direntry_8',['DirEntry',['../structkernel_1_1fat32_1_1_dir_entry.html',1,'kernel::fat32']]],
+  ['direntryraw_9',['DirEntryRaw',['../structkernel_1_1fat32_1_1_dir_entry_raw.html',1,'kernel::fat32']]],
+  ['dmabuffer_10',['DmaBuffer',['../structkernel_1_1dma_1_1_dma_buffer.html',1,'kernel::dma']]],
+  ['dmachannel_11',['DmaChannel',['../classkernel_1_1dma_1_1_dma_channel.html',1,'kernel::dma']]],
+  ['dmaengine_12',['DmaEngine',['../classkernel_1_1dma_1_1_dma_engine.html',1,'kernel::dma']]],
+  ['dmarinfo_13',['DmarInfo',['../structkernel_1_1iommu_1_1dmar_1_1_dmar_info.html',1,'kernel::iommu::dmar']]],
+  ['dmesgrecord_14',['DmesgRecord',['../structkernel_1_1log_1_1catalog_1_1_dmesg_record.html',1,'kernel::log::catalog']]],
+  ['dmesgservice_15',['DmesgService',['../classkernel_1_1log_1_1_dmesg_service.html',1,'kernel::log']]],
+  ['driver_16',['Driver',['../structkernel_1_1_driver.html',1,'kernel']]],
+  ['driverregistry_17',['DriverRegistry',['../classkernel_1_1_driver_registry.html',1,'kernel']]],
+  ['dynview_18',['DynView',['../structkernel_1_1elf_1_1_dyn_view.html',1,'kernel::elf']]]
 ];

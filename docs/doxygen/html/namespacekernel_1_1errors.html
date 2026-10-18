@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
 Enumerations</h2></td></tr>
+<tr class="memitem:ad7dec295b2042184adba48253a5c93b0" id="r_ad7dec295b2042184adba48253a5c93b0"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#ad7dec295b2042184adba48253a5c93b0">BufPoolError</a> : uint64_t { <a class="el" href="#ad7dec295b2042184adba48253a5c93b0aa98e80af579b0b39fcca016071a81e0b">BUFPOOL_ERROR_CODES</a>
+ }</td></tr>
+<tr class="memdesc:ad7dec295b2042184adba48253a5c93b0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Buffer pool error codes.  <a href="#ad7dec295b2042184adba48253a5c93b0">More...</a><br /></td></tr>
+<tr class="memitem:ad1f7fbc5e0a7a7fc2ade1589e27236ff" id="r_ad1f7fbc5e0a7a7fc2ade1589e27236ff"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#ad1f7fbc5e0a7a7fc2ade1589e27236ff">IpcError</a> : uint64_t { <a class="el" href="#ad1f7fbc5e0a7a7fc2ade1589e27236ffaee4229bc9e7639f279456c8ed5ce0c25">IPC_ERROR_CODES</a>
+ }</td></tr>
+<tr class="memdesc:ad1f7fbc5e0a7a7fc2ade1589e27236ff"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> subsystem error codes.  <a href="#ad1f7fbc5e0a7a7fc2ade1589e27236ff">More...</a><br /></td></tr>
 <tr class="memitem:aeb48fedc2d846227f58f7b1207bd4e9f" id="r_aeb48fedc2d846227f58f7b1207bd4e9f"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#aeb48fedc2d846227f58f7b1207bd4e9f">MemPoolError</a> : uint64_t { <a class="el" href="#aeb48fedc2d846227f58f7b1207bd4e9fa9894bcb1bf2887c59cbb64539b160a0b">MEMPOOL_ERROR_CODES</a>
  }</td></tr>
 <tr class="memdesc:aeb48fedc2d846227f58f7b1207bd4e9f"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">Error</a> codes for the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> allocator.  <a href="#aeb48fedc2d846227f58f7b1207bd4e9f">More...</a><br /></td></tr>
@@ -136,38 +142,103 @@ Enumerations</h2></td></tr>
 <tr class="memitem:abbe4a99ddc8a620a6497c8f2c388da9c" id="r_abbe4a99ddc8a620a6497c8f2c388da9c"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#abbe4a99ddc8a620a6497c8f2c388da9c">SyncError</a> : uint64_t { <a class="el" href="#abbe4a99ddc8a620a6497c8f2c388da9cac971f52a83605d83d1db920ea480b8b3">SYNC_ERROR_CODES</a>
  }</td></tr>
 <tr class="memdesc:abbe4a99ddc8a620a6497c8f2c388da9c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Synchronisation subsystem error codes.  <a href="#abbe4a99ddc8a620a6497c8f2c388da9c">More...</a><br /></td></tr>
+<tr class="memitem:a6905f268b79adff1ee2f3175485f86ee" id="r_a6905f268b79adff1ee2f3175485f86ee"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> : uint64_t { <a class="el" href="#a6905f268b79adff1ee2f3175485f86eea54c16a6f06a2c3423347c6614d701a63">SYS_ERR_GENERIC_FAIL</a> = 0xFFFFFFFFFFFFFFFFULL
+ }</td></tr>
+<tr class="memdesc:a6905f268b79adff1ee2f3175485f86ee"><td class="mdescLeft">&#160;</td><td class="mdescRight">System-call-level error codes (aggregated from all kernel subsystems).  <a href="#a6905f268b79adff1ee2f3175485f86ee">More...</a><br /></td></tr>
 <tr class="memitem:ae886175cc5c137dd98ed440d4a46c203" id="r_ae886175cc5c137dd98ed440d4a46c203"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#ae886175cc5c137dd98ed440d4a46c203">SchedulerError</a> : uint64_t { <a class="el" href="#ae886175cc5c137dd98ed440d4a46c203ac364bcc0b0496c9e76d83a9e0e2bbc07">SCHEDULER_ERROR_CODES</a>
  }</td></tr>
 <tr class="memdesc:ae886175cc5c137dd98ed440d4a46c203"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">Error</a> codes returned by scheduler operations.  <a href="#ae886175cc5c137dd98ed440d4a46c203">More...</a><br /></td></tr>
 <tr class="memitem:acfb6c673c29495fd20c2656c972a5632" id="r_acfb6c673c29495fd20c2656c972a5632"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#acfb6c673c29495fd20c2656c972a5632">TaskError</a> : uint64_t { <a class="el" href="#acfb6c673c29495fd20c2656c972a5632a607a3674699b42dbf9f094d5c087644c">TASK_ERROR_CODES</a>
  }</td></tr>
+<tr class="memitem:af02af811bc63e572d34fdddbd62cdafe" id="r_af02af811bc63e572d34fdddbd62cdafe"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#af02af811bc63e572d34fdddbd62cdafe">VfsError</a> : uint64_t { <a class="el" href="#af02af811bc63e572d34fdddbd62cdafeae0d11a6f736e71b8c93a94be5a6bf596">VFS_ERROR_CODES</a>
+ }</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:acd5cc848523a2304a3a98f7088afea47" id="r_acd5cc848523a2304a3a98f7088afea47"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:acd5cc848523a2304a3a98f7088afea47 template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#acd5cc848523a2304a3a98f7088afea47">error_string</a> (<a class="el" href="#ad7dec295b2042184adba48253a5c93b0">BufPoolError</a> e)</td></tr>
+<tr class="memdesc:acd5cc848523a2304a3a98f7088afea47"><td class="mdescLeft">&#160;</td><td class="mdescRight">OK anchor (issue #348-C): success is zero by convention.  <br /></td></tr>
+<tr class="memitem:a26384cea11f53e3295e727adc4d0e947" id="r_a26384cea11f53e3295e727adc4d0e947"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a26384cea11f53e3295e727adc4d0e947 template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a26384cea11f53e3295e727adc4d0e947">error_string</a> (<a class="el" href="#ad1f7fbc5e0a7a7fc2ade1589e27236ff">IpcError</a> e)</td></tr>
+<tr class="memdesc:a26384cea11f53e3295e727adc4d0e947"><td class="mdescLeft">&#160;</td><td class="mdescRight">OK anchor (issue #348-C): success is zero by convention.  <br /></td></tr>
 <tr class="memitem:abd7fc221d9b305cbbc7474467e0f34db" id="r_abd7fc221d9b305cbbc7474467e0f34db"><td class="memItemLeft">template&lt;&gt; </td></tr>
 <tr class="memitem:abd7fc221d9b305cbbc7474467e0f34db template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#abd7fc221d9b305cbbc7474467e0f34db">error_string</a> (<a class="el" href="#aeb48fedc2d846227f58f7b1207bd4e9f">MemPoolError</a> e)</td></tr>
-<tr class="memdesc:abd7fc221d9b305cbbc7474467e0f34db"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> error code.  <br /></td></tr>
+<tr class="memdesc:abd7fc221d9b305cbbc7474467e0f34db"><td class="mdescLeft">&#160;</td><td class="mdescRight">OK anchor (issue #348-C): success is zero by convention.  <br /></td></tr>
 <tr class="memitem:a20df0cde913b71389ade6b505cf4c5ce" id="r_a20df0cde913b71389ade6b505cf4c5ce"><td class="memItemLeft">template&lt;&gt; </td></tr>
 <tr class="memitem:a20df0cde913b71389ade6b505cf4c5ce template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a20df0cde913b71389ade6b505cf4c5ce">error_string</a> (<a class="el" href="#afa35d54dec63a101ca7d8eae809c4f63">PmmError</a> e)</td></tr>
-<tr class="memdesc:a20df0cde913b71389ade6b505cf4c5ce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> error code.  <br /></td></tr>
+<tr class="memdesc:a20df0cde913b71389ade6b505cf4c5ce"><td class="mdescLeft">&#160;</td><td class="mdescRight">OK anchor (issue #348-C): success is zero by convention.  <br /></td></tr>
 <tr class="memitem:a87836b282ba740f635309702ec40d797" id="r_a87836b282ba740f635309702ec40d797"><td class="memItemLeft">template&lt;&gt; </td></tr>
 <tr class="memitem:a87836b282ba740f635309702ec40d797 template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a87836b282ba740f635309702ec40d797">error_string</a> (<a class="el" href="#a2b154c9bf76e28a9152bbfc3b970074d">VmmError</a> e)</td></tr>
-<tr class="memdesc:a87836b282ba740f635309702ec40d797"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> error code.  <br /></td></tr>
+<tr class="memdesc:a87836b282ba740f635309702ec40d797"><td class="mdescLeft">&#160;</td><td class="mdescRight">OK anchor (issue #348-C): success is zero by convention.  <br /></td></tr>
 <tr class="memitem:a399a4655b96ab324d0e6e27a16b8de74" id="r_a399a4655b96ab324d0e6e27a16b8de74"><td class="memItemLeft">template&lt;&gt; </td></tr>
 <tr class="memitem:a399a4655b96ab324d0e6e27a16b8de74 template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a399a4655b96ab324d0e6e27a16b8de74">error_string</a> (<a class="el" href="#abbe4a99ddc8a620a6497c8f2c388da9c">SyncError</a> e)</td></tr>
-<tr class="memdesc:a399a4655b96ab324d0e6e27a16b8de74"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a sync error code.  <br /></td></tr>
+<tr class="memdesc:a399a4655b96ab324d0e6e27a16b8de74"><td class="mdescLeft">&#160;</td><td class="mdescRight">OK anchor (issue #348-C): success is zero by convention.  <br /></td></tr>
+<tr class="memitem:a07b9be493e286e878f87265d54b7e001" id="r_a07b9be493e286e878f87265d54b7e001"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a07b9be493e286e878f87265d54b7e001 template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a07b9be493e286e878f87265d54b7e001">error_string</a> (<a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> e)</td></tr>
+<tr class="memdesc:a07b9be493e286e878f87265d54b7e001"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a syscall error code.  <br /></td></tr>
+<tr class="memitem:a630821812ad41bddbee24432500e04bd" id="r_a630821812ad41bddbee24432500e04bd"><td class="memItemLeft"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a630821812ad41bddbee24432500e04bd">from_task_error</a> (uint64_t e)</td></tr>
+<tr class="memdesc:a630821812ad41bddbee24432500e04bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert a task subsystem error to <a class="el" href="#a6905f268b79adff1ee2f3175485f86ee" title="System-call-level error codes (aggregated from all kernel subsystems).">SyscallError</a> (offset 100).  <br /></td></tr>
+<tr class="memitem:a15fed77463016c516ade5519c4668d97" id="r_a15fed77463016c516ade5519c4668d97"><td class="memItemLeft"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a15fed77463016c516ade5519c4668d97">from_pmm_error</a> (uint64_t e)</td></tr>
+<tr class="memitem:aed4796f260eb85ffdafcbbe966d2cf8e" id="r_aed4796f260eb85ffdafcbbe966d2cf8e"><td class="memItemLeft"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a>&#160;</td><td class="memItemRight"><a class="el" href="#aed4796f260eb85ffdafcbbe966d2cf8e">from_vmm_error</a> (uint64_t e)</td></tr>
+<tr class="memitem:a12e2570fe6e1c86805c55e632a006389" id="r_a12e2570fe6e1c86805c55e632a006389"><td class="memItemLeft"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a12e2570fe6e1c86805c55e632a006389">from_sync_error</a> (uint64_t e)</td></tr>
+<tr class="memitem:ae4d4538509b668fec14a41fbff1db8b5" id="r_ae4d4538509b668fec14a41fbff1db8b5"><td class="memItemLeft"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae4d4538509b668fec14a41fbff1db8b5">from_vfs_error</a> (uint64_t e)</td></tr>
+<tr class="memitem:a16fade1cbf6b81704bd66d3568bcd498" id="r_a16fade1cbf6b81704bd66d3568bcd498"><td class="memItemLeft"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a16fade1cbf6b81704bd66d3568bcd498">from_ipc_error</a> (uint64_t e)</td></tr>
+<tr class="memitem:a1f5e348b020e984ea8f873ed02faa8e1" id="r_a1f5e348b020e984ea8f873ed02faa8e1"><td class="memItemLeft"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1f5e348b020e984ea8f873ed02faa8e1">from_bufpool_error</a> (uint64_t e)</td></tr>
+<tr class="memitem:afb5aac5501f2fd139387ceca228da1bd" id="r_afb5aac5501f2fd139387ceca228da1bd"><td class="memItemLeft"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a>&#160;</td><td class="memItemRight"><a class="el" href="#afb5aac5501f2fd139387ceca228da1bd">from_sched_error</a> (uint64_t e)</td></tr>
+<tr class="memitem:a32d04d268a8a966b6b29a59e4e57e885" id="r_a32d04d268a8a966b6b29a59e4e57e885"><td class="memItemLeft"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a32d04d268a8a966b6b29a59e4e57e885">from_mempool_error</a> (uint64_t e)</td></tr>
 <tr class="memitem:a7704469821a036eebee42e8508b9492d" id="r_a7704469821a036eebee42e8508b9492d"><td class="memItemLeft">template&lt;&gt; </td></tr>
 <tr class="memitem:a7704469821a036eebee42e8508b9492d template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a7704469821a036eebee42e8508b9492d">error_string</a> (<a class="el" href="#ae886175cc5c137dd98ed440d4a46c203">SchedulerError</a> e)</td></tr>
-<tr class="memdesc:a7704469821a036eebee42e8508b9492d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a scheduler error code.  <br /></td></tr>
+<tr class="memdesc:a7704469821a036eebee42e8508b9492d"><td class="mdescLeft">&#160;</td><td class="mdescRight">OK anchor (issue #348-C): success is zero by convention.  <br /></td></tr>
 <tr class="memitem:a44ced2acadda3917cd2cb3ed5ce89876" id="r_a44ced2acadda3917cd2cb3ed5ce89876"><td class="memItemLeft">template&lt;&gt; </td></tr>
 <tr class="memitem:a44ced2acadda3917cd2cb3ed5ce89876 template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a44ced2acadda3917cd2cb3ed5ce89876">error_string</a> (<a class="el" href="#acfb6c673c29495fd20c2656c972a5632">TaskError</a> error)</td></tr>
-<tr class="memdesc:a44ced2acadda3917cd2cb3ed5ce89876"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a task error code.  <br /></td></tr>
+<tr class="memdesc:a44ced2acadda3917cd2cb3ed5ce89876"><td class="mdescLeft">&#160;</td><td class="mdescRight">OK anchor (issue #348-C): success is zero by convention.  <br /></td></tr>
+<tr class="memitem:a262e036168597823565708104b7fc6aa" id="r_a262e036168597823565708104b7fc6aa"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a262e036168597823565708104b7fc6aa template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a262e036168597823565708104b7fc6aa">error_string</a> (<a class="el" href="#af02af811bc63e572d34fdddbd62cdafe">VfsError</a> e)</td></tr>
+<tr class="memdesc:a262e036168597823565708104b7fc6aa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a VFS error code.  <br /></td></tr>
 <tr class="memitem:a7a109eae637dbae8c0b5db75fad08745" id="r_a7a109eae637dbae8c0b5db75fad08745"><td class="memTemplParams" colspan="2">template&lt;<a class="el" href="conceptkernel_1_1_error_enum.html">kernel::ErrorEnum</a> E&gt; </td></tr>
 <tr class="memitem:a7a109eae637dbae8c0b5db75fad08745 template"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a7a109eae637dbae8c0b5db75fad08745">error_string</a> (E)</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Primary template for per-module error-string lookup. Each module that defines error codes specialises this template (e.g. &lt;<a class="el" href="task__errors_8hpp.html" title="Task module error codes and string lookup.">kernel/task/task_errors.hpp</a>&gt;). </p>
 </div><a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
+<a id="ad7dec295b2042184adba48253a5c93b0" name="ad7dec295b2042184adba48253a5c93b0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad7dec295b2042184adba48253a5c93b0">&#9670;&#160;</a></span>BufPoolError</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum <a class="el" href="#ad7dec295b2042184adba48253a5c93b0">kernel::errors::BufPoolError</a> : uint64_t</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Buffer pool error codes. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="ad7dec295b2042184adba48253a5c93b0aa98e80af579b0b39fcca016071a81e0b" name="ad7dec295b2042184adba48253a5c93b0aa98e80af579b0b39fcca016071a81e0b"></a>BUFPOOL_ERROR_CODES&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a id="ad1f7fbc5e0a7a7fc2ade1589e27236ff" name="ad1f7fbc5e0a7a7fc2ade1589e27236ff"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad1f7fbc5e0a7a7fc2ade1589e27236ff">&#9670;&#160;</a></span>IpcError</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum <a class="el" href="#ad1f7fbc5e0a7a7fc2ade1589e27236ff">kernel::errors::IpcError</a> : uint64_t</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p><a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> subsystem error codes. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="ad1f7fbc5e0a7a7fc2ade1589e27236ffaee4229bc9e7639f279456c8ed5ce0c25" name="ad1f7fbc5e0a7a7fc2ade1589e27236ffaee4229bc9e7639f279456c8ed5ce0c25"></a>IPC_ERROR_CODES&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
 <a id="aeb48fedc2d846227f58f7b1207bd4e9f" name="aeb48fedc2d846227f58f7b1207bd4e9f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aeb48fedc2d846227f58f7b1207bd4e9f">&#9670;&#160;</a></span>MemPoolError</h2>
 
@@ -244,6 +315,27 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a6905f268b79adff1ee2f3175485f86ee" name="a6905f268b79adff1ee2f3175485f86ee"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6905f268b79adff1ee2f3175485f86ee">&#9670;&#160;</a></span>SyscallError</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum <a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">kernel::errors::SyscallError</a> : uint64_t</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>System-call-level error codes (aggregated from all kernel subsystems). </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a6905f268b79adff1ee2f3175485f86eea54c16a6f06a2c3423347c6614d701a63" name="a6905f268b79adff1ee2f3175485f86eea54c16a6f06a2c3423347c6614d701a63"></a>SYS_ERR_GENERIC_FAIL&#160;</td><td class="fielddoc"><p>ABI-level generic failure (issue #257 H6): names the historic <span class="tt">(uint64_t)-1</span> so no failure path returns a raw -1. Value-kept (all-ones) — the userspace ABI contract for "failed, no
+    specific code". Never renumber; never narrow before compare. </p>
+</td></tr>
+</table>
+
+</div>
+</div>
 <a id="acfb6c673c29495fd20c2656c972a5632" name="acfb6c673c29495fd20c2656c972a5632"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#acfb6c673c29495fd20c2656c972a5632">&#9670;&#160;</a></span>TaskError</h2>
 
@@ -257,6 +349,23 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 <table class="fieldtable">
 <tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="acfb6c673c29495fd20c2656c972a5632a607a3674699b42dbf9f094d5c087644c" name="acfb6c673c29495fd20c2656c972a5632a607a3674699b42dbf9f094d5c087644c"></a>TASK_ERROR_CODES&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a id="af02af811bc63e572d34fdddbd62cdafe" name="af02af811bc63e572d34fdddbd62cdafe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af02af811bc63e572d34fdddbd62cdafe">&#9670;&#160;</a></span>VfsError</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum <a class="el" href="#af02af811bc63e572d34fdddbd62cdafe">kernel::errors::VfsError</a> : uint64_t</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="af02af811bc63e572d34fdddbd62cdafeae0d11a6f736e71b8c93a94be5a6bf596" name="af02af811bc63e572d34fdddbd62cdafeae0d11a6f736e71b8c93a94be5a6bf596"></a>VFS_ERROR_CODES&#160;</td><td class="fielddoc"></td></tr>
 </table>
 
 </div>
@@ -281,8 +390,38 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="acd5cc848523a2304a3a98f7088afea47" name="acd5cc848523a2304a3a98f7088afea47"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acd5cc848523a2304a3a98f7088afea47">&#9670;&#160;</a></span>error_string() <span class="overload">[1/11]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char * kernel::errors::error_string </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#ad7dec295b2042184adba48253a5c93b0">BufPoolError</a></td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>OK anchor (issue #348-C): success is zero by convention. </p>
+<p>Return a human-readable string for a buffer pool error code. </p>
+
+</div>
+</div>
 <a id="a7a109eae637dbae8c0b5db75fad08745" name="a7a109eae637dbae8c0b5db75fad08745"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7a109eae637dbae8c0b5db75fad08745">&#9670;&#160;</a></span>error_string() <span class="overload">[1/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a7a109eae637dbae8c0b5db75fad08745">&#9670;&#160;</a></span>error_string() <span class="overload">[2/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -308,8 +447,38 @@ template&lt;<a class="el" href="conceptkernel_1_1_error_enum.html">kernel::Error
 
 </div>
 </div>
+<a id="a26384cea11f53e3295e727adc4d0e947" name="a26384cea11f53e3295e727adc4d0e947"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a26384cea11f53e3295e727adc4d0e947">&#9670;&#160;</a></span>error_string() <span class="overload">[3/11]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char * kernel::errors::error_string </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#ad1f7fbc5e0a7a7fc2ade1589e27236ff">IpcError</a></td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>OK anchor (issue #348-C): success is zero by convention. </p>
+<p>Return a human-readable string for an <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> error code. </p>
+
+</div>
+</div>
 <a id="abd7fc221d9b305cbbc7474467e0f34db" name="abd7fc221d9b305cbbc7474467e0f34db"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abd7fc221d9b305cbbc7474467e0f34db">&#9670;&#160;</a></span>error_string() <span class="overload">[2/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#abd7fc221d9b305cbbc7474467e0f34db">&#9670;&#160;</a></span>error_string() <span class="overload">[4/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -333,12 +502,13 @@ template&lt;&gt; </div>
 </table>
 </div><div class="memdoc">
 
+<p>OK anchor (issue #348-C): success is zero by convention. </p>
 <p>Return a human-readable string for a <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> error code. </p>
 
 </div>
 </div>
 <a id="a20df0cde913b71389ade6b505cf4c5ce" name="a20df0cde913b71389ade6b505cf4c5ce"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a20df0cde913b71389ade6b505cf4c5ce">&#9670;&#160;</a></span>error_string() <span class="overload">[3/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a20df0cde913b71389ade6b505cf4c5ce">&#9670;&#160;</a></span>error_string() <span class="overload">[5/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -362,12 +532,13 @@ template&lt;&gt; </div>
 </table>
 </div><div class="memdoc">
 
+<p>OK anchor (issue #348-C): success is zero by convention. </p>
 <p>Return a human-readable string for a <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> error code. </p>
 
 </div>
 </div>
 <a id="a7704469821a036eebee42e8508b9492d" name="a7704469821a036eebee42e8508b9492d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7704469821a036eebee42e8508b9492d">&#9670;&#160;</a></span>error_string() <span class="overload">[4/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a7704469821a036eebee42e8508b9492d">&#9670;&#160;</a></span>error_string() <span class="overload">[6/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -391,12 +562,13 @@ template&lt;&gt; </div>
 </table>
 </div><div class="memdoc">
 
+<p>OK anchor (issue #348-C): success is zero by convention. </p>
 <p>Return a human-readable string for a scheduler error code. </p>
 
 </div>
 </div>
 <a id="a399a4655b96ab324d0e6e27a16b8de74" name="a399a4655b96ab324d0e6e27a16b8de74"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a399a4655b96ab324d0e6e27a16b8de74">&#9670;&#160;</a></span>error_string() <span class="overload">[5/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a399a4655b96ab324d0e6e27a16b8de74">&#9670;&#160;</a></span>error_string() <span class="overload">[7/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -420,12 +592,42 @@ template&lt;&gt; </div>
 </table>
 </div><div class="memdoc">
 
+<p>OK anchor (issue #348-C): success is zero by convention. </p>
 <p>Return a human-readable string for a sync error code. </p>
 
 </div>
 </div>
+<a id="a07b9be493e286e878f87265d54b7e001" name="a07b9be493e286e878f87265d54b7e001"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a07b9be493e286e878f87265d54b7e001">&#9670;&#160;</a></span>error_string() <span class="overload">[8/11]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char * kernel::errors::error_string </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a></td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Return a human-readable string for a syscall error code. </p>
+
+</div>
+</div>
 <a id="a44ced2acadda3917cd2cb3ed5ce89876" name="a44ced2acadda3917cd2cb3ed5ce89876"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a44ced2acadda3917cd2cb3ed5ce89876">&#9670;&#160;</a></span>error_string() <span class="overload">[6/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a44ced2acadda3917cd2cb3ed5ce89876">&#9670;&#160;</a></span>error_string() <span class="overload">[9/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -449,12 +651,42 @@ template&lt;&gt; </div>
 </table>
 </div><div class="memdoc">
 
+<p>OK anchor (issue #348-C): success is zero by convention. </p>
 <p>Return a human-readable string for a task error code. </p>
 
 </div>
 </div>
+<a id="a262e036168597823565708104b7fc6aa" name="a262e036168597823565708104b7fc6aa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a262e036168597823565708104b7fc6aa">&#9670;&#160;</a></span>error_string() <span class="overload">[10/11]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char * kernel::errors::error_string </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#af02af811bc63e572d34fdddbd62cdafe">VfsError</a></td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Return a human-readable string for a VFS error code. </p>
+
+</div>
+</div>
 <a id="a87836b282ba740f635309702ec40d797" name="a87836b282ba740f635309702ec40d797"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a87836b282ba740f635309702ec40d797">&#9670;&#160;</a></span>error_string() <span class="overload">[7/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a87836b282ba740f635309702ec40d797">&#9670;&#160;</a></span>error_string() <span class="overload">[11/11]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -478,7 +710,235 @@ template&lt;&gt; </div>
 </table>
 </div><div class="memdoc">
 
+<p>OK anchor (issue #348-C): success is zero by convention. </p>
 <p>Return a human-readable string for a <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> error code. </p>
+
+</div>
+</div>
+<a id="a1f5e348b020e984ea8f873ed02faa8e1" name="a1f5e348b020e984ea8f873ed02faa8e1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f5e348b020e984ea8f873ed02faa8e1">&#9670;&#160;</a></span>from_bufpool_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> kernel::errors::from_bufpool_error </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a16fade1cbf6b81704bd66d3568bcd498" name="a16fade1cbf6b81704bd66d3568bcd498"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a16fade1cbf6b81704bd66d3568bcd498">&#9670;&#160;</a></span>from_ipc_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> kernel::errors::from_ipc_error </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a32d04d268a8a966b6b29a59e4e57e885" name="a32d04d268a8a966b6b29a59e4e57e885"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a32d04d268a8a966b6b29a59e4e57e885">&#9670;&#160;</a></span>from_mempool_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> kernel::errors::from_mempool_error </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a15fed77463016c516ade5519c4668d97" name="a15fed77463016c516ade5519c4668d97"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a15fed77463016c516ade5519c4668d97">&#9670;&#160;</a></span>from_pmm_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> kernel::errors::from_pmm_error </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afb5aac5501f2fd139387ceca228da1bd" name="afb5aac5501f2fd139387ceca228da1bd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afb5aac5501f2fd139387ceca228da1bd">&#9670;&#160;</a></span>from_sched_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> kernel::errors::from_sched_error </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a12e2570fe6e1c86805c55e632a006389" name="a12e2570fe6e1c86805c55e632a006389"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a12e2570fe6e1c86805c55e632a006389">&#9670;&#160;</a></span>from_sync_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> kernel::errors::from_sync_error </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a630821812ad41bddbee24432500e04bd" name="a630821812ad41bddbee24432500e04bd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a630821812ad41bddbee24432500e04bd">&#9670;&#160;</a></span>from_task_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> kernel::errors::from_task_error </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Convert a task subsystem error to <a class="el" href="#a6905f268b79adff1ee2f3175485f86ee" title="System-call-level error codes (aggregated from all kernel subsystems).">SyscallError</a> (offset 100). </p>
+
+</div>
+</div>
+<a id="ae4d4538509b668fec14a41fbff1db8b5" name="ae4d4538509b668fec14a41fbff1db8b5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae4d4538509b668fec14a41fbff1db8b5">&#9670;&#160;</a></span>from_vfs_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> kernel::errors::from_vfs_error </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aed4796f260eb85ffdafcbbe966d2cf8e" name="aed4796f260eb85ffdafcbbe966d2cf8e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aed4796f260eb85ffdafcbbe966d2cf8e">&#9670;&#160;</a></span>from_vmm_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a6905f268b79adff1ee2f3175485f86ee">SyscallError</a> kernel::errors::from_vmm_error </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
 
 </div>
 </div>

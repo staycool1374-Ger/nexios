@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -128,16 +128,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('assert_8hpp.ht
 Include dependency graph for assert.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="assert_8hpp__incl.png" border="0" usemap="#asrc_2lib_2assert_8hpp" loading="lazy" alt=""/></div>
-<map name="asrc_2lib_2assert_8hpp" id="asrc_2lib_2assert_8hpp">
-<area shape="rect" title="Debug assertion macros and the panic handler declaration." alt="" coords="5,5,127,32"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="27,80,105,107"/>
-<area shape="poly" title=" " alt="" coords="68,31,69,65,63,64,64,35"/>
-</map>
-</div>
-</div><div class="textblock"><div class="dynheader">
-This graph shows which files directly or indirectly include this file:</div>
-<div class="dyncontent">
-<div class="center"><img src="assert_8hpp__dep__incl.png" border="0" usemap="#asrc_2lib_2assert_8hppdep" loading="lazy" alt=""/></div>
 <!-- MAP 0 -->
 </div>
 </div>
@@ -146,7 +136,7 @@ This graph shows which files directly or indirectly include this file:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Aerrors" id="r_kernel_3A_3Aerrors"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html">kernel::errors</a></td></tr>
 <tr class="memdesc:namespacekernel_1_1errors"><td class="mdescLeft">&#160;</td><td class="mdescRight">Primary template for per-module error-string lookup. Each module that defines error codes specialises this template (e.g. &lt;<a class="el" href="task__errors_8hpp.html" title="Task module error codes and string lookup.">kernel/task/task_errors.hpp</a>&gt;). <br /></td></tr>
 </table><table class="memberdecls">
@@ -190,7 +180,7 @@ Functions</h2></td></tr>
 <p>Non-fatal error assertion — logs the error with file/line in debug builds and compiles to a no-op in release builds. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">err</td><td>An enum value from a module error header; the associated error message is looked up via <a class="el" href="namespacekernel_1_1errors.html#abd7fc221d9b305cbbc7474467e0f34db" title="Return a human-readable string for a MemPool error code.">kernel::errors::error_string()</a>. </td></tr>
+    <tr><td class="paramname">err</td><td>An enum value from a module error header; the associated error message is looked up via <a class="el" href="namespacekernel_1_1errors.html#acd5cc848523a2304a3a98f7088afea47" title="OK anchor (issue #348-C): success is zero by convention.">kernel::errors::error_string()</a>. </td></tr>
   </table>
   </dd>
 </dl>
@@ -212,7 +202,7 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">do</span> { \</div>
-<div class="line">    if (!(cond)) { \</div>
+<div class="line">    if (!(cond)) [[unlikely]] { \</div>
 <div class="line">        panic(<span class="stringliteral">&quot;ENSURE failed: &quot;</span> #cond <span class="stringliteral">&quot; at &quot;</span> __FILE__ <span class="stringliteral">&quot;:&quot;</span> \</div>
 <div class="line">              <a class="code hl_define" href="#af404f8f49103651e90d404acdae3ffc4">EXPAND_AND_STRINGIFY</a>(__LINE__)); \</div>
 <div class="line">    } \</div>

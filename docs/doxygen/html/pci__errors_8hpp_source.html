@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('pci__errors_8h
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="preprocessor">#undef X</span></div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>};</div>
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span> </div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="keyword">template</span> &lt;&gt; <span class="keyword">inline</span> <span class="keyword">const</span> <span class="keywordtype">char</span> *<a class="code hl_function" href="namespacekernel_1_1errors.html#abd7fc221d9b305cbbc7474467e0f34db">error_string</a>(PciError e) {</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="keyword">template</span> &lt;&gt; <span class="keyword">inline</span> <span class="keyword">const</span> <span class="keywordtype">char</span> *<a class="code hl_function" href="namespacekernel_1_1errors.html#acd5cc848523a2304a3a98f7088afea47">error_string</a>(PciError e) {</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <span class="keywordflow">switch</span> (e) {</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="preprocessor">#define X(name, num, msg)                                                      \</span></div>
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span><span class="preprocessor">    case PCI_ERR_##name:                                                       \</span></div>
@@ -174,8 +174,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('pci__errors_8h
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>} <span class="comment">// namespace kernel::errors</span></div>
 <div class="ttc" id="aassert_8hpp_html"><div class="ttname"><a href="assert_8hpp.html">assert.hpp</a></div><div class="ttdoc">Debug assertion macros and the panic handler declaration.</div></div>
 <div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
-<div class="ttc" id="anamespacekernel_1_1errors_html"><div class="ttname"><a href="namespacekernel_1_1errors.html">kernel::errors</a></div><div class="ttdoc">Primary template for per-module error-string lookup. Each module that defines error codes specialises...</div><div class="ttdef"><b>Definition</b> mempool_errors.hpp:24</div></div>
-<div class="ttc" id="anamespacekernel_1_1errors_html_abd7fc221d9b305cbbc7474467e0f34db"><div class="ttname"><a href="namespacekernel_1_1errors.html#abd7fc221d9b305cbbc7474467e0f34db">kernel::errors::error_string</a></div><div class="ttdeci">const char * error_string(MemPoolError e)</div><div class="ttdoc">Return a human-readable string for a MemPool error code.</div><div class="ttdef"><b>Definition</b> mempool_errors.hpp:45</div></div>
+<div class="ttc" id="anamespacekernel_1_1errors_html"><div class="ttname"><a href="namespacekernel_1_1errors.html">kernel::errors</a></div><div class="ttdoc">Primary template for per-module error-string lookup. Each module that defines error codes specialises...</div><div class="ttdef"><b>Definition</b> buffer_pool_errors.hpp:27</div></div>
+<div class="ttc" id="anamespacekernel_1_1errors_html_acd5cc848523a2304a3a98f7088afea47"><div class="ttname"><a href="namespacekernel_1_1errors.html#acd5cc848523a2304a3a98f7088afea47">kernel::errors::error_string</a></div><div class="ttdeci">const char * error_string(BufPoolError e)</div><div class="ttdoc">OK anchor (issue #348-C): success is zero by convention.</div><div class="ttdef"><b>Definition</b> buffer_pool_errors.hpp:53</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

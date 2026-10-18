@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.2.21</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structarch_1_1
 </div><!--header-->
 <div class="contents">
 
+<p>x86-64 <a class="el" href="classarch_1_1_g_d_t.html" title="x86-64 Global Descriptor Table manager.">GDT</a> entry (8-byte packed descriptor).  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="hal_2gdt_8hpp_source.html">gdt.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for arch::GDTEntry:</div>
@@ -129,14 +132,22 @@ Collaboration diagram for arch::GDTEntry:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:ad64c4fac622e61be6b92670ffe7a28fb" id="r_ad64c4fac622e61be6b92670ffe7a28fb"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad64c4fac622e61be6b92670ffe7a28fb">limit_low</a></td></tr>
-<tr class="memitem:ac54dcd957207c16e544922812e8beb6d" id="r_ac54dcd957207c16e544922812e8beb6d"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac54dcd957207c16e544922812e8beb6d">base_low</a></td></tr>
-<tr class="memitem:ab7f322d59f539e21704552f9b0677fdb" id="r_ab7f322d59f539e21704552f9b0677fdb"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab7f322d59f539e21704552f9b0677fdb">base_mid</a></td></tr>
-<tr class="memitem:a7a1e900d4ea943f42b3ad29f6ad08ba2" id="r_a7a1e900d4ea943f42b3ad29f6ad08ba2"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7a1e900d4ea943f42b3ad29f6ad08ba2">access</a></td></tr>
-<tr class="memitem:a9b504adee60020401d39d09cdce53938" id="r_a9b504adee60020401d39d09cdce53938"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9b504adee60020401d39d09cdce53938">granularity</a></td></tr>
-<tr class="memitem:a49711076583eed37007d27adf7941043" id="r_a49711076583eed37007d27adf7941043"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a49711076583eed37007d27adf7941043">base_high</a></td></tr>
+<tr class="memitem:ad64c4fac622e61be6b92670ffe7a28fb" id="r_ad64c4fac622e61be6b92670ffe7a28fb"><td class="memItemLeft"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad64c4fac622e61be6b92670ffe7a28fb">limit_low</a></td></tr>
+<tr class="memdesc:ad64c4fac622e61be6b92670ffe7a28fb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 0–15 of the segment limit.  <br /></td></tr>
+<tr class="memitem:ac54dcd957207c16e544922812e8beb6d" id="r_ac54dcd957207c16e544922812e8beb6d"><td class="memItemLeft"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac54dcd957207c16e544922812e8beb6d">base_low</a></td></tr>
+<tr class="memdesc:ac54dcd957207c16e544922812e8beb6d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 0–15 of the base address.  <br /></td></tr>
+<tr class="memitem:ab7f322d59f539e21704552f9b0677fdb" id="r_ab7f322d59f539e21704552f9b0677fdb"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab7f322d59f539e21704552f9b0677fdb">base_mid</a></td></tr>
+<tr class="memdesc:ab7f322d59f539e21704552f9b0677fdb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 16–23 of the base address.  <br /></td></tr>
+<tr class="memitem:a7a1e900d4ea943f42b3ad29f6ad08ba2" id="r_a7a1e900d4ea943f42b3ad29f6ad08ba2"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7a1e900d4ea943f42b3ad29f6ad08ba2">access</a></td></tr>
+<tr class="memdesc:a7a1e900d4ea943f42b3ad29f6ad08ba2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Access byte (present, DPL, type, etc.).  <br /></td></tr>
+<tr class="memitem:a9b504adee60020401d39d09cdce53938" id="r_a9b504adee60020401d39d09cdce53938"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9b504adee60020401d39d09cdce53938">granularity</a></td></tr>
+<tr class="memdesc:a9b504adee60020401d39d09cdce53938"><td class="mdescLeft">&#160;</td><td class="mdescRight">Flags + bits 16–19 of the limit.  <br /></td></tr>
+<tr class="memitem:a49711076583eed37007d27adf7941043" id="r_a49711076583eed37007d27adf7941043"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a49711076583eed37007d27adf7941043">base_high</a></td></tr>
+<tr class="memdesc:a49711076583eed37007d27adf7941043"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 24–31 of the base address.  <br /></td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>x86-64 <a class="el" href="classarch_1_1_g_d_t.html" title="x86-64 Global Descriptor Table manager.">GDT</a> entry (8-byte packed descriptor). </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a7a1e900d4ea943f42b3ad29f6ad08ba2" name="a7a1e900d4ea943f42b3ad29f6ad08ba2"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a7a1e900d4ea943f42b3ad29f6ad08ba2">&#9670;&#160;</a></span>access</h2>
 
@@ -144,10 +155,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::GDTEntry::access</td>
+          <td class="memname"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch::GDTEntry::access</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Access byte (present, DPL, type, etc.). </p>
 
 </div>
 </div>
@@ -158,10 +171,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::GDTEntry::base_high</td>
+          <td class="memname"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch::GDTEntry::base_high</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Bits 24–31 of the base address. </p>
 
 </div>
 </div>
@@ -172,10 +187,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> arch::GDTEntry::base_low</td>
+          <td class="memname"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arch::GDTEntry::base_low</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Bits 0–15 of the base address. </p>
 
 </div>
 </div>
@@ -186,10 +203,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::GDTEntry::base_mid</td>
+          <td class="memname"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch::GDTEntry::base_mid</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Bits 16–23 of the base address. </p>
 
 </div>
 </div>
@@ -200,10 +219,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::GDTEntry::granularity</td>
+          <td class="memname"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch::GDTEntry::granularity</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Flags + bits 16–19 of the limit. </p>
 
 </div>
 </div>
@@ -214,10 +235,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> arch::GDTEntry::limit_low</td>
+          <td class="memname"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arch::GDTEntry::limit_low</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Bits 0–15 of the segment limit. </p>
 
 </div>
 </div>

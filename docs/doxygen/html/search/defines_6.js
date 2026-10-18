@@ -1,5 +1,4 @@
 var searchData=
 [
-  ['ipc_5fnonblock_0',['IPC_NONBLOCK',['../ipc_8h.html#a02406c274ef11e7931d893a8f7e7b293',1,'ipc.h']]],
-  ['ipc_5fsched_5ftrace_1',['IPC_SCHED_TRACE',['../ipc__sched__trace_8hpp.html#aae8f0940837800404672b2126a6c1a2a',1,'ipc_sched_trace.hpp']]]
+  ['h2_5frec_0',['H2_REC',['../global__state_8hpp.html#a9347125ae567ba5097e323ce1d5f8066',1,'global_state.hpp']]]
 ];

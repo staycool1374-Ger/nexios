@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
+<p>ELF64 file header (64-byte packed structure).  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="elf_8hpp_source.html">elf.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::elf::ELF64Header:</div>
@@ -134,21 +137,37 @@ Public Member Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a7ae8443fac4e1b94a00f6b32c1efce37" id="r_a7ae8443fac4e1b94a00f6b32c1efce37"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a7ae8443fac4e1b94a00f6b32c1efce37">ident</a> [16]</td></tr>
+<tr class="memdesc:a7ae8443fac4e1b94a00f6b32c1efce37"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF magic + class/endian/version/OSABI/pad.  <br /></td></tr>
 <tr class="memitem:a8513c43556f31ca92cb8b9d79d8e35ea" id="r_a8513c43556f31ca92cb8b9d79d8e35ea"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a8513c43556f31ca92cb8b9d79d8e35ea">type</a></td></tr>
+<tr class="memdesc:a8513c43556f31ca92cb8b9d79d8e35ea"><td class="mdescLeft">&#160;</td><td class="mdescRight">Object file type (ET_NONE, ET_EXEC, ET_DYN).  <br /></td></tr>
 <tr class="memitem:ab3c73385fc685b336cdea4830c62d125" id="r_ab3c73385fc685b336cdea4830c62d125"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ab3c73385fc685b336cdea4830c62d125">machine</a></td></tr>
+<tr class="memdesc:ab3c73385fc685b336cdea4830c62d125"><td class="mdescLeft">&#160;</td><td class="mdescRight">Architecture (e.g. 0x3E for x86_64).  <br /></td></tr>
 <tr class="memitem:a54a119e8984828a830c9becdad743729" id="r_a54a119e8984828a830c9becdad743729"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a54a119e8984828a830c9becdad743729">version</a></td></tr>
+<tr class="memdesc:a54a119e8984828a830c9becdad743729"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF version (must be 1).  <br /></td></tr>
 <tr class="memitem:a89d1260a9331fcfcf4beea8f92c947cf" id="r_a89d1260a9331fcfcf4beea8f92c947cf"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a89d1260a9331fcfcf4beea8f92c947cf">entry</a></td></tr>
+<tr class="memdesc:a89d1260a9331fcfcf4beea8f92c947cf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual address of entry point.  <br /></td></tr>
 <tr class="memitem:a2d7dde713618ab10b5611fd3449eb907" id="r_a2d7dde713618ab10b5611fd3449eb907"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a2d7dde713618ab10b5611fd3449eb907">phoff</a></td></tr>
+<tr class="memdesc:a2d7dde713618ab10b5611fd3449eb907"><td class="mdescLeft">&#160;</td><td class="mdescRight">Program header table offset.  <br /></td></tr>
 <tr class="memitem:a90c7cc22e241e0011ab3579e8b07a160" id="r_a90c7cc22e241e0011ab3579e8b07a160"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a90c7cc22e241e0011ab3579e8b07a160">shoff</a></td></tr>
+<tr class="memdesc:a90c7cc22e241e0011ab3579e8b07a160"><td class="mdescLeft">&#160;</td><td class="mdescRight">Section header table offset.  <br /></td></tr>
 <tr class="memitem:a2505c467474787575a32a78b5ca27b3c" id="r_a2505c467474787575a32a78b5ca27b3c"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a2505c467474787575a32a78b5ca27b3c">flags</a></td></tr>
+<tr class="memdesc:a2505c467474787575a32a78b5ca27b3c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Processor-specific flags.  <br /></td></tr>
 <tr class="memitem:ac51e5baf807713e6acde64831e7d9089" id="r_ac51e5baf807713e6acde64831e7d9089"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ac51e5baf807713e6acde64831e7d9089">ehsize</a></td></tr>
+<tr class="memdesc:ac51e5baf807713e6acde64831e7d9089"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF header size (64).  <br /></td></tr>
 <tr class="memitem:a69813058df531e5113fa77c6696c51ca" id="r_a69813058df531e5113fa77c6696c51ca"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a69813058df531e5113fa77c6696c51ca">phentsize</a></td></tr>
+<tr class="memdesc:a69813058df531e5113fa77c6696c51ca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of one program header entry.  <br /></td></tr>
 <tr class="memitem:a568c98ec7d8242927ad96a6904c0ec2f" id="r_a568c98ec7d8242927ad96a6904c0ec2f"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a568c98ec7d8242927ad96a6904c0ec2f">phnum</a></td></tr>
+<tr class="memdesc:a568c98ec7d8242927ad96a6904c0ec2f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of program header entries.  <br /></td></tr>
 <tr class="memitem:a733b56c2810cf66329b0dc7ac03c4501" id="r_a733b56c2810cf66329b0dc7ac03c4501"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a733b56c2810cf66329b0dc7ac03c4501">shentsize</a></td></tr>
+<tr class="memdesc:a733b56c2810cf66329b0dc7ac03c4501"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of one section header entry.  <br /></td></tr>
 <tr class="memitem:a5e476009f34e682326a0e66ec3f4eb11" id="r_a5e476009f34e682326a0e66ec3f4eb11"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a5e476009f34e682326a0e66ec3f4eb11">shnum</a></td></tr>
+<tr class="memdesc:a5e476009f34e682326a0e66ec3f4eb11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of section header entries.  <br /></td></tr>
 <tr class="memitem:a3f62e5e991dce3c5e93a7dfb43e6646c" id="r_a3f62e5e991dce3c5e93a7dfb43e6646c"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a3f62e5e991dce3c5e93a7dfb43e6646c">shstrndx</a></td></tr>
+<tr class="memdesc:a3f62e5e991dce3c5e93a7dfb43e6646c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Section header string table index.  <br /></td></tr>
 </table>
-<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>ELF64 file header (64-byte packed structure). </p>
+</div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a0770e33eeb07222573f90374c2bf4fa0" name="a0770e33eeb07222573f90374c2bf4fa0"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a0770e33eeb07222573f90374c2bf4fa0">&#9670;&#160;</a></span>ELF64Header()</h2>
 
@@ -187,6 +206,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>ELF header size (64). </p>
+
 </div>
 </div>
 <a id="a89d1260a9331fcfcf4beea8f92c947cf" name="a89d1260a9331fcfcf4beea8f92c947cf"></a>
@@ -200,6 +221,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Virtual address of entry point. </p>
 
 </div>
 </div>
@@ -215,6 +238,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Processor-specific flags. </p>
+
 </div>
 </div>
 <a id="a7ae8443fac4e1b94a00f6b32c1efce37" name="a7ae8443fac4e1b94a00f6b32c1efce37"></a>
@@ -228,6 +253,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>ELF magic + class/endian/version/OSABI/pad. </p>
 
 </div>
 </div>
@@ -243,6 +270,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Architecture (e.g. 0x3E for x86_64). </p>
+
 </div>
 </div>
 <a id="a69813058df531e5113fa77c6696c51ca" name="a69813058df531e5113fa77c6696c51ca"></a>
@@ -256,6 +285,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Size of one program header entry. </p>
 
 </div>
 </div>
@@ -271,6 +302,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Number of program header entries. </p>
+
 </div>
 </div>
 <a id="a2d7dde713618ab10b5611fd3449eb907" name="a2d7dde713618ab10b5611fd3449eb907"></a>
@@ -284,6 +317,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Program header table offset. </p>
 
 </div>
 </div>
@@ -299,6 +334,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Size of one section header entry. </p>
+
 </div>
 </div>
 <a id="a5e476009f34e682326a0e66ec3f4eb11" name="a5e476009f34e682326a0e66ec3f4eb11"></a>
@@ -312,6 +349,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Number of section header entries. </p>
 
 </div>
 </div>
@@ -327,6 +366,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Section header table offset. </p>
+
 </div>
 </div>
 <a id="a3f62e5e991dce3c5e93a7dfb43e6646c" name="a3f62e5e991dce3c5e93a7dfb43e6646c"></a>
@@ -340,6 +381,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Section header string table index. </p>
 
 </div>
 </div>
@@ -355,6 +398,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Object file type (ET_NONE, ET_EXEC, ET_DYN). </p>
+
 </div>
 </div>
 <a id="a54a119e8984828a830c9becdad743729" name="a54a119e8984828a830c9becdad743729"></a>
@@ -368,6 +413,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>ELF version (must be 1). </p>
 
 </div>
 </div>

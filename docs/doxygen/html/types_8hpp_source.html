@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -164,6 +164,17 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('types_8hpp_sou
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span><span class="keywordtype">void</span>* <span class="keyword">operator</span> <span class="keyword">new</span>[](<span class="keywordtype">unsigned</span> <span class="keywordtype">long</span> size, <span class="keywordtype">void</span>* ptr) <span class="keyword">noexcept</span>;</div>
 <div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span></div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="preprocessor">#include &lt;<a class="code" href="nexios__config_8h.html">kernel/nexios_config.h</a>&gt;</span></div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span><span class="preprocessor">#include &lt;<a class="code" href="concepts_8hpp.html">concepts.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span></div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="keyword">template</span> &lt;Enum E&gt;</div>
+<div class="foldopen" id="foldopen00059" data-start="{" data-end="}">
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno"><a class="line" href="namespacekernel.html#a17e67ea7443b3545f273cbe78f7c1a12">   59</a></span>[[nodiscard]] <span class="keyword">constexpr</span> <span class="keyword">auto</span> <a class="code hl_function" href="namespacekernel.html#a17e67ea7443b3545f273cbe78f7c1a12">to_underlying</a>(E value) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="keywordflow">return</span> <span class="keyword">static_cast&lt;</span>__underlying_type(E)<span class="keyword">&gt;</span>(value);</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>}</div>
+</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="aconcepts_8hpp_html"><div class="ttname"><a href="concepts_8hpp.html">concepts.hpp</a></div></div>
 <div class="ttc" id="anamespacearch_html_a04efa6b3c0547f1ce0bb801e33467690"><div class="ttname"><a href="namespacearch.html#a04efa6b3c0547f1ce0bb801e33467690">arch::nullptr_t</a></div><div class="ttdeci">decltype(nullptr) nullptr_t</div><div class="ttdef"><b>Definition</b> serial.cpp:39</div></div>
 <div class="ttc" id="anamespacearch_html_a22828bf7bcfab87c22084642f68ebf82"><div class="ttname"><a href="namespacearch.html#a22828bf7bcfab87c22084642f68ebf82">arch::int16_t</a></div><div class="ttdeci">signed short int16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:31</div></div>
 <div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
@@ -173,6 +184,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('types_8hpp_sou
 <div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
 <div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="anamespacearch_html_ad807ced5b2a69ed0abb2478a239ef54e"><div class="ttname"><a href="namespacearch.html#ad807ced5b2a69ed0abb2478a239ef54e">arch::int8_t</a></div><div class="ttdeci">signed char int8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:30</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html_a17e67ea7443b3545f273cbe78f7c1a12"><div class="ttname"><a href="namespacekernel.html#a17e67ea7443b3545f273cbe78f7c1a12">kernel::to_underlying</a></div><div class="ttdeci">constexpr auto to_underlying(E value) noexcept</div><div class="ttdef"><b>Definition</b> types.hpp:59</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
 <div class="ttc" id="atypes_8h_html_a83242de74310b4aec3fc506bc3644211"><div class="ttname"><a href="types_8h.html#a83242de74310b4aec3fc506bc3644211">uintptr_t</a></div><div class="ttdeci">unsigned long uintptr_t</div><div class="ttdef"><b>Definition</b> types.h:29</div></div>
 <div class="ttc" id="atypes_8h_html_aa9e7b0ed8f34f9c482a7a32d7f18c054"><div class="ttname"><a href="types_8h.html#aa9e7b0ed8f34f9c482a7a32d7f18c054">intptr_t</a></div><div class="ttdeci">long intptr_t</div><div class="ttdef"><b>Definition</b> types.h:28</div></div>

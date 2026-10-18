@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -118,6 +118,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <div class="textblock">Here is a list of all namespace functions with links to the namespace documentation for each function:</div>
 
 <h3 class="doxsection"><a id="index_i" name="index_i"></a>- i -</h3><ul>
+<li>icmp_checksum()&#160;:&#160;<a class="el" href="namespacenet.html#a2094f6a05de95cefca75935db3def6a0">net</a></li>
 <li>idle_aggregate_util()&#160;:&#160;<a class="el" href="namespacekernel.html#afcb17dd10fbc535bd63bb71f13f14272">kernel</a></li>
 <li>idle_clear_exit_records()&#160;:&#160;<a class="el" href="namespacekernel.html#a7a3e0e56701df314c0bda1619f352aa5">kernel</a></li>
 <li>idle_escalate_stall()&#160;:&#160;<a class="el" href="namespacekernel.html#ad5b4191fcd81829821bf9a34fb3e6609">kernel</a></li>
@@ -137,7 +138,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <li>init()&#160;:&#160;<a class="el" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd</a>, <a class="el" href="namespacekernel_1_1daemon.html#a0a2e6431675517acca87d324b2cff80e">kernel::daemon</a>, <a class="el" href="namespacekernel_1_1vfs.html#a509957f6e50ab1f0433a61bd4624859a">kernel::vfs</a></li>
 <li>init_all()&#160;:&#160;<a class="el" href="namespacekernel_1_1sync.html#aa2ee8b27f242c1625ef11e01adda6675">kernel::sync</a></li>
 <li>init_err()&#160;:&#160;<a class="el" href="namespacekernel_1_1vfs.html#a6281f0779a982cc0f19a98b36495e7b3">kernel::vfs</a></li>
+<li>init_resolve_context()&#160;:&#160;<a class="el" href="namespacekernel_1_1elf.html#a4fc24d471ff47542833fbe015878a37c">kernel::elf</a></li>
 <li>init_task_common()&#160;:&#160;<a class="el" href="namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e">kernel</a></li>
+<li>invalidate_pending_switch_to()&#160;:&#160;<a class="el" href="namespacekernel.html#aa7f25156e51b597a6747dc080959a347">kernel</a>, <a class="el" href="namespacekernel_1_1sched__queue.html#aa7f25156e51b597a6747dc080959a347">kernel::sched_queue</a></li>
 <li>iopb_claim()&#160;:&#160;<a class="el" href="namespacearch.html#abf043d19ff557eda98a5f62a99c78568">arch</a></li>
 <li>iopb_grant_count()&#160;:&#160;<a class="el" href="namespacearch.html#a7e628bb18aba285a4f22724b767ea9e2">arch</a></li>
 <li>iopb_grant_range()&#160;:&#160;<a class="el" href="namespacearch.html#a2c4c9fbb4236aa0576c8efa8c1c3dec9">arch</a></li>
@@ -149,13 +152,18 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <li>iopb_release()&#160;:&#160;<a class="el" href="namespacearch.html#a43e6d91ea884caad134906534ca1f4d0">arch</a></li>
 <li>iopb_snapshot_reset()&#160;:&#160;<a class="el" href="namespacearch.html#afc5702182937e7ef2f74261046d46dc5">arch</a></li>
 <li>iopb_switch_to()&#160;:&#160;<a class="el" href="namespacearch.html#a6f959073cbb99ec9e7be2d2142d1fc55">arch</a></li>
+<li>ipv4_checksum()&#160;:&#160;<a class="el" href="namespacenet.html#a2600cb24ebd60eff91f70685e4c8b383">net</a></li>
+<li>is_boot_stack_rsp()&#160;:&#160;<a class="el" href="namespacekernel.html#a72d7be181f62634469d9791222867623">kernel</a>, <a class="el" href="namespacekernel_1_1sched__verify.html#a72d7be181f62634469d9791222867623">kernel::sched_verify</a></li>
 <li>is_canonical_nbr()&#160;:&#160;<a class="el" href="namespacekernel_1_1log.html#a46122cf7056e720d90260c743e53f590">kernel::log</a></li>
 <li>is_iocd_task()&#160;:&#160;<a class="el" href="namespacekernel_1_1iocd.html#af3dc88f6386fc50faedb450547369a6c">kernel::iocd</a></li>
+<li>is_keyboard_owned()&#160;:&#160;<a class="el" href="namespacekernel_1_1iocd.html#abd93cf4565b34e256102ffc1da86ff4e">kernel::iocd</a></li>
 <li>is_managed()&#160;:&#160;<a class="el" href="namespacekernel_1_1daemon.html#ae3e4188f4434a72f6d12df9d801e03b1">kernel::daemon</a></li>
+<li>is_poisoned_block()&#160;:&#160;<a class="el" href="namespacekernel.html#af9e4d2f44f2d54a3a4c1144c7bf2202f">kernel</a>, <a class="el" href="namespacekernel_1_1sched__debug.html#af9e4d2f44f2d54a3a4c1144c7bf2202f">kernel::sched_debug</a></li>
 <li>is_ramdiskd_task()&#160;:&#160;<a class="el" href="namespacekernel_1_1ramdiskd.html#a8f3ac42fd60f44bb7f2196a5b3e5f180">kernel::ramdiskd</a></li>
 <li>is_timerfd_vnode()&#160;:&#160;<a class="el" href="namespacekernel.html#a39fa71941abf971947793936af03c774">kernel</a></li>
 <li>is_vfsd_task()&#160;:&#160;<a class="el" href="namespacekernel_1_1vfsd.html#a488cc7b15c3330b8558e1035654be4ba">kernel::vfsd</a></li>
 <li>is_watchdogd_task()&#160;:&#160;<a class="el" href="namespacekernel_1_1watchdogd.html#a50004d7a00a8c537040d2d926e386785">kernel::watchdogd</a></li>
+<li>isr_entry()&#160;:&#160;<a class="el" href="namespacearch.html#ad688be936ef7275e94d4d5595bc201c2">arch</a></li>
 <li>isr_nesting_own()&#160;:&#160;<a class="el" href="namespacekernel.html#a0571e17de31b74de7a47a25459361c20">kernel</a></li>
 </ul>
 </div><!-- contents -->

@@ -1,5 +1,58 @@
 # Completed Roadmap Items
 
+## v0.5.4 — Stabilization & Bugfixing (RELEASED 2026-10-18)
+
+**Purpose:** Stabilize the kernel after the v0.5.3 feature push —
+decompose the scheduler, transact the VMM, trace hot paths, adopt
+C++20, harden lifecycle/memory/sync, and fix what the release gate
+convicted. Milestone "v0.5.4 Stabilization & Bugfixing" (milestone
+25): 0 open issues at release (46 closed).
+
+- **Scheduler decomposition** (#323: 16 focused TUs — dispatch,
+  queue, admission, registry, snapshot, terminate, lifecycle,
+  switch, budget, watchdog, debug, auth, smp, id-table, integrity;
+  #369 post-split hardening — validate_task_ptr, lock-order table,
+  slot-writer windows, nodiscard/cold-leg sweep).
+- **Task lifecycle** (#324 T0–T14: triage, ENSURE audit, terminate
+  ordering, scan-vs-seam double-fire handshake, deferred-kill
+  compact-and-retain, reap via id-table, teardown trace).
+- **VMM transactions + hardening** (#325 A–F: fallible maps with
+  rollback, PMM pool-head fix, NX posture, clear-leaf unmaps,
+  fork deep-copy audit, shared-table/TLB contracts; #363 re-audit
+  split/masks/W^X; #366 flag accessors + checked unmaps; #376
+  runtime NX + boot-text W^X; #378 walk-geometry convergence; #377
+  page_table_ privatization; #374 validate-id gate; #375 atomic
+  budget counters; #361 deterministic fault injector + rollback
+  tests).
+- **Hot-path tracing** (#347 A–E + #362 order-sensitive fold:
+  PathTracer core, scheduler/task/VMM registries, overhead bench).
+- **Modernization + test base** (#348 A–E: nodiscard/span/bit/
+  enum-class/constexpr/templates; #364 core split into 7 classes;
+  #342 count reconciliation; test-cycle docs 22+4/26 runs).
+- **Harness + misc hardening** (#360 harness-CNode/ioport
+  residuals; #371 orphan-PML4 re-clones; #372 checkout scoping;
+  #358 readdir cursor stride; #344 dump-counts redirect; #345
+  timeout edge-trigger + EDF guard; #319 wall-clock hygiene; #327
+  aarch64 stack markers; #346 mount overlay; #339 strtok; #338
+  TP errno; #340 iocd keyboard delivery; #271 restartable runelf;
+  #343 shm div-by-zero; #341 O_CREAT; #335 shifted argv; #334
+  exec HHDM pointers; #331 PD_USE%; #328 fork budget charge;
+  #298/#262-#257 cleanup series; #253 umbrella).
+- **Gate-found + gate-fixed** (#380 AP EFER.NXE triple-fault;
+  #381 empty-class debugcon contract; #382 q35 `-mon none`
+  rewrite — all fixed and re-gated green in-cycle).
+
+Gates at completion (2026-10-18): debug test-full **26/26
+(1836/1836)** (core_basic 98, core_sync 93, core_sched 112,
+core_task 52, core_memory 120, core_syscall 88, core_tracing 25,
+ipc 87, capability 155, proc_elf 131, storage 167, servers 66,
+drivers 107, hal 122, smp 81, smp_multicpu 18, deadline 147, ui
+74, logging_debug 36, random 17, bench 28, task_tcb_log 1,
+task_fpu/testrunner specials, ahci_live 5, iommu_live 6; one
+deadline load-flake FAIL + two TCG STALL-recoveries cleared by
+identical-binary standalone reruns with 0 failures), release
+test-full **24/24 + 2 skips (89/89)**, `make build` Errors 0.
+
 ## v0.5.3 — User Space Enhancements (RELEASED 2026-10-12)
 
 **Purpose:** Bring microkernel user-space services to production

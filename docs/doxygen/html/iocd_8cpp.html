@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -133,7 +133,7 @@ Include dependency graph for iocd.cpp:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Aiocd" id="r_kernel_3A_3Aiocd"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html">kernel::iocd</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
@@ -144,6 +144,10 @@ Functions</h2></td></tr>
 <tr class="memdesc:aa1211fe0fe67ae70efe5f05508b58a63"><td class="mdescLeft">&#160;</td><td class="mdescRight">Retrieve the recorded IOCD PID.  <br /></td></tr>
 <tr class="memitem:af3dc88f6386fc50faedb450547369a6c" id="r_af3dc88f6386fc50faedb450547369a6c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html#af3dc88f6386fc50faedb450547369a6c">kernel::iocd::is_iocd_task</a> ()</td></tr>
 <tr class="memdesc:af3dc88f6386fc50faedb450547369a6c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the currently running task is the IOCD.  <br /></td></tr>
+<tr class="memitem:abd93cf4565b34e256102ffc1da86ff4e" id="r_abd93cf4565b34e256102ffc1da86ff4e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html#abd93cf4565b34e256102ffc1da86ff4e">kernel::iocd::is_keyboard_owned</a> ()</td></tr>
+<tr class="memdesc:abd93cf4565b34e256102ffc1da86ff4e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Keyboard ownership for input routing (issue #340 P1).  <br /></td></tr>
+<tr class="memitem:ad4eac49d3e542fc56f87583edffa612b" id="r_ad4eac49d3e542fc56f87583edffa612b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html#ad4eac49d3e542fc56f87583edffa612b">kernel::iocd::set_keyboard_owned</a> (bool owned)</td></tr>
+<tr class="memdesc:ad4eac49d3e542fc56f87583edffa612b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set or clear keyboard ownership.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>I/O Controller Daemon IPC implementation. </p>

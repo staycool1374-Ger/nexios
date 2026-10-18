@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classkernel_1_
 </div><!--header-->
 <div class="contents">
 
+<p>Lock-free single-producer single-consumer character ring buffer.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="ring__buffer_8hpp_source.html">ring_buffer.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::log::RingBuffer:</div>
@@ -130,17 +133,25 @@ Collaboration diagram for kernel::log::RingBuffer:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:ad971787349e9be0a4ff889920bc9c35a" id="r_ad971787349e9be0a4ff889920bc9c35a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad971787349e9be0a4ff889920bc9c35a">putchar</a> (char c)</td></tr>
+<tr class="memdesc:ad971787349e9be0a4ff889920bc9c35a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a single character (discards if full).  <br /></td></tr>
 <tr class="memitem:a1df984ebae363f81498eff87693a458e" id="r_a1df984ebae363f81498eff87693a458e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1df984ebae363f81498eff87693a458e">puts</a> (const char *s)</td></tr>
+<tr class="memdesc:a1df984ebae363f81498eff87693a458e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a null-terminated string.  <br /></td></tr>
 <tr class="memitem:a5309c609c20d75a14d2ca9d2c471a270" id="r_a5309c609c20d75a14d2ca9d2c471a270"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5309c609c20d75a14d2ca9d2c471a270">read</a> (char *dst, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> size)</td></tr>
+<tr class="memdesc:a5309c609c20d75a14d2ca9d2c471a270"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read up to <code class="param">size</code> bytes into <code class="param">dst</code>.  <br /></td></tr>
 <tr class="memitem:a4ee51ca785c2dd2ddcca966cd8ed6270" id="r_a4ee51ca785c2dd2ddcca966cd8ed6270"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4ee51ca785c2dd2ddcca966cd8ed6270">clear</a> ()</td></tr>
+<tr class="memdesc:a4ee51ca785c2dd2ddcca966cd8ed6270"><td class="mdescLeft">&#160;</td><td class="mdescRight">Discard all buffered data.  <br /></td></tr>
 <tr class="memitem:a4b5d8635333991c9675e43be44169cc3" id="r_a4b5d8635333991c9675e43be44169cc3"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4b5d8635333991c9675e43be44169cc3">empty</a> () const</td></tr>
+<tr class="memdesc:a4b5d8635333991c9675e43be44169cc3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the buffer contains no data.  <br /></td></tr>
 <tr class="memitem:aba0ed588da632effd5c96af5368704ef" id="r_aba0ed588da632effd5c96af5368704ef"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aba0ed588da632effd5c96af5368704ef">RingBuffer</a> ()</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
 <tr class="memitem:a059218e450e73fdfecbf562fb1977828" id="r_a059218e450e73fdfecbf562fb1977828"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a059218e450e73fdfecbf562fb1977828">BUFFER_SIZE</a> = 32768</td></tr>
+<tr class="memdesc:a059218e450e73fdfecbf562fb1977828"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total capacity in bytes.  <br /></td></tr>
 </table>
-<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Lock-free single-producer single-consumer character ring buffer. </p>
+</div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="aba0ed588da632effd5c96af5368704ef" name="aba0ed588da632effd5c96af5368704ef"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aba0ed588da632effd5c96af5368704ef">&#9670;&#160;</a></span>RingBuffer()</h2>
 
@@ -189,6 +200,8 @@ Static Public Attributes</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Discard all buffered data. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -220,6 +233,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Check whether the buffer contains no data. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -251,6 +266,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Write a single character (discards if full). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -282,6 +299,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Write a null-terminated string. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -317,6 +336,9 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Read up to <code class="param">size</code> bytes into <code class="param">dst</code>. </p>
+<dl class="section return"><dt>Returns</dt><dd>number of bytes read. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -346,6 +368,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Total capacity in bytes. </p>
 
 </div>
 </div>

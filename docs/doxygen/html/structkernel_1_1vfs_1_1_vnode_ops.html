@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -129,18 +129,33 @@ Collaboration diagram for kernel::vfs::VnodeOps:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:a3d66e05e7ade86edaf913b7782185859" id="r_a3d66e05e7ade86edaf913b7782185859"><td class="memItemLeft">int64_t(*&#160;</td><td class="memItemRight"><a class="el" href="#a3d66e05e7ade86edaf913b7782185859">read</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint8_t *buffer, uint64_t count, uint64_t <a class="el" href="virtio_8hpp.html#a894bdfa2d603d8343f8ef01dda6fcd23">offset</a>)</td></tr>
-<tr class="memitem:a5e42f52b7158b486942cd73a275fed26" id="r_a5e42f52b7158b486942cd73a275fed26"><td class="memItemLeft">int64_t(*&#160;</td><td class="memItemRight"><a class="el" href="#a5e42f52b7158b486942cd73a275fed26">write</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, const uint8_t *buffer, uint64_t count, uint64_t <a class="el" href="virtio_8hpp.html#a894bdfa2d603d8343f8ef01dda6fcd23">offset</a>)</td></tr>
-<tr class="memitem:a992f872493af45b4863c3e17b5d8d4bd" id="r_a992f872493af45b4863c3e17b5d8d4bd"><td class="memItemLeft">int(*&#160;</td><td class="memItemRight"><a class="el" href="#a992f872493af45b4863c3e17b5d8d4bd">open</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint64_t <a class="el" href="virtio_8hpp.html#a773b39d480759f67926cb18ae2219281">flags</a>)</td></tr>
+<tr class="memitem:a3d66e05e7ade86edaf913b7782185859" id="r_a3d66e05e7ade86edaf913b7782185859"><td class="memItemLeft">int64_t(*&#160;</td><td class="memItemRight"><a class="el" href="#a3d66e05e7ade86edaf913b7782185859">read</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint8_t *buffer, uint64_t count, uint64_t <a class="el" href="elf_8hpp.html#a612bb2807d848cca89ea1437cceea886">offset</a>)</td></tr>
+<tr class="memdesc:a3d66e05e7ade86edaf913b7782185859"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read data from vnode.  <br /></td></tr>
+<tr class="memitem:a5e42f52b7158b486942cd73a275fed26" id="r_a5e42f52b7158b486942cd73a275fed26"><td class="memItemLeft">int64_t(*&#160;</td><td class="memItemRight"><a class="el" href="#a5e42f52b7158b486942cd73a275fed26">write</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, const uint8_t *buffer, uint64_t count, uint64_t <a class="el" href="elf_8hpp.html#a612bb2807d848cca89ea1437cceea886">offset</a>)</td></tr>
+<tr class="memdesc:a5e42f52b7158b486942cd73a275fed26"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write data to vnode.  <br /></td></tr>
+<tr class="memitem:a992f872493af45b4863c3e17b5d8d4bd" id="r_a992f872493af45b4863c3e17b5d8d4bd"><td class="memItemLeft">int(*&#160;</td><td class="memItemRight"><a class="el" href="#a992f872493af45b4863c3e17b5d8d4bd">open</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint64_t <a class="el" href="dma_8hpp.html#a773b39d480759f67926cb18ae2219281">flags</a>)</td></tr>
+<tr class="memdesc:a992f872493af45b4863c3e17b5d8d4bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Open the vnode.  <br /></td></tr>
 <tr class="memitem:af5f7d54c97ec55d792b41947a90cc346" id="r_af5f7d54c97ec55d792b41947a90cc346"><td class="memItemLeft">void(*&#160;</td><td class="memItemRight"><a class="el" href="#af5f7d54c97ec55d792b41947a90cc346">close</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self)</td></tr>
-<tr class="memitem:a0a174f80c08dfac3a680bca68201ad83" id="r_a0a174f80c08dfac3a680bca68201ad83"><td class="memItemLeft">int64_t(*&#160;</td><td class="memItemRight"><a class="el" href="#a0a174f80c08dfac3a680bca68201ad83">lseek</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, int64_t <a class="el" href="virtio_8hpp.html#a894bdfa2d603d8343f8ef01dda6fcd23">offset</a>, int whence, uint64_t *out_pos)</td></tr>
+<tr class="memdesc:af5f7d54c97ec55d792b41947a90cc346"><td class="mdescLeft">&#160;</td><td class="mdescRight">Close the vnode.  <br /></td></tr>
+<tr class="memitem:a0a174f80c08dfac3a680bca68201ad83" id="r_a0a174f80c08dfac3a680bca68201ad83"><td class="memItemLeft">int64_t(*&#160;</td><td class="memItemRight"><a class="el" href="#a0a174f80c08dfac3a680bca68201ad83">lseek</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, int64_t <a class="el" href="elf_8hpp.html#a612bb2807d848cca89ea1437cceea886">offset</a>, int whence, uint64_t *out_pos)</td></tr>
+<tr class="memdesc:a0a174f80c08dfac3a680bca68201ad83"><td class="mdescLeft">&#160;</td><td class="mdescRight">Seek to a position.  <br /></td></tr>
 <tr class="memitem:a75b17bb00496f5ec1895e6501cd34129" id="r_a75b17bb00496f5ec1895e6501cd34129"><td class="memItemLeft">int(*&#160;</td><td class="memItemRight"><a class="el" href="#a75b17bb00496f5ec1895e6501cd34129">fstat</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, <a class="el" href="structkernel_1_1vfs_1_1_vfs_stat.html">VfsStat</a> &amp;st)</td></tr>
-<tr class="memitem:abc7537cd6a736ecd13a48eb42c11bc28" id="r_abc7537cd6a736ecd13a48eb42c11bc28"><td class="memItemLeft">int(*&#160;</td><td class="memItemRight"><a class="el" href="#abc7537cd6a736ecd13a48eb42c11bc28">ioctl</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint64_t request, void *arg)</td></tr>
+<tr class="memdesc:a75b17bb00496f5ec1895e6501cd34129"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get file status.  <br /></td></tr>
+<tr class="memitem:a65c9de23b75d1e8b50ed70bdf2a71c03" id="r_a65c9de23b75d1e8b50ed70bdf2a71c03"><td class="memItemLeft">int(*&#160;</td><td class="memItemRight"><a class="el" href="#a65c9de23b75d1e8b50ed70bdf2a71c03">ioctl</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint64_t request, <a class="el" href="classkernel_1_1_checked_ptr.html">kernel::CheckedPtr</a>&lt; uint8_t &gt; arg)</td></tr>
+<tr class="memdesc:a65c9de23b75d1e8b50ed70bdf2a71c03"><td class="mdescLeft">&#160;</td><td class="mdescRight">Device I/O control.  <br /></td></tr>
 <tr class="memitem:a53b567a50bc00ce17780c0a560416514" id="r_a53b567a50bc00ce17780c0a560416514"><td class="memItemLeft">int(*&#160;</td><td class="memItemRight"><a class="el" href="#a53b567a50bc00ce17780c0a560416514">readdir</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint64_t &amp;pos, <a class="el" href="structkernel_1_1vfs_1_1_dirent.html">Dirent</a> &amp;dent)</td></tr>
+<tr class="memdesc:a53b567a50bc00ce17780c0a560416514"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read directory entry.  <br /></td></tr>
 <tr class="memitem:add952f09531db47accba4d61ddf1af91" id="r_add952f09531db47accba4d61ddf1af91"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> *(*&#160;</td><td class="memItemRight"><a class="el" href="#add952f09531db47accba4d61ddf1af91">lookup</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, const char *<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>)</td></tr>
+<tr class="memdesc:add952f09531db47accba4d61ddf1af91"><td class="mdescLeft">&#160;</td><td class="mdescRight">Look up child by name.  <br /></td></tr>
 <tr class="memitem:af3855fd21d2cec6fc4af9a93c83d0006" id="r_af3855fd21d2cec6fc4af9a93c83d0006"><td class="memItemLeft">int(*&#160;</td><td class="memItemRight"><a class="el" href="#af3855fd21d2cec6fc4af9a93c83d0006">mkdir</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, const char *<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, uint16_t mode)</td></tr>
+<tr class="memdesc:af3855fd21d2cec6fc4af9a93c83d0006"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create subdirectory.  <br /></td></tr>
 <tr class="memitem:a271ef570e1074a1e2cffdf929ab18096" id="r_a271ef570e1074a1e2cffdf929ab18096"><td class="memItemLeft">int(*&#160;</td><td class="memItemRight"><a class="el" href="#a271ef570e1074a1e2cffdf929ab18096">unlink</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, const char *<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>)</td></tr>
+<tr class="memdesc:a271ef570e1074a1e2cffdf929ab18096"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove entry.  <br /></td></tr>
 <tr class="memitem:a25d2afda58995fa07034ceb5a9540d3f" id="r_a25d2afda58995fa07034ceb5a9540d3f"><td class="memItemLeft">int(*&#160;</td><td class="memItemRight"><a class="el" href="#a25d2afda58995fa07034ceb5a9540d3f">create</a> )(<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, const char *<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, uint16_t mode)</td></tr>
+<tr class="memitem:a63f835f9327cfc822bbf91e7b19e72e6" id="r_a63f835f9327cfc822bbf91e7b19e72e6"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a63f835f9327cfc822bbf91e7b19e72e6">readonly</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memdesc:a63f835f9327cfc822bbf91e7b19e72e6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read-only filesystem marker (issue #332): true only for tables over an immutable image (initrd). Lets the TOCTOU re-resolve accept same-object re-resolves that allocate fresh vnodes per lookup. Defaults false (strict pointer identity); writable fses must NEVER set it, even on tables without namespace mutators (e.g. fat32_file_ops — mutability lives on the sibling dir table, so ops-shape alone cannot prove it).  <br /></td></tr>
+<tr class="memitem:ad39eea82cdd3b7c1d324598701b6c338" id="r_ad39eea82cdd3b7c1d324598701b6c338"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad39eea82cdd3b7c1d324598701b6c338">stable_ino</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memdesc:ad39eea82cdd3b7c1d324598701b6c338"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stable-ino filesystem marker (issue #333): true only for tables whose lookup assigns a computed key that is stable across independent resolves of the same object (<a class="el" href="namespacekernel_1_1fat32.html">fat32</a>: parent-dir first cluster + dir-entry slot index; remove marks free without compacting). Lets the TOCTOU re-resolve accept same-object re-resolves that allocate fresh vnodes per lookup on a WRITABLE image. Gated additionally on ino/size/mode equality plus nonzero ino (root keeps ino 0 and always matches via the strict pointer path). Defaults false (strict pointer identity).  <br /></td></tr>
 </table>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="af5f7d54c97ec55d792b41947a90cc346" name="af5f7d54c97ec55d792b41947a90cc346"></a>
@@ -155,6 +170,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Close the vnode. </p>
+
 </div>
 </div>
 <a id="a25d2afda58995fa07034ceb5a9540d3f" name="a25d2afda58995fa07034ceb5a9540d3f"></a>
@@ -168,6 +185,7 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>Create file. </p>
 
 </div>
 </div>
@@ -183,19 +201,23 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Get file status. </p>
+
 </div>
 </div>
-<a id="abc7537cd6a736ecd13a48eb42c11bc28" name="abc7537cd6a736ecd13a48eb42c11bc28"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abc7537cd6a736ecd13a48eb42c11bc28">&#9670;&#160;</a></span>ioctl</h2>
+<a id="a65c9de23b75d1e8b50ed70bdf2a71c03" name="a65c9de23b75d1e8b50ed70bdf2a71c03"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a65c9de23b75d1e8b50ed70bdf2a71c03">&#9670;&#160;</a></span>ioctl</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int(* kernel::vfs::VnodeOps::ioctl) (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint64_t request, void *arg)</td>
+          <td class="memname">int(* kernel::vfs::VnodeOps::ioctl) (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint64_t request, <a class="el" href="classkernel_1_1_checked_ptr.html">kernel::CheckedPtr</a>&lt; uint8_t &gt; arg)</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Device I/O control. </p>
 
 </div>
 </div>
@@ -211,6 +233,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Look up child by name. </p>
+
 </div>
 </div>
 <a id="a0a174f80c08dfac3a680bca68201ad83" name="a0a174f80c08dfac3a680bca68201ad83"></a>
@@ -220,10 +244,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int64_t(* kernel::vfs::VnodeOps::lseek) (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, int64_t <a class="el" href="virtio_8hpp.html#a894bdfa2d603d8343f8ef01dda6fcd23">offset</a>, int whence, uint64_t *out_pos)</td>
+          <td class="memname">int64_t(* kernel::vfs::VnodeOps::lseek) (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, int64_t <a class="el" href="elf_8hpp.html#a612bb2807d848cca89ea1437cceea886">offset</a>, int whence, uint64_t *out_pos)</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Seek to a position. </p>
 
 </div>
 </div>
@@ -239,6 +265,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Create subdirectory. </p>
+
 </div>
 </div>
 <a id="a992f872493af45b4863c3e17b5d8d4bd" name="a992f872493af45b4863c3e17b5d8d4bd"></a>
@@ -248,10 +276,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int(* kernel::vfs::VnodeOps::open) (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint64_t <a class="el" href="virtio_8hpp.html#a773b39d480759f67926cb18ae2219281">flags</a>)</td>
+          <td class="memname">int(* kernel::vfs::VnodeOps::open) (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint64_t <a class="el" href="dma_8hpp.html#a773b39d480759f67926cb18ae2219281">flags</a>)</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Open the vnode. </p>
 
 </div>
 </div>
@@ -262,10 +292,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int64_t(* kernel::vfs::VnodeOps::read) (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint8_t *buffer, uint64_t count, uint64_t <a class="el" href="virtio_8hpp.html#a894bdfa2d603d8343f8ef01dda6fcd23">offset</a>)</td>
+          <td class="memname">int64_t(* kernel::vfs::VnodeOps::read) (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, uint8_t *buffer, uint64_t count, uint64_t <a class="el" href="elf_8hpp.html#a612bb2807d848cca89ea1437cceea886">offset</a>)</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Read data from vnode. </p>
 
 </div>
 </div>
@@ -281,6 +313,40 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Read directory entry. </p>
+
+</div>
+</div>
+<a id="a63f835f9327cfc822bbf91e7b19e72e6" name="a63f835f9327cfc822bbf91e7b19e72e6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a63f835f9327cfc822bbf91e7b19e72e6">&#9670;&#160;</a></span>readonly</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::vfs::VnodeOps::readonly = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Read-only filesystem marker (issue #332): true only for tables over an immutable image (initrd). Lets the TOCTOU re-resolve accept same-object re-resolves that allocate fresh vnodes per lookup. Defaults false (strict pointer identity); writable fses must NEVER set it, even on tables without namespace mutators (e.g. fat32_file_ops — mutability lives on the sibling dir table, so ops-shape alone cannot prove it). </p>
+
+</div>
+</div>
+<a id="ad39eea82cdd3b7c1d324598701b6c338" name="ad39eea82cdd3b7c1d324598701b6c338"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad39eea82cdd3b7c1d324598701b6c338">&#9670;&#160;</a></span>stable_ino</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::vfs::VnodeOps::stable_ino = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Stable-ino filesystem marker (issue #333): true only for tables whose lookup assigns a computed key that is stable across independent resolves of the same object (<a class="el" href="namespacekernel_1_1fat32.html">fat32</a>: parent-dir first cluster + dir-entry slot index; remove marks free without compacting). Lets the TOCTOU re-resolve accept same-object re-resolves that allocate fresh vnodes per lookup on a WRITABLE image. Gated additionally on ino/size/mode equality plus nonzero ino (root keeps ino 0 and always matches via the strict pointer path). Defaults false (strict pointer identity). </p>
+
 </div>
 </div>
 <a id="a271ef570e1074a1e2cffdf929ab18096" name="a271ef570e1074a1e2cffdf929ab18096"></a>
@@ -295,6 +361,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Remove entry. </p>
+
 </div>
 </div>
 <a id="a5e42f52b7158b486942cd73a275fed26" name="a5e42f52b7158b486942cd73a275fed26"></a>
@@ -304,10 +372,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int64_t(* kernel::vfs::VnodeOps::write) (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, const uint8_t *buffer, uint64_t count, uint64_t <a class="el" href="virtio_8hpp.html#a894bdfa2d603d8343f8ef01dda6fcd23">offset</a>)</td>
+          <td class="memname">int64_t(* kernel::vfs::VnodeOps::write) (<a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> &amp;self, const uint8_t *buffer, uint64_t count, uint64_t <a class="el" href="elf_8hpp.html#a612bb2807d848cca89ea1437cceea886">offset</a>)</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Write data to vnode. </p>
 
 </div>
 </div>

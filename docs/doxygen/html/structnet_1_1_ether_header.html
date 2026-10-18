@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structnet_1_1_
 </div><!--header-->
 <div class="contents">
 
-<p>Ethernet frame header.  
+<p>Ethernet frame header (14 bytes).  
  <a href="#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="ether_8hpp_source.html">ether.hpp</a>&gt;</code></p>
@@ -133,11 +133,14 @@ Collaboration diagram for net::EtherHeader:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:ad82b93ea3fcc348886989c92eb74f45e" id="r_ad82b93ea3fcc348886989c92eb74f45e"><td class="memItemLeft"><a class="el" href="structnet_1_1_mac_addr.html">MacAddr</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad82b93ea3fcc348886989c92eb74f45e">dst</a></td></tr>
+<tr class="memdesc:ad82b93ea3fcc348886989c92eb74f45e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destination MAC address.  <br /></td></tr>
 <tr class="memitem:a72384a93364c33a02c53ef25a424bb3e" id="r_a72384a93364c33a02c53ef25a424bb3e"><td class="memItemLeft"><a class="el" href="structnet_1_1_mac_addr.html">MacAddr</a>&#160;</td><td class="memItemRight"><a class="el" href="#a72384a93364c33a02c53ef25a424bb3e">src</a></td></tr>
+<tr class="memdesc:a72384a93364c33a02c53ef25a424bb3e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Source MAC address.  <br /></td></tr>
 <tr class="memitem:ad0c98609c01a0106cd20817decc581e2" id="r_ad0c98609c01a0106cd20817decc581e2"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ad0c98609c01a0106cd20817decc581e2">type</a></td></tr>
+<tr class="memdesc:ad0c98609c01a0106cd20817decc581e2"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893" title="EtherType constants (big-endian wire format).">EtherType</a> (big-endian).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Ethernet frame header. </p>
+<div class="textblock"><p>Ethernet frame header (14 bytes). </p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="ad82b93ea3fcc348886989c92eb74f45e" name="ad82b93ea3fcc348886989c92eb74f45e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ad82b93ea3fcc348886989c92eb74f45e">&#9670;&#160;</a></span>dst</h2>
@@ -150,6 +153,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Destination MAC address. </p>
 
 </div>
 </div>
@@ -165,6 +170,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Source MAC address. </p>
+
 </div>
 </div>
 <a id="ad0c98609c01a0106cd20817decc581e2" name="ad0c98609c01a0106cd20817decc581e2"></a>
@@ -178,6 +185,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p><a class="el" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893" title="EtherType constants (big-endian wire format).">EtherType</a> (big-endian). </p>
 
 </div>
 </div>

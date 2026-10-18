@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classarch_1_1_
 </div><!--header-->
 <div class="contents">
 
+<p><a class="el" href="classarch_1_1_serial.html" title="Serial port (UART) driver — architecture-agnostic interface.">Serial</a> port (UART) driver — architecture-agnostic interface.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="hal_2serial_8hpp_source.html">serial.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for arch::Serial:</div>
@@ -130,11 +133,21 @@ Collaboration diagram for arch::Serial:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:acd5b088c85ae5925492a248973f382ee" id="r_acd5b088c85ae5925492a248973f382ee"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#acd5b088c85ae5925492a248973f382ee">init</a> ()</td></tr>
+<tr class="memdesc:acd5b088c85ae5925492a248973f382ee"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialise the serial port hardware.  <br /></td></tr>
 <tr class="memitem:a2f8bcf0e34fb705854192fbdb8b3a04d" id="r_a2f8bcf0e34fb705854192fbdb8b3a04d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2f8bcf0e34fb705854192fbdb8b3a04d">putchar</a> (char c)</td></tr>
+<tr class="memdesc:a2f8bcf0e34fb705854192fbdb8b3a04d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Transmit a single character.  <br /></td></tr>
 <tr class="memitem:a655ac032c591b1f0156f26cd18eca4e9" id="r_a655ac032c591b1f0156f26cd18eca4e9"><td class="memItemLeft">static char&#160;</td><td class="memItemRight"><a class="el" href="#a655ac032c591b1f0156f26cd18eca4e9">getchar</a> ()</td></tr>
+<tr class="memdesc:a655ac032c591b1f0156f26cd18eca4e9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Receive a single character (blocking).  <br /></td></tr>
+<tr class="memitem:a9f60b44fdbe4ae788b27adf2483b2190" id="r_a9f60b44fdbe4ae788b27adf2483b2190"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a9f60b44fdbe4ae788b27adf2483b2190">poll_getchar</a> (char &amp;c)</td></tr>
+<tr class="memdesc:a9f60b44fdbe4ae788b27adf2483b2190"><td class="mdescLeft">&#160;</td><td class="mdescRight">Non-blocking receive poll (issue #245: the interactive shell has no input source on architectures without PS/2 — the x86 COM1 inline poll and the <a class="el" href="classarch_1_1_keyboard.html" title="PS/2 keyboard driver with modifier tracking and a character ring buffer.">Keyboard</a> stub both miss the UART). True with the oldest pending byte iff RX data is ready; false immediately otherwise (never waits, never spins). riscv64 polls the virt 16550A LSR (issue #247).  <br /></td></tr>
 <tr class="memitem:a46ee5ade7378701ed69f936fdbea2039" id="r_a46ee5ade7378701ed69f936fdbea2039"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a46ee5ade7378701ed69f936fdbea2039">puts</a> (const char *str)</td></tr>
+<tr class="memdesc:a46ee5ade7378701ed69f936fdbea2039"><td class="mdescLeft">&#160;</td><td class="mdescRight">Transmit a null-terminated string.  <br /></td></tr>
+<tr class="memitem:a3ce38f76c842430834231b7188b3a251" id="r_a3ce38f76c842430834231b7188b3a251"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3ce38f76c842430834231b7188b3a251">write_count</a> () noexcept</td></tr>
+<tr class="memdesc:a3ce38f76c842430834231b7188b3a251"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the number of characters written to the serial console since boot. The interactive shell snapshots this value before drawing its prompt; if it advanced while the shell waits for input, a background task wrote to the console and the shell redraws its prompt on a fresh line (prevents async output such as the ELF loader's "completed" event from gluing onto the prompt).  <br /></td></tr>
 </table>
-<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p><a class="el" href="classarch_1_1_serial.html" title="Serial port (UART) driver — architecture-agnostic interface.">Serial</a> port (UART) driver — architecture-agnostic interface. </p>
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="a655ac032c591b1f0156f26cd18eca4e9" name="a655ac032c591b1f0156f26cd18eca4e9"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a655ac032c591b1f0156f26cd18eca4e9">&#9670;&#160;</a></span>getchar()</h2>
 
@@ -157,12 +170,18 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classarch_1_1_serial_a655ac032c591b1f0156f26cd18eca4e9_cgraph.png" border="0" usemap="#aclassarch_1_1_serial_a655ac032c591b1f0156f26cd18eca4e9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
-</div>
+
+<p>Receive a single character (blocking). </p>
+<p>Read a single character from the serial port.</p>
+<p>Read a character from the virt 16550A RX FIFO (issue #247). Waits (bounded) for LSR data-ready; returns '\0' when nothing arrives (FLAW-08 — never hangs). TX stays on the SBI ecall path.</p>
+<p>Read a single character from the serial port. Waits (bounded) for RX FIFO data; returns '\0' when nothing arrives.</p>
+<dl class="section return"><dt>Returns</dt><dd>The received character.</dd>
+<dd>
+The received character (lower 8 bits of data register).</dd>
+<dd>
+The received character, or '\0' on bounded-wait expiry.</dd>
+<dd>
+The received character, or '\0' when no data arrives within the bounded wait (FLAW-08 — never hangs). </dd></dl>
 
 </div>
 </div>
@@ -188,12 +207,69 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classarch_1_1_serial_acd5b088c85ae5925492a248973f382ee_cgraph.png" border="0" usemap="#aclassarch_1_1_serial_acd5b088c85ae5925492a248973f382ee_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+
+<p>Initialise the serial port hardware. </p>
+<p>Initialise the serial port (COM1) at 115200 baud, 8N1.</p>
+<p>Initialize the serial port (no-op on RISC-V64). The virt 16550A divisor is pre-initialized by OpenSBI/QEMU; reprogramming it risks breaking the S-mode SBI TX path, so RX-only polling attaches to the live configuration (issue #247).</p>
+<p>Initialise the PL011 UART at 115200 baud (default QEMU virt config). Disables UART, clears pending interrupts, sets baud rate, enables TX/RX. </p>
+
 </div>
+</div>
+<a id="a9f60b44fdbe4ae788b27adf2483b2190" name="a9f60b44fdbe4ae788b27adf2483b2190"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f60b44fdbe4ae788b27adf2483b2190">&#9670;&#160;</a></span>poll_getchar()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::Serial::poll_getchar </td>
+          <td>(</td>
+          <td class="paramtype">char &amp;</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Non-blocking receive poll (issue #245: the interactive shell has no input source on architectures without PS/2 — the x86 COM1 inline poll and the <a class="el" href="classarch_1_1_keyboard.html" title="PS/2 keyboard driver with modifier tracking and a character ring buffer.">Keyboard</a> stub both miss the UART). True with the oldest pending byte iff RX data is ready; false immediately otherwise (never waits, never spins). riscv64 polls the virt 16550A LSR (issue #247). </p>
+<p>Non-blocking receive poll (issue #245).</p>
+<p>Non-blocking receive poll (issue #247): the interactive shell's only input source on riscv64 (no PS/2, <a class="el" href="classarch_1_1_keyboard.html" title="PS/2 keyboard driver with modifier tracking and a character ring buffer.">Keyboard</a> is a stub). Zero-wait LSR check — never spins, so the shell nap loop keeps its 20ms latency bound even when the FIFO is empty.</p>
+<p>Non-blocking receive poll (issue #245): the interactive shell's only input source on aarch64 (no PS/2, <a class="el" href="classarch_1_1_keyboard.html" title="PS/2 keyboard driver with modifier tracking and a character ring buffer.">Keyboard</a> is a stub). Zero-wait FR check — never spins, so the shell nap loop keeps its 20ms latency bound even when the FIFO is empty.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">c</td><td>Received character (untouched when returning false). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>True iff a byte was available and stored in c.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">c</td><td>Oldest pending RX byte when the FIFO is non-empty. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>True iff FR.RXFE was clear and c holds a byte.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">c</td><td>Oldest pending RX byte when data is ready (untouched otherwise). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>True iff the LSR data-ready bit was set and c holds a byte.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">c</td><td>Oldest pending RX byte when data is ready. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>True iff the LSR data-ready bit was set and c holds a byte. </dd></dl>
 
 </div>
 </div>
@@ -220,6 +296,19 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Transmit a single character. </p>
+<p>Write a single character to the serial port. Automatically expands '\n' to "\\r\\n" for carriage-return line-feed.</p>
+<p>Write a single character via SBI ecall.</p>
+<p>Write a single character to the serial port. Translates LF to CR+LF. Waits (bounded) for TX FIFO space; drops the byte when the UART never drains.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">c</td><td>Character to transmit.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">c</td><td>Character to transmit.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">c</td><td>Character to output (\n is expanded to \r\n). </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <a id="a46ee5ade7378701ed69f936fdbea2039" name="a46ee5ade7378701ed69f936fdbea2039"></a>
@@ -234,7 +323,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void arch::Serial::puts </td>
           <td>(</td>
-          <td class="paramtype">const char *</td>          <td class="paramname"><span class="paramname"><em>str</em></span></td><td>)</td>
+          <td class="paramtype">const char *</td>          <td class="paramname"><span class="paramname"><em>s</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -244,6 +333,49 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Transmit a null-terminated string. </p>
+<p>Write a null-terminated string via SBI ecall.</p>
+<p>Write a null-terminated string to the serial port.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">str</td><td>Null-terminated string to transmit.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">s</td><td>Null-terminated string to transmit.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">s</td><td>Null-terminated string to output.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">s</td><td>Null-terminated string to transmit. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a3ce38f76c842430834231b7188b3a251" name="a3ce38f76c842430834231b7188b3a251"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3ce38f76c842430834231b7188b3a251">&#9670;&#160;</a></span>write_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::Serial::write_count </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Returns the number of characters written to the serial console since boot. The interactive shell snapshots this value before drawing its prompt; if it advanced while the shell waits for input, a background task wrote to the console and the shell redraws its prompt on a fresh line (prevents async output such as the ELF loader's "completed" event from gluing onto the prompt). </p>
+<p>Total characters written to the serial console since boot.</p>
+<p>Returns the number of characters written to the serial console since boot.</p>
+<dl class="section return"><dt>Returns</dt><dd>Character write count. </dd></dl>
 
 </div>
 </div>

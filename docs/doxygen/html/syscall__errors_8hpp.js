@@ -4,7 +4,7 @@ var syscall__errors_8hpp =
     [ "X", "syscall__errors_8hpp.html#a47fb9cc75ae083f1d9af376bdbf18c9c", null ],
     [ "X", "syscall__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165", null ],
     [ "kernel::errors::SyscallError", "namespacekernel_1_1errors.html#a6905f268b79adff1ee2f3175485f86ee", [
-      [ "kernel::errors::SYSCALL_ERROR_CODES", "namespacekernel_1_1errors.html#a6905f268b79adff1ee2f3175485f86eeab0aaa42e66423d01d6c0262f6031201a", null ]
+      [ "kernel::errors::SYS_ERR_GENERIC_FAIL", "namespacekernel_1_1errors.html#a6905f268b79adff1ee2f3175485f86eea54c16a6f06a2c3423347c6614d701a63", null ]
     ] ],
     [ "kernel::errors::error_string", "namespacekernel_1_1errors.html#a07b9be493e286e878f87265d54b7e001", null ],
     [ "kernel::errors::from_bufpool_error", "namespacekernel_1_1errors.html#a1f5e348b020e984ea8f873ed02faa8e1", null ],

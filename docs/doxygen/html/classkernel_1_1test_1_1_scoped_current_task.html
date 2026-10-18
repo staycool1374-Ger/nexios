@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -139,7 +139,7 @@ Public Member Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>RAII guard that sets a task as current for the duration of a scope, restoring the original task on destruction. Interrupts are disabled for the entire scope to prevent the timer ISR from consuming stale globals or undoing set_current(). </p>
-<p>NOTE: Do NOT perform blocking operations (semaphore wait, mutex lock with contention, IPC receive) inside this scope — the scheduler cannot context-switch with IF=0. For blocking patterns, use raw <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> with the defensive cleanup in ~ScopedCurrentTask. </p>
+<p>NOTE: Do NOT perform blocking operations (semaphore wait, mutex lock with contention, <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> receive) inside this scope — the scheduler cannot context-switch with IF=0. For blocking patterns, use raw <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> with the defensive cleanup in ~ScopedCurrentTask. </p>
 </div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="abaa46b4f89a7425f5c8618f79f766031" name="abaa46b4f89a7425f5c8618f79f766031"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#abaa46b4f89a7425f5c8618f79f766031">&#9670;&#160;</a></span>ScopedCurrentTask() <span class="overload">[1/2]</span></h2>

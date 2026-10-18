@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,13 +119,23 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__driver_8
 </div><!--header-->
 <div class="contents">
 
-<p>Driver framework tests.  
+<p><a class="el" href="structkernel_1_1_driver.html" title="Describes a single driver module.">Driver</a> framework tests.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="string_8hpp_source.html">string.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="driver_8hpp_source.html">kernel/driver/driver.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="iocd_8hpp_source.html">kernel/driver/iocd.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="ipc_8hpp_source.html">kernel/ipc/ipc.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="cap_8hpp_source.html">kernel/cap/cap.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="cap__types_8hpp_source.html">kernel/cap/cap_types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="mmio_8hpp_source.html">kernel/cap/mmio.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="syscall_8hpp_source.html">kernel/syscall/syscall.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="test__sched__helpers_8hpp_source.html">kernel/test/test_sched_helpers.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="serial_8hpp_source.html">kernel/arch/serial.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="keyboard_8hpp_source.html">kernel/arch/keyboard.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
@@ -148,7 +158,7 @@ Functions</h2></td></tr>
 <tr class="memitem:af936af2ecbdca9446ddb4b9b4d3e24ea" id="r_af936af2ecbdca9446ddb4b9b4d3e24ea"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af936af2ecbdca9446ddb4b9b4d3e24ea">register_driver_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Driver framework tests. </p>
+<div class="textblock"><p><a class="el" href="structkernel_1_1_driver.html" title="Describes a single driver module.">Driver</a> framework tests. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a68941981361591d229e136075e4c9f92" name="a68941981361591d229e136075e4c9f92"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a68941981361591d229e136075e4c9f92">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/8]</span></h2>
@@ -222,6 +232,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__driver_8cpp_a02cd1c163f41757c47a4ffd759b0a211_cgraph.png" border="0" usemap="#atest__driver_8cpp_a02cd1c163f41757c47a4ffd759b0a211_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
 
 </div>
 </div>
@@ -285,6 +301,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__driver_8cpp_a29235138ebc0bd9f219747ffa4df353f_cgraph.png" border="0" usemap="#atest__driver_8cpp_a29235138ebc0bd9f219747ffa4df353f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
 
 </div>
 </div>
@@ -327,6 +349,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__driver_8cpp_ab64d2fd719a57d4cb3299f0efea46cbe_cgraph.png" border="0" usemap="#atest__driver_8cpp_ab64d2fd719a57d4cb3299f0efea46cbe_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
 
 </div>
 </div>
@@ -348,7 +376,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__driver_8cpp_af936af2ecbdca9446ddb4b9b4d3e24ea_cgraph.png" border="0" usemap="#atest__driver_8cpp_af936af2ecbdca9446ddb4b9b4d3e24ea_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 6 -->
 </div>
 
 </div>

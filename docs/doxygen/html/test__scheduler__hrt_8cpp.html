@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -151,7 +151,7 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Hard real-time assertions on real scheduler dispatch (issue #102). </p>
-<p>The existing scheduler_core tests verify FUNCTIONALITY only (reschedule, remove, reap, waitpid). This class runs the same real-dispatch scenarios WITH time-measurement assertions: wake-to-dispatch latency of a higher-prio task after IPC::send / Semaphore::post, and periodic dispatch-cadence jitter. Methodology mirrors the #101 stress_hrt class (see LEARNINGS):</p><ul>
+<p>The existing scheduler_core tests verify FUNCTIONALITY only (reschedule, remove, reap, waitpid). This class runs the same real-dispatch scenarios WITH time-measurement assertions: wake-to-dispatch latency of a higher-prio task after <a class="el" href="classkernel_1_1_i_p_c.html#aa8b196dbcb9c61d38946fe38c7dfffcd" title="Sends a message to a destination task.">IPC::send</a> / Semaphore::post, and periodic dispatch-cadence jitter. Methodology mirrors the #101 stress_hrt class (see LEARNINGS):</p><ul>
 <li>RELATIVE bounds (stress vs measured baseline), never bare absolute cycle constants — TCG rdtsc advances in coarse quanta and a dispatch spans many ticks (base avg ~3.0M cycles).</li>
 <li>Per-phase failure counters asserted == 0 (no Heisenbug masking).</li>
 <li>Calibration-derived constants with &gt;= 3x headroom.</li>

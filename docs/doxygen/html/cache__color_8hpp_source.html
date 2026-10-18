@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -153,13 +153,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('cache__color_8
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>              <span class="stringliteral">&quot;cache colors must be a power of two (mask formula)&quot;</span>);</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span></div>
 <div class="foldopen" id="foldopen00046" data-start="{" data-end="}">
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno"><a class="line" href="namespacekernel_1_1cache.html#a73ec3fc0b065a58526639da49f802c4c">   46</a></span><span class="keyword">constexpr</span> uint64_t <a class="code hl_function" href="namespacekernel_1_1cache.html#a73ec3fc0b065a58526639da49f802c4c">color_of</a>(uint64_t phys_addr) <span class="keyword">noexcept</span> {</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <span class="keywordflow">return</span> (phys_addr &gt;&gt; COLOR_SHIFT) &amp; COLOR_MASK;</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno"><a class="line" href="namespacekernel_1_1cache.html#a73ec3fc0b065a58526639da49f802c4c">   46</a></span><span class="keyword">constexpr</span> uint64_t <a class="code hl_function" href="namespacekernel_1_1cache.html#a73ec3fc0b065a58526639da49f802c4c">color_of</a>(uint64_t <a class="code hl_variable" href="dma_8hpp.html#acc7cea6c9ac13d013ad3f298c375f459">phys_addr</a>) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <span class="keywordflow">return</span> (<a class="code hl_variable" href="dma_8hpp.html#acc7cea6c9ac13d013ad3f298c375f459">phys_addr</a> &gt;&gt; COLOR_SHIFT) &amp; COLOR_MASK;</div>
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>}</div>
 </div>
 <div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span> </div>
 <div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>} <span class="comment">// namespace kernel::cache</span></div>
 </div>
+<div class="ttc" id="adma_8hpp_html_acc7cea6c9ac13d013ad3f298c375f459"><div class="ttname"><a href="dma_8hpp.html#acc7cea6c9ac13d013ad3f298c375f459">phys_addr</a></div><div class="ttdeci">uint32_t phys_addr</div><div class="ttdef"><b>Definition</b> dma.hpp:0</div></div>
 <div class="ttc" id="anamespacekernel_1_1cache_html"><div class="ttname"><a href="namespacekernel_1_1cache.html">kernel::cache</a></div><div class="ttdef"><b>Definition</b> cache_color.hpp:33</div></div>
 <div class="ttc" id="anamespacekernel_1_1cache_html_a73ec3fc0b065a58526639da49f802c4c"><div class="ttname"><a href="namespacekernel_1_1cache.html#a73ec3fc0b065a58526639da49f802c4c">kernel::cache::color_of</a></div><div class="ttdeci">constexpr uint64_t color_of(uint64_t phys_addr) noexcept</div><div class="ttdoc">Page color of a physical address (pure, lock-free, any ctx).</div><div class="ttdef"><b>Definition</b> cache_color.hpp:46</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>

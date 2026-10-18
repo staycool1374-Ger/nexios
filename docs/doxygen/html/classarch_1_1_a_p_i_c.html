@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -180,7 +180,7 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a2fd7d265e1290ebdd9f5207ee8cd387a" id="r_a2fd7d265e1290ebdd9f5207ee8cd387a"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2fd7d265e1290ebdd9f5207ee8cd387a">lapic_id</a> ()</td></tr>
 <tr class="memdesc:a2fd7d265e1290ebdd9f5207ee8cd387a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read this CPU's LAPIC ID (bits 24-31 of the ID register).  <br /></td></tr>
 <tr class="memitem:a2955b5b89ac50be8c8896d91a9d6b2f4" id="r_a2955b5b89ac50be8c8896d91a9d6b2f4"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a2955b5b89ac50be8c8896d91a9d6b2f4">send_ipi</a> (<a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> lapic_id, <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> vector, <a class="el" href="#a6b06edfa4ecc78977b1dfc0025eddc64">IpiMode</a> mode)</td></tr>
-<tr class="memdesc:a2955b5b89ac50be8c8896d91a9d6b2f4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send an inter-processor interrupt to a LAPIC. INIT/SIPI drive AP bring-up; FIXED targets a running CPU's IDT.  <br /></td></tr>
+<tr class="memdesc:a2955b5b89ac50be8c8896d91a9d6b2f4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send an inter-processor interrupt to a LAPIC. INIT/SIPI drive AP bring-up; FIXED targets a running CPU's <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a>.  <br /></td></tr>
 <tr class="memitem:ade44e2717815ffe8f655514c2d394be6" id="r_ade44e2717815ffe8f655514c2d394be6"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ade44e2717815ffe8f655514c2d394be6">init_ap</a> ()</td></tr>
 <tr class="memdesc:ade44e2717815ffe8f655514c2d394be6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable only the LOCAL <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> on an application processor. Programs SVR + masked LVTs + TPR 0 (the BSP-owned I/O <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> routing is left untouched). Called by ap_main on each woken AP.  <br /></td></tr>
 <tr class="memitem:a12b1c16e3b9a9b899aa22d653cb77a9a" id="r_a12b1c16e3b9a9b899aa22d653cb77a9a"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a12b1c16e3b9a9b899aa22d653cb77a9a">map_mmio</a> ()</td></tr>
@@ -232,7 +232,7 @@ Static Public Attributes</h2></td></tr>
 </td></tr>
 <tr><td class="fieldname"><a id="a6b06edfa4ecc78977b1dfc0025eddc64a1152a0f2f9073d5e2e6a81d8c4d90a86" name="a6b06edfa4ecc78977b1dfc0025eddc64a1152a0f2f9073d5e2e6a81d8c4d90a86"></a>SIPI&#160;</td><td class="fielddoc"><p>Startup IPI — vector byte is the 4 KiB page index. </p>
 </td></tr>
-<tr><td class="fieldname"><a id="a6b06edfa4ecc78977b1dfc0025eddc64ac6e6dc18b53b4c2681394b9d8aefcec7" name="a6b06edfa4ecc78977b1dfc0025eddc64ac6e6dc18b53b4c2681394b9d8aefcec7"></a>FIXED&#160;</td><td class="fielddoc"><p>Fixed delivery — vector runs the IDT handler. </p>
+<tr><td class="fieldname"><a id="a6b06edfa4ecc78977b1dfc0025eddc64ac6e6dc18b53b4c2681394b9d8aefcec7" name="a6b06edfa4ecc78977b1dfc0025eddc64ac6e6dc18b53b4c2681394b9d8aefcec7"></a>FIXED&#160;</td><td class="fielddoc"><p>Fixed delivery — vector runs the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> handler. </p>
 </td></tr>
 </table>
 
@@ -661,11 +661,11 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Send an inter-processor interrupt to a LAPIC. INIT/SIPI drive AP bring-up; FIXED targets a running CPU's IDT. </p>
+<p>Send an inter-processor interrupt to a LAPIC. INIT/SIPI drive AP bring-up; FIXED targets a running CPU's <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a>. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">lapic_id</td><td>Destination LAPIC ID (8-bit xAPIC, 32-bit x2APIC). </td></tr>
-    <tr><td class="paramname">vector</td><td>Vector byte (SIPI page index / FIXED IDT vector). </td></tr>
+    <tr><td class="paramname">vector</td><td>Vector byte (SIPI page index / FIXED <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> vector). </td></tr>
     <tr><td class="paramname">mode</td><td>Delivery mode. </td></tr>
   </table>
   </dd>

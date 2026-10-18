@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,481 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2gdt_8hpp.
 
 <p>Global Descriptor Table (x86_64) / no-op stubs for other architectures.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for gdt.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="hal_2gdt_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2arch_2hal_2gdt_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="hal_2gdt_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2arch_2hal_2gdt_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="hal_2gdt_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:arch_3A_3AGDTDescriptor" id="r_arch_3A_3AGDTDescriptor"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_g_d_t_descriptor.html">arch::GDTDescriptor</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 <a class="el" href="classarch_1_1_g_d_t.html" title="x86-64 Global Descriptor Table manager.">GDT</a> descriptor (6-byte packed, used with LGDT).  <a href="structarch_1_1_g_d_t_descriptor.html#details">More...</a><br /></td></tr>
+<tr class="memitem:arch_3A_3AGDTEntry" id="r_arch_3A_3AGDTEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_g_d_t_entry.html">arch::GDTEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 <a class="el" href="classarch_1_1_g_d_t.html" title="x86-64 Global Descriptor Table manager.">GDT</a> entry (8-byte packed descriptor).  <a href="structarch_1_1_g_d_t_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:arch_3A_3ATSS" id="r_arch_3A_3ATSS"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_t_s_s.html">arch::TSS</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 Task-State Segment structure (used for IST and RSP0).  <a href="structarch_1_1_t_s_s.html#details">More...</a><br /></td></tr>
+<tr class="memitem:arch_3A_3ATSSBlock" id="r_arch_3A_3ATSSBlock"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_t_s_s_block.html">arch::TSSBlock</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structarch_1_1_t_s_s.html" title="x86-64 Task-State Segment structure (used for IST and RSP0).">TSS</a> plus the I/O permission bitmap, in one contiguous block so the bitmap lies inside the <a class="el" href="structarch_1_1_t_s_s.html" title="x86-64 Task-State Segment structure (used for IST and RSP0).">TSS</a> segment (hardware requirement: the bitmap is addressed relative to the <a class="el" href="structarch_1_1_t_s_s.html" title="x86-64 Task-State Segment structure (used for IST and RSP0).">TSS</a> base via <code>iopb_offset</code>).  <a href="structarch_1_1_t_s_s_block.html#details">More...</a><br /></td></tr>
+<tr class="memitem:arch_3A_3AGDT" id="r_arch_3A_3AGDT"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_g_d_t.html">arch::GDT</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 Global Descriptor Table manager.  <a href="classarch_1_1_g_d_t.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
+<tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:aef6b9ecac6af5a008c1f2954f4e2b82d" id="r_aef6b9ecac6af5a008c1f2954f4e2b82d"><td class="memItemLeft">enum &#160;</td><td class="memItemRight">: uint8_t { <br />
+&#160;&#160;<a class="el" href="namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82da031732b849e8057f88ccacff915c5e79">arch::GDT_NULL</a> = 0x00
+, <a class="el" href="namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82da98d5ca50126cfb3d9fbc608f7ab62114">arch::GDT_CODE</a> = 0x08
+, <a class="el" href="namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82dabecbf292069d1e4494e9bdbfc6fe123d">arch::GDT_DATA</a> = 0x10
+, <a class="el" href="namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82da663cfbf1d8263fc2ae114d4321d7463f">arch::GDT_USER_CODE</a> = 0x18
+, <br />
+&#160;&#160;<a class="el" href="namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82dae370b47e9270b688bf49eea26eb8dffd">arch::GDT_USER_DATA</a> = 0x20
+, <a class="el" href="namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82daf5853cfae719c6ccb213bd0bc7f4d139">arch::GDT_TSS</a> = 0x28
+<br />
+ }</td></tr>
+<tr class="memdesc:aef6b9ecac6af5a008c1f2954f4e2b82d"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classarch_1_1_g_d_t.html" title="x86-64 Global Descriptor Table manager.">GDT</a> segment selector constants.  <a href="namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82d">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a3ca5db21df1fdddf99353ce554fd6d78" id="r_a3ca5db21df1fdddf99353ce554fd6d78"><td class="memItemLeft">struct <a class="el" href="structarch_1_1_g_d_t_descriptor.html">arch::GDTDescriptor</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a3ca5db21df1fdddf99353ce554fd6d78">arch::__attribute__</a> ((packed))</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:ab28e82ae69032cb4ad3ec3a0be3d7129" id="r_ab28e82ae69032cb4ad3ec3a0be3d7129"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ab28e82ae69032cb4ad3ec3a0be3d7129">limit</a></td></tr>
+<tr class="memdesc:ab28e82ae69032cb4ad3ec3a0be3d7129"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of the GDT minus one.  <br /></td></tr>
+<tr class="memitem:aeca790c0426654358d031f8180e84aca" id="r_aeca790c0426654358d031f8180e84aca"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aeca790c0426654358d031f8180e84aca">base</a></td></tr>
+<tr class="memdesc:aeca790c0426654358d031f8180e84aca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Linear address of the GDT.  <br /></td></tr>
+<tr class="memitem:aa7ae5b5a918e00776ff07fb1c58a348d" id="r_aa7ae5b5a918e00776ff07fb1c58a348d"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#aa7ae5b5a918e00776ff07fb1c58a348d">limit_low</a></td></tr>
+<tr class="memdesc:aa7ae5b5a918e00776ff07fb1c58a348d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 0–15 of the segment limit.  <br /></td></tr>
+<tr class="memitem:a71e21ea67de59991e9a27666a1752a8f" id="r_a71e21ea67de59991e9a27666a1752a8f"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a71e21ea67de59991e9a27666a1752a8f">base_low</a></td></tr>
+<tr class="memdesc:a71e21ea67de59991e9a27666a1752a8f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 0–15 of the base address.  <br /></td></tr>
+<tr class="memitem:ab14fc45c5ad229d9fb26bec51a95c174" id="r_ab14fc45c5ad229d9fb26bec51a95c174"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ab14fc45c5ad229d9fb26bec51a95c174">base_mid</a></td></tr>
+<tr class="memdesc:ab14fc45c5ad229d9fb26bec51a95c174"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 16–23 of the base address.  <br /></td></tr>
+<tr class="memitem:a8b0d6200bc639dd37ff68847a0adde5f" id="r_a8b0d6200bc639dd37ff68847a0adde5f"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a8b0d6200bc639dd37ff68847a0adde5f">access</a></td></tr>
+<tr class="memdesc:a8b0d6200bc639dd37ff68847a0adde5f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Access byte (present, DPL, type, etc.).  <br /></td></tr>
+<tr class="memitem:acfea365f69e71368a2db03333d4afd6f" id="r_acfea365f69e71368a2db03333d4afd6f"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#acfea365f69e71368a2db03333d4afd6f">granularity</a></td></tr>
+<tr class="memdesc:acfea365f69e71368a2db03333d4afd6f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Flags + bits 16–19 of the limit.  <br /></td></tr>
+<tr class="memitem:a1a173457c7aa39c59c008fcc3332d2b3" id="r_a1a173457c7aa39c59c008fcc3332d2b3"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a1a173457c7aa39c59c008fcc3332d2b3">base_high</a></td></tr>
+<tr class="memdesc:a1a173457c7aa39c59c008fcc3332d2b3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 24–31 of the base address.  <br /></td></tr>
+<tr class="memitem:aed93283265f941dc1d2bf8d634164493" id="r_aed93283265f941dc1d2bf8d634164493"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#aed93283265f941dc1d2bf8d634164493">reserved0</a></td></tr>
+<tr class="memdesc:aed93283265f941dc1d2bf8d634164493"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reserved.  <br /></td></tr>
+<tr class="memitem:a72b38046f765f14ce3d8f74ead10766b" id="r_a72b38046f765f14ce3d8f74ead10766b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a72b38046f765f14ce3d8f74ead10766b">rsp0</a></td></tr>
+<tr class="memdesc:a72b38046f765f14ce3d8f74ead10766b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stack pointer for privilege level 0.  <br /></td></tr>
+<tr class="memitem:a01fe81e8371ef1ebbf418968c24938af" id="r_a01fe81e8371ef1ebbf418968c24938af"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a01fe81e8371ef1ebbf418968c24938af">rsp1</a></td></tr>
+<tr class="memdesc:a01fe81e8371ef1ebbf418968c24938af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stack pointer for privilege level 1.  <br /></td></tr>
+<tr class="memitem:a15cb2c4ffbfbf962c70a94c7519ef51f" id="r_a15cb2c4ffbfbf962c70a94c7519ef51f"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a15cb2c4ffbfbf962c70a94c7519ef51f">rsp2</a></td></tr>
+<tr class="memdesc:a15cb2c4ffbfbf962c70a94c7519ef51f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stack pointer for privilege level 2.  <br /></td></tr>
+<tr class="memitem:a70e1f8ea009867b1bee1dcd6740874a1" id="r_a70e1f8ea009867b1bee1dcd6740874a1"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a70e1f8ea009867b1bee1dcd6740874a1">reserved1</a></td></tr>
+<tr class="memdesc:a70e1f8ea009867b1bee1dcd6740874a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reserved.  <br /></td></tr>
+<tr class="memitem:a715597b286f1f3911516ff33f7daed1d" id="r_a715597b286f1f3911516ff33f7daed1d"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a715597b286f1f3911516ff33f7daed1d">ist1</a></td></tr>
+<tr class="memdesc:a715597b286f1f3911516ff33f7daed1d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Stack Table entry 1.  <br /></td></tr>
+<tr class="memitem:a0cad174ca03880e2ef66877fa7452908" id="r_a0cad174ca03880e2ef66877fa7452908"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a0cad174ca03880e2ef66877fa7452908">ist2</a></td></tr>
+<tr class="memdesc:a0cad174ca03880e2ef66877fa7452908"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Stack Table entry 2.  <br /></td></tr>
+<tr class="memitem:adfffc52e9460241dab25a95518f110f1" id="r_adfffc52e9460241dab25a95518f110f1"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#adfffc52e9460241dab25a95518f110f1">ist3</a></td></tr>
+<tr class="memdesc:adfffc52e9460241dab25a95518f110f1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Stack Table entry 3.  <br /></td></tr>
+<tr class="memitem:aa9913c81119fe2e85184295729bb919f" id="r_aa9913c81119fe2e85184295729bb919f"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa9913c81119fe2e85184295729bb919f">ist4</a></td></tr>
+<tr class="memdesc:aa9913c81119fe2e85184295729bb919f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Stack Table entry 4.  <br /></td></tr>
+<tr class="memitem:ad44d2330d19aca0011f83bd384e17ffb" id="r_ad44d2330d19aca0011f83bd384e17ffb"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad44d2330d19aca0011f83bd384e17ffb">ist5</a></td></tr>
+<tr class="memdesc:ad44d2330d19aca0011f83bd384e17ffb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Stack Table entry 5.  <br /></td></tr>
+<tr class="memitem:a50ceffaaa84b8c9e483ab22a3e446a25" id="r_a50ceffaaa84b8c9e483ab22a3e446a25"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a50ceffaaa84b8c9e483ab22a3e446a25">ist6</a></td></tr>
+<tr class="memdesc:a50ceffaaa84b8c9e483ab22a3e446a25"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Stack Table entry 6.  <br /></td></tr>
+<tr class="memitem:a92d8554e63dfe173bb1cdc79e6105b77" id="r_a92d8554e63dfe173bb1cdc79e6105b77"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a92d8554e63dfe173bb1cdc79e6105b77">ist7</a></td></tr>
+<tr class="memdesc:a92d8554e63dfe173bb1cdc79e6105b77"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Stack Table entry 7.  <br /></td></tr>
+<tr class="memitem:a43927117f60a83134aaf449767b87b6c" id="r_a43927117f60a83134aaf449767b87b6c"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a43927117f60a83134aaf449767b87b6c">reserved2</a></td></tr>
+<tr class="memdesc:a43927117f60a83134aaf449767b87b6c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reserved.  <br /></td></tr>
+<tr class="memitem:ab2fa7b967649e7c6ddc0d86321cda4db" id="r_ab2fa7b967649e7c6ddc0d86321cda4db"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ab2fa7b967649e7c6ddc0d86321cda4db">reserved3</a></td></tr>
+<tr class="memdesc:ab2fa7b967649e7c6ddc0d86321cda4db"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reserved.  <br /></td></tr>
+<tr class="memitem:a42218cbc473a16eb991576f262463ae9" id="r_a42218cbc473a16eb991576f262463ae9"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a42218cbc473a16eb991576f262463ae9">iopb_offset</a></td></tr>
+<tr class="memdesc:a42218cbc473a16eb991576f262463ae9"><td class="mdescLeft">&#160;</td><td class="mdescRight">I/O Permission Bitmap offset.  <br /></td></tr>
+<tr class="memitem:a8c1dfc1ccf00a08192611433ee7f17b4" id="r_a8c1dfc1ccf00a08192611433ee7f17b4"><td class="memItemLeft">struct <a class="el" href="structarch_1_1_t_s_s_block.html">arch::TSSBlock</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a8c1dfc1ccf00a08192611433ee7f17b4">arch::__attribute__</a></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Global Descriptor Table (x86_64) / no-op stubs for other architectures. </p>
-</div></div><!-- contents -->
+</div><a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a8b0d6200bc639dd37ff68847a0adde5f" name="a8b0d6200bc639dd37ff68847a0adde5f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8b0d6200bc639dd37ff68847a0adde5f">&#9670;&#160;</a></span>access</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t access</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Access byte (present, DPL, type, etc.). </p>
+
+</div>
+</div>
+<a id="aeca790c0426654358d031f8180e84aca" name="aeca790c0426654358d031f8180e84aca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeca790c0426654358d031f8180e84aca">&#9670;&#160;</a></span>base</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t base</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Linear address of the GDT. </p>
+
+</div>
+</div>
+<a id="a1a173457c7aa39c59c008fcc3332d2b3" name="a1a173457c7aa39c59c008fcc3332d2b3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1a173457c7aa39c59c008fcc3332d2b3">&#9670;&#160;</a></span>base_high</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t base_high</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Bits 24–31 of the base address. </p>
+
+</div>
+</div>
+<a id="a71e21ea67de59991e9a27666a1752a8f" name="a71e21ea67de59991e9a27666a1752a8f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a71e21ea67de59991e9a27666a1752a8f">&#9670;&#160;</a></span>base_low</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t base_low</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Bits 0–15 of the base address. </p>
+
+</div>
+</div>
+<a id="ab14fc45c5ad229d9fb26bec51a95c174" name="ab14fc45c5ad229d9fb26bec51a95c174"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab14fc45c5ad229d9fb26bec51a95c174">&#9670;&#160;</a></span>base_mid</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t base_mid</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Bits 16–23 of the base address. </p>
+
+</div>
+</div>
+<a id="acfea365f69e71368a2db03333d4afd6f" name="acfea365f69e71368a2db03333d4afd6f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acfea365f69e71368a2db03333d4afd6f">&#9670;&#160;</a></span>granularity</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t granularity</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Flags + bits 16–19 of the limit. </p>
+
+</div>
+</div>
+<a id="a42218cbc473a16eb991576f262463ae9" name="a42218cbc473a16eb991576f262463ae9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a42218cbc473a16eb991576f262463ae9">&#9670;&#160;</a></span>iopb_offset</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t iopb_offset</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>I/O Permission Bitmap offset. </p>
+
+</div>
+</div>
+<a id="a715597b286f1f3911516ff33f7daed1d" name="a715597b286f1f3911516ff33f7daed1d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a715597b286f1f3911516ff33f7daed1d">&#9670;&#160;</a></span>ist1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t ist1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Interrupt Stack Table entry 1. </p>
+
+</div>
+</div>
+<a id="a0cad174ca03880e2ef66877fa7452908" name="a0cad174ca03880e2ef66877fa7452908"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0cad174ca03880e2ef66877fa7452908">&#9670;&#160;</a></span>ist2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t ist2</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Interrupt Stack Table entry 2. </p>
+
+</div>
+</div>
+<a id="adfffc52e9460241dab25a95518f110f1" name="adfffc52e9460241dab25a95518f110f1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adfffc52e9460241dab25a95518f110f1">&#9670;&#160;</a></span>ist3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t ist3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Interrupt Stack Table entry 3. </p>
+
+</div>
+</div>
+<a id="aa9913c81119fe2e85184295729bb919f" name="aa9913c81119fe2e85184295729bb919f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa9913c81119fe2e85184295729bb919f">&#9670;&#160;</a></span>ist4</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t ist4</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Interrupt Stack Table entry 4. </p>
+
+</div>
+</div>
+<a id="ad44d2330d19aca0011f83bd384e17ffb" name="ad44d2330d19aca0011f83bd384e17ffb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad44d2330d19aca0011f83bd384e17ffb">&#9670;&#160;</a></span>ist5</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t ist5</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Interrupt Stack Table entry 5. </p>
+
+</div>
+</div>
+<a id="a50ceffaaa84b8c9e483ab22a3e446a25" name="a50ceffaaa84b8c9e483ab22a3e446a25"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a50ceffaaa84b8c9e483ab22a3e446a25">&#9670;&#160;</a></span>ist6</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t ist6</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Interrupt Stack Table entry 6. </p>
+
+</div>
+</div>
+<a id="a92d8554e63dfe173bb1cdc79e6105b77" name="a92d8554e63dfe173bb1cdc79e6105b77"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a92d8554e63dfe173bb1cdc79e6105b77">&#9670;&#160;</a></span>ist7</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t ist7</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Interrupt Stack Table entry 7. </p>
+
+</div>
+</div>
+<a id="ab28e82ae69032cb4ad3ec3a0be3d7129" name="ab28e82ae69032cb4ad3ec3a0be3d7129"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab28e82ae69032cb4ad3ec3a0be3d7129">&#9670;&#160;</a></span>limit</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t limit</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Size of the GDT minus one. </p>
+
+</div>
+</div>
+<a id="aa7ae5b5a918e00776ff07fb1c58a348d" name="aa7ae5b5a918e00776ff07fb1c58a348d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa7ae5b5a918e00776ff07fb1c58a348d">&#9670;&#160;</a></span>limit_low</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t limit_low</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Bits 0–15 of the segment limit. </p>
+
+</div>
+</div>
+<a id="aed93283265f941dc1d2bf8d634164493" name="aed93283265f941dc1d2bf8d634164493"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aed93283265f941dc1d2bf8d634164493">&#9670;&#160;</a></span>reserved0</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t reserved0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Reserved. </p>
+
+</div>
+</div>
+<a id="a70e1f8ea009867b1bee1dcd6740874a1" name="a70e1f8ea009867b1bee1dcd6740874a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a70e1f8ea009867b1bee1dcd6740874a1">&#9670;&#160;</a></span>reserved1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t reserved1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Reserved. </p>
+
+</div>
+</div>
+<a id="a43927117f60a83134aaf449767b87b6c" name="a43927117f60a83134aaf449767b87b6c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a43927117f60a83134aaf449767b87b6c">&#9670;&#160;</a></span>reserved2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t reserved2</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Reserved. </p>
+
+</div>
+</div>
+<a id="ab2fa7b967649e7c6ddc0d86321cda4db" name="ab2fa7b967649e7c6ddc0d86321cda4db"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab2fa7b967649e7c6ddc0d86321cda4db">&#9670;&#160;</a></span>reserved3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t reserved3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Reserved. </p>
+
+</div>
+</div>
+<a id="a72b38046f765f14ce3d8f74ead10766b" name="a72b38046f765f14ce3d8f74ead10766b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a72b38046f765f14ce3d8f74ead10766b">&#9670;&#160;</a></span>rsp0</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t rsp0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Stack pointer for privilege level 0. </p>
+
+</div>
+</div>
+<a id="a01fe81e8371ef1ebbf418968c24938af" name="a01fe81e8371ef1ebbf418968c24938af"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a01fe81e8371ef1ebbf418968c24938af">&#9670;&#160;</a></span>rsp1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t rsp1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Stack pointer for privilege level 1. </p>
+
+</div>
+</div>
+<a id="a15cb2c4ffbfbf962c70a94c7519ef51f" name="a15cb2c4ffbfbf962c70a94c7519ef51f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a15cb2c4ffbfbf962c70a94c7519ef51f">&#9670;&#160;</a></span>rsp2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t rsp2</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Stack pointer for privilege level 2. </p>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

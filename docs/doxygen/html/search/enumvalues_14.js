@@ -1,9 +1,12 @@
 var searchData=
 [
-  ['validating_0',['VALIDATING',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5aff9726ecf722ce2a076e7cf705a073f7',1,'kernel::elf']]],
-  ['verified_1',['VERIFIED',['../classkernel_1_1_scheduler.html#aafa9966e76c491b9409a666d5dfd260da2778dde25400a8e3df508c90229d2657',1,'kernel::Scheduler::VERIFIED'],['../structkernel_1_1_task_control_block.html#a5a15a3d081ace9f33de0cea3d09f551fa2778dde25400a8e3df508c90229d2657',1,'kernel::TaskControlBlock::VERIFIED']]],
-  ['verifying_2',['VERIFYING',['../structkernel_1_1_task_control_block.html#a5a15a3d081ace9f33de0cea3d09f551fa4ea687957de9caaad1e098e3e95aae9e',1,'kernel::TaskControlBlock']]],
-  ['vfs_3',['VFS',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa296c58c4afa6e6c1d159f7d0d6cc864c',1,'kernel::log']]],
-  ['vmm_4',['VMM',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aaa7170792bc4a2bfbe1d1946911eb1d15',1,'kernel::log']]],
-  ['vmm_5ferror_5fcodes_5',['VMM_ERROR_CODES',['../namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074da6317a158a3baf1810a442eafb77a6998',1,'kernel::errors']]]
+  ['uname_0',['UNAME',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a358f6fb7b244ee3b66a8e071d055b542',1,'kernel']]],
+  ['unknown_1',['UNKNOWN',['../classkernel_1_1elf_1_1_elf_loader.html#a8286baa9f3c0fec05de8010655439239a696b031073e74bf2cb98e5ef201d4aa3',1,'kernel::elf::ElfLoader']]],
+  ['unlink_2',['UNLINK',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aa07e75cb3ec757003bb6b1284024135b',1,'kernel']]],
+  ['unloaded_3',['UNLOADED',['../namespacekernel.html#a7aad192801037c1b058a87c147f00a19a795b8a51556d0b2cf4fbc11a896f6269',1,'kernel']]],
+  ['unregister_4',['Unregister',['../namespacekernel.html#aa6c3b797a7f9c5f662f307dfd8af3704a9d4a8f2dfe3c62f3ce3011035d28fb66',1,'kernel']]],
+  ['untyped_5',['Untyped',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a4061e4e1089a827007bed4405fac6ee9',1,'kernel::cap']]],
+  ['unverified_6',['UNVERIFIED',['../structkernel_1_1_task_control_block.html#a5a15a3d081ace9f33de0cea3d09f551fa0dda3249de3efdf2a6a33708ec5aa1c3',1,'kernel::TaskControlBlock']]],
+  ['user_7',['USER',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa2e40ad879e955201df4dedbf8d479a12',1,'kernel::log']]],
+  ['user_5felf_8',['USER_ELF',['../namespacekernel_1_1task.html#afe20b357887445ef77f145177213ee11acd249b6e7fadaba2533c7e79e653ce90',1,'kernel::task']]]
 ];

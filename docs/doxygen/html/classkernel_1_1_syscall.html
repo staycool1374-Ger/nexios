@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -136,6 +136,17 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:acf1a63e5b0e8d0cd318d25ec04e34962"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize syscall table and MSRs (STAR, LSTAR, FMASK).  <br /></td></tr>
 <tr class="memitem:a4166c97da7594caaa03a16894d8dadf7" id="r_a4166c97da7594caaa03a16894d8dadf7"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4166c97da7594caaa03a16894d8dadf7">handle</a> (uint64_t number, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t *regs=nullptr)</td></tr>
 <tr class="memdesc:a4166c97da7594caaa03a16894d8dadf7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch a system call to the appropriate handler.  <br /></td></tr>
+<tr class="memitem:a7044d10c561fbe591e23118dc87b060c" id="r_a7044d10c561fbe591e23118dc87b060c"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a7044d10c561fbe591e23118dc87b060c">handle_fast</a> (uint64_t number, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t *regs=nullptr)</td></tr>
+<tr class="memdesc:a7044d10c561fbe591e23118dc87b060c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lean FAST-path dispatch (issue #92). Bounds-checked table dispatch WITHOUT the canary walk — for the audited pointer-free FAST subset only (docs/specs/syscall-fastpath.md §3.1/§4). The callers of this path must never pass a number that dereferences user memory (enforced by SYSCALL_FAST_MASK membership review).  <br /></td></tr>
+<tr class="memitem:a8b512d39438d3c870278814be1ff0a59" id="r_a8b512d39438d3c870278814be1ff0a59"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a8b512d39438d3c870278814be1ff0a59">set_fastpath_enabled</a> (bool enabled)</td></tr>
+<tr class="memdesc:a8b512d39438d3c870278814be1ff0a59"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test hook: force the FULL path even for FAST members (proves both paths agree). Plain static bool, default true — production parity when unarmed.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
+Static Public Attributes</h2></td></tr>
+<tr class="memitem:acb5f766245c7891e29166cfd36f06eca" id="r_acb5f766245c7891e29166cfd36f06eca"><td class="memItemLeft">static constexpr <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270">SyscallNumber</a>&#160;</td><td class="memItemRight"><a class="el" href="#acb5f766245c7891e29166cfd36f06eca">k_syscall_fast</a> []</td></tr>
+<tr class="memdesc:acb5f766245c7891e29166cfd36f06eca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Audited pointer-free syscall subset (issue #92). A member must NEVER dereference a user pointer — the FAST path skips the canary + (debug) SMAP/AC checks. SEND/RECEIVE/SEND_SYNC are intentionally excluded (they touch user buffers via checked_ptr / safe_copy_to_user). To reclassify, review the handler for user-memory access and update this list AND the spec.  <br /></td></tr>
+<tr class="memitem:abe598bb5aafa872ac1eac51e6ed79b33" id="r_abe598bb5aafa872ac1eac51e6ed79b33"><td class="memItemLeft">static constexpr __uint128_t&#160;</td><td class="memItemRight"><a class="el" href="#abe598bb5aafa872ac1eac51e6ed79b33">SYSCALL_FAST_MASK</a></td></tr>
+<tr class="memdesc:abe598bb5aafa872ac1eac51e6ed79b33"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitmask of the pointer-free FAST syscall numbers (issue #92). Derived from k_syscall_fast[] — the single source of truth. 128-bit: covers syscall numbers 0..127 (issue #11).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>System call handler and dispatcher. </p>
@@ -190,13 +201,85 @@ Static Public Member Functions</h2></td></tr>
 <p>Dispatch a system call to the appropriate handler. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">number</td><td><a class="el" href="classkernel_1_1_syscall.html" title="System call handler and dispatcher.">Syscall</a> number (see <a class="el" href="namespacekernel.html#a3c91fa593738cd1ac9fa175bf06916bf" title="System call numbers recognised by the kernel.">SyscallNumber</a>). </td></tr>
+    <tr><td class="paramname">number</td><td><a class="el" href="classkernel_1_1_syscall.html" title="System call handler and dispatcher.">Syscall</a> number (see <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270" title="System call numbers recognised by the kernel.">SyscallNumber</a>). </td></tr>
     <tr><td class="paramname">arg1</td><td>Arguments passed from user space. </td></tr>
     <tr><td class="paramname">regs</td><td>Pointer to register save area (for context-modifying calls). </td></tr>
   </table>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>The syscall return value. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_syscall_a4166c97da7594caaa03a16894d8dadf7_cgraph.png" border="0" usemap="#aclasskernel_1_1_syscall_a4166c97da7594caaa03a16894d8dadf7_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a7044d10c561fbe591e23118dc87b060c" name="a7044d10c561fbe591e23118dc87b060c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7044d10c561fbe591e23118dc87b060c">&#9670;&#160;</a></span>handle_fast()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::Syscall::handle_fast </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>number</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>arg0</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>arg1</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>arg2</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>arg3</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>regs</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Lean FAST-path dispatch (issue #92). Bounds-checked table dispatch WITHOUT the canary walk — for the audited pointer-free FAST subset only (docs/specs/syscall-fastpath.md §3.1/§4). The callers of this path must never pass a number that dereferences user memory (enforced by SYSCALL_FAST_MASK membership review). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">number</td><td><a class="el" href="classkernel_1_1_syscall.html" title="System call handler and dispatcher.">Syscall</a> number (see <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270" title="System call numbers recognised by the kernel.">SyscallNumber</a>). </td></tr>
+    <tr><td class="paramname">arg1</td><td>Arguments passed from user space. </td></tr>
+    <tr><td class="paramname">regs</td><td>Pointer to register save area. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>The syscall return value, or SYS_ERR_GENERIC_FAIL for an out-of-range number. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_syscall_a7044d10c561fbe591e23118dc87b060c_cgraph.png" border="0" usemap="#aclasskernel_1_1_syscall_a7044d10c561fbe591e23118dc87b060c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -224,23 +307,137 @@ Static Public Member Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Initialize syscall table and MSRs (STAR, LSTAR, FMASK). </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_syscall_acf1a63e5b0e8d0cd318d25ec04e34962_cgraph.png" border="0" usemap="#aclasskernel_1_1_syscall_acf1a63e5b0e8d0cd318d25ec04e34962_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<p>Initialise the syscall interface (syscall-table built at compile time). </p>
+
 </div>
+</div>
+<a id="a8b512d39438d3c870278814be1ff0a59" name="a8b512d39438d3c870278814be1ff0a59"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8b512d39438d3c870278814be1ff0a59">&#9670;&#160;</a></span>set_fastpath_enabled()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Syscall::set_fastpath_enabled </td>
+          <td>(</td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>enabled</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Test hook: force the FULL path even for FAST members (proves both paths agree). Plain static bool, default true — production parity when unarmed. </p>
+
+</div>
+</div>
+<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a id="acb5f766245c7891e29166cfd36f06eca" name="acb5f766245c7891e29166cfd36f06eca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acb5f766245c7891e29166cfd36f06eca">&#9670;&#160;</a></span>k_syscall_fast</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270">SyscallNumber</a> kernel::Syscall::k_syscall_fast[]</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<b>Initial value:</b><div class="fragment"><div class="line">                                              = {</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a18e25ac6cc28c2b91bce1fbe629b682a">SyscallNumber::YIELD</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a83e990574e4601b663d42b05121bf312">SyscallNumber::GET_TICKS</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270af96eee4e48ee90430f17fb3a8388507b">SyscallNumber::PRINT</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a491be84e80b2d9ee558a7c0ab3d9b7d6">SyscallNumber::CREATE_MAILBOX</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ac0e9b39754d7e9a33ea37fc69fb104e2">SyscallNumber::DESTROY_MAILBOX</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a27beb5c4ac5e1d44c9a9c48260a86043">SyscallNumber::GETPID</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a291554596c183e837f0a6bec3767c891">SyscallNumber::PAUSE</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a65abf85acd7ea0c82f179038bdc375f5">SyscallNumber::REBOOT</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270abf2d798abfe8267da4f101692b6cfecd">SyscallNumber::HALT</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a1c2e112ea60c1b1a83a5410d7dfa4fcd">SyscallNumber::SEND_FAST</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a5d465054367acd24c976f3ada51e493a">SyscallNumber::RECV_FAST</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a92b091b1c0aac5962a42c441bd5380f1">SyscallNumber::SEND_SYNC_FAST</a>,</div>
+<div class="line">}</div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a18e25ac6cc28c2b91bce1fbe629b682a"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a18e25ac6cc28c2b91bce1fbe629b682a">kernel::SyscallNumber::YIELD</a></div><div class="ttdeci">@ YIELD</div><div class="ttdef"><b>Definition</b> syscall.hpp:30</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a1c2e112ea60c1b1a83a5410d7dfa4fcd"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a1c2e112ea60c1b1a83a5410d7dfa4fcd">kernel::SyscallNumber::SEND_FAST</a></div><div class="ttdeci">@ SEND_FAST</div><div class="ttdoc">register-passing SEND, payload in regs[] (issue #11)</div><div class="ttdef"><b>Definition</b> syscall.hpp:104</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a27beb5c4ac5e1d44c9a9c48260a86043"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a27beb5c4ac5e1d44c9a9c48260a86043">kernel::SyscallNumber::GETPID</a></div><div class="ttdeci">@ GETPID</div><div class="ttdef"><b>Definition</b> syscall.hpp:53</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a291554596c183e837f0a6bec3767c891"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a291554596c183e837f0a6bec3767c891">kernel::SyscallNumber::PAUSE</a></div><div class="ttdeci">@ PAUSE</div><div class="ttdef"><b>Definition</b> syscall.hpp:66</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a491be84e80b2d9ee558a7c0ab3d9b7d6"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a491be84e80b2d9ee558a7c0ab3d9b7d6">kernel::SyscallNumber::CREATE_MAILBOX</a></div><div class="ttdeci">@ CREATE_MAILBOX</div><div class="ttdef"><b>Definition</b> syscall.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a5d465054367acd24c976f3ada51e493a"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a5d465054367acd24c976f3ada51e493a">kernel::SyscallNumber::RECV_FAST</a></div><div class="ttdeci">@ RECV_FAST</div><div class="ttdoc">register-passing RECEIVE, payload in regs[] (issue #11)</div><div class="ttdef"><b>Definition</b> syscall.hpp:105</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a65abf85acd7ea0c82f179038bdc375f5"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a65abf85acd7ea0c82f179038bdc375f5">kernel::SyscallNumber::REBOOT</a></div><div class="ttdeci">@ REBOOT</div><div class="ttdef"><b>Definition</b> syscall.hpp:79</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a83e990574e4601b663d42b05121bf312"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a83e990574e4601b663d42b05121bf312">kernel::SyscallNumber::GET_TICKS</a></div><div class="ttdeci">@ GET_TICKS</div><div class="ttdef"><b>Definition</b> syscall.hpp:35</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a92b091b1c0aac5962a42c441bd5380f1"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a92b091b1c0aac5962a42c441bd5380f1">kernel::SyscallNumber::SEND_SYNC_FAST</a></div><div class="ttdeci">@ SEND_SYNC_FAST</div><div class="ttdoc">register-passing SEND_SYNC (issue #11)</div><div class="ttdef"><b>Definition</b> syscall.hpp:106</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270abf2d798abfe8267da4f101692b6cfecd"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270abf2d798abfe8267da4f101692b6cfecd">kernel::SyscallNumber::HALT</a></div><div class="ttdeci">@ HALT</div><div class="ttdef"><b>Definition</b> syscall.hpp:80</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270ac0e9b39754d7e9a33ea37fc69fb104e2"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ac0e9b39754d7e9a33ea37fc69fb104e2">kernel::SyscallNumber::DESTROY_MAILBOX</a></div><div class="ttdeci">@ DESTROY_MAILBOX</div><div class="ttdef"><b>Definition</b> syscall.hpp:38</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270af96eee4e48ee90430f17fb3a8388507b"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270af96eee4e48ee90430f17fb3a8388507b">kernel::SyscallNumber::PRINT</a></div><div class="ttdeci">@ PRINT</div><div class="ttdef"><b>Definition</b> syscall.hpp:34</div></div>
+</div><!-- fragment -->
+<p>Audited pointer-free syscall subset (issue #92). A member must NEVER dereference a user pointer — the FAST path skips the canary + (debug) SMAP/AC checks. SEND/RECEIVE/SEND_SYNC are intentionally excluded (they touch user buffers via checked_ptr / safe_copy_to_user). To reclassify, review the handler for user-memory access and update this list AND the spec. </p>
+
+</div>
+</div>
+<a id="abe598bb5aafa872ac1eac51e6ed79b33" name="abe598bb5aafa872ac1eac51e6ed79b33"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abe598bb5aafa872ac1eac51e6ed79b33">&#9670;&#160;</a></span>SYSCALL_FAST_MASK</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">__uint128_t kernel::Syscall::SYSCALL_FAST_MASK</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<b>Initial value:</b><div class="fragment"><div class="line">                                           =</div>
+<div class="line"><a class="code hl_function" href="namespacekernel.html#a4714e27a53b879f1a1610a8b77e37b4d">syscall_fast_mask_from</a>(<a class="code hl_variable" href="#acb5f766245c7891e29166cfd36f06eca">k_syscall_fast</a>,</div>
+<div class="line">                       <span class="keyword">sizeof</span>(<a class="code hl_variable" href="#acb5f766245c7891e29166cfd36f06eca">k_syscall_fast</a>) /</div>
+<div class="line">                           <span class="keyword">sizeof</span>(<a class="code hl_variable" href="#acb5f766245c7891e29166cfd36f06eca">k_syscall_fast</a>[0]))</div>
+<div class="ttc" id="aclasskernel_1_1_syscall_html_acb5f766245c7891e29166cfd36f06eca"><div class="ttname"><a href="#acb5f766245c7891e29166cfd36f06eca">kernel::Syscall::k_syscall_fast</a></div><div class="ttdeci">static constexpr SyscallNumber k_syscall_fast[]</div><div class="ttdoc">Audited pointer-free syscall subset (issue #92). A member must NEVER dereference a user pointer — the...</div><div class="ttdef"><b>Definition</b> syscall.hpp:200</div></div>
+<div class="ttc" id="anamespacekernel_html_a4714e27a53b879f1a1610a8b77e37b4d"><div class="ttname"><a href="namespacekernel.html#a4714e27a53b879f1a1610a8b77e37b4d">kernel::syscall_fast_mask_from</a></div><div class="ttdeci">constexpr __uint128_t syscall_fast_mask_from(const SyscallNumber *list, size_t count)</div><div class="ttdoc">Folds a list of FAST syscall numbers into a single bitmask (issue #92). constexpr so SYSCALL_FAST_MAS...</div><div class="ttdef"><b>Definition</b> syscall.hpp:134</div></div>
+</div><!-- fragment -->
+<p>Bitmask of the pointer-free FAST syscall numbers (issue #92). Derived from k_syscall_fast[] — the single source of truth. 128-bit: covers syscall numbers 0..127 (issue #11). </p>
 
 </div>
 </div>
 <hr/>The documentation for this class was generated from the following files:<ul>
 <li>src/kernel/syscall/<a class="el" href="syscall_8hpp_source.html">syscall.hpp</a></li>
 <li>src/kernel/syscall/<a class="el" href="syscall_8cpp.html">syscall.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__cap_8cpp.html">syscall_handlers_cap.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__death_8cpp.html">syscall_handlers_death.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__debug_8cpp.html">syscall_handlers_debug.cpp</a></li>
 <li>src/kernel/syscall/<a class="el" href="syscall__handlers__fs_8cpp.html">syscall_handlers_fs.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__iommu_8cpp.html">syscall_handlers_iommu.cpp</a></li>
 <li>src/kernel/syscall/<a class="el" href="syscall__handlers__ipc_8cpp.html">syscall_handlers_ipc.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__irq_8cpp.html">syscall_handlers_irq.cpp</a></li>
 <li>src/kernel/syscall/<a class="el" href="syscall__handlers__misc_8cpp.html">syscall_handlers_misc.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__mmio_8cpp.html">syscall_handlers_mmio.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__pager_8cpp.html">syscall_handlers_pager.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__posix__time_8cpp.html">syscall_handlers_posix_time.cpp</a></li>
 <li>src/kernel/syscall/<a class="el" href="syscall__handlers__process_8cpp.html">syscall_handlers_process.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__shm_8cpp.html">syscall_handlers_shm.cpp</a></li>
 <li>src/kernel/syscall/<a class="el" href="syscall__handlers__sync_8cpp.html">syscall_handlers_sync.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__tls_8cpp.html">syscall_handlers_tls.cpp</a></li>
+<li>src/kernel/syscall/<a class="el" href="syscall__handlers__watchdog_8cpp.html">syscall_handlers_watchdog.cpp</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

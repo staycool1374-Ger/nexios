@@ -1,12 +1,20 @@
 var searchData=
 [
-  ['net_0',['NET',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa347aadfc505a4bc6b2f9d81363d2331c',1,'kernel::log']]],
-  ['never_5fwrite_1',['NEVER_WRITE',['../namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495da02c1dcf9d4370b9359a2152eb3c55b79',1,'kernel::gs']]],
-  ['no_5felf_2',['NO_ELF',['../namespaceservice.html#a827bfc4d7da8410f5f325ee7a9ecd55da656a5d5b77c940ebba6b5c39849ccaa0',1,'service']]],
-  ['none_3',['NONE',['../classkernel_1_1_scheduler.html#aafa9966e76c491b9409a666d5dfd260dab50339a10e1de285ac99d4c3990b8693',1,'kernel::Scheduler']]],
-  ['not_5ffound_4',['NOT_FOUND',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a8c02547a8a3b02382bac3557bcb2280d',1,'kernel']]],
-  ['not_5fimplemented_5',['NOT_IMPLEMENTED',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a3e860a081575fc82cc7b6ed2ca602947',1,'kernel']]],
-  ['not_5floading_6',['NOT_LOADING',['../namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796a42769f5c0b640211e86c29a70b3ad295',1,'kernel::elf']]],
-  ['notify_7',['NOTIFY',['../namespacekernel.html#a39a8b332edefebba052488078097a45ba9d087bfb809874e1b3e9adcbae8ca761',1,'kernel']]],
-  ['null_8',['Null',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99abbb93ef26e3c101ff11cdd21cab08a94',1,'kernel::cap']]]
+  ['machine_5fcheck_0',['MACHINE_CHECK',['../namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a82628675623bec259ca206fd9f76014c',1,'arch']]],
+  ['mapping_1',['MAPPING',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a2fa399f11879d3347f324fe703fb9f97',1,'kernel::elf']]],
+  ['max_5fsyscall_2',['MAX_SYSCALL',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a20583d4255e204362b630fbbc2d805da',1,'kernel']]],
+  ['memfree_3',['MemFree',['../namespacekernel.html#aa6c3b797a7f9c5f662f307dfd8af3704ad3d1c74dbc194e1ebb2768d59d419eb8',1,'kernel']]],
+  ['mempool_4',['MEMPOOL',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa9bb9239ff286274c8363021f3d82b782',1,'kernel::log']]],
+  ['mempool_5ferror_5fcodes_5',['MEMPOOL_ERROR_CODES',['../namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9fa9894bcb1bf2887c59cbb64539b160a0b',1,'kernel::errors']]],
+  ['mkdir_6',['MKDIR',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a54396a6379fdf76909f612cd9537897f',1,'kernel']]],
+  ['mmio_7',['Mmio',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99ad4861c9dc3a4e2f4b3edcff3c8604c07',1,'kernel::cap']]],
+  ['mmio_5fmap_8',['MMIO_MAP',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a7425ab7dc8c3e8303fcd9a987df6547b',1,'kernel']]],
+  ['mmio_5fmap_5ffailed_9',['MMIO_MAP_FAILED',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a9b5d5959351014c61c07627ae9c3e72e',1,'arch']]],
+  ['mmio_5funmap_10',['MMIO_UNMAP',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a863cbcbcb36fb755f508402ebadf5411',1,'kernel']]],
+  ['monotonic_11',['MONOTONIC',['../namespacekernel_1_1time.html#a37bf0aee4d287b1d413e122e666ba52ea109ce01d0775b5372b9b2cc517630d39',1,'kernel::time']]],
+  ['msg_5fdaemon_5ffailed_12',['MSG_DAEMON_FAILED',['../namespacekernel_1_1ipc.html#a2ff5729652bd08ce2741040379c060beaa513cfd8090f1020059205372d2b69f5',1,'kernel::ipc']]],
+  ['msg_5fdaemon_5fready_13',['MSG_DAEMON_READY',['../namespacekernel_1_1ipc.html#a2ff5729652bd08ce2741040379c060bea967b13a35e9ff41d406b6822fc0c98dc',1,'kernel::ipc']]],
+  ['msix_14',['MSIX',['../namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301',1,'kernel']]],
+  ['msix_15',['Msix',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a50073b0e818c9249ad19b1631149fad5',1,'kernel::cap']]],
+  ['mtime_16',['MTIME',['../namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1a2bc25ec844676fc09311e77ffbadf653',1,'arch']]]
 ];

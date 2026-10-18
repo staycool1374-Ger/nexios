@@ -1,11 +1,16 @@
 var searchData=
 [
-  ['va_0',['va',['../structarch_1_1_shootdown_batch_1_1_batch_entry.html#aa46750ab2f17ebcbccf9c6692a6923d3',1,'arch::ShootdownBatch::BatchEntry::va'],['../structkernel_1_1_tlb_shootdown_1_1_request.html#aaa251bb2a5e31db218f25b9768d0b542',1,'kernel::TlbShootdown::Request::va']]],
-  ['vaddr_1',['vaddr',['../structkernel_1_1_task_control_block_1_1_ro_range.html#ae3b5091c9eb628db20f2d8fdff7df543',1,'kernel::TaskControlBlock::RoRange']]],
-  ['valid_2',['valid',['../structkernel_1_1_task_exit_record.html#a349bcd6faf744357f300b39e1d662f4e',1,'kernel::TaskExitRecord']]],
-  ['value_3',['value',['../structkernel_1_1time_1_1_itimerspec_u.html#ad9a2f840af679a23005d83785adc707d',1,'kernel::time::ItimerspecU::value'],['../structkernel_1_1_error_or.html#a35360a5c262bf6fc941512cdcd717265',1,'kernel::ErrorOr::value'],['../structintegral__constant.html#ac7331c704031e5e636cf419dfe4c58b5',1,'integral_constant::value'],['../structkernel_1_1_error_or.html#a35360a5c262bf6fc941512cdcd717265',1,'kernel::ErrorOr&lt; void &gt;::value']]],
-  ['vector_4',['vector',['../classkernel_1_1cap_1_1_irq_cap.html#ae6379018acd4c73f7a5dfb1502505abe',1,'kernel::cap::IrqCap::vector'],['../classkernel_1_1cap_1_1_msix_cap.html#a3443c4acc56b8dc8ac630e14aaf9d726',1,'kernel::cap::MsixCap::vector'],['../structkernel_1_1_irq_registration.html#a66a7b11e6369f0a2421678670ddd682e',1,'kernel::IrqRegistration::vector']]],
-  ['version_5',['version',['../structkernel_1_1shm_1_1_shared_ring_header.html#a1ae6c798ecdf04e40094dfc95fa5f82c',1,'kernel::shm::SharedRingHeader::version'],['../structkernel_1_1_utsname.html#ac091210e0ca0b699107c4498dac7d292',1,'kernel::Utsname::version'],['../struct_utsname.html#a2238669fd24d0bed2a46aa978d2db00c',1,'Utsname::version'],['../structkernel_1_1vfs_1_1_rd_super.html#a63f75596e23797a415a696dcf8337cdc',1,'kernel::vfs::RdSuper::version'],['../structfdt__header.html#ad1ab024c18f8f6b87c7c5d6541a5b4fb',1,'fdt_header::version'],['../structutsname.html#acbd210b282a10423243acb647d3aeaec',1,'utsname::version']]],
-  ['vnode_6',['vnode',['../structkernel_1_1vfs_1_1_dev_entry.html#ad92fb247a53093452dd757201dc0b229',1,'kernel::vfs::DevEntry::vnode'],['../structkernel_1_1vfs_1_1_tmpfs_entry.html#a9771a08671906bc09fe79a413eed5a3f',1,'kernel::vfs::TmpfsEntry::vnode']]],
-  ['vnodes_7',['vnodes',['../structkernel_1_1test_1_1_resource_counters.html#a4e8f4cb19eed10d9d3b8b1172d493c1d',1,'kernel::test::ResourceCounters']]]
+  ['uint32_5fmax_0',['UINT32_MAX',['../constants_8hpp.html#a6dc3d5894cc08990629f0d006af81ad6',1,'constants.hpp']]],
+  ['uint64_5fmax_1',['UINT64_MAX',['../constants_8hpp.html#a5e5cc8e5f3f386f8eb0ab1012de4f0db',1,'constants.hpp']]],
+  ['unit_2',['unit',['../structkernel_1_1iommu_1_1dmar_1_1_dmar_info.html#a9f61d9705897186f2d524a0c9af56407',1,'kernel::iommu::dmar::DmarInfo']]],
+  ['unlink_3',['unlink',['../structkernel_1_1vfs_1_1_vnode_ops.html#a271ef570e1074a1e2cffdf929ab18096',1,'kernel::vfs::VnodeOps']]],
+  ['used_4',['used',['../structkernel_1_1vfs_1_1_file_description.html#abfe9f3336b359ecf184eacfe0e088a17',1,'kernel::vfs::FileDescription::used'],['../structkernel_1_1vfs_1_1_mount.html#a985ad559bfbbc5a13d39e188dd39df68',1,'kernel::vfs::Mount::used']]],
+  ['user_5',['USER',['../structkernel_1_1_page_flags.html#a28274ea221e20f492c97873209310b41',1,'kernel::PageFlags']]],
+  ['user_5fcs_6',['USER_CS',['../structkernel_1_1_task_control_block.html#a6410f57c6318b8c55011b75936398d9e',1,'kernel::TaskControlBlock']]],
+  ['user_5fdata_7',['user_data',['../structkernel_1_1_task_control_block.html#af412568a7d9331e3f801598cce45bf50',1,'kernel::TaskControlBlock']]],
+  ['user_5fss_8',['USER_SS',['../structkernel_1_1_task_control_block.html#a98a435c02587f00dbafaf1796a1e662f',1,'kernel::TaskControlBlock']]],
+  ['user_5fstack_5f_9',['user_stack_',['../structkernel_1_1_task_control_block.html#a2888326289461dff4d14a39ff05894b6',1,'kernel::TaskControlBlock']]],
+  ['user_5fstack_5fsize_10',['user_stack_size',['../structkernel_1_1task_1_1_task_def.html#ada5b7ac2f9388739e7ed1959a47980d8',1,'kernel::task::TaskDef']]],
+  ['user_5fstack_5fsize_5f_11',['user_stack_size_',['../structkernel_1_1_task_control_block.html#a8cdd52c0ab23814dee9ece3c8e91d1f5',1,'kernel::TaskControlBlock']]],
+  ['util_5fper_5fmille_12',['util_per_mille',['../structkernel_1_1_task_exit_record.html#ab6866f97e374d082bcc6c0f5b1025b23',1,'kernel::TaskExitRecord::util_per_mille'],['../structkernel_1_1_task_control_block.html#ae7ff2b511acd821bc3162eb396574a13',1,'kernel::TaskControlBlock::util_per_mille']]]
 ];

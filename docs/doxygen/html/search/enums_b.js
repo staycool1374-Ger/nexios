@@ -1,8 +1,7 @@
 var searchData=
 [
-  ['taskerror_0',['TaskError',['../namespacekernel_1_1errors.html#acfb6c673c29495fd20c2656c972a5632',1,'kernel::errors']]],
-  ['taskstate_1',['TaskState',['../namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3c',1,'kernel']]],
-  ['tasktype_2',['TaskType',['../namespacekernel_1_1task.html#afe20b357887445ef77f145177213ee11',1,'kernel::task']]],
-  ['testflags_3',['TestFlags',['../namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924',1,'kernel::test']]],
-  ['testtouchwarn_4',['TestTouchWarn',['../namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76',1,'kernel']]]
+  ['register_0',['Register',['../classarch_1_1_r_t_c.html#adbb6b6387e9290772332ee7ffa193df5',1,'arch::RTC']]],
+  ['rlimitresource_1',['RlimitResource',['../namespacekernel.html#a4c7abd4d7b6e60921e6661d7e6ac80af',1,'kernel::RlimitResource'],['../test__rlimit_8cpp.html#a2e9c5fc5c5951f5059e407b4c707195d',1,'RlimitResource:&#160;test_rlimit.cpp']]],
+  ['roverifystate_2',['RoVerifyState',['../structkernel_1_1_task_control_block.html#a5a15a3d081ace9f33de0cea3d09f551f',1,'kernel::TaskControlBlock']]],
+  ['runoutcome_3',['RunOutcome',['../classkernel_1_1elf_1_1_elf_loader.html#a8286baa9f3c0fec05de8010655439239',1,'kernel::elf::ElfLoader']]]
 ];

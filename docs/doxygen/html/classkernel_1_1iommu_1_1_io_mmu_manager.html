@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -154,9 +154,9 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:adbed9ff975a1f17ea0c2023eeb2217c9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps every page of <code class="param">fc</code> at its identity IOVA with <code class="param">sl_flags</code> (R|W bits) in the domain at <code class="param">idx</code>. Overlapping mappings are rejected; a mid-map failure rolls back every entry written by this call (no partial mapping is ever visible).  <br /></td></tr>
 <tr class="memitem:a294fa5f72b9904484f394ecda03618e4" id="r_a294fa5f72b9904484f394ecda03618e4"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a294fa5f72b9904484f394ecda03618e4">unmap_frame</a> (int16_t idx, const <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">cap::FrameCap</a> &amp;fc)</td></tr>
 <tr class="memdesc:a294fa5f72b9904484f394ecda03618e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Removes the mapping covering exactly <code class="param">fc</code> (phys + page count) and reclaims now-empty intermediate table pages.  <br /></td></tr>
-<tr class="memitem:aa2cfa572fccf0321a95c02adbb8164d0" id="r_aa2cfa572fccf0321a95c02adbb8164d0"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#aa2cfa572fccf0321a95c02adbb8164d0">attach_device</a> (int16_t idx, arch::PciBdf bdf)</td></tr>
+<tr class="memitem:aa2cfa572fccf0321a95c02adbb8164d0" id="r_aa2cfa572fccf0321a95c02adbb8164d0"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#aa2cfa572fccf0321a95c02adbb8164d0">attach_device</a> (int16_t idx, <a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a> bdf)</td></tr>
 <tr class="memdesc:aa2cfa572fccf0321a95c02adbb8164d0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Attaches the device at <code class="param">bdf</code> to the domain at <code class="param">idx</code> by programming the root entry (bus) and the context entry (device:function) with T=translate and ASR = the domain root. Re-attaching the same device to another domain re-points it (one device -&gt; one domain; last attach wins).  <br /></td></tr>
-<tr class="memitem:a2183155ddfc340b08c95383afe78d64d" id="r_a2183155ddfc340b08c95383afe78d64d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2183155ddfc340b08c95383afe78d64d">clear_attachment</a> (int16_t idx, arch::PciBdf bdf)</td></tr>
+<tr class="memitem:a2183155ddfc340b08c95383afe78d64d" id="r_a2183155ddfc340b08c95383afe78d64d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2183155ddfc340b08c95383afe78d64d">clear_attachment</a> (int16_t idx, <a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a> bdf)</td></tr>
 <tr class="memdesc:a2183155ddfc340b08c95383afe78d64d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clears the root + context entries programmed for <code class="param">bdf</code>.  <br /></td></tr>
 <tr class="memitem:a5a8be334015c0e43e47309e7b2cb3756" id="r_a5a8be334015c0e43e47309e7b2cb3756"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5a8be334015c0e43e47309e7b2cb3756">sl_root</a> (int16_t idx)</td></tr>
 <tr class="memdesc:a5a8be334015c0e43e47309e7b2cb3756"><td class="mdescLeft">&#160;</td><td class="mdescRight">SL root physical address of the domain (0 when invalid/free).  <br /></td></tr>
@@ -168,9 +168,9 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a15b657b8380e46b29e702228f3dba83d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of outstanding mappings in the domain (leak audit).  <br /></td></tr>
 <tr class="memitem:a7463b40f4b2775b972a688575c2aa0d5" id="r_a7463b40f4b2775b972a688575c2aa0d5"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a7463b40f4b2775b972a688575c2aa0d5">root_entry_present</a> (uint8_t bus)</td></tr>
 <tr class="memdesc:a7463b40f4b2775b972a688575c2aa0d5"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when the root entry for <code class="param">bus</code> is Present.  <br /></td></tr>
-<tr class="memitem:a939682e591c6d5536f7e9922cfd662f0" id="r_a939682e591c6d5536f7e9922cfd662f0"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a939682e591c6d5536f7e9922cfd662f0">context_asr</a> (int16_t idx, arch::PciBdf bdf)</td></tr>
+<tr class="memitem:a939682e591c6d5536f7e9922cfd662f0" id="r_a939682e591c6d5536f7e9922cfd662f0"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a939682e591c6d5536f7e9922cfd662f0">context_asr</a> (int16_t idx, <a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a> bdf)</td></tr>
 <tr class="memdesc:a939682e591c6d5536f7e9922cfd662f0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Context-entry ASR for <code class="param">bdf</code> when attached to <code class="param">idx</code>, else 0.  <br /></td></tr>
-<tr class="memitem:a47c6da71f79d17984e9c3c01765ba860" id="r_a47c6da71f79d17984e9c3c01765ba860"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a47c6da71f79d17984e9c3c01765ba860">context_entry</a> (arch::PciBdf bdf)</td></tr>
+<tr class="memitem:a47c6da71f79d17984e9c3c01765ba860" id="r_a47c6da71f79d17984e9c3c01765ba860"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a47c6da71f79d17984e9c3c01765ba860">context_entry</a> (<a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a> bdf)</td></tr>
 <tr class="memdesc:a47c6da71f79d17984e9c3c01765ba860"><td class="mdescLeft">&#160;</td><td class="mdescRight">Low 64 bits of the context entry programmed for <code class="param">bdf</code> (the full raw entry — Present + TT + ASR). 0 when no context table covers <code class="param">bdf</code>. Test introspection for the live passthrough entries programmed by <a class="el" href="#a582ea3017abaca02880cb55ac45324ae" title="Actively enables DMA translation on the live unit (issue #9): programs RTADDR to the manager&#39;s root t...">enable_translation()</a>.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -193,7 +193,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">arch::PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -224,7 +224,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">arch::PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -255,7 +255,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">arch::PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -281,7 +281,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">uint64_t kernel::iommu::IoMmuManager::context_entry </td>
           <td>(</td>
-          <td class="paramtype">arch::PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>

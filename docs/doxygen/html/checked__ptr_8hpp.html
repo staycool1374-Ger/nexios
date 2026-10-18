@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('checked__ptr_8
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="string_8hpp_source.html">string.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="concepts_8hpp_source.html">concepts.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
@@ -127,20 +128,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('checked__ptr_8
 Include dependency graph for checked_ptr.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="checked__ptr_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2memory_2checked__ptr_8hpp" loading="lazy" alt=""/></div>
-<map name="asrc_2kernel_2memory_2checked__ptr_8hpp" id="asrc_2kernel_2memory_2checked__ptr_8hpp">
-<area shape="rect" title=" " alt="" coords="5,5,188,48"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="57,171,136,197"/>
-<area shape="poly" title=" " alt="" coords="92,46,88,84,87,122,92,156,87,155,82,123,83,83,90,51"/>
-<area shape="rect" href="string_8hpp.html" title="Memory and string utility functions (extern &quot;C&quot; for ABI compat)." alt="" coords="96,96,174,123"/>
-<area shape="poly" title=" " alt="" coords="107,46,125,82,120,82,106,51"/>
-<area shape="poly" title=" " alt="" coords="131,122,112,159,108,155,126,125"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="checked__ptr_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2memory_2checked__ptr_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="checked__ptr_8hpp_source.html">Go to the source code of this file.</a></p>
@@ -153,7 +147,7 @@ Data Structures</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>

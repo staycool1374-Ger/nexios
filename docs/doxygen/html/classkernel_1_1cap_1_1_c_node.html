@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -144,8 +144,8 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:aa73bc0e7f514e8cdfeecbca9ff4c67df"><td class="mdescLeft">&#160;</td><td class="mdescRight">Genuinely shared (may be referenced by multiple tasks/pins).  <br /></td></tr>
 <tr class="memitem:a93276e8f5f95e609e91d37f7173e3b89" id="r_a93276e8f5f95e609e91d37f7173e3b89"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a93276e8f5f95e609e91d37f7173e3b89">revoke</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> override</td></tr>
 <tr class="memdesc:a93276e8f5f95e609e91d37f7173e3b89"><td class="mdescLeft">&#160;</td><td class="mdescRight">Cascade revoke: marks this node revoked and invalidates every capability reachable through it (iterative, depth-bounded).  <br /></td></tr>
-<tr class="memitem:a25aa483871e43e9d83ceacf6ddc1143f" id="r_a25aa483871e43e9d83ceacf6ddc1143f"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a25aa483871e43e9d83ceacf6ddc1143f">install</a> (<a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> *obj, <a class="el" href="namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99">CapType</a> type, uint32_t rights, uint32_t *gen_out=nullptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:a25aa483871e43e9d83ceacf6ddc1143f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Installs <code class="param">obj</code> into the first free slot with the given type and rights. Takes a strong reference (<a class="el" href="classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464" title="Takes a new reference. Relaxed ordering is sufficient for the reference count (a lifetime guard,...">acquire()</a>) on success.  <br /></td></tr>
+<tr class="memitem:a51bc2d979f4200682776bf8e282dab88" id="r_a51bc2d979f4200682776bf8e282dab88"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a51bc2d979f4200682776bf8e282dab88">install</a> (<a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> *obj, <a class="el" href="namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99">CapType</a> type, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rights, uint32_t *gen_out=nullptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a51bc2d979f4200682776bf8e282dab88"><td class="mdescLeft">&#160;</td><td class="mdescRight">Installs <code class="param">obj</code> into the first free slot with the given type and rights. Takes a strong reference (<a class="el" href="classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464" title="Takes a new reference. Relaxed ordering is sufficient for the reference count (a lifetime guard,...">acquire()</a>) on success.  <br /></td></tr>
 <tr class="memitem:ace2a22c2d65ce6966fddd05e3e5f2182" id="r_ace2a22c2d65ce6966fddd05e3e5f2182"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ace2a22c2d65ce6966fddd05e3e5f2182">remove</a> (uint32_t idx) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ace2a22c2d65ce6966fddd05e3e5f2182"><td class="mdescLeft">&#160;</td><td class="mdescRight">Removes the slot at <code class="param">idx</code> (clears and releases the target). Idempotent: an already-free slot is a no-op. The target is released OUTSIDE the slot-table lock (deferred release list).  <br /></td></tr>
 <tr class="memitem:a6d962205da2437f62bb1491e1f63fcc2" id="r_a6d962205da2437f62bb1491e1f63fcc2"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a6d962205da2437f62bb1491e1f63fcc2">peek</a> (uint32_t idx, <a class="el" href="namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99">CapType</a> want) const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
@@ -289,8 +289,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a25aa483871e43e9d83ceacf6ddc1143f" name="a25aa483871e43e9d83ceacf6ddc1143f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a25aa483871e43e9d83ceacf6ddc1143f">&#9670;&#160;</a></span>install()</h2>
+<a id="a51bc2d979f4200682776bf8e282dab88" name="a51bc2d979f4200682776bf8e282dab88"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a51bc2d979f4200682776bf8e282dab88">&#9670;&#160;</a></span>install()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -311,7 +311,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>rights</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>rights</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -337,7 +337,7 @@ Here is the call graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1cap_1_1_c_node_a25aa483871e43e9d83ceacf6ddc1143f_cgraph.png" border="0" usemap="#aclasskernel_1_1cap_1_1_c_node_a25aa483871e43e9d83ceacf6ddc1143f_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="classkernel_1_1cap_1_1_c_node_a51bc2d979f4200682776bf8e282dab88_cgraph.png" border="0" usemap="#aclasskernel_1_1cap_1_1_c_node_a51bc2d979f4200682776bf8e282dab88_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 4 -->
 </div>
 

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,278 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2idt_8hpp.
 
 <p>Interrupt Descriptor Table (x86_64) / interrupt vector dispatch for all architectures.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for idt.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="hal_2idt_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2arch_2hal_2idt_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="hal_2idt_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2arch_2hal_2idt_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="hal_2idt_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:arch_3A_3AIDTEntry" id="r_arch_3A_3AIDTEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_i_d_t_entry.html">arch::IDTEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> entry (16-byte packed interrupt gate descriptor).  <a href="structarch_1_1_i_d_t_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:arch_3A_3AIDTDescriptor" id="r_arch_3A_3AIDTDescriptor"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_i_d_t_descriptor.html">arch::IDTDescriptor</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> descriptor (10-byte packed, used with LIDT).  <a href="structarch_1_1_i_d_t_descriptor.html#details">More...</a><br /></td></tr>
+<tr class="memitem:arch_3A_3AIDT" id="r_arch_3A_3AIDT"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_i_d_t.html">arch::IDT</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 Interrupt Descriptor Table manager.  <a href="classarch_1_1_i_d_t.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
+<tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
+Typedefs</h2></td></tr>
+<tr class="memitem:a88ca764670435787bd482678ef7b7084" id="r_a88ca764670435787bd482678ef7b7084"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a88ca764670435787bd482678ef7b7084">arch::ISRHandler</a> = void (*)(<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> vector, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="el" href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a>, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="el" href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a>)</td></tr>
+<tr class="memdesc:a88ca764670435787bd482678ef7b7084"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Service Routine function signature.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:aa51e0cd803d847e27b50eaa53ba87630" id="r_aa51e0cd803d847e27b50eaa53ba87630"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630">arch::InterruptVector</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630aaac08f3bf1b13771e1a9db2af3fb1010">arch::DIV_ZERO</a> = 0
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630adc30ec20708ef7b0f641ef78b7880a15">arch::DEBUG</a> = 1
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a98ac9fa587d32240fbd819325be9beac">arch::NMI</a> = 2
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630afd14a8e38e53a8241e49cfbe48095de3">arch::BREAKPOINT</a> = 3
+, <br />
+&#160;&#160;<a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a0134b04a942cbc5336958c8cd09b82f3">arch::OVERFLOW</a> = 4
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630abb12db7eeea355518cba67caea27ee97">arch::BOUND_RANGE</a> = 5
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a78e364cbd50bcd6e731cc156bded135e">arch::INVALID_OPCODE</a> = 6
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a2510ed66923668b4e5a7de8e5ea25dfd">arch::DEVICE_NA</a> = 7
+, <br />
+&#160;&#160;<a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a4610998910a6e140e710de438722c8de">arch::DOUBLE_FAULT</a> = 8
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a3ce5c6ca0c08cbc339c355a17efdce3c">arch::INVALID_TSS</a> = 10
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a921ec71b18fa05e696f9cea218b4d528">arch::SEGMENT_NP</a> = 11
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a6a166ac7b8beda6e754eb18001925a35">arch::STACK_SEG_FAULT</a> = 12
+, <br />
+&#160;&#160;<a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a3b33a94cc0376965dcbbf4f180378f32">arch::GP_FAULT</a> = 13
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a84ec0a3ff6aea921d3fe97604180eb3c">arch::PAGE_FAULT</a> = 14
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630ab8f26afea9e7489af61091d3c6a41eaa">arch::FPU_ERROR</a> = 16
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630abb85438380126e2043dbbae39389d547">arch::ALIGN_CHECK</a> = 17
+, <br />
+&#160;&#160;<a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a82628675623bec259ca206fd9f76014c">arch::MACHINE_CHECK</a> = 18
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630aa9129a1870e9f06f7d31eb325144a86a">arch::SIMD_ERROR</a> = 19
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630aa4637fbe447629a1a593161d20af0f89">arch::VIRT_ERROR</a> = 20
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630ab127d163c55a6603f3a37ce3a642c36d">arch::TIMER</a> = 32
+, <br />
+&#160;&#160;<a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630aedda266cdb6345b9f6914cc2e7577475">arch::KEYBOARD</a> = 33
+, <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a45f1e61f22cb04eb7a6a39016b56db9b">arch::SYSCALL</a> = 0x80
+<br />
+ }</td></tr>
+<tr class="memdesc:aa51e0cd803d847e27b50eaa53ba87630"><td class="mdescLeft">&#160;</td><td class="mdescRight">Named interrupt vectors for x86-64.  <a href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a3ca5db21df1fdddf99353ce554fd6d78" id="r_a3ca5db21df1fdddf99353ce554fd6d78"><td class="memItemLeft">struct <a class="el" href="structarch_1_1_g_d_t_descriptor.html">arch::GDTDescriptor</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a3ca5db21df1fdddf99353ce554fd6d78">arch::__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:afbea1f090434d66e8d5380ab9c81364e" id="r_afbea1f090434d66e8d5380ab9c81364e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#afbea1f090434d66e8d5380ab9c81364e">IDTEntry</a> ()=default</td></tr>
+<tr class="memitem:ad688be936ef7275e94d4d5595bc201c2" id="r_ad688be936ef7275e94d4d5595bc201c2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ad688be936ef7275e94d4d5595bc201c2">arch::isr_entry</a> ()</td></tr>
+<tr class="memdesc:ad688be936ef7275e94d4d5595bc201c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Assembly-level interrupt entry point.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a11b1c6ed61493da558a28e77fa1efee6" id="r_a11b1c6ed61493da558a28e77fa1efee6"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a11b1c6ed61493da558a28e77fa1efee6">offset_low</a></td></tr>
+<tr class="memdesc:a11b1c6ed61493da558a28e77fa1efee6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 0–15 of handler address.  <br /></td></tr>
+<tr class="memitem:a1c44289c163c1460544d6ee0900d02ba" id="r_a1c44289c163c1460544d6ee0900d02ba"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a1c44289c163c1460544d6ee0900d02ba">selector</a></td></tr>
+<tr class="memdesc:a1c44289c163c1460544d6ee0900d02ba"><td class="mdescLeft">&#160;</td><td class="mdescRight">Code segment selector.  <br /></td></tr>
+<tr class="memitem:a254d5bd1552992f9c17e038f363987ec" id="r_a254d5bd1552992f9c17e038f363987ec"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a254d5bd1552992f9c17e038f363987ec">ist</a></td></tr>
+<tr class="memdesc:a254d5bd1552992f9c17e038f363987ec"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Stack Table index.  <br /></td></tr>
+<tr class="memitem:a5e7eb925db6957f19edc1e5d7d74c8f6" id="r_a5e7eb925db6957f19edc1e5d7d74c8f6"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a5e7eb925db6957f19edc1e5d7d74c8f6">type_attr</a></td></tr>
+<tr class="memdesc:a5e7eb925db6957f19edc1e5d7d74c8f6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Gate type and attributes.  <br /></td></tr>
+<tr class="memitem:a53f1fc81461c3837b1f868359f547b18" id="r_a53f1fc81461c3837b1f868359f547b18"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a53f1fc81461c3837b1f868359f547b18">offset_mid</a></td></tr>
+<tr class="memdesc:a53f1fc81461c3837b1f868359f547b18"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 16–31 of handler address.  <br /></td></tr>
+<tr class="memitem:a8ae200aa7aa01feab491177777fc0dd9" id="r_a8ae200aa7aa01feab491177777fc0dd9"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a8ae200aa7aa01feab491177777fc0dd9">offset_high</a></td></tr>
+<tr class="memdesc:a8ae200aa7aa01feab491177777fc0dd9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits 32–63 of handler address.  <br /></td></tr>
+<tr class="memitem:a85a38ad3adb021b224bf4d87a0465119" id="r_a85a38ad3adb021b224bf4d87a0465119"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a85a38ad3adb021b224bf4d87a0465119">zero</a></td></tr>
+<tr class="memdesc:a85a38ad3adb021b224bf4d87a0465119"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reserved (must be zero).  <br /></td></tr>
+<tr class="memitem:ab28e82ae69032cb4ad3ec3a0be3d7129" id="r_ab28e82ae69032cb4ad3ec3a0be3d7129"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ab28e82ae69032cb4ad3ec3a0be3d7129">limit</a></td></tr>
+<tr class="memdesc:ab28e82ae69032cb4ad3ec3a0be3d7129"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of the IDT minus one.  <br /></td></tr>
+<tr class="memitem:aeca790c0426654358d031f8180e84aca" id="r_aeca790c0426654358d031f8180e84aca"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aeca790c0426654358d031f8180e84aca">base</a></td></tr>
+<tr class="memdesc:aeca790c0426654358d031f8180e84aca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Linear address of the IDT.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Interrupt Descriptor Table (x86_64) / interrupt vector dispatch for all architectures. </p>
-</div></div><!-- contents -->
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="afbea1f090434d66e8d5380ab9c81364e" name="afbea1f090434d66e8d5380ab9c81364e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afbea1f090434d66e8d5380ab9c81364e">&#9670;&#160;</a></span>IDTEntry()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">__attribute__::IDTEntry </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel default">default</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="aeca790c0426654358d031f8180e84aca" name="aeca790c0426654358d031f8180e84aca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeca790c0426654358d031f8180e84aca">&#9670;&#160;</a></span>base</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t base</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Linear address of the IDT. </p>
+
+</div>
+</div>
+<a id="a254d5bd1552992f9c17e038f363987ec" name="a254d5bd1552992f9c17e038f363987ec"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a254d5bd1552992f9c17e038f363987ec">&#9670;&#160;</a></span>ist</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t ist</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Interrupt Stack Table index. </p>
+
+</div>
+</div>
+<a id="ab28e82ae69032cb4ad3ec3a0be3d7129" name="ab28e82ae69032cb4ad3ec3a0be3d7129"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab28e82ae69032cb4ad3ec3a0be3d7129">&#9670;&#160;</a></span>limit</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t limit</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Size of the IDT minus one. </p>
+
+</div>
+</div>
+<a id="a8ae200aa7aa01feab491177777fc0dd9" name="a8ae200aa7aa01feab491177777fc0dd9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8ae200aa7aa01feab491177777fc0dd9">&#9670;&#160;</a></span>offset_high</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t offset_high</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Bits 32–63 of handler address. </p>
+
+</div>
+</div>
+<a id="a11b1c6ed61493da558a28e77fa1efee6" name="a11b1c6ed61493da558a28e77fa1efee6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a11b1c6ed61493da558a28e77fa1efee6">&#9670;&#160;</a></span>offset_low</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t offset_low</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Bits 0–15 of handler address. </p>
+
+</div>
+</div>
+<a id="a53f1fc81461c3837b1f868359f547b18" name="a53f1fc81461c3837b1f868359f547b18"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53f1fc81461c3837b1f868359f547b18">&#9670;&#160;</a></span>offset_mid</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t offset_mid</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Bits 16–31 of handler address. </p>
+
+</div>
+</div>
+<a id="a1c44289c163c1460544d6ee0900d02ba" name="a1c44289c163c1460544d6ee0900d02ba"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1c44289c163c1460544d6ee0900d02ba">&#9670;&#160;</a></span>selector</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t selector</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Code segment selector. </p>
+
+</div>
+</div>
+<a id="a5e7eb925db6957f19edc1e5d7d74c8f6" name="a5e7eb925db6957f19edc1e5d7d74c8f6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5e7eb925db6957f19edc1e5d7d74c8f6">&#9670;&#160;</a></span>type_attr</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t type_attr</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Gate type and attributes. </p>
+
+</div>
+</div>
+<a id="a85a38ad3adb021b224bf4d87a0465119" name="a85a38ad3adb021b224bf4d87a0465119"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a85a38ad3adb021b224bf4d87a0465119">&#9670;&#160;</a></span>zero</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t zero</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Reserved (must be zero). </p>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

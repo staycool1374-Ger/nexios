@@ -17,5 +17,14 @@ var dir_cfddc3e4738eb751c9ecb1dcd81b4d56 =
     [ "tlb_shootdown.hpp", "tlb__shootdown_8hpp.html", "tlb__shootdown_8hpp" ],
     [ "vmm.cpp", "vmm_8cpp.html", "vmm_8cpp" ],
     [ "vmm.hpp", "vmm_8hpp.html", "vmm_8hpp" ],
-    [ "vmm_errors.hpp", "vmm__errors_8hpp.html", "vmm__errors_8hpp" ]
+    [ "vmm_aarch64.cpp", "vmm__aarch64_8cpp.html", null ],
+    [ "vmm_cap.cpp", "vmm__cap_8cpp.html", null ],
+    [ "vmm_clone.cpp", "vmm__clone_8cpp.html", null ],
+    [ "vmm_errors.hpp", "vmm__errors_8hpp.html", "vmm__errors_8hpp" ],
+    [ "vmm_internal.hpp", "vmm__internal_8hpp.html", "vmm__internal_8hpp" ],
+    [ "vmm_map.cpp", "vmm__map_8cpp.html", null ],
+    [ "vmm_path.hpp", "vmm__path_8hpp.html", "vmm__path_8hpp" ],
+    [ "vmm_riscv64.cpp", "vmm__riscv64_8cpp.html", null ],
+    [ "vmm_teardown.cpp", "vmm__teardown_8cpp.html", null ],
+    [ "vmm_x86_64.cpp", "vmm__x86__64_8cpp.html", null ]
 ];

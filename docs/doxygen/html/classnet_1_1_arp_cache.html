@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -133,7 +133,9 @@ Collaboration diagram for net::ArpCache:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:abd0798daa96364063223838784a8925f" id="r_abd0798daa96364063223838784a8925f"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#abd0798daa96364063223838784a8925f">ArpCache</a> ()</td></tr>
+<tr class="memdesc:abd0798daa96364063223838784a8925f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Construct an empty ARP cache.  <br /></td></tr>
 <tr class="memitem:a4239af47aa869c8d61f291781b1e6dd1" id="r_a4239af47aa869c8d61f291781b1e6dd1"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4239af47aa869c8d61f291781b1e6dd1">lookup</a> (uint32_t ip, <a class="el" href="structnet_1_1_mac_addr.html">MacAddr</a> &amp;mac) const</td></tr>
+<tr class="memdesc:a4239af47aa869c8d61f291781b1e6dd1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Look up a MAC address for the given IP.  <br /></td></tr>
 <tr class="memitem:af1a9de58388688381eea4b134148a640" id="r_af1a9de58388688381eea4b134148a640"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af1a9de58388688381eea4b134148a640">update</a> (uint32_t ip, <a class="el" href="structnet_1_1_mac_addr.html">MacAddr</a> mac)</td></tr>
 <tr class="memdesc:af1a9de58388688381eea4b134148a640"><td class="mdescLeft">&#160;</td><td class="mdescRight">Update the cache with a new IP→MAC mapping.  <br /></td></tr>
 <tr class="memitem:a04c79ec3181bb756d93d4449994be6b7" id="r_a04c79ec3181bb756d93d4449994be6b7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a04c79ec3181bb756d93d4449994be6b7">remove</a> (uint32_t ip)</td></tr>
@@ -160,6 +162,8 @@ Public Member Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Construct an empty ARP cache. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -186,6 +190,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Clear all entries. </p>
+<p>Clear all cache entries. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -240,7 +245,11 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>Look up a MAC for the given IP. </p><dl class="section return"><dt>Returns</dt><dd>true if found, populates <code class="param">mac</code>. </dd></dl>
+
+<p>Look up a MAC address for the given IP. </p>
+<p>Look up a MAC for the given IP. </p><dl class="section return"><dt>Returns</dt><dd>true if found, populates <code class="param">mac</code>.</dd>
+<dd>
+true if found. </dd></dl>
 
 </div>
 </div>
@@ -260,6 +269,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Remove an entry. </p>
+<p>Remove an entry from the cache. </p>
 
 </div>
 </div>

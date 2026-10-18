@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -146,6 +146,17 @@ Namespaces</h2></td></tr>
 <tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
 <tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
 <tr class="memitem:arch_3A_3Akernel" id="r_arch_3A_3Akernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html">arch::kernel</a></td></tr>
+<tr class="memdesc:namespacearch_1_1kernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert a scoped-enum value to its underlying integer type (issue #348-D: std::to_underlying is C++23/<span class="tt">&lt;utility&gt;</span>, absent under -nostdinc — this is the hand-rolled equivalent). <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-concepts" class="groupheader"><a id="concepts" name="concepts"></a>
+Concepts</h2></td></tr>
+<tr class="memitem:arch_3A_3Akernel_3A_3AIntegral" id="r_arch_3A_3Akernel_3A_3AIntegral"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_integral.html">arch::kernel::Integral</a></td></tr>
+<tr class="memitem:arch_3A_3Akernel_3A_3ATriviallyCopiable" id="r_arch_3A_3Akernel_3A_3ATriviallyCopiable"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_trivially_copiable.html">arch::kernel::TriviallyCopiable</a></td></tr>
+<tr class="memitem:arch_3A_3Akernel_3A_3AValueType" id="r_arch_3A_3Akernel_3A_3AValueType"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_value_type.html">arch::kernel::ValueType</a></td></tr>
+<tr class="memitem:arch_3A_3Akernel_3A_3AErrorEnum" id="r_arch_3A_3Akernel_3A_3AErrorEnum"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_error_enum.html">arch::kernel::ErrorEnum</a></td></tr>
+<tr class="memitem:arch_3A_3Akernel_3A_3AEnum" id="r_arch_3A_3Akernel_3A_3AEnum"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_enum.html">arch::kernel::Enum</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Any scoped/unscoped enumeration (issue #348-D: constrains <a class="el" href="namespacekernel.html#a17e67ea7443b3545f273cbe78f7c1a12">kernel::to_underlying</a> without dragging error-enum semantics). <br /></td></tr>
+<tr class="memitem:arch_3A_3Akernel_3A_3ALockable" id="r_arch_3A_3Akernel_3A_3ALockable"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_lockable.html">arch::kernel::Lockable</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
@@ -346,10 +357,47 @@ Functions</h2></td></tr>
 <tr class="memitem:aacc243b6f6ab0bbbab1c9d54e9d1be70" id="r_aacc243b6f6ab0bbbab1c9d54e9d1be70"><td class="memItemLeft">void *&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#aacc243b6f6ab0bbbab1c9d54e9d1be70">arch::operator new[]</a> (unsigned long size, void *ptr) noexcept</td></tr>
 <tr class="memitem:a1c35ec53665b5bbb1c2a397c7fc19ee6" id="r_a1c35ec53665b5bbb1c2a397c7fc19ee6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a1c35ec53665b5bbb1c2a397c7fc19ee6">arch::panic</a> (const char *msg)</td></tr>
 <tr class="memdesc:a1c35ec53665b5bbb1c2a397c7fc19ee6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Overridable assertion macro. Default calls panic on failure.  <br /></td></tr>
+<tr class="memitem:a183ae8a5fade214f2d597e2d4093c722" id="r_a183ae8a5fade214f2d597e2d4093c722"><td class="memTemplParams" colspan="2">template&lt;Enum E&gt; </td></tr>
+<tr class="memitem:a183ae8a5fade214f2d597e2d4093c722 template"><td class="memItemLeft">constexpr auto&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a183ae8a5fade214f2d597e2d4093c722">arch::kernel::to_underlying</a> (E value) noexcept</td></tr>
 <tr class="memitem:a4793ddf07e93583f1a7eabd519a69f11" id="r_a4793ddf07e93583f1a7eabd519a69f11"><td class="memItemLeft">constexpr <a class="el" href="classarch_1_1kernel_1_1_virtual_address.html">VirtualAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a4793ddf07e93583f1a7eabd519a69f11">arch::kernel::phys_to_virt</a> (<a class="el" href="classarch_1_1kernel_1_1_physical_address.html">PhysicalAddress</a> phys) noexcept</td></tr>
 <tr class="memdesc:a4793ddf07e93583f1a7eabd519a69f11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert physical address to higher-half virtual address.  <br /></td></tr>
 <tr class="memitem:a79b39c91ac679b2cf5c2734e608df421" id="r_a79b39c91ac679b2cf5c2734e608df421"><td class="memItemLeft">constexpr <a class="el" href="classarch_1_1kernel_1_1_physical_address.html">PhysicalAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a79b39c91ac679b2cf5c2734e608df421">arch::kernel::virt_to_phys</a> (<a class="el" href="classarch_1_1kernel_1_1_virtual_address.html">VirtualAddress</a> virt) noexcept</td></tr>
 <tr class="memdesc:a79b39c91ac679b2cf5c2734e608df421"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert higher-half virtual address to physical address.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a63aa23d785e9755ac54f99dde4924b9e" id="r_a63aa23d785e9755ac54f99dde4924b9e"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:a63aa23d785e9755ac54f99dde4924b9e template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:aae0587baae55dbb6cf7f27349f656070" id="r_aae0587baae55dbb6cf7f27349f656070"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:aae0587baae55dbb6cf7f27349f656070 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#aae0587baae55dbb6cf7f27349f656070">arch::kernel::_is_integral_v&lt; bool &gt;</a> = true</td></tr>
+<tr class="memitem:a98a9420db004d1c10568a01a79158ec0" id="r_a98a9420db004d1c10568a01a79158ec0"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a98a9420db004d1c10568a01a79158ec0 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a98a9420db004d1c10568a01a79158ec0">arch::kernel::_is_integral_v&lt; char &gt;</a> = true</td></tr>
+<tr class="memitem:aba6953893c9b9a1a7e382b35814a63cc" id="r_aba6953893c9b9a1a7e382b35814a63cc"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:aba6953893c9b9a1a7e382b35814a63cc template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#aba6953893c9b9a1a7e382b35814a63cc">arch::kernel::_is_integral_v&lt; signed char &gt;</a> = true</td></tr>
+<tr class="memitem:a5248b5a5137669ddf3d1c7b681830617" id="r_a5248b5a5137669ddf3d1c7b681830617"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a5248b5a5137669ddf3d1c7b681830617 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a5248b5a5137669ddf3d1c7b681830617">arch::kernel::_is_integral_v&lt; unsigned char &gt;</a> = true</td></tr>
+<tr class="memitem:a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8" id="r_a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8">arch::kernel::_is_integral_v&lt; short &gt;</a> = true</td></tr>
+<tr class="memitem:a58554b1ed85d945662cad4a5b395a518" id="r_a58554b1ed85d945662cad4a5b395a518"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a58554b1ed85d945662cad4a5b395a518 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a58554b1ed85d945662cad4a5b395a518">arch::kernel::_is_integral_v&lt; unsigned short &gt;</a> = true</td></tr>
+<tr class="memitem:ac881e35e852f88136a6feb6d039c7451" id="r_ac881e35e852f88136a6feb6d039c7451"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:ac881e35e852f88136a6feb6d039c7451 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#ac881e35e852f88136a6feb6d039c7451">arch::kernel::_is_integral_v&lt; int &gt;</a> = true</td></tr>
+<tr class="memitem:a0cda3ddfb6b5e388b2a6269445cc55c2" id="r_a0cda3ddfb6b5e388b2a6269445cc55c2"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a0cda3ddfb6b5e388b2a6269445cc55c2 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a0cda3ddfb6b5e388b2a6269445cc55c2">arch::kernel::_is_integral_v&lt; unsigned int &gt;</a> = true</td></tr>
+<tr class="memitem:aef4ad6504507eff72676a4ff3a7900c6" id="r_aef4ad6504507eff72676a4ff3a7900c6"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:aef4ad6504507eff72676a4ff3a7900c6 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#aef4ad6504507eff72676a4ff3a7900c6">arch::kernel::_is_integral_v&lt; long &gt;</a> = true</td></tr>
+<tr class="memitem:ac4ccafe2ba8415dfa65e8b7ebe63bb2a" id="r_ac4ccafe2ba8415dfa65e8b7ebe63bb2a"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:ac4ccafe2ba8415dfa65e8b7ebe63bb2a template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#ac4ccafe2ba8415dfa65e8b7ebe63bb2a">arch::kernel::_is_integral_v&lt; unsigned long &gt;</a> = true</td></tr>
+<tr class="memitem:a9cc193c289242f41921635ee6c992371" id="r_a9cc193c289242f41921635ee6c992371"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a9cc193c289242f41921635ee6c992371 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a9cc193c289242f41921635ee6c992371">arch::kernel::_is_integral_v&lt; long long &gt;</a> = true</td></tr>
+<tr class="memitem:a9fd6bdbf7aff079a03fb30ec5605acf5" id="r_a9fd6bdbf7aff079a03fb30ec5605acf5"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a9fd6bdbf7aff079a03fb30ec5605acf5 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a9fd6bdbf7aff079a03fb30ec5605acf5">arch::kernel::_is_integral_v&lt; unsigned long long &gt;</a> = true</td></tr>
+<tr class="memitem:a251cdbeaa30e125a22a37a16cc578651" id="r_a251cdbeaa30e125a22a37a16cc578651"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:a251cdbeaa30e125a22a37a16cc578651 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a251cdbeaa30e125a22a37a16cc578651">arch::kernel::_is_reference_v</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:a3d6feca2f91997684059ed2e15305081" id="r_a3d6feca2f91997684059ed2e15305081"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:a3d6feca2f91997684059ed2e15305081 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a3d6feca2f91997684059ed2e15305081">arch::kernel::_is_reference_v&lt; T &amp; &gt;</a> = true</td></tr>
+<tr class="memitem:a87b09c48462e2fcc946b0fa1c36ab4f4" id="r_a87b09c48462e2fcc946b0fa1c36ab4f4"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:a87b09c48462e2fcc946b0fa1c36ab4f4 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html#a87b09c48462e2fcc946b0fa1c36ab4f4">arch::kernel::_is_reference_v&lt; T &amp;&amp; &gt;</a> = true</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>AArch64 PL011 UART serial driver. </p>

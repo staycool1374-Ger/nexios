@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -140,6 +140,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:aa31478530f584907b7a8d79cd60a8e46"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a virtual page to a physical page in the kernel page table.  <br /></td></tr>
 <tr class="memitem:a00badc7d69ae6df6b9ec4ece614fe766" id="r_a00badc7d69ae6df6b9ec4ece614fe766"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a00badc7d69ae6df6b9ec4ece614fe766">map_page_err</a> (uint64_t virt_addr, uint64_t phys_addr, bool user=<a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>)</td></tr>
 <tr class="memdesc:a00badc7d69ae6df6b9ec4ece614fe766"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a virtual page to a physical page with error code.  <br /></td></tr>
+<tr class="memitem:a7909805b82ca4689a2d6cafeec21218b" id="r_a7909805b82ca4689a2d6cafeec21218b"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7909805b82ca4689a2d6cafeec21218b">map_page_try</a> (uint64_t virt_addr, uint64_t phys_addr, bool user=<a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>)</td></tr>
+<tr class="memdesc:a7909805b82ca4689a2d6cafeec21218b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fallible kernel-table map worker (issue #325-B): the map_page body with walk allocation failures surfaced instead of silently dropped (same contract shape as map_page_in_pml4_try).  <br /></td></tr>
 <tr class="memitem:a0bf86a0e97402ac5e989fa1aa55a0df5" id="r_a0bf86a0e97402ac5e989fa1aa55a0df5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0bf86a0e97402ac5e989fa1aa55a0df5">unmap_page</a> (uint64_t virt_addr)</td></tr>
 <tr class="memdesc:a0bf86a0e97402ac5e989fa1aa55a0df5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps a virtual page.  <br /></td></tr>
 <tr class="memitem:af16c2a20fa00db35b4aea6f91227818b" id="r_af16c2a20fa00db35b4aea6f91227818b"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#af16c2a20fa00db35b4aea6f91227818b">unmap_page_err</a> (uint64_t virt_addr)</td></tr>
@@ -158,18 +160,26 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:ab1e588a7330966cfa208fdb3255ed778"><td class="mdescLeft">&#160;</td><td class="mdescRight">Converge a child PML4's kernel half (entries 256..511) toward <code class="param">src_pml4</code> (issue #96, kernel-half merge). Recursive top-down walk (PML4→PDPT→PD→PT): wherever the child lacks an entry present in the source, the entry is copied by value (link semantics — lower tables stay shared, never duplicated); entries already present are left untouched (idempotent); huge/leaf entries are copied by value. Performs ZERO allocations, so it cannot OOM by construction; the bool preserves the failure contract for future allocating revisions (callers must destroy the child table on false). No locking: single-threaded, runs before the first CR3 switch to the child (same window MP-7 uses).  <br /></td></tr>
 <tr class="memitem:aaea3e29ad09f4191bd7ad1bf1fcfdeb9" id="r_aaea3e29ad09f4191bd7ad1bf1fcfdeb9"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aaea3e29ad09f4191bd7ad1bf1fcfdeb9">snapshot_kernel_template</a> ()</td></tr>
 <tr class="memdesc:aaea3e29ad09f4191bd7ad1bf1fcfdeb9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot the live kernel PML4's kernel half (entries 256..511) into the bring-up template (issue #96). Call ONCE at end of bring-up, before the first task spawns.  <br /></td></tr>
+<tr class="memitem:aac50a31b8a3d1e795a90cbea690fb80d" id="r_aac50a31b8a3d1e795a90cbea690fb80d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aac50a31b8a3d1e795a90cbea690fb80d">harden_kernel_half</a> ()</td></tr>
+<tr class="memdesc:aac50a31b8a3d1e795a90cbea690fb80d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Harden boot-established kernel-half permissions to W^X (issue #376 epic remainder): text RX, rodata RO+NX, data/bss RW+NX over the linker section ranges. Splits boot huge/block entries to 4K as needed (split fills preserve flags, see the arch notes), then applies per-page bits. TLB flushed per page as each leaf reaches its final state, plus one full flush at the end. Call ONCE at end of bring-up after PMM/VMM init and BEFORE <a class="el" href="#aaea3e29ad09f4191bd7ad1bf1fcfdeb9" title="Snapshot the live kernel PML4&#39;s kernel half (entries 256..511) into the bring-up template (issue #96)...">snapshot_kernel_template()</a> so the template and every later clone_kernel_pml4 inherit hardened flags by value. Panics on any mapping failure (a half-hardened root must never boot). Single-threaded BSP, IRQs off; no locks taken.  <br /></td></tr>
 <tr class="memitem:a1c943ca077e476e51633526b6c4a67d5" id="r_a1c943ca077e476e51633526b6c4a67d5"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a1c943ca077e476e51633526b6c4a67d5">kernel_half_equal</a> (uint64_t a_pml4, uint64_t b_pml4)</td></tr>
 <tr class="memdesc:a1c943ca077e476e51633526b6c4a67d5"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when <code class="param">a_pml4</code> and <code class="param">b_pml4</code> agree on every kernel-half entry (256..511), compared recursively through shared tables (present+equal u64, or both-absent, at each level).  <br /></td></tr>
 <tr class="memitem:a07d72a53086737838d0072b7b12daeb9" id="r_a07d72a53086737838d0072b7b12daeb9"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a07d72a53086737838d0072b7b12daeb9">kernel_half_matches_template</a> (uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:a07d72a53086737838d0072b7b12daeb9"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when <code class="param">pml4_phys</code> matches the bring-up template on every kernel-half entry (diagnostics + tests; drift from legitimate late mappings is NOT a failure here).  <br /></td></tr>
 <tr class="memitem:ab4a1174de0ca4f1aab88831fc9439847" id="r_ab4a1174de0ca4f1aab88831fc9439847"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab4a1174de0ca4f1aab88831fc9439847">assert_kernel_half_converged</a> (uint64_t child_pml4)</td></tr>
 <tr class="memdesc:ab4a1174de0ca4f1aab88831fc9439847"><td class="mdescLeft">&#160;</td><td class="mdescRight">Halt unless <code class="param">child_pml4</code> converged to the LIVE kernel PML4's kernel half (issue #96, structural audit). Panics (debug AND release) on mismatch; template drift is debug-logged only — legitimate late mappings must converge, not panic (paper §4 row 2).  <br /></td></tr>
-<tr class="memitem:a6c283a922356a4a1b0a157a996a2bb03" id="r_a6c283a922356a4a1b0a157a996a2bb03"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6c283a922356a4a1b0a157a996a2bb03">map_page_in_pml4</a> (uint64_t virt_addr, uint64_t phys_addr, bool user, uint64_t pml4_phys)</td></tr>
-<tr class="memdesc:a6c283a922356a4a1b0a157a996a2bb03"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a page into a specific page table (not the kernel one).  <br /></td></tr>
 <tr class="memitem:a39e966b6069fb70b5f4177d3fd6b58cb" id="r_a39e966b6069fb70b5f4177d3fd6b58cb"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a39e966b6069fb70b5f4177d3fd6b58cb">map_page_in_pml4</a> (uint64_t virt_addr, uint64_t phys_addr, bool user, bool executable, uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:a39e966b6069fb70b5f4177d3fd6b58cb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a page into a specific page table with explicit W^X permission (VULN-H1). When <code class="param">executable</code> is false the architectural NX bit is set (x86_64 bit 63, aarch64 bit 54) or the X bit is dropped (riscv64), so the page cannot execute.  <br /></td></tr>
-<tr class="memitem:a60a557d98925cd250a9180effab1e774" id="r_a60a557d98925cd250a9180effab1e774"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a60a557d98925cd250a9180effab1e774">map_page_in_pml4_err</a> (uint64_t virt_addr, uint64_t phys_addr, bool user, uint64_t pml4_phys)</td></tr>
-<tr class="memdesc:a60a557d98925cd250a9180effab1e774"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a page into a specific page table with error code.  <br /></td></tr>
+<tr class="memitem:a30df343754060210f6315b7a069e3368" id="r_a30df343754060210f6315b7a069e3368"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a30df343754060210f6315b7a069e3368">map_page_ro_in_pml4</a> (uint64_t virt_addr, uint64_t phys_addr, bool executable, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:a30df343754060210f6315b7a069e3368"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a user page read-only with explicit executability (issue #271 P0 — retained-golden primitive). The page is first mapped through the standard path (identical table allocation), then the write permission is cleared with the arch RO encoding (x86_64 RW-clear; aarch64 AP_USER | AP_RO = EL0 read-only; riscv64 W-clear); NX/UXN follows <code class="param">executable</code> like the 5-arg overload. First run and reruns map through THIS function so perms are identical.  <br /></td></tr>
+<tr class="memitem:aa99fac0dda34fefd95a4d0f6cf9fcf9c" id="r_aa99fac0dda34fefd95a4d0f6cf9fcf9c"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#aa99fac0dda34fefd95a4d0f6cf9fcf9c">pte_is_ro_in_pml4</a> (uint64_t virt_addr, uint64_t pml4_phys, bool *executable_out)</td></tr>
+<tr class="memdesc:aa99fac0dda34fefd95a4d0f6cf9fcf9c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test inspector: reports whether the mapped leaf is read-only per the RO encoding (walk-only, never allocates). <code class="param">executable_out</code> is written ONLY when the leaf is RO (callers must not read it on a false return).  <br /></td></tr>
+<tr class="memitem:aebc2feb36e3e2888c702c96e9c76dad1" id="r_aebc2feb36e3e2888c702c96e9c76dad1"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#aebc2feb36e3e2888c702c96e9c76dad1">pte_is_executable_in_pml4</a> (uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:aebc2feb36e3e2888c702c96e9c76dad1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test inspector: reports whether the mapped leaf is executable per the arch NX encoding (walk-only, never allocates; issue #325-D NX pinning). x86_64: NX bit 63 clear; aarch64: UXN (bit 54) clear; riscv64: X bit set.  <br /></td></tr>
+<tr class="memitem:a42fa198c36939ca6242e7c20f63637fb" id="r_a42fa198c36939ca6242e7c20f63637fb"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a42fa198c36939ca6242e7c20f63637fb">remap_range_ro_in_pml4</a> (uint64_t pml4_phys, uint64_t vaddr, uint64_t size, bool executable)</td></tr>
+<tr class="memdesc:a42fa198c36939ca6242e7c20f63637fb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remap every mapped page in [vaddr, vaddr+size) read-only through the RO primitive (issue #271 P0 — load paths and the P2 rerun builder share this). Unmapped holes are skipped; bounds are page-aligned outward with overflow guard (empty range → no-op).  <br /></td></tr>
+<tr class="memitem:a2d5e78f6e99731337d8fbb2da32d9a02" id="r_a2d5e78f6e99731337d8fbb2da32d9a02"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2d5e78f6e99731337d8fbb2da32d9a02">map_page_in_pml4_err</a> (uint64_t virt_addr, uint64_t phys_addr, bool user, uint64_t pml4_phys, bool executable=true)</td></tr>
+<tr class="memdesc:a2d5e78f6e99731337d8fbb2da32d9a02"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a page into a specific page table with error code.  <br /></td></tr>
 <tr class="memitem:a41f6aadd3a5d784d8324a8b1e0e11789" id="r_a41f6aadd3a5d784d8324a8b1e0e11789"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a41f6aadd3a5d784d8324a8b1e0e11789">get_kernel_pml4</a> ()</td></tr>
 <tr class="memdesc:a41f6aadd3a5d784d8324a8b1e0e11789"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the physical address of the kernel PML4 table.  <br /></td></tr>
 <tr class="memitem:a14814ba2ea03a0fef26664c62410c8de" id="r_a14814ba2ea03a0fef26664c62410c8de"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a14814ba2ea03a0fef26664c62410c8de">deep_copy_user_pages</a> (uint64_t src_pml4, uint64_t dst_pml4)</td></tr>
@@ -180,30 +190,48 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:ac75e4a39be64ad3c364d4321c1a621e1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees all user-space pages and page tables with error code.  <br /></td></tr>
 <tr class="memitem:af38a18ef6db1e4e014d7c5aee0b71aaf" id="r_af38a18ef6db1e4e014d7c5aee0b71aaf"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#af38a18ef6db1e4e014d7c5aee0b71aaf">map_frame_from_cap</a> (class <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">cap::FrameCap</a> *fc, uint64_t virt_addr, bool user, uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:af38a18ef6db1e4e014d7c5aee0b71aaf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps the frame(s) owned by a FrameCap into <code class="param">pml4_phys</code>. Refuses a revoked FrameCap (ROADMAP 0.4.1 CSpace) — mapping capability-gated memory requires a live, non-revoked cap.  <br /></td></tr>
+<tr class="memitem:a36e0b70e1680756f730909d50759c2d8" id="r_a36e0b70e1680756f730909d50759c2d8"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a36e0b70e1680756f730909d50759c2d8">map_frame_from_cap_err</a> (class <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">cap::FrameCap</a> *fc, uint64_t virt_addr, bool user, uint64_t pml4_phys, bool executable=<a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>)</td></tr>
+<tr class="memdesc:a36e0b70e1680756f730909d50759c2d8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps the frame(s) owned by a FrameCap with error code and transactional rollback (issue #325-A): when a page fails mid-range, the already-mapped prefix is unmapped again, so the caller observes all-or-nothing.  <br /></td></tr>
 <tr class="memitem:a9d3b6e67113f63864a37d28320a7bc28" id="r_a9d3b6e67113f63864a37d28320a7bc28"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a9d3b6e67113f63864a37d28320a7bc28">unmap_frame_from_cap</a> (uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:a9d3b6e67113f63864a37d28320a7bc28"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps one page previously mapped via <a class="el" href="#af38a18ef6db1e4e014d7c5aee0b71aaf" title="Maps the frame(s) owned by a FrameCap into pml4_phys. Refuses a revoked FrameCap (ROADMAP 0....">map_frame_from_cap()</a>.  <br /></td></tr>
+<tr class="memitem:addd04cbcf116823799ad42392fe20c45" id="r_addd04cbcf116823799ad42392fe20c45"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#addd04cbcf116823799ad42392fe20c45">unmap_frame_from_cap_err</a> (class <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">cap::FrameCap</a> *fc, uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:addd04cbcf116823799ad42392fe20c45"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps one frame-mapped page with error code (issue #366 Q2b). Revocation is NOT checked: unmap-after-revoke must work (the revoke path itself unmaps revoked caps).  <br /></td></tr>
 <tr class="memitem:af2f11f9011cb503e77cdfcdd2c26618c" id="r_af2f11f9011cb503e77cdfcdd2c26618c"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#af2f11f9011cb503e77cdfcdd2c26618c">map_mmio_from_cap</a> (class <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *mmio, uint64_t virt_addr, bool user, uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:af2f11f9011cb503e77cdfcdd2c26618c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps an MmioCap's memory BAR range into <code class="param">pml4_phys</code> (v0.4.2, issue #3). Refuses a revoked cap and IO-type ranges. Page-granular: the BAR tail is rounded up to a full page.  <br /></td></tr>
+<tr class="memitem:a874bb125e410504e426afb9971015d1f" id="r_a874bb125e410504e426afb9971015d1f"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a874bb125e410504e426afb9971015d1f">map_mmio_from_cap_err</a> (class <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *mmio, uint64_t virt_addr, bool user, uint64_t pml4_phys, bool executable=<a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>)</td></tr>
+<tr class="memdesc:a874bb125e410504e426afb9971015d1f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps an MmioCap's BAR range with error code and transactional rollback (issue #325-A): same all-or-nothing contract as map_frame_from_cap_err.  <br /></td></tr>
 <tr class="memitem:a4aba9fc6e5febed05a0dc3edfb0dc22f" id="r_a4aba9fc6e5febed05a0dc3edfb0dc22f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4aba9fc6e5febed05a0dc3edfb0dc22f">unmap_mmio_from_cap</a> (class <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *mmio, uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:a4aba9fc6e5febed05a0dc3edfb0dc22f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps an MmioCap's memory BAR range previously mapped via <a class="el" href="#af2f11f9011cb503e77cdfcdd2c26618c" title="Maps an MmioCap&#39;s memory BAR range into pml4_phys (v0.4.2, issue #3). Refuses a revoked cap and IO-ty...">map_mmio_from_cap()</a>.  <br /></td></tr>
+<tr class="memitem:ac3620fa463b4b1321bf9296e4bfd35e4" id="r_ac3620fa463b4b1321bf9296e4bfd35e4"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac3620fa463b4b1321bf9296e4bfd35e4">unmap_mmio_from_cap_err</a> (class <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *mmio, uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:ac3620fa463b4b1321bf9296e4bfd35e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps an MmioCap BAR range with error code (issue #366 Q2b). Two-pass (verify every leaf present, then clear all) so a hole reports NOT_MAPPED with nothing cleared — no rollback needed and no partial unmap. Revocation/IO-type are NOT checked (see unmap_frame_from_cap_err).  <br /></td></tr>
 <tr class="memitem:a87e909fad18b6d7d49eb348c5183cbca" id="r_a87e909fad18b6d7d49eb348c5183cbca"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a87e909fad18b6d7d49eb348c5183cbca">unmap_page_in_pml4</a> (uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:a87e909fad18b6d7d49eb348c5183cbca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps one user page previously mapped into <code class="param">pml4_phys</code> (issue #95: shared-library RO pages must be unmapped — never freed — by each task teardown; the cache owns shared phys lifetime by refcount). Clears the PT leaf and flushes the VA; huge entries and absent tables are left alone.  <br /></td></tr>
+<tr class="memitem:a818b86723c8492766747bd3dade54dc6" id="r_a818b86723c8492766747bd3dade54dc6"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a818b86723c8492766747bd3dade54dc6">unmap_page_in_pml4_err</a> (uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
+<tr class="memdesc:a818b86723c8492766747bd3dade54dc6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps one user page with error code (issue #366 Q2b).  <br /></td></tr>
 <tr class="memitem:a32036fcad3f6784d43cef83b23423d49" id="r_a32036fcad3f6784d43cef83b23423d49"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a32036fcad3f6784d43cef83b23423d49">virt_to_phys_in_pml4</a> (uint64_t virt_addr, uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:a32036fcad3f6784d43cef83b23423d49"><td class="mdescLeft">&#160;</td><td class="mdescRight">Translates a virtual address to a physical address using a specific PML4.  <br /></td></tr>
 <tr class="memitem:a464e326efd7e29354e19617ca99d9e86" id="r_a464e326efd7e29354e19617ca99d9e86"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a464e326efd7e29354e19617ca99d9e86">virt_to_phys_in_pml4_err</a> (uint64_t virt_addr, uint64_t pml4_phys, uint64_t &amp;out_phys_addr)</td></tr>
 <tr class="memdesc:a464e326efd7e29354e19617ca99d9e86"><td class="mdescLeft">&#160;</td><td class="mdescRight">Translates a virtual address to a physical address using a specific PML4 with error code.  <br /></td></tr>
+<tr class="memitem:a118d59a51184acb5eae3f473f195ee59" id="r_a118d59a51184acb5eae3f473f195ee59"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a118d59a51184acb5eae3f473f195ee59">set_hhdm_modified</a> ()</td></tr>
+<tr class="memdesc:a118d59a51184acb5eae3f473f195ee59"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the HHDM modification flag (issue #366: the single SET path — release store, pairs with the acquire <span class="tt"><a class="el" href="#a70bf58e478f1a27ad8e1badfeb9fc1f2" title="Returns true if any test has modified the HHDM page tables since the last clear/take call (acquire: p...">hhdm_was_modified</a></span> / acq_rel <span class="tt"><a class="el" href="#ac5cc5b13afcd183532d0f49f56d164d5" title="Atomically take the HHDM flag: returns the previous value and clears it in one step,...">take_hhdm_modified</a></span> reads; callable only from the test-active arm path and the flag-semantics test; set-true is idempotent, no gate inside).  <br /></td></tr>
 <tr class="memitem:a70bf58e478f1a27ad8e1badfeb9fc1f2" id="r_a70bf58e478f1a27ad8e1badfeb9fc1f2"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a70bf58e478f1a27ad8e1badfeb9fc1f2">hhdm_was_modified</a> ()</td></tr>
 <tr class="memdesc:a70bf58e478f1a27ad8e1badfeb9fc1f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true if any test has modified the HHDM page tables since the last clear/take call (acquire: pairs with the release store in map_page).  <br /></td></tr>
 <tr class="memitem:a301ec275afeeb7bfecb93073618e67ea" id="r_a301ec275afeeb7bfecb93073618e67ea"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a301ec275afeeb7bfecb93073618e67ea">clear_hhdm_modified</a> ()</td></tr>
 <tr class="memdesc:a301ec275afeeb7bfecb93073618e67ea"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset the HHDM modification flag (called after PD restore).  <br /></td></tr>
 <tr class="memitem:ac5cc5b13afcd183532d0f49f56d164d5" id="r_ac5cc5b13afcd183532d0f49f56d164d5"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ac5cc5b13afcd183532d0f49f56d164d5">take_hhdm_modified</a> ()</td></tr>
 <tr class="memdesc:ac5cc5b13afcd183532d0f49f56d164d5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Atomically take the HHDM flag: returns the previous value and clears it in one step, so a set landing after the take is preserved for the next restore (fail-safe over-restore instead of fail-dangerous skip). Used by snapshot_restore.  <br /></td></tr>
+<tr class="memitem:a93f1797c071f0164b440ae92fa6b4ff2" id="r_a93f1797c071f0164b440ae92fa6b4ff2"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a93f1797c071f0164b440ae92fa6b4ff2">set_identity_modified</a> ()</td></tr>
+<tr class="memdesc:a93f1797c071f0164b440ae92fa6b4ff2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the identity modification flag (issue #366: same single-SET-path contract as the HHDM setter above).  <br /></td></tr>
 <tr class="memitem:a31597ed436d671994e03be2f5aa6de21" id="r_a31597ed436d671994e03be2f5aa6de21"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a31597ed436d671994e03be2f5aa6de21">identity_was_modified</a> ()</td></tr>
 <tr class="memdesc:a31597ed436d671994e03be2f5aa6de21"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true if any test has modified the low identity page tables since the last clear/take call.  <br /></td></tr>
 <tr class="memitem:a878fec96367292e290701c0827eb103e" id="r_a878fec96367292e290701c0827eb103e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a878fec96367292e290701c0827eb103e">clear_identity_modified</a> ()</td></tr>
 <tr class="memdesc:a878fec96367292e290701c0827eb103e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset the identity modification flag (called after PD restore).  <br /></td></tr>
 <tr class="memitem:a287c73fed6d835188195b1992850d1ff" id="r_a287c73fed6d835188195b1992850d1ff"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a287c73fed6d835188195b1992850d1ff">take_identity_modified</a> ()</td></tr>
 <tr class="memdesc:a287c73fed6d835188195b1992850d1ff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Atomically take the identity flag (same contract as the HHDM take above). Used by snapshot_restore.  <br /></td></tr>
+<tr class="memitem:aea1a1d9ecd25b9454761b49b2b1c328d" id="r_aea1a1d9ecd25b9454761b49b2b1c328d"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#aea1a1d9ecd25b9454761b49b2b1c328d">map_phys_range_try</a> (uint64_t virt_addr, uint64_t phys_addr, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> page_count, bool user, uint64_t pml4_phys, bool executable)</td></tr>
+<tr class="memdesc:aea1a1d9ecd25b9454761b49b2b1c328d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fallible contiguous-range mapper shared by the cap-map transactions (issue #325-A): maps <code class="param">page_count</code> pages from <code class="param">phys_addr</code> at <code class="param">virt_addr</code>, rolling back the mapped prefix when a page fails mid-range (all-or-nothing).  <br /></td></tr>
+<tr class="memitem:ab610584e8dc74832cfb4f19965e1c175" id="r_ab610584e8dc74832cfb4f19965e1c175"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab610584e8dc74832cfb4f19965e1c175">test_table_alloc_fail_snapshot_reset</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ab610584e8dc74832cfb4f19965e1c175"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clears injector state for snapshot restore (issue #361). Unconditional decl so <a class="el" href="test__isolate_8cpp.html" title="Test isolation snapshot/restore implementation.">test_isolate.cpp</a> needs no #if; release def is a no-op.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
@@ -214,7 +242,9 @@ Static Public Attributes</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Virtual memory manager — maps virtual to physical pages. </p>
-<dl class="section note"><dt>Note</dt><dd>Page-walk depth is fixed per architecture (4 levels for x86_64/aarch64, 3 levels for riscv64 Sv39). Huge-page split (512 iterations) occurs at most once per 2 MB region. Both walks are bounded, meeting hard-RT WCET requirements for map_page / map_page_in_pml4. </dd>
+<dl class="section note"><dt>Note</dt><dd>Naming (issue #363): <span class="tt">pml4</span> names the page-table ROOT cross-arch (x86_64 PML4, aarch64 L0, riscv64 Sv39 L0) — not the Intel format. </dd>
+<dd>
+Page-walk depth is fixed per architecture (4 levels for x86_64/aarch64, 3 levels for riscv64 Sv39). Huge-page split (512 iterations) occurs at most once per 2 MB region. Both walks are bounded, meeting hard-RT WCET requirements for map_page / map_page_in_pml4. </dd>
 <dd>
 Supports user/kernel page flags, TLB flush after each mapping. </dd></dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
@@ -242,6 +272,7 @@ Supports user/kernel page flags, TLB flush after each mapping. </dd></dl>
 </div><div class="memdoc">
 
 <p>Halt unless <code class="param">child_pml4</code> converged to the LIVE kernel PML4's kernel half (issue #96, structural audit). Panics (debug AND release) on mismatch; template drift is debug-logged only — legitimate late mappings must converge, not panic (paper §4 row 2). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only (exec/load paths + tests). SMP: pre-CR3/publish window (panics both builds on mismatch). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -275,6 +306,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Reset the HHDM modification flag (called after PD restore). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (lock-free atomics). Context: test-only (snapshot restore). SMP: test-serialized. </dd></dl>
 
 </div>
 </div>
@@ -302,6 +334,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Reset the identity modification flag (called after PD restore). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (lock-free atomics). Context: test-only (snapshot restore). SMP: test-serialized. </dd></dl>
 
 </div>
 </div>
@@ -330,9 +363,9 @@ Here is the call graph for this function:</div>
 
 <p>Creates a fresh PML4: zeroes user entries (0-255), copies kernel entries (256-511). Used during exec/load — NOT for fork (which needs parent user entries). </p>
 <p>Create a new PML4: zeroes user entries, copies kernel entries.</p>
-<dl class="section return"><dt>Returns</dt><dd>Physical address of the new PML4, or 0 on failure.</dd>
-<dd>
-Physical address of new PML4, or 0 on failure. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address of the new PML4, or 0 on failure. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (VMM-internal; <a class="el" href="structkernel_1_1_task_control_block.html#a1443c8caa63e4d8af39ad150f91d413d" title="Clones the current task — creates a child with copied context.">TaskControlBlock::clone</a> runs without IrqGuard here). Context: kernel-only (exec/spawn/fork paths). SMP: child tables are not live on any CPU (pre-CR3/publish window) — safety rests on non-publication, not locking.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address of new PML4, or 0 on failure. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -360,7 +393,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -373,7 +406,8 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as clone_kernel_pml4 (Lock: none; Context: kernel-only; SMP: pre-publish window).</dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[out]</td><td class="paramname">out_pml4_phys</td><td>Physical address of new PML4 on success. </td></tr>
@@ -415,9 +449,9 @@ Here is the call graph for this function:</div>
 
 <p>Returns the physical address of the current PML4 table. </p>
 <p>Read the current PML4 physical address from CR3 (or equivalent).</p>
-<dl class="section return"><dt>Returns</dt><dd>Physical address of PML4.</dd>
-<dd>
-Physical address of the active PML4. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address of PML4. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: any-task (register read). SMP: N/A.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address of the active PML4. </dd></dl>
 
 </div>
 </div>
@@ -463,9 +497,9 @@ Physical address of the active PML4. </dd></dl>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>true on success, false on OOM (partial state may remain).</dd>
-<dd>
-true on success, false on OOM. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success, false on OOM or on a user-range huge/block entry (issue #325-E: by-value copy would alias one writable page parent/child — fail closed instead). Partial state may remain on false, but every installed table and data page is USER-owned, so the caller MUST destroy the child (<a class="el" href="structkernel_1_1_task_control_block.html#ab52ff8402135c9d2a8ac6df1c5346f5e" title="Destroys a TCB and returns its MemPool block (H-5: single pool-aware teardown path replacing raw dele...">TaskControlBlock::destroy</a> → cleanup → free_user_pages reclaims all partials — <a class="el" href="task_8cpp.html" title="TaskControlBlock lifecycle: creation, initialisation, cloning, and cleanup.">task.cpp</a> documents this invariant). Leaf flags (USER/write/dirty/accessed/NX) copy verbatim; non-RAM frames are skipped (child leaf stays unmapped). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (VMM-internal; <a class="el" href="structkernel_1_1_task_control_block.html#a1443c8caa63e4d8af39ad150f91d413d" title="Clones the current task — creates a child with copied context.">TaskControlBlock::clone</a> runs without IrqGuard here). Context: kernel-only (fork path). SMP: source and destination are not live on any CPU (pre-publish window); the caller MUST destroy the child on false (see above).</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success, false on OOM. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -499,6 +533,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Free all user-space pages and page tables owned by a user PML4. Skips kernel-owned pages (<a class="el" href="classkernel_1_1_p_m_m.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership.">PMM::is_user_page</a> owner-bit check). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (VMM-internal). Context: kernel-only, dead-task teardown (cleanup/reap/ELF error paths). SMP: CPU0-pinned + dead-state filter — freed tables are never reactivated (see the free-vs-use note on merge_kernel_half).</dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">pml4_phys</td><td>Physical address of the user PML4 to tear down.</td></tr>
@@ -533,13 +568,21 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>Frees all user-space pages and page tables with error code. </p>
 <p>Free all user pages from a PML4 with error-code return.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the user PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code (always VMM_ERR_OK: teardown walks with create=false and frees; it cannot fail). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as free_user_pages (Lock: none; Context: kernel-only dead-task teardown; SMP: CPU0-pinned + dead-state filter).</dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">pml4_phys</td><td>Physical address of the user PML4. </td></tr>
@@ -581,6 +624,41 @@ Here is the call graph for this function:</div>
 
 <p>Return the physical address of the kernel PML4 table. </p>
 <dl class="section return"><dt>Returns</dt><dd>Physical address of the kernel page-table root. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: any-task (plain load). SMP: N/A. </dd></dl>
+
+</div>
+</div>
+<a id="aac50a31b8a3d1e795a90cbea690fb80d" name="aac50a31b8a3d1e795a90cbea690fb80d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac50a31b8a3d1e795a90cbea690fb80d">&#9670;&#160;</a></span>harden_kernel_half()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::harden_kernel_half </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Harden boot-established kernel-half permissions to W^X (issue #376 epic remainder): text RX, rodata RO+NX, data/bss RW+NX over the linker section ranges. Splits boot huge/block entries to 4K as needed (split fills preserve flags, see the arch notes), then applies per-page bits. TLB flushed per page as each leaf reaches its final state, plus one full flush at the end. Call ONCE at end of bring-up after PMM/VMM init and BEFORE <a class="el" href="#aaea3e29ad09f4191bd7ad1bf1fcfdeb9" title="Snapshot the live kernel PML4&#39;s kernel half (entries 256..511) into the bring-up template (issue #96)...">snapshot_kernel_template()</a> so the template and every later clone_kernel_pml4 inherit hardened flags by value. Panics on any mapping failure (a half-hardened root must never boot). Single-threaded BSP, IRQs off; no locks taken. </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: boot-only (single call). SMP: boot-single-CPU. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_aac50a31b8a3d1e795a90cbea690fb80d_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_aac50a31b8a3d1e795a90cbea690fb80d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
 
 </div>
 </div>
@@ -608,6 +686,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Returns true if any test has modified the HHDM page tables since the last clear/take call (acquire: pairs with the release store in map_page). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (lock-free atomics). Context: test-only. SMP: test-serialized. </dd></dl>
 
 </div>
 </div>
@@ -635,6 +714,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Returns true if any test has modified the low identity page tables since the last clear/take call. </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (lock-free atomics). Context: test-only. SMP: test-serialized. </dd></dl>
 
 </div>
 </div>
@@ -662,7 +742,8 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialises the <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> and sets up the kernel page tables. </p>
-<p>Initialise the <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a>: capture current PML4, zero residual bootloader entries. </p>
+<p>Initialise the <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a>: capture current PML4, zero residual bootloader entries.</p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: boot-only (<a class="el" href="kernel_8cpp.html">kernel.cpp</a> bring-up, pre-scheduler). SMP: boot-single-CPU. </dd></dl>
 
 </div>
 </div>
@@ -684,21 +765,21 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>Initialises the <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> with error code. </p>
 <p>Initialise <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> with error-code return.</p>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code.</dd>
-<dd>
-VMM_ERR_OK. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code (always VMM_ERR_OK: init only zeroes boot-constructed tables and allocates nothing). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: boot-only (same call window as init). SMP: boot-single-CPU.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>VMM_ERR_OK. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_abeb64ef713899d8f0a29c24d1a3b4be6_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_abeb64ef713899d8f0a29c24d1a3b4be6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -725,12 +806,13 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>True when <code class="param">a_pml4</code> and <code class="param">b_pml4</code> agree on every kernel-half entry (256..511), compared recursively through shared tables (present+equal u64, or both-absent, at each level). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: any-task (diagnostics + tests; pure compare). SMP: N/A. </dd></dl>
 
 </div>
 </div>
@@ -752,12 +834,13 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>True when <code class="param">pml4_phys</code> matches the bring-up template on every kernel-half entry (diagnostics + tests; drift from legitimate late mappings is NOT a failure here). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: any-task (diagnostics + tests). SMP: N/A. </dd></dl>
 
 </div>
 </div>
@@ -793,7 +876,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -810,11 +893,71 @@ Here is the call graph for this function:</div>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>true when every frame was mapped, false on a revoked cap or a zero frame. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Mapped non-executable (issue #325-D NX policy). </dd>
+<dd>
+Concurrency/caller contract (issue #366): Lock: none (VMM-internal; the cap pin is the caller's). Context: kernel-only. SMP: CPU0-pinned user targets; the _err twin rolls back on mid-range failure (target must be unmapped). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_af38a18ef6db1e4e014d7c5aee0b71aaf_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_af38a18ef6db1e4e014d7c5aee0b71aaf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
+</div>
+
+</div>
+</div>
+<a id="a36e0b70e1680756f730909d50759c2d8" name="a36e0b70e1680756f730909d50759c2d8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a36e0b70e1680756f730909d50759c2d8">&#9670;&#160;</a></span>map_frame_from_cap_err()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a> kernel::VMM::map_frame_from_cap_err </td>
+          <td>(</td>
+          <td class="paramtype">class <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">cap::FrameCap</a> *</td>          <td class="paramname"><span class="paramname"><em>fc</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>executable</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Maps the frame(s) owned by a FrameCap with error code and transactional rollback (issue #325-A): when a page fails mid-range, the already-mapped prefix is unmapped again, so the caller observes all-or-nothing. </p>
+<dl class="section warning"><dt>Warning</dt><dd>Requires an unmapped target range: rollback clears every leaf it installed and cannot distinguish a pre-existing live mapping (overlapping ranges are a caller bug). </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>VMM_ERR_OK when every frame was mapped; VMM_ERR_INVALID_ADDR on a null cap, misaligned base, wrap-around range, or IO-bar misuse; VMM_ERR_REVOKED on a revoked cap; VMM_ERR_EMPTY_RANGE on a zero frame; VMM_ERR_PAGE_ALLOC when a table page allocation fails mid-walk (prefix rolled back). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>NX policy (issue #325-D): cap-mapped memory defaults non-executable (no production caller executes from it); pass executable=true only for code. </dd>
+<dd>
+Concurrency/caller contract (issue #366): same as map_frame_from_cap (Lock: none; Context: kernel-only; SMP: CPU0-pinned, unmapped-target precondition). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a36e0b70e1680756f730909d50759c2d8_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a36e0b70e1680756f730909d50759c2d8_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -851,7 +994,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -868,11 +1011,71 @@ Here is the call graph for this function:</div>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>true when every page was mapped, false on a revoked/IO-type cap or a zero range. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Mapped non-executable (issue #325-D NX policy). </dd>
+<dd>
+Concurrency/caller contract (issue #366): Lock: none (VMM-internal; the cap pin is the caller's). Context: kernel-only. SMP: as map_frame_from_cap (CPU0-pinned, unmapped-target precondition on the _err twin). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_af2f11f9011cb503e77cdfcdd2c26618c_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_af2f11f9011cb503e77cdfcdd2c26618c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="a874bb125e410504e426afb9971015d1f" name="a874bb125e410504e426afb9971015d1f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a874bb125e410504e426afb9971015d1f">&#9670;&#160;</a></span>map_mmio_from_cap_err()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a> kernel::VMM::map_mmio_from_cap_err </td>
+          <td>(</td>
+          <td class="paramtype">class <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *</td>          <td class="paramname"><span class="paramname"><em>mmio</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>executable</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Maps an MmioCap's BAR range with error code and transactional rollback (issue #325-A): same all-or-nothing contract as map_frame_from_cap_err. </p>
+<dl class="section warning"><dt>Warning</dt><dd>Requires an unmapped target range (same rollback caveat as map_frame_from_cap_err). </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>VMM_ERR_OK when every page was mapped; error codes as in map_frame_from_cap_err (IO-type BAR → VMM_ERR_INVALID_ADDR). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>NX policy (issue #325-D): device memory is never executable. </dd>
+<dd>
+Concurrency/caller contract (issue #366): same as map_frame_from_cap_err (Lock: none; Context: kernel-only; SMP: CPU0-pinned, unmapped-target precondition). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a874bb125e410504e426afb9971015d1f_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a874bb125e410504e426afb9971015d1f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -910,7 +1113,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Maps a virtual page to a physical page in the kernel page table. </p>
-<p>Map a 4 KiB page in the kernel page table.</p>
+<p>Map a virtual page in the kernel table (legacy void wrapper: behavior-identical to the pre-#325 revision — walk allocation failures stay silent drops with a one-time log; fallible callers use map_page_try / map_page_err).</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address (page-aligned). </td></tr>
@@ -919,20 +1122,14 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section note"><dt>Note</dt><dd>WCET is bounded: fixed-depth page walk + at most one huge-page split (512 iterations) when the target PD entry is a 2 MB block.</dd></dl>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address. </td></tr>
-    <tr><td class="paramname">phys_addr</td><td>Page-aligned physical address. </td></tr>
-    <tr><td class="paramname">user</td><td>If true, mark the page as user-accessible. </td></tr>
-  </table>
-  </dd>
-</dl>
+<dl class="section note"><dt>Note</dt><dd>WCET is bounded: fixed-depth page walk + at most one huge-page split (512 iterations) when the target PD entry is a 2 MB block. </dd>
+<dd>
+Concurrency/caller contract (issue #366): Lock: none (VMM-internal; <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> allocs self-serialize via pmm_lock_). Context: kernel-only. SMP: user address spaces are CPU0-pinned (scheduler.md S3.3); callers needing IRQ-atomicity hold IrqGuard themselves (the pager fault path does). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_aa31478530f584907b7a8d79cd60a8e46_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_aa31478530f584907b7a8d79cd60a8e46_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -964,7 +1161,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -979,7 +1176,8 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as map_page (Lock: none; Context: kernel-only; SMP: CPU0-pinned user spaces, caller-held IrqGuard for IRQ-atomicity).</dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address. </td></tr>
@@ -993,13 +1191,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a00badc7d69ae6df6b9ec4ece614fe766_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a00badc7d69ae6df6b9ec4ece614fe766_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
 </div>
 <a id="a39e966b6069fb70b5f4177d3fd6b58cb" name="a39e966b6069fb70b5f4177d3fd6b58cb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a39e966b6069fb70b5f4177d3fd6b58cb">&#9670;&#160;</a></span>map_page_in_pml4() <span class="overload">[1/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a39e966b6069fb70b5f4177d3fd6b58cb">&#9670;&#160;</a></span>map_page_in_pml4()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1041,6 +1239,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Maps a page into a specific page table with explicit W^X permission (VULN-H1). When <code class="param">executable</code> is false the architectural NX bit is set (x86_64 bit 63, aarch64 bit 54) or the X bit is dropped (riscv64), so the page cannot execute. </p>
+<p>Map a page into a specific (non-kernel) PML4 page table.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address (page-aligned). </td></tr>
@@ -1051,78 +1250,20 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_v_m_m_a39e966b6069fb70b5f4177d3fd6b58cb_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a39e966b6069fb70b5f4177d3fd6b58cb_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
-</div>
-
-</div>
-</div>
-<a id="a6c283a922356a4a1b0a157a996a2bb03" name="a6c283a922356a4a1b0a157a996a2bb03"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6c283a922356a4a1b0a157a996a2bb03">&#9670;&#160;</a></span>map_page_in_pml4() <span class="overload">[2/2]</span></h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">void kernel::VMM::map_page_in_pml4 </td>
-          <td>(</td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phys_addr</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>Maps a page into a specific page table (not the kernel one). </p>
-<p>Map a page into a specific (non-kernel) PML4 page table.</p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (VMM-internal). Context: kernel-only. SMP: user PML4s are CPU0-pinned; the pager fault path holds IrqGuard across its map/unmap sequence (<a class="el" href="pager__registry_8cpp.html" title="PagerRegistry implementation (issue #107). Mirrors the DeathNotify / FrameUserMap discipline: mutate ...">pager_registry.cpp</a>) — other callers (buffer/task/loader) map private or current-task tables.</dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">virt_addr</td><td>Virtual address (page-aligned). </td></tr>
-    <tr><td class="paramname">phys_addr</td><td>Physical address (page-aligned). </td></tr>
-    <tr><td class="paramname">user</td><td>If true, sets user-accessible flag. </td></tr>
-    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4.</td></tr>
     <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address. </td></tr>
-    <tr><td class="paramname">phys_addr</td><td>Page-aligned physical address. </td></tr>
-    <tr><td class="paramname">user</td><td>If true, mark the page as user-accessible. </td></tr>
-    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+    <tr><td class="paramname">phys_addr</td><td>Page-aligned physical address.</td></tr>
   </table>
   </dd>
 </dl>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_v_m_m_a6c283a922356a4a1b0a157a996a2bb03_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a6c283a922356a4a1b0a157a996a2bb03_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
-</div>
+<p>Maps a page into a specific page table with explicit W^X permission (legacy void wrapper: behavior-identical to the pre-#325 revision — walk allocation failures stay silent drops with a one-time log; fallible callers use map_page_in_pml4_try / map_page_in_pml4_err). </p>
 
 </div>
 </div>
-<a id="a60a557d98925cd250a9180effab1e774" name="a60a557d98925cd250a9180effab1e774"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a60a557d98925cd250a9180effab1e774">&#9670;&#160;</a></span>map_page_in_pml4_err()</h2>
+<a id="a2d5e78f6e99731337d8fbb2da32d9a02" name="a2d5e78f6e99731337d8fbb2da32d9a02"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2d5e78f6e99731337d8fbb2da32d9a02">&#9670;&#160;</a></span>map_page_in_pml4_err()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1148,12 +1289,17 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>executable</em></span><span class="paramdefsep"> = </span><span class="paramdefval">true</span>&#160;)</td>
         </tr>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -1166,10 +1312,12 @@ Here is the call graph for this function:</div>
     <tr><td class="paramname">phys_addr</td><td>Physical address (page-aligned). </td></tr>
     <tr><td class="paramname">user</td><td>If true, sets user-accessible flag. </td></tr>
     <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+    <tr><td class="paramname">executable</td><td>If true, page is executable (default preserves the legacy 4-arg mapping behaviour; pass false for W^X data). </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code (walk allocation failures propagate as VMM_ERR_PAGE_ALLOC). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as map_page_in_pml4 (Lock: none; Context: kernel-only; SMP: caller-held IrqGuard on the pager fault path).</dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address. </td></tr>
@@ -1180,11 +1328,185 @@ Here is the call graph for this function:</div>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
+
+</div>
+</div>
+<a id="a30df343754060210f6315b7a069e3368" name="a30df343754060210f6315b7a069e3368"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a30df343754060210f6315b7a069e3368">&#9670;&#160;</a></span>map_page_ro_in_pml4()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::map_page_ro_in_pml4 </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phys_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>executable</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Maps a user page read-only with explicit executability (issue #271 P0 — retained-golden primitive). The page is first mapped through the standard path (identical table allocation), then the write permission is cleared with the arch RO encoding (x86_64 RW-clear; aarch64 AP_USER | AP_RO = EL0 read-only; riscv64 W-clear); NX/UXN follows <code class="param">executable</code> like the 5-arg overload. First run and reruns map through THIS function so perms are identical. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Virtual address (page-aligned). </td></tr>
+    <tr><td class="paramname">phys_addr</td><td>Physical address (page-aligned). </td></tr>
+    <tr><td class="paramname">executable</td><td>If true, page is executable (NX clear). </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only (loader/golden paths). SMP: pre-CR3 window / CPU0-pinned (same as map_page_in_pml4). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_v_m_m_a60a557d98925cd250a9180effab1e774_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a60a557d98925cd250a9180effab1e774_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<div class="center"><img src="classkernel_1_1_v_m_m_a30df343754060210f6315b7a069e3368_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a30df343754060210f6315b7a069e3368_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 15 -->
+</div>
+
+</div>
+</div>
+<a id="a7909805b82ca4689a2d6cafeec21218b" name="a7909805b82ca4689a2d6cafeec21218b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7909805b82ca4689a2d6cafeec21218b">&#9670;&#160;</a></span>map_page_try()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a> kernel::VMM::map_page_try </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phys_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Fallible kernel-table map worker (issue #325-B): the map_page body with walk allocation failures surfaced instead of silently dropped (same contract shape as map_page_in_pml4_try). </p>
+<p>Map a 4 KiB page in the kernel page table.</p>
+<dl class="section return"><dt>Returns</dt><dd>VMM_ERR_OK, or VMM_ERR_PAGE_ALLOC when a table page or huge-page split allocation fails mid-walk. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as map_page (Lock: none; Context: kernel-only; SMP: CPU0-pinned, caller IrqGuard for IRQ-atomicity).</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address. </td></tr>
+    <tr><td class="paramname">phys_addr</td><td>Page-aligned physical address. </td></tr>
+    <tr><td class="paramname">user</td><td>If true, mark the page as user-accessible. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a7909805b82ca4689a2d6cafeec21218b_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a7909805b82ca4689a2d6cafeec21218b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 16 -->
+</div>
+
+</div>
+</div>
+<a id="aea1a1d9ecd25b9454761b49b2b1c328d" name="aea1a1d9ecd25b9454761b49b2b1c328d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aea1a1d9ecd25b9454761b49b2b1c328d">&#9670;&#160;</a></span>map_phys_range_try()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a> kernel::VMM::map_phys_range_try </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>phys_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>page_count</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>user</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>executable</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Fallible contiguous-range mapper shared by the cap-map transactions (issue #325-A): maps <code class="param">page_count</code> pages from <code class="param">phys_addr</code> at <code class="param">virt_addr</code>, rolling back the mapped prefix when a page fails mid-range (all-or-nothing). </p>
+<dl class="section return"><dt>Returns</dt><dd>VMM_ERR_OK on full success; VMM_ERR_INVALID_ADDR on a misaligned base or wrap-around range (including page_count == 0 — the public cap wrappers report a zero range as VMM_ERR_EMPTY_RANGE instead); VMM_ERR_PAGE_ALLOC on a mid-walk table allocation failure (prefix rolled back before returning). </dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">executable</td><td>If true, pages are executable (issue #325-D; cap wrappers default false). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section note"><dt>Note</dt><dd>Public since issue #347 (Slice D): the XOR path-tracer drives this primitive directly; it is a general fallible range mapper with no hidden state (kernel pml4 or an explicit <code class="param">pml4_phys</code>). </dd>
+<dd>
+Concurrency/caller contract (issue #366): Lock: none (VMM-internal). Context: kernel-only (cap-map transactions<ul>
+<li>path tracer). SMP: inherits the caller's window (CPU0-pinned user targets; caller-held IrqGuard on the pager path). </li>
+</ul>
+</dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_aea1a1d9ecd25b9454761b49b2b1c328d_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_aea1a1d9ecd25b9454761b49b2b1c328d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -1211,12 +1533,20 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>Converge a child PML4's kernel half (entries 256..511) toward <code class="param">src_pml4</code> (issue #96, kernel-half merge). Recursive top-down walk (PML4→PDPT→PD→PT): wherever the child lacks an entry present in the source, the entry is copied by value (link semantics — lower tables stay shared, never duplicated); entries already present are left untouched (idempotent); huge/leaf entries are copied by value. Performs ZERO allocations, so it cannot OOM by construction; the bool preserves the failure contract for future allocating revisions (callers must destroy the child table on false). No locking: single-threaded, runs before the first CR3 switch to the child (same window MP-7 uses). </p>
+<dl class="section note"><dt>Note</dt><dd>Shared-table contract (issue #325-F): shared lower tables are KERNEL-owned (allocated without user_alloc), so child teardown (free_user_pages) always skips them — a child can never free a table the live kernel half still references. Late kernel mappings and huge-page splits rewrite shared entries in place and are visible to all sharers; splits allocate fresh tables, never mutate shared ones in a way that orphans sharers. </dd>
+<dd>
+No copy-on-write exists in this kernel (answer to "when
+      does COW take place": never): fork deep-copies user pages (deep_copy_user_pages) and shares only kernel-half tables, which are never written through user paths. </dd>
+<dd>
+TLB locality contract (issue #325-F): every <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> map/unmap site flushes the VA locally (issue #225 discipline). Local-only sufficiency rests on: (a) user tasks execute on CPU0 exclusively (scheduler CPU0 pin, #25 C1), so user TLB entries live on one CPU; (b) CR3 switches flush untagged entries (exec path) and pcid_free purges on PCID release; (c) freed tables are never reactivated (teardown destroys the PML4; exec switches before freeing). Cross-CPU invalidation beyond this is owned by the selective/lazy shootdown mechanisms (#157/#158). </dd>
+<dd>
+Free-vs-use ordering (issue #325-F): page-table teardown runs only for dead tasks (cleanup/reap paths) which cannot run on another CPU (CPU0 pin + dead-state filter), after the pager/cap/ELF drains (see <a class="el" href="structkernel_1_1_task_control_block.html#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">TaskControlBlock::cleanup</a> ordering) — a live mapping is never freed under a user. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">src_pml4</td><td>Physical address of the source (canonical) PML4. </td></tr>
@@ -1225,6 +1555,193 @@ Here is the call graph for this function:</div>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>true on success, false on invalid arguments (null or identical roots — never on allocation failure). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only. SMP: single-threaded pre-CR3-switch window (same window MP-7 uses) — see the No-locking note above; the canonical example for this triple. </dd></dl>
+
+</div>
+</div>
+<a id="aebc2feb36e3e2888c702c96e9c76dad1" name="aebc2feb36e3e2888c702c96e9c76dad1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aebc2feb36e3e2888c702c96e9c76dad1">&#9670;&#160;</a></span>pte_is_executable_in_pml4()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::pte_is_executable_in_pml4 </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Test inspector: reports whether the mapped leaf is executable per the arch NX encoding (walk-only, never allocates; issue #325-D NX pinning). x86_64: NX bit 63 clear; aarch64: UXN (bit 54) clear; riscv64: X bit set. </p>
+<p>Test inspector: reports whether the mapped leaf is executable per the arch NX encoding (walk-only, never allocates).</p>
+<dl class="section return"><dt>Returns</dt><dd>false when unmapped (or a huge/block entry, not ours). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: any-task (test inspector, walk-only). SMP: N/A.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Virtual address to inspect. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>false when unmapped (or a huge/block entry, not ours). </dd></dl>
+
+</div>
+</div>
+<a id="aa99fac0dda34fefd95a4d0f6cf9fcf9c" name="aa99fac0dda34fefd95a4d0f6cf9fcf9c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa99fac0dda34fefd95a4d0f6cf9fcf9c">&#9670;&#160;</a></span>pte_is_ro_in_pml4()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::VMM::pte_is_ro_in_pml4 </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool *</td>          <td class="paramname"><span class="paramname"><em>executable_out</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Test inspector: reports whether the mapped leaf is read-only per the RO encoding (walk-only, never allocates). <code class="param">executable_out</code> is written ONLY when the leaf is RO (callers must not read it on a false return). </p>
+<dl class="section return"><dt>Returns</dt><dd>false when unmapped (or a huge/block entry, not ours). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: any-task (test inspector, walk-only, never allocates). SMP: N/A. </dd></dl>
+
+</div>
+</div>
+<a id="a42fa198c36939ca6242e7c20f63637fb" name="a42fa198c36939ca6242e7c20f63637fb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a42fa198c36939ca6242e7c20f63637fb">&#9670;&#160;</a></span>remap_range_ro_in_pml4()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::remap_range_ro_in_pml4 </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>vaddr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>executable</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Remap every mapped page in [vaddr, vaddr+size) read-only through the RO primitive (issue #271 P0 — load paths and the P2 rerun builder share this). Unmapped holes are skipped; bounds are page-aligned outward with overflow guard (empty range → no-op). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366) for the Sv39 codecs above: Lock: none. Context: any (pure functions). SMP: N/A. </dd>
+<dd>
+Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only (loader/P2 rerun paths). SMP: pre-CR3 window / CPU0-pinned. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a42fa198c36939ca6242e7c20f63637fb_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a42fa198c36939ca6242e7c20f63637fb_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 18 -->
+</div>
+
+</div>
+</div>
+<a id="a118d59a51184acb5eae3f473f195ee59" name="a118d59a51184acb5eae3f473f195ee59"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a118d59a51184acb5eae3f473f195ee59">&#9670;&#160;</a></span>set_hhdm_modified()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::set_hhdm_modified </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the HHDM modification flag (issue #366: the single SET path — release store, pairs with the acquire <span class="tt"><a class="el" href="#a70bf58e478f1a27ad8e1badfeb9fc1f2" title="Returns true if any test has modified the HHDM page tables since the last clear/take call (acquire: p...">hhdm_was_modified</a></span> / acq_rel <span class="tt"><a class="el" href="#ac5cc5b13afcd183532d0f49f56d164d5" title="Atomically take the HHDM flag: returns the previous value and clears it in one step,...">take_hhdm_modified</a></span> reads; callable only from the test-active arm path and the flag-semantics test; set-true is idempotent, no gate inside). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (lock-free atomics). Context: test-only. SMP: test-serialized; release/acquire pairing is the contract. </dd></dl>
+
+</div>
+</div>
+<a id="a93f1797c071f0164b440ae92fa6b4ff2" name="a93f1797c071f0164b440ae92fa6b4ff2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a93f1797c071f0164b440ae92fa6b4ff2">&#9670;&#160;</a></span>set_identity_modified()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::set_identity_modified </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the identity modification flag (issue #366: same single-SET-path contract as the HHDM setter above). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (lock-free atomics). Context: test-only. SMP: test-serialized; release/acquire pairing is the contract. </dd></dl>
 
 </div>
 </div>
@@ -1252,6 +1769,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Snapshot the live kernel PML4's kernel half (entries 256..511) into the bring-up template (issue #96). Call ONCE at end of bring-up, before the first task spawns. </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: boot-only (single call). SMP: boot-single-CPU. </dd></dl>
 
 </div>
 </div>
@@ -1279,6 +1797,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Atomically take the HHDM flag: returns the previous value and clears it in one step, so a set landing after the take is preserved for the next restore (fail-safe over-restore instead of fail-dangerous skip). Used by snapshot_restore. </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (lock-free atomics). Context: test-only (snapshot restore). SMP: test-serialized; acq_rel take is the restore gate. </dd></dl>
 
 </div>
 </div>
@@ -1306,6 +1825,45 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Atomically take the identity flag (same contract as the HHDM take above). Used by snapshot_restore. </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (lock-free atomics). Context: test-only (snapshot restore). SMP: test-serialized; acq_rel take is the restore gate. </dd></dl>
+
+</div>
+</div>
+<a id="ab610584e8dc74832cfb4f19965e1c175" name="ab610584e8dc74832cfb4f19965e1c175"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab610584e8dc74832cfb4f19965e1c175">&#9670;&#160;</a></span>test_table_alloc_fail_snapshot_reset()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::test_table_alloc_fail_snapshot_reset </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Clears injector state for snapshot restore (issue #361). Unconditional decl so <a class="el" href="test__isolate_8cpp.html" title="Test isolation snapshot/restore implementation.">test_isolate.cpp</a> needs no #if; release def is a no-op. </p>
+<p>Walk or create a page-table entry at the current level.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">table</td><td>Pointer to the current-level page table. </td></tr>
+    <tr><td class="paramname">index</td><td>Entry index within <code class="param">table</code>. </td></tr>
+    <tr><td class="paramname">create</td><td>If true, allocate a new table when missing. </td></tr>
+    <tr><td class="paramname">user_alloc</td><td>If true, allocate USER-owned pages for the new table. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to the next-level table, or nullptr if not present and !create. WCET: intentional flat walk/split (bounded depth, at most one table alloc per call); a failed alloc returns nullptr and the caller drops the mapping through note_silent_drop_once (never retries in a loop). </dd></dl>
 
 </div>
 </div>
@@ -1337,6 +1895,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Unmaps one page previously mapped via <a class="el" href="#af38a18ef6db1e4e014d7c5aee0b71aaf" title="Maps the frame(s) owned by a FrameCap into pml4_phys. Refuses a revoked FrameCap (ROADMAP 0....">map_frame_from_cap()</a>. </p>
+<p>Unmaps one page previously mapped via <a class="el" href="#af38a18ef6db1e4e014d7c5aee0b71aaf" title="Maps the frame(s) owned by a FrameCap into pml4_phys. Refuses a revoked FrameCap (ROADMAP 0....">map_frame_from_cap()</a>. Clear-leaf primitive (issue #325-C): never map-with-zero (that installs a PRESENT supervisor-writable leaf to physical page zero — silent kernel NULL-deref access instead of #PF).</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address to unmap. </td></tr>
@@ -1344,11 +1903,66 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
+<dl class="section note"><dt>Note</dt><dd>Naming convention (issue #325-C): every <span class="tt">unmap_*</span> clears the leaf (not-present) and flushes the VA. Mapping with phys 0 is NEVER an unmap — it installs a PRESENT supervisor leaf to physical page zero. </dd>
+<dd>
+Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only. SMP: CPU0-pinned (same as the other unmaps). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a9d3b6e67113f63864a37d28320a7bc28_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a9d3b6e67113f63864a37d28320a7bc28_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 19 -->
+</div>
+
+</div>
+</div>
+<a id="addd04cbcf116823799ad42392fe20c45" name="addd04cbcf116823799ad42392fe20c45"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#addd04cbcf116823799ad42392fe20c45">&#9670;&#160;</a></span>unmap_frame_from_cap_err()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a> kernel::VMM::unmap_frame_from_cap_err </td>
+          <td>(</td>
+          <td class="paramtype">class <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">cap::FrameCap</a> *</td>          <td class="paramname"><span class="paramname"><em>fc</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Unmaps one frame-mapped page with error code (issue #366 Q2b). Revocation is NOT checked: unmap-after-revoke must work (the revoke path itself unmaps revoked caps). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">fc</td><td>The FrameCap (must be non-null; pin not required for the single-leaf walk, matching the void twin). </td></tr>
+    <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address to unmap. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>VMM_ERR_INVALID_ADDR on a null cap or misaligned base, VMM_ERR_NOT_MAPPED when no present leaf exists, VMM_ERR_OK when a leaf was cleared and flushed. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as unmap_frame_from_cap (Lock: none; Context: kernel-only; SMP: CPU0-pinned). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_addd04cbcf116823799ad42392fe20c45_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_addd04cbcf116823799ad42392fe20c45_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -1394,11 +2008,66 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
+<dl class="section note"><dt>Note</dt><dd>Same clear-leaf convention as unmap_frame_from_cap (never map-with-zero). </dd>
+<dd>
+Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only. SMP: CPU0-pinned (same as unmap_frame_from_cap). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a4aba9fc6e5febed05a0dc3edfb0dc22f_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a4aba9fc6e5febed05a0dc3edfb0dc22f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 21 -->
+</div>
+
+</div>
+</div>
+<a id="ac3620fa463b4b1321bf9296e4bfd35e4" name="ac3620fa463b4b1321bf9296e4bfd35e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac3620fa463b4b1321bf9296e4bfd35e4">&#9670;&#160;</a></span>unmap_mmio_from_cap_err()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a> kernel::VMM::unmap_mmio_from_cap_err </td>
+          <td>(</td>
+          <td class="paramtype">class <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *</td>          <td class="paramname"><span class="paramname"><em>mmio</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Unmaps an MmioCap BAR range with error code (issue #366 Q2b). Two-pass (verify every leaf present, then clear all) so a hole reports NOT_MAPPED with nothing cleared — no rollback needed and no partial unmap. Revocation/IO-type are NOT checked (see unmap_frame_from_cap_err). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">mmio</td><td>The MmioCap (must be non-null, non-zero size). </td></tr>
+    <tr><td class="paramname">virt_addr</td><td>Base virtual address the range was mapped at. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>VMM_ERR_INVALID_ADDR on a null cap or misaligned base, VMM_ERR_EMPTY_RANGE on a zero-size cap, VMM_ERR_NOT_MAPPED when any page in the range has no present leaf, VMM_ERR_OK when every leaf was cleared. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as unmap_mmio_from_cap (Lock: none; Context: kernel-only; SMP: CPU0-pinned). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_ac3620fa463b4b1321bf9296e4bfd35e4_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_ac3620fa463b4b1321bf9296e4bfd35e4_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -1434,6 +2103,19 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (VMM-internal; walk-only, allocates nothing). Context: kernel-only. SMP: as map_page (CPU0-pinned, caller IrqGuard for IRQ-atomicity).</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Virtual address to unmap. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a0bf86a0e97402ac5e989fa1aa55a0df5_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a0bf86a0e97402ac5e989fa1aa55a0df5_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 23 -->
+</div>
 
 </div>
 </div>
@@ -1455,7 +2137,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -1468,12 +2150,20 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code: VMM_ERR_INVALID_ADDR on misalignment, VMM_ERR_NOT_MAPPED when no present leaf exists for the VA (missing table, clear leaf, or huge/block entry — never cleared), VMM_ERR_OK when a leaf was cleared. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as unmap_page (Lock: none; Context: kernel-only; SMP: CPU0-pinned).</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Virtual address to unmap. </td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_af16c2a20fa00db35b4aea6f91227818b_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_af16c2a20fa00db35b4aea6f91227818b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -1513,6 +2203,59 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only (shared-library RO unmap + teardown). SMP: CPU0-pinned (same as the other unmaps). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a87e909fad18b6d7d49eb348c5183cbca_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a87e909fad18b6d7d49eb348c5183cbca_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 25 -->
+</div>
+
+</div>
+</div>
+<a id="a818b86723c8492766747bd3dade54dc6" name="a818b86723c8492766747bd3dade54dc6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a818b86723c8492766747bd3dade54dc6">&#9670;&#160;</a></span>unmap_page_in_pml4_err()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a> kernel::VMM::unmap_page_in_pml4_err </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Unmaps one user page with error code (issue #366 Q2b). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Page-aligned virtual address to unmap. </td></tr>
+    <tr><td class="paramname">pml4_phys</td><td>Physical address of the target PML4. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>VMM_ERR_INVALID_ADDR on misalignment, VMM_ERR_NOT_MAPPED when no present leaf exists (missing table, clear leaf, or huge/block entry — never cleared), VMM_ERR_OK when a leaf was cleared and flushed. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as unmap_page_in_pml4 (Lock: none; Context: kernel-only; SMP: CPU0-pinned). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a818b86723c8492766747bd3dade54dc6_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a818b86723c8492766747bd3dade54dc6_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 26 -->
+</div>
 
 </div>
 </div>
@@ -1548,6 +2291,20 @@ Here is the call graph for this function:</div>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 if not mapped. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: any-task (walk-only, no store). SMP: N/A (read-only walk).</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">virt_addr</td><td>Virtual address. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 if not mapped. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a21f16b2e0bd481ac0584f2a27fb1887a_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a21f16b2e0bd481ac0584f2a27fb1887a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 27 -->
+</div>
 
 </div>
 </div>
@@ -1573,7 +2330,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -1588,11 +2345,20 @@ Here is the call graph for this function:</div>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as virt_to_phys (Lock: none; Context: any-task; SMP: N/A).</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">virt_addr</td><td>Virtual address. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_phys_addr</td><td>Physical address on success. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_aca50fe995582fa2e7697f4b241bf54ac_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_aca50fe995582fa2e7697f4b241bf54ac_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 28 -->
 </div>
 
 </div>
@@ -1633,7 +2399,8 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 if not mapped.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Physical address, or 0 if not mapped. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: any-task (walk-only, no store). SMP: N/A.</dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">virt_addr</td><td>Virtual address. </td></tr>
@@ -1672,7 +2439,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -1687,7 +2454,8 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d" title="Error codes for the Virtual Memory Manager.">VmmError</a> code. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): same as virt_to_phys_in_pml4 (Lock: none; Context: any-task; SMP: N/A).</dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">virt_addr</td><td>Virtual address. </td></tr>
@@ -1701,7 +2469,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a464e326efd7e29354e19617ca99d9e86_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a464e326efd7e29354e19617ca99d9e86_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -1758,6 +2526,10 @@ Here is the call graph for this function:</div>
 <hr/>The documentation for this class was generated from the following files:<ul>
 <li>src/kernel/memory/<a class="el" href="vmm_8hpp_source.html">vmm.hpp</a></li>
 <li>src/kernel/memory/<a class="el" href="vmm_8cpp.html">vmm.cpp</a></li>
+<li>src/kernel/memory/<a class="el" href="vmm__cap_8cpp.html">vmm_cap.cpp</a></li>
+<li>src/kernel/memory/<a class="el" href="vmm__clone_8cpp.html">vmm_clone.cpp</a></li>
+<li>src/kernel/memory/<a class="el" href="vmm__map_8cpp.html">vmm_map.cpp</a></li>
+<li>src/kernel/memory/<a class="el" href="vmm__teardown_8cpp.html">vmm_teardown.cpp</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -146,7 +146,7 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Diagnostic-dump smoke tests (milestone v0.4.10 issue #128): <a class="el" href="dump_8cpp.html" title="Diagnostic dump implementation — scheduler, CPU registers, task state.">src/kernel/debug/dump.cpp</a> is the post-mortem path — it runs when the kernel is already dying (panic handler at <a class="el" href="kernel_8cpp.html">kernel.cpp</a>:1588/1622 and the scheduler invariant violations at <a class="el" href="task_8cpp.html" title="TaskControlBlock lifecycle: creation, initialisation, cloning, and cleanup.">task.cpp</a>:348/355/375). If the dump itself faults, the entire post-mortem is lost, so the four entry points must be proven to render their report for live state AND for the degenerate inputs a crash actually hands them (unknown task id, freed TCB). </p>
-<dl class="section note"><dt>Note</dt><dd>Observation channel: the dump writes through <a class="el" href="classkernel_1_1_logger.html">Logger</a>, which during test runs routes to QEMU debugcon (NOT the UART — so <span class="tt">arch::Serial::write_count()</span> stays frozen and Terminal capture sees nothing). It also feeds the klog ring, whose documented consumers include tests (<a class="el" href="ring__buffer_8hpp.html" title="Lock-free SPSC character ring buffer for kernel console (g_klog).">src/kernel/log/ring_buffer.hpp</a>). Each probe clears the ring, runs the dump and reads it back, all inside an arch::IrqGuard so no other task can contribute bytes. </dd>
+<dl class="section note"><dt>Note</dt><dd>Observation channel: the dump writes through <a class="el" href="classkernel_1_1_logger.html">Logger</a>, which during test runs routes to QEMU debugcon (NOT the UART — so <span class="tt"><a class="el" href="classarch_1_1_serial.html#a3ce38f76c842430834231b7188b3a251" title="Returns the number of characters written to the serial console since boot. The interactive shell snap...">arch::Serial::write_count()</a></span> stays frozen and Terminal capture sees nothing). It also feeds the klog ring, whose documented consumers include tests (<a class="el" href="ring__buffer_8hpp.html" title="Lock-free SPSC character ring buffer for kernel console (g_klog).">src/kernel/log/ring_buffer.hpp</a>). Each probe clears the ring, runs the dump and reads it back, all inside an <a class="el" href="classarch_1_1_irq_guard.html" title="RAII guard that disables interrupts on construction and restores the previous interrupt state on dest...">arch::IrqGuard</a> so no other task can contribute bytes. </dd>
 <dd>
 dump_cpu_regs() has three architecture variants; only the one for the target arch is compiled, so 10/12 is the ceiling per arch. </dd></dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
@@ -205,6 +205,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__debug__dump_8cpp_ac886c50258ef101bcb30ad934c481587_cgraph.png" border="0" usemap="#atest__debug__dump_8cpp_ac886c50258ef101bcb30ad934c481587_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -235,7 +241,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__dump_8cpp_a227fc204a37c5d4acdd8c5615ab62381_cgraph.png" border="0" usemap="#atest__debug__dump_8cpp_a227fc204a37c5d4acdd8c5615ab62381_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -267,7 +273,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__dump_8cpp_a78f25d27a40e14d30e6ef8335f9b5e7b_cgraph.png" border="0" usemap="#atest__debug__dump_8cpp_a78f25d27a40e14d30e6ef8335f9b5e7b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -290,7 +296,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__debug__dump_8cpp_aeb521b4391bd0f6b7391b5b9de63b5a0_cgraph.png" border="0" usemap="#atest__debug__dump_8cpp_aeb521b4391bd0f6b7391b5b9de63b5a0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('syscall__handl
 <p>External pager syscalls (issue #107): SYS_PAGER_REGISTER — designate a pager for the caller's own faults. SYS_PAGER_RECV — drain the next pending fault (never blocks). SYS_PAGER_MAP — map the pager's FrameCap into the CLIENT's PML4. SYS_PAGER_ABORT — pager cannot satisfy a fault (unmap + poison VA). SYS_PAGER_UNREGISTER — remove a pager registration. These syscalls write user memory and touch cross-task page tables — they MUST stay out of k_syscall_fast[] (issue #92 discipline).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="syscall_8hpp_source.html">kernel/syscall/syscall.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="syscall__errors_8hpp_source.html">kernel/syscall/syscall_errors.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="syscall__helpers_8hpp_source.html">kernel/syscall/syscall_helpers.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pager__registry_8hpp_source.html">kernel/ipc/pager_registry.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="cap_8hpp_source.html">kernel/cap/cap.hpp</a>&gt;</code><br />

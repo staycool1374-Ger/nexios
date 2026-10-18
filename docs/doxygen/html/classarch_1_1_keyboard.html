@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.2.21</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classarch_1_1_
 </div><!--header-->
 <div class="contents">
 
+<p>PS/2 keyboard driver with modifier tracking and a character ring buffer.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="hal_2keyboard_8hpp_source.html">keyboard.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for arch::Keyboard:</div>
@@ -134,15 +137,24 @@ Public Member Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a88b2726cc0d551f950c94d8497d00907" id="r_a88b2726cc0d551f950c94d8497d00907"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a88b2726cc0d551f950c94d8497d00907">init</a> ()</td></tr>
+<tr class="memdesc:a88b2726cc0d551f950c94d8497d00907"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialise the PS/2 keyboard controller.  <br /></td></tr>
 <tr class="memitem:a14555f392329060ff5dc5ddd1256d4d5" id="r_a14555f392329060ff5dc5ddd1256d4d5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a14555f392329060ff5dc5ddd1256d4d5">handle_irq</a> ()</td></tr>
+<tr class="memdesc:a14555f392329060ff5dc5ddd1256d4d5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Handle a keyboard interrupt — read scancode and enqueue character.  <br /></td></tr>
 <tr class="memitem:adb05e9e7476b213912dbe13a33d9a9ac" id="r_adb05e9e7476b213912dbe13a33d9a9ac"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#adb05e9e7476b213912dbe13a33d9a9ac">getchar</a> (char &amp;c)</td></tr>
-<tr class="memitem:ab30e2104166c699e14d5a538beb1dc78" id="r_ab30e2104166c699e14d5a538beb1dc78"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab30e2104166c699e14d5a538beb1dc78">read</a> (char *buf, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> len)</td></tr>
+<tr class="memdesc:adb05e9e7476b213912dbe13a33d9a9ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dequeue a single character (non-blocking).  <br /></td></tr>
+<tr class="memitem:af1b2d0f68ab739eefc810405acbad22a" id="r_af1b2d0f68ab739eefc810405acbad22a"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#af1b2d0f68ab739eefc810405acbad22a">try_forward_to_iocd</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> scancode)</td></tr>
+<tr class="memdesc:af1b2d0f68ab739eefc810405acbad22a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Forward a raw scancode to the iocd daemon (issue #340 P1). Task context only: returns false in ISR context (never IPC-sends from an interrupt), when no daemon runs, or when the send is refused — the caller falls back to the legacy ring path.  <br /></td></tr>
+<tr class="memitem:ab30e2104166c699e14d5a538beb1dc78" id="r_ab30e2104166c699e14d5a538beb1dc78"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab30e2104166c699e14d5a538beb1dc78">read</a> (char *buf, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> len)</td></tr>
+<tr class="memdesc:ab30e2104166c699e14d5a538beb1dc78"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read multiple characters into a buffer (non-blocking).  <br /></td></tr>
 <tr class="memitem:a89d3e6a5e144545835dfbe00264ecf1c" id="r_a89d3e6a5e144545835dfbe00264ecf1c"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a89d3e6a5e144545835dfbe00264ecf1c">flush</a> ()</td></tr>
+<tr class="memdesc:a89d3e6a5e144545835dfbe00264ecf1c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Discard all buffered characters.  <br /></td></tr>
 <tr class="memitem:a1c8abb75b860333350ef311eb593517c" id="r_a1c8abb75b860333350ef311eb593517c"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a1c8abb75b860333350ef311eb593517c">is_shifted</a> ()</td></tr>
 <tr class="memitem:a2f7e6dfc03e24f153ce7eb2ee9198b95" id="r_a2f7e6dfc03e24f153ce7eb2ee9198b95"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a2f7e6dfc03e24f153ce7eb2ee9198b95">is_ctrl</a> ()</td></tr>
 <tr class="memitem:af6320edcb4f7512b37245a284a3ee3b8" id="r_af6320edcb4f7512b37245a284a3ee3b8"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#af6320edcb4f7512b37245a284a3ee3b8">is_alt</a> ()</td></tr>
 </table>
-<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>PS/2 keyboard driver with modifier tracking and a character ring buffer. </p>
+</div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="ac49c8d2c0ce17be62d257d2ea05abd8e" name="ac49c8d2c0ce17be62d257d2ea05abd8e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac49c8d2c0ce17be62d257d2ea05abd8e">&#9670;&#160;</a></span>Keyboard()</h2>
 
@@ -192,6 +204,9 @@ Static Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Discard all buffered characters. </p>
+<p>Discard all characters currently in the ring buffer. </p>
+
 </div>
 </div>
 <a id="adb05e9e7476b213912dbe13a33d9a9ac" name="adb05e9e7476b213912dbe13a33d9a9ac"></a>
@@ -217,6 +232,23 @@ Static Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Dequeue a single character (non-blocking). </p>
+<p>Dequeue a single character from the input ring buffer.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">c</td><td>Output character. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if a character was available.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">c</td><td>Reference that receives the retrieved character. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if a character was available and dequeued, false if the buffer was empty. </dd></dl>
+
 </div>
 </div>
 <a id="a14555f392329060ff5dc5ddd1256d4d5" name="a14555f392329060ff5dc5ddd1256d4d5"></a>
@@ -241,6 +273,9 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Handle a keyboard interrupt — read scancode and enqueue character. </p>
+<p>IRQ handler for keyboard interrupts. Reads the scancode from the PS/2 data port, updates modifier key states, translates the scancode to an ASCII character, and pushes it onto the ring buffer. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -272,12 +307,9 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classarch_1_1_keyboard_a88b2726cc0d551f950c94d8497d00907_cgraph.png" border="0" usemap="#aclassarch_1_1_keyboard_a88b2726cc0d551f950c94d8497d00907_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
-</div>
+
+<p>Initialise the PS/2 keyboard controller. </p>
+<p>Initialise the PS/2 keyboard controller. Enables the keyboard interface, resets the scancode ring buffer, and clears all modifier key states. </p>
 
 </div>
 </div>
@@ -303,6 +335,7 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+<dl class="section return"><dt>Returns</dt><dd>true if Alt is held. </dd></dl>
 
 </div>
 </div>
@@ -328,6 +361,7 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+<dl class="section return"><dt>Returns</dt><dd>true if Ctrl is held. </dd></dl>
 
 </div>
 </div>
@@ -353,6 +387,7 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+<dl class="section return"><dt>Returns</dt><dd>true if Shift is held. </dd></dl>
 
 </div>
 </div>
@@ -366,14 +401,14 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> arch::Keyboard::read </td>
+          <td class="memname"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> arch::Keyboard::read </td>
           <td>(</td>
           <td class="paramtype">char *</td>          <td class="paramname"><span class="paramname"><em>buf</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>len</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a></td>          <td class="paramname"><span class="paramname"><em>len</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -382,6 +417,66 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Read multiple characters into a buffer (non-blocking). </p>
+<p>Read up to <code class="param">len</code> characters from the ring buffer into a caller-supplied buffer.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">buf</td><td>Output buffer. </td></tr>
+    <tr><td class="paramname">len</td><td>Maximum number of characters to read. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of characters actually read.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">buf</td><td>Destination buffer. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">len</td><td>Maximum number of characters to read. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>The number of characters actually dequeued. </dd></dl>
+
+</div>
+</div>
+<a id="af1b2d0f68ab739eefc810405acbad22a" name="af1b2d0f68ab739eefc810405acbad22a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af1b2d0f68ab739eefc810405acbad22a">&#9670;&#160;</a></span>try_forward_to_iocd()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::Keyboard::try_forward_to_iocd </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>scancode</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Forward a raw scancode to the iocd daemon (issue #340 P1). Task context only: returns false in ISR context (never IPC-sends from an interrupt), when no daemon runs, or when the send is refused — the caller falls back to the legacy ring path. </p>
+<p>Forward a raw scancode to the iocd daemon (issue #340 P1). Task context only: ISR context (isr nesting nonzero), no daemon, or a refused NONBLOCK send all fail closed so the caller keeps the legacy ring push and no keystroke is lost.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">scancode</td><td>Raw PS/2 set-1 byte (press or release). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true when the daemon accepted it (caller must skip the ring push — never both), false otherwise. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classarch_1_1_keyboard_af1b2d0f68ab739eefc810405acbad22a_cgraph.png" border="0" usemap="#aclassarch_1_1_keyboard_af1b2d0f68ab739eefc810405acbad22a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -118,85 +118,123 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ether_8hpp_sou
   <div class="headertitle"><div class="title">ether.hpp</div></div>
 </div><!--header-->
 <div class="contents">
-<a href="ether_8hpp.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#pragma once</span></div>
-<div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span> </div>
+<a href="ether_8hpp.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno"><a class="line" href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">    1</a></span><span class="preprocessor">#pragma once</span></div>
+<div class="foldopen" id="foldopen00002" data-start="{" data-end="}">
+<div class="line"><a id="l00002" name="l00002"></a><span class="lineno"><a class="line" href="ether_8hpp.html#a473bb231407012ee7b940769574b571a">    2</a></span> </div>
 <div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="comment">/*</span></div>
 <div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="comment"> * NexIOS RTOS — Development Roadmap / Kernel Core</span></div>
 <div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="comment"> * Copyright (C) 2026 Arnold Hasshold</span></div>
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="comment"> *</span></div>
 <div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span><span class="comment"> * This program is free software: you can redistribute it and/or modify</span></div>
-<div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span><span class="comment"> * it under the terms of the GNU General Public License as published by</span></div>
+</div>
+<div class="foldopen" id="foldopen00008" data-start="{" data-end="}">
+<div class="line"><a id="l00008" name="l00008"></a><span class="lineno"><a class="line" href="ether_8hpp.html#adb0d2f5bdb13f4c9c877d7af301a0c35">    8</a></span><span class="comment"> * it under the terms of the GNU General Public License as published by</span></div>
 <div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span><span class="comment"> * the Free Software Foundation, either version 3 of the License, or</span></div>
 <div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span><span class="comment"> * (at your option) any later version.</span></div>
+</div>
 <div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="comment"> *</span></div>
-<div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span><span class="comment"> * This program is distributed in the hope that it will be useful,</span></div>
+<div class="foldopen" id="foldopen00012" data-start="{" data-end="}">
+<div class="line"><a id="l00012" name="l00012"></a><span class="lineno"><a class="line" href="ether_8hpp.html#aec73c759dce11f7c64b7cd8e009be90e">   12</a></span><span class="comment"> * This program is distributed in the hope that it will be useful,</span></div>
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span><span class="comment"> * but WITHOUT ANY WARRANTY; without even the implied warranty of</span></div>
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span><span class="comment"> * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span></div>
 <div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span><span class="comment"> * GNU General Public License for more details.</span></div>
 <div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span><span class="comment"> *</span></div>
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="comment"> * You should have received a copy of the GNU General Public License</span></div>
-<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span><span class="comment"> * along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;.</span></div>
+</div>
+<div class="foldopen" id="foldopen00018" data-start="{" data-end="}">
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno"><a class="line" href="ether_8hpp.html#a0cd1291386fdebcd6b2280a14bc12052">   18</a></span><span class="comment"> * along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;.</span></div>
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#pragma once</span></div>
+</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacenet.html">net</a> {</div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span> </div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacenet.html">net</a> {</div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span> </div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> ETH_ADDR_LEN = 6;</div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> ETH_HEADER_LEN = 14;</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> ETH_MTU = 1500;</div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> ETH_FRAME_MAX = 1518;</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span></div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keyword">struct </span>MacAddr {</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> addr[ETH_ADDR_LEN]; </div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span> </div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    <span class="keywordtype">bool</span> operator==(<span class="keyword">const</span> MacAddr &amp;o)<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>        <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; ETH_ADDR_LEN; ++i)</div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>            <span class="keywordflow">if</span> (addr[i] != o.addr[i])</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>                <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>        <span class="keywordflow">return</span> <span class="keyword">true</span>;</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    }</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <span class="keywordtype">bool</span> operator!=(<span class="keyword">const</span> MacAddr &amp;o)<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>        <span class="keywordflow">return</span> !(*<span class="keyword">this</span> == o);</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    }</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span> </div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    <span class="keywordtype">bool</span> is_broadcast()<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>        <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; ETH_ADDR_LEN; ++i)</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>            <span class="keywordflow">if</span> (addr[i] != 0xFF)</div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>                <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>        <span class="keywordflow">return</span> <span class="keyword">true</span>;</div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    }</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    <span class="keywordtype">bool</span> is_null()<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>        <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; ETH_ADDR_LEN; ++i)</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>            <span class="keywordflow">if</span> (addr[i] != 0)</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>                <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>        <span class="keywordflow">return</span> <span class="keyword">true</span>;</div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    }</div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>} <a class="code hl_function" href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">__attribute__</a>((packed));</div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span> </div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="keyword">constexpr</span> MacAddr MAC_BROADCAST = {{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}};</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span><span class="keyword">constexpr</span> MacAddr MAC_NULL = {{0, 0, 0, 0, 0, 0}};</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span></div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span><span class="keyword">struct </span>EtherHeader {</div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    MacAddr dst;   </div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>    MacAddr src;   </div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> type; </div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>} <a class="code hl_function" href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">__attribute__</a>((packed));</div>
-<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span></div>
-<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="keyword">enum</span> EtherType : <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> {</div>
-<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    ETH_TYPE_IPV4 = 0x0800, </div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    ETH_TYPE_ARP = 0x0806,  </div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    ETH_TYPE_IPV6 = 0x86DD, </div>
-<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>};</div>
-<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span> </div>
-<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>} <span class="comment">// namespace net</span></div>
-<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
-<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
-<div class="ttc" id="anamespaceinitrd_html_a00c53aee04ed1b36b1a86a010b49ef61"><div class="ttname"><a href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">initrd::__attribute__</a></div><div class="ttdeci">struct initrd::CpioNewcHeader __attribute__((packed))</div></div>
-<div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> global_state.hpp:59</div></div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno"><a class="line" href="namespacenet.html#a87132e93c24bfd60f72e00a2986f07e1">   28</a></span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="namespacenet.html#a87132e93c24bfd60f72e00a2986f07e1">ETH_ADDR_LEN</a> = 6;</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno"><a class="line" href="namespacenet.html#ae87d8a50d8ebd248c81b97cc7d2ede0f">   29</a></span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="namespacenet.html#ae87d8a50d8ebd248c81b97cc7d2ede0f">ETH_HEADER_LEN</a> = 14;</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno"><a class="line" href="namespacenet.html#a91dabda33ebaa24d5c6b90c149a09112">   30</a></span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="namespacenet.html#a91dabda33ebaa24d5c6b90c149a09112">ETH_MTU</a> = 1500;</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="namespacenet.html#a4eb0cbea0baea33fc20fbe5f9ee00efd">   31</a></span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="namespacenet.html#a4eb0cbea0baea33fc20fbe5f9ee00efd">ETH_FRAME_MAX</a> = 1518;</div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span></div>
+<div class="foldopen" id="foldopen00034" data-start="{" data-end="};">
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno"><a class="line" href="structkernel_1_1net_1_1_mac_addr.html">   34</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> {</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno"><a class="line" href="structnet_1_1_mac_addr.html#a6fc63a84e2731b6246e97d2a859b0dc5">   35</a></span>    uint8_t <a class="code hl_variable" href="structnet_1_1_mac_addr.html#a6fc63a84e2731b6246e97d2a859b0dc5">addr</a>[<a class="code hl_variable" href="namespacenet.html#a87132e93c24bfd60f72e00a2986f07e1">ETH_ADDR_LEN</a>]; </div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span> </div>
+<div class="foldopen" id="foldopen00037" data-start="{" data-end="}">
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="structnet_1_1_mac_addr.html#a08156d7a33c3107ae0cf9fe17c28f687">   37</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="structnet_1_1_mac_addr.html#a08156d7a33c3107ae0cf9fe17c28f687">operator==</a>(<span class="keyword">const</span> <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> &amp;o)<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>        <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; <a class="code hl_variable" href="namespacenet.html#a87132e93c24bfd60f72e00a2986f07e1">ETH_ADDR_LEN</a>; ++i)</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>            <span class="keywordflow">if</span> (<a class="code hl_variable" href="structnet_1_1_mac_addr.html#a6fc63a84e2731b6246e97d2a859b0dc5">addr</a>[i] != o.<a class="code hl_variable" href="structnet_1_1_mac_addr.html#a6fc63a84e2731b6246e97d2a859b0dc5">addr</a>[i])</div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>                <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>        <span class="keywordflow">return</span> <span class="keyword">true</span>;</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    }</div>
+</div>
+<div class="foldopen" id="foldopen00043" data-start="{" data-end="}">
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno"><a class="line" href="structnet_1_1_mac_addr.html#a7938dd81d5183a94147878d45237274c">   43</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="structnet_1_1_mac_addr.html#a7938dd81d5183a94147878d45237274c">operator!=</a>(<span class="keyword">const</span> <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> &amp;o)<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>        <span class="keywordflow">return</span> !(*<span class="keyword">this</span> == o);</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    }</div>
+</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span> </div>
+<div class="foldopen" id="foldopen00047" data-start="{" data-end="}">
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno"><a class="line" href="structnet_1_1_mac_addr.html#a89411c00900cea0c3785eb49c7731534">   47</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="structnet_1_1_mac_addr.html#a89411c00900cea0c3785eb49c7731534">is_broadcast</a>()<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>        <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; <a class="code hl_variable" href="namespacenet.html#a87132e93c24bfd60f72e00a2986f07e1">ETH_ADDR_LEN</a>; ++i)</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>            <span class="keywordflow">if</span> (<a class="code hl_variable" href="structnet_1_1_mac_addr.html#a6fc63a84e2731b6246e97d2a859b0dc5">addr</a>[i] != 0xFF)</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>                <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>        <span class="keywordflow">return</span> <span class="keyword">true</span>;</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    }</div>
+</div>
+<div class="foldopen" id="foldopen00053" data-start="{" data-end="}">
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno"><a class="line" href="structnet_1_1_mac_addr.html#a4dc8e25dd5cbcd8fe46449de6340f5a2">   53</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="structnet_1_1_mac_addr.html#a4dc8e25dd5cbcd8fe46449de6340f5a2">is_null</a>()<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>        <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; <a class="code hl_variable" href="namespacenet.html#a87132e93c24bfd60f72e00a2986f07e1">ETH_ADDR_LEN</a>; ++i)</div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>            <span class="keywordflow">if</span> (<a class="code hl_variable" href="structnet_1_1_mac_addr.html#a6fc63a84e2731b6246e97d2a859b0dc5">addr</a>[i] != 0)</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>                <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>        <span class="keywordflow">return</span> <span class="keyword">true</span>;</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    }</div>
+</div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>} <a class="code hl_variable" href="namespacenet.html#abc797c4b5188f5f8f09cab0d2d841de7">__attribute__</a>((packed));</div>
+</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span> </div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno"><a class="line" href="namespacenet.html#ad5a420109c2abb655791051ce184c33d">   61</a></span><span class="keyword">constexpr</span> <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> <a class="code hl_variable" href="namespacenet.html#ad5a420109c2abb655791051ce184c33d">MAC_BROADCAST</a> = {{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}};</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno"><a class="line" href="namespacenet.html#a01aabe2976f3f0d3259a37c323f8f799">   62</a></span><span class="keyword">constexpr</span> <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> <a class="code hl_variable" href="namespacenet.html#a01aabe2976f3f0d3259a37c323f8f799">MAC_NULL</a> = {{0, 0, 0, 0, 0, 0}};</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span></div>
+<div class="foldopen" id="foldopen00065" data-start="{" data-end="};">
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno"><a class="line" href="structnet_1_1_ether_header.html">   65</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structnet_1_1_ether_header.html">EtherHeader</a> {</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno"><a class="line" href="structnet_1_1_ether_header.html#ad82b93ea3fcc348886989c92eb74f45e">   66</a></span>    <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> <a class="code hl_variable" href="structnet_1_1_ether_header.html#ad82b93ea3fcc348886989c92eb74f45e">dst</a>;   </div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno"><a class="line" href="structnet_1_1_ether_header.html#a72384a93364c33a02c53ef25a424bb3e">   67</a></span>    <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> <a class="code hl_variable" href="structnet_1_1_ether_header.html#a72384a93364c33a02c53ef25a424bb3e">src</a>;   </div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno"><a class="line" href="structnet_1_1_ether_header.html#ad0c98609c01a0106cd20817decc581e2">   68</a></span>    uint16_t <a class="code hl_variable" href="structnet_1_1_ether_header.html#ad0c98609c01a0106cd20817decc581e2">type</a>; </div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>} <a class="code hl_variable" href="namespacenet.html#abc797c4b5188f5f8f09cab0d2d841de7">__attribute__</a>((packed));</div>
+</div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span></div>
+<div class="foldopen" id="foldopen00072" data-start="{" data-end="};">
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno"><a class="line" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893">   72</a></span><span class="keyword">enum</span> <a class="code hl_enumeration" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893">EtherType</a> : uint16_t {</div>
+<div class="line"><a id="l00073" name="l00073"></a><span class="lineno"><a class="line" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893ae796740279ddacddccb6cac4e39e54f1">   73</a></span>    <a class="code hl_enumvalue" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893ae796740279ddacddccb6cac4e39e54f1">ETH_TYPE_IPV4</a> = 0x0800, </div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno"><a class="line" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893a29bab296a94c929f2f9cf11325ba55f4">   74</a></span>    <a class="code hl_enumvalue" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893a29bab296a94c929f2f9cf11325ba55f4">ETH_TYPE_ARP</a> = 0x0806,  </div>
+<div class="line"><a id="l00075" name="l00075"></a><span class="lineno"><a class="line" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893af9970eefc117adefc8691499b49f58d2">   75</a></span>    <a class="code hl_enumvalue" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893af9970eefc117adefc8691499b49f58d2">ETH_TYPE_IPV6</a> = 0x86DD, </div>
+<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>};</div>
+</div>
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span> </div>
+<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>} <span class="comment">// namespace net</span></div>
+<div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> global_state.hpp:61</div></div>
+<div class="ttc" id="anamespacenet_html_a01aabe2976f3f0d3259a37c323f8f799"><div class="ttname"><a href="namespacenet.html#a01aabe2976f3f0d3259a37c323f8f799">net::MAC_NULL</a></div><div class="ttdeci">constexpr MacAddr MAC_NULL</div><div class="ttdef"><b>Definition</b> ether.hpp:62</div></div>
+<div class="ttc" id="anamespacenet_html_a4eb0cbea0baea33fc20fbe5f9ee00efd"><div class="ttname"><a href="namespacenet.html#a4eb0cbea0baea33fc20fbe5f9ee00efd">net::ETH_FRAME_MAX</a></div><div class="ttdeci">constexpr size_t ETH_FRAME_MAX</div><div class="ttdef"><b>Definition</b> ether.hpp:31</div></div>
+<div class="ttc" id="anamespacenet_html_a87132e93c24bfd60f72e00a2986f07e1"><div class="ttname"><a href="namespacenet.html#a87132e93c24bfd60f72e00a2986f07e1">net::ETH_ADDR_LEN</a></div><div class="ttdeci">constexpr size_t ETH_ADDR_LEN</div><div class="ttdef"><b>Definition</b> ether.hpp:28</div></div>
+<div class="ttc" id="anamespacenet_html_a91dabda33ebaa24d5c6b90c149a09112"><div class="ttname"><a href="namespacenet.html#a91dabda33ebaa24d5c6b90c149a09112">net::ETH_MTU</a></div><div class="ttdeci">constexpr size_t ETH_MTU</div><div class="ttdef"><b>Definition</b> ether.hpp:30</div></div>
+<div class="ttc" id="anamespacenet_html_abc797c4b5188f5f8f09cab0d2d841de7"><div class="ttname"><a href="namespacenet.html#abc797c4b5188f5f8f09cab0d2d841de7">net::__attribute__</a></div><div class="ttdeci">struct net::ArpCacheEntry __attribute__</div></div>
+<div class="ttc" id="anamespacenet_html_ad5a420109c2abb655791051ce184c33d"><div class="ttname"><a href="namespacenet.html#ad5a420109c2abb655791051ce184c33d">net::MAC_BROADCAST</a></div><div class="ttdeci">constexpr MacAddr MAC_BROADCAST</div><div class="ttdef"><b>Definition</b> ether.hpp:61</div></div>
+<div class="ttc" id="anamespacenet_html_ae87d8a50d8ebd248c81b97cc7d2ede0f"><div class="ttname"><a href="namespacenet.html#ae87d8a50d8ebd248c81b97cc7d2ede0f">net::ETH_HEADER_LEN</a></div><div class="ttdeci">constexpr size_t ETH_HEADER_LEN</div><div class="ttdef"><b>Definition</b> ether.hpp:29</div></div>
+<div class="ttc" id="anamespacenet_html_aec7aea6ec09ae9699ac4c723e1efb893"><div class="ttname"><a href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893">net::EtherType</a></div><div class="ttdeci">EtherType</div><div class="ttdoc">EtherType constants (big-endian wire format).</div><div class="ttdef"><b>Definition</b> ether.hpp:72</div></div>
+<div class="ttc" id="anamespacenet_html_aec7aea6ec09ae9699ac4c723e1efb893a29bab296a94c929f2f9cf11325ba55f4"><div class="ttname"><a href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893a29bab296a94c929f2f9cf11325ba55f4">net::ETH_TYPE_ARP</a></div><div class="ttdeci">@ ETH_TYPE_ARP</div><div class="ttdoc">ARP.</div><div class="ttdef"><b>Definition</b> ether.hpp:74</div></div>
+<div class="ttc" id="anamespacenet_html_aec7aea6ec09ae9699ac4c723e1efb893ae796740279ddacddccb6cac4e39e54f1"><div class="ttname"><a href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893ae796740279ddacddccb6cac4e39e54f1">net::ETH_TYPE_IPV4</a></div><div class="ttdeci">@ ETH_TYPE_IPV4</div><div class="ttdoc">IPv4.</div><div class="ttdef"><b>Definition</b> ether.hpp:73</div></div>
+<div class="ttc" id="anamespacenet_html_aec7aea6ec09ae9699ac4c723e1efb893af9970eefc117adefc8691499b49f58d2"><div class="ttname"><a href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893af9970eefc117adefc8691499b49f58d2">net::ETH_TYPE_IPV6</a></div><div class="ttdeci">@ ETH_TYPE_IPV6</div><div class="ttdoc">IPv6.</div><div class="ttdef"><b>Definition</b> ether.hpp:75</div></div>
+<div class="ttc" id="astructnet_1_1_ether_header_html"><div class="ttname"><a href="structnet_1_1_ether_header.html">net::EtherHeader</a></div><div class="ttdoc">Ethernet frame header (14 bytes).</div><div class="ttdef"><b>Definition</b> ether.hpp:65</div></div>
+<div class="ttc" id="astructnet_1_1_ether_header_html_a72384a93364c33a02c53ef25a424bb3e"><div class="ttname"><a href="structnet_1_1_ether_header.html#a72384a93364c33a02c53ef25a424bb3e">net::EtherHeader::src</a></div><div class="ttdeci">MacAddr src</div><div class="ttdoc">Source MAC address.</div><div class="ttdef"><b>Definition</b> ether.hpp:67</div></div>
+<div class="ttc" id="astructnet_1_1_ether_header_html_ad0c98609c01a0106cd20817decc581e2"><div class="ttname"><a href="structnet_1_1_ether_header.html#ad0c98609c01a0106cd20817decc581e2">net::EtherHeader::type</a></div><div class="ttdeci">uint16_t type</div><div class="ttdoc">EtherType (big-endian).</div><div class="ttdef"><b>Definition</b> ether.hpp:68</div></div>
+<div class="ttc" id="astructnet_1_1_ether_header_html_ad82b93ea3fcc348886989c92eb74f45e"><div class="ttname"><a href="structnet_1_1_ether_header.html#ad82b93ea3fcc348886989c92eb74f45e">net::EtherHeader::dst</a></div><div class="ttdeci">MacAddr dst</div><div class="ttdoc">Destination MAC address.</div><div class="ttdef"><b>Definition</b> ether.hpp:66</div></div>
+<div class="ttc" id="astructnet_1_1_mac_addr_html"><div class="ttname"><a href="structnet_1_1_mac_addr.html">net::MacAddr</a></div><div class="ttdoc">Ethernet MAC address (6 bytes).</div><div class="ttdef"><b>Definition</b> ether.hpp:34</div></div>
+<div class="ttc" id="astructnet_1_1_mac_addr_html_a08156d7a33c3107ae0cf9fe17c28f687"><div class="ttname"><a href="structnet_1_1_mac_addr.html#a08156d7a33c3107ae0cf9fe17c28f687">net::MacAddr::operator==</a></div><div class="ttdeci">bool operator==(const MacAddr &amp;o) const</div><div class="ttdef"><b>Definition</b> ether.hpp:37</div></div>
+<div class="ttc" id="astructnet_1_1_mac_addr_html_a4dc8e25dd5cbcd8fe46449de6340f5a2"><div class="ttname"><a href="structnet_1_1_mac_addr.html#a4dc8e25dd5cbcd8fe46449de6340f5a2">net::MacAddr::is_null</a></div><div class="ttdeci">bool is_null() const</div><div class="ttdef"><b>Definition</b> ether.hpp:53</div></div>
+<div class="ttc" id="astructnet_1_1_mac_addr_html_a6fc63a84e2731b6246e97d2a859b0dc5"><div class="ttname"><a href="structnet_1_1_mac_addr.html#a6fc63a84e2731b6246e97d2a859b0dc5">net::MacAddr::addr</a></div><div class="ttdeci">uint8_t addr[ETH_ADDR_LEN]</div><div class="ttdoc">Octets in network order.</div><div class="ttdef"><b>Definition</b> ether.hpp:35</div></div>
+<div class="ttc" id="astructnet_1_1_mac_addr_html_a7938dd81d5183a94147878d45237274c"><div class="ttname"><a href="structnet_1_1_mac_addr.html#a7938dd81d5183a94147878d45237274c">net::MacAddr::operator!=</a></div><div class="ttdeci">bool operator!=(const MacAddr &amp;o) const</div><div class="ttdef"><b>Definition</b> ether.hpp:43</div></div>
+<div class="ttc" id="astructnet_1_1_mac_addr_html_a89411c00900cea0c3785eb49c7731534"><div class="ttname"><a href="structnet_1_1_mac_addr.html#a89411c00900cea0c3785eb49c7731534">net::MacAddr::is_broadcast</a></div><div class="ttdeci">bool is_broadcast() const</div><div class="ttdef"><b>Definition</b> ether.hpp:47</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

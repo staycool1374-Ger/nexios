@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
-<p>NIC (Network Interface Card) abstraction.  
+<p>NIC (Network Interface Card) abstraction exposed to the network stack.  
  <a href="#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="net_8hpp_source.html">net.hpp</a>&gt;</code></p>
@@ -133,21 +133,26 @@ Collaboration diagram for kernel::net::Nic:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a60abb3dae2d326c1b422609666a7a8a5" id="r_a60abb3dae2d326c1b422609666a7a8a5"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a60abb3dae2d326c1b422609666a7a8a5">name</a></td></tr>
+<tr class="memdesc:a60abb3dae2d326c1b422609666a7a8a5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interface name (e.g. "eth0").  <br /></td></tr>
 <tr class="memitem:ac4413ffd2d265e180cb53897a99fc116" id="r_ac4413ffd2d265e180cb53897a99fc116"><td class="memItemLeft"><a class="el" href="structnet_1_1_mac_addr.html">MacAddr</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac4413ffd2d265e180cb53897a99fc116">mac</a></td></tr>
+<tr class="memdesc:ac4413ffd2d265e180cb53897a99fc116"><td class="mdescLeft">&#160;</td><td class="mdescRight">This NIC's MAC address.  <br /></td></tr>
 <tr class="memitem:a530b4045573acda6bba11713131c60db" id="r_a530b4045573acda6bba11713131c60db"><td class="memItemLeft"><a class="el" href="structnet_1_1_ipv4_addr.html">Ipv4Addr</a>&#160;</td><td class="memItemRight"><a class="el" href="#a530b4045573acda6bba11713131c60db">ip</a></td></tr>
+<tr class="memdesc:a530b4045573acda6bba11713131c60db"><td class="mdescLeft">&#160;</td><td class="mdescRight">Assigned IPv4 address.  <br /></td></tr>
 <tr class="memitem:aaf637c7f855f76eb59448b32d4668439" id="r_aaf637c7f855f76eb59448b32d4668439"><td class="memItemLeft"><a class="el" href="structnet_1_1_ipv4_addr.html">Ipv4Addr</a>&#160;</td><td class="memItemRight"><a class="el" href="#aaf637c7f855f76eb59448b32d4668439">subnet</a></td></tr>
+<tr class="memdesc:aaf637c7f855f76eb59448b32d4668439"><td class="mdescLeft">&#160;</td><td class="mdescRight">Subnet mask.  <br /></td></tr>
 <tr class="memitem:ab3a59b0d764395c5787e73ea9b89215b" id="r_ab3a59b0d764395c5787e73ea9b89215b"><td class="memItemLeft"><a class="el" href="structnet_1_1_ipv4_addr.html">Ipv4Addr</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab3a59b0d764395c5787e73ea9b89215b">gateway</a></td></tr>
-<tr class="memitem:a9cfdac0fff68942bc6762a83df132b36" id="r_a9cfdac0fff68942bc6762a83df132b36"><td class="memItemLeft">bool(*&#160;</td><td class="memItemRight"><a class="el" href="#a9cfdac0fff68942bc6762a83df132b36">send_frame</a> )(const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> <a class="el" href="virtio_8hpp.html#a96bbf959016e4411c9e6b9812a8be60a">len</a>)</td></tr>
+<tr class="memdesc:ab3a59b0d764395c5787e73ea9b89215b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default gateway.  <br /></td></tr>
+<tr class="memitem:a9cfdac0fff68942bc6762a83df132b36" id="r_a9cfdac0fff68942bc6762a83df132b36"><td class="memItemLeft">bool(*&#160;</td><td class="memItemRight"><a class="el" href="#a9cfdac0fff68942bc6762a83df132b36">send_frame</a> )(const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> len)</td></tr>
 <tr class="memdesc:a9cfdac0fff68942bc6762a83df132b36"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send a raw Ethernet frame. Implemented by the NIC driver.  <br /></td></tr>
-<tr class="memitem:aaeefb4b2b8da1d91522c60471c2d3f5c" id="r_aaeefb4b2b8da1d91522c60471c2d3f5c"><td class="memItemLeft">bool(*&#160;</td><td class="memItemRight"><a class="el" href="#aaeefb4b2b8da1d91522c60471c2d3f5c">poll_frame</a> )(uint8_t *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> &amp;<a class="el" href="virtio_8hpp.html#a96bbf959016e4411c9e6b9812a8be60a">len</a>)</td></tr>
+<tr class="memitem:aaeefb4b2b8da1d91522c60471c2d3f5c" id="r_aaeefb4b2b8da1d91522c60471c2d3f5c"><td class="memItemLeft">bool(*&#160;</td><td class="memItemRight"><a class="el" href="#aaeefb4b2b8da1d91522c60471c2d3f5c">poll_frame</a> )(uint8_t *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> &amp;len)</td></tr>
 <tr class="memdesc:aaeefb4b2b8da1d91522c60471c2d3f5c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Poll for a received frame. Non-blocking.  <br /></td></tr>
-<tr class="memitem:a02b0d87a05acf847f2533cb61c6b957a" id="r_a02b0d87a05acf847f2533cb61c6b957a"><td class="memItemLeft">void(*&#160;</td><td class="memItemRight"><a class="el" href="#a02b0d87a05acf847f2533cb61c6b957a">on_frame</a> )(const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> <a class="el" href="virtio_8hpp.html#a96bbf959016e4411c9e6b9812a8be60a">len</a>)</td></tr>
+<tr class="memitem:a02b0d87a05acf847f2533cb61c6b957a" id="r_a02b0d87a05acf847f2533cb61c6b957a"><td class="memItemLeft">void(*&#160;</td><td class="memItemRight"><a class="el" href="#a02b0d87a05acf847f2533cb61c6b957a">on_frame</a> )(const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> len)</td></tr>
 <tr class="memdesc:a02b0d87a05acf847f2533cb61c6b957a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Called when a frame arrives — set by the stack.  <br /></td></tr>
 <tr class="memitem:a9a42742d935b78998c4e250a236c2c92" id="r_a9a42742d935b78998c4e250a236c2c92"><td class="memItemLeft">void *&#160;</td><td class="memItemRight"><a class="el" href="#a9a42742d935b78998c4e250a236c2c92">driver_data</a></td></tr>
 <tr class="memdesc:a9a42742d935b78998c4e250a236c2c92"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structkernel_1_1_driver.html" title="Describes a single driver module.">Driver</a> private data.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>NIC (Network Interface Card) abstraction. </p>
+<div class="textblock"><p>NIC (Network Interface Card) abstraction exposed to the network stack. </p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a9a42742d935b78998c4e250a236c2c92" name="a9a42742d935b78998c4e250a236c2c92"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a9a42742d935b78998c4e250a236c2c92">&#9670;&#160;</a></span>driver_data</h2>
@@ -177,6 +182,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Default gateway. </p>
+
 </div>
 </div>
 <a id="a530b4045573acda6bba11713131c60db" name="a530b4045573acda6bba11713131c60db"></a>
@@ -190,6 +197,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Assigned IPv4 address. </p>
 
 </div>
 </div>
@@ -205,6 +214,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>This NIC's MAC address. </p>
+
 </div>
 </div>
 <a id="a60abb3dae2d326c1b422609666a7a8a5" name="a60abb3dae2d326c1b422609666a7a8a5"></a>
@@ -219,6 +230,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Interface name (e.g. "eth0"). </p>
+
 </div>
 </div>
 <a id="a02b0d87a05acf847f2533cb61c6b957a" name="a02b0d87a05acf847f2533cb61c6b957a"></a>
@@ -228,7 +241,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void(* net::Nic::on_frame) (const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> <a class="el" href="virtio_8hpp.html#a96bbf959016e4411c9e6b9812a8be60a">len</a>)</td>
+          <td class="memname">void(* net::Nic::on_frame) (const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> len)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -244,7 +257,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">bool(* net::Nic::poll_frame) (uint8_t *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> &amp;<a class="el" href="virtio_8hpp.html#a96bbf959016e4411c9e6b9812a8be60a">len</a>)</td>
+          <td class="memname">bool(* net::Nic::poll_frame) (uint8_t *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> &amp;len)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -260,7 +273,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">bool(* net::Nic::send_frame) (const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> <a class="el" href="virtio_8hpp.html#a96bbf959016e4411c9e6b9812a8be60a">len</a>)</td>
+          <td class="memname">bool(* net::Nic::send_frame) (const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> len)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -280,6 +293,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Subnet mask. </p>
 
 </div>
 </div>

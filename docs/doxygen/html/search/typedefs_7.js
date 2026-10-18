@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['nullptr_5ft_0',['nullptr_t',['../namespacearch.html#a04efa6b3c0547f1ce0bb801e33467690',1,'arch']]]
+  ['l_0',['L',['../namespacekernel_1_1debug.html#a516d263e9a9dd5318b938067a1e3b353',1,'kernel::debug']]]
 ];

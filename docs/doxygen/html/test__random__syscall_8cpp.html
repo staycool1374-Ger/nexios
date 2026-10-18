@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -144,7 +144,7 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Random system call interface tests. </p>
-<p>v0.3.10 rework (SIMULATED → DRIVEN): every syscall runs inside a REAL kernel task (prio ≥ 11) that is genuinely dispatched — the handler's <span class="tt"><a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f" title="Get the currently running task from the scheduler.">syscall_task()</a></span> resolves to the running task. The harness never calls Syscall::handle() directly. </p>
+<p>v0.3.10 rework (SIMULATED → DRIVEN): every syscall runs inside a REAL kernel task (prio ≥ 11) that is genuinely dispatched — the handler's <span class="tt"><a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f" title="Get the currently running task from the scheduler.">syscall_task()</a></span> resolves to the running task. The harness never calls <a class="el" href="classkernel_1_1_syscall.html#a4166c97da7594caaa03a16894d8dadf7" title="Dispatch a system call to the appropriate handler.">Syscall::handle()</a> directly. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a83bce0d42e081fc6ffcff1c16a4e89b7" name="a83bce0d42e081fc6ffcff1c16a4e89b7"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a83bce0d42e081fc6ffcff1c16a4e89b7">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/4]</span></h2>

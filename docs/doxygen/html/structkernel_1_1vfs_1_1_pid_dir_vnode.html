@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
-<p>Vnode representing a per-process directory in /proc.  
+<p><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> representing a per-process directory in /proc.  
  <a href="#details">More...</a></p>
 <div class="dynheader">
 Collaboration diagram for kernel::vfs::PidDirVnode:</div>
@@ -130,23 +130,23 @@ Collaboration diagram for kernel::vfs::PidDirVnode:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:a3ff4df06403fc4ca53c75fc508001fd4" id="r_a3ff4df06403fc4ca53c75fc508001fd4"><td class="memItemLeft">Vnode&#160;</td><td class="memItemRight"><a class="el" href="#a3ff4df06403fc4ca53c75fc508001fd4">base</a></td></tr>
-<tr class="memdesc:a3ff4df06403fc4ca53c75fc508001fd4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Base Vnode.  <br /></td></tr>
+<tr class="memitem:a3ff4df06403fc4ca53c75fc508001fd4" id="r_a3ff4df06403fc4ca53c75fc508001fd4"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3ff4df06403fc4ca53c75fc508001fd4">base</a></td></tr>
+<tr class="memdesc:a3ff4df06403fc4ca53c75fc508001fd4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Base <a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a>.  <br /></td></tr>
 <tr class="memitem:a12a909d26d3b60e39539055f4508f4a1" id="r_a12a909d26d3b60e39539055f4508f4a1"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a12a909d26d3b60e39539055f4508f4a1">pid</a></td></tr>
 <tr class="memdesc:a12a909d26d3b60e39539055f4508f4a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Process ID.  <br /></td></tr>
 <tr class="memitem:ae66600164b12eff2116dbddea25b5853" id="r_ae66600164b12eff2116dbddea25b5853"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ae66600164b12eff2116dbddea25b5853">task</a></td></tr>
 <tr class="memdesc:ae66600164b12eff2116dbddea25b5853"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pointer to the task's TCB.  <br /></td></tr>
-<tr class="memitem:ad442fa828cb32a88b711902da5927f85" id="r_ad442fa828cb32a88b711902da5927f85"><td class="memItemLeft">Vnode&#160;</td><td class="memItemRight"><a class="el" href="#ad442fa828cb32a88b711902da5927f85">stat_vnode</a></td></tr>
+<tr class="memitem:ad442fa828cb32a88b711902da5927f85" id="r_ad442fa828cb32a88b711902da5927f85"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad442fa828cb32a88b711902da5927f85">stat_vnode</a></td></tr>
 <tr class="memdesc:ad442fa828cb32a88b711902da5927f85"><td class="mdescLeft">&#160;</td><td class="mdescRight">Embedded stat vnode.  <br /></td></tr>
 <tr class="memitem:a0579fd3201b25ade43e9eb96da1b49b9" id="r_a0579fd3201b25ade43e9eb96da1b49b9"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_pid_stat_vnode.html">PidStatVnode</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0579fd3201b25ade43e9eb96da1b49b9">stat_data</a></td></tr>
 <tr class="memdesc:a0579fd3201b25ade43e9eb96da1b49b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Embedded stat vnode data.  <br /></td></tr>
-<tr class="memitem:a4c3d3eec0c4f9f8763f52450edab286a" id="r_a4c3d3eec0c4f9f8763f52450edab286a"><td class="memItemLeft">Vnode&#160;</td><td class="memItemRight"><a class="el" href="#a4c3d3eec0c4f9f8763f52450edab286a">watchdog_vnode</a></td></tr>
+<tr class="memitem:a4c3d3eec0c4f9f8763f52450edab286a" id="r_a4c3d3eec0c4f9f8763f52450edab286a"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4c3d3eec0c4f9f8763f52450edab286a">watchdog_vnode</a></td></tr>
 <tr class="memdesc:a4c3d3eec0c4f9f8763f52450edab286a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Embedded watchdog vnode (issue #41).  <br /></td></tr>
 <tr class="memitem:a10bfec4bb74c35ffcf078270baf464c8" id="r_a10bfec4bb74c35ffcf078270baf464c8"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_pid_watchdog_vnode.html">PidWatchdogVnode</a>&#160;</td><td class="memItemRight"><a class="el" href="#a10bfec4bb74c35ffcf078270baf464c8">watchdog_data</a></td></tr>
 <tr class="memdesc:a10bfec4bb74c35ffcf078270baf464c8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Embedded watchdog vnode data.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Vnode representing a per-process directory in /proc. </p>
+<div class="textblock"><p><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> representing a per-process directory in /proc. </p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a3ff4df06403fc4ca53c75fc508001fd4" name="a3ff4df06403fc4ca53c75fc508001fd4"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3ff4df06403fc4ca53c75fc508001fd4">&#9670;&#160;</a></span>base</h2>
@@ -155,12 +155,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">Vnode kernel::vfs::PidDirVnode::base</td>
+          <td class="memname"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> kernel::vfs::PidDirVnode::base</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
-<p>Base Vnode. </p>
+<p>Base <a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a>. </p>
 
 </div>
 </div>
@@ -203,7 +203,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">Vnode kernel::vfs::PidDirVnode::stat_vnode</td>
+          <td class="memname"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> kernel::vfs::PidDirVnode::stat_vnode</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -251,7 +251,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">Vnode kernel::vfs::PidDirVnode::watchdog_vnode</td>
+          <td class="memname"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> kernel::vfs::PidDirVnode::watchdog_vnode</td>
         </tr>
       </table>
 </div><div class="memdoc">

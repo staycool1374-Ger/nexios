@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
+<p>IOCD <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> request message.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="iocd_8hpp_source.html">iocd.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::iocd::Msg:</div>
@@ -130,9 +133,13 @@ Collaboration diagram for kernel::iocd::Msg:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a38e84dd77e5f4e243e1ec662dc61af21" id="r_a38e84dd77e5f4e243e1ec662dc61af21"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a38e84dd77e5f4e243e1ec662dc61af21">type</a></td></tr>
+<tr class="memdesc:a38e84dd77e5f4e243e1ec662dc61af21"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structkernel_1_1_message.html" title="The register budget must fit the message payload (design paper #11 §3.8).">Message</a> type (IOCD_REGISTER_DEVICE, etc.).  <br /></td></tr>
 <tr class="memitem:a43fd0002a4c224405b0e9aa8e9ef93de" id="r_a43fd0002a4c224405b0e9aa8e9ef93de"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a43fd0002a4c224405b0e9aa8e9ef93de">args</a> [7]</td></tr>
+<tr class="memdesc:a43fd0002a4c224405b0e9aa8e9ef93de"><td class="mdescLeft">&#160;</td><td class="mdescRight">Type-specific arguments.  <br /></td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>IOCD <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> request message. </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a43fd0002a4c224405b0e9aa8e9ef93de" name="a43fd0002a4c224405b0e9aa8e9ef93de"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a43fd0002a4c224405b0e9aa8e9ef93de">&#9670;&#160;</a></span>args</h2>
 
@@ -144,6 +151,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Type-specific arguments. </p>
 
 </div>
 </div>
@@ -158,6 +167,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p><a class="el" href="structkernel_1_1_message.html" title="The register budget must fit the message payload (design paper #11 §3.8).">Message</a> type (IOCD_REGISTER_DEVICE, etc.). </p>
 
 </div>
 </div>

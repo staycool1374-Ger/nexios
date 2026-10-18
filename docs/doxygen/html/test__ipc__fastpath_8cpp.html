@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__ipc__fas
 </div><!--header-->
 <div class="contents">
 
-<p>In-register IPC fastpath tests (issue #11). Verifies the register-passing SEND_FAST/RECV_FAST/SEND_SYNC_FAST (74/75/76): FAST-mask membership, the regs[] ABI layout, the new <a class="el" href="structkernel_1_1_message_queue.html#abea5b684d416c4467bb309fe146cbb8a" title="Pop the highest-priority message only if it fits max_size. Fail-closed for the IPC fastpath (issue #1...">MessageQueue::pop_clamped()</a> primitive (fail-closed oversized handling), byte-for-byte payload roundtrips, blocking semantics identical to the full path (SEND_FAST on a full queue, RECV_FAST on an empty queue), oversized fail-closed rules (RECV_FAST never consumes; SEND_SYNC_FAST leaves an oversized reply queued), authority parity with SEND, canary-skip on the FAST path, and relative latency (docs/specs/ipc-fastpath.md §5).  
+<p>In-register <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> fastpath tests (issue #11). Verifies the register-passing SEND_FAST/RECV_FAST/SEND_SYNC_FAST (74/75/76): FAST-mask membership, the regs[] ABI layout, the new <a class="el" href="structkernel_1_1_message_queue.html#abea5b684d416c4467bb309fe146cbb8a" title="Pop the highest-priority message only if it fits max_size. Fail-closed for the IPC fastpath (issue #1...">MessageQueue::pop_clamped()</a> primitive (fail-closed oversized handling), byte-for-byte payload roundtrips, blocking semantics identical to the full path (SEND_FAST on a full queue, RECV_FAST on an empty queue), oversized fail-closed rules (RECV_FAST never consumes; SEND_SYNC_FAST leaves an oversized reply queued), authority parity with SEND, canary-skip on the FAST path, and relative latency (docs/specs/ipc-fastpath.md §5).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
@@ -158,8 +158,8 @@ Functions</h2></td></tr>
 <tr class="memitem:aeb94d4eba1757f91f6961761cd26cf2a" id="r_aeb94d4eba1757f91f6961761cd26cf2a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aeb94d4eba1757f91f6961761cd26cf2a">register_ipc_fastpath_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>In-register IPC fastpath tests (issue #11). Verifies the register-passing SEND_FAST/RECV_FAST/SEND_SYNC_FAST (74/75/76): FAST-mask membership, the regs[] ABI layout, the new <a class="el" href="structkernel_1_1_message_queue.html#abea5b684d416c4467bb309fe146cbb8a" title="Pop the highest-priority message only if it fits max_size. Fail-closed for the IPC fastpath (issue #1...">MessageQueue::pop_clamped()</a> primitive (fail-closed oversized handling), byte-for-byte payload roundtrips, blocking semantics identical to the full path (SEND_FAST on a full queue, RECV_FAST on an empty queue), oversized fail-closed rules (RECV_FAST never consumes; SEND_SYNC_FAST leaves an oversized reply queued), authority parity with SEND, canary-skip on the FAST path, and relative latency (docs/specs/ipc-fastpath.md §5). </p>
-<p>SAFETY: RECV_FAST / SEND_FAST are real dispatched syscalls — blocking variants use the real scheduler block machinery (the H2 deferred switch, WEDGE invariant and PI boost are untouched). Tests drive them via Syscall::handle with fabricated regs[] frames and real tasks exactly as <a class="el" href="test__ipc_8cpp.html" title="IPC (Inter-Process Communication) tests.">test_ipc.cpp</a> / <a class="el" href="test__ipc__blocking_8cpp.html" title="IPC blocking send/receive tests.">test_ipc_blocking.cpp</a> do. </p>
+<div class="textblock"><p>In-register <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> fastpath tests (issue #11). Verifies the register-passing SEND_FAST/RECV_FAST/SEND_SYNC_FAST (74/75/76): FAST-mask membership, the regs[] ABI layout, the new <a class="el" href="structkernel_1_1_message_queue.html#abea5b684d416c4467bb309fe146cbb8a" title="Pop the highest-priority message only if it fits max_size. Fail-closed for the IPC fastpath (issue #1...">MessageQueue::pop_clamped()</a> primitive (fail-closed oversized handling), byte-for-byte payload roundtrips, blocking semantics identical to the full path (SEND_FAST on a full queue, RECV_FAST on an empty queue), oversized fail-closed rules (RECV_FAST never consumes; SEND_SYNC_FAST leaves an oversized reply queued), authority parity with SEND, canary-skip on the FAST path, and relative latency (docs/specs/ipc-fastpath.md §5). </p>
+<p>SAFETY: RECV_FAST / SEND_FAST are real dispatched syscalls — blocking variants use the real scheduler block machinery (the H2 deferred switch, WEDGE invariant and PI boost are untouched). Tests drive them via <a class="el" href="classkernel_1_1_syscall.html#a4166c97da7594caaa03a16894d8dadf7" title="Dispatch a system call to the appropriate handler.">Syscall::handle</a> with fabricated regs[] frames and real tasks exactly as <a class="el" href="test__ipc_8cpp.html" title="IPC (Inter-Process Communication) tests.">test_ipc.cpp</a> / <a class="el" href="test__ipc__blocking_8cpp.html" title="IPC blocking send/receive tests.">test_ipc_blocking.cpp</a> do. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="afe0c36cabdac5507042050c90268c858" name="afe0c36cabdac5507042050c90268c858"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#afe0c36cabdac5507042050c90268c858">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/14]</span></h2>
@@ -179,6 +179,12 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__ipc__fastpath_8cpp_afe0c36cabdac5507042050c90268c858_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_afe0c36cabdac5507042050c90268c858_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -204,7 +210,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_a208a338ed675bff4686e57c9129f5da8_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_a208a338ed675bff4686e57c9129f5da8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -231,7 +237,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_a821d78cd7fd755eedcd3e66c62cc0968_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_a821d78cd7fd755eedcd3e66c62cc0968_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -258,7 +264,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_a6a95c5374f547d2b972de3ea5a8d86a0_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_a6a95c5374f547d2b972de3ea5a8d86a0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -306,7 +312,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_ae302eb60ff821683700d534281444e8c_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_ae302eb60ff821683700d534281444e8c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -333,7 +339,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_a73e02205cd77dcb65f8365d771f4b36b_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_a73e02205cd77dcb65f8365d771f4b36b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -360,7 +366,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_a42ec967f2c0543cbd263127416248bc5_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_a42ec967f2c0543cbd263127416248bc5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -387,7 +393,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_a48933f9df0c6ff82e4d1ca35b2525612_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_a48933f9df0c6ff82e4d1ca35b2525612_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -414,7 +420,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_ab7f2697e90055898484efa0f6e46cf87_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_ab7f2697e90055898484efa0f6e46cf87_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -441,7 +447,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_ae6a7cc0b19a68a979500f5adb664cb6f_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_ae6a7cc0b19a68a979500f5adb664cb6f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -468,7 +474,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_aa17687d470cd0579eb139f9430aed93b_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_aa17687d470cd0579eb139f9430aed93b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -495,7 +501,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_ac0a95d572bfd376455bf9335d7721a63_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_ac0a95d572bfd376455bf9335d7721a63_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -522,7 +528,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_a5d69577fc60ee885b4479624101dbfe1_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_a5d69577fc60ee885b4479624101dbfe1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -545,7 +551,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__ipc__fastpath_8cpp_aeb94d4eba1757f91f6961761cd26cf2a_cgraph.png" border="0" usemap="#atest__ipc__fastpath_8cpp_aeb94d4eba1757f91f6961761cd26cf2a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 14 -->
 </div>
 
 </div>

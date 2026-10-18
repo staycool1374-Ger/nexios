@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -126,11 +126,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('shell_8hpp.htm
 Include dependency graph for shell.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="shell_8hpp__incl.png" border="0" usemap="#asrc_2services_2shell_8hpp" loading="lazy" alt=""/></div>
-<map name="asrc_2services_2shell_8hpp" id="asrc_2services_2shell_8hpp">
-<area shape="rect" title="Interactive command&#45;line shell with built&#45;in and user commands." alt="" coords="5,5,154,32"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="40,80,119,107"/>
-<area shape="poly" title=" " alt="" coords="81,31,82,65,77,64,78,35"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
@@ -157,6 +153,11 @@ Data Structures</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:service" id="r_service"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespaceservice.html">service</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a16d3f7f60ab906f01523bd7c58625a76" id="r_a16d3f7f60ab906f01523bd7c58625a76"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespaceservice.html#a16d3f7f60ab906f01523bd7c58625a76">service::shell_try_get_key</a> (char &amp;out)</td></tr>
+<tr class="memdesc:a16d3f7f60ab906f01523bd7c58625a76"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam (issue #303 item 3): P2 key-delivery poll exposed so a shell-level test can drive the exact production path (serial → iocd daemon → hardware ring). Zero-logic wrapper over the internal poll above.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Interactive command-line shell with built-in and user commands. </p>

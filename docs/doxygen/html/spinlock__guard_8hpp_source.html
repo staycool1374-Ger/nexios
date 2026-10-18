@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,64 +121,66 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('spinlock__guar
 <a href="spinlock__guard_8hpp.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#pragma once</span></div>
 <div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span> </div>
 <div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span></div>
-<div class="line"><a id="l00006" name="l00006"></a><span class="lineno"><a class="line" href="structadopt__lock__t.html">    6</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structadopt__lock__t.html">adopt_lock_t</a> {};</div>
-<div class="line"><a id="l00008" name="l00008"></a><span class="lineno"><a class="line" href="spinlock__guard_8hpp.html#ae87541999d37878249d8fbb062bd6017">    8</a></span><span class="keyword">constexpr</span> <a class="code hl_struct" href="structadopt__lock__t.html">adopt_lock_t</a> <a class="code hl_variable" href="spinlock__guard_8hpp.html#ae87541999d37878249d8fbb062bd6017">adopt_lock</a>{};</div>
-<div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span></div>
-<div class="foldopen" id="foldopen00011" data-start="{" data-end="};">
-<div class="line"><a id="l00011" name="l00011"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html">   11</a></span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Lock&gt; <span class="keyword">class </span>[[nodiscard]] <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> {</div>
-<div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span>  <span class="keyword">public</span>:</div>
-<div class="foldopen" id="foldopen00014" data-start="{" data-end="}">
-<div class="line"><a id="l00014" name="l00014"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">   14</a></span>    <span class="keyword">explicit</span> <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a>(Lock &amp;lock) noexcept : lock_(lock), owns_(<span class="keyword">true</span>) {</div>
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>        lock_.lock();</div>
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    }</div>
+<div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="preprocessor">#include &lt;<a class="code" href="concepts_8hpp.html">concepts.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span></div>
+<div class="line"><a id="l00007" name="l00007"></a><span class="lineno"><a class="line" href="structadopt__lock__t.html">    7</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structadopt__lock__t.html">adopt_lock_t</a> {};</div>
+<div class="line"><a id="l00009" name="l00009"></a><span class="lineno"><a class="line" href="spinlock__guard_8hpp.html#ae87541999d37878249d8fbb062bd6017">    9</a></span><span class="keyword">constexpr</span> <a class="code hl_struct" href="structadopt__lock__t.html">adopt_lock_t</a> <a class="code hl_variable" href="spinlock__guard_8hpp.html#ae87541999d37878249d8fbb062bd6017">adopt_lock</a>{};</div>
+<div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span></div>
+<div class="foldopen" id="foldopen00013" data-start="{" data-end="};">
+<div class="line"><a id="l00013" name="l00013"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html">   13</a></span><span class="keyword">template</span> &lt;kernel::Lockable Lock&gt; <span class="keyword">class </span>[[nodiscard]] <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> {</div>
+<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span>  <span class="keyword">public</span>:</div>
+<div class="foldopen" id="foldopen00016" data-start="{" data-end="}">
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">   16</a></span>    <span class="keyword">explicit</span> <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a>(Lock &amp;lock) noexcept : lock_(lock), owns_(<span class="keyword">true</span>) {</div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>        lock_.lock();</div>
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    }</div>
 </div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span></div>
-<div class="foldopen" id="foldopen00021" data-start="{" data-end="}">
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a54f9dc0b49255d1b0a4f2f9f531dd28f">   21</a></span>    <span class="keyword">explicit</span> <a class="code hl_function" href="class_spin_lock_guard.html#a54f9dc0b49255d1b0a4f2f9f531dd28f">SpinLockGuard</a>(Lock &amp;lock, <a class="code hl_struct" href="structadopt__lock__t.html">adopt_lock_t</a>) noexcept</div>
-<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>        : lock_(lock), owns_(<span class="keyword">true</span>) {</div>
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    }</div>
+<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span></div>
+<div class="foldopen" id="foldopen00023" data-start="{" data-end="}">
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a54f9dc0b49255d1b0a4f2f9f531dd28f">   23</a></span>    <span class="keyword">explicit</span> <a class="code hl_function" href="class_spin_lock_guard.html#a54f9dc0b49255d1b0a4f2f9f531dd28f">SpinLockGuard</a>(Lock &amp;lock, <a class="code hl_struct" href="structadopt__lock__t.html">adopt_lock_t</a>) noexcept</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>        : lock_(lock), owns_(<span class="keyword">true</span>) {</div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>    }</div>
 </div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
-<div class="foldopen" id="foldopen00025" data-start="{" data-end="}">
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a29d70f70e6499f0a1b97ca4282c3974c">   25</a></span>    <a class="code hl_function" href="class_spin_lock_guard.html#a29d70f70e6499f0a1b97ca4282c3974c">~SpinLockGuard</a>() noexcept {</div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>        <span class="keywordflow">if</span> (owns_)</div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>            lock_.unlock();</div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    }</div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span> </div>
+<div class="foldopen" id="foldopen00027" data-start="{" data-end="}">
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a29d70f70e6499f0a1b97ca4282c3974c">   27</a></span>    <a class="code hl_function" href="class_spin_lock_guard.html#a29d70f70e6499f0a1b97ca4282c3974c">~SpinLockGuard</a>() noexcept {</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>        <span class="keywordflow">if</span> (owns_)</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>            lock_.unlock();</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>    }</div>
 </div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span></div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#ae50bdcd8e6138968f9f54052372810d0">   31</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="class_spin_lock_guard.html#ae50bdcd8e6138968f9f54052372810d0">owns_lock</a>() const noexcept { <span class="keywordflow">return</span> owns_; }</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span></div>
-<div class="foldopen" id="foldopen00034" data-start="{" data-end="}">
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a1ffb2994e0e021147d1c624246485813">   34</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="class_spin_lock_guard.html#a1ffb2994e0e021147d1c624246485813">unlock</a>() noexcept {</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>        <span class="keywordflow">if</span> (owns_) {</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>            lock_.unlock();</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>            owns_ = <span class="keyword">false</span>;</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>        }</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    }</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span></div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#ae50bdcd8e6138968f9f54052372810d0">   33</a></span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="class_spin_lock_guard.html#ae50bdcd8e6138968f9f54052372810d0">owns_lock</a>() const noexcept { <span class="keywordflow">return</span> owns_; }</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span></div>
+<div class="foldopen" id="foldopen00036" data-start="{" data-end="}">
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a1ffb2994e0e021147d1c624246485813">   36</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="class_spin_lock_guard.html#a1ffb2994e0e021147d1c624246485813">unlock</a>() noexcept {</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>        <span class="keywordflow">if</span> (owns_) {</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>            lock_.unlock();</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>            owns_ = <span class="keyword">false</span>;</div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>        }</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    }</div>
 </div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span> </div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a22fc95da8f5d322eee7eb5f9a65383e3">   41</a></span>    <a class="code hl_function" href="class_spin_lock_guard.html#a22fc95da8f5d322eee7eb5f9a65383e3">SpinLockGuard</a>(<span class="keyword">const</span> <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a71a83ae3cc1f70d6d5a1424a910b4a34">   42</a></span>    <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;<a class="code hl_function" href="class_spin_lock_guard.html#a71a83ae3cc1f70d6d5a1424a910b4a34">operator=</a>(<span class="keyword">const</span> <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a0f7a8fa8a1ee329e27e0bff03cae3a31">   43</a></span>    <a class="code hl_function" href="class_spin_lock_guard.html#a0f7a8fa8a1ee329e27e0bff03cae3a31">SpinLockGuard</a>(<a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;&amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a15aa9d4b3c4606646622f7f12b56f641">   44</a></span>    <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;<a class="code hl_function" href="class_spin_lock_guard.html#a15aa9d4b3c4606646622f7f12b56f641">operator=</a>(<a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;&amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span> </div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>  <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    Lock &amp;lock_;</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    <span class="keywordtype">bool</span> owns_ = <span class="keyword">false</span>;</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>};</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span> </div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a22fc95da8f5d322eee7eb5f9a65383e3">   43</a></span>    <a class="code hl_function" href="class_spin_lock_guard.html#a22fc95da8f5d322eee7eb5f9a65383e3">SpinLockGuard</a>(<span class="keyword">const</span> <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a71a83ae3cc1f70d6d5a1424a910b4a34">   44</a></span>    <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;<a class="code hl_function" href="class_spin_lock_guard.html#a71a83ae3cc1f70d6d5a1424a910b4a34">operator=</a>(<span class="keyword">const</span> <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a0f7a8fa8a1ee329e27e0bff03cae3a31">   45</a></span>    <a class="code hl_function" href="class_spin_lock_guard.html#a0f7a8fa8a1ee329e27e0bff03cae3a31">SpinLockGuard</a>(<a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;&amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno"><a class="line" href="class_spin_lock_guard.html#a15aa9d4b3c4606646622f7f12b56f641">   46</a></span>    <a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;<a class="code hl_function" href="class_spin_lock_guard.html#a15aa9d4b3c4606646622f7f12b56f641">operator=</a>(<a class="code hl_function" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard</a> &amp;&amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span> </div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>  <span class="keyword">private</span>:</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    Lock &amp;lock_;</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    <span class="keywordtype">bool</span> owns_ = <span class="keyword">false</span>;</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>};</div>
 </div>
 <div class="ttc" id="aclass_spin_lock_guard_html_a0f7a8fa8a1ee329e27e0bff03cae3a31"><div class="ttname"><a href="class_spin_lock_guard.html#a0f7a8fa8a1ee329e27e0bff03cae3a31">SpinLockGuard::SpinLockGuard</a></div><div class="ttdeci">SpinLockGuard(SpinLockGuard &amp;&amp;)=delete</div></div>
 <div class="ttc" id="aclass_spin_lock_guard_html_a15aa9d4b3c4606646622f7f12b56f641"><div class="ttname"><a href="class_spin_lock_guard.html#a15aa9d4b3c4606646622f7f12b56f641">SpinLockGuard::operator=</a></div><div class="ttdeci">SpinLockGuard &amp; operator=(SpinLockGuard &amp;&amp;)=delete</div></div>
-<div class="ttc" id="aclass_spin_lock_guard_html_a1ffb2994e0e021147d1c624246485813"><div class="ttname"><a href="class_spin_lock_guard.html#a1ffb2994e0e021147d1c624246485813">SpinLockGuard::unlock</a></div><div class="ttdeci">void unlock() noexcept</div><div class="ttdoc">Release the lock early (guard becomes a no-op on destruction).</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:34</div></div>
+<div class="ttc" id="aclass_spin_lock_guard_html_a1ffb2994e0e021147d1c624246485813"><div class="ttname"><a href="class_spin_lock_guard.html#a1ffb2994e0e021147d1c624246485813">SpinLockGuard::unlock</a></div><div class="ttdeci">void unlock() noexcept</div><div class="ttdoc">Release the lock early (guard becomes a no-op on destruction).</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:36</div></div>
 <div class="ttc" id="aclass_spin_lock_guard_html_a22fc95da8f5d322eee7eb5f9a65383e3"><div class="ttname"><a href="class_spin_lock_guard.html#a22fc95da8f5d322eee7eb5f9a65383e3">SpinLockGuard::SpinLockGuard</a></div><div class="ttdeci">SpinLockGuard(const SpinLockGuard &amp;)=delete</div></div>
-<div class="ttc" id="aclass_spin_lock_guard_html_a29d70f70e6499f0a1b97ca4282c3974c"><div class="ttname"><a href="class_spin_lock_guard.html#a29d70f70e6499f0a1b97ca4282c3974c">SpinLockGuard::~SpinLockGuard</a></div><div class="ttdeci">~SpinLockGuard() noexcept</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:25</div></div>
-<div class="ttc" id="aclass_spin_lock_guard_html_a54f9dc0b49255d1b0a4f2f9f531dd28f"><div class="ttname"><a href="class_spin_lock_guard.html#a54f9dc0b49255d1b0a4f2f9f531dd28f">SpinLockGuard::SpinLockGuard</a></div><div class="ttdeci">SpinLockGuard(Lock &amp;lock, adopt_lock_t) noexcept</div><div class="ttdoc">Adopt an already-acquired lock (caller must have called lock() or try_lock() successfully before cons...</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:21</div></div>
-<div class="ttc" id="aclass_spin_lock_guard_html_a64ccd78b7926e3b15d716f553886b490"><div class="ttname"><a href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard::SpinLockGuard</a></div><div class="ttdeci">SpinLockGuard(Lock &amp;lock) noexcept</div><div class="ttdoc">Acquire the lock on construction.</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:14</div></div>
+<div class="ttc" id="aclass_spin_lock_guard_html_a29d70f70e6499f0a1b97ca4282c3974c"><div class="ttname"><a href="class_spin_lock_guard.html#a29d70f70e6499f0a1b97ca4282c3974c">SpinLockGuard::~SpinLockGuard</a></div><div class="ttdeci">~SpinLockGuard() noexcept</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:27</div></div>
+<div class="ttc" id="aclass_spin_lock_guard_html_a54f9dc0b49255d1b0a4f2f9f531dd28f"><div class="ttname"><a href="class_spin_lock_guard.html#a54f9dc0b49255d1b0a4f2f9f531dd28f">SpinLockGuard::SpinLockGuard</a></div><div class="ttdeci">SpinLockGuard(Lock &amp;lock, adopt_lock_t) noexcept</div><div class="ttdoc">Adopt an already-acquired lock (caller must have called lock() or try_lock() successfully before cons...</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:23</div></div>
+<div class="ttc" id="aclass_spin_lock_guard_html_a64ccd78b7926e3b15d716f553886b490"><div class="ttname"><a href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard::SpinLockGuard</a></div><div class="ttdeci">SpinLockGuard(Lock &amp;lock) noexcept</div><div class="ttdoc">Acquire the lock on construction.</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:16</div></div>
 <div class="ttc" id="aclass_spin_lock_guard_html_a71a83ae3cc1f70d6d5a1424a910b4a34"><div class="ttname"><a href="class_spin_lock_guard.html#a71a83ae3cc1f70d6d5a1424a910b4a34">SpinLockGuard::operator=</a></div><div class="ttdeci">SpinLockGuard &amp; operator=(const SpinLockGuard &amp;)=delete</div></div>
-<div class="ttc" id="aclass_spin_lock_guard_html_ae50bdcd8e6138968f9f54052372810d0"><div class="ttname"><a href="class_spin_lock_guard.html#ae50bdcd8e6138968f9f54052372810d0">SpinLockGuard::owns_lock</a></div><div class="ttdeci">bool owns_lock() const noexcept</div><div class="ttdoc">True if this guard holds the lock and will release it.</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:31</div></div>
-<div class="ttc" id="aspinlock__guard_8hpp_html_ae87541999d37878249d8fbb062bd6017"><div class="ttname"><a href="spinlock__guard_8hpp.html#ae87541999d37878249d8fbb062bd6017">adopt_lock</a></div><div class="ttdeci">constexpr adopt_lock_t adopt_lock</div><div class="ttdoc">Tag value indicating the lock is already held by the caller.</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:8</div></div>
-<div class="ttc" id="astructadopt__lock__t_html"><div class="ttname"><a href="structadopt__lock__t.html">adopt_lock_t</a></div><div class="ttdoc">Tag type for SpinLockGuard adopt-lock constructor.</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:6</div></div>
+<div class="ttc" id="aclass_spin_lock_guard_html_ae50bdcd8e6138968f9f54052372810d0"><div class="ttname"><a href="class_spin_lock_guard.html#ae50bdcd8e6138968f9f54052372810d0">SpinLockGuard::owns_lock</a></div><div class="ttdeci">bool owns_lock() const noexcept</div><div class="ttdoc">True if this guard holds the lock and will release it.</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:33</div></div>
+<div class="ttc" id="aconcepts_8hpp_html"><div class="ttname"><a href="concepts_8hpp.html">concepts.hpp</a></div></div>
+<div class="ttc" id="aspinlock__guard_8hpp_html_ae87541999d37878249d8fbb062bd6017"><div class="ttname"><a href="spinlock__guard_8hpp.html#ae87541999d37878249d8fbb062bd6017">adopt_lock</a></div><div class="ttdeci">constexpr adopt_lock_t adopt_lock</div><div class="ttdoc">Tag value indicating the lock is already held by the caller.</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:9</div></div>
+<div class="ttc" id="astructadopt__lock__t_html"><div class="ttname"><a href="structadopt__lock__t.html">adopt_lock_t</a></div><div class="ttdoc">Tag type for SpinLockGuard adopt-lock constructor.</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:7</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

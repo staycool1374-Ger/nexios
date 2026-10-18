@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structarch_1_1
 </div><!--header-->
 <div class="contents">
 
-<p>BDF (Bus:Device.Function) address.  
+<p>PCI Bus:Device.Function address.  
  <a href="#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="hal_2pci_8hpp_source.html">pci.hpp</a>&gt;</code></p>
@@ -138,11 +138,14 @@ Public Member Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a52a4545c409ba90747b83eafd240782e" id="r_a52a4545c409ba90747b83eafd240782e"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a52a4545c409ba90747b83eafd240782e">bus</a></td></tr>
+<tr class="memdesc:a52a4545c409ba90747b83eafd240782e"><td class="mdescLeft">&#160;</td><td class="mdescRight">PCI bus number.  <br /></td></tr>
 <tr class="memitem:aecb6905ae3d307e58e0c1214c44bf517" id="r_aecb6905ae3d307e58e0c1214c44bf517"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aecb6905ae3d307e58e0c1214c44bf517">device</a></td></tr>
+<tr class="memdesc:aecb6905ae3d307e58e0c1214c44bf517"><td class="mdescLeft">&#160;</td><td class="mdescRight">Device number on the bus.  <br /></td></tr>
 <tr class="memitem:afd87c8ddd4d1af7a99263fa1d135e27f" id="r_afd87c8ddd4d1af7a99263fa1d135e27f"><td class="memItemLeft"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afd87c8ddd4d1af7a99263fa1d135e27f">function</a></td></tr>
+<tr class="memdesc:afd87c8ddd4d1af7a99263fa1d135e27f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Function number within the device.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>BDF (Bus:Device.Function) address. </p>
+<div class="textblock"><p>PCI Bus:Device.Function address. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="a6bd6c54974c622c35f0738cd61d63a9d" name="a6bd6c54974c622c35f0738cd61d63a9d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a6bd6c54974c622c35f0738cd61d63a9d">&#9670;&#160;</a></span>operator!=()</h2>
@@ -207,6 +210,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>PCI bus number. </p>
+
 </div>
 </div>
 <a id="aecb6905ae3d307e58e0c1214c44bf517" name="aecb6905ae3d307e58e0c1214c44bf517"></a>
@@ -221,6 +226,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Device number on the bus. </p>
+
 </div>
 </div>
 <a id="afd87c8ddd4d1af7a99263fa1d135e27f" name="afd87c8ddd4d1af7a99263fa1d135e27f"></a>
@@ -234,6 +241,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Function number within the device. </p>
 
 </div>
 </div>

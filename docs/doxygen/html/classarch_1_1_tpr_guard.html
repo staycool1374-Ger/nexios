@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classarch_1_1_
 </div><!--header-->
 <div class="contents">
 
-<p>RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces IrqGuard: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed).  
+<p>RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces <a class="el" href="classarch_1_1_irq_guard.html" title="RAII guard that disables interrupts on construction and restores the previous interrupt state on dest...">IrqGuard</a>: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed).  
  <a href="#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="tpr__guard_8hpp_source.html">tpr_guard.hpp</a>&gt;</code></p>
@@ -142,7 +142,7 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a0a3bed3bd196322e78d707d06a8e7edf" id="r_a0a3bed3bd196322e78d707d06a8e7edf"><td class="memItemLeft"><a class="el" href="#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a0a3bed3bd196322e78d707d06a8e7edf">operator=</a> (<a class="el" href="#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;&amp;)=delete</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces IrqGuard: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed). </p>
+<div class="textblock"><p>RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces <a class="el" href="classarch_1_1_irq_guard.html" title="RAII guard that disables interrupts on construction and restores the previous interrupt state on dest...">IrqGuard</a>: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed). </p>
 </div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="ab3d0f8afd0fdf6610c5f7113670aefd5" name="ab3d0f8afd0fdf6610c5f7113670aefd5"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ab3d0f8afd0fdf6610c5f7113670aefd5">&#9670;&#160;</a></span>TprGuard() <span class="overload">[1/3]</span></h2>

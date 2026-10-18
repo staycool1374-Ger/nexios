@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.2.21</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classarch_1_1_
 </div><!--header-->
 <div class="contents">
 
+<p>x86-64 PIC (8259A) interrupt controller driver.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="hal_2interrupt__controller_8hpp_source.html">interrupt_controller.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for arch::ArchInterruptController:</div>
@@ -129,16 +132,38 @@ Collaboration diagram for arch::ArchInterruptController:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
+<tr class="memitem:af4e4dcb29285195a41bab1340f91e9fe" id="r_af4e4dcb29285195a41bab1340f91e9fe"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af4e4dcb29285195a41bab1340f91e9fe">init</a> ()</td></tr>
+<tr class="memdesc:af4e4dcb29285195a41bab1340f91e9fe"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialise both PICs in cascade mode with vector offsets.  <br /></td></tr>
+<tr class="memitem:a864f496a087651dd6d3d68f1cc92e755" id="r_a864f496a087651dd6d3d68f1cc92e755"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a864f496a087651dd6d3d68f1cc92e755">eoi</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> vector)</td></tr>
+<tr class="memdesc:a864f496a087651dd6d3d68f1cc92e755"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send end-of-interrupt to the PIC(s).  <br /></td></tr>
+<tr class="memitem:a30bc0c1d678d47a028779a2c5545eafc" id="r_a30bc0c1d678d47a028779a2c5545eafc"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a30bc0c1d678d47a028779a2c5545eafc">mask</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
+<tr class="memdesc:a30bc0c1d678d47a028779a2c5545eafc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mask (disable) a specific IRQ line.  <br /></td></tr>
+<tr class="memitem:a3254f6b5ff56ae412a82bce90cfa484e" id="r_a3254f6b5ff56ae412a82bce90cfa484e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a3254f6b5ff56ae412a82bce90cfa484e">unmask</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
+<tr class="memdesc:a3254f6b5ff56ae412a82bce90cfa484e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmask (enable) a specific IRQ line.  <br /></td></tr>
+<tr class="memitem:a9f7ae62eee0caa50cb5d7f931853b83a" id="r_a9f7ae62eee0caa50cb5d7f931853b83a"><td class="memItemLeft">static <a class="el" href="structarch_1_1_irq_state.html">IrqState</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9f7ae62eee0caa50cb5d7f931853b83a">snapshot</a> ()</td></tr>
+<tr class="memdesc:a9f7ae62eee0caa50cb5d7f931853b83a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot the current PIC mask state.  <br /></td></tr>
+<tr class="memitem:ad42b9fb25c4deedf744135d76a194bb8" id="r_ad42b9fb25c4deedf744135d76a194bb8"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ad42b9fb25c4deedf744135d76a194bb8">restore</a> (const <a class="el" href="structarch_1_1_irq_state.html">IrqState</a> &amp;state)</td></tr>
+<tr class="memdesc:ad42b9fb25c4deedf744135d76a194bb8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore a previously saved PIC mask state.  <br /></td></tr>
 <tr class="memitem:abffeda20ad3d371c21b00b4749064b60" id="r_abffeda20ad3d371c21b00b4749064b60"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abffeda20ad3d371c21b00b4749064b60">init</a> ()</td></tr>
-<tr class="memitem:a1ef84c4cd2e97d83789c527505559ff6" id="r_a1ef84c4cd2e97d83789c527505559ff6"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a1ef84c4cd2e97d83789c527505559ff6">eoi</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector)</td></tr>
-<tr class="memitem:afb45f40268b3aca2f1fb4146b7402e5f" id="r_afb45f40268b3aca2f1fb4146b7402e5f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#afb45f40268b3aca2f1fb4146b7402e5f">mask</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> irq)</td></tr>
-<tr class="memitem:ae45ebdb73c93f701d34183eb82489ee1" id="r_ae45ebdb73c93f701d34183eb82489ee1"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae45ebdb73c93f701d34183eb82489ee1">unmask</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> irq)</td></tr>
+<tr class="memitem:a1ef84c4cd2e97d83789c527505559ff6" id="r_a1ef84c4cd2e97d83789c527505559ff6"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a1ef84c4cd2e97d83789c527505559ff6">eoi</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> vector)</td></tr>
+<tr class="memitem:afb45f40268b3aca2f1fb4146b7402e5f" id="r_afb45f40268b3aca2f1fb4146b7402e5f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#afb45f40268b3aca2f1fb4146b7402e5f">mask</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
+<tr class="memitem:ae45ebdb73c93f701d34183eb82489ee1" id="r_ae45ebdb73c93f701d34183eb82489ee1"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae45ebdb73c93f701d34183eb82489ee1">unmask</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
+<tr class="memitem:a3f2bf4b249890d0966275e1881f95c2c" id="r_a3f2bf4b249890d0966275e1881f95c2c"><td class="memItemLeft">static <a class="el" href="structarch_1_1_irq_state.html">IrqState</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3f2bf4b249890d0966275e1881f95c2c">snapshot</a> ()</td></tr>
+<tr class="memitem:a6621770c8517ef8faae80a6430b8c164" id="r_a6621770c8517ef8faae80a6430b8c164"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6621770c8517ef8faae80a6430b8c164">restore</a> (const <a class="el" href="structarch_1_1_irq_state.html">IrqState</a> &amp;state)</td></tr>
+<tr class="memitem:abffeda20ad3d371c21b00b4749064b60" id="r_abffeda20ad3d371c21b00b4749064b60"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abffeda20ad3d371c21b00b4749064b60">init</a> ()</td></tr>
+<tr class="memitem:a1ef84c4cd2e97d83789c527505559ff6" id="r_a1ef84c4cd2e97d83789c527505559ff6"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a1ef84c4cd2e97d83789c527505559ff6">eoi</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> vector)</td></tr>
+<tr class="memitem:afb45f40268b3aca2f1fb4146b7402e5f" id="r_afb45f40268b3aca2f1fb4146b7402e5f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#afb45f40268b3aca2f1fb4146b7402e5f">mask</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
+<tr class="memitem:ae45ebdb73c93f701d34183eb82489ee1" id="r_ae45ebdb73c93f701d34183eb82489ee1"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae45ebdb73c93f701d34183eb82489ee1">unmask</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
 <tr class="memitem:a3f2bf4b249890d0966275e1881f95c2c" id="r_a3f2bf4b249890d0966275e1881f95c2c"><td class="memItemLeft">static <a class="el" href="structarch_1_1_irq_state.html">IrqState</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3f2bf4b249890d0966275e1881f95c2c">snapshot</a> ()</td></tr>
 <tr class="memitem:a6621770c8517ef8faae80a6430b8c164" id="r_a6621770c8517ef8faae80a6430b8c164"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6621770c8517ef8faae80a6430b8c164">restore</a> (const <a class="el" href="structarch_1_1_irq_state.html">IrqState</a> &amp;state)</td></tr>
 </table>
-<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>x86-64 PIC (8259A) interrupt controller driver. </p>
+<p>RISC-V PLIC (Platform-Level Interrupt Controller) driver.</p>
+<p>AArch64 GIC (Generic Interrupt Controller) driver. </p>
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="a1ef84c4cd2e97d83789c527505559ff6" name="a1ef84c4cd2e97d83789c527505559ff6"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1ef84c4cd2e97d83789c527505559ff6">&#9670;&#160;</a></span>eoi()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a1ef84c4cd2e97d83789c527505559ff6">&#9670;&#160;</a></span>eoi() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -149,7 +174,57 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">void arch::ArchInterruptController::eoi </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1ef84c4cd2e97d83789c527505559ff6" name="a1ef84c4cd2e97d83789c527505559ff6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1ef84c4cd2e97d83789c527505559ff6">&#9670;&#160;</a></span>eoi() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchInterruptController::eoi </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a864f496a087651dd6d3d68f1cc92e755" name="a864f496a087651dd6d3d68f1cc92e755"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a864f496a087651dd6d3d68f1cc92e755">&#9670;&#160;</a></span>eoi() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchInterruptController::eoi </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -159,17 +234,69 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classarch_1_1_arch_interrupt_controller_a1ef84c4cd2e97d83789c527505559ff6_cgraph.png" border="0" usemap="#aclassarch_1_1_arch_interrupt_controller_a1ef84c4cd2e97d83789c527505559ff6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
-</div>
+
+<p>Send end-of-interrupt to the PIC(s). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">vector</td><td>The interrupt vector that was handled. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
 <a id="abffeda20ad3d371c21b00b4749064b60" name="abffeda20ad3d371c21b00b4749064b60"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abffeda20ad3d371c21b00b4749064b60">&#9670;&#160;</a></span>init()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#abffeda20ad3d371c21b00b4749064b60">&#9670;&#160;</a></span>init() <span class="overload">[1/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchInterruptController::init </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abffeda20ad3d371c21b00b4749064b60" name="abffeda20ad3d371c21b00b4749064b60"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abffeda20ad3d371c21b00b4749064b60">&#9670;&#160;</a></span>init() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchInterruptController::init </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af4e4dcb29285195a41bab1340f91e9fe" name="af4e4dcb29285195a41bab1340f91e9fe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af4e4dcb29285195a41bab1340f91e9fe">&#9670;&#160;</a></span>init() <span class="overload">[3/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -190,17 +317,14 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classarch_1_1_arch_interrupt_controller_abffeda20ad3d371c21b00b4749064b60_cgraph.png" border="0" usemap="#aclassarch_1_1_arch_interrupt_controller_abffeda20ad3d371c21b00b4749064b60_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
-</div>
+
+<p>Initialise both PICs in cascade mode with vector offsets. </p>
+<p>Initialise the GIC distributor, CPU interface, and redistributor. Detects GICv2 vs GICv3 from GICD_TYPER. Enables Group 1 interrupts and the timer PPI (INTID 30). Performs full distributor reset. </p>
 
 </div>
 </div>
 <a id="afb45f40268b3aca2f1fb4146b7402e5f" name="afb45f40268b3aca2f1fb4146b7402e5f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#afb45f40268b3aca2f1fb4146b7402e5f">&#9670;&#160;</a></span>mask()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#afb45f40268b3aca2f1fb4146b7402e5f">&#9670;&#160;</a></span>mask() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -211,7 +335,57 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void arch::ArchInterruptController::mask </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afb45f40268b3aca2f1fb4146b7402e5f" name="afb45f40268b3aca2f1fb4146b7402e5f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afb45f40268b3aca2f1fb4146b7402e5f">&#9670;&#160;</a></span>mask() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchInterruptController::mask </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a30bc0c1d678d47a028779a2c5545eafc" name="a30bc0c1d678d47a028779a2c5545eafc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a30bc0c1d678d47a028779a2c5545eafc">&#9670;&#160;</a></span>mask() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchInterruptController::mask </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -221,17 +395,69 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classarch_1_1_arch_interrupt_controller_afb45f40268b3aca2f1fb4146b7402e5f_cgraph.png" border="0" usemap="#aclassarch_1_1_arch_interrupt_controller_afb45f40268b3aca2f1fb4146b7402e5f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
-</div>
+
+<p>Mask (disable) a specific IRQ line. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">irq</td><td>IRQ number (0–15). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
 <a id="a6621770c8517ef8faae80a6430b8c164" name="a6621770c8517ef8faae80a6430b8c164"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6621770c8517ef8faae80a6430b8c164">&#9670;&#160;</a></span>restore()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a6621770c8517ef8faae80a6430b8c164">&#9670;&#160;</a></span>restore() <span class="overload">[1/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchInterruptController::restore </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structarch_1_1_irq_state.html">IrqState</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>state</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6621770c8517ef8faae80a6430b8c164" name="a6621770c8517ef8faae80a6430b8c164"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6621770c8517ef8faae80a6430b8c164">&#9670;&#160;</a></span>restore() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchInterruptController::restore </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structarch_1_1_irq_state.html">IrqState</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>state</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad42b9fb25c4deedf744135d76a194bb8" name="ad42b9fb25c4deedf744135d76a194bb8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad42b9fb25c4deedf744135d76a194bb8">&#9670;&#160;</a></span>restore() <span class="overload">[3/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -252,17 +478,69 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classarch_1_1_arch_interrupt_controller_a6621770c8517ef8faae80a6430b8c164_cgraph.png" border="0" usemap="#aclassarch_1_1_arch_interrupt_controller_a6621770c8517ef8faae80a6430b8c164_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
-</div>
+
+<p>Restore a previously saved PIC mask state. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">state</td><td>The <a class="el" href="structarch_1_1_irq_state.html" title="Snapshot of the x86-64 PIC mask registers.">IrqState</a> to restore. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
 <a id="a3f2bf4b249890d0966275e1881f95c2c" name="a3f2bf4b249890d0966275e1881f95c2c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3f2bf4b249890d0966275e1881f95c2c">&#9670;&#160;</a></span>snapshot()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a3f2bf4b249890d0966275e1881f95c2c">&#9670;&#160;</a></span>snapshot() <span class="overload">[1/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structarch_1_1_irq_state.html">IrqState</a> arch::ArchInterruptController::snapshot </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3f2bf4b249890d0966275e1881f95c2c" name="a3f2bf4b249890d0966275e1881f95c2c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3f2bf4b249890d0966275e1881f95c2c">&#9670;&#160;</a></span>snapshot() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structarch_1_1_irq_state.html">IrqState</a> arch::ArchInterruptController::snapshot </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9f7ae62eee0caa50cb5d7f931853b83a" name="a9f7ae62eee0caa50cb5d7f931853b83a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f7ae62eee0caa50cb5d7f931853b83a">&#9670;&#160;</a></span>snapshot() <span class="overload">[3/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -283,17 +561,14 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classarch_1_1_arch_interrupt_controller_a3f2bf4b249890d0966275e1881f95c2c_cgraph.png" border="0" usemap="#aclassarch_1_1_arch_interrupt_controller_a3f2bf4b249890d0966275e1881f95c2c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
-</div>
+
+<p>Snapshot the current PIC mask state. </p>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="structarch_1_1_irq_state.html" title="Snapshot of the x86-64 PIC mask registers.">IrqState</a> containing both PIC masks. </dd></dl>
 
 </div>
 </div>
 <a id="ae45ebdb73c93f701d34183eb82489ee1" name="ae45ebdb73c93f701d34183eb82489ee1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae45ebdb73c93f701d34183eb82489ee1">&#9670;&#160;</a></span>unmask()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ae45ebdb73c93f701d34183eb82489ee1">&#9670;&#160;</a></span>unmask() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -304,7 +579,57 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void arch::ArchInterruptController::unmask </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae45ebdb73c93f701d34183eb82489ee1" name="ae45ebdb73c93f701d34183eb82489ee1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae45ebdb73c93f701d34183eb82489ee1">&#9670;&#160;</a></span>unmask() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchInterruptController::unmask </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3254f6b5ff56ae412a82bce90cfa484e" name="a3254f6b5ff56ae412a82bce90cfa484e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3254f6b5ff56ae412a82bce90cfa484e">&#9670;&#160;</a></span>unmask() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchInterruptController::unmask </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -314,17 +639,21 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classarch_1_1_arch_interrupt_controller_ae45ebdb73c93f701d34183eb82489ee1_cgraph.png" border="0" usemap="#aclassarch_1_1_arch_interrupt_controller_ae45ebdb73c93f701d34183eb82489ee1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
-</div>
+
+<p>Unmask (enable) a specific IRQ line. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">irq</td><td>IRQ number (0–15). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
-<hr/>The documentation for this class was generated from the following file:<ul>
+<hr/>The documentation for this class was generated from the following files:<ul>
 <li>src/kernel/arch/hal/<a class="el" href="hal_2interrupt__controller_8hpp_source.html">interrupt_controller.hpp</a></li>
+<li>src/kernel/arch/aarch64/<a class="el" href="aarch64_2interrupt__controller_8cpp.html">interrupt_controller.cpp</a></li>
+<li>src/kernel/arch/riscv64/<a class="el" href="riscv64_2interrupt__controller_8cpp.html">interrupt_controller.cpp</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

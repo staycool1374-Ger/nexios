@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -130,7 +130,7 @@ This graph shows which files directly or indirectly include this file:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-concepts" class="groupheader"><a id="concepts" name="concepts"></a>
 Concepts</h2></td></tr>
@@ -138,6 +138,8 @@ Concepts</h2></td></tr>
 <tr class="memitem:kernel_3A_3ATriviallyCopiable" id="r_kernel_3A_3ATriviallyCopiable"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptkernel_1_1_trivially_copiable.html">kernel::TriviallyCopiable</a></td></tr>
 <tr class="memitem:kernel_3A_3AValueType" id="r_kernel_3A_3AValueType"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptkernel_1_1_value_type.html">kernel::ValueType</a></td></tr>
 <tr class="memitem:kernel_3A_3AErrorEnum" id="r_kernel_3A_3AErrorEnum"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptkernel_1_1_error_enum.html">kernel::ErrorEnum</a></td></tr>
+<tr class="memitem:kernel_3A_3AEnum" id="r_kernel_3A_3AEnum"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptkernel_1_1_enum.html">kernel::Enum</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Any scoped/unscoped enumeration (issue #348-D: constrains <a class="el" href="namespacekernel.html#a17e67ea7443b3545f273cbe78f7c1a12">kernel::to_underlying</a> without dragging error-enum semantics). <br /></td></tr>
 <tr class="memitem:kernel_3A_3ALockable" id="r_kernel_3A_3ALockable"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>

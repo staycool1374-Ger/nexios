@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -133,9 +133,13 @@ Collaboration diagram for net::UdpHeader:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a5f5186de319ad546c6d90861dceeb79c" id="r_a5f5186de319ad546c6d90861dceeb79c"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a5f5186de319ad546c6d90861dceeb79c">src_port</a></td></tr>
+<tr class="memdesc:a5f5186de319ad546c6d90861dceeb79c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Source port (big-endian).  <br /></td></tr>
 <tr class="memitem:aa84fa715b8200e37af3150743366617b" id="r_aa84fa715b8200e37af3150743366617b"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#aa84fa715b8200e37af3150743366617b">dst_port</a></td></tr>
+<tr class="memdesc:aa84fa715b8200e37af3150743366617b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destination port (big-endian).  <br /></td></tr>
 <tr class="memitem:abfd401cbe8582afe1d9df5cca7dec521" id="r_abfd401cbe8582afe1d9df5cca7dec521"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#abfd401cbe8582afe1d9df5cca7dec521">length</a></td></tr>
+<tr class="memdesc:abfd401cbe8582afe1d9df5cca7dec521"><td class="mdescLeft">&#160;</td><td class="mdescRight">Header + data length (big-endian).  <br /></td></tr>
 <tr class="memitem:ad497e768758636d75fe952c48dc8cec5" id="r_ad497e768758636d75fe952c48dc8cec5"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ad497e768758636d75fe952c48dc8cec5">checksum</a></td></tr>
+<tr class="memdesc:ad497e768758636d75fe952c48dc8cec5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Optional checksum (big-endian; 0 = no checksum).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>UDP header (8 bytes). </p>
@@ -152,6 +156,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Optional checksum (big-endian; 0 = no checksum). </p>
+
 </div>
 </div>
 <a id="aa84fa715b8200e37af3150743366617b" name="aa84fa715b8200e37af3150743366617b"></a>
@@ -165,6 +171,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Destination port (big-endian). </p>
 
 </div>
 </div>
@@ -180,6 +188,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Header + data length (big-endian). </p>
+
 </div>
 </div>
 <a id="a5f5186de319ad546c6d90861dceeb79c" name="a5f5186de319ad546c6d90861dceeb79c"></a>
@@ -193,6 +203,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Source port (big-endian). </p>
 
 </div>
 </div>

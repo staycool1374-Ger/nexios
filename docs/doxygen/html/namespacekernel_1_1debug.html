@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -206,14 +206,17 @@ Functions</h2></td></tr>
 <tr class="memdesc:ade0bc324da03fcc112cdb93eb35f220b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump all CPU GPRs + CR0/CR2/CR3/CR4 (x86_64); stub on other archs.  <br /></td></tr>
 <tr class="memitem:a70b0bd6c79eac81164d116b1c7b780d7" id="r_a70b0bd6c79eac81164d116b1c7b780d7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a70b0bd6c79eac81164d116b1c7b780d7">dump_all_tasks</a> ()</td></tr>
 <tr class="memdesc:a70b0bd6c79eac81164d116b1c7b780d7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump all valid tasks in the scheduler array.  <br /></td></tr>
+<tr class="memitem:a8e339ab3b15cf62caa047c7c770b1b21" id="r_a8e339ab3b15cf62caa047c7c770b1b21"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8e339ab3b15cf62caa047c7c770b1b21">dump_cpu_regs</a> ()</td></tr>
+<tr class="memdesc:a8e339ab3b15cf62caa047c7c770b1b21"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump all CPU general-purpose registers + CR0/CR2/CR3/CR4.  <br /></td></tr>
+<tr class="memitem:ae301850b7dcbeb7beaeb3dc92d909ddf" id="r_ae301850b7dcbeb7beaeb3dc92d909ddf"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae301850b7dcbeb7beaeb3dc92d909ddf">record_task_entry</a> (uint64_t entry, uint64_t tcb)</td></tr>
+<tr class="memdesc:ae301850b7dcbeb7beaeb3dc92d909ddf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record a task's entry (code address) + TCB address for BUGS.md#020 wild-write forensics.  <br /></td></tr>
+<tr class="memitem:a094fd17ebd41a3d23a3ac83dbab61387" id="r_a094fd17ebd41a3d23a3ac83dbab61387"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a094fd17ebd41a3d23a3ac83dbab61387">find_entry_owner</a> (uint64_t value)</td></tr>
+<tr class="memdesc:a094fd17ebd41a3d23a3ac83dbab61387"><td class="mdescLeft">&#160;</td><td class="mdescRight">If <span class="tt">value</span> matches a recently-created task's <span class="tt"><a class="el" href="elf_8hpp.html#a6aac0a1a7d70f8270f9bb1222445f370" title="Virtual address of entry point.">entry</a></span>, return that task's TCB address; else 0.  <br /></td></tr>
 <tr class="memitem:ad4e746d8bc125cec09030517a74f8180" id="r_ad4e746d8bc125cec09030517a74f8180"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad4e746d8bc125cec09030517a74f8180">trace</a> (const char *msg)</td></tr>
 <tr class="memdesc:ad4e746d8bc125cec09030517a74f8180"><td class="mdescLeft">&#160;</td><td class="mdescRight">Emit a raw trace line to the debug console. On x86_64 the QEMU debugcon (0xE9) is used — lock-free, no UART baud pacing — so the per-tick/per-switch traces do not perturb timing. UART elsewhere.  <br /></td></tr>
 <tr class="memitem:abfe4175e0b1de7e6d86961cee076ef9d" id="r_abfe4175e0b1de7e6d86961cee076ef9d"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#abfe4175e0b1de7e6d86961cee076ef9d">fmt_u64</a> (char *buf, int pos, uint64_t v)</td></tr>
 <tr class="memdesc:abfe4175e0b1de7e6d86961cee076ef9d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print an integer (decimal, unsigned) appended at buf[pos].  <br /></td></tr>
 <tr class="memitem:adc744b33c8c6fcc879f99b6094f3a8ae" id="r_adc744b33c8c6fcc879f99b6094f3a8ae"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#adc744b33c8c6fcc879f99b6094f3a8ae">fmt_str</a> (char *buf, int &amp;pos, const char *s)</td></tr>
-<tr class="memitem:ae301850b7dcbeb7beaeb3dc92d909ddf" id="r_ae301850b7dcbeb7beaeb3dc92d909ddf"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae301850b7dcbeb7beaeb3dc92d909ddf">record_task_entry</a> (uint64_t entry, uint64_t tcb)</td></tr>
-<tr class="memitem:a094fd17ebd41a3d23a3ac83dbab61387" id="r_a094fd17ebd41a3d23a3ac83dbab61387"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a094fd17ebd41a3d23a3ac83dbab61387">find_entry_owner</a> (uint64_t value)</td></tr>
-<tr class="memdesc:a094fd17ebd41a3d23a3ac83dbab61387"><td class="mdescLeft">&#160;</td><td class="mdescRight">If <span class="tt">value</span> equals the low 32 bits or full value of a recently created task's <span class="tt">entry</span>, return that task's tcb address; else 0.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
@@ -966,6 +969,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Publish a task-death stop event (reserved slot, never dropped) and poke the debugger. Runs in cleanup() before page-table free while bindings and Notify are intact. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_ae06768db20c0174541f81596c57c0b3d_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_ae06768db20c0174541f81596c57c0b3d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
 
 </div>
 </div>
@@ -1007,7 +1016,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_a1468d93c02ba1436b5a09e3e0e1b4825_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a1468d93c02ba1436b5a09e3e0e1b4825_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -1062,7 +1071,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_a2c8f28a30ede46d24969f5d4817076b8_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a2c8f28a30ede46d24969f5d4817076b8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -1150,7 +1159,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_a6844256c85a889488a4b3de0adc28f6c_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a6844256c85a889488a4b3de0adc28f6c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -1184,7 +1193,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_aa12d00119d664f5407c3ef417781baf6_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_aa12d00119d664f5407c3ef417781baf6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -1218,7 +1227,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_ab32e690298a0ec155075a435c8466b2a_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_ab32e690298a0ec155075a435c8466b2a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -1251,7 +1260,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_a8fc24d896b69e34fe3580013516e7314_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a8fc24d896b69e34fe3580013516e7314_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -1326,7 +1335,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_ae70a742c8c462e516c06a9af82b55258_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_ae70a742c8c462e516c06a9af82b55258_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -1351,8 +1360,28 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_a70b0bd6c79eac81164d116b1c7b780d7_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a70b0bd6c79eac81164d116b1c7b780d7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 15 -->
 </div>
+
+</div>
+</div>
+<a id="a8e339ab3b15cf62caa047c7c770b1b21" name="a8e339ab3b15cf62caa047c7c770b1b21"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8e339ab3b15cf62caa047c7c770b1b21">&#9670;&#160;</a></span>dump_cpu_regs()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::debug::dump_cpu_regs </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Dump all CPU general-purpose registers + CR0/CR2/CR3/CR4. </p>
+<dl class="section note"><dt>Note</dt><dd>x86_64 only; other architectures print a stub. </dd></dl>
 
 </div>
 </div>
@@ -1372,12 +1401,13 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Print three hex key-value pairs. </p>
+<p>Dump all scheduler state (indices, counts, flags, deferred-switch globals).</p>
 <p>Dump scheduler indices, counts, flags, and deferred-switch globals. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_a9c80a5a9a3a6f52efef1fabf4192ab72_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a9c80a5a9a3a6f52efef1fabf4192ab72_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -1398,8 +1428,10 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Dump all CPU GPRs + CR0/CR2/CR3/CR4 (x86_64); stub on other archs. </p>
+<p>Dump all fields of a single task identified by ID.</p>
 <p>Dump all fields of a single task. </p><dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
+    <tr><td class="paramname">task_id</td><td>Task ID to dump.</td></tr>
     <tr><td class="paramname">task_id</td><td>Task ID to dump. </td></tr>
   </table>
   </dd>
@@ -1408,7 +1440,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_ade0bc324da03fcc112cdb93eb35f220b_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_ade0bc324da03fcc112cdb93eb35f220b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -1428,7 +1460,8 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>If <span class="tt">value</span> equals the low 32 bits or full value of a recently created task's <span class="tt">entry</span>, return that task's tcb address; else 0. </p>
+<p>If <span class="tt">value</span> matches a recently-created task's <span class="tt"><a class="el" href="elf_8hpp.html#a6aac0a1a7d70f8270f9bb1222445f370" title="Virtual address of entry point.">entry</a></span>, return that task's TCB address; else 0. </p>
+<p>If <span class="tt">value</span> equals the low 32 bits or full value of a recently created task's <span class="tt"><a class="el" href="elf_8hpp.html#a6aac0a1a7d70f8270f9bb1222445f370" title="Virtual address of entry point.">entry</a></span>, return that task's tcb address; else 0. </p>
 
 </div>
 </div>
@@ -1521,6 +1554,8 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
+<p>Record a task's entry (code address) + TCB address for BUGS.md#020 wild-write forensics. </p>
+
 </div>
 </div>
 <a id="ad4e746d8bc125cec09030517a74f8180" name="ad4e746d8bc125cec09030517a74f8180"></a>
@@ -1551,7 +1586,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_ad4e746d8bc125cec09030517a74f8180_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_ad4e746d8bc125cec09030517a74f8180_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 18 -->
 </div>
 
 </div>

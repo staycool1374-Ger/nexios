@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -139,7 +139,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a8ba8ae68551cd9afd15186cd5bd576a8" id="r_a8ba8ae68551cd9afd15186cd5bd576a8"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a8ba8ae68551cd9afd15186cd5bd576a8">shm_ring_push</a> (<a class="el" href="structkernel_1_1shm_1_1_shared_ring_header.html">SharedRingHeader</a> *header, uint8_t *data_base, const uint8_t *src)</td></tr>
 <tr class="memdesc:a8ba8ae68551cd9afd15186cd5bd576a8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Producer push: copy <code class="param">src</code> (element_size bytes) into the ring at the head. Returns false when full or not initialised. Head is published with release after the payload write (SPSC protocol).  <br /></td></tr>
 <tr class="memitem:ade7741ed3caa4f38200b3b55c548d7ac" id="r_ade7741ed3caa4f38200b3b55c548d7ac"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ade7741ed3caa4f38200b3b55c548d7ac">shm_ring_pop</a> (<a class="el" href="structkernel_1_1shm_1_1_shared_ring_header.html">SharedRingHeader</a> *header, uint8_t *data_base, uint8_t *dst)</td></tr>
-<tr class="memdesc:ade7741ed3caa4f38200b3b55c548d7ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consumer pop: copy the element at the tail into <code class="param">dst</code>. Returns false when empty or not initialised. Tail is published with release after the payload read (SPSC protocol).  <br /></td></tr>
+<tr class="memdesc:ade7741ed3caa4f38200b3b55c548d7ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consumer pop: copy the element at the tail into <code class="param">dst</code>. Returns false when empty or not initialised. Tail is published with release after the payload read (SPSC protocol). A zero capacity/element_size (hostile or corrupt peer header) fails closed before the tail/element_size division (issue #343) — mirrors shm_ring_has_space.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
@@ -315,7 +315,7 @@ Variables</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Consumer pop: copy the element at the tail into <code class="param">dst</code>. Returns false when empty or not initialised. Tail is published with release after the payload read (SPSC protocol). </p>
+<p>Consumer pop: copy the element at the tail into <code class="param">dst</code>. Returns false when empty or not initialised. Tail is published with release after the payload read (SPSC protocol). A zero capacity/element_size (hostile or corrupt peer header) fails closed before the tail/element_size division (issue #343) — mirrors shm_ring_has_space. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">

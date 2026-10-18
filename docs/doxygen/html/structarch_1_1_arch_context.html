@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.2.21</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structarch_1_1
 </div><!--header-->
 <div class="contents">
 
+<p>x86-64 CPU context — general-purpose registers, interrupt vector, error code, and interrupt-frame (rip, cs, rflags, rsp, ss).  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="hal_2context_8hpp_source.html">context.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for arch::ArchContext:</div>
@@ -129,30 +132,87 @@ Collaboration diagram for arch::ArchContext:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:a4779f38d3ca0479858135a9cda5f4ea1" id="r_a4779f38d3ca0479858135a9cda5f4ea1"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4779f38d3ca0479858135a9cda5f4ea1">rax</a></td></tr>
-<tr class="memitem:a578d403672ffa671a9a48d4ec692d3e0" id="r_a578d403672ffa671a9a48d4ec692d3e0"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a578d403672ffa671a9a48d4ec692d3e0">rbx</a></td></tr>
-<tr class="memitem:a67c0eb42bc564c84b02d082e8d36914e" id="r_a67c0eb42bc564c84b02d082e8d36914e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a67c0eb42bc564c84b02d082e8d36914e">rcx</a></td></tr>
-<tr class="memitem:a6dd5064eb70b60a6d0920675ce2f0397" id="r_a6dd5064eb70b60a6d0920675ce2f0397"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6dd5064eb70b60a6d0920675ce2f0397">rdx</a></td></tr>
-<tr class="memitem:ad505c3a38cc5e4c0f3eb2f72b8a61331" id="r_ad505c3a38cc5e4c0f3eb2f72b8a61331"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad505c3a38cc5e4c0f3eb2f72b8a61331">rsi</a></td></tr>
-<tr class="memitem:a0dcb34c45c7d33b5dbc7fe23f20188a8" id="r_a0dcb34c45c7d33b5dbc7fe23f20188a8"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0dcb34c45c7d33b5dbc7fe23f20188a8">rdi</a></td></tr>
-<tr class="memitem:a02b2b3b1b526fcfdb67ad36a5bc5f061" id="r_a02b2b3b1b526fcfdb67ad36a5bc5f061"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a02b2b3b1b526fcfdb67ad36a5bc5f061">rbp</a></td></tr>
-<tr class="memitem:ab563d838c3f4f8af2849227351294816" id="r_ab563d838c3f4f8af2849227351294816"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab563d838c3f4f8af2849227351294816">r8</a></td></tr>
-<tr class="memitem:a7c3f758525e46c1ee5cdb8f07a790c7d" id="r_a7c3f758525e46c1ee5cdb8f07a790c7d"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7c3f758525e46c1ee5cdb8f07a790c7d">r9</a></td></tr>
-<tr class="memitem:a726cb71d35f3acbde1d5be6ab156a4a0" id="r_a726cb71d35f3acbde1d5be6ab156a4a0"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a726cb71d35f3acbde1d5be6ab156a4a0">r10</a></td></tr>
-<tr class="memitem:a20e5b485e94adc827b8db51fa6ce4db9" id="r_a20e5b485e94adc827b8db51fa6ce4db9"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a20e5b485e94adc827b8db51fa6ce4db9">r11</a></td></tr>
-<tr class="memitem:a9e3191fd47972c3445ed0c10f71edcdb" id="r_a9e3191fd47972c3445ed0c10f71edcdb"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9e3191fd47972c3445ed0c10f71edcdb">r12</a></td></tr>
-<tr class="memitem:a266d2fb7b6270ba1d0b202577d5e920e" id="r_a266d2fb7b6270ba1d0b202577d5e920e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a266d2fb7b6270ba1d0b202577d5e920e">r13</a></td></tr>
-<tr class="memitem:aa95627a360c86aee0d9e6167eecb281f" id="r_aa95627a360c86aee0d9e6167eecb281f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa95627a360c86aee0d9e6167eecb281f">r14</a></td></tr>
-<tr class="memitem:a6ac12a363ecefe16e446ba156dca8881" id="r_a6ac12a363ecefe16e446ba156dca8881"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6ac12a363ecefe16e446ba156dca8881">r15</a></td></tr>
-<tr class="memitem:a9ed5a0fee6884cc989509268cf99ab80" id="r_a9ed5a0fee6884cc989509268cf99ab80"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9ed5a0fee6884cc989509268cf99ab80">vector</a></td></tr>
-<tr class="memitem:afe9da5d95730109af860ecae5aeebb30" id="r_afe9da5d95730109af860ecae5aeebb30"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afe9da5d95730109af860ecae5aeebb30">error_code</a></td></tr>
-<tr class="memitem:afffcb0b999db32c775d1a7a590e74ac0" id="r_afffcb0b999db32c775d1a7a590e74ac0"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afffcb0b999db32c775d1a7a590e74ac0">rip</a></td></tr>
-<tr class="memitem:af3da3c77136cafe5a306caffdb0a6618" id="r_af3da3c77136cafe5a306caffdb0a6618"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af3da3c77136cafe5a306caffdb0a6618">cs</a></td></tr>
-<tr class="memitem:a786aee9f74a14a24b7ac9bb77d136a84" id="r_a786aee9f74a14a24b7ac9bb77d136a84"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a786aee9f74a14a24b7ac9bb77d136a84">rflags</a></td></tr>
-<tr class="memitem:a7edd4dbb42afa998f5bc48c02f82f782" id="r_a7edd4dbb42afa998f5bc48c02f82f782"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7edd4dbb42afa998f5bc48c02f82f782">rsp</a></td></tr>
-<tr class="memitem:ab4e57e118207e2d182ef50a6b7035b2c" id="r_ab4e57e118207e2d182ef50a6b7035b2c"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab4e57e118207e2d182ef50a6b7035b2c">ss</a></td></tr>
+<tr class="memitem:a4779f38d3ca0479858135a9cda5f4ea1" id="r_a4779f38d3ca0479858135a9cda5f4ea1"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4779f38d3ca0479858135a9cda5f4ea1">rax</a></td></tr>
+<tr class="memitem:a578d403672ffa671a9a48d4ec692d3e0" id="r_a578d403672ffa671a9a48d4ec692d3e0"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a578d403672ffa671a9a48d4ec692d3e0">rbx</a></td></tr>
+<tr class="memitem:a67c0eb42bc564c84b02d082e8d36914e" id="r_a67c0eb42bc564c84b02d082e8d36914e"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a67c0eb42bc564c84b02d082e8d36914e">rcx</a></td></tr>
+<tr class="memitem:a6dd5064eb70b60a6d0920675ce2f0397" id="r_a6dd5064eb70b60a6d0920675ce2f0397"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6dd5064eb70b60a6d0920675ce2f0397">rdx</a></td></tr>
+<tr class="memitem:ad505c3a38cc5e4c0f3eb2f72b8a61331" id="r_ad505c3a38cc5e4c0f3eb2f72b8a61331"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad505c3a38cc5e4c0f3eb2f72b8a61331">rsi</a></td></tr>
+<tr class="memitem:a0dcb34c45c7d33b5dbc7fe23f20188a8" id="r_a0dcb34c45c7d33b5dbc7fe23f20188a8"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0dcb34c45c7d33b5dbc7fe23f20188a8">rdi</a></td></tr>
+<tr class="memitem:a02b2b3b1b526fcfdb67ad36a5bc5f061" id="r_a02b2b3b1b526fcfdb67ad36a5bc5f061"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a02b2b3b1b526fcfdb67ad36a5bc5f061">rbp</a></td></tr>
+<tr class="memitem:ab563d838c3f4f8af2849227351294816" id="r_ab563d838c3f4f8af2849227351294816"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab563d838c3f4f8af2849227351294816">r8</a></td></tr>
+<tr class="memitem:a7c3f758525e46c1ee5cdb8f07a790c7d" id="r_a7c3f758525e46c1ee5cdb8f07a790c7d"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7c3f758525e46c1ee5cdb8f07a790c7d">r9</a></td></tr>
+<tr class="memitem:a726cb71d35f3acbde1d5be6ab156a4a0" id="r_a726cb71d35f3acbde1d5be6ab156a4a0"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a726cb71d35f3acbde1d5be6ab156a4a0">r10</a></td></tr>
+<tr class="memitem:a20e5b485e94adc827b8db51fa6ce4db9" id="r_a20e5b485e94adc827b8db51fa6ce4db9"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a20e5b485e94adc827b8db51fa6ce4db9">r11</a></td></tr>
+<tr class="memitem:a9e3191fd47972c3445ed0c10f71edcdb" id="r_a9e3191fd47972c3445ed0c10f71edcdb"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9e3191fd47972c3445ed0c10f71edcdb">r12</a></td></tr>
+<tr class="memitem:a266d2fb7b6270ba1d0b202577d5e920e" id="r_a266d2fb7b6270ba1d0b202577d5e920e"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a266d2fb7b6270ba1d0b202577d5e920e">r13</a></td></tr>
+<tr class="memitem:aa95627a360c86aee0d9e6167eecb281f" id="r_aa95627a360c86aee0d9e6167eecb281f"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa95627a360c86aee0d9e6167eecb281f">r14</a></td></tr>
+<tr class="memitem:a6ac12a363ecefe16e446ba156dca8881" id="r_a6ac12a363ecefe16e446ba156dca8881"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6ac12a363ecefe16e446ba156dca8881">r15</a></td></tr>
+<tr class="memitem:a9ed5a0fee6884cc989509268cf99ab80" id="r_a9ed5a0fee6884cc989509268cf99ab80"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9ed5a0fee6884cc989509268cf99ab80">vector</a></td></tr>
+<tr class="memitem:afe9da5d95730109af860ecae5aeebb30" id="r_afe9da5d95730109af860ecae5aeebb30"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afe9da5d95730109af860ecae5aeebb30">error_code</a></td></tr>
+<tr class="memitem:afffcb0b999db32c775d1a7a590e74ac0" id="r_afffcb0b999db32c775d1a7a590e74ac0"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afffcb0b999db32c775d1a7a590e74ac0">rip</a></td></tr>
+<tr class="memitem:af3da3c77136cafe5a306caffdb0a6618" id="r_af3da3c77136cafe5a306caffdb0a6618"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af3da3c77136cafe5a306caffdb0a6618">cs</a></td></tr>
+<tr class="memitem:a786aee9f74a14a24b7ac9bb77d136a84" id="r_a786aee9f74a14a24b7ac9bb77d136a84"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a786aee9f74a14a24b7ac9bb77d136a84">rflags</a></td></tr>
+<tr class="memitem:a7edd4dbb42afa998f5bc48c02f82f782" id="r_a7edd4dbb42afa998f5bc48c02f82f782"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7edd4dbb42afa998f5bc48c02f82f782">rsp</a></td></tr>
+<tr class="memitem:ab4e57e118207e2d182ef50a6b7035b2c" id="r_ab4e57e118207e2d182ef50a6b7035b2c"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab4e57e118207e2d182ef50a6b7035b2c">ss</a></td></tr>
+<tr class="memitem:a939d7c6a7809111ff96ddf654e750366" id="r_a939d7c6a7809111ff96ddf654e750366"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a939d7c6a7809111ff96ddf654e750366">x0</a></td></tr>
+<tr class="memitem:a78f12250c7044a504affc73ac02e60b2" id="r_a78f12250c7044a504affc73ac02e60b2"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a78f12250c7044a504affc73ac02e60b2">x1</a></td></tr>
+<tr class="memitem:ae2e8275e4eb83320c37d843457a3e966" id="r_ae2e8275e4eb83320c37d843457a3e966"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae2e8275e4eb83320c37d843457a3e966">x2</a></td></tr>
+<tr class="memitem:a17b3479f6de67bbaf81fa7aa76e7a009" id="r_a17b3479f6de67bbaf81fa7aa76e7a009"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a17b3479f6de67bbaf81fa7aa76e7a009">x3</a></td></tr>
+<tr class="memitem:adc704a35096e13c82bd2cbb3ab36abaa" id="r_adc704a35096e13c82bd2cbb3ab36abaa"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adc704a35096e13c82bd2cbb3ab36abaa">x4</a></td></tr>
+<tr class="memitem:a0a530516f428275398358898347e02cb" id="r_a0a530516f428275398358898347e02cb"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0a530516f428275398358898347e02cb">x5</a></td></tr>
+<tr class="memitem:af63a864e575b62d73074fcf3b26197e2" id="r_af63a864e575b62d73074fcf3b26197e2"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af63a864e575b62d73074fcf3b26197e2">x6</a></td></tr>
+<tr class="memitem:ab66657b8bcc1c89ed9060033d75d28f4" id="r_ab66657b8bcc1c89ed9060033d75d28f4"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab66657b8bcc1c89ed9060033d75d28f4">x7</a></td></tr>
+<tr class="memitem:a4ea725d2cf4643bb77696e97fc309929" id="r_a4ea725d2cf4643bb77696e97fc309929"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4ea725d2cf4643bb77696e97fc309929">x8</a></td></tr>
+<tr class="memitem:a6061aed83f19a79145f054fb1128990c" id="r_a6061aed83f19a79145f054fb1128990c"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6061aed83f19a79145f054fb1128990c">x9</a></td></tr>
+<tr class="memitem:a47dcdfe4d18e815c5e631e38e08cf0c3" id="r_a47dcdfe4d18e815c5e631e38e08cf0c3"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a47dcdfe4d18e815c5e631e38e08cf0c3">x10</a></td></tr>
+<tr class="memitem:ab6d90a25426868391d2747c68293c525" id="r_ab6d90a25426868391d2747c68293c525"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab6d90a25426868391d2747c68293c525">x11</a></td></tr>
+<tr class="memitem:a22fd537b98f73128bf5402922a5099b3" id="r_a22fd537b98f73128bf5402922a5099b3"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a22fd537b98f73128bf5402922a5099b3">x12</a></td></tr>
+<tr class="memitem:a36bf4f9c42df9165c9b3e6a297b08ef0" id="r_a36bf4f9c42df9165c9b3e6a297b08ef0"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a36bf4f9c42df9165c9b3e6a297b08ef0">x13</a></td></tr>
+<tr class="memitem:a42644c3f0cf1ae895713dc7eb92fce64" id="r_a42644c3f0cf1ae895713dc7eb92fce64"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a42644c3f0cf1ae895713dc7eb92fce64">x14</a></td></tr>
+<tr class="memitem:a88285fdb44d858070b366847b1ec7e7d" id="r_a88285fdb44d858070b366847b1ec7e7d"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a88285fdb44d858070b366847b1ec7e7d">x15</a></td></tr>
+<tr class="memitem:a2bc2907411931c40c6e4316a7931bc4f" id="r_a2bc2907411931c40c6e4316a7931bc4f"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2bc2907411931c40c6e4316a7931bc4f">x16</a></td></tr>
+<tr class="memitem:ad756d013176ea46e1597a7cf813f49f9" id="r_ad756d013176ea46e1597a7cf813f49f9"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad756d013176ea46e1597a7cf813f49f9">x17</a></td></tr>
+<tr class="memitem:a77f618783b9bc4820588617bc4d0ae82" id="r_a77f618783b9bc4820588617bc4d0ae82"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a77f618783b9bc4820588617bc4d0ae82">x18</a></td></tr>
+<tr class="memitem:a1c60fd794413f192dede7a67c9c7eece" id="r_a1c60fd794413f192dede7a67c9c7eece"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1c60fd794413f192dede7a67c9c7eece">x19</a></td></tr>
+<tr class="memitem:a7019a1eb980e2d0d707fcd20aa8dfa9b" id="r_a7019a1eb980e2d0d707fcd20aa8dfa9b"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7019a1eb980e2d0d707fcd20aa8dfa9b">x20</a></td></tr>
+<tr class="memitem:a9ab639b9840fa8c7c0e59f6cb6bc9de5" id="r_a9ab639b9840fa8c7c0e59f6cb6bc9de5"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9ab639b9840fa8c7c0e59f6cb6bc9de5">x21</a></td></tr>
+<tr class="memitem:a08720c290705725386f7806b1b6fdb34" id="r_a08720c290705725386f7806b1b6fdb34"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a08720c290705725386f7806b1b6fdb34">x22</a></td></tr>
+<tr class="memitem:aa25a377aa12303af3402931b0518e402" id="r_aa25a377aa12303af3402931b0518e402"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa25a377aa12303af3402931b0518e402">x23</a></td></tr>
+<tr class="memitem:a5bae93ac9e06e87f236bcfad04899ed5" id="r_a5bae93ac9e06e87f236bcfad04899ed5"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5bae93ac9e06e87f236bcfad04899ed5">x24</a></td></tr>
+<tr class="memitem:acbf4324841dade769f86cbe39f0b796a" id="r_acbf4324841dade769f86cbe39f0b796a"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#acbf4324841dade769f86cbe39f0b796a">x25</a></td></tr>
+<tr class="memitem:a656bba3060a8101cbc4743ee4b7381b2" id="r_a656bba3060a8101cbc4743ee4b7381b2"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a656bba3060a8101cbc4743ee4b7381b2">x26</a></td></tr>
+<tr class="memitem:a0ebc0b0887943d050a2a8ba2995c7cbd" id="r_a0ebc0b0887943d050a2a8ba2995c7cbd"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0ebc0b0887943d050a2a8ba2995c7cbd">x27</a></td></tr>
+<tr class="memitem:a68c444d2588ffef27717941b8addc86d" id="r_a68c444d2588ffef27717941b8addc86d"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a68c444d2588ffef27717941b8addc86d">x28</a></td></tr>
+<tr class="memitem:a29a69cf9951a246c7e4bea1510a1d812" id="r_a29a69cf9951a246c7e4bea1510a1d812"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a29a69cf9951a246c7e4bea1510a1d812">x29</a></td></tr>
+<tr class="memitem:ab739c5b0b1b8877b092896d13643ac73" id="r_ab739c5b0b1b8877b092896d13643ac73"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab739c5b0b1b8877b092896d13643ac73">x30</a></td></tr>
+<tr class="memitem:a649c8178ba587552ddfcd400fcb53b3a" id="r_a649c8178ba587552ddfcd400fcb53b3a"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a649c8178ba587552ddfcd400fcb53b3a">sp_el0</a></td></tr>
+<tr class="memitem:a78113668b17f09ddffa2c40c70b88234" id="r_a78113668b17f09ddffa2c40c70b88234"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a78113668b17f09ddffa2c40c70b88234">elr_el1</a></td></tr>
+<tr class="memitem:a8f2c5f490954eda78191cdd75a61f702" id="r_a8f2c5f490954eda78191cdd75a61f702"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8f2c5f490954eda78191cdd75a61f702">spsr_el1</a></td></tr>
+<tr class="memitem:a6ddb5b2adf55f494c6e3e90385bb1d90" id="r_a6ddb5b2adf55f494c6e3e90385bb1d90"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6ddb5b2adf55f494c6e3e90385bb1d90">ra</a></td></tr>
+<tr class="memitem:acb7af706c108e4bd02f369472e66ac98" id="r_acb7af706c108e4bd02f369472e66ac98"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#acb7af706c108e4bd02f369472e66ac98">sp</a></td></tr>
+<tr class="memitem:afff32e2cb23bcd0e37083d62418375ca" id="r_afff32e2cb23bcd0e37083d62418375ca"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afff32e2cb23bcd0e37083d62418375ca">gp</a></td></tr>
+<tr class="memitem:a5f331ee14256b2ca47338d9fa0c89afa" id="r_a5f331ee14256b2ca47338d9fa0c89afa"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5f331ee14256b2ca47338d9fa0c89afa">tp</a></td></tr>
+<tr class="memitem:a83ff17d01769db01c945dc177ba8e632" id="r_a83ff17d01769db01c945dc177ba8e632"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a83ff17d01769db01c945dc177ba8e632">s0</a></td></tr>
+<tr class="memitem:a9e99db3fcd96f31f7727bb30e1d12d6b" id="r_a9e99db3fcd96f31f7727bb30e1d12d6b"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9e99db3fcd96f31f7727bb30e1d12d6b">s1</a></td></tr>
+<tr class="memitem:a0065a3648904da03643a392dcdd6acb8" id="r_a0065a3648904da03643a392dcdd6acb8"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0065a3648904da03643a392dcdd6acb8">s2</a></td></tr>
+<tr class="memitem:a1232c2443d290be551b9f7f2baf40533" id="r_a1232c2443d290be551b9f7f2baf40533"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1232c2443d290be551b9f7f2baf40533">s3</a></td></tr>
+<tr class="memitem:a0744343750fffb00145b59cd14b1f3ed" id="r_a0744343750fffb00145b59cd14b1f3ed"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0744343750fffb00145b59cd14b1f3ed">s4</a></td></tr>
+<tr class="memitem:af2b822ec8abf93c4f43d9b654a8cee75" id="r_af2b822ec8abf93c4f43d9b654a8cee75"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af2b822ec8abf93c4f43d9b654a8cee75">s5</a></td></tr>
+<tr class="memitem:a16b6878d661126bf48bd7ec251497ac9" id="r_a16b6878d661126bf48bd7ec251497ac9"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a16b6878d661126bf48bd7ec251497ac9">s6</a></td></tr>
+<tr class="memitem:a408e689a9a592a0dfde421a21c142972" id="r_a408e689a9a592a0dfde421a21c142972"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a408e689a9a592a0dfde421a21c142972">s7</a></td></tr>
+<tr class="memitem:a82bbbdcf4859c60afce4fa042114ec27" id="r_a82bbbdcf4859c60afce4fa042114ec27"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a82bbbdcf4859c60afce4fa042114ec27">s8</a></td></tr>
+<tr class="memitem:a72c8156cad77732cce3d5c9d790bd1b1" id="r_a72c8156cad77732cce3d5c9d790bd1b1"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a72c8156cad77732cce3d5c9d790bd1b1">s9</a></td></tr>
+<tr class="memitem:acdfe0f4ad7e755645177ba2805e1ff38" id="r_acdfe0f4ad7e755645177ba2805e1ff38"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#acdfe0f4ad7e755645177ba2805e1ff38">s10</a></td></tr>
+<tr class="memitem:a3c99730230fd55ef937081a7a45ba234" id="r_a3c99730230fd55ef937081a7a45ba234"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3c99730230fd55ef937081a7a45ba234">s11</a></td></tr>
+<tr class="memitem:a5221fa4c9da90fece2149141eb4b7ff8" id="r_a5221fa4c9da90fece2149141eb4b7ff8"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5221fa4c9da90fece2149141eb4b7ff8">sepc</a></td></tr>
+<tr class="memitem:a52c824396435964091352e8f1a2392cb" id="r_a52c824396435964091352e8f1a2392cb"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a52c824396435964091352e8f1a2392cb">sstatus</a></td></tr>
+<tr class="memitem:a96e85d32a728898c2dc34172978de86b" id="r_a96e85d32a728898c2dc34172978de86b"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a96e85d32a728898c2dc34172978de86b">stvec</a></td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>x86-64 CPU context — general-purpose registers, interrupt vector, error code, and interrupt-frame (rip, cs, rflags, rsp, ss). </p>
+<p>RISC-V 64 CPU context — general-purpose registers, S-mode CSRs, interrupt vector, and error code.</p>
+<p>AArch64 CPU context — general-purpose registers x0–x30, SP_EL0, ELR_EL1, SPSR_EL1, interrupt vector, and error code. </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="af3da3c77136cafe5a306caffdb0a6618" name="af3da3c77136cafe5a306caffdb0a6618"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#af3da3c77136cafe5a306caffdb0a6618">&#9670;&#160;</a></span>cs</h2>
 
@@ -160,7 +220,21 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::cs</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::cs</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a78113668b17f09ddffa2c40c70b88234" name="a78113668b17f09ddffa2c40c70b88234"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a78113668b17f09ddffa2c40c70b88234">&#9670;&#160;</a></span>elr_el1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::elr_el1</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -174,7 +248,21 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::error_code</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::error_code</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afff32e2cb23bcd0e37083d62418375ca" name="afff32e2cb23bcd0e37083d62418375ca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afff32e2cb23bcd0e37083d62418375ca">&#9670;&#160;</a></span>gp</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::gp</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -188,7 +276,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::r10</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::r10</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -202,7 +290,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::r11</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::r11</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -216,7 +304,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::r12</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::r12</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -230,7 +318,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::r13</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::r13</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -244,7 +332,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::r14</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::r14</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -258,7 +346,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::r15</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::r15</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -272,7 +360,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::r8</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::r8</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -286,7 +374,21 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::r9</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::r9</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6ddb5b2adf55f494c6e3e90385bb1d90" name="a6ddb5b2adf55f494c6e3e90385bb1d90"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6ddb5b2adf55f494c6e3e90385bb1d90">&#9670;&#160;</a></span>ra</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::ra</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -300,7 +402,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::rax</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::rax</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -314,7 +416,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::rbp</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::rbp</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -328,7 +430,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::rbx</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::rbx</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -342,7 +444,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::rcx</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::rcx</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -356,7 +458,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::rdi</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::rdi</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -370,7 +472,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::rdx</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::rdx</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -384,7 +486,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::rflags</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::rflags</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -398,7 +500,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::rip</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::rip</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -412,7 +514,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::rsi</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::rsi</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -426,7 +528,231 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::rsp</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::rsp</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a83ff17d01769db01c945dc177ba8e632" name="a83ff17d01769db01c945dc177ba8e632"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a83ff17d01769db01c945dc177ba8e632">&#9670;&#160;</a></span>s0</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9e99db3fcd96f31f7727bb30e1d12d6b" name="a9e99db3fcd96f31f7727bb30e1d12d6b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9e99db3fcd96f31f7727bb30e1d12d6b">&#9670;&#160;</a></span>s1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acdfe0f4ad7e755645177ba2805e1ff38" name="acdfe0f4ad7e755645177ba2805e1ff38"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acdfe0f4ad7e755645177ba2805e1ff38">&#9670;&#160;</a></span>s10</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s10</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3c99730230fd55ef937081a7a45ba234" name="a3c99730230fd55ef937081a7a45ba234"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3c99730230fd55ef937081a7a45ba234">&#9670;&#160;</a></span>s11</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s11</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0065a3648904da03643a392dcdd6acb8" name="a0065a3648904da03643a392dcdd6acb8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0065a3648904da03643a392dcdd6acb8">&#9670;&#160;</a></span>s2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s2</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1232c2443d290be551b9f7f2baf40533" name="a1232c2443d290be551b9f7f2baf40533"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1232c2443d290be551b9f7f2baf40533">&#9670;&#160;</a></span>s3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0744343750fffb00145b59cd14b1f3ed" name="a0744343750fffb00145b59cd14b1f3ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0744343750fffb00145b59cd14b1f3ed">&#9670;&#160;</a></span>s4</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s4</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af2b822ec8abf93c4f43d9b654a8cee75" name="af2b822ec8abf93c4f43d9b654a8cee75"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af2b822ec8abf93c4f43d9b654a8cee75">&#9670;&#160;</a></span>s5</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s5</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a16b6878d661126bf48bd7ec251497ac9" name="a16b6878d661126bf48bd7ec251497ac9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a16b6878d661126bf48bd7ec251497ac9">&#9670;&#160;</a></span>s6</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s6</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a408e689a9a592a0dfde421a21c142972" name="a408e689a9a592a0dfde421a21c142972"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a408e689a9a592a0dfde421a21c142972">&#9670;&#160;</a></span>s7</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s7</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a82bbbdcf4859c60afce4fa042114ec27" name="a82bbbdcf4859c60afce4fa042114ec27"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a82bbbdcf4859c60afce4fa042114ec27">&#9670;&#160;</a></span>s8</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a72c8156cad77732cce3d5c9d790bd1b1" name="a72c8156cad77732cce3d5c9d790bd1b1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a72c8156cad77732cce3d5c9d790bd1b1">&#9670;&#160;</a></span>s9</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::s9</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5221fa4c9da90fece2149141eb4b7ff8" name="a5221fa4c9da90fece2149141eb4b7ff8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5221fa4c9da90fece2149141eb4b7ff8">&#9670;&#160;</a></span>sepc</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::sepc</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acb7af706c108e4bd02f369472e66ac98" name="acb7af706c108e4bd02f369472e66ac98"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acb7af706c108e4bd02f369472e66ac98">&#9670;&#160;</a></span>sp</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::sp</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a649c8178ba587552ddfcd400fcb53b3a" name="a649c8178ba587552ddfcd400fcb53b3a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a649c8178ba587552ddfcd400fcb53b3a">&#9670;&#160;</a></span>sp_el0</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::sp_el0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8f2c5f490954eda78191cdd75a61f702" name="a8f2c5f490954eda78191cdd75a61f702"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8f2c5f490954eda78191cdd75a61f702">&#9670;&#160;</a></span>spsr_el1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::spsr_el1</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -440,7 +766,49 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::ss</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::ss</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a52c824396435964091352e8f1a2392cb" name="a52c824396435964091352e8f1a2392cb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a52c824396435964091352e8f1a2392cb">&#9670;&#160;</a></span>sstatus</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::sstatus</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a96e85d32a728898c2dc34172978de86b" name="a96e85d32a728898c2dc34172978de86b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a96e85d32a728898c2dc34172978de86b">&#9670;&#160;</a></span>stvec</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::stvec</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5f331ee14256b2ca47338d9fa0c89afa" name="a5f331ee14256b2ca47338d9fa0c89afa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5f331ee14256b2ca47338d9fa0c89afa">&#9670;&#160;</a></span>tp</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::tp</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -454,7 +822,441 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::ArchContext::vector</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::vector</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a939d7c6a7809111ff96ddf654e750366" name="a939d7c6a7809111ff96ddf654e750366"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a939d7c6a7809111ff96ddf654e750366">&#9670;&#160;</a></span>x0</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a78f12250c7044a504affc73ac02e60b2" name="a78f12250c7044a504affc73ac02e60b2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a78f12250c7044a504affc73ac02e60b2">&#9670;&#160;</a></span>x1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a47dcdfe4d18e815c5e631e38e08cf0c3" name="a47dcdfe4d18e815c5e631e38e08cf0c3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a47dcdfe4d18e815c5e631e38e08cf0c3">&#9670;&#160;</a></span>x10</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x10</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab6d90a25426868391d2747c68293c525" name="ab6d90a25426868391d2747c68293c525"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab6d90a25426868391d2747c68293c525">&#9670;&#160;</a></span>x11</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x11</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a22fd537b98f73128bf5402922a5099b3" name="a22fd537b98f73128bf5402922a5099b3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a22fd537b98f73128bf5402922a5099b3">&#9670;&#160;</a></span>x12</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x12</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a36bf4f9c42df9165c9b3e6a297b08ef0" name="a36bf4f9c42df9165c9b3e6a297b08ef0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a36bf4f9c42df9165c9b3e6a297b08ef0">&#9670;&#160;</a></span>x13</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x13</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a42644c3f0cf1ae895713dc7eb92fce64" name="a42644c3f0cf1ae895713dc7eb92fce64"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a42644c3f0cf1ae895713dc7eb92fce64">&#9670;&#160;</a></span>x14</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x14</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a88285fdb44d858070b366847b1ec7e7d" name="a88285fdb44d858070b366847b1ec7e7d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a88285fdb44d858070b366847b1ec7e7d">&#9670;&#160;</a></span>x15</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x15</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2bc2907411931c40c6e4316a7931bc4f" name="a2bc2907411931c40c6e4316a7931bc4f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2bc2907411931c40c6e4316a7931bc4f">&#9670;&#160;</a></span>x16</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad756d013176ea46e1597a7cf813f49f9" name="ad756d013176ea46e1597a7cf813f49f9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad756d013176ea46e1597a7cf813f49f9">&#9670;&#160;</a></span>x17</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x17</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a77f618783b9bc4820588617bc4d0ae82" name="a77f618783b9bc4820588617bc4d0ae82"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a77f618783b9bc4820588617bc4d0ae82">&#9670;&#160;</a></span>x18</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x18</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1c60fd794413f192dede7a67c9c7eece" name="a1c60fd794413f192dede7a67c9c7eece"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1c60fd794413f192dede7a67c9c7eece">&#9670;&#160;</a></span>x19</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x19</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae2e8275e4eb83320c37d843457a3e966" name="ae2e8275e4eb83320c37d843457a3e966"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae2e8275e4eb83320c37d843457a3e966">&#9670;&#160;</a></span>x2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x2</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7019a1eb980e2d0d707fcd20aa8dfa9b" name="a7019a1eb980e2d0d707fcd20aa8dfa9b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7019a1eb980e2d0d707fcd20aa8dfa9b">&#9670;&#160;</a></span>x20</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x20</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9ab639b9840fa8c7c0e59f6cb6bc9de5" name="a9ab639b9840fa8c7c0e59f6cb6bc9de5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9ab639b9840fa8c7c0e59f6cb6bc9de5">&#9670;&#160;</a></span>x21</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x21</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a08720c290705725386f7806b1b6fdb34" name="a08720c290705725386f7806b1b6fdb34"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a08720c290705725386f7806b1b6fdb34">&#9670;&#160;</a></span>x22</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x22</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa25a377aa12303af3402931b0518e402" name="aa25a377aa12303af3402931b0518e402"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa25a377aa12303af3402931b0518e402">&#9670;&#160;</a></span>x23</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x23</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5bae93ac9e06e87f236bcfad04899ed5" name="a5bae93ac9e06e87f236bcfad04899ed5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5bae93ac9e06e87f236bcfad04899ed5">&#9670;&#160;</a></span>x24</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x24</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acbf4324841dade769f86cbe39f0b796a" name="acbf4324841dade769f86cbe39f0b796a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acbf4324841dade769f86cbe39f0b796a">&#9670;&#160;</a></span>x25</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x25</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a656bba3060a8101cbc4743ee4b7381b2" name="a656bba3060a8101cbc4743ee4b7381b2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a656bba3060a8101cbc4743ee4b7381b2">&#9670;&#160;</a></span>x26</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x26</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0ebc0b0887943d050a2a8ba2995c7cbd" name="a0ebc0b0887943d050a2a8ba2995c7cbd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0ebc0b0887943d050a2a8ba2995c7cbd">&#9670;&#160;</a></span>x27</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x27</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a68c444d2588ffef27717941b8addc86d" name="a68c444d2588ffef27717941b8addc86d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a68c444d2588ffef27717941b8addc86d">&#9670;&#160;</a></span>x28</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x28</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a29a69cf9951a246c7e4bea1510a1d812" name="a29a69cf9951a246c7e4bea1510a1d812"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a29a69cf9951a246c7e4bea1510a1d812">&#9670;&#160;</a></span>x29</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x29</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a17b3479f6de67bbaf81fa7aa76e7a009" name="a17b3479f6de67bbaf81fa7aa76e7a009"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a17b3479f6de67bbaf81fa7aa76e7a009">&#9670;&#160;</a></span>x3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab739c5b0b1b8877b092896d13643ac73" name="ab739c5b0b1b8877b092896d13643ac73"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab739c5b0b1b8877b092896d13643ac73">&#9670;&#160;</a></span>x30</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x30</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="adc704a35096e13c82bd2cbb3ab36abaa" name="adc704a35096e13c82bd2cbb3ab36abaa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adc704a35096e13c82bd2cbb3ab36abaa">&#9670;&#160;</a></span>x4</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x4</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0a530516f428275398358898347e02cb" name="a0a530516f428275398358898347e02cb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0a530516f428275398358898347e02cb">&#9670;&#160;</a></span>x5</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x5</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af63a864e575b62d73074fcf3b26197e2" name="af63a864e575b62d73074fcf3b26197e2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af63a864e575b62d73074fcf3b26197e2">&#9670;&#160;</a></span>x6</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x6</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab66657b8bcc1c89ed9060033d75d28f4" name="ab66657b8bcc1c89ed9060033d75d28f4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab66657b8bcc1c89ed9060033d75d28f4">&#9670;&#160;</a></span>x7</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x7</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4ea725d2cf4643bb77696e97fc309929" name="a4ea725d2cf4643bb77696e97fc309929"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4ea725d2cf4643bb77696e97fc309929">&#9670;&#160;</a></span>x8</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6061aed83f19a79145f054fb1128990c" name="a6061aed83f19a79145f054fb1128990c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6061aed83f19a79145f054fb1128990c">&#9670;&#160;</a></span>x9</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::ArchContext::x9</td>
         </tr>
       </table>
 </div><div class="memdoc">

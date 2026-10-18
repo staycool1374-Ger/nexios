@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -122,7 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:CmdHeader" id="r_CmdHeader"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ahci_1_1_cmd_header.html">CmdHeader</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Command Header (32 bytes).  <a href="structkernel_1_1ahci_1_1_cmd_header.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Command Header (32 bytes, AHCI 1.3.1 §4.2.2).  <a href="structkernel_1_1ahci_1_1_cmd_header.html#details">More...</a><br /></td></tr>
 <tr class="memitem:CmdFIS" id="r_CmdFIS"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ahci_1_1_cmd_f_i_s.html">CmdFIS</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Command FIS (FIS Type 0x27, 5 DWORDS = 20 bytes).  <a href="structkernel_1_1ahci_1_1_cmd_f_i_s.html#details">More...</a><br /></td></tr>
 <tr class="memitem:PrdHbaEntry" id="r_PrdHbaEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ahci_1_1_prd_hba_entry.html">PrdHbaEntry</a></td></tr>
@@ -195,6 +195,11 @@ Variables</h2></td></tr>
 <tr class="memitem:a28e17b8a652d5b51ef76c5a9a8aa832f" id="r_a28e17b8a652d5b51ef76c5a9a8aa832f"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a28e17b8a652d5b51ef76c5a9a8aa832f">PORT_RESERVED0</a> = 0x1C</td></tr>
 <tr class="memitem:a23b851eb6ffd716dded6871755199a8e" id="r_a23b851eb6ffd716dded6871755199a8e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a23b851eb6ffd716dded6871755199a8e">PORT_TFD</a> = 0x20</td></tr>
 <tr class="memitem:a16d00f6fb5ec708157f1674d2437eedf" id="r_a16d00f6fb5ec708157f1674d2437eedf"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a16d00f6fb5ec708157f1674d2437eedf">PORT_SIG</a> = 0x24</td></tr>
+<tr class="memitem:a334f85615d8817c3171b520d88912dd4" id="r_a334f85615d8817c3171b520d88912dd4"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a334f85615d8817c3171b520d88912dd4">PORT_SIG_SATA</a> = 0x00000101</td></tr>
+<tr class="memdesc:a334f85615d8817c3171b520d88912dd4"><td class="mdescLeft">&#160;</td><td class="mdescRight">PORT_SIG device signatures (AHCI 1.3.1 §3.3.8).  <br /></td></tr>
+<tr class="memitem:ae31724e6e0dc248b9146c1a7dedebc8a" id="r_ae31724e6e0dc248b9146c1a7dedebc8a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ae31724e6e0dc248b9146c1a7dedebc8a">PORT_SIG_ATAPI</a> = 0xEB140101</td></tr>
+<tr class="memitem:a3472e32146bcc77f5201ed0ac80ae732" id="r_a3472e32146bcc77f5201ed0ac80ae732"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a3472e32146bcc77f5201ed0ac80ae732">PORT_SIG_PM</a> = 0x96690101</td></tr>
+<tr class="memitem:a6616a9cb03ee686157fb218158b334e4" id="r_a6616a9cb03ee686157fb218158b334e4"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a6616a9cb03ee686157fb218158b334e4">PORT_SIG_SEMB</a> = 0xC33C0101</td></tr>
 <tr class="memitem:a5bc2671958fbfdd0e6457f75586a1edb" id="r_a5bc2671958fbfdd0e6457f75586a1edb"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a5bc2671958fbfdd0e6457f75586a1edb">PORT_SSTS</a> = 0x28</td></tr>
 <tr class="memitem:a5d9c52d79631749f985d987c3bb13c47" id="r_a5d9c52d79631749f985d987c3bb13c47"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a5d9c52d79631749f985d987c3bb13c47">PORT_SCTL</a> = 0x2C</td></tr>
 <tr class="memitem:abd02f10589e8a3ab61514fe8c306a4e3" id="r_abd02f10589e8a3ab61514fe8c306a4e3"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#abd02f10589e8a3ab61514fe8c306a4e3">PORT_SERR</a> = 0x30</td></tr>
@@ -255,11 +260,11 @@ Variables</h2></td></tr>
 <tr class="memitem:a9538f53c28aea23c532e696c92f85aa6" id="r_a9538f53c28aea23c532e696c92f85aa6"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a9538f53c28aea23c532e696c92f85aa6">SSTS_DET_NODEVICE</a> = 0x00</td></tr>
 <tr class="memitem:a6403f87b45b60c1d7b674cd4eaf16414" id="r_a6403f87b45b60c1d7b674cd4eaf16414"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a6403f87b45b60c1d7b674cd4eaf16414">SSTS_DET_DETACHED</a> = 0x01</td></tr>
 <tr class="memitem:a2dacbc81a3e358c8fe77cce5437cd15e" id="r_a2dacbc81a3e358c8fe77cce5437cd15e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a2dacbc81a3e358c8fe77cce5437cd15e">SSTS_DET_ONLINE</a> = 0x03</td></tr>
-<tr class="memitem:a741f80f7039c6fa13d908e2501c60f6e" id="r_a741f80f7039c6fa13d908e2501c60f6e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a741f80f7039c6fa13d908e2501c60f6e">SSTS_DET_OFFLINE</a> = 0x04</td></tr>
+<tr class="memitem:a741f80f7039c6fa13d908e2501c60f6e" id="r_a741f80f7039c6fa13d908e2501c60f6e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a741f80f7039c6fa13d908e2501c60f6e">SSTS_DET_OFFLINE</a></td></tr>
 <tr class="memitem:a97cadcb9d28ca4921a66e08213dfea6f" id="r_a97cadcb9d28ca4921a66e08213dfea6f"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a97cadcb9d28ca4921a66e08213dfea6f">SSTS_SPD_MASK</a> = 0x000000F0</td></tr>
-<tr class="memitem:ad28b8b2cf8235b27fd0bb983ba6e0388" id="r_ad28b8b2cf8235b27fd0bb983ba6e0388"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ad28b8b2cf8235b27fd0bb983ba6e0388">SSTS_IPM_MASK</a> = 0x00000F00</td></tr>
+<tr class="memitem:ad28b8b2cf8235b27fd0bb983ba6e0388" id="r_ad28b8b2cf8235b27fd0bb983ba6e0388"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ad28b8b2cf8235b27fd0bb983ba6e0388">SSTS_IPM_MASK</a></td></tr>
 <tr class="memitem:a1fab7a6592f12c072a5906604405aa68" id="r_a1fab7a6592f12c072a5906604405aa68"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a1fab7a6592f12c072a5906604405aa68">SERR_DIAG_X</a> = 0x00000001</td></tr>
-<tr class="memdesc:a1fab7a6592f12c072a5906604405aa68"><td class="mdescLeft">&#160;</td><td class="mdescRight">PORT_SERR bits (SATA <a class="el" href="namespacekernel.html#ac3675881848739146fbcc8b84d5c1fcd" title="Kernel error codes returned by various operations.">Error</a>).  <br /></td></tr>
+<tr class="memdesc:a1fab7a6592f12c072a5906604405aa68"><td class="mdescLeft">&#160;</td><td class="mdescRight">PORT_SERR bits (SATA <a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">Error</a>).  <br /></td></tr>
 <tr class="memitem:a8f1a45b77d11f501f751c31df38b2edc" id="r_a8f1a45b77d11f501f751c31df38b2edc"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a8f1a45b77d11f501f751c31df38b2edc">SERR_DIAG_F</a> = 0x00000002</td></tr>
 <tr class="memitem:a1d0c6317ee33156656a87ee6c1969497" id="r_a1d0c6317ee33156656a87ee6c1969497"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a1d0c6317ee33156656a87ee6c1969497">SERR_DIAG_T</a> = 0x00000004</td></tr>
 <tr class="memitem:a61cbf59ef3957ead2530133228c50921" id="r_a61cbf59ef3957ead2530133228c50921"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a61cbf59ef3957ead2530133228c50921">SERR_DIAG_S</a> = 0x00000008</td></tr>
@@ -3166,6 +3171,96 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ae31724e6e0dc248b9146c1a7dedebc8a" name="ae31724e6e0dc248b9146c1a7dedebc8a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae31724e6e0dc248b9146c1a7dedebc8a">&#9670;&#160;</a></span>PORT_SIG_ATAPI</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t kernel::ahci::PORT_SIG_ATAPI = 0xEB140101</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3472e32146bcc77f5201ed0ac80ae732" name="a3472e32146bcc77f5201ed0ac80ae732"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3472e32146bcc77f5201ed0ac80ae732">&#9670;&#160;</a></span>PORT_SIG_PM</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t kernel::ahci::PORT_SIG_PM = 0x96690101</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a334f85615d8817c3171b520d88912dd4" name="a334f85615d8817c3171b520d88912dd4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a334f85615d8817c3171b520d88912dd4">&#9670;&#160;</a></span>PORT_SIG_SATA</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t kernel::ahci::PORT_SIG_SATA = 0x00000101</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>PORT_SIG device signatures (AHCI 1.3.1 §3.3.8). </p>
+
+</div>
+</div>
+<a id="a6616a9cb03ee686157fb218158b334e4" name="a6616a9cb03ee686157fb218158b334e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6616a9cb03ee686157fb218158b334e4">&#9670;&#160;</a></span>PORT_SIG_SEMB</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t kernel::ahci::PORT_SIG_SEMB = 0xC33C0101</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="ab2bf5c1883b9fbe87fbcb58e7f0f63c0" name="ab2bf5c1883b9fbe87fbcb58e7f0f63c0"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ab2bf5c1883b9fbe87fbcb58e7f0f63c0">&#9670;&#160;</a></span>PORT_SNTF</h2>
 
@@ -3628,7 +3723,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>PORT_SERR bits (SATA <a class="el" href="namespacekernel.html#ac3675881848739146fbcc8b84d5c1fcd" title="Kernel error codes returned by various operations.">Error</a>). </p>
+<p>PORT_SERR bits (SATA <a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">Error</a>). </p>
 
 </div>
 </div>
@@ -3710,7 +3805,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">uint32_t kernel::ahci::SSTS_DET_OFFLINE = 0x04</td>
+          <td class="memname">uint32_t kernel::ahci::SSTS_DET_OFFLINE</td>
         </tr>
       </table>
   </td>
@@ -3719,7 +3814,9 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-
+<b>Initial value:</b><div class="fragment"><div class="line">                                =</div>
+<div class="line">0x04</div>
+</div><!-- fragment -->
 </div>
 </div>
 <a id="a2dacbc81a3e358c8fe77cce5437cd15e" name="a2dacbc81a3e358c8fe77cce5437cd15e"></a>
@@ -3754,7 +3851,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">uint32_t kernel::ahci::SSTS_IPM_MASK = 0x00000F00</td>
+          <td class="memname">uint32_t kernel::ahci::SSTS_IPM_MASK</td>
         </tr>
       </table>
   </td>
@@ -3763,7 +3860,9 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-
+<b>Initial value:</b><div class="fragment"><div class="line">                             =</div>
+<div class="line">0x00000F00</div>
+</div><!-- fragment -->
 </div>
 </div>
 <a id="a97cadcb9d28ca4921a66e08213dfea6f" name="a97cadcb9d28ca4921a66e08213dfea6f"></a>

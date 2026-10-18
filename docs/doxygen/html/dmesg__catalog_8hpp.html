@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -145,7 +145,7 @@ Data Structures</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Alog" id="r_kernel_3A_3Alog"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html">kernel::log</a></td></tr>
 <tr class="memitem:kernel_3A_3Alog_3A_3Acatalog" id="r_kernel_3A_3Alog_3A_3Acatalog"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log_1_1catalog.html">kernel::log::catalog</a></td></tr>
 </table><table class="memberdecls">
@@ -172,7 +172,7 @@ Variables</h2></td></tr>
 <tr class="memitem:a551f4a358170ea2214923d29758b09fc" id="r_a551f4a358170ea2214923d29758b09fc"><td class="memItemLeft">constexpr <a class="el" href="structkernel_1_1log_1_1catalog_1_1_dmesg_record.html">DmesgRecord</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log_1_1catalog.html#a551f4a358170ea2214923d29758b09fc">kernel::log::catalog::kDmesgCatalog_NET</a> []</td></tr>
 <tr class="memdesc:a551f4a358170ea2214923d29758b09fc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Network records (canonical base kDmesgBase_NET). No producer pushes these yet — the space is reserved so drivers report into a stable numbering from day one.  <br /></td></tr>
 <tr class="memitem:a8d322de7376aa6eaaec5d54f8dce67a7" id="r_a8d322de7376aa6eaaec5d54f8dce67a7"><td class="memItemLeft">constexpr <a class="el" href="structkernel_1_1log_1_1catalog_1_1_dmesg_record.html">DmesgRecord</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log_1_1catalog.html#a8d322de7376aa6eaaec5d54f8dce67a7">kernel::log::catalog::kDmesgCatalog_DRIVER</a> []</td></tr>
-<tr class="memdesc:a8d322de7376aa6eaaec5d54f8dce67a7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Driver records (canonical base kDmesgBase_DRIVER): probe, transport, queue, request and DMA failures across ahci/virtio/pci.  <br /></td></tr>
+<tr class="memdesc:a8d322de7376aa6eaaec5d54f8dce67a7"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structkernel_1_1_driver.html" title="Describes a single driver module.">Driver</a> records (canonical base kDmesgBase_DRIVER): probe, transport, queue, request and DMA failures across ahci/virtio/pci.  <br /></td></tr>
 <tr class="memitem:a5e9f6975a2bf059fda2af6af990fc62d" id="r_a5e9f6975a2bf059fda2af6af990fc62d"><td class="memItemLeft">constexpr <a class="el" href="structkernel_1_1log_1_1catalog_1_1_dmesg_record.html">DmesgRecord</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log_1_1catalog.html#a5e9f6975a2bf059fda2af6af990fc62d">kernel::log::catalog::kDmesgCatalog_INIT</a> []</td></tr>
 <tr class="memdesc:a5e9f6975a2bf059fda2af6af990fc62d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Init records (canonical base kDmesgBase_INIT): init-rc, fstab, daemon-startup and shell-creation milestones and failures.  <br /></td></tr>
 <tr class="memitem:a0a3ac25128cf2f20f367de5c1083b18b" id="r_a0a3ac25128cf2f20f367de5c1083b18b"><td class="memItemLeft">constexpr <a class="el" href="structkernel_1_1log_1_1catalog_1_1_dmesg_record.html">DmesgRecord</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log_1_1catalog.html#a0a3ac25128cf2f20f367de5c1083b18b">kernel::log::catalog::kDmesgCatalog_TIMING</a> []</td></tr>

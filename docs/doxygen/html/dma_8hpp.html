@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,141 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dma_8hpp.html'
 
 <p>DMA driver — buffer management, scatter-gather, PRD table construction, and portable DMA channel abstraction for kernel and userspace drivers.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="pci_8hpp_source.html">kernel/arch/pci.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="irq__spinlock__guard_8hpp_source.html">kernel/sync/irq_spinlock_guard.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for dma.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="dma_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2driver_2dma_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="dma_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2driver_2dma_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="dma_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Adma_3A_3ASgEntry" id="r_kernel_3A_3Adma_3A_3ASgEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1dma_1_1_sg_entry.html">kernel::dma::SgEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A single scatter-gather entry.  <a href="structkernel_1_1dma_1_1_sg_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Adma_3A_3ASgList" id="r_kernel_3A_3Adma_3A_3ASgList"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1dma_1_1_sg_list.html">kernel::dma::SgList</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Scatter-gather list.  <a href="structkernel_1_1dma_1_1_sg_list.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Adma_3A_3APrdEntry" id="r_kernel_3A_3Adma_3A_3APrdEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1dma_1_1_prd_entry.html">kernel::dma::PrdEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical Region Descriptor (ATA bus master format).  <a href="structkernel_1_1dma_1_1_prd_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Adma_3A_3APrdTable" id="r_kernel_3A_3Adma_3A_3APrdTable"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1dma_1_1_prd_table.html">kernel::dma::PrdTable</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">PRD table — fixed-size array of <a class="el" href="structkernel_1_1dma_1_1_prd_entry.html" title="Physical Region Descriptor (ATA bus master format).">PrdEntry</a>.  <a href="structkernel_1_1dma_1_1_prd_table.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Adma_3A_3ADmaBuffer" id="r_kernel_3A_3Adma_3A_3ADmaBuffer"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">kernel::dma::DmaBuffer</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A physically contiguous DMA buffer.  <a href="structkernel_1_1dma_1_1_dma_buffer.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Adma_3A_3ADmaChannel" id="r_kernel_3A_3Adma_3A_3ADmaChannel"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1dma_1_1_dma_channel.html">kernel::dma::DmaChannel</a></td></tr>
+<tr class="memitem:kernel_3A_3Adma_3A_3ABmDmaChannel" id="r_kernel_3A_3Adma_3A_3ABmDmaChannel"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html">kernel::dma::BmDmaChannel</a></td></tr>
+<tr class="memitem:kernel_3A_3Adma_3A_3ADmaEngine" id="r_kernel_3A_3Adma_3A_3ADmaEngine"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1dma_1_1_dma_engine.html">kernel::dma::DmaEngine</a></td></tr>
+<tr class="memitem:kernel_3A_3Adma_3A_3APingPongDma" id="r_kernel_3A_3Adma_3A_3APingPongDma"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1dma_1_1_ping_pong_dma.html">kernel::dma::PingPongDma</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Adma" id="r_kernel_3A_3Adma"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html">kernel::dma</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
+Typedefs</h2></td></tr>
+<tr class="memitem:a1e86daeaf63aaada648341891f68bb97" id="r_a1e86daeaf63aaada648341891f68bb97"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a1e86daeaf63aaada648341891f68bb97">kernel::dma::DmaCallback</a> = void (*)(uint64_t context, bool success)</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a84e8c46b4e33b83d66f7b0ff078eaeac" id="r_a84e8c46b4e33b83d66f7b0ff078eaeac"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a84e8c46b4e33b83d66f7b0ff078eaeac">kernel::dma::Direction</a> : uint8_t { <a class="el" href="namespacekernel_1_1dma.html#a84e8c46b4e33b83d66f7b0ff078eaeaca3466fab4975481651940ed328aa990e4">kernel::dma::READ</a> = 0
+, <a class="el" href="namespacekernel_1_1dma.html#a84e8c46b4e33b83d66f7b0ff078eaeacad4b9e47f65b6e79b010582f15785867e">kernel::dma::WRITE</a> = 1
+ }</td></tr>
+<tr class="memdesc:a84e8c46b4e33b83d66f7b0ff078eaeac"><td class="mdescLeft">&#160;</td><td class="mdescRight">DMA direction.  <a href="namespacekernel_1_1dma.html#a84e8c46b4e33b83d66f7b0ff078eaeac">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ae58a5d89d2f598db6a1aec1d6b9fa27e" id="r_ae58a5d89d2f598db6a1aec1d6b9fa27e"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1dma_1_1_prd_entry.html">kernel::dma::PrdEntry</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#ae58a5d89d2f598db6a1aec1d6b9fa27e">kernel::dma::__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:a9ed9bda8444aa6fed65a4d02bb7157d9" id="r_a9ed9bda8444aa6fed65a4d02bb7157d9"><td class="memItemLeft"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a9ed9bda8444aa6fed65a4d02bb7157d9">kernel::dma::alloc_buffer</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> size)</td></tr>
+<tr class="memitem:ae63cca35e8ce0810d35364b5e21a252d" id="r_ae63cca35e8ce0810d35364b5e21a252d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#ae63cca35e8ce0810d35364b5e21a252d">kernel::dma::free_buffer</a> (<a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> &amp;buf)</td></tr>
+<tr class="memdesc:ae63cca35e8ce0810d35364b5e21a252d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free a previously allocated DMA buffer.  <br /></td></tr>
+<tr class="memitem:aa9108fb6f9a44d1546323ec20a06c334" id="r_aa9108fb6f9a44d1546323ec20a06c334"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#aa9108fb6f9a44d1546323ec20a06c334">kernel::dma::sg_from_buffer</a> (<a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg, const <a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> &amp;buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset=0, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> length=0)</td></tr>
+<tr class="memitem:a6d426c4def3e0e077f11e5f5617ea809" id="r_a6d426c4def3e0e077f11e5f5617ea809"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a6d426c4def3e0e077f11e5f5617ea809">kernel::dma::sg_from_virt</a> (<a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg, uint64_t virt_addr, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> length)</td></tr>
+<tr class="memitem:a3694e0ff7a283647c1638774454314f2" id="r_a3694e0ff7a283647c1638774454314f2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a3694e0ff7a283647c1638774454314f2">kernel::dma::sg_reset</a> (<a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg)</td></tr>
+<tr class="memdesc:a3694e0ff7a283647c1638774454314f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset a scatter-gather list.  <br /></td></tr>
+<tr class="memitem:a2b0e39f4a2f3d6d1eb72850767919d44" id="r_a2b0e39f4a2f3d6d1eb72850767919d44"><td class="memItemLeft"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a2b0e39f4a2f3d6d1eb72850767919d44">kernel::dma::prd_from_sg</a> (<a class="el" href="structkernel_1_1dma_1_1_prd_table.html">PrdTable</a> &amp;prd, const <a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg, bool eot)</td></tr>
+<tr class="memitem:a4ac8093b599e8f148c0873cb8657e7c2" id="r_a4ac8093b599e8f148c0873cb8657e7c2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a4ac8093b599e8f148c0873cb8657e7c2">kernel::dma::prd_reset</a> (<a class="el" href="structkernel_1_1dma_1_1_prd_table.html">PrdTable</a> &amp;prd)</td></tr>
+<tr class="memdesc:a4ac8093b599e8f148c0873cb8657e7c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset a PRD table.  <br /></td></tr>
+<tr class="memitem:a7c295e7cd57137a154f6ce5fe0bbde68" id="r_a7c295e7cd57137a154f6ce5fe0bbde68"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a7c295e7cd57137a154f6ce5fe0bbde68">kernel::dma::pci_set_bus_master</a> (<a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a> bdf, bool enable)</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:aad354cd855e6380b46c7779471e09172" id="r_aad354cd855e6380b46c7779471e09172"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#aad354cd855e6380b46c7779471e09172">kernel::dma::DMA_MAX_SG_ENTRIES</a> = 256</td></tr>
+<tr class="memdesc:aad354cd855e6380b46c7779471e09172"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum entries in a scatter-gather list or PRD table.  <br /></td></tr>
+<tr class="memitem:a575880390445bddafd86f288a579b60c" id="r_a575880390445bddafd86f288a579b60c"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a575880390445bddafd86f288a579b60c">kernel::dma::DMA_MAX_PRD_ENTRIES</a> = 256</td></tr>
+<tr class="memitem:acc7cea6c9ac13d013ad3f298c375f459" id="r_acc7cea6c9ac13d013ad3f298c375f459"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#acc7cea6c9ac13d013ad3f298c375f459">phys_addr</a></td></tr>
+<tr class="memitem:a3897a1c704a4b78dde8b0c538e725386" id="r_a3897a1c704a4b78dde8b0c538e725386"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a3897a1c704a4b78dde8b0c538e725386">byte_count</a></td></tr>
+<tr class="memitem:a773b39d480759f67926cb18ae2219281" id="r_a773b39d480759f67926cb18ae2219281"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a773b39d480759f67926cb18ae2219281">flags</a></td></tr>
+<tr class="memdesc:a773b39d480759f67926cb18ae2219281"><td class="mdescLeft">&#160;</td><td class="mdescRight">Segment flags (PF_R, PF_W, PF_X).  <br /></td></tr>
+<tr class="memitem:a66632527972301cb54ea7447f4c7bb59" id="r_a66632527972301cb54ea7447f4c7bb59"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1dma_1_1_prd_table.html">kernel::dma::PrdTable</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a66632527972301cb54ea7447f4c7bb59">kernel::dma::__attribute__</a></td></tr>
+<tr class="memitem:a56b2daba79fabb19559a7e49fb7d4253" id="r_a56b2daba79fabb19559a7e49fb7d4253"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a56b2daba79fabb19559a7e49fb7d4253">kernel::dma::BMCMD_START</a> = 0x01</td></tr>
+<tr class="memdesc:a56b2daba79fabb19559a7e49fb7d4253"><td class="mdescLeft">&#160;</td><td class="mdescRight">BMDMA command register bits.  <br /></td></tr>
+<tr class="memitem:a77febcce08bec5fcf61e8a5973b8ff38" id="r_a77febcce08bec5fcf61e8a5973b8ff38"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a77febcce08bec5fcf61e8a5973b8ff38">kernel::dma::BMCMD_STOP</a> = 0x00</td></tr>
+<tr class="memitem:af11c8d76ddba9f441582a41132de33fe" id="r_af11c8d76ddba9f441582a41132de33fe"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#af11c8d76ddba9f441582a41132de33fe">kernel::dma::BMCMD_READ</a> = 0x08</td></tr>
+<tr class="memitem:a3b83bc74ca08bbb1dfaf6612d697eb98" id="r_a3b83bc74ca08bbb1dfaf6612d697eb98"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a3b83bc74ca08bbb1dfaf6612d697eb98">kernel::dma::BMSTAT_ACTIVE</a> = 0x01</td></tr>
+<tr class="memdesc:a3b83bc74ca08bbb1dfaf6612d697eb98"><td class="mdescLeft">&#160;</td><td class="mdescRight">BMDMA status register bits.  <br /></td></tr>
+<tr class="memitem:ade4a1588cc0e752b16b201a058d11318" id="r_ade4a1588cc0e752b16b201a058d11318"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#ade4a1588cc0e752b16b201a058d11318">kernel::dma::BMSTAT_ERROR</a> = 0x02</td></tr>
+<tr class="memitem:ae8a94e472ff9ada3416d4504f6cb05be" id="r_ae8a94e472ff9ada3416d4504f6cb05be"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#ae8a94e472ff9ada3416d4504f6cb05be">kernel::dma::BMSTAT_INTR</a> = 0x04</td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>DMA driver — buffer management, scatter-gather, PRD table construction, and portable DMA channel abstraction for kernel and userspace drivers. </p>
-</div></div><!-- contents -->
+</div><a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a3897a1c704a4b78dde8b0c538e725386" name="a3897a1c704a4b78dde8b0c538e725386"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3897a1c704a4b78dde8b0c538e725386">&#9670;&#160;</a></span>byte_count</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t byte_count</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a773b39d480759f67926cb18ae2219281" name="a773b39d480759f67926cb18ae2219281"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a773b39d480759f67926cb18ae2219281">&#9670;&#160;</a></span>flags</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t flags</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Segment flags (PF_R, PF_W, PF_X). </p>
+
+</div>
+</div>
+<a id="acc7cea6c9ac13d013ad3f298c375f459" name="acc7cea6c9ac13d013ad3f298c375f459"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acc7cea6c9ac13d013ad3f298c375f459">&#9670;&#160;</a></span>phys_addr</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t phys_addr</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

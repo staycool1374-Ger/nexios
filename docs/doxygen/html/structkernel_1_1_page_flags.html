@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -133,11 +133,17 @@ Collaboration diagram for kernel::PageFlags:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
 <tr class="memitem:a52fbcffb496445853d2ace15d449b5bf" id="r_a52fbcffb496445853d2ace15d449b5bf"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a52fbcffb496445853d2ace15d449b5bf">PRESENT</a> = 1ULL &lt;&lt; 0</td></tr>
+<tr class="memdesc:a52fbcffb496445853d2ace15d449b5bf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page is present in memory.  <br /></td></tr>
 <tr class="memitem:a32377706ca7ee536f8e1e9e9577a1f08" id="r_a32377706ca7ee536f8e1e9e9577a1f08"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a32377706ca7ee536f8e1e9e9577a1f08">WRITE</a> = 1ULL &lt;&lt; 1</td></tr>
+<tr class="memdesc:a32377706ca7ee536f8e1e9e9577a1f08"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page is writable.  <br /></td></tr>
 <tr class="memitem:a28274ea221e20f492c97873209310b41" id="r_a28274ea221e20f492c97873209310b41"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a28274ea221e20f492c97873209310b41">USER</a> = 1ULL &lt;&lt; 2</td></tr>
+<tr class="memdesc:a28274ea221e20f492c97873209310b41"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page is user-accessible (EL0).  <br /></td></tr>
 <tr class="memitem:a83b7e1265b8a7966a05e4ec6ecc6f2a9" id="r_a83b7e1265b8a7966a05e4ec6ecc6f2a9"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a83b7e1265b8a7966a05e4ec6ecc6f2a9">NX</a> = 1ULL &lt;&lt; 3</td></tr>
+<tr class="memdesc:a83b7e1265b8a7966a05e4ec6ecc6f2a9"><td class="mdescLeft">&#160;</td><td class="mdescRight">No-execute — disables instruction fetch.  <br /></td></tr>
 <tr class="memitem:a49c204ab53c9837e979562c6ea6401c5" id="r_a49c204ab53c9837e979562c6ea6401c5"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a49c204ab53c9837e979562c6ea6401c5">CACHE_DISABLED</a> = 1ULL &lt;&lt; 4</td></tr>
+<tr class="memdesc:a49c204ab53c9837e979562c6ea6401c5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Uncached / device memory attribute.  <br /></td></tr>
 <tr class="memitem:ac7368c9e50fbd1090f3088a7815b9fd2" id="r_ac7368c9e50fbd1090f3088a7815b9fd2"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ac7368c9e50fbd1090f3088a7815b9fd2">HUGE</a> = 1ULL &lt;&lt; 7</td></tr>
+<tr class="memdesc:ac7368c9e50fbd1090f3088a7815b9fd2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Huge page (2 MiB or 1 GiB, detected via page-table level).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Architecture-independent page flags for page table operations. Used by <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> and ArchPageTable to build page table entries. </p>
@@ -162,6 +168,8 @@ Static Public Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Uncached / device memory attribute. </p>
+
 </div>
 </div>
 <a id="ac7368c9e50fbd1090f3088a7815b9fd2" name="ac7368c9e50fbd1090f3088a7815b9fd2"></a>
@@ -183,6 +191,8 @@ Static Public Attributes</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Huge page (2 MiB or 1 GiB, detected via page-table level). </p>
 
 </div>
 </div>
@@ -206,6 +216,8 @@ Static Public Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>No-execute — disables instruction fetch. </p>
+
 </div>
 </div>
 <a id="a52fbcffb496445853d2ace15d449b5bf" name="a52fbcffb496445853d2ace15d449b5bf"></a>
@@ -227,6 +239,8 @@ Static Public Attributes</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Page is present in memory. </p>
 
 </div>
 </div>
@@ -250,6 +264,8 @@ Static Public Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Page is user-accessible (EL0). </p>
+
 </div>
 </div>
 <a id="a32377706ca7ee536f8e1e9e9577a1f08" name="a32377706ca7ee536f8e1e9e9577a1f08"></a>
@@ -271,6 +287,8 @@ Static Public Attributes</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Page is writable. </p>
 
 </div>
 </div>

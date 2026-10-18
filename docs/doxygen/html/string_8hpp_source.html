@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -156,9 +156,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('string_8hpp_so
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span></div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="comment">// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)</span></div>
 <div class="foldopen" id="foldopen00048" data-start="{" data-end="}">
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno"><a class="line" href="string_8hpp.html#ae74ab5750db5e6b0ebcda0e772d50235">   48</a></span><span class="keyword">inline</span> <span class="keywordtype">void</span>* <a class="code hl_function" href="string_8hpp.html#ae74ab5750db5e6b0ebcda0e772d50235">memcpy</a>(<span class="keywordtype">void</span>* dest, <span class="keyword">const</span> <span class="keywordtype">void</span>* src, <span class="keywordtype">size_t</span> count) {</div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno"><a class="line" href="string_8hpp.html#ae74ab5750db5e6b0ebcda0e772d50235">   48</a></span><span class="keyword">inline</span> <span class="keywordtype">void</span>* <a class="code hl_function" href="string_8hpp.html#ae74ab5750db5e6b0ebcda0e772d50235">memcpy</a>(<span class="keywordtype">void</span>* dest, <span class="keyword">const</span> <span class="keywordtype">void</span>* <a class="code hl_variable" href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">src</a>, <span class="keywordtype">size_t</span> count) {</div>
 <div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    <span class="keyword">auto</span>* d = <span class="keyword">static_cast&lt;</span>uint8_t*<span class="keyword">&gt;</span>(dest);</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    <span class="keyword">auto</span>* s = <span class="keyword">static_cast&lt;</span><span class="keyword">const </span>uint8_t*<span class="keyword">&gt;</span>(src);</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    <span class="keyword">auto</span>* s = <span class="keyword">static_cast&lt;</span><span class="keyword">const </span>uint8_t*<span class="keyword">&gt;</span>(<a class="code hl_variable" href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">src</a>);</div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; count; ++i) d[i] = s[i];</div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    <span class="keywordflow">return</span> dest;</div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>}</div>
@@ -203,20 +203,20 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('string_8hpp_so
 </div>
 <div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span> </div>
 <div class="foldopen" id="foldopen00093" data-start="{" data-end="}">
-<div class="line"><a id="l00093" name="l00093"></a><span class="lineno"><a class="line" href="string_8hpp.html#a9380f4a95b2c4e3d979b1634d3a8bcc9">   93</a></span><span class="keyword">inline</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="string_8hpp.html#a9380f4a95b2c4e3d979b1634d3a8bcc9">strncpy</a>(<span class="keywordtype">char</span>* dest, <span class="keyword">const</span> <span class="keywordtype">char</span>* src, <span class="keywordtype">size_t</span> n) {</div>
+<div class="line"><a id="l00093" name="l00093"></a><span class="lineno"><a class="line" href="string_8hpp.html#a9380f4a95b2c4e3d979b1634d3a8bcc9">   93</a></span><span class="keyword">inline</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="string_8hpp.html#a9380f4a95b2c4e3d979b1634d3a8bcc9">strncpy</a>(<span class="keywordtype">char</span>* dest, <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_variable" href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">src</a>, <span class="keywordtype">size_t</span> n) {</div>
 <div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>    <span class="keywordtype">size_t</span> i = 0;</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keywordflow">while</span> (i &lt; n &amp;&amp; src[i]) { dest[i] = src[i]; ++i; }</div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keywordflow">while</span> (i &lt; n &amp;&amp; <a class="code hl_variable" href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">src</a>[i]) { dest[i] = <a class="code hl_variable" href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">src</a>[i]; ++i; }</div>
 <div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    <span class="keywordflow">while</span> (i &lt; n) { dest[i] = <span class="charliteral">&#39;\0&#39;</span>; ++i; }</div>
 <div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>    <span class="keywordflow">return</span> dest;</div>
 <div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>}</div>
 </div>
 <div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span> </div>
 <div class="foldopen" id="foldopen00100" data-start="{" data-end="}">
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno"><a class="line" href="string_8hpp.html#a50c616aa4328d128f9eb8f1ef051bd27">  100</a></span><span class="keyword">inline</span> <span class="keywordtype">size_t</span> <a class="code hl_function" href="string_8hpp.html#a50c616aa4328d128f9eb8f1ef051bd27">strlcpy</a>(<span class="keywordtype">char</span>* dest, <span class="keyword">const</span> <span class="keywordtype">char</span>* src, <span class="keywordtype">size_t</span> n) {</div>
-<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>    <span class="keywordflow">if</span> (!dest || !src || n == 0) <span class="keywordflow">return</span> 0;</div>
-<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    <span class="keywordtype">size_t</span> srclen = <a class="code hl_function" href="string_8hpp.html#aa383452fe445bfae989358c9d7d96f4f">strlen</a>(src);</div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno"><a class="line" href="string_8hpp.html#a50c616aa4328d128f9eb8f1ef051bd27">  100</a></span><span class="keyword">inline</span> <span class="keywordtype">size_t</span> <a class="code hl_function" href="string_8hpp.html#a50c616aa4328d128f9eb8f1ef051bd27">strlcpy</a>(<span class="keywordtype">char</span>* dest, <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_variable" href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">src</a>, <span class="keywordtype">size_t</span> n) {</div>
+<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>    <span class="keywordflow">if</span> (!dest || !<a class="code hl_variable" href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">src</a> || n == 0) <span class="keywordflow">return</span> 0;</div>
+<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    <span class="keywordtype">size_t</span> srclen = <a class="code hl_function" href="string_8hpp.html#aa383452fe445bfae989358c9d7d96f4f">strlen</a>(<a class="code hl_variable" href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">src</a>);</div>
 <div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    <span class="keywordtype">size_t</span> copylen = (srclen &lt; n - 1) ? srclen : n - 1;</div>
-<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; copylen; ++i) dest[i] = src[i];</div>
+<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; copylen; ++i) dest[i] = <a class="code hl_variable" href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">src</a>[i];</div>
 <div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    dest[copylen] = <span class="charliteral">&#39;\0&#39;</span>;</div>
 <div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    <span class="keywordflow">return</span> srclen;</div>
 <div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>}</div>
@@ -224,6 +224,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('string_8hpp_so
 <div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span> </div>
 <div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>} <span class="comment">// extern &quot;C&quot;</span></div>
 <div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span><span class="comment">// NOLINTEND(bugprone-narrowing-conversions)</span></div>
+<div class="ttc" id="aether_8hpp_html_a55c144966716230e49e89dbd523641fc"><div class="ttname"><a href="ether_8hpp.html#a55c144966716230e49e89dbd523641fc">src</a></div><div class="ttdeci">MacAddr src</div><div class="ttdoc">Source MAC address.</div><div class="ttdef"><b>Definition</b> ether.hpp:1</div></div>
 <div class="ttc" id="astring_8hpp_html_a14e6581584b7433c4440fdc7ecf86aea"><div class="ttname"><a href="string_8hpp.html#a14e6581584b7433c4440fdc7ecf86aea">strcmp</a></div><div class="ttdeci">int strcmp(const char *a, const char *b)</div><div class="ttdef"><b>Definition</b> string.hpp:80</div></div>
 <div class="ttc" id="astring_8hpp_html_a4f9a1ab61f7ff461486f299dd17a9b52"><div class="ttname"><a href="string_8hpp.html#a4f9a1ab61f7ff461486f299dd17a9b52">memset</a></div><div class="ttdeci">void * memset(void *dest, int ch, size_t count)</div><div class="ttdoc">Fills a memory block with a byte value.</div><div class="ttdef"><b>Definition</b> string.hpp:35</div></div>
 <div class="ttc" id="astring_8hpp_html_a50c616aa4328d128f9eb8f1ef051bd27"><div class="ttname"><a href="string_8hpp.html#a50c616aa4328d128f9eb8f1ef051bd27">strlcpy</a></div><div class="ttdeci">size_t strlcpy(char *dest, const char *src, size_t n)</div><div class="ttdef"><b>Definition</b> string.hpp:100</div></div>

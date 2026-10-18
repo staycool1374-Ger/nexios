@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -130,9 +130,13 @@ Collaboration diagram for kernel::vfs::Mount:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:ad19bb83b6fcc4a97aae9084dd96d607b" id="r_ad19bb83b6fcc4a97aae9084dd96d607b"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#ad19bb83b6fcc4a97aae9084dd96d607b">mount_point</a></td></tr>
+<tr class="memdesc:ad19bb83b6fcc4a97aae9084dd96d607b"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structkernel_1_1vfs_1_1_mount.html">Mount</a> path (e.g. "/", "/dev").  <br /></td></tr>
 <tr class="memitem:a2df18ee2472a185272513c527bc7787b" id="r_a2df18ee2472a185272513c527bc7787b"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_filesystem.html">Filesystem</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a2df18ee2472a185272513c527bc7787b">fs</a></td></tr>
+<tr class="memdesc:a2df18ee2472a185272513c527bc7787b"><td class="mdescLeft">&#160;</td><td class="mdescRight">The mounted filesystem.  <br /></td></tr>
 <tr class="memitem:a6ce556bc27301408bce67d89929e1a8c" id="r_a6ce556bc27301408bce67d89929e1a8c"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a6ce556bc27301408bce67d89929e1a8c">root_vnode</a></td></tr>
+<tr class="memdesc:a6ce556bc27301408bce67d89929e1a8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Root vnode of the mounted fs.  <br /></td></tr>
 <tr class="memitem:a985ad559bfbbc5a13d39e188dd39df68" id="r_a985ad559bfbbc5a13d39e188dd39df68"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a985ad559bfbbc5a13d39e188dd39df68">used</a></td></tr>
+<tr class="memdesc:a985ad559bfbbc5a13d39e188dd39df68"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether this mount slot is occupied.  <br /></td></tr>
 </table>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a2df18ee2472a185272513c527bc7787b" name="a2df18ee2472a185272513c527bc7787b"></a>
@@ -146,6 +150,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>The mounted filesystem. </p>
 
 </div>
 </div>
@@ -161,6 +167,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p><a class="el" href="structkernel_1_1vfs_1_1_mount.html">Mount</a> path (e.g. "/", "/dev"). </p>
+
 </div>
 </div>
 <a id="a6ce556bc27301408bce67d89929e1a8c" name="a6ce556bc27301408bce67d89929e1a8c"></a>
@@ -175,6 +183,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Root vnode of the mounted fs. </p>
+
 </div>
 </div>
 <a id="a985ad559bfbbc5a13d39e188dd39df68" name="a985ad559bfbbc5a13d39e188dd39df68"></a>
@@ -188,6 +198,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Whether this mount slot is occupied. </p>
 
 </div>
 </div>

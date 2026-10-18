@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,116 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__blk_8h
 
 <p>Virtio block driver — modern (Virtio 1.0) PCI transport.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="virtio_8hpp_source.html">kernel/arch/virtio.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="block__device_8hpp_source.html">kernel/driver/block_device.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="mutex_8hpp_source.html">kernel/sync/mutex.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="spinlock_8hpp_source.html">kernel/sync/spinlock.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for virtio_blk.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="virtio__blk_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2driver_2virtio__blk_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="virtio__blk_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2driver_2virtio__blk_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="virtio__blk_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Ablock_3A_3AVirtioBlkReqHdr" id="r_kernel_3A_3Ablock_3A_3AVirtioBlkReqHdr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1block_1_1_virtio_blk_req_hdr.html">kernel::block::VirtioBlkReqHdr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio block request header (must be 16-byte aligned).  <a href="structkernel_1_1block_1_1_virtio_blk_req_hdr.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Ablock_3A_3AVirtioBlkComplRecord" id="r_kernel_3A_3Ablock_3A_3AVirtioBlkComplRecord"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1block_1_1_virtio_blk_compl_record.html">kernel::block::VirtioBlkComplRecord</a></td></tr>
+<tr class="memitem:kernel_3A_3Ablock_3A_3AVirtioBlkDriver" id="r_kernel_3A_3Ablock_3A_3AVirtioBlkDriver"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_virtio_blk_driver.html">kernel::block::VirtioBlkDriver</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio block device driver (modern interface).  <a href="classkernel_1_1block_1_1_virtio_blk_driver.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Ablock" id="r_kernel_3A_3Ablock"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html">kernel::block</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:adf5dbe3e60c5de5cfebd65e8303367b3" id="r_adf5dbe3e60c5de5cfebd65e8303367b3"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3">kernel::block::VirtioBlkReqType</a> : uint8_t { <a class="el" href="namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3af6426ba276b201c84082f50995f35028">kernel::block::VIRTIO_BLK_T_IN</a> = 0
+, <a class="el" href="namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3a2d1e65aa48eb46505250b4ea949bbe24">kernel::block::VIRTIO_BLK_T_OUT</a> = 1
+, <a class="el" href="namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3ac15f8cfa6a966c44bd850dac6a3dda3d">kernel::block::VIRTIO_BLK_T_FLUSH</a> = 4
+ }</td></tr>
+<tr class="memdesc:adf5dbe3e60c5de5cfebd65e8303367b3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio block I/O request types.  <a href="namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3">More...</a><br /></td></tr>
+<tr class="memitem:a1b8885384f857a7a96f07598de9a83d9" id="r_a1b8885384f857a7a96f07598de9a83d9"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html#a1b8885384f857a7a96f07598de9a83d9">kernel::block::VirtioBlkStatus</a> : uint8_t { <a class="el" href="namespacekernel_1_1block.html#a1b8885384f857a7a96f07598de9a83d9a468cf9e67f4ecd98e4c97db2885591bc">kernel::block::VIRTIO_BLK_S_OK</a> = 0
+, <a class="el" href="namespacekernel_1_1block.html#a1b8885384f857a7a96f07598de9a83d9a232c1ad54f6ad5d9878b23bea3cb5fc3">kernel::block::VIRTIO_BLK_S_IOERR</a> = 1
+, <a class="el" href="namespacekernel_1_1block.html#a1b8885384f857a7a96f07598de9a83d9a3c8b96c7fbd1a03f1e0569ceee25e6bb">kernel::block::VIRTIO_BLK_S_UNSUP</a> = 2
+ }</td></tr>
+<tr class="memdesc:a1b8885384f857a7a96f07598de9a83d9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio block response status.  <a href="namespacekernel_1_1block.html#a1b8885384f857a7a96f07598de9a83d9">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a90eee3f04cfc9723e3a20ba67e676298" id="r_a90eee3f04cfc9723e3a20ba67e676298"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1block_1_1_virtio_blk_req_hdr.html">kernel::block::VirtioBlkReqHdr</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html#a90eee3f04cfc9723e3a20ba67e676298">kernel::block::__attribute__</a> ((packed))</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:ad44b615021ed3ccb734fcaf583ef4a03" id="r_ad44b615021ed3ccb734fcaf583ef4a03"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ad44b615021ed3ccb734fcaf583ef4a03">type</a></td></tr>
+<tr class="memdesc:ad44b615021ed3ccb734fcaf583ef4a03"><td class="mdescLeft">&#160;</td><td class="mdescRight">Segment type (PT_NULL, PT_LOAD, PT_DYNAMIC, etc.).  <br /></td></tr>
+<tr class="memitem:aa43c4c21b173ada1b6b7568956f0d650" id="r_aa43c4c21b173ada1b6b7568956f0d650"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#aa43c4c21b173ada1b6b7568956f0d650">reserved</a></td></tr>
+<tr class="memitem:acb2800a3d84c58e5c21cbb16295d4340" id="r_acb2800a3d84c58e5c21cbb16295d4340"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#acb2800a3d84c58e5c21cbb16295d4340">sector</a></td></tr>
+<tr class="memitem:a9b4388793f4259a38f5674f5e1522e21" id="r_a9b4388793f4259a38f5674f5e1522e21"><td class="memItemLeft">enum <a class="el" href="namespacekernel_1_1block.html#a1b8885384f857a7a96f07598de9a83d9">kernel::block::VirtioBlkStatus</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html#a9b4388793f4259a38f5674f5e1522e21">kernel::block::__attribute__</a></td></tr>
+<tr class="memitem:afe3a6542780d7d32e0e82633376c2fad" id="r_afe3a6542780d7d32e0e82633376c2fad"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html#afe3a6542780d7d32e0e82633376c2fad">kernel::block::VIRTIO_BLK_WAIT_TIMEOUT_US</a> = 100000</td></tr>
+<tr class="memitem:aff3f91192f77da7f9430f5ac87fcba5f" id="r_aff3f91192f77da7f9430f5ac87fcba5f"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html#aff3f91192f77da7f9430f5ac87fcba5f">kernel::block::VIRTIO_NO_VECTOR</a> = 0xFFFF</td></tr>
+<tr class="memdesc:aff3f91192f77da7f9430f5ac87fcba5f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Queue-vector "no vector" sentinel (VIRTIO 1.0 §4.1.4.8).  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Virtio block driver — modern (Virtio 1.0) PCI transport. </p>
-</div></div><!-- contents -->
+</div><a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="aa43c4c21b173ada1b6b7568956f0d650" name="aa43c4c21b173ada1b6b7568956f0d650"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa43c4c21b173ada1b6b7568956f0d650">&#9670;&#160;</a></span>reserved</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t reserved</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acb2800a3d84c58e5c21cbb16295d4340" name="acb2800a3d84c58e5c21cbb16295d4340"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acb2800a3d84c58e5c21cbb16295d4340">&#9670;&#160;</a></span>sector</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t sector</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad44b615021ed3ccb734fcaf583ef4a03" name="ad44b615021ed3ccb734fcaf583ef4a03"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad44b615021ed3ccb734fcaf583ef4a03">&#9670;&#160;</a></span>type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Segment type (PT_NULL, PT_LOAD, PT_DYNAMIC, etc.). </p>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

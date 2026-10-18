@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -130,10 +130,15 @@ Collaboration diagram for kernel::vfsd::Msg:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:aa2df98c9038e7c64f7c1580796117a37" id="r_aa2df98c9038e7c64f7c1580796117a37"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa2df98c9038e7c64f7c1580796117a37">sender_id</a></td></tr>
+<tr class="memdesc:aa2df98c9038e7c64f7c1580796117a37"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task ID of the sender.  <br /></td></tr>
 <tr class="memitem:a808cef1ba8840455f0b031cfca3408ae" id="r_a808cef1ba8840455f0b031cfca3408ae"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a808cef1ba8840455f0b031cfca3408ae">type</a></td></tr>
+<tr class="memdesc:a808cef1ba8840455f0b031cfca3408ae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Request type (VFS_OPEN, VFS_READ, etc.).  <br /></td></tr>
 <tr class="memitem:a77c736b6a99f4257788b1f4df4d53d5b" id="r_a77c736b6a99f4257788b1f4df4d53d5b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a77c736b6a99f4257788b1f4df4d53d5b">arg0</a></td></tr>
+<tr class="memdesc:a77c736b6a99f4257788b1f4df4d53d5b"><td class="mdescLeft">&#160;</td><td class="mdescRight">First argument (varies by type).  <br /></td></tr>
 <tr class="memitem:acf4c8e8f51b32fcdd952b0ec6a99ac80" id="r_acf4c8e8f51b32fcdd952b0ec6a99ac80"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#acf4c8e8f51b32fcdd952b0ec6a99ac80">arg1</a></td></tr>
+<tr class="memdesc:acf4c8e8f51b32fcdd952b0ec6a99ac80"><td class="mdescLeft">&#160;</td><td class="mdescRight">Second argument (varies by type).  <br /></td></tr>
 <tr class="memitem:a71b547d423c47db121838125c141a6ed" id="r_a71b547d423c47db121838125c141a6ed"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a71b547d423c47db121838125c141a6ed">path</a> [32]</td></tr>
+<tr class="memdesc:a71b547d423c47db121838125c141a6ed"><td class="mdescLeft">&#160;</td><td class="mdescRight">Path buffer for path-based requests.  <br /></td></tr>
 </table>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a77c736b6a99f4257788b1f4df4d53d5b" name="a77c736b6a99f4257788b1f4df4d53d5b"></a>
@@ -147,6 +152,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>First argument (varies by type). </p>
 
 </div>
 </div>
@@ -162,6 +169,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Second argument (varies by type). </p>
+
 </div>
 </div>
 <a id="a71b547d423c47db121838125c141a6ed" name="a71b547d423c47db121838125c141a6ed"></a>
@@ -175,6 +184,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Path buffer for path-based requests. </p>
 
 </div>
 </div>
@@ -190,6 +201,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Task ID of the sender. </p>
+
 </div>
 </div>
 <a id="a808cef1ba8840455f0b031cfca3408ae" name="a808cef1ba8840455f0b031cfca3408ae"></a>
@@ -203,6 +216,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Request type (VFS_OPEN, VFS_READ, etc.). </p>
 
 </div>
 </div>

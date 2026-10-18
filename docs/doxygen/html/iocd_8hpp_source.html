@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -139,44 +139,57 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('iocd_8hpp_sour
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#pragma once</span></div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span> </div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1iocd.html">iocd</a> {</div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span> </div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_REGISTER_DEVICE = 200;</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_IRQ_EVENT = 201;</div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_MMIO_MAP = 202;</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_MMIO_UNMAP = 203;</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_KEYBOARD_READ = 204;</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_SERIAL_READ = 205;</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_SERIAL_WRITE = 206;</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span></div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="keyword">struct </span>Msg {</div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> type;    </div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> args[7]; </div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>};</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span></div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span><span class="keyword">struct </span>Reply {</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <a class="code hl_typedef" href="namespacearch.html#ab36a30458aed711e58ed074d7b427721">int64_t</a> result;   </div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> data[4]; </div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>};</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span></div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1iocd.html#abb256f04b1e192ba428e9ec86fd4baac">set_iocd_pid</a>(uint64_t pid);</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="code hl_function" href="namespacekernel_1_1iocd.html#aa1211fe0fe67ae70efe5f05508b58a63">get_iocd_pid</a>();</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1iocd.html#af3dc88f6386fc50faedb450547369a6c">is_iocd_task</a>();</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span> </div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>} <span class="comment">// namespace iocd</span></div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>} <span class="comment">// namespace kernel</span></div>
-<div class="ttc" id="anamespacearch_html_ab36a30458aed711e58ed074d7b427721"><div class="ttname"><a href="namespacearch.html#ab36a30458aed711e58ed074d7b427721">arch::int64_t</a></div><div class="ttdeci">signed long long int64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:33</div></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1iocd.html">iocd</a> {</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_REGISTER_DEVICE = 200;</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_IRQ_EVENT = 201;</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_MMIO_MAP = 202;</div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_MMIO_UNMAP = 203;</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_KEYBOARD_READ = 204;</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_SERIAL_READ = 205;</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_SERIAL_WRITE = 206;</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> IOCD_UNREGISTER_DEVICE = 207;</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span></div>
+<div class="foldopen" id="foldopen00039" data-start="{" data-end="};">
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno"><a class="line" href="structkernel_1_1iocd_1_1_msg.html">   39</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structkernel_1_1iocd_1_1_msg.html">Msg</a> {</div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno"><a class="line" href="structkernel_1_1iocd_1_1_msg.html#a38e84dd77e5f4e243e1ec662dc61af21">   40</a></span>    uint64_t <a class="code hl_variable" href="structkernel_1_1iocd_1_1_msg.html#a38e84dd77e5f4e243e1ec662dc61af21">type</a>;    </div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="structkernel_1_1iocd_1_1_msg.html#a43fd0002a4c224405b0e9aa8e9ef93de">   41</a></span>    uint64_t <a class="code hl_variable" href="structkernel_1_1iocd_1_1_msg.html#a43fd0002a4c224405b0e9aa8e9ef93de">args</a>[7]; </div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>};</div>
+</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span></div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span></div>
+<div class="foldopen" id="foldopen00062" data-start="{" data-end="};">
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno"><a class="line" href="structkernel_1_1iocd_1_1_reply.html">   62</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structkernel_1_1iocd_1_1_reply.html">Reply</a> {</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno"><a class="line" href="structkernel_1_1iocd_1_1_reply.html#a75a1c5a083dd02418981bece8c6c1d77">   63</a></span>    int64_t <a class="code hl_variable" href="structkernel_1_1iocd_1_1_reply.html#a75a1c5a083dd02418981bece8c6c1d77">result</a>;   </div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno"><a class="line" href="structkernel_1_1iocd_1_1_reply.html#ad8de5fc5fb97de34aa74d5412b72ac92">   64</a></span>    uint64_t <a class="code hl_variable" href="structkernel_1_1iocd_1_1_reply.html#ad8de5fc5fb97de34aa74d5412b72ac92">data</a>[4]; </div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>};</div>
+</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span></div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1iocd.html#abb256f04b1e192ba428e9ec86fd4baac">set_iocd_pid</a>(uint64_t pid);</div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>uint64_t <a class="code hl_function" href="namespacekernel_1_1iocd.html#aa1211fe0fe67ae70efe5f05508b58a63">get_iocd_pid</a>();</div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1iocd.html#af3dc88f6386fc50faedb450547369a6c">is_iocd_task</a>();</div>
+<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1iocd.html#abd93cf4565b34e256102ffc1da86ff4e">is_keyboard_owned</a>();</div>
+<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1iocd.html#ad4eac49d3e542fc56f87583edffa612b">set_keyboard_owned</a>(<span class="keywordtype">bool</span> owned);</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span> </div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>} <span class="comment">// namespace iocd</span></div>
+<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>} <span class="comment">// namespace kernel</span></div>
 <div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="anamespacekernel_1_1iocd_html"><div class="ttname"><a href="namespacekernel_1_1iocd.html">kernel::iocd</a></div><div class="ttdef"><b>Definition</b> iocd.cpp:26</div></div>
 <div class="ttc" id="anamespacekernel_1_1iocd_html_aa1211fe0fe67ae70efe5f05508b58a63"><div class="ttname"><a href="namespacekernel_1_1iocd.html#aa1211fe0fe67ae70efe5f05508b58a63">kernel::iocd::get_iocd_pid</a></div><div class="ttdeci">uint64_t get_iocd_pid()</div><div class="ttdoc">Retrieve the recorded IOCD PID.</div><div class="ttdef"><b>Definition</b> iocd.cpp:38</div></div>
 <div class="ttc" id="anamespacekernel_1_1iocd_html_abb256f04b1e192ba428e9ec86fd4baac"><div class="ttname"><a href="namespacekernel_1_1iocd.html#abb256f04b1e192ba428e9ec86fd4baac">kernel::iocd::set_iocd_pid</a></div><div class="ttdeci">void set_iocd_pid(uint64_t pid)</div><div class="ttdoc">Record the PID of the I/O Controller Daemon.</div><div class="ttdef"><b>Definition</b> iocd.cpp:32</div></div>
+<div class="ttc" id="anamespacekernel_1_1iocd_html_abd93cf4565b34e256102ffc1da86ff4e"><div class="ttname"><a href="namespacekernel_1_1iocd.html#abd93cf4565b34e256102ffc1da86ff4e">kernel::iocd::is_keyboard_owned</a></div><div class="ttdeci">bool is_keyboard_owned()</div><div class="ttdoc">Keyboard ownership for input routing (issue #340 P1).</div><div class="ttdef"><b>Definition</b> iocd.cpp:58</div></div>
+<div class="ttc" id="anamespacekernel_1_1iocd_html_ad4eac49d3e542fc56f87583edffa612b"><div class="ttname"><a href="namespacekernel_1_1iocd.html#ad4eac49d3e542fc56f87583edffa612b">kernel::iocd::set_keyboard_owned</a></div><div class="ttdeci">void set_keyboard_owned(bool owned)</div><div class="ttdoc">Set or clear keyboard ownership.</div><div class="ttdef"><b>Definition</b> iocd.cpp:63</div></div>
 <div class="ttc" id="anamespacekernel_1_1iocd_html_af3dc88f6386fc50faedb450547369a6c"><div class="ttname"><a href="namespacekernel_1_1iocd.html#af3dc88f6386fc50faedb450547369a6c">kernel::iocd::is_iocd_task</a></div><div class="ttdeci">bool is_iocd_task()</div><div class="ttdoc">Check whether the currently running task is the IOCD.</div><div class="ttdef"><b>Definition</b> iocd.cpp:44</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="astructkernel_1_1iocd_1_1_msg_html"><div class="ttname"><a href="structkernel_1_1iocd_1_1_msg.html">kernel::iocd::Msg</a></div><div class="ttdoc">IOCD IPC request message.</div><div class="ttdef"><b>Definition</b> iocd.hpp:39</div></div>
+<div class="ttc" id="astructkernel_1_1iocd_1_1_msg_html_a38e84dd77e5f4e243e1ec662dc61af21"><div class="ttname"><a href="structkernel_1_1iocd_1_1_msg.html#a38e84dd77e5f4e243e1ec662dc61af21">kernel::iocd::Msg::type</a></div><div class="ttdeci">uint64_t type</div><div class="ttdoc">Message type (IOCD_REGISTER_DEVICE, etc.).</div><div class="ttdef"><b>Definition</b> iocd.hpp:40</div></div>
+<div class="ttc" id="astructkernel_1_1iocd_1_1_msg_html_a43fd0002a4c224405b0e9aa8e9ef93de"><div class="ttname"><a href="structkernel_1_1iocd_1_1_msg.html#a43fd0002a4c224405b0e9aa8e9ef93de">kernel::iocd::Msg::args</a></div><div class="ttdeci">uint64_t args[7]</div><div class="ttdoc">Type-specific arguments.</div><div class="ttdef"><b>Definition</b> iocd.hpp:41</div></div>
+<div class="ttc" id="astructkernel_1_1iocd_1_1_reply_html"><div class="ttname"><a href="structkernel_1_1iocd_1_1_reply.html">kernel::iocd::Reply</a></div><div class="ttdoc">MMIO policy protocol (issue #303 item 4). The daemon authorizes WHICH registered driver may use WHICH...</div><div class="ttdef"><b>Definition</b> iocd.hpp:62</div></div>
+<div class="ttc" id="astructkernel_1_1iocd_1_1_reply_html_a75a1c5a083dd02418981bece8c6c1d77"><div class="ttname"><a href="structkernel_1_1iocd_1_1_reply.html#a75a1c5a083dd02418981bece8c6c1d77">kernel::iocd::Reply::result</a></div><div class="ttdeci">int64_t result</div><div class="ttdoc">Return code (negative on error).</div><div class="ttdef"><b>Definition</b> iocd.hpp:63</div></div>
+<div class="ttc" id="astructkernel_1_1iocd_1_1_reply_html_ad8de5fc5fb97de34aa74d5412b72ac92"><div class="ttname"><a href="structkernel_1_1iocd_1_1_reply.html#ad8de5fc5fb97de34aa74d5412b72ac92">kernel::iocd::Reply::data</a></div><div class="ttdeci">uint64_t data[4]</div><div class="ttdoc">Type-specific result data.</div><div class="ttdef"><b>Definition</b> iocd.hpp:64</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

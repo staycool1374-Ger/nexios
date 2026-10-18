@@ -4,6 +4,7 @@ var concepts_8hpp =
     [ "kernel::TriviallyCopiable", "conceptkernel_1_1_trivially_copiable.html", null ],
     [ "kernel::ValueType", "conceptkernel_1_1_value_type.html", null ],
     [ "kernel::ErrorEnum", "conceptkernel_1_1_error_enum.html", null ],
+    [ "kernel::Enum", "conceptkernel_1_1_enum.html", null ],
     [ "kernel::Lockable", "conceptkernel_1_1_lockable.html", null ],
     [ "kernel::_is_integral_v", "namespacekernel.html#a3fb2836fc67f3791312d86a01372cc32", null ],
     [ "kernel::_is_integral_v< bool >", "namespacekernel.html#a0918223d95121a29478551a127691778", null ],

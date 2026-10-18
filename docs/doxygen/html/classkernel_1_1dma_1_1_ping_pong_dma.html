@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -129,7 +129,7 @@ Collaboration diagram for kernel::dma::PingPongDma:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-types" class="groupheader"><a id="pub-types" name="pub-types"></a>
 Public Types</h2></td></tr>
-<tr class="memitem:a566cd0cbf1f59d0abd56cd78e8337acb" id="r_a566cd0cbf1f59d0abd56cd78e8337acb"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#a566cd0cbf1f59d0abd56cd78e8337acb">ChainCallback</a> = void (*)(uint64_t ctx, <a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a>* buf, bool success)</td></tr>
+<tr class="memitem:ac929760defed55981e296d6bf1748247" id="r_ac929760defed55981e296d6bf1748247"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#ac929760defed55981e296d6bf1748247">ChainCallback</a> = void (*)(uint64_t ctx, <a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> *buf, bool success)</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
@@ -139,7 +139,7 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:a2e094219e0432b6aea007fb72411d755"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the buffer currently available for data preparation.  <br /></td></tr>
 <tr class="memitem:aaad93901bda3f4e9df928c30d4b2a10b" id="r_aaad93901bda3f4e9df928c30d4b2a10b"><td class="memItemLeft"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aaad93901bda3f4e9df928c30d4b2a10b">xfer_buf</a> ()</td></tr>
 <tr class="memdesc:aaad93901bda3f4e9df928c30d4b2a10b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the buffer currently being transferred.  <br /></td></tr>
-<tr class="memitem:ae8a1b59c28105f28adc9eaf47a6f6932" id="r_ae8a1b59c28105f28adc9eaf47a6f6932"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae8a1b59c28105f28adc9eaf47a6f6932">start_next</a> (<a class="el" href="namespacekernel_1_1dma.html#a84e8c46b4e33b83d66f7b0ff078eaeac">Direction</a> dir, <a class="el" href="#a566cd0cbf1f59d0abd56cd78e8337acb">ChainCallback</a> cb=nullptr, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ctx=0)</td></tr>
+<tr class="memitem:ae8a1b59c28105f28adc9eaf47a6f6932" id="r_ae8a1b59c28105f28adc9eaf47a6f6932"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae8a1b59c28105f28adc9eaf47a6f6932">start_next</a> (<a class="el" href="namespacekernel_1_1dma.html#a84e8c46b4e33b83d66f7b0ff078eaeac">Direction</a> dir, <a class="el" href="#ac929760defed55981e296d6bf1748247">ChainCallback</a> cb=nullptr, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ctx=0)</td></tr>
 <tr class="memitem:a627aae0bab23297d83e98f604925c5dd" id="r_a627aae0bab23297d83e98f604925c5dd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a627aae0bab23297d83e98f604925c5dd">on_completion</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ctx, bool success)</td></tr>
 <tr class="memdesc:a627aae0bab23297d83e98f604925c5dd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Handle a DMA completion — invoked by <a class="el" href="classkernel_1_1dma_1_1_dma_engine.html">DmaEngine</a> callback.  <br /></td></tr>
 <tr class="memitem:a8212617ea2dd575edc4a0d8b5c187e61" id="r_a8212617ea2dd575edc4a0d8b5c187e61"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8212617ea2dd575edc4a0d8b5c187e61">shutdown</a> ()</td></tr>
@@ -152,14 +152,14 @@ Public Member Functions</h2></td></tr>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Ping-pong DMA double-buffer manager. Provides two alternating DMA buffers with automatic chaining: while buffer A transfers, buffer B is available for data preparation. </p>
 </div><a name="doc-typedef-members" id="doc-typedef-members"></a><h2 id="header-doc-typedef-members" class="groupheader">Member Typedef Documentation</h2>
-<a id="a566cd0cbf1f59d0abd56cd78e8337acb" name="a566cd0cbf1f59d0abd56cd78e8337acb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a566cd0cbf1f59d0abd56cd78e8337acb">&#9670;&#160;</a></span>ChainCallback</h2>
+<a id="ac929760defed55981e296d6bf1748247" name="ac929760defed55981e296d6bf1748247"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac929760defed55981e296d6bf1748247">&#9670;&#160;</a></span>ChainCallback</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">using <a class="el" href="#a566cd0cbf1f59d0abd56cd78e8337acb">kernel::dma::PingPongDma::ChainCallback</a> = void (*)(uint64_t ctx, <a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a>* buf, bool success)</td>
+          <td class="memname">using <a class="el" href="#ac929760defed55981e296d6bf1748247">kernel::dma::PingPongDma::ChainCallback</a> = void (*)(uint64_t ctx, <a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> *buf, bool success)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -369,7 +369,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="#a566cd0cbf1f59d0abd56cd78e8337acb">ChainCallback</a></td>          <td class="paramname"><span class="paramname"><em>cb</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>, </td>
+          <td class="paramtype"><a class="el" href="#ac929760defed55981e296d6bf1748247">ChainCallback</a></td>          <td class="paramname"><span class="paramname"><em>cb</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>

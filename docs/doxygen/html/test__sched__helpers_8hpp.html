@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -143,7 +143,7 @@ Data Structures</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Atest" id="r_kernel_3A_3Atest"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html">kernel::test</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
@@ -169,7 +169,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a5f11b3daec7f81082d98cc76b23a14b3" id="r_a5f11b3daec7f81082d98cc76b23a14b3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a5f11b3daec7f81082d98cc76b23a14b3">kernel::test::make_synthetic_clone_frame</a> (uint64_t(&amp;regs)[37], uint64_t entry=0x1000, uint64_t stack=0x80000000)</td></tr>
 <tr class="memdesc:a5f11b3daec7f81082d98cc76b23a14b3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Build a synthetic per-arch register frame for <a class="el" href="structkernel_1_1_task_control_block.html#a1443c8caa63e4d8af39ad150f91d413d" title="Clones the current task — creates a child with copied context.">TaskControlBlock::clone()</a> (issue #215). Sized for the arch frame layout so clone() never reads out of bounds: x86_64 reads regs[0..21], aarch64 reads regs[0..33] (x0-x30, SP_EL0, ELR_EL1, SPSR_EL1), riscv64 reads regs[0..36]. Callers declare 37 slots on every arch; each arch populates its own PC/SP slots (content is otherwise zero — no test asserts frame echo).  <br /></td></tr>
 <tr class="memitem:adaf685bd992e296e30fb7358c5f28b9a" id="r_adaf685bd992e296e30fb7358c5f28b9a"><td class="memItemLeft"><a class="el" href="task__ptr_8hpp.html#a263f29adbaac80d77e9fbbbf23965723">TaskPtr</a>&#160;</td><td class="memItemRight"><a class="el" href="#adaf685bd992e296e30fb7358c5f28b9a">create_test_task</a> (uint64_t ipc_priority=5, uint64_t period=10)</td></tr>
-<tr class="memdesc:adaf685bd992e296e30fb7358c5f28b9a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a TCB for test use and register it with the scheduler WITHOUT making it runnable. The task is registered in id_table_ and all_tasks_ (so IPC routing via find_task() works), and is placed in BLOCKED state to prevent the scheduler's lazy-rebuild from discovering and enqueuing it. Tests use <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> to impersonate the task.  <br /></td></tr>
+<tr class="memdesc:adaf685bd992e296e30fb7358c5f28b9a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a TCB for test use and register it with the scheduler WITHOUT making it runnable. The task is registered in id_table_ and all_tasks_ (so <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> routing via find_task() works), and is placed in BLOCKED state to prevent the scheduler's lazy-rebuild from discovering and enqueuing it. Tests use <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> to impersonate the task.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Safe test helpers for scheduler operations (set_current, reschedule). </p>
@@ -203,10 +203,10 @@ Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Create a TCB for test use and register it with the scheduler WITHOUT making it runnable. The task is registered in id_table_ and all_tasks_ (so IPC routing via find_task() works), and is placed in BLOCKED state to prevent the scheduler's lazy-rebuild from discovering and enqueuing it. Tests use <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> to impersonate the task. </p>
+<p>Create a TCB for test use and register it with the scheduler WITHOUT making it runnable. The task is registered in id_table_ and all_tasks_ (so <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> routing via find_task() works), and is placed in BLOCKED state to prevent the scheduler's lazy-rebuild from discovering and enqueuing it. Tests use <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> to impersonate the task. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">ipc_priority</td><td>Priority visible to IPC (block_sender inheritance). </td></tr>
+    <tr><td class="paramname">ipc_priority</td><td>Priority visible to <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> (block_sender inheritance). </td></tr>
     <tr><td class="paramname">period</td><td>Task period in ticks. </td></tr>
   </table>
   </dd>

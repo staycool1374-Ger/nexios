@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -124,11 +124,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test_8hpp.html
 Include dependency graph for test.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="test_8hpp__incl.png" border="0" usemap="#asrc_2lib_2test_8hpp" loading="lazy" alt=""/></div>
-<map name="asrc_2lib_2test_8hpp" id="asrc_2lib_2test_8hpp">
-<area shape="rect" title="Unified macro&#45;driven kernel test framework." alt="" coords="5,5,113,32"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="20,80,98,107"/>
-<area shape="poly" title=" " alt="" coords="61,30,62,65,56,64,57,35"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div>
 <p><a href="test_8hpp_source.html">Go to the source code of this file.</a></p>
@@ -144,32 +140,32 @@ Data Structures</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Atest" id="r_kernel_3A_3Atest"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html">kernel::test</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
-<tr class="memitem:a85f9a17a30cbbc792b991eada487723f" id="r_a85f9a17a30cbbc792b991eada487723f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a85f9a17a30cbbc792b991eada487723f">JARVIS_TEST</a>(name, ...)</td></tr>
-<tr class="memitem:acb011f9c5f9d8a4cc78c234a97855696" id="r_acb011f9c5f9d8a4cc78c234a97855696"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#acb011f9c5f9d8a4cc78c234a97855696">JARVIS_TEST_SUITE</a>(suite,  name, ...)</td></tr>
+<tr class="memitem:a85f9a17a30cbbc792b991eada487723f" id="r_a85f9a17a30cbbc792b991eada487723f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a85f9a17a30cbbc792b991eada487723f">JARVIS_TEST</a>(<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, ...)</td></tr>
+<tr class="memitem:acb011f9c5f9d8a4cc78c234a97855696" id="r_acb011f9c5f9d8a4cc78c234a97855696"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#acb011f9c5f9d8a4cc78c234a97855696">JARVIS_TEST_SUITE</a>(suite,  <a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, ...)</td></tr>
 <tr class="memitem:a6be5a5c3dd0c6a401f58b591b07914f3" id="r_a6be5a5c3dd0c6a401f58b591b07914f3"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6be5a5c3dd0c6a401f58b591b07914f3">JARVIS_ASSERT</a>(cond)</td></tr>
 <tr class="memitem:a97a6a193c23a6c013f125d670fca1547" id="r_a97a6a193c23a6c013f125d670fca1547"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a97a6a193c23a6c013f125d670fca1547">JARVIS_ASSERT_HEX_EQ</a>(expected,  actual)</td></tr>
 <tr class="memitem:a49403c168ea4b3a44b7cebd4eb5178b8" id="r_a49403c168ea4b3a44b7cebd4eb5178b8"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a49403c168ea4b3a44b7cebd4eb5178b8">JARVIS_ASSERT_EQ</a>(expected,  actual)</td></tr>
 <tr class="memitem:adecb4ba72098ef39a0f4f24b829f807c" id="r_adecb4ba72098ef39a0f4f24b829f807c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adecb4ba72098ef39a0f4f24b829f807c">JARVIS_TEST_PASS</a>()</td></tr>
 <tr class="memitem:a94a59c91c6346de8eeff27bab97b2f51" id="r_a94a59c91c6346de8eeff27bab97b2f51"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a94a59c91c6346de8eeff27bab97b2f51">JARVIS_FAIL</a>(<a class="el" href="namespacefmt.html">fmt</a>, ...)</td></tr>
 <tr class="memitem:aa489f4f0e59be8f90da251140ac3f61d" id="r_aa489f4f0e59be8f90da251140ac3f61d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa489f4f0e59be8f90da251140ac3f61d">JARVIS_ASSERT_FMT</a>(cond,  <a class="el" href="namespacefmt.html">fmt</a>, ...)</td></tr>
-<tr class="memitem:a374771e8d81b5baa372492a3979e5f73" id="r_a374771e8d81b5baa372492a3979e5f73"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a>(name,  flags_)</td></tr>
-<tr class="memitem:ac06709245437cdd63dee99d87fbd39c2" id="r_ac06709245437cdd63dee99d87fbd39c2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac06709245437cdd63dee99d87fbd39c2">JARVIS_REGISTER_TEST</a>(name)</td></tr>
-<tr class="memitem:ace88e8d25337f01fa0b540f62b0889e7" id="r_ace88e8d25337f01fa0b540f62b0889e7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ace88e8d25337f01fa0b540f62b0889e7">JARVIS_REGISTER_RELEASE_TEST</a>(name)</td></tr>
-<tr class="memitem:a898e9992b56f0e0b33e86dba5b5afa59" id="r_a898e9992b56f0e0b33e86dba5b5afa59"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a898e9992b56f0e0b33e86dba5b5afa59">JARVIS_REGISTER_TEST_SUITE_FLAGS</a>(suite,  name,  flags_)</td></tr>
-<tr class="memitem:ab8f70fab26dfe2f99dbbf29a783b8244" id="r_ab8f70fab26dfe2f99dbbf29a783b8244"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab8f70fab26dfe2f99dbbf29a783b8244">JARVIS_REGISTER_TEST_SUITE</a>(suite,  name)</td></tr>
-<tr class="memitem:aea3010f67d1cac2e436b9cbe6915a317" id="r_aea3010f67d1cac2e436b9cbe6915a317"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aea3010f67d1cac2e436b9cbe6915a317">JARVIS_REGISTER_RELEASE_TEST_SUITE</a>(suite,  name)</td></tr>
+<tr class="memitem:a374771e8d81b5baa372492a3979e5f73" id="r_a374771e8d81b5baa372492a3979e5f73"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a>(<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>,  flags_)</td></tr>
+<tr class="memitem:ac06709245437cdd63dee99d87fbd39c2" id="r_ac06709245437cdd63dee99d87fbd39c2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac06709245437cdd63dee99d87fbd39c2">JARVIS_REGISTER_TEST</a>(<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>)</td></tr>
+<tr class="memitem:ace88e8d25337f01fa0b540f62b0889e7" id="r_ace88e8d25337f01fa0b540f62b0889e7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ace88e8d25337f01fa0b540f62b0889e7">JARVIS_REGISTER_RELEASE_TEST</a>(<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>)</td></tr>
+<tr class="memitem:a898e9992b56f0e0b33e86dba5b5afa59" id="r_a898e9992b56f0e0b33e86dba5b5afa59"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a898e9992b56f0e0b33e86dba5b5afa59">JARVIS_REGISTER_TEST_SUITE_FLAGS</a>(suite,  <a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>,  flags_)</td></tr>
+<tr class="memitem:ab8f70fab26dfe2f99dbbf29a783b8244" id="r_ab8f70fab26dfe2f99dbbf29a783b8244"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab8f70fab26dfe2f99dbbf29a783b8244">JARVIS_REGISTER_TEST_SUITE</a>(suite,  <a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>)</td></tr>
+<tr class="memitem:aea3010f67d1cac2e436b9cbe6915a317" id="r_aea3010f67d1cac2e436b9cbe6915a317"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aea3010f67d1cac2e436b9cbe6915a317">JARVIS_REGISTER_RELEASE_TEST_SUITE</a>(suite,  <a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>)</td></tr>
 <tr class="memitem:aad8a8d3a88163a9f5bc99478d042d6d9" id="r_aad8a8d3a88163a9f5bc99478d042d6d9"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aad8a8d3a88163a9f5bc99478d042d6d9">TEST_CLASS_DIAG_PUSH</a>&#160;&#160;&#160;_Pragma(&quot;GCC diagnostic push&quot;)</td></tr>
 <tr class="memitem:a63090b98936c40fe36959666f20e9b5a" id="r_a63090b98936c40fe36959666f20e9b5a"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a63090b98936c40fe36959666f20e9b5a">TEST_CLASS_DIAG_IGNORE</a>&#160;&#160;&#160;_Pragma(&quot;GCC diagnostic ignored \&quot;-Wanalyzer-possible-null-dereference\&quot;&quot;)</td></tr>
 <tr class="memitem:a150303e01ba93eb38c6b6fe25a02ca17" id="r_a150303e01ba93eb38c6b6fe25a02ca17"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a150303e01ba93eb38c6b6fe25a02ca17">TEST_CLASS_DIAG_POP</a>&#160;&#160;&#160;_Pragma(&quot;GCC diagnostic pop&quot;)</td></tr>
-<tr class="memitem:a90a8db2c8cb10c09750f1f73a0bbf01c" id="r_a90a8db2c8cb10c09750f1f73a0bbf01c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a90a8db2c8cb10c09750f1f73a0bbf01c">TEST_CLASS</a>(name)</td></tr>
-<tr class="memitem:ace9d865ef1ecb142666cd0beb9c51af3" id="r_ace9d865ef1ecb142666cd0beb9c51af3"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ace9d865ef1ecb142666cd0beb9c51af3">REGISTER_CLASS_FLAGS</a>(name,  flags_)</td></tr>
-<tr class="memitem:a1102009e7794c6401082aa06a3838921" id="r_a1102009e7794c6401082aa06a3838921"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a1102009e7794c6401082aa06a3838921">REGISTER_CLASS</a>(name)</td></tr>
-<tr class="memitem:ade6c7976dfdd68610815dca74c7be91d" id="r_ade6c7976dfdd68610815dca74c7be91d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ade6c7976dfdd68610815dca74c7be91d">REGISTER_RELEASE_CLASS</a>(name)</td></tr>
+<tr class="memitem:a90a8db2c8cb10c09750f1f73a0bbf01c" id="r_a90a8db2c8cb10c09750f1f73a0bbf01c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a90a8db2c8cb10c09750f1f73a0bbf01c">TEST_CLASS</a>(<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>)</td></tr>
+<tr class="memitem:ace9d865ef1ecb142666cd0beb9c51af3" id="r_ace9d865ef1ecb142666cd0beb9c51af3"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ace9d865ef1ecb142666cd0beb9c51af3">REGISTER_CLASS_FLAGS</a>(<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>,  flags_)</td></tr>
+<tr class="memitem:a1102009e7794c6401082aa06a3838921" id="r_a1102009e7794c6401082aa06a3838921"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a1102009e7794c6401082aa06a3838921">REGISTER_CLASS</a>(<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>)</td></tr>
+<tr class="memitem:ade6c7976dfdd68610815dca74c7be91d" id="r_ade6c7976dfdd68610815dca74c7be91d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ade6c7976dfdd68610815dca74c7be91d">REGISTER_RELEASE_CLASS</a>(<a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>)</td></tr>
 <tr class="memitem:aa54f4bdd6c8fab31d7b1c3f9a778f440" id="r_aa54f4bdd6c8fab31d7b1c3f9a778f440"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa54f4bdd6c8fab31d7b1c3f9a778f440">CT_ASSERT</a>(cond)</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
@@ -187,9 +183,9 @@ Enumerations</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a0393b984f5bd8f8fa3e1014037f2dcd0" id="r_a0393b984f5bd8f8fa3e1014037f2dcd0"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a0393b984f5bd8f8fa3e1014037f2dcd0">kernel::test::create_named_task</a> (void(*entry)(), uint64_t priority, uint64_t period_ticks, const char *tag=nullptr)</td></tr>
-<tr class="memdesc:a0393b984f5bd8f8fa3e1014037f2dcd0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Creates a task (via the kernel's <a class="el" href="structkernel_1_1_task_control_block.html#a82a06cb63bdaa30a038a40e5632fbe9d" title="Creates a new kernel task with the given entry and scheduling parameters.">TaskControlBlock::create</a>) and adds it to the scheduler, tagging its <span class="tt">name</span> with the calling test case so leaked/orphaned tasks are traceable to their origin. <span class="tt">tag</span> (if non-null) is prefixed to the test name (e.g. a role like "worker"). Falls back to the raw <span class="tt">create</span> name when no test is active.  <br /></td></tr>
+<tr class="memdesc:a0393b984f5bd8f8fa3e1014037f2dcd0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Creates a task (via the kernel's <a class="el" href="structkernel_1_1_task_control_block.html#a82a06cb63bdaa30a038a40e5632fbe9d" title="Creates a new kernel task with the given entry and scheduling parameters.">TaskControlBlock::create</a>) and adds it to the scheduler, tagging its <span class="tt"><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1" title="8.3 short name (space-padded).">name</a></span> with the calling test case so leaked/orphaned tasks are traceable to their origin. <span class="tt">tag</span> (if non-null) is prefixed to the test name (e.g. a role like "worker"). Falls back to the raw <span class="tt">create</span> name when no test is active.  <br /></td></tr>
 <tr class="memitem:a2f2ad7408a2984ebbc8a46b37f1e6f5f" id="r_a2f2ad7408a2984ebbc8a46b37f1e6f5f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a2f2ad7408a2984ebbc8a46b37f1e6f5f">kernel::test::add_task_named</a> (<a class="el" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> &amp;task, const char *tag=nullptr)</td></tr>
-<tr class="memdesc:a2f2ad7408a2984ebbc8a46b37f1e6f5f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Adds an already-created task to the scheduler, tagging its <span class="tt">name</span> with the calling test case (see create_named_task). Thin wrapper over <a class="el" href="classkernel_1_1_scheduler.html#a392525912608998bc99fa1a3d4816538" title="Adds a task to the scheduler&#39;s run queue.">Scheduler::add_task</a> that records provenance.  <br /></td></tr>
+<tr class="memdesc:a2f2ad7408a2984ebbc8a46b37f1e6f5f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Adds an already-created task to the scheduler, tagging its <span class="tt"><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1" title="8.3 short name (space-padded).">name</a></span> with the calling test case (see create_named_task). Thin wrapper over <a class="el" href="classkernel_1_1_scheduler.html#a392525912608998bc99fa1a3d4816538" title="Adds a task to the scheduler&#39;s run queue.">Scheduler::add_task</a> that records provenance.  <br /></td></tr>
 <tr class="memitem:a47e1961f61dd3427ce55333d8828a5de" id="r_a47e1961f61dd3427ce55333d8828a5de"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a47e1961f61dd3427ce55333d8828a5de">kernel::test::run_all</a> ()</td></tr>
 <tr class="memitem:a1c32eb5484b7cdcad0ae45d94849f02b" id="r_a1c32eb5484b7cdcad0ae45d94849f02b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a1c32eb5484b7cdcad0ae45d94849f02b">kernel::test::run_safe</a> ()</td></tr>
 <tr class="memitem:a9096f1bb9a2e4b1541226759b08c1ae5" id="r_a9096f1bb9a2e4b1541226759b08c1ae5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a9096f1bb9a2e4b1541226759b08c1ae5">kernel::test::run_filtered</a> (uint8_t required_flags, bool use_isolation)</td></tr>
@@ -394,12 +390,13 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define JARVIS_REGISTER_RELEASE_TEST</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span></td><td>)</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a>(name, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8">kernel::test::TF_RELEASE</a>)</div>
+<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a>(<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8">kernel::test::TF_RELEASE</a>)</div>
+<div class="ttc" id="afat32_8hpp_html_a30308c9b983377042fd2cc8900454fb1"><div class="ttname"><a href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></div><div class="ttdeci">uint8_t name[11]</div><div class="ttdoc">8.3 short name (space-padded).</div><div class="ttdef"><b>Definition</b> fat32.hpp:0</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8"><div class="ttname"><a href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8">kernel::test::TF_RELEASE</a></div><div class="ttdeci">@ TF_RELEASE</div><div class="ttdef"><b>Definition</b> test.hpp:39</div></div>
 <div class="ttc" id="atest_8hpp_html_a374771e8d81b5baa372492a3979e5f73"><div class="ttname"><a href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a></div><div class="ttdeci">#define JARVIS_REGISTER_TEST_FLAGS(name, flags_)</div><div class="ttdef"><b>Definition</b> test.hpp:354</div></div>
 </div><!-- fragment -->
@@ -419,11 +416,11 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>&#160;)</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a898e9992b56f0e0b33e86dba5b5afa59">JARVIS_REGISTER_TEST_SUITE_FLAGS</a>(suite, name, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8">kernel::test::TF_RELEASE</a>)</div>
+<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a898e9992b56f0e0b33e86dba5b5afa59">JARVIS_REGISTER_TEST_SUITE_FLAGS</a>(suite, <a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8">kernel::test::TF_RELEASE</a>)</div>
 <div class="ttc" id="atest_8hpp_html_a898e9992b56f0e0b33e86dba5b5afa59"><div class="ttname"><a href="#a898e9992b56f0e0b33e86dba5b5afa59">JARVIS_REGISTER_TEST_SUITE_FLAGS</a></div><div class="ttdeci">#define JARVIS_REGISTER_TEST_SUITE_FLAGS(suite, name, flags_)</div><div class="ttdef"><b>Definition</b> test.hpp:368</div></div>
 </div><!-- fragment -->
 </div>
@@ -437,12 +434,12 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define JARVIS_REGISTER_TEST</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span></td><td>)</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a>(name, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924a758901b7d4ff562bfcf86fd8d1a08252">kernel::test::TF_KERNEL</a>)</div>
+<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a>(<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924a758901b7d4ff562bfcf86fd8d1a08252">kernel::test::TF_KERNEL</a>)</div>
 <div class="ttc" id="anamespacekernel_1_1test_html_a3c3d9504ac5a18a5220063a8e94b0924a758901b7d4ff562bfcf86fd8d1a08252"><div class="ttname"><a href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924a758901b7d4ff562bfcf86fd8d1a08252">kernel::test::TF_KERNEL</a></div><div class="ttdeci">@ TF_KERNEL</div><div class="ttdef"><b>Definition</b> test.hpp:38</div></div>
 </div><!-- fragment -->
 </div>
@@ -456,7 +453,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define JARVIS_REGISTER_TEST_FLAGS</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -467,7 +464,7 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 <b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">do</span> {                                                                       \</div>
 <div class="line">    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_struct" href="structkernel_1_1test_1_1_test_case.html">kernel::test::TestCase</a> tc = {                         \</div>
-<div class="line">        <span class="stringliteral">&quot;&quot;</span>, #name, test_##name, <span class="keyword">nullptr</span>, flags_                            \</div>
+<div class="line">        <span class="stringliteral">&quot;&quot;</span>, #<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, test_##<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, <span class="keyword">nullptr</span>, flags_                            \</div>
 <div class="line">    };                                                                     \</div>
 <div class="line">    kernel::test::Registry::register_test(tc);                             \</div>
 <div class="line">} <span class="keywordflow">while</span> (0)</div>
@@ -489,11 +486,11 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>&#160;)</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a898e9992b56f0e0b33e86dba5b5afa59">JARVIS_REGISTER_TEST_SUITE_FLAGS</a>(suite, name, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924a758901b7d4ff562bfcf86fd8d1a08252">kernel::test::TF_KERNEL</a>)</div>
+<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a898e9992b56f0e0b33e86dba5b5afa59">JARVIS_REGISTER_TEST_SUITE_FLAGS</a>(suite, <a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924a758901b7d4ff562bfcf86fd8d1a08252">kernel::test::TF_KERNEL</a>)</div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -511,7 +508,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -538,7 +535,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define JARVIS_TEST</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -547,8 +544,8 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><span class="keywordtype">void</span> test_##name();                                                        \</div>
-<div class="line"><span class="keywordtype">void</span> test_##name()</div>
+<b>Value:</b><div class="fragment"><div class="line"><span class="keywordtype">void</span> test_##<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>();                                                        \</div>
+<div class="line"><span class="keywordtype">void</span> test_##<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>()</div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -567,7 +564,7 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <b>Value:</b><div class="fragment"><div class="line"><a class="code hl_function" href="classkernel_1_1test_1_1_registry.html#abf323cc53e9953c7f1abd1777785d3ef">kernel::test::Registry::record_success</a>()</div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_registry_html_abf323cc53e9953c7f1abd1777785d3ef"><div class="ttname"><a href="classkernel_1_1test_1_1_registry.html#abf323cc53e9953c7f1abd1777785d3ef">kernel::test::Registry::record_success</a></div><div class="ttdeci">static void record_success()</div><div class="ttdef"><b>Definition</b> test.cpp:113</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_registry_html_abf323cc53e9953c7f1abd1777785d3ef"><div class="ttname"><a href="classkernel_1_1test_1_1_registry.html#abf323cc53e9953c7f1abd1777785d3ef">kernel::test::Registry::record_success</a></div><div class="ttdeci">static void record_success()</div><div class="ttdef"><b>Definition</b> test.cpp:114</div></div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -585,7 +582,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -594,8 +591,8 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><span class="keywordtype">void</span> test_##suite##_##name();                                              \</div>
-<div class="line"><span class="keywordtype">void</span> test_##suite##_##name()</div>
+<b>Value:</b><div class="fragment"><div class="line"><span class="keywordtype">void</span> test_##suite##_##<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>();                                              \</div>
+<div class="line"><span class="keywordtype">void</span> test_##suite##_##<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>()</div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -608,12 +605,12 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define REGISTER_CLASS</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span></td><td>)</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#ace9d865ef1ecb142666cd0beb9c51af3">REGISTER_CLASS_FLAGS</a>(name, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924a758901b7d4ff562bfcf86fd8d1a08252">kernel::test::TF_KERNEL</a>)</div>
+<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#ace9d865ef1ecb142666cd0beb9c51af3">REGISTER_CLASS_FLAGS</a>(<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924a758901b7d4ff562bfcf86fd8d1a08252">kernel::test::TF_KERNEL</a>)</div>
 <div class="ttc" id="atest_8hpp_html_ace9d865ef1ecb142666cd0beb9c51af3"><div class="ttname"><a href="#ace9d865ef1ecb142666cd0beb9c51af3">REGISTER_CLASS_FLAGS</a></div><div class="ttdeci">#define REGISTER_CLASS_FLAGS(name, flags_)</div><div class="ttdef"><b>Definition</b> test.hpp:406</div></div>
 </div><!-- fragment -->
 </div>
@@ -627,7 +624,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define REGISTER_CLASS_FLAGS</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span>, </td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -638,7 +635,7 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 <b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">do</span> {                                                                      \</div>
 <div class="line">    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_struct" href="structkernel_1_1test_1_1_test_case.html">kernel::test::TestCase</a> tc = {                        \</div>
-<div class="line">        <span class="stringliteral">&quot;&quot;</span>, #name, <span class="keyword">nullptr</span>, _factory_##name, flags_                       \</div>
+<div class="line">        <span class="stringliteral">&quot;&quot;</span>, #<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, <span class="keyword">nullptr</span>, _factory_##<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, flags_                       \</div>
 <div class="line">    };                                                                    \</div>
 <div class="line">    kernel::test::Registry::register_test(tc);                            \</div>
 <div class="line">} <span class="keywordflow">while</span> (0)</div>
@@ -654,12 +651,12 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define REGISTER_RELEASE_CLASS</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span></td><td>)</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#ace9d865ef1ecb142666cd0beb9c51af3">REGISTER_CLASS_FLAGS</a>(name, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8">kernel::test::TF_RELEASE</a>)</div>
+<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#ace9d865ef1ecb142666cd0beb9c51af3">REGISTER_CLASS_FLAGS</a>(<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8">kernel::test::TF_RELEASE</a>)</div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -672,23 +669,22 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define TEST_CLASS</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>name</em></span></td><td>)</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><span class="keyword">class </span>name : <span class="keyword">public</span> <a class="code hl_class" href="classkernel_1_1test_1_1_test_base.html">kernel::test::TestBase</a> {                              \</div>
+<b>Value:</b><div class="fragment"><div class="line"><span class="keyword">class </span><a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a> : <span class="keyword">public</span> <a class="code hl_class" href="classkernel_1_1test_1_1_test_base.html">kernel::test::TestBase</a> {                              \</div>
 <div class="line"><span class="keyword">public</span>:                                                                   \</div>
-<div class="line">    name() : <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">TestBase</a>(#<a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">name</a>) {}                                           \</div>
+<div class="line">    name() : <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">TestBase</a>(#<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>) {}                                           \</div>
 <div class="line">    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">run</a>() <span class="keyword">override</span>;                                                  \</div>
 <div class="line">};                                                                        \</div>
 <div class="line">TEST_CLASS_DIAG_PUSH                                                      \</div>
 <div class="line">TEST_CLASS_DIAG_IGNORE                                                    \</div>
-<div class="line">static kernel::test::TestBase* _factory_##name() { <span class="keywordflow">return</span> <span class="keyword">new</span> name(); }   \</div>
+<div class="line">static kernel::test::TestBase* _factory_##<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>() { <span class="keywordflow">return</span> <span class="keyword">new</span> <a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>(); }   \</div>
 <div class="line">TEST_CLASS_DIAG_POP                                                       \</div>
 <div class="line">void name::run()</div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html">kernel::test::TestBase</a></div><div class="ttdef"><b>Definition</b> test.hpp:118</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a032cc2a5f4432b575f97644a68513d83"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">kernel::test::TestBase::name</a></div><div class="ttdeci">const char * name() const</div><div class="ttdef"><b>Definition</b> test.hpp:134</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a4c0175612d2ff4a7940500bf48cc5a82"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">kernel::test::TestBase::run</a></div><div class="ttdeci">virtual void run()=0</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a8f5b879eeecec1b8052e368e24c697b2"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">kernel::test::TestBase::TestBase</a></div><div class="ttdeci">TestBase(const char *name)</div><div class="ttdef"><b>Definition</b> test.hpp:120</div></div>
 </div><!-- fragment -->

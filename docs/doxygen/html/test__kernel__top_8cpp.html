@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -196,7 +196,7 @@ Variables</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Top-level kernel tests (milestone v0.4.10 issue #131) — the IRQ latency histogram export path in <a class="el" href="irq__latency__histogram_8cpp.html">src/kernel/irq_latency_histogram.cpp</a>: <span class="tt">dump()</span> was never entered by any test class. </p>
-<dl class="section note"><dt>Note</dt><dd>Observation channel: the histogram reports through <span class="tt"><a class="el" href="classkernel_1_1_logger.html#ac55cd7a631b4e76a2293edf8b8bb0bd4">Logger::info</a></span>, which during test runs routes to QEMU debugcon (not the UART) and also feeds the klog ring — whose documented consumers include tests. Each probe clears the klog, runs the code under test, reads it back and asserts on the rendered text, all inside an arch::IrqGuard so no other task can contribute bytes. </dd>
+<dl class="section note"><dt>Note</dt><dd>Observation channel: the histogram reports through <span class="tt"><a class="el" href="classkernel_1_1_logger.html#ac55cd7a631b4e76a2293edf8b8bb0bd4">Logger::info</a></span>, which during test runs routes to QEMU debugcon (not the UART) and also feeds the klog ring — whose documented consumers include tests. Each probe clears the klog, runs the code under test, reads it back and asserts on the rendered text, all inside an <a class="el" href="classarch_1_1_irq_guard.html" title="RAII guard that disables interrupts on construction and restores the previous interrupt state on dest...">arch::IrqGuard</a> so no other task can contribute bytes. </dd>
 <dd>
 <span class="tt">record()</span> is safe to drive with an arbitrary delta only because CONFIG_IRQ_LATENCY_MAX_NS is 0; with a non-zero budget an oversized delta calls <a class="el" href="classkernel_1_1_logger.html#a174337cfc9a31a6333b723019fe7c940">Logger::fatal</a> + panic. The overflow test below therefore asserts the <em>clamping</em> behaviour, not the panic path. </dd>
 <dd>
@@ -573,6 +573,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__kernel__top_8cpp_a1da3bdf28b725f89d1aead917c5460e8_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_a1da3bdf28b725f89d1aead917c5460e8_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 11 -->
+</div>
 
 </div>
 </div>
@@ -629,7 +635,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__kernel__top_8cpp_a19653f15fe9ed9d254ba1d21c27b4110_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_a19653f15fe9ed9d254ba1d21c27b4110_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -661,7 +667,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__kernel__top_8cpp_afac84b48893a9a43d792a2de9448e6c8_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_afac84b48893a9a43d792a2de9448e6c8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -693,7 +699,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__kernel__top_8cpp_ab7e87243d58d7a74ebb4e232df195877_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_ab7e87243d58d7a74ebb4e232df195877_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -725,7 +731,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__kernel__top_8cpp_a7adf333e94140e8623340d962b7c0c6d_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_a7adf333e94140e8623340d962b7c0c6d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 15 -->
 </div>
 
 </div>
@@ -757,7 +763,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__kernel__top_8cpp_a451fd9a21ccd97c61823fb7d266e23ba_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_a451fd9a21ccd97c61823fb7d266e23ba_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -789,7 +795,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__kernel__top_8cpp_a2ba15237d80ef814c65cc2f5f17d6eaf_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_a2ba15237d80ef814c65cc2f5f17d6eaf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -821,7 +827,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__kernel__top_8cpp_ad3dd561d9eb295a702d577c2526a0025_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_ad3dd561d9eb295a702d577c2526a0025_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -853,7 +859,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__kernel__top_8cpp_a1197a9c2231a6dfd98376fe136e00880_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_a1197a9c2231a6dfd98376fe136e00880_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -876,7 +882,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__kernel__top_8cpp_a064ea1d0e8953ed783b55e14b39dd6f3_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_a064ea1d0e8953ed783b55e14b39dd6f3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -903,6 +909,12 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__kernel__top_8cpp_a63ea049cdb63f0c14b053144c5a72fd1_cgraph.png" border="0" usemap="#atest__kernel__top_8cpp_a63ea049cdb63f0c14b053144c5a72fd1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 21 -->
+</div>
 
 </div>
 </div>

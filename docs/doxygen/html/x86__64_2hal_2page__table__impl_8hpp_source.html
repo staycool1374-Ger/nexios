@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -234,34 +234,38 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="code hl_variable" href="namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af">PAGE_SIZE</a> = CONFIG_PAGE_SIZE;</div>
 <div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ENTRIES = 512;</div>
 <div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span> </div>
-<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>    <span class="comment">// ─── Page-table index constants (x86_64 4-level paging) ───────────────</span></div>
-<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PML4_SHIFT = 39;</div>
-<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PDPT_SHIFT = 30;</div>
-<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PD_SHIFT   = 21;</div>
-<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PT_SHIFT   = 12;</div>
-<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PML4_MASK  = 0x1FFULL &lt;&lt; PML4_SHIFT;</div>
-<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PDPT_MASK  = 0x1FFULL &lt;&lt; PDPT_SHIFT;</div>
-<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PD_MASK    = 0x1FFULL &lt;&lt; PD_SHIFT;</div>
-<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PT_MASK    = 0x1FFULL &lt;&lt; PT_SHIFT;</div>
-<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span></div>
-<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pml4_index(uint64_t vaddr) {</div>
-<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>        <span class="keywordflow">return</span> (vaddr &amp; PML4_MASK) &gt;&gt; PML4_SHIFT;</div>
-<div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    }</div>
-<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pdpt_index(uint64_t vaddr) {</div>
-<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>        <span class="keywordflow">return</span> (vaddr &amp; PDPT_MASK) &gt;&gt; PDPT_SHIFT;</div>
-<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>    }</div>
-<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pd_index(uint64_t vaddr) {</div>
-<div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>        <span class="keywordflow">return</span> (vaddr &amp; PD_MASK) &gt;&gt; PD_SHIFT;</div>
-<div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>    }</div>
-<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pt_index(uint64_t vaddr) {</div>
-<div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span>        <span class="keywordflow">return</span> (vaddr &amp; PT_MASK) &gt;&gt; PT_SHIFT;</div>
-<div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span>    }</div>
-<div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>};</div>
-<div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span> </div>
-<div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span>} <span class="comment">// namespace arch</span></div>
+<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>    <span class="comment">// ─── PTE flag constants (x86_64 leaf encoding) ─────────────────────────</span></div>
+<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> NX = 1ULL &lt;&lt; 63;</div>
+<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span> </div>
+<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    <span class="comment">// ─── Page-table index constants (x86_64 4-level paging) ───────────────</span></div>
+<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PML4_SHIFT = 39;</div>
+<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PDPT_SHIFT = 30;</div>
+<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PD_SHIFT   = 21;</div>
+<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PT_SHIFT   = 12;</div>
+<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PML4_MASK  = 0x1FFULL &lt;&lt; PML4_SHIFT;</div>
+<div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PDPT_MASK  = 0x1FFULL &lt;&lt; PDPT_SHIFT;</div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PD_MASK    = 0x1FFULL &lt;&lt; PD_SHIFT;</div>
+<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> PT_MASK    = 0x1FFULL &lt;&lt; PT_SHIFT;</div>
+<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span></div>
+<div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pml4_index(uint64_t <a class="code hl_variable" href="elf_8hpp.html#a674826ac4551bd6353b61bb78db62172">vaddr</a>) {</div>
+<div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>        <span class="keywordflow">return</span> (<a class="code hl_variable" href="elf_8hpp.html#a674826ac4551bd6353b61bb78db62172">vaddr</a> &amp; PML4_MASK) &gt;&gt; PML4_SHIFT;</div>
+<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    }</div>
+<div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pdpt_index(uint64_t <a class="code hl_variable" href="elf_8hpp.html#a674826ac4551bd6353b61bb78db62172">vaddr</a>) {</div>
+<div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span>        <span class="keywordflow">return</span> (<a class="code hl_variable" href="elf_8hpp.html#a674826ac4551bd6353b61bb78db62172">vaddr</a> &amp; PDPT_MASK) &gt;&gt; PDPT_SHIFT;</div>
+<div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>    }</div>
+<div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pd_index(uint64_t <a class="code hl_variable" href="elf_8hpp.html#a674826ac4551bd6353b61bb78db62172">vaddr</a>) {</div>
+<div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span>        <span class="keywordflow">return</span> (<a class="code hl_variable" href="elf_8hpp.html#a674826ac4551bd6353b61bb78db62172">vaddr</a> &amp; PD_MASK) &gt;&gt; PD_SHIFT;</div>
+<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span>    }</div>
+<div class="line"><a id="l00174" name="l00174"></a><span class="lineno">  174</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">size_t</span> pt_index(uint64_t <a class="code hl_variable" href="elf_8hpp.html#a674826ac4551bd6353b61bb78db62172">vaddr</a>) {</div>
+<div class="line"><a id="l00175" name="l00175"></a><span class="lineno">  175</span>        <span class="keywordflow">return</span> (<a class="code hl_variable" href="elf_8hpp.html#a674826ac4551bd6353b61bb78db62172">vaddr</a> &amp; PT_MASK) &gt;&gt; PT_SHIFT;</div>
+<div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span>    }</div>
+<div class="line"><a id="l00177" name="l00177"></a><span class="lineno">  177</span>};</div>
+<div class="line"><a id="l00178" name="l00178"></a><span class="lineno">  178</span> </div>
+<div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>} <span class="comment">// namespace arch</span></div>
+<div class="ttc" id="aelf_8hpp_html_a674826ac4551bd6353b61bb78db62172"><div class="ttname"><a href="elf_8hpp.html#a674826ac4551bd6353b61bb78db62172">vaddr</a></div><div class="ttdeci">uint64_t vaddr</div><div class="ttdoc">Virtual address to load at.</div><div class="ttdef"><b>Definition</b> elf.hpp:3</div></div>
 <div class="ttc" id="ahal_2io_8hpp_html"><div class="ttname"><a href="hal_2io_8hpp.html">io.hpp</a></div><div class="ttdoc">Port I/O (x86_64) and memory-mapped I/O (AArch64, RISC-V) primitives.</div></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:35</div></div>
-<div class="ttc" id="anamespacearch_html_a9e56d1c39ac66468549b4230ebb9f5af"><div class="ttname"><a href="namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af">arch::PAGE_SIZE</a></div><div class="ttdeci">constexpr uint64_t PAGE_SIZE</div><div class="ttdef"><b>Definition</b> constants.hpp:63</div></div>
+<div class="ttc" id="anamespacearch_html_a9e56d1c39ac66468549b4230ebb9f5af"><div class="ttname"><a href="namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af">arch::PAGE_SIZE</a></div><div class="ttdeci">constexpr uint64_t PAGE_SIZE</div><div class="ttdef"><b>Definition</b> constants.hpp:67</div></div>
 <div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
 <div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>

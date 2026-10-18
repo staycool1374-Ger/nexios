@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -134,8 +134,8 @@ Collaboration diagram for kernel::cap::FrameUserMap:</div>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a85d0da5d5967e598e5082a5482e375dd" id="r_a85d0da5d5967e598e5082a5482e375dd"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a85d0da5d5967e598e5082a5482e375dd">map</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">cap::FrameCap</a> &amp;fc)</td></tr>
 <tr class="memdesc:a85d0da5d5967e598e5082a5482e375dd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps <code class="param">fc's</code> frames into <code class="param">task's</code> user VA window.  <br /></td></tr>
-<tr class="memitem:a48bdaa774b286873adfc45f767b7c0fd" id="r_a48bdaa774b286873adfc45f767b7c0fd"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a48bdaa774b286873adfc45f767b7c0fd">unmap</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, uint64_t va)</td></tr>
-<tr class="memdesc:a48bdaa774b286873adfc45f767b7c0fd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps the mapping at <code class="param">va</code> if it belongs to <code class="param">task</code>.  <br /></td></tr>
+<tr class="memitem:a4984b1a6503d617a6be02fd71fde7055" id="r_a4984b1a6503d617a6be02fd71fde7055"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a4984b1a6503d617a6be02fd71fde7055">unmap</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, uint64_t va) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a4984b1a6503d617a6be02fd71fde7055"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps the mapping at <code class="param">va</code> if it belongs to <code class="param">task</code>.  <br /></td></tr>
 <tr class="memitem:acee30a31e35324acd757b51a9b47b9d5" id="r_acee30a31e35324acd757b51a9b47b9d5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#acee30a31e35324acd757b51a9b47b9d5">invalidate_cap</a> (<a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">cap::FrameCap</a> *fc)</td></tr>
 <tr class="memdesc:acee30a31e35324acd757b51a9b47b9d5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Immediately removes every live mapping backed by <code class="param">fc</code> (revocation closure). Called from <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#a61c0c510877e83a8061a248ac229f9c9" title="Final teardown: returns every wrapped frame to the PMM and the block to the MemPool....">FrameCap::dispose</a>/revoke before the cap block is freed. Pointer-equality only — never dereferenced.  <br /></td></tr>
 <tr class="memitem:a80e3a84f88b4f3b5ad0601c9ac2d65b2" id="r_a80e3a84f88b4f3b5ad0601c9ac2d65b2"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a80e3a84f88b4f3b5ad0601c9ac2d65b2">drain_task</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task)</td></tr>
@@ -144,8 +144,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a31ec33541ce5d8f47f7d57bb038d1c97"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clears the whole registry (test isolation snapshot restore).  <br /></td></tr>
 <tr class="memitem:a68b0b29d016c3fe8c9838f2a118b6f22" id="r_a68b0b29d016c3fe8c9838f2a118b6f22"><td class="memItemLeft">static <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a68b0b29d016c3fe8c9838f2a118b6f22">live_count</a> ()</td></tr>
 <tr class="memdesc:a68b0b29d016c3fe8c9838f2a118b6f22"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of live mappings (test accessor).  <br /></td></tr>
-<tr class="memitem:a3e3ff59a18407df3a101450e440060f7" id="r_a3e3ff59a18407df3a101450e440060f7"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a3e3ff59a18407df3a101450e440060f7">is_owner</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, uint64_t va)</td></tr>
-<tr class="memdesc:a3e3ff59a18407df3a101450e440060f7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether <code class="param">task</code> currently owns the mapping at <code class="param">va</code> (test accessor).  <br /></td></tr>
+<tr class="memitem:a37813e1cc7334f506635c9a1e42771b9" id="r_a37813e1cc7334f506635c9a1e42771b9"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a37813e1cc7334f506635c9a1e42771b9">is_owner</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, uint64_t va) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a37813e1cc7334f506635c9a1e42771b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether <code class="param">task</code> currently owns the mapping at <code class="param">va</code> (test accessor).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>User-space frame mapping registry (issue #106 Part B). A static bounded table keyed by task id (<a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html" title="User-space MMIO page-frame mapping registry (issue #8). A static bounded table keyed by task id (IrqD...">MmioUserMap</a> pattern) that maps a <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html" title="A capability-gated physical frame (or contiguous range). Owns the PMM pages it wraps: the last refere...">FrameCap</a>'s frames into a fixed user VA window for Ring 3 shared memory via the SYS_FRAME_MAP/SYS_FRAME_UNMAP syscall surface. Keyed by owner_task_id + a per-slot generation (recycled-slot stale-VA defense). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; frame map lock (never held across <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> map/unmap or reschedule). </p>
@@ -216,8 +216,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a3e3ff59a18407df3a101450e440060f7" name="a3e3ff59a18407df3a101450e440060f7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3e3ff59a18407df3a101450e440060f7">&#9670;&#160;</a></span>is_owner()</h2>
+<a id="a37813e1cc7334f506635c9a1e42771b9" name="a37813e1cc7334f506635c9a1e42771b9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a37813e1cc7334f506635c9a1e42771b9">&#9670;&#160;</a></span>is_owner()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -238,7 +238,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -345,8 +345,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a48bdaa774b286873adfc45f767b7c0fd" name="a48bdaa774b286873adfc45f767b7c0fd"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a48bdaa774b286873adfc45f767b7c0fd">&#9670;&#160;</a></span>unmap()</h2>
+<a id="a4984b1a6503d617a6be02fd71fde7055" name="a4984b1a6503d617a6be02fd71fde7055"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4984b1a6503d617a6be02fd71fde7055">&#9670;&#160;</a></span>unmap()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -367,7 +367,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -377,7 +377,7 @@ Here is the call graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1cap_1_1_frame_user_map_a48bdaa774b286873adfc45f767b7c0fd_cgraph.png" border="0" usemap="#aclasskernel_1_1cap_1_1_frame_user_map_a48bdaa774b286873adfc45f767b7c0fd_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="classkernel_1_1cap_1_1_frame_user_map_a4984b1a6503d617a6be02fd71fde7055_cgraph.png" border="0" usemap="#aclasskernel_1_1cap_1_1_frame_user_map_a4984b1a6503d617a6be02fd71fde7055_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 5 -->
 </div>
 

@@ -1,5 +1,6 @@
 var errno_8h =
 [
+    [ "nexios_tcb", "structnexios__tcb.html", "structnexios__tcb" ],
     [ "EACCES", "errno_8h.html#ac2a2e9fa555401f94478f74e01868032", null ],
     [ "EAGAIN", "errno_8h.html#af0fac1cea1165b4debec7f686edf3313", null ],
     [ "EBADF", "errno_8h.html#ac54507d66b43ad12f9356257323c0018", null ],
@@ -17,8 +18,9 @@ var errno_8h =
     [ "EPERM", "errno_8h.html#add669d31505a077f769cff8e66c780b3", null ],
     [ "ERANGE", "errno_8h.html#aa1591a4f3a86360108de5b9ba34980ca", null ],
     [ "EROFS", "errno_8h.html#acb02bb67dddd7ca8cf82634a0781d58d", null ],
+    [ "errno", "errno_8h.html#ab03f640d90fbc5bcb75285d08a0f25ed", null ],
     [ "ESPIPE", "errno_8h.html#a0e42d4f9fecdcf5fcca2b333252173c3", null ],
     [ "ESRCH", "errno_8h.html#a462e47a8af6288232a5df548221ada4c", null ],
     [ "ETIMEDOUT", "errno_8h.html#a597718e59a8fc9c4d4ab63f5a34e28b1", null ],
-    [ "errno", "errno_8h.html#ad65a8842cc674e3ddf69355898c0ecbf", null ]
+    [ "__errno_location", "errno_8h.html#a4fd616e20294ce1318de576c5b8c1472", null ]
 ];

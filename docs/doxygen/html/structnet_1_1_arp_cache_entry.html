@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structnet_1_1_
 </div><!--header-->
 <div class="contents">
 
-<p>ARP cache entry.  
+<p>A single ARP cache entry.  
  <a href="#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="arp_8hpp_source.html">arp.hpp</a>&gt;</code></p>
@@ -133,11 +133,14 @@ Collaboration diagram for net::ArpCacheEntry:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a2287025139b70aff9be1e85ce5f24796" id="r_a2287025139b70aff9be1e85ce5f24796"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a2287025139b70aff9be1e85ce5f24796">ip</a></td></tr>
+<tr class="memdesc:a2287025139b70aff9be1e85ce5f24796"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPv4 address (big-endian).  <br /></td></tr>
 <tr class="memitem:a237d6cbb45dfcacace3a1e9ed7286208" id="r_a237d6cbb45dfcacace3a1e9ed7286208"><td class="memItemLeft"><a class="el" href="structnet_1_1_mac_addr.html">MacAddr</a>&#160;</td><td class="memItemRight"><a class="el" href="#a237d6cbb45dfcacace3a1e9ed7286208">mac</a></td></tr>
+<tr class="memdesc:a237d6cbb45dfcacace3a1e9ed7286208"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolved MAC address.  <br /></td></tr>
 <tr class="memitem:af8e6797a4d221cc1901c4c8b4f0f1b53" id="r_af8e6797a4d221cc1901c4c8b4f0f1b53"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af8e6797a4d221cc1901c4c8b4f0f1b53">valid</a></td></tr>
+<tr class="memdesc:af8e6797a4d221cc1901c4c8b4f0f1b53"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether this entry contains valid data.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>ARP cache entry. </p>
+<div class="textblock"><p>A single ARP cache entry. </p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a2287025139b70aff9be1e85ce5f24796" name="a2287025139b70aff9be1e85ce5f24796"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a2287025139b70aff9be1e85ce5f24796">&#9670;&#160;</a></span>ip</h2>
@@ -150,6 +153,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>IPv4 address (big-endian). </p>
 
 </div>
 </div>
@@ -165,6 +170,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Resolved MAC address. </p>
+
 </div>
 </div>
 <a id="af8e6797a4d221cc1901c4c8b4f0f1b53" name="af8e6797a4d221cc1901c4c8b4f0f1b53"></a>
@@ -178,6 +185,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Whether this entry contains valid data. </p>
 
 </div>
 </div>

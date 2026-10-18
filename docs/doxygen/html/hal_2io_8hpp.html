@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,256 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2io_8hpp.h
 
 <p>Port I/O (x86_64) and memory-mapped I/O (AArch64, RISC-V) primitives.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="x86__64_2hal_2io__impl_8hpp_source.html">kernel/arch/x86_64/hal/io_impl.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for io.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="hal_2io_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2arch_2hal_2io_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="hal_2io_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2arch_2hal_2io_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="hal_2io_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a81eeb81808f70c788bfe65bf4fffbfb5" id="r_a81eeb81808f70c788bfe65bf4fffbfb5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a81eeb81808f70c788bfe65bf4fffbfb5">arch_outb</a> (uint16_t port, uint8_t val)</td></tr>
+<tr class="memdesc:a81eeb81808f70c788bfe65bf4fffbfb5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Assembly-level I/O stubs for x86-64 (provided by arch linker).  <br /></td></tr>
+<tr class="memitem:aff61fd1a757813cc1826f8c3207e89eb" id="r_aff61fd1a757813cc1826f8c3207e89eb"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#aff61fd1a757813cc1826f8c3207e89eb">arch_inb</a> (uint16_t port)</td></tr>
+<tr class="memdesc:aff61fd1a757813cc1826f8c3207e89eb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read a byte from an I/O port.  <br /></td></tr>
+<tr class="memitem:af2c7f10d627fdfec5611a72677038387" id="r_af2c7f10d627fdfec5611a72677038387"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af2c7f10d627fdfec5611a72677038387">arch_outw</a> (uint16_t port, uint16_t val)</td></tr>
+<tr class="memdesc:af2c7f10d627fdfec5611a72677038387"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a 16-bit word to an I/O port.  <br /></td></tr>
+<tr class="memitem:aa994f15d7b4bda88e88959c5d4947b19" id="r_aa994f15d7b4bda88e88959c5d4947b19"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#aa994f15d7b4bda88e88959c5d4947b19">arch_inw</a> (uint16_t port)</td></tr>
+<tr class="memdesc:aa994f15d7b4bda88e88959c5d4947b19"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read a 16-bit word from an I/O port.  <br /></td></tr>
+<tr class="memitem:ae9749e2b962a65d147ce3c90ea7778ad" id="r_ae9749e2b962a65d147ce3c90ea7778ad"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae9749e2b962a65d147ce3c90ea7778ad">arch_outl</a> (uint16_t port, uint32_t val)</td></tr>
+<tr class="memdesc:ae9749e2b962a65d147ce3c90ea7778ad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a 32-bit dword to an I/O port.  <br /></td></tr>
+<tr class="memitem:a348279f3fc04029caf4da3abf7850580" id="r_a348279f3fc04029caf4da3abf7850580"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a348279f3fc04029caf4da3abf7850580">arch_inl</a> (uint16_t port)</td></tr>
+<tr class="memdesc:a348279f3fc04029caf4da3abf7850580"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read a 32-bit dword from an I/O port.  <br /></td></tr>
+<tr class="memitem:a7a9c77c95139ee73afeaa3b1abdffb46" id="r_a7a9c77c95139ee73afeaa3b1abdffb46"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7a9c77c95139ee73afeaa3b1abdffb46">arch_hlt</a> ()</td></tr>
+<tr class="memdesc:a7a9c77c95139ee73afeaa3b1abdffb46"><td class="mdescLeft">&#160;</td><td class="mdescRight">Halt the CPU until the next interrupt.  <br /></td></tr>
+<tr class="memitem:a451855cfa237ffacab4e05c2a7ec0292" id="r_a451855cfa237ffacab4e05c2a7ec0292"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a451855cfa237ffacab4e05c2a7ec0292">arch_pause</a> ()</td></tr>
+<tr class="memdesc:a451855cfa237ffacab4e05c2a7ec0292"><td class="mdescLeft">&#160;</td><td class="mdescRight">CPU pause/yield hint (e.g. PAUSE on x86).  <br /></td></tr>
+<tr class="memitem:a7a73f3d7779b45651b9ea4629caa7df3" id="r_a7a73f3d7779b45651b9ea4629caa7df3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7a73f3d7779b45651b9ea4629caa7df3">arch_cli</a> ()</td></tr>
+<tr class="memdesc:a7a73f3d7779b45651b9ea4629caa7df3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Disable interrupts (CLI).  <br /></td></tr>
+<tr class="memitem:a19fb293e900f53bce4a1546d326789d5" id="r_a19fb293e900f53bce4a1546d326789d5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a19fb293e900f53bce4a1546d326789d5">arch_sti</a> ()</td></tr>
+<tr class="memdesc:a19fb293e900f53bce4a1546d326789d5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable interrupts (STI).  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Port I/O (x86_64) and memory-mapped I/O (AArch64, RISC-V) primitives. </p>
-</div></div><!-- contents -->
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a7a73f3d7779b45651b9ea4629caa7df3" name="a7a73f3d7779b45651b9ea4629caa7df3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7a73f3d7779b45651b9ea4629caa7df3">&#9670;&#160;</a></span>arch_cli()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch_cli </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Disable interrupts (CLI). </p>
+
+</div>
+</div>
+<a id="a7a9c77c95139ee73afeaa3b1abdffb46" name="a7a9c77c95139ee73afeaa3b1abdffb46"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7a9c77c95139ee73afeaa3b1abdffb46">&#9670;&#160;</a></span>arch_hlt()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch_hlt </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Halt the CPU until the next interrupt. </p>
+
+</div>
+</div>
+<a id="aff61fd1a757813cc1826f8c3207e89eb" name="aff61fd1a757813cc1826f8c3207e89eb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aff61fd1a757813cc1826f8c3207e89eb">&#9670;&#160;</a></span>arch_inb()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t arch_inb </td>
+          <td>(</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>port</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Read a byte from an I/O port. </p>
+<dl class="section return"><dt>Returns</dt><dd>The byte read. </dd></dl>
+
+</div>
+</div>
+<a id="a348279f3fc04029caf4da3abf7850580" name="a348279f3fc04029caf4da3abf7850580"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a348279f3fc04029caf4da3abf7850580">&#9670;&#160;</a></span>arch_inl()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t arch_inl </td>
+          <td>(</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>port</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Read a 32-bit dword from an I/O port. </p>
+<dl class="section return"><dt>Returns</dt><dd>The dword read. </dd></dl>
+
+</div>
+</div>
+<a id="aa994f15d7b4bda88e88959c5d4947b19" name="aa994f15d7b4bda88e88959c5d4947b19"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa994f15d7b4bda88e88959c5d4947b19">&#9670;&#160;</a></span>arch_inw()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t arch_inw </td>
+          <td>(</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>port</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Read a 16-bit word from an I/O port. </p>
+<dl class="section return"><dt>Returns</dt><dd>The word read. </dd></dl>
+
+</div>
+</div>
+<a id="a81eeb81808f70c788bfe65bf4fffbfb5" name="a81eeb81808f70c788bfe65bf4fffbfb5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a81eeb81808f70c788bfe65bf4fffbfb5">&#9670;&#160;</a></span>arch_outb()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch_outb </td>
+          <td>(</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>port</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint8_t</td>          <td class="paramname"><span class="paramname"><em>val</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Assembly-level I/O stubs for x86-64 (provided by arch linker). </p>
+<p>Write a byte to an I/O port. </p>
+
+</div>
+</div>
+<a id="ae9749e2b962a65d147ce3c90ea7778ad" name="ae9749e2b962a65d147ce3c90ea7778ad"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae9749e2b962a65d147ce3c90ea7778ad">&#9670;&#160;</a></span>arch_outl()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch_outl </td>
+          <td>(</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>port</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>val</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Write a 32-bit dword to an I/O port. </p>
+
+</div>
+</div>
+<a id="af2c7f10d627fdfec5611a72677038387" name="af2c7f10d627fdfec5611a72677038387"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af2c7f10d627fdfec5611a72677038387">&#9670;&#160;</a></span>arch_outw()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch_outw </td>
+          <td>(</td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>port</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>val</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Write a 16-bit word to an I/O port. </p>
+
+</div>
+</div>
+<a id="a451855cfa237ffacab4e05c2a7ec0292" name="a451855cfa237ffacab4e05c2a7ec0292"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a451855cfa237ffacab4e05c2a7ec0292">&#9670;&#160;</a></span>arch_pause()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch_pause </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>CPU pause/yield hint (e.g. PAUSE on x86). </p>
+
+</div>
+</div>
+<a id="a19fb293e900f53bce4a1546d326789d5" name="a19fb293e900f53bce4a1546d326789d5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a19fb293e900f53bce4a1546d326789d5">&#9670;&#160;</a></span>arch_sti()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch_sti </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Enable interrupts (STI). </p>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

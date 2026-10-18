@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -118,6 +118,20 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <div class="textblock">Here is a list of all namespace variables with links to the namespace documentation for each variable:</div>
 
 <h3 class="doxsection"><a id="index_k" name="index_k"></a>- k -</h3><ul>
+<li>k_dispatch_apply_expected&#160;:&#160;<a class="el" href="namespacekernel.html#a383025bb1abbd271ab1ad0f06cc033de">kernel</a></li>
+<li>k_dispatch_arm_expected&#160;:&#160;<a class="el" href="namespacekernel.html#a432cfda35c27a0178e3df0ab62301bc0">kernel</a></li>
+<li>k_dispatch_select_expected&#160;:&#160;<a class="el" href="namespacekernel.html#a371739af8778e4b6f3977689cdf7d562">kernel</a></li>
+<li>k_fast_word_regs&#160;:&#160;<a class="el" href="namespacekernel.html#a1f2097a483b8b9b8bf08efcacf47df7a">kernel</a></li>
+<li>k_path_mix&#160;:&#160;<a class="el" href="namespacekernel.html#a29af56aad516c628a83f9ba5b5c8a0dd">kernel</a></li>
+<li>k_task_cleanup_expected&#160;:&#160;<a class="el" href="namespacekernel.html#a95ff0c36ab4cba16170ff2892948787e">kernel</a></li>
+<li>k_task_cleanup_pinned_expected&#160;:&#160;<a class="el" href="namespacekernel.html#ab640bed16119f3a62c7befd6c86eaad7">kernel</a></li>
+<li>k_task_create_expected&#160;:&#160;<a class="el" href="namespacekernel.html#a019fc1bc25520b1ffa3599eec1b0eb6d">kernel</a></li>
+<li>k_teardown_canonical_expected&#160;:&#160;<a class="el" href="namespacekernel.html#aba46fc9e6d9586d1131485f5371c8438">kernel</a></li>
+<li>k_teardown_reap_expected&#160;:&#160;<a class="el" href="namespacekernel.html#a186291d8d39ee6b84c451225c691197f">kernel</a></li>
+<li>k_teardown_sched_prefix_expected&#160;:&#160;<a class="el" href="namespacekernel.html#af2b2f6adad6bfa2c3d64df43aa3df6cd">kernel</a></li>
+<li>k_vmm_map_reject_expected&#160;:&#160;<a class="el" href="namespacekernel.html#a91ef5b873fdfbb3c94843801b39e433c">kernel</a></li>
+<li>k_vmm_map_rollback_expected&#160;:&#160;<a class="el" href="namespacekernel.html#a6ff1bbbb697bdc4402042f780d62023b">kernel</a></li>
+<li>k_vmm_map_success_expected&#160;:&#160;<a class="el" href="namespacekernel.html#a84219b243e0fd692681ffa98181afbfb">kernel</a></li>
 <li>kCapReg&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#afb22e8f848eb82b06f3c9cac3b31e6cc">kernel::iommu::vtd::mmio</a></li>
 <li>kCteAsrMask&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd.html#a52f202e84ece4f51f9eae649196a830a">kernel::iommu::vtd</a></li>
 <li>kCteFpd&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd.html#afe4ca8e643c1ee0ed7cb334e5bc8e011">kernel::iommu::vtd</a></li>
@@ -164,6 +178,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <li>kFstsIqe&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a701c3412a9c0109684ee005aec85b35a">kernel::iommu::vtd::mmio</a></li>
 <li>kFstsPfo&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a5da573ff164f7cfe414f81acd5e3e4d2">kernel::iommu::vtd::mmio</a></li>
 <li>kFstsPpf&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#aad23eca219776b730cd82f56a959ac5a">kernel::iommu::vtd::mmio</a></li>
+<li>kFupSkipLogCap&#160;:&#160;<a class="el" href="namespacekernel.html#a1369d42060e8bc15128adcdb3a63a570">kernel</a></li>
 <li>kGcmd&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a738f0109825c26664886ed760985774c">kernel::iommu::vtd::mmio</a></li>
 <li>kGcmdQie&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a649fb26f337c8bdd7e7c8f08d9dedd50">kernel::iommu::vtd::mmio</a></li>
 <li>kGcmdSrtp&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a9da063661e09e6552692ded28c23d302">kernel::iommu::vtd::mmio</a></li>
@@ -172,12 +187,16 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <li>kGstsQies&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a319827944e89ed3ad1160d0fd1298107">kernel::iommu::vtd::mmio</a></li>
 <li>kGstsRtps&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a86eab8afe620a22929b30e4899254f0b">kernel::iommu::vtd::mmio</a></li>
 <li>kGstsTes&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a9108dfe7e7aee05d22c3c2d5b3593ea8">kernel::iommu::vtd::mmio</a></li>
+<li>kHuge2MBaseMask&#160;:&#160;<a class="el" href="namespacekernel.html#ac9d6bb3792d15a7c10c6556f89a9ed78">kernel</a></li>
+<li>kHuge2MOffsetMask&#160;:&#160;<a class="el" href="namespacekernel.html#a79b9c49a1501eb20faeb4246d49efd33">kernel</a></li>
 <li>kIqa&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a4007f7d8853e3c9cb0b7bbe652036e6f">kernel::iommu::vtd::mmio</a></li>
 <li>kIqaAddrMask&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a8ad4941c35ba92236c60fb1b8474c76a">kernel::iommu::vtd::mmio</a></li>
 <li>kIqaQen&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#adce53ac58ab612cf1de936d616323253">kernel::iommu::vtd::mmio</a></li>
 <li>kIqh&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a00e7b9ad2a6579bd7091e0134219fcae">kernel::iommu::vtd::mmio</a></li>
 <li>kIqt&#160;:&#160;<a class="el" href="namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a3e3c79b205a95801a817dba4c25efbda">kernel::iommu::vtd::mmio</a></li>
 <li>kIrqNotifyRevoked&#160;:&#160;<a class="el" href="namespacekernel.html#ab596ed6f93b40b1636ef3dfcf39ebd1e">kernel</a></li>
+<li>kPageOffsetMask&#160;:&#160;<a class="el" href="namespacekernel.html#a0baae30bc1ab6a716e981544f012ba23">kernel</a></li>
+<li>kPdptBlockBaseMask&#160;:&#160;<a class="el" href="namespacekernel.html#ae1135d0af9e02c614b5cca60f39c14c0">kernel</a></li>
 <li>kPosixErrAgain&#160;:&#160;<a class="el" href="namespacekernel_1_1time.html#a17d57ee06221a9cb02e1f9f088493fc3">kernel::time</a></li>
 <li>kPosixErrBadFd&#160;:&#160;<a class="el" href="namespacekernel_1_1time.html#af089c8d5023a0728fd47d1d9f39e3c1e">kernel::time</a></li>
 <li>kPosixErrFault&#160;:&#160;<a class="el" href="namespacekernel_1_1time.html#a0dbc4e6dc04704af973b5cfd199f7939">kernel::time</a></li>

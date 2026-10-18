@@ -7,7 +7,7 @@ var daemon__mgr_8cpp =
     [ "kernel::daemon::get_entry", "namespacekernel_1_1daemon.html#a978776a5839d1f7bbac1e5a22572afca", null ],
     [ "kernel::daemon::init", "namespacekernel_1_1daemon.html#a0a2e6431675517acca87d324b2cff80e", null ],
     [ "kernel::daemon::is_managed", "namespacekernel_1_1daemon.html#ae3e4188f4434a72f6d12df9d801e03b1", null ],
-    [ "kernel::daemon::notify_death", "namespacekernel_1_1daemon.html#a92ec4786a10d49508858cb50f5a83ce3", null ],
+    [ "kernel::daemon::notify_death", "namespacekernel_1_1daemon.html#a7e16eb8619c9f04be9b9404c2d939644", null ],
     [ "kernel::daemon::register_daemon", "namespacekernel_1_1daemon.html#a805ce70d7458d932a10b9f7aec27fde1", null ],
     [ "kernel::daemon::reset_clear_daemons", "namespacekernel_1_1daemon.html#af8c94939f398ca91404fdf9f7aef8171", null ],
     [ "kernel::daemon::reset_restart_count", "namespacekernel_1_1daemon.html#aadff7e665c02eef5c3cf2d52db58b8bd", null ],

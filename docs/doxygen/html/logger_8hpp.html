@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -126,11 +126,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('logger_8hpp.ht
 Include dependency graph for logger.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="logger_8hpp__incl.png" border="0" usemap="#asrc_2lib_2logger_8hpp" loading="lazy" alt=""/></div>
-<map name="asrc_2lib_2logger_8hpp" id="asrc_2lib_2logger_8hpp">
-<area shape="rect" title="Kernel logger subsystem with verbosity tiers and color output." alt="" coords="5,5,125,32"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="26,80,104,107"/>
-<area shape="poly" title=" " alt="" coords="67,30,68,65,62,64,63,35"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div>
 <p><a href="logger_8hpp_source.html">Go to the source code of this file.</a></p>
@@ -142,13 +138,13 @@ Data Structures</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
 <tr class="memitem:ade24ac546ea93fde2353ed2db8e89c66" id="r_ade24ac546ea93fde2353ed2db8e89c66"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ade24ac546ea93fde2353ed2db8e89c66">va_start</a>(ap,  last)</td></tr>
 <tr class="memitem:acd9b3b9085ec072324c5fdac2b40304e" id="r_acd9b3b9085ec072324c5fdac2b40304e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#acd9b3b9085ec072324c5fdac2b40304e">va_end</a>(ap)</td></tr>
-<tr class="memitem:a81ebe6ea6253b0c6618e29de70fe10eb" id="r_a81ebe6ea6253b0c6618e29de70fe10eb"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a81ebe6ea6253b0c6618e29de70fe10eb">va_arg</a>(ap,  type)</td></tr>
+<tr class="memitem:a81ebe6ea6253b0c6618e29de70fe10eb" id="r_a81ebe6ea6253b0c6618e29de70fe10eb"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a81ebe6ea6253b0c6618e29de70fe10eb">va_arg</a>(ap,  <a class="el" href="virtio__blk_8hpp.html#ad44b615021ed3ccb734fcaf583ef4a03">type</a>)</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
@@ -183,11 +179,12 @@ Enumerations</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>type</em></span>&#160;)</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="virtio__blk_8hpp.html#ad44b615021ed3ccb734fcaf583ef4a03">type</a></em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line">__builtin_va_arg(ap, type)</div>
+<b>Value:</b><div class="fragment"><div class="line">__builtin_va_arg(ap, <a class="code hl_variable" href="virtio__blk_8hpp.html#ad44b615021ed3ccb734fcaf583ef4a03">type</a>)</div>
+<div class="ttc" id="avirtio__blk_8hpp_html_ad44b615021ed3ccb734fcaf583ef4a03"><div class="ttname"><a href="virtio__blk_8hpp.html#ad44b615021ed3ccb734fcaf583ef4a03">type</a></div><div class="ttdeci">uint32_t type</div><div class="ttdoc">Segment type (PT_NULL, PT_LOAD, PT_DYNAMIC, etc.).</div><div class="ttdef"><b>Definition</b> virtio_blk.hpp:0</div></div>
 </div><!-- fragment -->
 </div>
 </div>

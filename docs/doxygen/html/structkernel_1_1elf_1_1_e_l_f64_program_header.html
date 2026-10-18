@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
+<p>ELF64 program header (segment descriptor).  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="elf_8hpp_source.html">elf.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::elf::ELF64ProgramHeader:</div>
@@ -130,15 +133,25 @@ Collaboration diagram for kernel::elf::ELF64ProgramHeader:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a9f9c365dd6d8b004fc31f5144b1bfb51" id="r_a9f9c365dd6d8b004fc31f5144b1bfb51"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a9f9c365dd6d8b004fc31f5144b1bfb51">type</a></td></tr>
+<tr class="memdesc:a9f9c365dd6d8b004fc31f5144b1bfb51"><td class="mdescLeft">&#160;</td><td class="mdescRight">Segment type (PT_NULL, PT_LOAD, PT_DYNAMIC, etc.).  <br /></td></tr>
 <tr class="memitem:af46ee290c63487e8673d785de213d782" id="r_af46ee290c63487e8673d785de213d782"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#af46ee290c63487e8673d785de213d782">flags</a></td></tr>
+<tr class="memdesc:af46ee290c63487e8673d785de213d782"><td class="mdescLeft">&#160;</td><td class="mdescRight">Segment flags (PF_R, PF_W, PF_X).  <br /></td></tr>
 <tr class="memitem:ad191c47d52ddc17427621f2e8c0c8c82" id="r_ad191c47d52ddc17427621f2e8c0c8c82"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad191c47d52ddc17427621f2e8c0c8c82">offset</a></td></tr>
+<tr class="memdesc:ad191c47d52ddc17427621f2e8c0c8c82"><td class="mdescLeft">&#160;</td><td class="mdescRight">Offset in file.  <br /></td></tr>
 <tr class="memitem:abd51ed754a6243b59f8e68f4602ce421" id="r_abd51ed754a6243b59f8e68f4602ce421"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#abd51ed754a6243b59f8e68f4602ce421">vaddr</a></td></tr>
+<tr class="memdesc:abd51ed754a6243b59f8e68f4602ce421"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual address to load at.  <br /></td></tr>
 <tr class="memitem:a1ca692fe7f8e786e2288e633227d3671" id="r_a1ca692fe7f8e786e2288e633227d3671"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a1ca692fe7f8e786e2288e633227d3671">paddr</a></td></tr>
+<tr class="memdesc:a1ca692fe7f8e786e2288e633227d3671"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical address (usually same as vaddr).  <br /></td></tr>
 <tr class="memitem:adf09109347338348a5627a1bfa9e1008" id="r_adf09109347338348a5627a1bfa9e1008"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#adf09109347338348a5627a1bfa9e1008">filesz</a></td></tr>
+<tr class="memdesc:adf09109347338348a5627a1bfa9e1008"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size in file.  <br /></td></tr>
 <tr class="memitem:a93ae8d05ba137ad4f8365b2556f1f671" id="r_a93ae8d05ba137ad4f8365b2556f1f671"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a93ae8d05ba137ad4f8365b2556f1f671">memsz</a></td></tr>
+<tr class="memdesc:a93ae8d05ba137ad4f8365b2556f1f671"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size in memory (zero-padded if &gt; filesz).  <br /></td></tr>
 <tr class="memitem:adf302bd25859d67ccf5dc56dd6e44692" id="r_adf302bd25859d67ccf5dc56dd6e44692"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#adf302bd25859d67ccf5dc56dd6e44692">align</a></td></tr>
+<tr class="memdesc:adf302bd25859d67ccf5dc56dd6e44692"><td class="mdescLeft">&#160;</td><td class="mdescRight">Alignment constraint.  <br /></td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>ELF64 program header (segment descriptor). </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="adf302bd25859d67ccf5dc56dd6e44692" name="adf302bd25859d67ccf5dc56dd6e44692"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#adf302bd25859d67ccf5dc56dd6e44692">&#9670;&#160;</a></span>align</h2>
 
@@ -150,6 +163,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Alignment constraint. </p>
 
 </div>
 </div>
@@ -165,6 +180,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Size in file. </p>
+
 </div>
 </div>
 <a id="af46ee290c63487e8673d785de213d782" name="af46ee290c63487e8673d785de213d782"></a>
@@ -178,6 +195,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Segment flags (PF_R, PF_W, PF_X). </p>
 
 </div>
 </div>
@@ -193,6 +212,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Size in memory (zero-padded if &gt; filesz). </p>
+
 </div>
 </div>
 <a id="ad191c47d52ddc17427621f2e8c0c8c82" name="ad191c47d52ddc17427621f2e8c0c8c82"></a>
@@ -206,6 +227,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Offset in file. </p>
 
 </div>
 </div>
@@ -221,6 +244,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Physical address (usually same as vaddr). </p>
+
 </div>
 </div>
 <a id="a9f9c365dd6d8b004fc31f5144b1bfb51" name="a9f9c365dd6d8b004fc31f5144b1bfb51"></a>
@@ -235,6 +260,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Segment type (PT_NULL, PT_LOAD, PT_DYNAMIC, etc.). </p>
+
 </div>
 </div>
 <a id="abd51ed754a6243b59f8e68f4602ce421" name="abd51ed754a6243b59f8e68f4602ce421"></a>
@@ -248,6 +275,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Virtual address to load at. </p>
 
 </div>
 </div>

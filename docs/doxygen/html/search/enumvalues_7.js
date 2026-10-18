@@ -1,4 +1,19 @@
 var searchData=
 [
-  ['gettime_0',['GETTIME',['../namespacekernel_1_1time.html#ab13778b383b7889160470c87141ea20aa319e8770e4375709d8a4907b0faa6754',1,'kernel::time']]]
+  ['gdt_5fcode_0',['GDT_CODE',['../namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82da98d5ca50126cfb3d9fbc608f7ab62114',1,'arch']]],
+  ['gdt_5fdata_1',['GDT_DATA',['../namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82dabecbf292069d1e4494e9bdbfc6fe123d',1,'arch']]],
+  ['gdt_5fnull_2',['GDT_NULL',['../namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82da031732b849e8057f88ccacff915c5e79',1,'arch']]],
+  ['gdt_5ftss_3',['GDT_TSS',['../namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82daf5853cfae719c6ccb213bd0bc7f4d139',1,'arch']]],
+  ['gdt_5fuser_5fcode_4',['GDT_USER_CODE',['../namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82da663cfbf1d8263fc2ae114d4321d7463f',1,'arch']]],
+  ['gdt_5fuser_5fdata_5',['GDT_USER_DATA',['../namespacearch.html#aef6b9ecac6af5a008c1f2954f4e2b82dae370b47e9270b688bf49eea26eb8dffd',1,'arch']]],
+  ['generic_5fcounter_6',['GENERIC_COUNTER',['../namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1a7159c74a0b8e9c1551d63fc310c163fe',1,'arch']]],
+  ['get_5faffinity_7',['GET_AFFINITY',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a7d211c51a7949d5c34fafea8643f8fb7',1,'kernel']]],
+  ['get_5fticks_8',['GET_TICKS',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a83e990574e4601b663d42b05121bf312',1,'kernel']]],
+  ['getpid_9',['GETPID',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a27beb5c4ac5e1d44c9a9c48260a86043',1,'kernel']]],
+  ['getrandom_10',['GETRANDOM',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a28cffe05a3dce6d9d9afa6675f1837a7',1,'kernel']]],
+  ['getrlimit_11',['GETRLIMIT',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aaf7ecf75b39da3b49d57d40ce7b0171a',1,'kernel']]],
+  ['gettime_12',['GETTIME',['../namespacekernel_1_1time.html#ab13778b383b7889160470c87141ea20aa319e8770e4375709d8a4907b0faa6754',1,'kernel::time']]],
+  ['gettod_13',['GETTOD',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270acff1e0f0bef6d93db592185f3f3d2413',1,'kernel']]],
+  ['gp_5ffault_14',['GP_FAULT',['../namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a3b33a94cc0376965dcbbf4f180378f32',1,'arch']]],
+  ['grant_15',['GRANT',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ad9fdc8f875b86df6d7a2f5b2aece1ef2',1,'kernel::cap']]]
 ];

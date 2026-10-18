@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__hr__cloc
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="cpuid_8hpp_source.html">kernel/arch/cpuid.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for test_hr_clock.cpp:</div>
@@ -139,13 +141,14 @@ Functions</h2></td></tr>
 <tr class="memitem:a9480a860a3d8f07af13dfd1181b7746a" id="r_a9480a860a3d8f07af13dfd1181b7746a"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a9480a860a3d8f07af13dfd1181b7746a">JARVIS_TEST</a> (hrt_active_source_valid, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a192beb3ebda9c924b2b05a738cd95918" id="r_a192beb3ebda9c924b2b05a738cd95918"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a192beb3ebda9c924b2b05a738cd95918">JARVIS_TEST</a> (hrt_test_ticks_determinism, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a7e4e681c043771a384858e165cdc6628" id="r_a7e4e681c043771a384858e165cdc6628"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a7e4e681c043771a384858e165cdc6628">JARVIS_TEST</a> (hrt_oneshot_remaining_ns, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:ad145f503682946372327439b5dbc28ea" id="r_ad145f503682946372327439b5dbc28ea"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ad145f503682946372327439b5dbc28ea">JARVIS_TEST</a> (hrt_wall_accuracy_bound, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a449b8e4a4177f482e31f6ffd658b436b" id="r_a449b8e4a4177f482e31f6ffd658b436b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a449b8e4a4177f482e31f6ffd658b436b">register_hrt_monotonic_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>High-resolution monotonic clock tests (issue #16, v0.4.7). </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a9480a860a3d8f07af13dfd1181b7746a" name="a9480a860a3d8f07af13dfd1181b7746a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9480a860a3d8f07af13dfd1181b7746a">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a9480a860a3d8f07af13dfd1181b7746a">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -172,7 +175,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="aff4a8b0b5ea7873e7f8459c70874d485" name="aff4a8b0b5ea7873e7f8459c70874d485"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aff4a8b0b5ea7873e7f8459c70874d485">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aff4a8b0b5ea7873e7f8459c70874d485">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -189,11 +192,17 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__hr__clock_8cpp_aff4a8b0b5ea7873e7f8459c70874d485_cgraph.png" border="0" usemap="#atest__hr__clock_8cpp_aff4a8b0b5ea7873e7f8459c70874d485_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
 <a id="a1f8e3e4c99eabde57eb369911bd2d2d3" name="a1f8e3e4c99eabde57eb369911bd2d2d3"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1f8e3e4c99eabde57eb369911bd2d2d3">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f8e3e4c99eabde57eb369911bd2d2d3">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -210,11 +219,17 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__hr__clock_8cpp_a1f8e3e4c99eabde57eb369911bd2d2d3_cgraph.png" border="0" usemap="#atest__hr__clock_8cpp_a1f8e3e4c99eabde57eb369911bd2d2d3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
 
 </div>
 </div>
 <a id="a7e4e681c043771a384858e165cdc6628" name="a7e4e681c043771a384858e165cdc6628"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7e4e681c043771a384858e165cdc6628">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a7e4e681c043771a384858e165cdc6628">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -235,13 +250,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__hr__clock_8cpp_a7e4e681c043771a384858e165cdc6628_cgraph.png" border="0" usemap="#atest__hr__clock_8cpp_a7e4e681c043771a384858e165cdc6628_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
 </div>
 <a id="a192beb3ebda9c924b2b05a738cd95918" name="a192beb3ebda9c924b2b05a738cd95918"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a192beb3ebda9c924b2b05a738cd95918">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a192beb3ebda9c924b2b05a738cd95918">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -258,6 +273,39 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__hr__clock_8cpp_a192beb3ebda9c924b2b05a738cd95918_cgraph.png" border="0" usemap="#atest__hr__clock_8cpp_a192beb3ebda9c924b2b05a738cd95918_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
+
+</div>
+</div>
+<a id="ad145f503682946372327439b5dbc28ea" name="ad145f503682946372327439b5dbc28ea"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad145f503682946372327439b5dbc28ea">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/6]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">hrt_wall_accuracy_bound</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__hr__clock_8cpp_ad145f503682946372327439b5dbc28ea_cgraph.png" border="0" usemap="#atest__hr__clock_8cpp_ad145f503682946372327439b5dbc28ea_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
 
 </div>
 </div>
@@ -279,7 +327,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__hr__clock_8cpp_a449b8e4a4177f482e31f6ffd658b436b_cgraph.png" border="0" usemap="#atest__hr__clock_8cpp_a449b8e4a4177f482e31f6ffd658b436b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 7 -->
 </div>
 
 </div>

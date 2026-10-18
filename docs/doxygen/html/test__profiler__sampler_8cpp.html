@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -151,7 +151,7 @@ Functions</h2></td></tr>
 <div class="textblock"><p>Sampling-profiler tests (milestone v0.4.10 issue #129): the in-kernel <a class="el" href="class_sampler.html">Sampler</a> API had no test — it was exercised only by <span class="tt">make profile-class</span>, which is not a test class. </p>
 <dl class="section note"><dt>Note</dt><dd>Why this matters beyond coverage: the sampler is initialised and ENABLED unconditionally at boot (<a class="el" href="kernel_8cpp.html">kernel.cpp</a>:933-935, no CONFIG_DEBUG gate) and <span class="tt">record_sample()</span> runs inside the timer ISR (<a class="el" href="x86__64_2hal_2timer_8cpp.html" title="PIT (Programmable Interval Timer) driver — generates periodic ticks and calibrates the TSC.">hal/timer.cpp</a>:100) in every build. A bounds or ring-wrap bug is therefore an interrupt-path bug in production, not a dead diagnostic. </dd>
 <dd>
-Determinism: <span class="tt">record_sample()</span> is also driven by the timer ISR, so every measurement runs inside an arch::IrqGuard (scheduler frozen) and starts from <span class="tt">clear()</span> (which resets the sample sequence, so the rate gate is reproducible). Each test restores the boot state (enabled, rate 10, cleared) BEFORE its first assertion, so an assertion early-return can never leave the profiler disabled. </dd></dl>
+Determinism: <span class="tt">record_sample()</span> is also driven by the timer ISR, so every measurement runs inside an <a class="el" href="classarch_1_1_irq_guard.html" title="RAII guard that disables interrupts on construction and restores the previous interrupt state on dest...">arch::IrqGuard</a> (scheduler frozen) and starts from <span class="tt">clear()</span> (which resets the sample sequence, so the rate gate is reproducible). Each test restores the boot state (enabled, rate 10, cleared) BEFORE its first assertion, so an assertion early-return can never leave the profiler disabled. </dd></dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a21ab1b39bd319c9f14dfccdc2052dbb2" name="a21ab1b39bd319c9f14dfccdc2052dbb2"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a21ab1b39bd319c9f14dfccdc2052dbb2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/6]</span></h2>

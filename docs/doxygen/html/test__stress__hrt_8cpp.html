@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -150,7 +150,7 @@ Functions</h2></td></tr>
 <div class="textblock"><p>Hard real-time measurement class (issue #101). </p>
 <p>The class boots QEMU with <span class="tt">-icount shift=0,<a class="el" href="time_8c.html#a69c97039c9ec10a30e5edbdf365e3bbd">sleep</a>=off</span> (see Makefile QEMU_ICOUNT, class-scoped to <span class="tt">stress_hrt</span>/<span class="tt">hrt</span>), so in-kernel rdtsc readings are virtualized instruction-count timestamps. The tests here verify that NexIOS meets hard time criteria under synthetic stress:</p><ul>
 <li><span class="tt">stress_hrt_rdtsc_baseline</span> — rdtsc virtualization sanity canary.</li>
-<li><span class="tt">stress_hrt_ipc_latency_hard_bound</span> — IPC send_sync roundtrip latency of a high-priority RT task measured under a low-priority memory/IPC hammerer, asserted against RELATIVE bounds derived from a measured baseline (never bare absolute cycle constants — they vary across QEMU/ TCG versions). Bound philosophy mirrors bench_jitter / syscall-fastpath: stress_avg &lt;= base_avg * K_AVG_RATIO (or ABS_FLOOR), p95 with headroom, plus a PATHOLOGICAL_CAP wedge detector that only fires on a wedged scheduler. </li>
+<li><span class="tt">stress_hrt_ipc_latency_hard_bound</span> — <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> send_sync roundtrip latency of a high-priority RT task measured under a low-priority memory/IPC hammerer, asserted against RELATIVE bounds derived from a measured baseline (never bare absolute cycle constants — they vary across QEMU/ TCG versions). Bound philosophy mirrors bench_jitter / syscall-fastpath: stress_avg &lt;= base_avg * K_AVG_RATIO (or ABS_FLOOR), p95 with headroom, plus a PATHOLOGICAL_CAP wedge detector that only fires on a wedged scheduler. </li>
 </ul>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="ad84e095e1def9741aa7dfd968c680e9c" name="ad84e095e1def9741aa7dfd968c680e9c"></a>

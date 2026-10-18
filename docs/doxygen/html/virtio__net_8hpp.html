@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,168 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__net_8h
 
 <p>Virtio-net NIC driver — modern (Virtio 1.0) PCI transport.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="virtio_8hpp_source.html">kernel/arch/virtio.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="net_8hpp_source.html">kernel/net/net.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="irq__spinlock__guard_8hpp_source.html">kernel/sync/irq_spinlock_guard.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for virtio_net.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="virtio__net_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2driver_2virtio__net_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="virtio__net_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2driver_2virtio__net_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="virtio__net_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Anet_3A_3AVirtioNetHdr" id="r_kernel_3A_3Anet_3A_3AVirtioNetHdr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1net_1_1_virtio_net_hdr.html">kernel::net::VirtioNetHdr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio-net header (prepended to each packet by the device).  <a href="structkernel_1_1net_1_1_virtio_net_hdr.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Anet_3A_3AVirtioNetDevice" id="r_kernel_3A_3Anet_3A_3AVirtioNetDevice"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1net_1_1_virtio_net_device.html">kernel::net::VirtioNetDevice</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio-net NIC driver state.  <a href="structkernel_1_1net_1_1_virtio_net_device.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Anet_3A_3AIpv4Addr" id="r_kernel_3A_3Anet_3A_3AIpv4Addr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1net_1_1_ipv4_addr.html">kernel::net::Ipv4Addr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPv4 address (4 bytes, network-byte-order).  <a href="structkernel_1_1net_1_1_ipv4_addr.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Anet_3A_3AMacAddr" id="r_kernel_3A_3Anet_3A_3AMacAddr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1net_1_1_mac_addr.html">kernel::net::MacAddr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ethernet MAC address (6 bytes).  <a href="structkernel_1_1net_1_1_mac_addr.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Anet_3A_3ANic" id="r_kernel_3A_3Anet_3A_3ANic"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1net_1_1_nic.html">kernel::net::Nic</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">NIC (Network Interface Card) abstraction exposed to the network stack.  <a href="structkernel_1_1net_1_1_nic.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Anet" id="r_kernel_3A_3Anet"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html">kernel::net</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:afe0409339432dc6c20999f9546e4f831" id="r_afe0409339432dc6c20999f9546e4f831"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1net_1_1_virtio_net_hdr.html">kernel::net::VirtioNetHdr</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#afe0409339432dc6c20999f9546e4f831">kernel::net::__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:ac79735cf719349d1a7d42f5c788b1406" id="r_ac79735cf719349d1a7d42f5c788b1406"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406">kernel::net::virtio_net_probe</a> (<a class="el" href="structnet_1_1_nic.html">Nic</a> &amp;nic)</td></tr>
+<tr class="memitem:ad963f2495bdf069ba09023e4b584c4b2" id="r_ad963f2495bdf069ba09023e4b584c4b2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#ad963f2495bdf069ba09023e4b584c4b2">kernel::net::virtio_net_poll</a> (uint8_t *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> &amp;len)</td></tr>
+<tr class="memitem:af8019b1cd8dcf090045eb65e97779e2b" id="r_af8019b1cd8dcf090045eb65e97779e2b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#af8019b1cd8dcf090045eb65e97779e2b">kernel::net::virtio_net_destroy</a> ()</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:aa2585d779da0ab21273a8d92de9a0ebe" id="r_aa2585d779da0ab21273a8d92de9a0ebe"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#aa2585d779da0ab21273a8d92de9a0ebe">flags</a></td></tr>
+<tr class="memitem:a93accb5ba722083c10375148df23f5ba" id="r_a93accb5ba722083c10375148df23f5ba"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a93accb5ba722083c10375148df23f5ba">gso_type</a></td></tr>
+<tr class="memitem:a402d45c9147f75825a11b609cc79f869" id="r_a402d45c9147f75825a11b609cc79f869"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a402d45c9147f75825a11b609cc79f869">hdr_len</a></td></tr>
+<tr class="memitem:a8bda46892fe42bfda4f9aa31c80a5ccc" id="r_a8bda46892fe42bfda4f9aa31c80a5ccc"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a8bda46892fe42bfda4f9aa31c80a5ccc">gso_size</a></td></tr>
+<tr class="memitem:a254de678b4a6f6750124b1eb74cc71e5" id="r_a254de678b4a6f6750124b1eb74cc71e5"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a254de678b4a6f6750124b1eb74cc71e5">csum_start</a></td></tr>
+<tr class="memitem:a7273480cee9c930381e150fa88a4a33e" id="r_a7273480cee9c930381e150fa88a4a33e"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a7273480cee9c930381e150fa88a4a33e">csum_offset</a></td></tr>
+<tr class="memitem:a0bf152e518744753fff6e6bc6c7b7f9e" id="r_a0bf152e518744753fff6e6bc6c7b7f9e"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a0bf152e518744753fff6e6bc6c7b7f9e">num_buffers</a></td></tr>
+<tr class="memitem:ad345498ecb7601f76e0af8f2b57acee1" id="r_ad345498ecb7601f76e0af8f2b57acee1"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#ad345498ecb7601f76e0af8f2b57acee1">kernel::net::VIRTIO_NET_HDR_SIZE</a> = sizeof(<a class="el" href="structkernel_1_1net_1_1_virtio_net_hdr.html">VirtioNetHdr</a>)</td></tr>
+<tr class="memitem:ad1a0583fe930593c5698468802a84868" id="r_ad1a0583fe930593c5698468802a84868"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#ad1a0583fe930593c5698468802a84868">kernel::net::VIRTIO_NET_QUEUE_RX</a> = 0</td></tr>
+<tr class="memitem:a791e8db7fbc529ecbdabdfcc31c4f859" id="r_a791e8db7fbc529ecbdabdfcc31c4f859"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#a791e8db7fbc529ecbdabdfcc31c4f859">kernel::net::VIRTIO_NET_QUEUE_TX</a> = 1</td></tr>
+<tr class="memitem:ab3a4abd2b12f76a6b17a0bb8e763bc22" id="r_ab3a4abd2b12f76a6b17a0bb8e763bc22"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1net_1_1_virtio_net_device.html">kernel::net::VirtioNetDevice</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#ab3a4abd2b12f76a6b17a0bb8e763bc22">kernel::net::__attribute__</a></td></tr>
+<tr class="memitem:a8a0e19cfd124c4121eda1a92ac391f5a" id="r_a8a0e19cfd124c4121eda1a92ac391f5a"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#a8a0e19cfd124c4121eda1a92ac391f5a">kernel::net::MAX_PACKET_SIZE</a></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Virtio-net NIC driver — modern (Virtio 1.0) PCI transport. </p>
-</div></div><!-- contents -->
+</div><a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a7273480cee9c930381e150fa88a4a33e" name="a7273480cee9c930381e150fa88a4a33e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7273480cee9c930381e150fa88a4a33e">&#9670;&#160;</a></span>csum_offset</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t csum_offset</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a254de678b4a6f6750124b1eb74cc71e5" name="a254de678b4a6f6750124b1eb74cc71e5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a254de678b4a6f6750124b1eb74cc71e5">&#9670;&#160;</a></span>csum_start</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t csum_start</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa2585d779da0ab21273a8d92de9a0ebe" name="aa2585d779da0ab21273a8d92de9a0ebe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa2585d779da0ab21273a8d92de9a0ebe">&#9670;&#160;</a></span>flags</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t flags</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8bda46892fe42bfda4f9aa31c80a5ccc" name="a8bda46892fe42bfda4f9aa31c80a5ccc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8bda46892fe42bfda4f9aa31c80a5ccc">&#9670;&#160;</a></span>gso_size</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t gso_size</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a93accb5ba722083c10375148df23f5ba" name="a93accb5ba722083c10375148df23f5ba"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a93accb5ba722083c10375148df23f5ba">&#9670;&#160;</a></span>gso_type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t gso_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a402d45c9147f75825a11b609cc79f869" name="a402d45c9147f75825a11b609cc79f869"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a402d45c9147f75825a11b609cc79f869">&#9670;&#160;</a></span>hdr_len</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t hdr_len</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0bf152e518744753fff6e6bc6c7b7f9e" name="a0bf152e518744753fff6e6bc6c7b7f9e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0bf152e518744753fff6e6bc6c7b7f9e">&#9670;&#160;</a></span>num_buffers</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t num_buffers</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

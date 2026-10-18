@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -126,7 +126,7 @@ Data Structures</h2></td></tr>
 <tr class="memitem:CSlot" id="r_CSlot"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1cap_1_1_c_slot.html">CSlot</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One slot in a <a class="el" href="classkernel_1_1cap_1_1_c_node.html" title="A capability node: a bounded table of slots. Itself a KernelObject (shared-heap class,...">CNode</a>: a strong reference (acquire()) to the target.  <a href="structkernel_1_1cap_1_1_c_slot.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Endpoint" id="r_Endpoint"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_endpoint.html">Endpoint</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A capability-gated IPC endpoint: a heap-resident message queue plus a receiver binding and badge. Shared-heap class (PipeBuffer pattern): lifetime is pinned by capability slots; <a class="el" href="classkernel_1_1cap_1_1_endpoint.html#af3270ad2831af92c117bb3d26ee727b7" title="Final teardown: detaches the receiver binding and returns the block to the MemPool.">dispose()</a> runs on the last reference.  <a href="classkernel_1_1cap_1_1_endpoint.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A capability-gated <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> endpoint: a heap-resident message queue plus a receiver binding and badge. Shared-heap class (PipeBuffer pattern): lifetime is pinned by capability slots; <a class="el" href="classkernel_1_1cap_1_1_endpoint.html#af3270ad2831af92c117bb3d26ee727b7" title="Final teardown: detaches the receiver binding and returns the block to the MemPool.">dispose()</a> runs on the last reference.  <a href="classkernel_1_1cap_1_1_endpoint.html#details">More...</a><br /></td></tr>
 <tr class="memitem:FrameCap" id="r_FrameCap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">FrameCap</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A capability-gated physical frame (or contiguous range). Owns the <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> pages it wraps: the last reference frees them via <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#a61c0c510877e83a8061a248ac229f9c9" title="Final teardown: returns every wrapped frame to the PMM and the block to the MemPool....">dispose()</a>. Shared-heap class (PipeBuffer pattern).  <a href="classkernel_1_1cap_1_1_frame_cap.html#details">More...</a><br /></td></tr>
 <tr class="memitem:FrameUserMap" id="r_FrameUserMap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_frame_user_map.html">FrameUserMap</a></td></tr>
@@ -166,31 +166,45 @@ Enumerations</h2></td></tr>
 <br />
  }</td></tr>
 <tr class="memdesc:a4bea603a315495a20341a4cc2519eb99"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capability target types (iteration-1 slice). Null = empty slot; Task/Endpoint/Frame/CNode are live targets.  <a href="#a4bea603a315495a20341a4cc2519eb99">More...</a><br /></td></tr>
-<tr class="memitem:a8b99d584dbea5c2c8a8d071e2923f5e5" id="r_a8b99d584dbea5c2c8a8d071e2923f5e5"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> : uint32_t { <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5adab68b51d572f1b802f432fa54aa580c">CAP_RIGHT_READ</a> = 1u &lt;&lt; 0
-, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5ab512d4006cb9ec087a47d414741f8327">CAP_RIGHT_WRITE</a> = 1u &lt;&lt; 1
-, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5a25cb8d45a9e8d54082778c74d1c39fbb">CAP_RIGHT_GRANT</a> = 1u &lt;&lt; 2
-, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5af0177bb4009a7a1acfdc5f6ee2ccd0f5">CAP_RIGHT_COPY</a> = 1u &lt;&lt; 3
+<tr class="memitem:a8b99d584dbea5c2c8a8d071e2923f5e5" id="r_a8b99d584dbea5c2c8a8d071e2923f5e5"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> : uint32_t { <br />
+&#160;&#160;<a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5ab50339a10e1de285ac99d4c3990b8693">NONE</a> = 0
+, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5a3466fab4975481651940ed328aa990e4">READ</a> = 1u &lt;&lt; 0
+, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5ad4b9e47f65b6e79b010582f15785867e">WRITE</a> = 1u &lt;&lt; 1
+, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5ad9fdc8f875b86df6d7a2f5b2aece1ef2">GRANT</a> = 1u &lt;&lt; 2
+, <br />
+&#160;&#160;<a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5ae8606d021da140a92c7eba8d9b8af84f">COPY</a> = 1u &lt;&lt; 3
+<br />
  }</td></tr>
-<tr class="memdesc:a8b99d584dbea5c2c8a8d071e2923f5e5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Rights bitmap, checked by the operation that consumes the cap.  <a href="#a8b99d584dbea5c2c8a8d071e2923f5e5">More...</a><br /></td></tr>
+<tr class="memdesc:a8b99d584dbea5c2c8a8d071e2923f5e5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Rights bitmap, checked by the operation that consumes the cap. Scoped enum (issue #348-D): combine with | test with &amp;, strip with &amp; ~. Convert at u32 boundaries via <a class="el" href="namespacekernel.html#a17e67ea7443b3545f273cbe78f7c1a12">kernel::to_underlying</a>.  <a href="#a8b99d584dbea5c2c8a8d071e2923f5e5">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:af858a03da6c7b9cd2bcce101005847c8" id="r_af858a03da6c7b9cd2bcce101005847c8"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="#af858a03da6c7b9cd2bcce101005847c8">lookup</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *cspace, uint64_t handle, <a class="el" href="#a4bea603a315495a20341a4cc2519eb99">CapType</a> want, uint32_t need_rights) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:af858a03da6c7b9cd2bcce101005847c8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Looks up <code class="param">handle</code> in <code class="param">cspace</code> and returns a PREFIX-reference (target-&gt;acquire() already taken) if the slot is occupied, matches <code class="param">want</code>, carries <code class="param">need_rights</code> and the generation matches.  <br /></td></tr>
+<tr class="memitem:ad15ee7547df28d841aa4f7bddbe9e227" id="r_ad15ee7547df28d841aa4f7bddbe9e227"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ad15ee7547df28d841aa4f7bddbe9e227">lookup</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *cspace, uint64_t handle, <a class="el" href="#a4bea603a315495a20341a4cc2519eb99">CapType</a> want, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> need_rights) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ad15ee7547df28d841aa4f7bddbe9e227"><td class="mdescLeft">&#160;</td><td class="mdescRight">Looks up <code class="param">handle</code> in <code class="param">cspace</code> and returns a PREFIX-reference (target-&gt;acquire() already taken) if the slot is occupied, matches <code class="param">want</code>, carries <code class="param">need_rights</code> and the generation matches.  <br /></td></tr>
 <tr class="memitem:a4687c0de42566299b68cafc47996d1c6" id="r_a4687c0de42566299b68cafc47996d1c6"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4687c0de42566299b68cafc47996d1c6">revoke</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *cspace, uint64_t handle) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a4687c0de42566299b68cafc47996d1c6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Revokes the capability at <code class="param">handle</code> in <code class="param">cspace</code>. Idempotent.  <br /></td></tr>
 <tr class="memitem:a9a203e34fee2dd3bb9109e54e6b3a5f9" id="r_a9a203e34fee2dd3bb9109e54e6b3a5f9"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9a203e34fee2dd3bb9109e54e6b3a5f9">occupied_count</a> (const <a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *cspace) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a9a203e34fee2dd3bb9109e54e6b3a5f9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of occupied slots (debug/leak audit helper).  <br /></td></tr>
-<tr class="memitem:af9d875099d37b0b4bc14b9956a353dd5" id="r_af9d875099d37b0b4bc14b9956a353dd5"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#af9d875099d37b0b4bc14b9956a353dd5">do_copy_pinned</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *src, uint64_t src_handle, <a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *dst, uint32_t rights, uint32_t *gen_out=nullptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:af9d875099d37b0b4bc14b9956a353dd5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Core of copy/grant: pins the source slot target, then installs it into <code class="param">dst</code> with <code class="param">rights</code>. The install takes its own acquire(); the pin taken here is released on both success and failure. Forwards an optional generation out-slot to the dst install (issue #266: lets syscall returns encode with no TOCTOU).  <br /></td></tr>
+<tr class="memitem:a50c781928807139bd8c7827bddcf12ba" id="r_a50c781928807139bd8c7827bddcf12ba"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a50c781928807139bd8c7827bddcf12ba">do_copy_pinned</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *src, uint64_t src_handle, <a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *dst, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rights, uint32_t *gen_out=nullptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a50c781928807139bd8c7827bddcf12ba"><td class="mdescLeft">&#160;</td><td class="mdescRight">Core of copy/grant: pins the source slot target, then installs it into <code class="param">dst</code> with <code class="param">rights</code>. The install takes its own acquire(); the pin taken here is released on both success and failure. Forwards an optional generation out-slot to the dst install (issue #266: lets syscall returns encode with no TOCTOU).  <br /></td></tr>
 <tr class="memitem:afdd149e43195d36c7cd1534d6aacfdf5" id="r_afdd149e43195d36c7cd1534d6aacfdf5"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#afdd149e43195d36c7cd1534d6aacfdf5">copy</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *src, uint64_t src_handle, <a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *dst, uint32_t *gen_out=nullptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:afdd149e43195d36c7cd1534d6aacfdf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capability lifecycle primitives (task context only). All return -1 on failure (invalid handle, wrong type, missing rights, revoked target, full destination). On success they install exactly one new slot and return its index.  <br /></td></tr>
 <tr class="memitem:a96ba6fb98451dc81901d2aa9dc571113" id="r_a96ba6fb98451dc81901d2aa9dc571113"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a96ba6fb98451dc81901d2aa9dc571113">grant</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *src, uint64_t src_handle, <a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *dst, uint32_t *gen_out=nullptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:a96ba6fb98451dc81901d2aa9dc571113"><td class="mdescLeft">&#160;</td><td class="mdescRight">Grants the capability at <code class="param">src_handle</code> of <code class="param">src</code> into <code class="param">dst</code>. Requires CAP_RIGHT_GRANT on the source slot; clears the source GRANT right after use (mint-once semantics).  <br /></td></tr>
-<tr class="memitem:a62d2ecebb212c2ab730b0646c9a96ff5" id="r_a62d2ecebb212c2ab730b0646c9a96ff5"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a62d2ecebb212c2ab730b0646c9a96ff5">mint</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *src, uint64_t src_handle, <a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *dst, uint32_t rights_mask, uint32_t badge, uint32_t *gen_out=nullptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:a62d2ecebb212c2ab730b0646c9a96ff5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copies the capability with a reduced rights mask and, for endpoints, a new badge.  <br /></td></tr>
-<tr class="memitem:af3d96f289f3d94dab69c6fdf344a93d9" id="r_af3d96f289f3d94dab69c6fdf344a93d9"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#af3d96f289f3d94dab69c6fdf344a93d9">retype</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *cspace, uint64_t untyped_handle, <a class="el" href="#a4bea603a315495a20341a4cc2519eb99">CapType</a> target_type, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> size, uint32_t rights, uint32_t *gen_out=nullptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:af3d96f289f3d94dab69c6fdf344a93d9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Retypes the Untyped at <code class="param">untyped_handle</code> in <code class="param">cspace</code> into a new capability of <code class="param">target_type</code>, installed into <code class="param">cspace</code>. Supports Frame targets with a sub-range carve (issue #1): <code class="param">size</code> may be smaller than the Untyped's region (PAGE-aligned, prefix-only); the remainder is installed as a child Untyped in the same <code class="param">cspace</code> and is itself retypable (exhaustion model). size == ut-&gt;size is the exact-size degenerate case (no child). Non-destructive on validation/capacity failure; fail-closed after the guard is claimed.  <br /></td></tr>
+<tr class="memdesc:a96ba6fb98451dc81901d2aa9dc571113"><td class="mdescLeft">&#160;</td><td class="mdescRight">Grants the capability at <code class="param">src_handle</code> of <code class="param">src</code> into <code class="param">dst</code>. Requires <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5ad9fdc8f875b86df6d7a2f5b2aece1ef2" title="may grant (copy into another CSpace)">CapRights::GRANT</a> on the source slot; clears the source GRANT right after use (mint-once semantics).  <br /></td></tr>
+<tr class="memitem:a9b71329b534ff0f5ed5aed0f7aa6b54c" id="r_a9b71329b534ff0f5ed5aed0f7aa6b54c"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a9b71329b534ff0f5ed5aed0f7aa6b54c">mint</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *src, uint64_t src_handle, <a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *dst, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rights_mask, uint32_t badge, uint32_t *gen_out=nullptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a9b71329b534ff0f5ed5aed0f7aa6b54c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copies the capability with a reduced rights mask and, for endpoints, a new badge.  <br /></td></tr>
+<tr class="memitem:ac4f7bad9f77ba829b23df3c4c1ae586e" id="r_ac4f7bad9f77ba829b23df3c4c1ae586e"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#ac4f7bad9f77ba829b23df3c4c1ae586e">retype</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *cspace, uint64_t untyped_handle, <a class="el" href="#a4bea603a315495a20341a4cc2519eb99">CapType</a> target_type, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> size, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rights, uint32_t *gen_out=nullptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ac4f7bad9f77ba829b23df3c4c1ae586e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Retypes the Untyped at <code class="param">untyped_handle</code> in <code class="param">cspace</code> into a new capability of <code class="param">target_type</code>, installed into <code class="param">cspace</code>. Supports Frame targets with a sub-range carve (issue #1): <code class="param">size</code> may be smaller than the Untyped's region (PAGE-aligned, prefix-only); the remainder is installed as a child Untyped in the same <code class="param">cspace</code> and is itself retypable (exhaustion model). size == ut-&gt;size is the exact-size degenerate case (no child). Non-destructive on validation/capacity failure; fail-closed after the guard is claimed.  <br /></td></tr>
+<tr class="memitem:a74affb6e037d566896788022877979d3" id="r_a74affb6e037d566896788022877979d3"><td class="memItemLeft">constexpr <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a>&#160;</td><td class="memItemRight"><a class="el" href="#a74affb6e037d566896788022877979d3">operator|</a> (<a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> lhs, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a74affb6e037d566896788022877979d3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitwise-or for capability rights.  <br /></td></tr>
+<tr class="memitem:a221802bcb2a2842eb3d501497ede6f76" id="r_a221802bcb2a2842eb3d501497ede6f76"><td class="memItemLeft">constexpr <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a>&#160;</td><td class="memItemRight"><a class="el" href="#a221802bcb2a2842eb3d501497ede6f76">operator&amp;</a> (<a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> lhs, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a221802bcb2a2842eb3d501497ede6f76"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitwise-and for capability rights (test/mask).  <br /></td></tr>
+<tr class="memitem:abdce64a9380b5d2ab00e18a3bf8ceeff" id="r_abdce64a9380b5d2ab00e18a3bf8ceeff"><td class="memItemLeft">constexpr <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a>&#160;</td><td class="memItemRight"><a class="el" href="#abdce64a9380b5d2ab00e18a3bf8ceeff">operator~</a> (<a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:abdce64a9380b5d2ab00e18a3bf8ceeff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitwise-not for capability rights (mask-out).  <br /></td></tr>
+<tr class="memitem:a4909907acf81bf83e14f95d1e1f32cf1" id="r_a4909907acf81bf83e14f95d1e1f32cf1"><td class="memItemLeft">constexpr <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a4909907acf81bf83e14f95d1e1f32cf1">operator|=</a> (<a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp;lhs, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a4909907acf81bf83e14f95d1e1f32cf1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Or-assign for capability rights.  <br /></td></tr>
+<tr class="memitem:a115e9152b4f35e4e2b76dde6d79bb490" id="r_a115e9152b4f35e4e2b76dde6d79bb490"><td class="memItemLeft">constexpr <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a115e9152b4f35e4e2b76dde6d79bb490">operator&amp;=</a> (<a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp;lhs, <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a115e9152b4f35e4e2b76dde6d79bb490"><td class="mdescLeft">&#160;</td><td class="mdescRight">And-assign for capability rights.  <br /></td></tr>
 <tr class="memitem:ade55928be04f23829263375da7b1cb45" id="r_ade55928be04f23829263375da7b1cb45"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ade55928be04f23829263375da7b1cb45">cap_slot_bits</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ade55928be04f23829263375da7b1cb45"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits allocated to the slot index in a capability handle. Derived from CONFIG_CSLOT_COUNT (power of two preferred).  <br /></td></tr>
 <tr class="memitem:ad0673cef188c336d042b38b4d31a68e4" id="r_ad0673cef188c336d042b38b4d31a68e4"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad0673cef188c336d042b38b4d31a68e4">encode_handle</a> (uint32_t cspace_id, uint32_t slot_index, uint32_t gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
@@ -219,22 +233,32 @@ Variables</h2></td></tr>
 
 <div class="memitem">
 <div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">kernel::cap::CapRights</a> : uint32_t</td>
+          <td class="memname">enum class <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">kernel::cap::CapRights</a> : uint32_t</td>
         </tr>
       </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
 
-<p>Rights bitmap, checked by the operation that consumes the cap. </p>
+<p>Rights bitmap, checked by the operation that consumes the cap. Scoped enum (issue #348-D): combine with | test with &amp;, strip with &amp; ~. Convert at u32 boundaries via <a class="el" href="namespacekernel.html#a17e67ea7443b3545f273cbe78f7c1a12">kernel::to_underlying</a>. </p>
 <table class="fieldtable">
-<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a8b99d584dbea5c2c8a8d071e2923f5e5adab68b51d572f1b802f432fa54aa580c" name="a8b99d584dbea5c2c8a8d071e2923f5e5adab68b51d572f1b802f432fa54aa580c"></a>CAP_RIGHT_READ&#160;</td><td class="fielddoc"><p>endpoint recv / frame read-mapping </p>
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a8b99d584dbea5c2c8a8d071e2923f5e5ab50339a10e1de285ac99d4c3990b8693" name="a8b99d584dbea5c2c8a8d071e2923f5e5ab50339a10e1de285ac99d4c3990b8693"></a>NONE&#160;</td><td class="fielddoc"><p>no rights. </p>
 </td></tr>
-<tr><td class="fieldname"><a id="a8b99d584dbea5c2c8a8d071e2923f5e5ab512d4006cb9ec087a47d414741f8327" name="a8b99d584dbea5c2c8a8d071e2923f5e5ab512d4006cb9ec087a47d414741f8327"></a>CAP_RIGHT_WRITE&#160;</td><td class="fielddoc"><p>endpoint send / frame write-mapping </p>
+<tr><td class="fieldname"><a id="a8b99d584dbea5c2c8a8d071e2923f5e5a3466fab4975481651940ed328aa990e4" name="a8b99d584dbea5c2c8a8d071e2923f5e5a3466fab4975481651940ed328aa990e4"></a>READ&#160;</td><td class="fielddoc"><p>endpoint recv / frame read-mapping </p>
 </td></tr>
-<tr><td class="fieldname"><a id="a8b99d584dbea5c2c8a8d071e2923f5e5a25cb8d45a9e8d54082778c74d1c39fbb" name="a8b99d584dbea5c2c8a8d071e2923f5e5a25cb8d45a9e8d54082778c74d1c39fbb"></a>CAP_RIGHT_GRANT&#160;</td><td class="fielddoc"><p>may grant (copy into another CSpace) </p>
+<tr><td class="fieldname"><a id="a8b99d584dbea5c2c8a8d071e2923f5e5ad4b9e47f65b6e79b010582f15785867e" name="a8b99d584dbea5c2c8a8d071e2923f5e5ad4b9e47f65b6e79b010582f15785867e"></a>WRITE&#160;</td><td class="fielddoc"><p>endpoint send / frame write-mapping </p>
 </td></tr>
-<tr><td class="fieldname"><a id="a8b99d584dbea5c2c8a8d071e2923f5e5af0177bb4009a7a1acfdc5f6ee2ccd0f5" name="a8b99d584dbea5c2c8a8d071e2923f5e5af0177bb4009a7a1acfdc5f6ee2ccd0f5"></a>CAP_RIGHT_COPY&#160;</td><td class="fielddoc"><p>may copy (duplicate into own CSpace) </p>
+<tr><td class="fieldname"><a id="a8b99d584dbea5c2c8a8d071e2923f5e5ad9fdc8f875b86df6d7a2f5b2aece1ef2" name="a8b99d584dbea5c2c8a8d071e2923f5e5ad9fdc8f875b86df6d7a2f5b2aece1ef2"></a>GRANT&#160;</td><td class="fielddoc"><p>may grant (copy into another CSpace) </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a8b99d584dbea5c2c8a8d071e2923f5e5ae8606d021da140a92c7eba8d9b8af84f" name="a8b99d584dbea5c2c8a8d071e2923f5e5ae8606d021da140a92c7eba8d9b8af84f"></a>COPY&#160;</td><td class="fielddoc"><p>may copy (duplicate into own CSpace) </p>
 </td></tr>
 </table>
 
@@ -364,8 +388,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="af9d875099d37b0b4bc14b9956a353dd5" name="af9d875099d37b0b4bc14b9956a353dd5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af9d875099d37b0b4bc14b9956a353dd5">&#9670;&#160;</a></span>do_copy_pinned()</h2>
+<a id="a50c781928807139bd8c7827bddcf12ba" name="a50c781928807139bd8c7827bddcf12ba"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a50c781928807139bd8c7827bddcf12ba">&#9670;&#160;</a></span>do_copy_pinned()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -391,7 +415,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>rights</em></span>, </td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>rights</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -410,7 +434,7 @@ Here is the call graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="namespacekernel_1_1cap_af9d875099d37b0b4bc14b9956a353dd5_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_af9d875099d37b0b4bc14b9956a353dd5_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="namespacekernel_1_1cap_a50c781928807139bd8c7827bddcf12ba_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_a50c781928807139bd8c7827bddcf12ba_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 1 -->
 </div>
 
@@ -531,7 +555,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Grants the capability at <code class="param">src_handle</code> of <code class="param">src</code> into <code class="param">dst</code>. Requires CAP_RIGHT_GRANT on the source slot; clears the source GRANT right after use (mint-once semantics). </p>
+<p>Grants the capability at <code class="param">src_handle</code> of <code class="param">src</code> into <code class="param">dst</code>. Requires <a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5ad9fdc8f875b86df6d7a2f5b2aece1ef2" title="may grant (copy into another CSpace)">CapRights::GRANT</a> on the source slot; clears the source GRANT right after use (mint-once semantics). </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">gen_out</td><td>when non-null, receives the new destination slot's generation (issue #266; written inside the install lock). </td></tr>
@@ -628,8 +652,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="af858a03da6c7b9cd2bcce101005847c8" name="af858a03da6c7b9cd2bcce101005847c8"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af858a03da6c7b9cd2bcce101005847c8">&#9670;&#160;</a></span>lookup()</h2>
+<a id="ad15ee7547df28d841aa4f7bddbe9e227" name="ad15ee7547df28d841aa4f7bddbe9e227"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad15ee7547df28d841aa4f7bddbe9e227">&#9670;&#160;</a></span>lookup()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -655,7 +679,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>need_rights</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>need_rights</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -670,14 +694,14 @@ Here is the call graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="namespacekernel_1_1cap_af858a03da6c7b9cd2bcce101005847c8_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_af858a03da6c7b9cd2bcce101005847c8_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="namespacekernel_1_1cap_ad15ee7547df28d841aa4f7bddbe9e227_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_ad15ee7547df28d841aa4f7bddbe9e227_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 4 -->
 </div>
 
 </div>
 </div>
-<a id="a62d2ecebb212c2ab730b0646c9a96ff5" name="a62d2ecebb212c2ab730b0646c9a96ff5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a62d2ecebb212c2ab730b0646c9a96ff5">&#9670;&#160;</a></span>mint()</h2>
+<a id="a9b71329b534ff0f5ed5aed0f7aa6b54c" name="a9b71329b534ff0f5ed5aed0f7aa6b54c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9b71329b534ff0f5ed5aed0f7aa6b54c">&#9670;&#160;</a></span>mint()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -703,7 +727,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>rights_mask</em></span>, </td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>rights_mask</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -733,7 +757,7 @@ Here is the call graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="namespacekernel_1_1cap_a62d2ecebb212c2ab730b0646c9a96ff5_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_a62d2ecebb212c2ab730b0646c9a96ff5_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="namespacekernel_1_1cap_a9b71329b534ff0f5ed5aed0f7aa6b54c_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_a9b71329b534ff0f5ed5aed0f7aa6b54c_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 5 -->
 </div>
 
@@ -766,8 +790,177 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="af3d96f289f3d94dab69c6fdf344a93d9" name="af3d96f289f3d94dab69c6fdf344a93d9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af3d96f289f3d94dab69c6fdf344a93d9">&#9670;&#160;</a></span>retype()</h2>
+<a id="a221802bcb2a2842eb3d501497ede6f76" name="a221802bcb2a2842eb3d501497ede6f76"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a221802bcb2a2842eb3d501497ede6f76">&#9670;&#160;</a></span>operator&amp;()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> kernel::cap::operator&amp; </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>lhs</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>rhs</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel nodiscard">nodiscard</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Bitwise-and for capability rights (test/mask). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1cap_a221802bcb2a2842eb3d501497ede6f76_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_a221802bcb2a2842eb3d501497ede6f76_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
+
+</div>
+</div>
+<a id="a115e9152b4f35e4e2b76dde6d79bb490" name="a115e9152b4f35e4e2b76dde6d79bb490"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a115e9152b4f35e4e2b76dde6d79bb490">&#9670;&#160;</a></span>operator&amp;=()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp; kernel::cap::operator&amp;= </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>lhs</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>rhs</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>And-assign for capability rights. </p>
+
+</div>
+</div>
+<a id="a74affb6e037d566896788022877979d3" name="a74affb6e037d566896788022877979d3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a74affb6e037d566896788022877979d3">&#9670;&#160;</a></span>operator|()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> kernel::cap::operator| </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>lhs</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>rhs</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel nodiscard">nodiscard</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Bitwise-or for capability rights. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1cap_a74affb6e037d566896788022877979d3_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_a74affb6e037d566896788022877979d3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a id="a4909907acf81bf83e14f95d1e1f32cf1" name="a4909907acf81bf83e14f95d1e1f32cf1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4909907acf81bf83e14f95d1e1f32cf1">&#9670;&#160;</a></span>operator|=()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp; kernel::cap::operator|= </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>lhs</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>rhs</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Or-assign for capability rights. </p>
+
+</div>
+</div>
+<a id="abdce64a9380b5d2ab00e18a3bf8ceeff" name="abdce64a9380b5d2ab00e18a3bf8ceeff"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abdce64a9380b5d2ab00e18a3bf8ceeff">&#9670;&#160;</a></span>operator~()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> kernel::cap::operator~ </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>rhs</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel nodiscard">nodiscard</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Bitwise-not for capability rights (mask-out). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1cap_abdce64a9380b5d2ab00e18a3bf8ceeff_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_abdce64a9380b5d2ab00e18a3bf8ceeff_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
+</div>
+
+</div>
+</div>
+<a id="ac4f7bad9f77ba829b23df3c4c1ae586e" name="ac4f7bad9f77ba829b23df3c4c1ae586e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac4f7bad9f77ba829b23df3c4c1ae586e">&#9670;&#160;</a></span>retype()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -798,7 +991,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>rights</em></span>, </td>
+          <td class="paramtype"><a class="el" href="#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a></td>          <td class="paramname"><span class="paramname"><em>rights</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -824,8 +1017,8 @@ Here is the call graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="namespacekernel_1_1cap_af3d96f289f3d94dab69c6fdf344a93d9_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_af3d96f289f3d94dab69c6fdf344a93d9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<div class="center"><img src="namespacekernel_1_1cap_ac4f7bad9f77ba829b23df3c4c1ae586e_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_ac4f7bad9f77ba829b23df3c4c1ae586e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -863,7 +1056,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1cap_a4687c0de42566299b68cafc47996d1c6_cgraph.png" border="0" usemap="#anamespacekernel_1_1cap_a4687c0de42566299b68cafc47996d1c6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 10 -->
 </div>
 
 </div>

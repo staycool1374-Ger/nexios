@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -133,6 +133,7 @@ Collaboration diagram for kernel::fat32::Fat32Partition:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a57051bdf82c3d3baccb4a865cba17bc6" id="r_a57051bdf82c3d3baccb4a865cba17bc6"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a57051bdf82c3d3baccb4a865cba17bc6">Fat32Partition</a> (<a class="el" href="classkernel_1_1block_1_1_block_device.html">block::BlockDevice</a> &amp;device)</td></tr>
+<tr class="memdesc:a57051bdf82c3d3baccb4a865cba17bc6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Construct a <a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html" title="A mounted FAT32 partition, backed by a BlockDevice.">Fat32Partition</a> backed by the given block device.  <br /></td></tr>
 <tr class="memitem:af72e0e26cca6fd357f0b5c82c7b0907d" id="r_af72e0e26cca6fd357f0b5c82c7b0907d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af72e0e26cca6fd357f0b5c82c7b0907d">mount</a> ()</td></tr>
 <tr class="memdesc:af72e0e26cca6fd357f0b5c82c7b0907d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Attempt to mount the device by scanning for a FAT32 partition.  <br /></td></tr>
 <tr class="memitem:a42c3db79121fafbcc79728f377a7efb2" id="r_a42c3db79121fafbcc79728f377a7efb2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a42c3db79121fafbcc79728f377a7efb2">mount_at</a> (uint64_t partition_lba)</td></tr>
@@ -191,6 +192,8 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Construct a <a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html" title="A mounted FAT32 partition, backed by a BlockDevice.">Fat32Partition</a> backed by the given block device. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -228,7 +231,9 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>true on success. The new cluster is zero-filled and marked EOF. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success. The new cluster is zero-filled and marked EOF.</dd>
+<dd>
+true on success. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -279,6 +284,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Zero-fill a cluster. </p>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -341,7 +347,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::fat32::Fat32Partition::find_free_cluster </td>
           <td>(</td>
-          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>start_cluster</em></span>, </td>
+          <td class="paramtype">uint32_t</td>          <td class="paramname"><span class="paramname"><em>start_hint</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -359,7 +365,9 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>true if found. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true if found.</dd>
+<dd>
+true if a free cluster was found. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -466,7 +474,10 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Attempt to mount the device by scanning for a FAT32 partition. </p>
-<dl class="section return"><dt>Returns</dt><dd>true if a valid FAT32 partition was found and BPB parsed. </dd></dl>
+<p>Mount by scanning the MBR for a FAT32 partition.</p>
+<dl class="section return"><dt>Returns</dt><dd>true if a valid FAT32 partition was found and BPB parsed.</dd>
+<dd>
+true if a valid FAT32 partition was found. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -492,6 +503,8 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Mount at a specific partition LBA (for mock/test use). </p>
+<p>Mount at a specific partition LBA.</p>
+<dl class="section return"><dt>Returns</dt><dd>true if the BPB at the given LBA parsed successfully. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -546,6 +559,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Read a full cluster's data. </p>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -575,6 +589,8 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Read the FAT entry for a given cluster. </p>
+<p>Read a FAT entry for a given cluster.</p>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 
 </div>
 </div>
@@ -598,6 +614,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Write a full cluster's data. </p>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -627,6 +644,8 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Write a FAT entry for a given cluster. </p>
+<p>Write a FAT entry, mirroring to secondary FATs.</p>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 
 </div>
 </div>

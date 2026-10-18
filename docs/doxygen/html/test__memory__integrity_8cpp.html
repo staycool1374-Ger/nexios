@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__memory__
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="integrity_8hpp_source.html">kernel/memory/integrity.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for test_memory_integrity.cpp:</div>
 <div class="dyncontent">
@@ -135,6 +136,7 @@ Include dependency graph for test_memory_integrity.cpp:</div>
 Functions</h2></td></tr>
 <tr class="memitem:a36006614358544b1ed3190f1c378842b" id="r_a36006614358544b1ed3190f1c378842b"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a36006614358544b1ed3190f1c378842b">JARVIS_TEST</a> (integrity_section_markers_intact, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a805e4da1a6c5053bfaae3742d4db6eba" id="r_a805e4da1a6c5053bfaae3742d4db6eba"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a805e4da1a6c5053bfaae3742d4db6eba">JARVIS_TEST</a> (integrity_crc_scan_completes_and_matches, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a0a2ca5b4bb6305786862ffb4a895ea3f" id="r_a0a2ca5b4bb6305786862ffb4a895ea3f"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a0a2ca5b4bb6305786862ffb4a895ea3f">JARVIS_TEST</a> (integrity_stack_markers_span, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a53211d94da013fdf6f660ff887ca352c" id="r_a53211d94da013fdf6f660ff887ca352c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a53211d94da013fdf6f660ff887ca352c">register_memory_integrity_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -144,7 +146,7 @@ Functions</h2></td></tr>
 The CRC scan is restartable by design (the idle task processes one chunk per wakeup), so a test can own the scan: reset_crc_state() then crc_process_chunk() until it reports completion. The final chunk compares the computed CRC against the linker-patched expected value and panics on mismatch — which is exactly the guarantee being asserted. </dd></dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a805e4da1a6c5053bfaae3742d4db6eba" name="a805e4da1a6c5053bfaae3742d4db6eba"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a805e4da1a6c5053bfaae3742d4db6eba">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a805e4da1a6c5053bfaae3742d4db6eba">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -176,7 +178,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a36006614358544b1ed3190f1c378842b" name="a36006614358544b1ed3190f1c378842b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a36006614358544b1ed3190f1c378842b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a36006614358544b1ed3190f1c378842b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -204,6 +206,32 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="test__memory__integrity_8cpp_a36006614358544b1ed3190f1c378842b_cgraph.png" border="0" usemap="#atest__memory__integrity_8cpp_a36006614358544b1ed3190f1c378842b_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 2 -->
 </div>
+
+</div>
+</div>
+<a id="a0a2ca5b4bb6305786862ffb4a895ea3f" name="a0a2ca5b4bb6305786862ffb4a895ea3f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0a2ca5b4bb6305786862ffb4a895ea3f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">integrity_stack_markers_span</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>

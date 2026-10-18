@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -129,6 +129,7 @@ Collaboration diagram for kernel::vfs::FdTable:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
+<tr class="memitem:a0f2d4cc68ec61e0999b611d694ba89fd" id="r_a0f2d4cc68ec61e0999b611d694ba89fd"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a0f2d4cc68ec61e0999b611d694ba89fd">FdTable</a> ()</td></tr>
 <tr class="memitem:ad3ac2531da920e48b0b7ba804a72ab9c" id="r_ad3ac2531da920e48b0b7ba804a72ab9c"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#ad3ac2531da920e48b0b7ba804a72ab9c">alloc</a> ()</td></tr>
 <tr class="memdesc:ad3ac2531da920e48b0b7ba804a72ab9c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocate a file descriptor entry.  <br /></td></tr>
 <tr class="memitem:ad22ffd7651288f4b0e84a37b77434348" id="r_ad22ffd7651288f4b0e84a37b77434348"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">VfsError</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad22ffd7651288f4b0e84a37b77434348">alloc_err</a> (int &amp;out_fd)</td></tr>
@@ -145,7 +146,34 @@ Public Member Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a22b92b41d6d8a240e776c7150c357da6" id="r_a22b92b41d6d8a240e776c7150c357da6"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_file_description.html">FileDescription</a>&#160;</td><td class="memItemRight"><a class="el" href="#a22b92b41d6d8a240e776c7150c357da6">fds</a> [MAX_FDS]</td></tr>
+<tr class="memdesc:a22b92b41d6d8a240e776c7150c357da6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Array of file descriptor entries.  <br /></td></tr>
 </table>
+<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a0f2d4cc68ec61e0999b611d694ba89fd" name="a0f2d4cc68ec61e0999b611d694ba89fd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0f2d4cc68ec61e0999b611d694ba89fd">&#9670;&#160;</a></span>FdTable()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">kernel::vfs::FdTable::FdTable </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="ad3ac2531da920e48b0b7ba804a72ab9c" name="ad3ac2531da920e48b0b7ba804a72ab9c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ad3ac2531da920e48b0b7ba804a72ab9c">&#9670;&#160;</a></span>alloc()</h2>
@@ -195,7 +223,9 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">VfsError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">VfsError</a> code.</dd>
+<dd>
+<a class="el" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">VfsError</a> code. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -302,7 +332,9 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">VfsError</a> code. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">VfsError</a> code.</dd>
+<dd>
+<a class="el" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">VfsError</a> code. </dd></dl>
 
 </div>
 </div>
@@ -318,6 +350,8 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Array of file descriptor entries. </p>
 
 </div>
 </div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,292 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ipv4_8hpp.html
 
 <p>IPv4 protocol types and helpers.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for ipv4.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="ipv4_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2net_2ipv4_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="ipv4_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2net_2ipv4_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="ipv4_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:net_3A_3AIpv4Addr" id="r_net_3A_3AIpv4Addr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structnet_1_1_ipv4_addr.html">net::Ipv4Addr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPv4 address (4 bytes, network-byte-order).  <a href="structnet_1_1_ipv4_addr.html#details">More...</a><br /></td></tr>
+<tr class="memitem:net_3A_3AIpv4Header" id="r_net_3A_3AIpv4Header"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structnet_1_1_ipv4_header.html">net::Ipv4Header</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPv4 header (20 bytes, no options).  <a href="structnet_1_1_ipv4_header.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:net" id="r_net"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html">net</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a0eb0983814a72820e9c1094d5cca6cda" id="r_a0eb0983814a72820e9c1094d5cca6cda"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a0eb0983814a72820e9c1094d5cca6cda">net::Ipv4Protocol</a> : uint8_t { <a class="el" href="namespacenet.html#a0eb0983814a72820e9c1094d5cca6cdaab40670dfb8f63f60c71be7ab518f47f1">net::IP_PROTO_ICMP</a> = 1
+, <a class="el" href="namespacenet.html#a0eb0983814a72820e9c1094d5cca6cdaa46aa3ac8da35d70b83de1386ee032183">net::IP_PROTO_TCP</a> = 6
+, <a class="el" href="namespacenet.html#a0eb0983814a72820e9c1094d5cca6cdaa42b2f8065c0a1302b3cd0ba89e1e5525">net::IP_PROTO_UDP</a> = 17
+ }</td></tr>
+<tr class="memdesc:a0eb0983814a72820e9c1094d5cca6cda"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPv4 protocol number constants.  <a href="namespacenet.html#a0eb0983814a72820e9c1094d5cca6cda">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ac7db56eb36db03ea6f642b3895d2665a" id="r_ac7db56eb36db03ea6f642b3895d2665a"><td class="memItemLeft">struct <a class="el" href="structnet_1_1_arp_header.html">net::ArpHeader</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#ac7db56eb36db03ea6f642b3895d2665a">net::__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:a667f1f9bdad39e2c272add09fae8c96e" id="r_a667f1f9bdad39e2c272add09fae8c96e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a667f1f9bdad39e2c272add09fae8c96e">operator==</a> (const Ipv4Addr &amp;o) const</td></tr>
+<tr class="memitem:a1f56c27ee7b7deba6d65e96d02d39efe" id="r_a1f56c27ee7b7deba6d65e96d02d39efe"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a1f56c27ee7b7deba6d65e96d02d39efe">as_u32</a> () const</td></tr>
+<tr class="memitem:a2600cb24ebd60eff91f70685e4c8b383" id="r_a2600cb24ebd60eff91f70685e4c8b383"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a2600cb24ebd60eff91f70685e4c8b383">net::ipv4_checksum</a> (const <a class="el" href="structnet_1_1_ipv4_header.html">Ipv4Header</a> *hdr)</td></tr>
+<tr class="memdesc:a2600cb24ebd60eff91f70685e4c8b383"><td class="mdescLeft">&#160;</td><td class="mdescRight">Compute an IPv4 header one's-complement checksum.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a00189ba2a6ef030760d1ba8397e8da7b" id="r_a00189ba2a6ef030760d1ba8397e8da7b"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a00189ba2a6ef030760d1ba8397e8da7b">net::IPV4_ADDR_LEN</a> = 4</td></tr>
+<tr class="memitem:a231a03b22308fb3d8dabf4dcc9acaf6d" id="r_a231a03b22308fb3d8dabf4dcc9acaf6d"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a231a03b22308fb3d8dabf4dcc9acaf6d">net::IPV4_MIN_HEADER_LEN</a> = 20</td></tr>
+<tr class="memitem:a8e3a6ba677f5def07965c65946660a5a" id="r_a8e3a6ba677f5def07965c65946660a5a"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a8e3a6ba677f5def07965c65946660a5a">net::IPV4_MAX_HEADER_LEN</a> = 60</td></tr>
+<tr class="memitem:a5f74fd5c992e20aa1adb650125d7fda9" id="r_a5f74fd5c992e20aa1adb650125d7fda9"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a5f74fd5c992e20aa1adb650125d7fda9">addr</a> [IPV4_ADDR_LEN]</td></tr>
+<tr class="memdesc:a5f74fd5c992e20aa1adb650125d7fda9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Octets in network order.  <br /></td></tr>
+<tr class="memitem:ac7f8fbdb4cc699d813b4b32c81c1d401" id="r_ac7f8fbdb4cc699d813b4b32c81c1d401"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ac7f8fbdb4cc699d813b4b32c81c1d401">ver_ihl</a></td></tr>
+<tr class="memdesc:ac7f8fbdb4cc699d813b4b32c81c1d401"><td class="mdescLeft">&#160;</td><td class="mdescRight">Version (4) | header length (5 = 20 bytes).  <br /></td></tr>
+<tr class="memitem:a93fa4d19a7afc3f4af90e29126f0c2ab" id="r_a93fa4d19a7afc3f4af90e29126f0c2ab"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a93fa4d19a7afc3f4af90e29126f0c2ab">dscp_ecn</a></td></tr>
+<tr class="memdesc:a93fa4d19a7afc3f4af90e29126f0c2ab"><td class="mdescLeft">&#160;</td><td class="mdescRight">DSCP + ECN.  <br /></td></tr>
+<tr class="memitem:aa487bb47bd88257a2fcd58d10c7836a2" id="r_aa487bb47bd88257a2fcd58d10c7836a2"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#aa487bb47bd88257a2fcd58d10c7836a2">total_length</a></td></tr>
+<tr class="memdesc:aa487bb47bd88257a2fcd58d10c7836a2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total packet length (big-endian).  <br /></td></tr>
+<tr class="memitem:a778fd3f83b301f89ae998cdd04ad9921" id="r_a778fd3f83b301f89ae998cdd04ad9921"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a778fd3f83b301f89ae998cdd04ad9921">ident</a></td></tr>
+<tr class="memdesc:a778fd3f83b301f89ae998cdd04ad9921"><td class="mdescLeft">&#160;</td><td class="mdescRight">Identification (big-endian).  <br /></td></tr>
+<tr class="memitem:aaa3c2e4c0bfed9f805231664f651450e" id="r_aaa3c2e4c0bfed9f805231664f651450e"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#aaa3c2e4c0bfed9f805231664f651450e">flags_frag</a></td></tr>
+<tr class="memdesc:aaa3c2e4c0bfed9f805231664f651450e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Flags + fragment offset (big-endian).  <br /></td></tr>
+<tr class="memitem:a4d402503271315376ddf4e47674d4965" id="r_a4d402503271315376ddf4e47674d4965"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a4d402503271315376ddf4e47674d4965">ttl</a></td></tr>
+<tr class="memdesc:a4d402503271315376ddf4e47674d4965"><td class="mdescLeft">&#160;</td><td class="mdescRight">Time to live.  <br /></td></tr>
+<tr class="memitem:ad124d3d2e02c729afa303c775295278e" id="r_ad124d3d2e02c729afa303c775295278e"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ad124d3d2e02c729afa303c775295278e">protocol</a></td></tr>
+<tr class="memdesc:ad124d3d2e02c729afa303c775295278e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Protocol (1 = ICMP, 6 = TCP, 17 = UDP).  <br /></td></tr>
+<tr class="memitem:a6796c847bbd16253ce2538754c250bd6" id="r_a6796c847bbd16253ce2538754c250bd6"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a6796c847bbd16253ce2538754c250bd6">checksum</a></td></tr>
+<tr class="memdesc:a6796c847bbd16253ce2538754c250bd6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Header checksum (big-endian).  <br /></td></tr>
+<tr class="memitem:a050f4b08e8c5a308883a8d1f427cd6c8" id="r_a050f4b08e8c5a308883a8d1f427cd6c8"><td class="memItemLeft">Ipv4Addr&#160;</td><td class="memItemRight"><a class="el" href="#a050f4b08e8c5a308883a8d1f427cd6c8">src</a></td></tr>
+<tr class="memdesc:a050f4b08e8c5a308883a8d1f427cd6c8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Source address.  <br /></td></tr>
+<tr class="memitem:a92dbcebd9d1dd9de91c403a6c33450d5" id="r_a92dbcebd9d1dd9de91c403a6c33450d5"><td class="memItemLeft">Ipv4Addr&#160;</td><td class="memItemRight"><a class="el" href="#a92dbcebd9d1dd9de91c403a6c33450d5">dst</a></td></tr>
+<tr class="memdesc:a92dbcebd9d1dd9de91c403a6c33450d5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destination address.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>IPv4 protocol types and helpers. </p>
-</div></div><!-- contents -->
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a1f56c27ee7b7deba6d65e96d02d39efe" name="a1f56c27ee7b7deba6d65e96d02d39efe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f56c27ee7b7deba6d65e96d02d39efe">&#9670;&#160;</a></span>as_u32()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t __attribute__::as_u32 </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a667f1f9bdad39e2c272add09fae8c96e" name="a667f1f9bdad39e2c272add09fae8c96e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a667f1f9bdad39e2c272add09fae8c96e">&#9670;&#160;</a></span>operator==()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool __attribute__::operator== </td>
+          <td>(</td>
+          <td class="paramtype">const Ipv4Addr &amp;</td>          <td class="paramname"><span class="paramname"><em>o</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a5f74fd5c992e20aa1adb650125d7fda9" name="a5f74fd5c992e20aa1adb650125d7fda9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5f74fd5c992e20aa1adb650125d7fda9">&#9670;&#160;</a></span>addr</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t addr[IPV4_ADDR_LEN]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Octets in network order. </p>
+
+</div>
+</div>
+<a id="a6796c847bbd16253ce2538754c250bd6" name="a6796c847bbd16253ce2538754c250bd6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6796c847bbd16253ce2538754c250bd6">&#9670;&#160;</a></span>checksum</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t checksum</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Header checksum (big-endian). </p>
+
+</div>
+</div>
+<a id="a93fa4d19a7afc3f4af90e29126f0c2ab" name="a93fa4d19a7afc3f4af90e29126f0c2ab"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a93fa4d19a7afc3f4af90e29126f0c2ab">&#9670;&#160;</a></span>dscp_ecn</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t dscp_ecn</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>DSCP + ECN. </p>
+
+</div>
+</div>
+<a id="a92dbcebd9d1dd9de91c403a6c33450d5" name="a92dbcebd9d1dd9de91c403a6c33450d5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a92dbcebd9d1dd9de91c403a6c33450d5">&#9670;&#160;</a></span>dst</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">Ipv4Addr dst</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Destination address. </p>
+
+</div>
+</div>
+<a id="aaa3c2e4c0bfed9f805231664f651450e" name="aaa3c2e4c0bfed9f805231664f651450e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaa3c2e4c0bfed9f805231664f651450e">&#9670;&#160;</a></span>flags_frag</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t flags_frag</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Flags + fragment offset (big-endian). </p>
+
+</div>
+</div>
+<a id="a778fd3f83b301f89ae998cdd04ad9921" name="a778fd3f83b301f89ae998cdd04ad9921"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a778fd3f83b301f89ae998cdd04ad9921">&#9670;&#160;</a></span>ident</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t ident</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Identification (big-endian). </p>
+
+</div>
+</div>
+<a id="ad124d3d2e02c729afa303c775295278e" name="ad124d3d2e02c729afa303c775295278e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad124d3d2e02c729afa303c775295278e">&#9670;&#160;</a></span>protocol</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t protocol</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Protocol (1 = ICMP, 6 = TCP, 17 = UDP). </p>
+
+</div>
+</div>
+<a id="a050f4b08e8c5a308883a8d1f427cd6c8" name="a050f4b08e8c5a308883a8d1f427cd6c8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a050f4b08e8c5a308883a8d1f427cd6c8">&#9670;&#160;</a></span>src</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">Ipv4Addr src</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Source address. </p>
+
+</div>
+</div>
+<a id="aa487bb47bd88257a2fcd58d10c7836a2" name="aa487bb47bd88257a2fcd58d10c7836a2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa487bb47bd88257a2fcd58d10c7836a2">&#9670;&#160;</a></span>total_length</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t total_length</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Total packet length (big-endian). </p>
+
+</div>
+</div>
+<a id="a4d402503271315376ddf4e47674d4965" name="a4d402503271315376ddf4e47674d4965"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4d402503271315376ddf4e47674d4965">&#9670;&#160;</a></span>ttl</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t ttl</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Time to live. </p>
+
+</div>
+</div>
+<a id="ac7f8fbdb4cc699d813b4b32c81c1d401" name="ac7f8fbdb4cc699d813b4b32c81c1d401"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac7f8fbdb4cc699d813b4b32c81c1d401">&#9670;&#160;</a></span>ver_ihl</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t ver_ihl</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Version (4) | header length (5 = 20 bytes). </p>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

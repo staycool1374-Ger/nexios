@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
+<p>A single buffer-pool entry.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="buffer__pool_8hpp_source.html">buffer_pool.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::BufferPool::Entry:</div>
@@ -134,14 +137,22 @@ Public Member Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a4262b2bead5ebf68c8b202a41d9fd000" id="r_a4262b2bead5ebf68c8b202a41d9fd000"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4262b2bead5ebf68c8b202a41d9fd000">phys_addr</a></td></tr>
+<tr class="memdesc:a4262b2bead5ebf68c8b202a41d9fd000"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical address of the backing page (0 = free).  <br /></td></tr>
 <tr class="memitem:aa88ac2204d0cc6722a7144991ab78c80" id="r_aa88ac2204d0cc6722a7144991ab78c80"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#aa88ac2204d0cc6722a7144991ab78c80">generation</a></td></tr>
 <tr class="memitem:a76bbabbc8e6a26d2e37721da4353448b" id="r_a76bbabbc8e6a26d2e37721da4353448b"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a76bbabbc8e6a26d2e37721da4353448b">refcount</a></td></tr>
+<tr class="memdesc:a76bbabbc8e6a26d2e37721da4353448b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reference count (unused currently, reserved).  <br /></td></tr>
 <tr class="memitem:a5c4be014f3c20094ad5287731fce002e" id="r_a5c4be014f3c20094ad5287731fce002e"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a5c4be014f3c20094ad5287731fce002e">owner_task</a></td></tr>
+<tr class="memdesc:a5c4be014f3c20094ad5287731fce002e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task ID of the current owner.  <br /></td></tr>
 <tr class="memitem:ad92439f5754cdccbdb8f21463941934c" id="r_ad92439f5754cdccbdb8f21463941934c"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad92439f5754cdccbdb8f21463941934c">mapped_va</a></td></tr>
+<tr class="memdesc:ad92439f5754cdccbdb8f21463941934c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual address where mapped (0 = unmapped).  <br /></td></tr>
 <tr class="memitem:a3d4b6c3d5ca6d8850d7c2957cef91843" id="r_a3d4b6c3d5ca6d8850d7c2957cef91843"><td class="memItemLeft">int32_t&#160;</td><td class="memItemRight"><a class="el" href="#a3d4b6c3d5ca6d8850d7c2957cef91843">list_prev</a></td></tr>
+<tr class="memdesc:a3d4b6c3d5ca6d8850d7c2957cef91843"><td class="mdescLeft">&#160;</td><td class="mdescRight">Previous entry in per-task linked list.  <br /></td></tr>
 <tr class="memitem:af32897e0abcd8c3582598c83e2c241c3" id="r_af32897e0abcd8c3582598c83e2c241c3"><td class="memItemLeft">int32_t&#160;</td><td class="memItemRight"><a class="el" href="#af32897e0abcd8c3582598c83e2c241c3">list_next</a></td></tr>
+<tr class="memdesc:af32897e0abcd8c3582598c83e2c241c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Next entry in per-task linked list (or free-list).  <br /></td></tr>
 </table>
-<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>A single buffer-pool entry. </p>
+</div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="aa11e4d077393601ccb3ec8c0d6e3bb13" name="aa11e4d077393601ccb3ec8c0d6e3bb13"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aa11e4d077393601ccb3ec8c0d6e3bb13">&#9670;&#160;</a></span>Entry()</h2>
 
@@ -179,6 +190,7 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>Cookie incrementing on each alloc (stale-handle detection). </p>
 
 </div>
 </div>
@@ -194,6 +206,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Next entry in per-task linked list (or free-list). </p>
+
 </div>
 </div>
 <a id="a3d4b6c3d5ca6d8850d7c2957cef91843" name="a3d4b6c3d5ca6d8850d7c2957cef91843"></a>
@@ -207,6 +221,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Previous entry in per-task linked list. </p>
 
 </div>
 </div>
@@ -222,6 +238,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Virtual address where mapped (0 = unmapped). </p>
+
 </div>
 </div>
 <a id="a5c4be014f3c20094ad5287731fce002e" name="a5c4be014f3c20094ad5287731fce002e"></a>
@@ -235,6 +253,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Task ID of the current owner. </p>
 
 </div>
 </div>
@@ -250,6 +270,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Physical address of the backing page (0 = free). </p>
+
 </div>
 </div>
 <a id="a76bbabbc8e6a26d2e37721da4353448b" name="a76bbabbc8e6a26d2e37721da4353448b"></a>
@@ -263,6 +285,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Reference count (unused currently, reserved). </p>
 
 </div>
 </div>

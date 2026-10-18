@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -118,6 +118,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacearch_
   <div class="headertitle"><div class="title">arch::kernel Namespace Reference</div></div>
 </div><!--header-->
 <div class="contents">
+
+<p>Convert a scoped-enum value to its underlying integer type (issue #348-D: std::to_underlying is C++23/<span class="tt">&lt;utility&gt;</span>, absent under -nostdinc — this is the hand-rolled equivalent).  
+<a href="#details">More...</a></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
@@ -128,14 +131,63 @@ Data Structures</h2></td></tr>
 <tr class="memitem:PageAddress" id="r_PageAddress"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1kernel_1_1_page_address.html">PageAddress</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Page-aligned physical address.  <a href="classarch_1_1kernel_1_1_page_address.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-concepts" class="groupheader"><a id="concepts" name="concepts"></a>
+Concepts</h2></td></tr>
+<tr class="memitem:Integral" id="r_Integral"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_integral.html">Integral</a></td></tr>
+<tr class="memitem:TriviallyCopiable" id="r_TriviallyCopiable"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_trivially_copiable.html">TriviallyCopiable</a></td></tr>
+<tr class="memitem:ValueType" id="r_ValueType"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_value_type.html">ValueType</a></td></tr>
+<tr class="memitem:ErrorEnum" id="r_ErrorEnum"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_error_enum.html">ErrorEnum</a></td></tr>
+<tr class="memitem:Enum" id="r_Enum"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_enum.html">Enum</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Any scoped/unscoped enumeration (issue #348-D: constrains <a class="el" href="namespacekernel.html#a17e67ea7443b3545f273cbe78f7c1a12">kernel::to_underlying</a> without dragging error-enum semantics). <br /></td></tr>
+<tr class="memitem:Lockable" id="r_Lockable"><td class="memItemLeft">concept &#160;</td><td class="memItemRight"><a class="el" href="conceptarch_1_1kernel_1_1_lockable.html">Lockable</a></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a183ae8a5fade214f2d597e2d4093c722" id="r_a183ae8a5fade214f2d597e2d4093c722"><td class="memTemplParams" colspan="2">template&lt;Enum E&gt; </td></tr>
+<tr class="memitem:a183ae8a5fade214f2d597e2d4093c722 template"><td class="memItemLeft">constexpr auto&#160;</td><td class="memItemRight"><a class="el" href="#a183ae8a5fade214f2d597e2d4093c722">to_underlying</a> (E value) noexcept</td></tr>
 <tr class="memitem:a4793ddf07e93583f1a7eabd519a69f11" id="r_a4793ddf07e93583f1a7eabd519a69f11"><td class="memItemLeft">constexpr <a class="el" href="classarch_1_1kernel_1_1_virtual_address.html">VirtualAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4793ddf07e93583f1a7eabd519a69f11">phys_to_virt</a> (<a class="el" href="classarch_1_1kernel_1_1_physical_address.html">PhysicalAddress</a> phys) noexcept</td></tr>
 <tr class="memdesc:a4793ddf07e93583f1a7eabd519a69f11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert physical address to higher-half virtual address.  <br /></td></tr>
 <tr class="memitem:a79b39c91ac679b2cf5c2734e608df421" id="r_a79b39c91ac679b2cf5c2734e608df421"><td class="memItemLeft">constexpr <a class="el" href="classarch_1_1kernel_1_1_physical_address.html">PhysicalAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="#a79b39c91ac679b2cf5c2734e608df421">virt_to_phys</a> (<a class="el" href="classarch_1_1kernel_1_1_virtual_address.html">VirtualAddress</a> virt) noexcept</td></tr>
 <tr class="memdesc:a79b39c91ac679b2cf5c2734e608df421"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert higher-half virtual address to physical address.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a63aa23d785e9755ac54f99dde4924b9e" id="r_a63aa23d785e9755ac54f99dde4924b9e"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:a63aa23d785e9755ac54f99dde4924b9e template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">_is_integral_v</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:aae0587baae55dbb6cf7f27349f656070" id="r_aae0587baae55dbb6cf7f27349f656070"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:aae0587baae55dbb6cf7f27349f656070 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#aae0587baae55dbb6cf7f27349f656070">_is_integral_v&lt; bool &gt;</a> = true</td></tr>
+<tr class="memitem:a98a9420db004d1c10568a01a79158ec0" id="r_a98a9420db004d1c10568a01a79158ec0"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a98a9420db004d1c10568a01a79158ec0 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a98a9420db004d1c10568a01a79158ec0">_is_integral_v&lt; char &gt;</a> = true</td></tr>
+<tr class="memitem:aba6953893c9b9a1a7e382b35814a63cc" id="r_aba6953893c9b9a1a7e382b35814a63cc"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:aba6953893c9b9a1a7e382b35814a63cc template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#aba6953893c9b9a1a7e382b35814a63cc">_is_integral_v&lt; signed char &gt;</a> = true</td></tr>
+<tr class="memitem:a5248b5a5137669ddf3d1c7b681830617" id="r_a5248b5a5137669ddf3d1c7b681830617"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a5248b5a5137669ddf3d1c7b681830617 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a5248b5a5137669ddf3d1c7b681830617">_is_integral_v&lt; unsigned char &gt;</a> = true</td></tr>
+<tr class="memitem:a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8" id="r_a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8">_is_integral_v&lt; short &gt;</a> = true</td></tr>
+<tr class="memitem:a58554b1ed85d945662cad4a5b395a518" id="r_a58554b1ed85d945662cad4a5b395a518"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a58554b1ed85d945662cad4a5b395a518 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a58554b1ed85d945662cad4a5b395a518">_is_integral_v&lt; unsigned short &gt;</a> = true</td></tr>
+<tr class="memitem:ac881e35e852f88136a6feb6d039c7451" id="r_ac881e35e852f88136a6feb6d039c7451"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:ac881e35e852f88136a6feb6d039c7451 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#ac881e35e852f88136a6feb6d039c7451">_is_integral_v&lt; int &gt;</a> = true</td></tr>
+<tr class="memitem:a0cda3ddfb6b5e388b2a6269445cc55c2" id="r_a0cda3ddfb6b5e388b2a6269445cc55c2"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a0cda3ddfb6b5e388b2a6269445cc55c2 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a0cda3ddfb6b5e388b2a6269445cc55c2">_is_integral_v&lt; unsigned int &gt;</a> = true</td></tr>
+<tr class="memitem:aef4ad6504507eff72676a4ff3a7900c6" id="r_aef4ad6504507eff72676a4ff3a7900c6"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:aef4ad6504507eff72676a4ff3a7900c6 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#aef4ad6504507eff72676a4ff3a7900c6">_is_integral_v&lt; long &gt;</a> = true</td></tr>
+<tr class="memitem:ac4ccafe2ba8415dfa65e8b7ebe63bb2a" id="r_ac4ccafe2ba8415dfa65e8b7ebe63bb2a"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:ac4ccafe2ba8415dfa65e8b7ebe63bb2a template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#ac4ccafe2ba8415dfa65e8b7ebe63bb2a">_is_integral_v&lt; unsigned long &gt;</a> = true</td></tr>
+<tr class="memitem:a9cc193c289242f41921635ee6c992371" id="r_a9cc193c289242f41921635ee6c992371"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a9cc193c289242f41921635ee6c992371 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a9cc193c289242f41921635ee6c992371">_is_integral_v&lt; long long &gt;</a> = true</td></tr>
+<tr class="memitem:a9fd6bdbf7aff079a03fb30ec5605acf5" id="r_a9fd6bdbf7aff079a03fb30ec5605acf5"><td class="memItemLeft">template&lt;&gt; </td></tr>
+<tr class="memitem:a9fd6bdbf7aff079a03fb30ec5605acf5 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a9fd6bdbf7aff079a03fb30ec5605acf5">_is_integral_v&lt; unsigned long long &gt;</a> = true</td></tr>
+<tr class="memitem:a251cdbeaa30e125a22a37a16cc578651" id="r_a251cdbeaa30e125a22a37a16cc578651"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:a251cdbeaa30e125a22a37a16cc578651 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a251cdbeaa30e125a22a37a16cc578651">_is_reference_v</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:a3d6feca2f91997684059ed2e15305081" id="r_a3d6feca2f91997684059ed2e15305081"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:a3d6feca2f91997684059ed2e15305081 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a3d6feca2f91997684059ed2e15305081">_is_reference_v&lt; T &amp; &gt;</a> = true</td></tr>
+<tr class="memitem:a87b09c48462e2fcc946b0fa1c36ab4f4" id="r_a87b09c48462e2fcc946b0fa1c36ab4f4"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:a87b09c48462e2fcc946b0fa1c36ab4f4 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a87b09c48462e2fcc946b0fa1c36ab4f4">_is_reference_v&lt; T &amp;&amp; &gt;</a> = true</td></tr>
 </table>
-<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Convert a scoped-enum value to its underlying integer type (issue #348-D: std::to_underlying is C++23/<span class="tt">&lt;utility&gt;</span>, absent under -nostdinc — this is the hand-rolled equivalent). </p>
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a4793ddf07e93583f1a7eabd519a69f11" name="a4793ddf07e93583f1a7eabd519a69f11"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a4793ddf07e93583f1a7eabd519a69f11">&#9670;&#160;</a></span>phys_to_virt()</h2>
 
@@ -163,6 +215,33 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a183ae8a5fade214f2d597e2d4093c722" name="a183ae8a5fade214f2d597e2d4093c722"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a183ae8a5fade214f2d597e2d4093c722">&#9670;&#160;</a></span>to_underlying()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;Enum E&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">auto arch::kernel::to_underlying </td>
+          <td>(</td>
+          <td class="paramtype">E</td>          <td class="paramname"><span class="paramname"><em>value</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel nodiscard">nodiscard</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a79b39c91ac679b2cf5c2734e608df421" name="a79b39c91ac679b2cf5c2734e608df421"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a79b39c91ac679b2cf5c2734e608df421">&#9670;&#160;</a></span>virt_to_phys()</h2>
 
@@ -187,6 +266,391 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Convert higher-half virtual address to physical address. </p>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a63aa23d785e9755ac54f99dde4924b9e" name="a63aa23d785e9755ac54f99dde4924b9e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a63aa23d785e9755ac54f99dde4924b9e">&#9670;&#160;</a></span>_is_integral_v</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::kernel::_is_integral_v = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aae0587baae55dbb6cf7f27349f656070" name="aae0587baae55dbb6cf7f27349f656070"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aae0587baae55dbb6cf7f27349f656070">&#9670;&#160;</a></span>_is_integral_v&lt; bool &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; bool &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a98a9420db004d1c10568a01a79158ec0" name="a98a9420db004d1c10568a01a79158ec0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a98a9420db004d1c10568a01a79158ec0">&#9670;&#160;</a></span>_is_integral_v&lt; char &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; char &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac881e35e852f88136a6feb6d039c7451" name="ac881e35e852f88136a6feb6d039c7451"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac881e35e852f88136a6feb6d039c7451">&#9670;&#160;</a></span>_is_integral_v&lt; int &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; int &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aef4ad6504507eff72676a4ff3a7900c6" name="aef4ad6504507eff72676a4ff3a7900c6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aef4ad6504507eff72676a4ff3a7900c6">&#9670;&#160;</a></span>_is_integral_v&lt; long &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; long &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9cc193c289242f41921635ee6c992371" name="a9cc193c289242f41921635ee6c992371"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9cc193c289242f41921635ee6c992371">&#9670;&#160;</a></span>_is_integral_v&lt; long long &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; long long &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8" name="a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9ba04c5cbaa4fd79a03e7ff2bbf8b8e8">&#9670;&#160;</a></span>_is_integral_v&lt; short &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; short &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aba6953893c9b9a1a7e382b35814a63cc" name="aba6953893c9b9a1a7e382b35814a63cc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aba6953893c9b9a1a7e382b35814a63cc">&#9670;&#160;</a></span>_is_integral_v&lt; signed char &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; signed char &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5248b5a5137669ddf3d1c7b681830617" name="a5248b5a5137669ddf3d1c7b681830617"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5248b5a5137669ddf3d1c7b681830617">&#9670;&#160;</a></span>_is_integral_v&lt; unsigned char &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; unsigned char &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0cda3ddfb6b5e388b2a6269445cc55c2" name="a0cda3ddfb6b5e388b2a6269445cc55c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0cda3ddfb6b5e388b2a6269445cc55c2">&#9670;&#160;</a></span>_is_integral_v&lt; unsigned int &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; unsigned int &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac4ccafe2ba8415dfa65e8b7ebe63bb2a" name="ac4ccafe2ba8415dfa65e8b7ebe63bb2a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac4ccafe2ba8415dfa65e8b7ebe63bb2a">&#9670;&#160;</a></span>_is_integral_v&lt; unsigned long &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; unsigned long &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9fd6bdbf7aff079a03fb30ec5605acf5" name="a9fd6bdbf7aff079a03fb30ec5605acf5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9fd6bdbf7aff079a03fb30ec5605acf5">&#9670;&#160;</a></span>_is_integral_v&lt; unsigned long long &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; unsigned long long &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a58554b1ed85d945662cad4a5b395a518" name="a58554b1ed85d945662cad4a5b395a518"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a58554b1ed85d945662cad4a5b395a518">&#9670;&#160;</a></span>_is_integral_v&lt; unsigned short &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a63aa23d785e9755ac54f99dde4924b9e">arch::kernel::_is_integral_v</a>&lt; unsigned short &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a251cdbeaa30e125a22a37a16cc578651" name="a251cdbeaa30e125a22a37a16cc578651"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a251cdbeaa30e125a22a37a16cc578651">&#9670;&#160;</a></span>_is_reference_v</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::kernel::_is_reference_v = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3d6feca2f91997684059ed2e15305081" name="a3d6feca2f91997684059ed2e15305081"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3d6feca2f91997684059ed2e15305081">&#9670;&#160;</a></span>_is_reference_v&lt; T &amp; &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a251cdbeaa30e125a22a37a16cc578651">arch::kernel::_is_reference_v</a>&lt; T &amp; &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a87b09c48462e2fcc946b0fa1c36ab4f4" name="a87b09c48462e2fcc946b0fa1c36ab4f4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a87b09c48462e2fcc946b0fa1c36ab4f4">&#9670;&#160;</a></span>_is_reference_v&lt; T &amp;&amp; &gt;</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool <a class="el" href="#a251cdbeaa30e125a22a37a16cc578651">arch::kernel::_is_reference_v</a>&lt; T &amp;&amp; &gt; = true</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
 
 </div>
 </div>

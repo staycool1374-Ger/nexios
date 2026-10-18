@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,217 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('arp_8hpp.html'
 
 <p>ARP (Address Resolution Protocol) — IPv4 → MAC resolution.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="ether_8hpp_source.html">kernel/net/ether.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for arp.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="arp_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2net_2arp_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="arp_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2net_2arp_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="arp_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:net_3A_3AArpHeader" id="r_net_3A_3AArpHeader"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structnet_1_1_arp_header.html">net::ArpHeader</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">ARP packet header (28 bytes).  <a href="structnet_1_1_arp_header.html#details">More...</a><br /></td></tr>
+<tr class="memitem:net_3A_3AArpCacheEntry" id="r_net_3A_3AArpCacheEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structnet_1_1_arp_cache_entry.html">net::ArpCacheEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A single ARP cache entry.  <a href="structnet_1_1_arp_cache_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:net_3A_3AArpCache" id="r_net_3A_3AArpCache"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classnet_1_1_arp_cache.html">net::ArpCache</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">ARP cache — resolves IP → MAC, caches results.  <a href="classnet_1_1_arp_cache.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:net" id="r_net"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html">net</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ac7db56eb36db03ea6f642b3895d2665a" id="r_ac7db56eb36db03ea6f642b3895d2665a"><td class="memItemLeft">struct <a class="el" href="structnet_1_1_arp_header.html">net::ArpHeader</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#ac7db56eb36db03ea6f642b3895d2665a">net::__attribute__</a> ((packed))</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a9e24fa6457b5a663358906e621531a74" id="r_a9e24fa6457b5a663358906e621531a74"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a9e24fa6457b5a663358906e621531a74">net::ARP_CACHE_SIZE</a> = 32</td></tr>
+<tr class="memitem:aaf87c38602b614bc7896cf7a5a90d372" id="r_aaf87c38602b614bc7896cf7a5a90d372"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#aaf87c38602b614bc7896cf7a5a90d372">htype</a></td></tr>
+<tr class="memdesc:aaf87c38602b614bc7896cf7a5a90d372"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hardware type (1 = Ethernet).  <br /></td></tr>
+<tr class="memitem:ab4891e9b77eb26f33d21cfde982564cb" id="r_ab4891e9b77eb26f33d21cfde982564cb"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ab4891e9b77eb26f33d21cfde982564cb">ptype</a></td></tr>
+<tr class="memdesc:ab4891e9b77eb26f33d21cfde982564cb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Protocol type (0x0800 = IPv4).  <br /></td></tr>
+<tr class="memitem:aff25a69752648654e56c4ff3e0b1b226" id="r_aff25a69752648654e56c4ff3e0b1b226"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#aff25a69752648654e56c4ff3e0b1b226">hlen</a></td></tr>
+<tr class="memdesc:aff25a69752648654e56c4ff3e0b1b226"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hardware address length (6).  <br /></td></tr>
+<tr class="memitem:ae414f6c2299d9cf0eff8aa8e81f538d8" id="r_ae414f6c2299d9cf0eff8aa8e81f538d8"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ae414f6c2299d9cf0eff8aa8e81f538d8">plen</a></td></tr>
+<tr class="memdesc:ae414f6c2299d9cf0eff8aa8e81f538d8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Protocol address length (4).  <br /></td></tr>
+<tr class="memitem:ab35932285f9c007075b755333d3a2f94" id="r_ab35932285f9c007075b755333d3a2f94"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ab35932285f9c007075b755333d3a2f94">oper</a></td></tr>
+<tr class="memdesc:ab35932285f9c007075b755333d3a2f94"><td class="mdescLeft">&#160;</td><td class="mdescRight">Operation (1 = request, 2 = reply).  <br /></td></tr>
+<tr class="memitem:a9bdc2cb963ceafba4f481d22daefda25" id="r_a9bdc2cb963ceafba4f481d22daefda25"><td class="memItemLeft">MacAddr&#160;</td><td class="memItemRight"><a class="el" href="#a9bdc2cb963ceafba4f481d22daefda25">sha</a></td></tr>
+<tr class="memdesc:a9bdc2cb963ceafba4f481d22daefda25"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sender hardware address.  <br /></td></tr>
+<tr class="memitem:a1240a1cea4b508557b7bc9cd305d7f19" id="r_a1240a1cea4b508557b7bc9cd305d7f19"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a1240a1cea4b508557b7bc9cd305d7f19">spa</a></td></tr>
+<tr class="memdesc:a1240a1cea4b508557b7bc9cd305d7f19"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sender protocol address (IPv4, big-endian).  <br /></td></tr>
+<tr class="memitem:adefce83f011eb7eee2560177ff051ea8" id="r_adefce83f011eb7eee2560177ff051ea8"><td class="memItemLeft">MacAddr&#160;</td><td class="memItemRight"><a class="el" href="#adefce83f011eb7eee2560177ff051ea8">tha</a></td></tr>
+<tr class="memdesc:adefce83f011eb7eee2560177ff051ea8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Target hardware address.  <br /></td></tr>
+<tr class="memitem:a02cfdacdf408d69651fe548a79c5124c" id="r_a02cfdacdf408d69651fe548a79c5124c"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a02cfdacdf408d69651fe548a79c5124c">tpa</a></td></tr>
+<tr class="memdesc:a02cfdacdf408d69651fe548a79c5124c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Target protocol address (IPv4, big-endian).  <br /></td></tr>
+<tr class="memitem:adcb0d71a014ebd7ab1c224c73db6f1de" id="r_adcb0d71a014ebd7ab1c224c73db6f1de"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#adcb0d71a014ebd7ab1c224c73db6f1de">net::ARP_HTYPE_ETHER</a> = 1</td></tr>
+<tr class="memdesc:adcb0d71a014ebd7ab1c224c73db6f1de"><td class="mdescLeft">&#160;</td><td class="mdescRight">ARP hardware type: Ethernet.  <br /></td></tr>
+<tr class="memitem:a0109abfbe5b20b685075948205bfd513" id="r_a0109abfbe5b20b685075948205bfd513"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a0109abfbe5b20b685075948205bfd513">net::ARP_OPER_REQUEST</a> = 1</td></tr>
+<tr class="memdesc:a0109abfbe5b20b685075948205bfd513"><td class="mdescLeft">&#160;</td><td class="mdescRight">ARP operation: request.  <br /></td></tr>
+<tr class="memitem:a3588b3ee19b07fd8a16b2eac318f7fcb" id="r_a3588b3ee19b07fd8a16b2eac318f7fcb"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a3588b3ee19b07fd8a16b2eac318f7fcb">net::ARP_OPER_REPLY</a> = 2</td></tr>
+<tr class="memdesc:a3588b3ee19b07fd8a16b2eac318f7fcb"><td class="mdescLeft">&#160;</td><td class="mdescRight">ARP operation: reply.  <br /></td></tr>
+<tr class="memitem:abc797c4b5188f5f8f09cab0d2d841de7" id="r_abc797c4b5188f5f8f09cab0d2d841de7"><td class="memItemLeft">struct <a class="el" href="structnet_1_1_arp_cache_entry.html">net::ArpCacheEntry</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#abc797c4b5188f5f8f09cab0d2d841de7">net::__attribute__</a></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>ARP (Address Resolution Protocol) — IPv4 → MAC resolution. </p>
-</div></div><!-- contents -->
+</div><a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="aff25a69752648654e56c4ff3e0b1b226" name="aff25a69752648654e56c4ff3e0b1b226"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aff25a69752648654e56c4ff3e0b1b226">&#9670;&#160;</a></span>hlen</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t hlen</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Hardware address length (6). </p>
+
+</div>
+</div>
+<a id="aaf87c38602b614bc7896cf7a5a90d372" name="aaf87c38602b614bc7896cf7a5a90d372"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaf87c38602b614bc7896cf7a5a90d372">&#9670;&#160;</a></span>htype</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t htype</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Hardware type (1 = Ethernet). </p>
+
+</div>
+</div>
+<a id="ab35932285f9c007075b755333d3a2f94" name="ab35932285f9c007075b755333d3a2f94"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab35932285f9c007075b755333d3a2f94">&#9670;&#160;</a></span>oper</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t oper</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Operation (1 = request, 2 = reply). </p>
+
+</div>
+</div>
+<a id="ae414f6c2299d9cf0eff8aa8e81f538d8" name="ae414f6c2299d9cf0eff8aa8e81f538d8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae414f6c2299d9cf0eff8aa8e81f538d8">&#9670;&#160;</a></span>plen</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t plen</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Protocol address length (4). </p>
+
+</div>
+</div>
+<a id="ab4891e9b77eb26f33d21cfde982564cb" name="ab4891e9b77eb26f33d21cfde982564cb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab4891e9b77eb26f33d21cfde982564cb">&#9670;&#160;</a></span>ptype</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t ptype</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Protocol type (0x0800 = IPv4). </p>
+
+</div>
+</div>
+<a id="a9bdc2cb963ceafba4f481d22daefda25" name="a9bdc2cb963ceafba4f481d22daefda25"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9bdc2cb963ceafba4f481d22daefda25">&#9670;&#160;</a></span>sha</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">MacAddr sha</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Sender hardware address. </p>
+
+</div>
+</div>
+<a id="a1240a1cea4b508557b7bc9cd305d7f19" name="a1240a1cea4b508557b7bc9cd305d7f19"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1240a1cea4b508557b7bc9cd305d7f19">&#9670;&#160;</a></span>spa</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t spa</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Sender protocol address (IPv4, big-endian). </p>
+
+</div>
+</div>
+<a id="adefce83f011eb7eee2560177ff051ea8" name="adefce83f011eb7eee2560177ff051ea8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adefce83f011eb7eee2560177ff051ea8">&#9670;&#160;</a></span>tha</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">MacAddr tha</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Target hardware address. </p>
+
+</div>
+</div>
+<a id="a02cfdacdf408d69651fe548a79c5124c" name="a02cfdacdf408d69651fe548a79c5124c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a02cfdacdf408d69651fe548a79c5124c">&#9670;&#160;</a></span>tpa</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t tpa</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Target protocol address (IPv4, big-endian). </p>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -118,9 +118,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('udp_8hpp_sourc
   <div class="headertitle"><div class="title">udp.hpp</div></div>
 </div><!--header-->
 <div class="contents">
-<a href="udp_8hpp.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#pragma once</span></div>
-<div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span> </div>
-<div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="comment">/*</span></div>
+<a href="udp_8hpp.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno"><a class="line" href="udp_8hpp.html#ae18defed4756b8c15e34718f51e86e55">    1</a></span><span class="preprocessor">#pragma once</span></div>
+<div class="line"><a id="l00002" name="l00002"></a><span class="lineno"><a class="line" href="udp_8hpp.html#a1892eba2086d12ac2b09005aeb09ea3b">    2</a></span> </div>
+<div class="line"><a id="l00003" name="l00003"></a><span class="lineno"><a class="line" href="udp_8hpp.html#a6796c847bbd16253ce2538754c250bd6">    3</a></span><span class="comment">/*</span></div>
 <div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="comment"> * NexIOS RTOS — Development Roadmap / Kernel Core</span></div>
 <div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="comment"> * Copyright (C) 2026 Arnold Hasshold</span></div>
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="comment"> *</span></div>
@@ -139,23 +139,27 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('udp_8hpp_sourc
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#pragma once</span></div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span> </div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacenet.html">net</a> {</div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span></div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="keyword">struct </span>UdpHeader {</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> src_port; </div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> dst_port; </div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> length;   </div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> checksum; </div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>} <a class="code hl_function" href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">__attribute__</a>((packed));</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span> </div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>} <span class="comment">// namespace net</span></div>
-<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
-<div class="ttc" id="anamespaceinitrd_html_a00c53aee04ed1b36b1a86a010b49ef61"><div class="ttname"><a href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">initrd::__attribute__</a></div><div class="ttdeci">struct initrd::CpioNewcHeader __attribute__((packed))</div></div>
-<div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> global_state.hpp:59</div></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacenet.html">net</a> {</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span></div>
+<div class="foldopen" id="foldopen00029" data-start="{" data-end="};">
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno"><a class="line" href="structnet_1_1_udp_header.html">   29</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structnet_1_1_udp_header.html">UdpHeader</a> {</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno"><a class="line" href="structnet_1_1_udp_header.html#a5f5186de319ad546c6d90861dceeb79c">   30</a></span>    uint16_t <a class="code hl_variable" href="structnet_1_1_udp_header.html#a5f5186de319ad546c6d90861dceeb79c">src_port</a>; </div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="structnet_1_1_udp_header.html#aa84fa715b8200e37af3150743366617b">   31</a></span>    uint16_t <a class="code hl_variable" href="structnet_1_1_udp_header.html#aa84fa715b8200e37af3150743366617b">dst_port</a>; </div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="structnet_1_1_udp_header.html#abfd401cbe8582afe1d9df5cca7dec521">   32</a></span>    uint16_t <a class="code hl_variable" href="structnet_1_1_udp_header.html#abfd401cbe8582afe1d9df5cca7dec521">length</a>;   </div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="structnet_1_1_udp_header.html#ad497e768758636d75fe952c48dc8cec5">   33</a></span>    uint16_t <a class="code hl_variable" href="structnet_1_1_udp_header.html#ad497e768758636d75fe952c48dc8cec5">checksum</a>; </div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>} <a class="code hl_variable" href="namespacenet.html#abc797c4b5188f5f8f09cab0d2d841de7">__attribute__</a>((packed));</div>
+</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span> </div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>} <span class="comment">// namespace net</span></div>
+<div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> global_state.hpp:61</div></div>
+<div class="ttc" id="anamespacenet_html_abc797c4b5188f5f8f09cab0d2d841de7"><div class="ttname"><a href="namespacenet.html#abc797c4b5188f5f8f09cab0d2d841de7">net::__attribute__</a></div><div class="ttdeci">struct net::ArpCacheEntry __attribute__</div></div>
+<div class="ttc" id="astructnet_1_1_udp_header_html"><div class="ttname"><a href="structnet_1_1_udp_header.html">net::UdpHeader</a></div><div class="ttdoc">UDP header (8 bytes).</div><div class="ttdef"><b>Definition</b> udp.hpp:29</div></div>
+<div class="ttc" id="astructnet_1_1_udp_header_html_a5f5186de319ad546c6d90861dceeb79c"><div class="ttname"><a href="structnet_1_1_udp_header.html#a5f5186de319ad546c6d90861dceeb79c">net::UdpHeader::src_port</a></div><div class="ttdeci">uint16_t src_port</div><div class="ttdoc">Source port (big-endian).</div><div class="ttdef"><b>Definition</b> udp.hpp:30</div></div>
+<div class="ttc" id="astructnet_1_1_udp_header_html_aa84fa715b8200e37af3150743366617b"><div class="ttname"><a href="structnet_1_1_udp_header.html#aa84fa715b8200e37af3150743366617b">net::UdpHeader::dst_port</a></div><div class="ttdeci">uint16_t dst_port</div><div class="ttdoc">Destination port (big-endian).</div><div class="ttdef"><b>Definition</b> udp.hpp:31</div></div>
+<div class="ttc" id="astructnet_1_1_udp_header_html_abfd401cbe8582afe1d9df5cca7dec521"><div class="ttname"><a href="structnet_1_1_udp_header.html#abfd401cbe8582afe1d9df5cca7dec521">net::UdpHeader::length</a></div><div class="ttdeci">uint16_t length</div><div class="ttdoc">Header + data length (big-endian).</div><div class="ttdef"><b>Definition</b> udp.hpp:32</div></div>
+<div class="ttc" id="astructnet_1_1_udp_header_html_ad497e768758636d75fe952c48dc8cec5"><div class="ttname"><a href="structnet_1_1_udp_header.html#ad497e768758636d75fe952c48dc8cec5">net::UdpHeader::checksum</a></div><div class="ttdeci">uint16_t checksum</div><div class="ttdoc">Optional checksum (big-endian; 0 = no checksum).</div><div class="ttdef"><b>Definition</b> udp.hpp:33</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

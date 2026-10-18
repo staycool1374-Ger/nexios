@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
-<p>IPv4 address.  
+<p>IPv4 address (4 bytes, network-byte-order).  
  <a href="#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="ipv4_8hpp_source.html">ipv4.hpp</a>&gt;</code></p>
@@ -142,9 +142,10 @@ Static Public Member Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a34eb921634c396f3bb3438844285c061" id="r_a34eb921634c396f3bb3438844285c061"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a34eb921634c396f3bb3438844285c061">addr</a> [<a class="el" href="namespacenet.html#a00189ba2a6ef030760d1ba8397e8da7b">IPV4_ADDR_LEN</a>]</td></tr>
+<tr class="memdesc:a34eb921634c396f3bb3438844285c061"><td class="mdescLeft">&#160;</td><td class="mdescRight">Octets in network order.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>IPv4 address. </p>
+<div class="textblock"><p>IPv4 address (4 bytes, network-byte-order). </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="a0c5074fb7cae326f6423a552b4fe8caf" name="a0c5074fb7cae326f6423a552b4fe8caf"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a0c5074fb7cae326f6423a552b4fe8caf">&#9670;&#160;</a></span>as_u32()</h2>
@@ -233,6 +234,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Octets in network order. </p>
 
 </div>
 </div>

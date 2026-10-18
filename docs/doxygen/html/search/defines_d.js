@@ -1,6 +1,6 @@
 var searchData=
 [
-  ['register_5fclass_0',['REGISTER_CLASS',['../test_8hpp.html#a1102009e7794c6401082aa06a3838921',1,'test.hpp']]],
-  ['register_5fclass_5fflags_1',['REGISTER_CLASS_FLAGS',['../test_8hpp.html#ace9d865ef1ecb142666cd0beb9c51af3',1,'test.hpp']]],
-  ['register_5frelease_5fclass_2',['REGISTER_RELEASE_CLASS',['../test_8hpp.html#ade6c7976dfdd68610815dca74c7be91d',1,'test.hpp']]]
+  ['picolibc_5fo_5fcreat_0',['PICOLIBC_O_CREAT',['../picolib__stubs_8c.html#a00ed1906ba54ef743b52d380fb50420a',1,'picolib_stubs.c']]],
+  ['picolibc_5fo_5ftrunc_1',['PICOLIBC_O_TRUNC',['../picolib__stubs_8c.html#a7cdfc60303924c2090863c432f82fbb3',1,'picolib_stubs.c']]],
+  ['pmm_5ferror_5fcodes_2',['PMM_ERROR_CODES',['../pmm__errors_8hpp.html#af32598a66e0dbf6105b93a6b9f0ff977',1,'pmm_errors.hpp']]]
 ];

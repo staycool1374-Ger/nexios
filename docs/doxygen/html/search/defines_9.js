@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['madt_5fmax_5fcpus_0',['MADT_MAX_CPUS',['../madt_8hpp.html#a69976ac879c8e8fca164b29acf54b675',1,'madt.hpp']]],
-  ['mempool_5ferror_5fcodes_1',['MEMPOOL_ERROR_CODES',['../mempool__errors_8hpp.html#a14f67d52686ba1c9d553000d342748d1',1,'mempool_errors.hpp']]]
+  ['kernel_5fo_5fcreat_0',['KERNEL_O_CREAT',['../picolib__stubs_8c.html#a5ac7a519cc2877c50584608e19994c35',1,'picolib_stubs.c']]],
+  ['kernel_5fversion_5fstring_1',['KERNEL_VERSION_STRING',['../version_8hpp.html#abba67610a81ec56f7d1f834e9bfdbec3',1,'version.hpp']]]
 ];

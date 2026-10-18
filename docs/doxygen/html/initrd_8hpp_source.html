@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -160,9 +160,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('initrd_8hpp_so
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>(<span class="keyword">const</span> uint8_t* start, <span class="keyword">const</span> uint8_t* end);</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><a class="code hl_struct" href="structinitrd_1_1_initrd_file.html">InitrdFile</a> <a class="code hl_function" href="namespaceinitrd.html#a08db2dcf48cc3117394e849a12e1fc19">find</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* path);</div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span> </div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespaceinitrd.html#a36c2e1ae3322f0ee5973773ba6a3f6fe">readdir</a>(uint64_t* pos, <a class="code hl_struct" href="structinitrd_1_1_initrd_entry.html">InitrdEntry</a>* entry);</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespaceinitrd.html#a36c2e1ae3322f0ee5973773ba6a3f6fe">readdir</a>(uint64_t* pos, <a class="code hl_struct" href="structinitrd_1_1_initrd_entry.html">InitrdEntry</a>* <a class="code hl_variable" href="elf_8hpp.html#a6aac0a1a7d70f8270f9bb1222445f370">entry</a>);</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span> </div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>} <span class="comment">// namespace initrd</span></div>
+<div class="ttc" id="aelf_8hpp_html_a6aac0a1a7d70f8270f9bb1222445f370"><div class="ttname"><a href="elf_8hpp.html#a6aac0a1a7d70f8270f9bb1222445f370">entry</a></div><div class="ttdeci">uint64_t entry</div><div class="ttdoc">Virtual address of entry point.</div><div class="ttdef"><b>Definition</b> elf.hpp:4</div></div>
 <div class="ttc" id="anamespaceinitrd_html"><div class="ttname"><a href="namespaceinitrd.html">initrd</a></div><div class="ttdef"><b>Definition</b> initrd.cpp:22</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a08db2dcf48cc3117394e849a12e1fc19"><div class="ttname"><a href="namespaceinitrd.html#a08db2dcf48cc3117394e849a12e1fc19">initrd::find</a></div><div class="ttdeci">InitrdFile find(const char *path)</div><div class="ttdef"><b>Definition</b> initrd.cpp:72</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a36c2e1ae3322f0ee5973773ba6a3f6fe"><div class="ttname"><a href="namespaceinitrd.html#a36c2e1ae3322f0ee5973773ba6a3f6fe">initrd::readdir</a></div><div class="ttdeci">bool readdir(uint64_t *pos, InitrdEntry *entry)</div><div class="ttdef"><b>Definition</b> initrd.cpp:122</div></div>

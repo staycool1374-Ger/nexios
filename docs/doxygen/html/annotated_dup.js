@@ -7,10 +7,29 @@ var annotated_dup =
         [ "PageAddress", "classarch_1_1kernel_1_1_page_address.html", "classarch_1_1kernel_1_1_page_address" ]
       ] ],
       [ "APIC", "classarch_1_1_a_p_i_c.html", "classarch_1_1_a_p_i_c" ],
+      [ "ArchContext", "structarch_1_1_arch_context.html", "structarch_1_1_arch_context" ],
+      [ "ArchContextManager", "classarch_1_1_arch_context_manager.html", null ],
+      [ "ArchInterruptController", "classarch_1_1_arch_interrupt_controller.html", null ],
       [ "Caps", "structarch_1_1_caps.html", "structarch_1_1_caps" ],
+      [ "GDT", "classarch_1_1_g_d_t.html", "classarch_1_1_g_d_t" ],
+      [ "GDTDescriptor", "structarch_1_1_g_d_t_descriptor.html", "structarch_1_1_g_d_t_descriptor" ],
+      [ "GDTEntry", "structarch_1_1_g_d_t_entry.html", "structarch_1_1_g_d_t_entry" ],
+      [ "IDT", "classarch_1_1_i_d_t.html", null ],
+      [ "IDTDescriptor", "structarch_1_1_i_d_t_descriptor.html", "structarch_1_1_i_d_t_descriptor" ],
+      [ "IDTEntry", "structarch_1_1_i_d_t_entry.html", "structarch_1_1_i_d_t_entry" ],
+      [ "IrqGuard", "classarch_1_1_irq_guard.html", "classarch_1_1_irq_guard" ],
+      [ "IrqState", "structarch_1_1_irq_state.html", "structarch_1_1_irq_state" ],
+      [ "Keyboard", "classarch_1_1_keyboard.html", "classarch_1_1_keyboard" ],
+      [ "PciBdf", "structarch_1_1_pci_bdf.html", "structarch_1_1_pci_bdf" ],
       [ "QemuDebugcon", "classarch_1_1_qemu_debugcon.html", null ],
+      [ "RTC", "classarch_1_1_r_t_c.html", "classarch_1_1_r_t_c" ],
+      [ "Serial", "classarch_1_1_serial.html", null ],
       [ "ShootdownBatch", "classarch_1_1_shootdown_batch.html", "classarch_1_1_shootdown_batch" ],
-      [ "TprGuard", "classarch_1_1_tpr_guard.html", "classarch_1_1_tpr_guard" ]
+      [ "Timer", "classarch_1_1_timer.html", null ],
+      [ "tm", "structarch_1_1tm.html", "structarch_1_1tm" ],
+      [ "TprGuard", "classarch_1_1_tpr_guard.html", "classarch_1_1_tpr_guard" ],
+      [ "TSS", "structarch_1_1_t_s_s.html", "structarch_1_1_t_s_s" ],
+      [ "TSSBlock", "structarch_1_1_t_s_s_block.html", "structarch_1_1_t_s_s_block" ]
     ] ],
     [ "crypto", "namespacecrypto.html", [
       [ "ChaChaState", "structcrypto_1_1_cha_cha_state.html", "structcrypto_1_1_cha_cha_state" ]
@@ -23,6 +42,22 @@ var annotated_dup =
     [ "kernel", "namespacekernel.html", [
       [ "acpi", "namespacekernel_1_1acpi.html", [
         [ "MadtInfo", "structkernel_1_1acpi_1_1_madt_info.html", "structkernel_1_1acpi_1_1_madt_info" ]
+      ] ],
+      [ "ahci", "namespacekernel_1_1ahci.html", [
+        [ "CmdHeader", "structkernel_1_1ahci_1_1_cmd_header.html", "structkernel_1_1ahci_1_1_cmd_header" ],
+        [ "CmdFIS", "structkernel_1_1ahci_1_1_cmd_f_i_s.html", "structkernel_1_1ahci_1_1_cmd_f_i_s" ],
+        [ "PrdHbaEntry", "structkernel_1_1ahci_1_1_prd_hba_entry.html", "structkernel_1_1ahci_1_1_prd_hba_entry" ],
+        [ "CmdTable", "structkernel_1_1ahci_1_1_cmd_table.html", "structkernel_1_1ahci_1_1_cmd_table" ]
+      ] ],
+      [ "block", "namespacekernel_1_1block.html", [
+        [ "AhciComplRecord", "structkernel_1_1block_1_1_ahci_compl_record.html", "structkernel_1_1block_1_1_ahci_compl_record" ],
+        [ "AhciDriver", "classkernel_1_1block_1_1_ahci_driver.html", "classkernel_1_1block_1_1_ahci_driver" ],
+        [ "AtaPioDriver", "classkernel_1_1block_1_1_ata_pio_driver.html", "classkernel_1_1block_1_1_ata_pio_driver" ],
+        [ "BlockDevice", "classkernel_1_1block_1_1_block_device.html", "classkernel_1_1block_1_1_block_device" ],
+        [ "MockBlockDevice", "classkernel_1_1block_1_1_mock_block_device.html", "classkernel_1_1block_1_1_mock_block_device" ],
+        [ "VirtioBlkComplRecord", "structkernel_1_1block_1_1_virtio_blk_compl_record.html", "structkernel_1_1block_1_1_virtio_blk_compl_record" ],
+        [ "VirtioBlkDriver", "classkernel_1_1block_1_1_virtio_blk_driver.html", "classkernel_1_1block_1_1_virtio_blk_driver" ],
+        [ "VirtioBlkReqHdr", "structkernel_1_1block_1_1_virtio_blk_req_hdr.html", "structkernel_1_1block_1_1_virtio_blk_req_hdr" ]
       ] ],
       [ "cap", "namespacekernel_1_1cap.html", [
         [ "CNode", "classkernel_1_1cap_1_1_c_node.html", "classkernel_1_1cap_1_1_c_node" ],
@@ -39,18 +74,53 @@ var annotated_dup =
         [ "WdogCap", "classkernel_1_1cap_1_1_wdog_cap.html", "classkernel_1_1cap_1_1_wdog_cap" ],
         [ "WdogClaim", "structkernel_1_1cap_1_1_wdog_claim.html", "structkernel_1_1cap_1_1_wdog_claim" ]
       ] ],
+      [ "daemon", "namespacekernel_1_1daemon.html", [
+        [ "DaemonEntry", "structkernel_1_1daemon_1_1_daemon_entry.html", "structkernel_1_1daemon_1_1_daemon_entry" ]
+      ] ],
       [ "debug", "namespacekernel_1_1debug.html", [
         [ "StopEvent", "structkernel_1_1debug_1_1_stop_event.html", "structkernel_1_1debug_1_1_stop_event" ]
       ] ],
       [ "diag", "namespacekernel_1_1diag.html", [
         [ "TcbWriteLog", "structkernel_1_1diag_1_1_tcb_write_log.html", "structkernel_1_1diag_1_1_tcb_write_log" ]
       ] ],
+      [ "dma", "namespacekernel_1_1dma.html", [
+        [ "SgEntry", "structkernel_1_1dma_1_1_sg_entry.html", "structkernel_1_1dma_1_1_sg_entry" ],
+        [ "SgList", "structkernel_1_1dma_1_1_sg_list.html", "structkernel_1_1dma_1_1_sg_list" ],
+        [ "PrdEntry", "structkernel_1_1dma_1_1_prd_entry.html", "structkernel_1_1dma_1_1_prd_entry" ],
+        [ "PrdTable", "structkernel_1_1dma_1_1_prd_table.html", "structkernel_1_1dma_1_1_prd_table" ],
+        [ "DmaBuffer", "structkernel_1_1dma_1_1_dma_buffer.html", "structkernel_1_1dma_1_1_dma_buffer" ],
+        [ "DmaChannel", "classkernel_1_1dma_1_1_dma_channel.html", "classkernel_1_1dma_1_1_dma_channel" ],
+        [ "BmDmaChannel", "classkernel_1_1dma_1_1_bm_dma_channel.html", "classkernel_1_1dma_1_1_bm_dma_channel" ],
+        [ "DmaEngine", "classkernel_1_1dma_1_1_dma_engine.html", "classkernel_1_1dma_1_1_dma_engine" ],
+        [ "PingPongDma", "classkernel_1_1dma_1_1_ping_pong_dma.html", "classkernel_1_1dma_1_1_ping_pong_dma" ]
+      ] ],
       [ "elf", "namespacekernel_1_1elf.html", [
-        [ "ElfLoader", "classkernel_1_1elf_1_1_elf_loader.html", null ],
-        [ "MapOut", "structkernel_1_1elf_1_1_map_out.html", "structkernel_1_1elf_1_1_map_out" ]
+        [ "DepResolveContext", "structkernel_1_1elf_1_1_dep_resolve_context.html", "structkernel_1_1elf_1_1_dep_resolve_context" ],
+        [ "DynView", "structkernel_1_1elf_1_1_dyn_view.html", "structkernel_1_1elf_1_1_dyn_view" ],
+        [ "ELF64Dynamic", "structkernel_1_1elf_1_1_e_l_f64_dynamic.html", "structkernel_1_1elf_1_1_e_l_f64_dynamic" ],
+        [ "ELF64Header", "structkernel_1_1elf_1_1_e_l_f64_header.html", "structkernel_1_1elf_1_1_e_l_f64_header" ],
+        [ "ELF64ProgramHeader", "structkernel_1_1elf_1_1_e_l_f64_program_header.html", "structkernel_1_1elf_1_1_e_l_f64_program_header" ],
+        [ "ELF64Rel", "structkernel_1_1elf_1_1_e_l_f64_rel.html", "structkernel_1_1elf_1_1_e_l_f64_rel" ],
+        [ "ELF64Rela", "structkernel_1_1elf_1_1_e_l_f64_rela.html", "structkernel_1_1elf_1_1_e_l_f64_rela" ],
+        [ "ELF64Symbol", "structkernel_1_1elf_1_1_e_l_f64_symbol.html", "structkernel_1_1elf_1_1_e_l_f64_symbol" ],
+        [ "ElfLoader", "classkernel_1_1elf_1_1_elf_loader.html", "classkernel_1_1elf_1_1_elf_loader" ],
+        [ "LoadedLibrary", "structkernel_1_1elf_1_1_loaded_library.html", "structkernel_1_1elf_1_1_loaded_library" ],
+        [ "MapOut", "structkernel_1_1elf_1_1_map_out.html", "structkernel_1_1elf_1_1_map_out" ],
+        [ "SharedLibCache", "classkernel_1_1elf_1_1_shared_lib_cache.html", "classkernel_1_1elf_1_1_shared_lib_cache" ]
+      ] ],
+      [ "fat32", "namespacekernel_1_1fat32.html", [
+        [ "MbrPartition", "structkernel_1_1fat32_1_1_mbr_partition.html", "structkernel_1_1fat32_1_1_mbr_partition" ],
+        [ "Fat32Bpb", "structkernel_1_1fat32_1_1_fat32_bpb.html", "structkernel_1_1fat32_1_1_fat32_bpb" ],
+        [ "Fat32Partition", "classkernel_1_1fat32_1_1_fat32_partition.html", "classkernel_1_1fat32_1_1_fat32_partition" ],
+        [ "DirEntryRaw", "structkernel_1_1fat32_1_1_dir_entry_raw.html", "structkernel_1_1fat32_1_1_dir_entry_raw" ],
+        [ "DirEntry", "structkernel_1_1fat32_1_1_dir_entry.html", "structkernel_1_1fat32_1_1_dir_entry" ]
       ] ],
       [ "gs", "namespacekernel_1_1gs.html", [
         [ "WriteContext", "structkernel_1_1gs_1_1_write_context.html", "structkernel_1_1gs_1_1_write_context" ]
+      ] ],
+      [ "iocd", "namespacekernel_1_1iocd.html", [
+        [ "Msg", "structkernel_1_1iocd_1_1_msg.html", "structkernel_1_1iocd_1_1_msg" ],
+        [ "Reply", "structkernel_1_1iocd_1_1_reply.html", "structkernel_1_1iocd_1_1_reply" ]
       ] ],
       [ "iommu", "namespacekernel_1_1iommu.html", [
         [ "dmar", "namespacekernel_1_1iommu_1_1dmar.html", [
@@ -73,11 +143,23 @@ var annotated_dup =
         [ "catalog", "namespacekernel_1_1log_1_1catalog.html", [
           [ "DmesgRecord", "structkernel_1_1log_1_1catalog_1_1_dmesg_record.html", "structkernel_1_1log_1_1catalog_1_1_dmesg_record" ]
         ] ],
+        [ "DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", "classkernel_1_1log_1_1_dmesg_service" ],
+        [ "KlogService", "classkernel_1_1log_1_1_klog_service.html", "classkernel_1_1log_1_1_klog_service" ],
         [ "LogEntry", "structkernel_1_1log_1_1_log_entry.html", "structkernel_1_1log_1_1_log_entry" ],
-        [ "DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", "classkernel_1_1log_1_1_dmesg_service" ]
+        [ "RingBuffer", "classkernel_1_1log_1_1_ring_buffer.html", "classkernel_1_1log_1_1_ring_buffer" ]
+      ] ],
+      [ "net", "namespacekernel_1_1net.html", [
+        [ "Ipv4Addr", "structkernel_1_1net_1_1_ipv4_addr.html", "structkernel_1_1net_1_1_ipv4_addr" ],
+        [ "MacAddr", "structkernel_1_1net_1_1_mac_addr.html", "structkernel_1_1net_1_1_mac_addr" ],
+        [ "Nic", "structkernel_1_1net_1_1_nic.html", "structkernel_1_1net_1_1_nic" ],
+        [ "VirtioNetDevice", "structkernel_1_1net_1_1_virtio_net_device.html", "structkernel_1_1net_1_1_virtio_net_device" ],
+        [ "VirtioNetHdr", "structkernel_1_1net_1_1_virtio_net_hdr.html", "structkernel_1_1net_1_1_virtio_net_hdr" ]
       ] ],
       [ "profiling", "namespacekernel_1_1profiling.html", [
         [ "Sampler", "classkernel_1_1profiling_1_1_sampler.html", null ]
+      ] ],
+      [ "sched_queue", "namespacekernel_1_1sched__queue.html", [
+        [ "EdfReadyList", "structkernel_1_1sched__queue_1_1_edf_ready_list.html", "structkernel_1_1sched__queue_1_1_edf_ready_list" ]
       ] ],
       [ "shm", "namespacekernel_1_1shm.html", [
         [ "SharedRingHeader", "structkernel_1_1shm_1_1_shared_ring_header.html", "structkernel_1_1shm_1_1_shared_ring_header" ]
@@ -117,10 +199,15 @@ var annotated_dup =
       ] ],
       [ "vfs", "namespacekernel_1_1vfs.html", [
         [ "DevEntry", "structkernel_1_1vfs_1_1_dev_entry.html", "structkernel_1_1vfs_1_1_dev_entry" ],
+        [ "Dirent", "structkernel_1_1vfs_1_1_dirent.html", "structkernel_1_1vfs_1_1_dirent" ],
         [ "Fat32VnodeData", "structkernel_1_1vfs_1_1_fat32_vnode_data.html", "structkernel_1_1vfs_1_1_fat32_vnode_data" ],
+        [ "FdTable", "structkernel_1_1vfs_1_1_fd_table.html", "structkernel_1_1vfs_1_1_fd_table" ],
+        [ "FileDescription", "structkernel_1_1vfs_1_1_file_description.html", "structkernel_1_1vfs_1_1_file_description" ],
+        [ "Filesystem", "structkernel_1_1vfs_1_1_filesystem.html", "structkernel_1_1vfs_1_1_filesystem" ],
         [ "InitrdDirNode", "structkernel_1_1vfs_1_1_initrd_dir_node.html", "structkernel_1_1vfs_1_1_initrd_dir_node" ],
         [ "InitrdFileNode", "structkernel_1_1vfs_1_1_initrd_file_node.html", "structkernel_1_1vfs_1_1_initrd_file_node" ],
         [ "MemInfoVnode", "structkernel_1_1vfs_1_1_mem_info_vnode.html", "structkernel_1_1vfs_1_1_mem_info_vnode" ],
+        [ "Mount", "structkernel_1_1vfs_1_1_mount.html", "structkernel_1_1vfs_1_1_mount" ],
         [ "PciVnode", "structkernel_1_1vfs_1_1_pci_vnode.html", "structkernel_1_1vfs_1_1_pci_vnode" ],
         [ "PidDirVnode", "structkernel_1_1vfs_1_1_pid_dir_vnode.html", "structkernel_1_1vfs_1_1_pid_dir_vnode" ],
         [ "PidStatVnode", "structkernel_1_1vfs_1_1_pid_stat_vnode.html", "structkernel_1_1vfs_1_1_pid_stat_vnode" ],
@@ -129,19 +216,30 @@ var annotated_dup =
         [ "RdDirEntry", "structkernel_1_1vfs_1_1_rd_dir_entry.html", "structkernel_1_1vfs_1_1_rd_dir_entry" ],
         [ "RdExtent", "structkernel_1_1vfs_1_1_rd_extent.html", "structkernel_1_1vfs_1_1_rd_extent" ],
         [ "RdSuper", "structkernel_1_1vfs_1_1_rd_super.html", "structkernel_1_1vfs_1_1_rd_super" ],
-        [ "TmpfsEntry", "structkernel_1_1vfs_1_1_tmpfs_entry.html", "structkernel_1_1vfs_1_1_tmpfs_entry" ]
+        [ "TmpfsEntry", "structkernel_1_1vfs_1_1_tmpfs_entry.html", "structkernel_1_1vfs_1_1_tmpfs_entry" ],
+        [ "VfsStat", "structkernel_1_1vfs_1_1_vfs_stat.html", "structkernel_1_1vfs_1_1_vfs_stat" ],
+        [ "Vnode", "structkernel_1_1vfs_1_1_vnode.html", "structkernel_1_1vfs_1_1_vnode" ],
+        [ "VnodeOps", "structkernel_1_1vfs_1_1_vnode_ops.html", "structkernel_1_1vfs_1_1_vnode_ops" ]
+      ] ],
+      [ "vfsd", "namespacekernel_1_1vfsd.html", [
+        [ "Msg", "structkernel_1_1vfsd_1_1_msg.html", "structkernel_1_1vfsd_1_1_msg" ],
+        [ "Reply", "structkernel_1_1vfsd_1_1_reply.html", "structkernel_1_1vfsd_1_1_reply" ]
       ] ],
       [ "AllTasksRegistry", "classkernel_1_1_all_tasks_registry.html", "classkernel_1_1_all_tasks_registry" ],
+      [ "BufferPool", "classkernel_1_1_buffer_pool.html", "classkernel_1_1_buffer_pool" ],
+      [ "CanaryTrip", "structkernel_1_1_canary_trip.html", "structkernel_1_1_canary_trip" ],
       [ "CheckedPtr", "classkernel_1_1_checked_ptr.html", "classkernel_1_1_checked_ptr" ],
       [ "CpuContext", "structkernel_1_1_cpu_context.html", "structkernel_1_1_cpu_context" ],
       [ "CRC32", "classkernel_1_1_c_r_c32.html", null ],
       [ "DeadlineList", "classkernel_1_1_deadline_list.html", "classkernel_1_1_deadline_list" ],
-      [ "EdfReadyList", "structkernel_1_1_edf_ready_list.html", "structkernel_1_1_edf_ready_list" ],
+      [ "Driver", "structkernel_1_1_driver.html", "structkernel_1_1_driver" ],
+      [ "DriverRegistry", "classkernel_1_1_driver_registry.html", null ],
       [ "ErrorOr", "structkernel_1_1_error_or.html", "structkernel_1_1_error_or" ],
       [ "ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", "structkernel_1_1_error_or_3_01void_01_4" ],
       [ "ExceptionSignalMap", "structkernel_1_1_exception_signal_map.html", "structkernel_1_1_exception_signal_map" ],
       [ "IdleScanCursor", "structkernel_1_1_idle_scan_cursor.html", "structkernel_1_1_idle_scan_cursor" ],
       [ "IdleScanProgress", "structkernel_1_1_idle_scan_progress.html", "structkernel_1_1_idle_scan_progress" ],
+      [ "IPC", "classkernel_1_1_i_p_c.html", null ],
       [ "IrqDelivery", "classkernel_1_1_irq_delivery.html", null ],
       [ "IrqRegistration", "structkernel_1_1_irq_registration.html", "structkernel_1_1_irq_registration" ],
       [ "KernelObject", "classkernel_1_1_kernel_object.html", "classkernel_1_1_kernel_object" ],
@@ -150,6 +248,7 @@ var annotated_dup =
       [ "Message", "structkernel_1_1_message.html", "structkernel_1_1_message" ],
       [ "MessageQueue", "structkernel_1_1_message_queue.html", "structkernel_1_1_message_queue" ],
       [ "PageAddress", "classkernel_1_1_page_address.html", "classkernel_1_1_page_address" ],
+      [ "PageFlags", "structkernel_1_1_page_flags.html", null ],
       [ "PhysicalAddress", "classkernel_1_1_physical_address.html", "classkernel_1_1_physical_address" ],
       [ "PMM", "classkernel_1_1_p_m_m.html", "classkernel_1_1_p_m_m" ],
       [ "PriorityMap", "classkernel_1_1_priority_map.html", "classkernel_1_1_priority_map" ],
@@ -161,6 +260,8 @@ var annotated_dup =
       [ "SchedulerConfig", "structkernel_1_1_scheduler_config.html", "structkernel_1_1_scheduler_config" ],
       [ "ScopedRef", "classkernel_1_1_scoped_ref.html", "classkernel_1_1_scoped_ref" ],
       [ "SignalFrame", "structkernel_1_1_signal_frame.html", "structkernel_1_1_signal_frame" ],
+      [ "Span", "classkernel_1_1_span.html", "classkernel_1_1_span" ],
+      [ "Syscall", "classkernel_1_1_syscall.html", null ],
       [ "TaskControlBlock", "structkernel_1_1_task_control_block.html", "structkernel_1_1_task_control_block" ],
       [ "TaskExitRecord", "structkernel_1_1_task_exit_record.html", "structkernel_1_1_task_exit_record" ],
       [ "TaskQueue", "classkernel_1_1_task_queue.html", "classkernel_1_1_task_queue" ],
@@ -173,6 +274,19 @@ var annotated_dup =
       [ "VirtualAddress", "classkernel_1_1_virtual_address.html", "classkernel_1_1_virtual_address" ],
       [ "VMM", "classkernel_1_1_v_m_m.html", null ]
     ] ],
+    [ "net", "namespacenet.html", [
+      [ "ArpCache", "classnet_1_1_arp_cache.html", "classnet_1_1_arp_cache" ],
+      [ "ArpCacheEntry", "structnet_1_1_arp_cache_entry.html", "structnet_1_1_arp_cache_entry" ],
+      [ "ArpHeader", "structnet_1_1_arp_header.html", "structnet_1_1_arp_header" ],
+      [ "EtherHeader", "structnet_1_1_ether_header.html", "structnet_1_1_ether_header" ],
+      [ "IcmpEchoReply", "structnet_1_1_icmp_echo_reply.html", "structnet_1_1_icmp_echo_reply" ],
+      [ "IcmpHeader", "structnet_1_1_icmp_header.html", "structnet_1_1_icmp_header" ],
+      [ "Ipv4Addr", "structnet_1_1_ipv4_addr.html", "structnet_1_1_ipv4_addr" ],
+      [ "Ipv4Header", "structnet_1_1_ipv4_header.html", "structnet_1_1_ipv4_header" ],
+      [ "MacAddr", "structnet_1_1_mac_addr.html", "structnet_1_1_mac_addr" ],
+      [ "Nic", "structnet_1_1_nic.html", "structnet_1_1_nic" ],
+      [ "UdpHeader", "structnet_1_1_udp_header.html", "structnet_1_1_udp_header" ]
+    ] ],
     [ "service", "namespaceservice.html", [
       [ "Framebuffer", "classservice_1_1_framebuffer.html", null ],
       [ "FramebufferInfo", "structservice_1_1_framebuffer_info.html", "structservice_1_1_framebuffer_info" ],
@@ -183,6 +297,7 @@ var annotated_dup =
     ] ],
     [ "adopt_lock_t", "structadopt__lock__t.html", null ],
     [ "BenchResult", "struct_bench_result.html", "struct_bench_result" ],
+    [ "BootInfo", "struct_boot_info.html", "struct_boot_info" ],
     [ "DefaultDeleter", "struct_default_deleter.html", "struct_default_deleter" ],
     [ "Fat32TestFixture", "struct_fat32_test_fixture.html", "struct_fat32_test_fixture" ],
     [ "fdt_header", "structfdt__header.html", "structfdt__header" ],
@@ -195,6 +310,7 @@ var annotated_dup =
     [ "is_same", "structis__same.html", null ],
     [ "is_same&lt; T, T &gt;", "structis__same_3_01_t_00_01_t_01_4.html", null ],
     [ "itimerspec", "structitimerspec.html", "structitimerspec" ],
+    [ "nexios_tcb", "structnexios__tcb.html", "structnexios__tcb" ],
     [ "PmmAllocHdr", "struct_pmm_alloc_hdr.html", "struct_pmm_alloc_hdr" ],
     [ "remove_reference", "structremove__reference.html", "structremove__reference" ],
     [ "remove_reference&lt; T &amp; &gt;", "structremove__reference_3_01_t_01_6_01_4.html", "structremove__reference_3_01_t_01_6_01_4" ],
@@ -208,6 +324,7 @@ var annotated_dup =
     [ "SPSCRing", "class_s_p_s_c_ring.html", "class_s_p_s_c_ring" ],
     [ "stat", "structstat.html", "structstat" ],
     [ "TaskDeleter", "struct_task_deleter.html", "struct_task_deleter" ],
+    [ "TestMeta", "struct_test_meta.html", "struct_test_meta" ],
     [ "TestStruct", "struct_test_struct.html", "struct_test_struct" ],
     [ "timespec", "structtimespec.html", "structtimespec" ],
     [ "Timeval", "struct_timeval.html", "struct_timeval" ],

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -139,39 +139,44 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2io_8hpp_s
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#pragma once</span></div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span></div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">extern</span> <span class="stringliteral">&quot;C&quot;</span> {</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keywordtype">void</span> arch_outb(uint16_t port, uint8_t val);</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch_inb(uint16_t port);</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keywordtype">void</span> arch_outw(uint16_t port, uint16_t val);</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arch_inw(uint16_t port);</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="keywordtype">void</span> arch_outl(uint16_t port, uint32_t val);</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch_inl(uint16_t port);</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keywordtype">void</span> arch_hlt();</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="keywordtype">void</span> arch_pause();</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><span class="keywordtype">void</span> arch_cli();</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><span class="keywordtype">void</span> arch_sti();</div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>}</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span></div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span><span class="comment">// Include arch-specific inline implementations</span></div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span><span class="preprocessor">#include &lt;<a class="code" href="x86__64_2hal_2io__impl_8hpp.html">kernel/arch/x86_64/hal/io_impl.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span><span class="preprocessor">#elif defined(CONFIG_ARCH_AARCH64)</span></div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span><span class="preprocessor">#include &lt;<a class="code" href="aarch64_2hal_2io__impl_8hpp.html">kernel/arch/aarch64/hal/io_impl.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span><span class="preprocessor">#elif defined(CONFIG_ARCH_RISCV64)</span></div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span><span class="preprocessor">#include &lt;<a class="code" href="riscv64_2hal_2io__impl_8hpp.html">kernel/arch/riscv64/hal/io_impl.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span><span class="preprocessor">#else</span></div>
-<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span><span class="preprocessor">#error &quot;HAL: no io implementation for this architecture&quot;</span></div>
-<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span></div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="keyword">extern</span> <span class="stringliteral">&quot;C&quot;</span> {</div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="hal_2io_8hpp.html#a81eeb81808f70c788bfe65bf4fffbfb5">   32</a></span><span class="keywordtype">void</span> <a class="code hl_function" href="hal_2io_8hpp.html#a81eeb81808f70c788bfe65bf4fffbfb5">arch_outb</a>(uint16_t port, uint8_t val);</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno"><a class="line" href="hal_2io_8hpp.html#aff61fd1a757813cc1826f8c3207e89eb">   35</a></span>uint8_t <a class="code hl_function" href="hal_2io_8hpp.html#aff61fd1a757813cc1826f8c3207e89eb">arch_inb</a>(uint16_t port);</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="hal_2io_8hpp.html#af2c7f10d627fdfec5611a72677038387">   37</a></span><span class="keywordtype">void</span> <a class="code hl_function" href="hal_2io_8hpp.html#af2c7f10d627fdfec5611a72677038387">arch_outw</a>(uint16_t port, uint16_t val);</div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno"><a class="line" href="hal_2io_8hpp.html#aa994f15d7b4bda88e88959c5d4947b19">   40</a></span>uint16_t <a class="code hl_function" href="hal_2io_8hpp.html#aa994f15d7b4bda88e88959c5d4947b19">arch_inw</a>(uint16_t port);</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno"><a class="line" href="hal_2io_8hpp.html#ae9749e2b962a65d147ce3c90ea7778ad">   42</a></span><span class="keywordtype">void</span> <a class="code hl_function" href="hal_2io_8hpp.html#ae9749e2b962a65d147ce3c90ea7778ad">arch_outl</a>(uint16_t port, uint32_t val);</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno"><a class="line" href="hal_2io_8hpp.html#a348279f3fc04029caf4da3abf7850580">   45</a></span>uint32_t <a class="code hl_function" href="hal_2io_8hpp.html#a348279f3fc04029caf4da3abf7850580">arch_inl</a>(uint16_t port);</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno"><a class="line" href="hal_2io_8hpp.html#a7a9c77c95139ee73afeaa3b1abdffb46">   47</a></span><span class="keywordtype">void</span> <a class="code hl_function" href="hal_2io_8hpp.html#a7a9c77c95139ee73afeaa3b1abdffb46">arch_hlt</a>();</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno"><a class="line" href="hal_2io_8hpp.html#a451855cfa237ffacab4e05c2a7ec0292">   49</a></span><span class="keywordtype">void</span> <a class="code hl_function" href="hal_2io_8hpp.html#a451855cfa237ffacab4e05c2a7ec0292">arch_pause</a>();</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno"><a class="line" href="hal_2io_8hpp.html#a7a73f3d7779b45651b9ea4629caa7df3">   51</a></span><span class="keywordtype">void</span> <a class="code hl_function" href="hal_2io_8hpp.html#a7a73f3d7779b45651b9ea4629caa7df3">arch_cli</a>();</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno"><a class="line" href="hal_2io_8hpp.html#a19fb293e900f53bce4a1546d326789d5">   53</a></span><span class="keywordtype">void</span> <a class="code hl_function" href="hal_2io_8hpp.html#a19fb293e900f53bce4a1546d326789d5">arch_sti</a>();</div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>}</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span></div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span><span class="comment">// Include arch-specific inline implementations</span></div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="preprocessor">#include &lt;<a class="code" href="x86__64_2hal_2io__impl_8hpp.html">kernel/arch/x86_64/hal/io_impl.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span><span class="preprocessor">#elif defined(CONFIG_ARCH_AARCH64)</span></div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span><span class="preprocessor">#include &lt;<a class="code" href="aarch64_2hal_2io__impl_8hpp.html">kernel/arch/aarch64/hal/io_impl.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span><span class="preprocessor">#elif defined(CONFIG_ARCH_RISCV64)</span></div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span><span class="preprocessor">#include &lt;<a class="code" href="riscv64_2hal_2io__impl_8hpp.html">kernel/arch/riscv64/hal/io_impl.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span><span class="preprocessor">#else</span></div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span><span class="preprocessor">#error &quot;HAL: no io implementation for this architecture&quot;</span></div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span><span class="preprocessor">#endif</span></div>
 <div class="ttc" id="aaarch64_2hal_2io__impl_8hpp_html"><div class="ttname"><a href="aarch64_2hal_2io__impl_8hpp.html">io_impl.hpp</a></div><div class="ttdoc">AArch64 I/O primitives — MMIO, port I/O stubs, barrier, and FP enable.</div></div>
-<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
-<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
-<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
+<div class="ttc" id="ahal_2io_8hpp_html_a19fb293e900f53bce4a1546d326789d5"><div class="ttname"><a href="hal_2io_8hpp.html#a19fb293e900f53bce4a1546d326789d5">arch_sti</a></div><div class="ttdeci">void arch_sti()</div><div class="ttdoc">Enable interrupts (STI).</div></div>
+<div class="ttc" id="ahal_2io_8hpp_html_a348279f3fc04029caf4da3abf7850580"><div class="ttname"><a href="hal_2io_8hpp.html#a348279f3fc04029caf4da3abf7850580">arch_inl</a></div><div class="ttdeci">uint32_t arch_inl(uint16_t port)</div><div class="ttdoc">Read a 32-bit dword from an I/O port.</div></div>
+<div class="ttc" id="ahal_2io_8hpp_html_a451855cfa237ffacab4e05c2a7ec0292"><div class="ttname"><a href="hal_2io_8hpp.html#a451855cfa237ffacab4e05c2a7ec0292">arch_pause</a></div><div class="ttdeci">void arch_pause()</div><div class="ttdoc">CPU pause/yield hint (e.g. PAUSE on x86).</div></div>
+<div class="ttc" id="ahal_2io_8hpp_html_a7a73f3d7779b45651b9ea4629caa7df3"><div class="ttname"><a href="hal_2io_8hpp.html#a7a73f3d7779b45651b9ea4629caa7df3">arch_cli</a></div><div class="ttdeci">void arch_cli()</div><div class="ttdoc">Disable interrupts (CLI).</div></div>
+<div class="ttc" id="ahal_2io_8hpp_html_a7a9c77c95139ee73afeaa3b1abdffb46"><div class="ttname"><a href="hal_2io_8hpp.html#a7a9c77c95139ee73afeaa3b1abdffb46">arch_hlt</a></div><div class="ttdeci">void arch_hlt()</div><div class="ttdoc">Halt the CPU until the next interrupt.</div></div>
+<div class="ttc" id="ahal_2io_8hpp_html_a81eeb81808f70c788bfe65bf4fffbfb5"><div class="ttname"><a href="hal_2io_8hpp.html#a81eeb81808f70c788bfe65bf4fffbfb5">arch_outb</a></div><div class="ttdeci">void arch_outb(uint16_t port, uint8_t val)</div><div class="ttdoc">Assembly-level I/O stubs for x86-64 (provided by arch linker).</div></div>
+<div class="ttc" id="ahal_2io_8hpp_html_aa994f15d7b4bda88e88959c5d4947b19"><div class="ttname"><a href="hal_2io_8hpp.html#aa994f15d7b4bda88e88959c5d4947b19">arch_inw</a></div><div class="ttdeci">uint16_t arch_inw(uint16_t port)</div><div class="ttdoc">Read a 16-bit word from an I/O port.</div></div>
+<div class="ttc" id="ahal_2io_8hpp_html_ae9749e2b962a65d147ce3c90ea7778ad"><div class="ttname"><a href="hal_2io_8hpp.html#ae9749e2b962a65d147ce3c90ea7778ad">arch_outl</a></div><div class="ttdeci">void arch_outl(uint16_t port, uint32_t val)</div><div class="ttdoc">Write a 32-bit dword to an I/O port.</div></div>
+<div class="ttc" id="ahal_2io_8hpp_html_af2c7f10d627fdfec5611a72677038387"><div class="ttname"><a href="hal_2io_8hpp.html#af2c7f10d627fdfec5611a72677038387">arch_outw</a></div><div class="ttdeci">void arch_outw(uint16_t port, uint16_t val)</div><div class="ttdoc">Write a 16-bit word to an I/O port.</div></div>
+<div class="ttc" id="ahal_2io_8hpp_html_aff61fd1a757813cc1826f8c3207e89eb"><div class="ttname"><a href="hal_2io_8hpp.html#aff61fd1a757813cc1826f8c3207e89eb">arch_inb</a></div><div class="ttdeci">uint8_t arch_inb(uint16_t port)</div><div class="ttdoc">Read a byte from an I/O port.</div></div>
 <div class="ttc" id="ariscv64_2hal_2io__impl_8hpp_html"><div class="ttname"><a href="riscv64_2hal_2io__impl_8hpp.html">io_impl.hpp</a></div><div class="ttdoc">RISC-V64 I/O HAL — MMIO load/store, CSR access, WFI, FPU enable, and stub x86 port I/O.</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="ax86__64_2hal_2io__impl_8hpp_html"><div class="ttname"><a href="x86__64_2hal_2io__impl_8hpp.html">io_impl.hpp</a></div><div class="ttdoc">x86_64 I/O port access, control register access, and CPU instruction wrappers.</div></div>

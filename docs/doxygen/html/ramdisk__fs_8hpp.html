@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,37 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ramdisk__fs_8h
 
 <p>Minimal flat file store over ramdiskd block IPC (issue #314), mounted at <span class="tt">/mnt/ramdisk</span>. Fixed directory region + bump-allocated extents; same <span class="tt">VnodeOps</span> surface and mount point reserved for a later full FAT32 backend (explicit non-goal of this issue).  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for ramdisk_fs.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="ramdisk__fs_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2vfs_2ramdisk__fs_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="ramdisk__fs_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2vfs_2ramdisk__fs_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="ramdisk__fs_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Avfs" id="r_kernel_3A_3Avfs"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html">kernel::vfs</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:acb7b7264f275dc4b5139c6739c46f1f0" id="r_acb7b7264f275dc4b5139c6739c46f1f0"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#acb7b7264f275dc4b5139c6739c46f1f0">kernel::vfs::ramdisk_fs_try_mount</a> ()</td></tr>
+<tr class="memdesc:acb7b7264f275dc4b5139c6739c46f1f0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Try to mount the ramdisk filesystem at <span class="tt">/mnt/ramdisk</span>. Best-effort and fail-closed: returns nonzero without mounting when ramdiskd is ungranted; never blocks boot. Safe to call repeatedly (already-mounted is a no-op success).  <br /></td></tr>
+<tr class="memitem:adfef1f0d08b703f47ea256474baf1d7a" id="r_adfef1f0d08b703f47ea256474baf1d7a"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#adfef1f0d08b703f47ea256474baf1d7a">kernel::vfs::ramdisk_fs_verify_all</a> ()</td></tr>
+<tr class="memdesc:adfef1f0d08b703f47ea256474baf1d7a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verify every live file's CRC against ramdisk (test seam — the same per-file check the boot cache-fill runs).  <br /></td></tr>
+<tr class="memitem:aa66799fc199574092ebec434d2b6607b" id="r_aa66799fc199574092ebec434d2b6607b"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1vfs.html#aa66799fc199574092ebec434d2b6607b">kernel::vfs::ramdisk_fs_extent</a> (const char *name, uint64_t &amp;start_block, uint64_t &amp;block_count, uint32_t &amp;crc)</td></tr>
+<tr class="memdesc:aa66799fc199574092ebec434d2b6607b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam: fetch a file's extent (start block, block count, stored CRC).  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Minimal flat file store over ramdiskd block IPC (issue #314), mounted at <span class="tt">/mnt/ramdisk</span>. Fixed directory region + bump-allocated extents; same <span class="tt">VnodeOps</span> surface and mount point reserved for a later full FAT32 backend (explicit non-goal of this issue). </p>
 <p>Visibility rule (stage-commit without rename — there is no rename syscall): create(name, expected_size) makes an INVISIBLE entry (size 0); lookup/open/read refuse entries whose size != expected_size. The final sized write flips the file visible atomically at the single dir-region persist. Torn uploads are therefore never executable. Integrity verification is client-side re-read (no stored checksum in v1; bit-rot detection is out of scope — see docs/specs/ramdisk_fs.md). </p>

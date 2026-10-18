@@ -1,8 +1,10 @@
 var namespacekernel_1_1log =
 [
     [ "catalog", "namespacekernel_1_1log_1_1catalog.html", "namespacekernel_1_1log_1_1catalog" ],
-    [ "LogEntry", "structkernel_1_1log_1_1_log_entry.html", "structkernel_1_1log_1_1_log_entry" ],
     [ "DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", "classkernel_1_1log_1_1_dmesg_service" ],
+    [ "KlogService", "classkernel_1_1log_1_1_klog_service.html", "classkernel_1_1log_1_1_klog_service" ],
+    [ "LogEntry", "structkernel_1_1log_1_1_log_entry.html", "structkernel_1_1log_1_1_log_entry" ],
+    [ "RingBuffer", "classkernel_1_1log_1_1_ring_buffer.html", "classkernel_1_1log_1_1_ring_buffer" ],
     [ "ErrorSubsystem", "namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a", [
       [ "BASE", "namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aae7b1a5c82772e0e055096008cb9883ef", null ],
       [ "SYNC", "namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa274ccef15a21e829d03293a6fd1974f3", null ],

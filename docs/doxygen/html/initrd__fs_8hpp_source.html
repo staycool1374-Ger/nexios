@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -139,21 +139,20 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('initrd__fs_8hp
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#pragma once</span></div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#include &lt;<a class="code" href="vfs_8hpp.html">kernel/vfs/vfs.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &lt;<a class="code" href="vfs_8hpp.html">kernel/vfs/vfs.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span> </div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1vfs.html">vfs</a> {</div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span> </div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="comment">// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)</span></div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">extern</span> Filesystem <a class="code hl_variable" href="namespacekernel_1_1vfs.html#a7ef3281549b66c34c3500a7b5156718b">initrd_fs</a>;</div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span> </div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>} <span class="comment">// namespace vfs</span></div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1vfs.html">vfs</a> {</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="comment">// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)</span></div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="keyword">extern</span> <a class="code hl_struct" href="structkernel_1_1vfs_1_1_filesystem.html">Filesystem</a> <a class="code hl_variable" href="namespacekernel_1_1vfs.html#a7ef3281549b66c34c3500a7b5156718b">initrd_fs</a>;</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>} <span class="comment">// namespace vfs</span></div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>} <span class="comment">// namespace kernel</span></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html"><div class="ttname"><a href="namespacekernel_1_1vfs.html">kernel::vfs</a></div><div class="ttdef"><b>Definition</b> devfs.cpp:33</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_a7ef3281549b66c34c3500a7b5156718b"><div class="ttname"><a href="namespacekernel_1_1vfs.html#a7ef3281549b66c34c3500a7b5156718b">kernel::vfs::initrd_fs</a></div><div class="ttdeci">Filesystem initrd_fs</div><div class="ttdef"><b>Definition</b> initrd_fs.cpp:641</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="astructkernel_1_1vfs_1_1_filesystem_html"><div class="ttname"><a href="structkernel_1_1vfs_1_1_filesystem.html">kernel::vfs::Filesystem</a></div><div class="ttdef"><b>Definition</b> vfs.hpp:198</div></div>
 <div class="ttc" id="avfs_8hpp_html"><div class="ttname"><a href="vfs_8hpp.html">vfs.hpp</a></div><div class="ttdoc">Core VFS types, structures, and public API declarations.</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

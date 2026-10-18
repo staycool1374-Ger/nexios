@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,114 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('udp_8hpp.html'
 
 <p>UDP protocol types and helpers.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for udp.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="udp_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2net_2udp_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="udp_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2net_2udp_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="udp_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:net_3A_3AUdpHeader" id="r_net_3A_3AUdpHeader"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structnet_1_1_udp_header.html">net::UdpHeader</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">UDP header (8 bytes).  <a href="structnet_1_1_udp_header.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:net" id="r_net"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html">net</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ac7db56eb36db03ea6f642b3895d2665a" id="r_ac7db56eb36db03ea6f642b3895d2665a"><td class="memItemLeft">struct <a class="el" href="structnet_1_1_arp_header.html">net::ArpHeader</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#ac7db56eb36db03ea6f642b3895d2665a">net::__attribute__</a> ((packed))</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:ab98974981cf4c143fcee028643f313e6" id="r_ab98974981cf4c143fcee028643f313e6"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ab98974981cf4c143fcee028643f313e6">src_port</a></td></tr>
+<tr class="memdesc:ab98974981cf4c143fcee028643f313e6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Source port (big-endian).  <br /></td></tr>
+<tr class="memitem:ae18defed4756b8c15e34718f51e86e55" id="r_ae18defed4756b8c15e34718f51e86e55"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ae18defed4756b8c15e34718f51e86e55">dst_port</a></td></tr>
+<tr class="memdesc:ae18defed4756b8c15e34718f51e86e55"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destination port (big-endian).  <br /></td></tr>
+<tr class="memitem:a1892eba2086d12ac2b09005aeb09ea3b" id="r_a1892eba2086d12ac2b09005aeb09ea3b"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a1892eba2086d12ac2b09005aeb09ea3b">length</a></td></tr>
+<tr class="memdesc:a1892eba2086d12ac2b09005aeb09ea3b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Header + data length (big-endian).  <br /></td></tr>
+<tr class="memitem:a6796c847bbd16253ce2538754c250bd6" id="r_a6796c847bbd16253ce2538754c250bd6"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a6796c847bbd16253ce2538754c250bd6">checksum</a></td></tr>
+<tr class="memdesc:a6796c847bbd16253ce2538754c250bd6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Optional checksum (big-endian; 0 = no checksum).  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>UDP protocol types and helpers. </p>
-</div></div><!-- contents -->
+</div><a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a6796c847bbd16253ce2538754c250bd6" name="a6796c847bbd16253ce2538754c250bd6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6796c847bbd16253ce2538754c250bd6">&#9670;&#160;</a></span>checksum</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t checksum</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Optional checksum (big-endian; 0 = no checksum). </p>
+
+</div>
+</div>
+<a id="ae18defed4756b8c15e34718f51e86e55" name="ae18defed4756b8c15e34718f51e86e55"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae18defed4756b8c15e34718f51e86e55">&#9670;&#160;</a></span>dst_port</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t dst_port</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Destination port (big-endian). </p>
+
+</div>
+</div>
+<a id="a1892eba2086d12ac2b09005aeb09ea3b" name="a1892eba2086d12ac2b09005aeb09ea3b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1892eba2086d12ac2b09005aeb09ea3b">&#9670;&#160;</a></span>length</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t length</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Header + data length (big-endian). </p>
+
+</div>
+</div>
+<a id="ab98974981cf4c143fcee028643f313e6" name="ab98974981cf4c143fcee028643f313e6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab98974981cf4c143fcee028643f313e6">&#9670;&#160;</a></span>src_port</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t src_port</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Source port (big-endian). </p>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

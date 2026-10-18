@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,18 +119,47 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dump_8hpp.html
 </div><!--header-->
 <div class="contents">
 
-<p>Diagnostic dump functions for kernel debugging. All functions use arch::IrqGuard internally to disable IRQs during output. Output goes to serial via Logger::raw_write/print_hex/print_dec.  
+<p>Diagnostic dump functions for kernel debugging. All functions use <a class="el" href="classarch_1_1_irq_guard.html" title="RAII guard that disables interrupts on construction and restores the previous interrupt state on dest...">arch::IrqGuard</a> internally to disable IRQs during output. Output goes to serial via Logger::raw_write/print_hex/print_dec.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for dump.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="dump_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2debug_2dump_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="dump_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2debug_2dump_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="dump_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Adebug" id="r_kernel_3A_3Adebug"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html">kernel::debug</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a9c80a5a9a3a6f52efef1fabf4192ab72" id="r_a9c80a5a9a3a6f52efef1fabf4192ab72"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#a9c80a5a9a3a6f52efef1fabf4192ab72">kernel::debug::dump_scheduler_info</a> ()</td></tr>
+<tr class="memdesc:a9c80a5a9a3a6f52efef1fabf4192ab72"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print three hex key-value pairs.  <br /></td></tr>
+<tr class="memitem:a8e339ab3b15cf62caa047c7c770b1b21" id="r_a8e339ab3b15cf62caa047c7c770b1b21"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#a8e339ab3b15cf62caa047c7c770b1b21">kernel::debug::dump_cpu_regs</a> ()</td></tr>
+<tr class="memdesc:a8e339ab3b15cf62caa047c7c770b1b21"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump all CPU general-purpose registers + CR0/CR2/CR3/CR4.  <br /></td></tr>
+<tr class="memitem:ade0bc324da03fcc112cdb93eb35f220b" id="r_ade0bc324da03fcc112cdb93eb35f220b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#ade0bc324da03fcc112cdb93eb35f220b">kernel::debug::dump_task_info</a> (uint64_t task_id)</td></tr>
+<tr class="memdesc:ade0bc324da03fcc112cdb93eb35f220b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump all CPU GPRs + CR0/CR2/CR3/CR4 (x86_64); stub on other archs.  <br /></td></tr>
+<tr class="memitem:a70b0bd6c79eac81164d116b1c7b780d7" id="r_a70b0bd6c79eac81164d116b1c7b780d7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#a70b0bd6c79eac81164d116b1c7b780d7">kernel::debug::dump_all_tasks</a> ()</td></tr>
+<tr class="memdesc:a70b0bd6c79eac81164d116b1c7b780d7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump all valid tasks in the scheduler array.  <br /></td></tr>
+<tr class="memitem:ae301850b7dcbeb7beaeb3dc92d909ddf" id="r_ae301850b7dcbeb7beaeb3dc92d909ddf"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#ae301850b7dcbeb7beaeb3dc92d909ddf">kernel::debug::record_task_entry</a> (uint64_t entry, uint64_t tcb)</td></tr>
+<tr class="memdesc:ae301850b7dcbeb7beaeb3dc92d909ddf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record a task's entry (code address) + TCB address for BUGS.md#020 wild-write forensics.  <br /></td></tr>
+<tr class="memitem:a094fd17ebd41a3d23a3ac83dbab61387" id="r_a094fd17ebd41a3d23a3ac83dbab61387"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#a094fd17ebd41a3d23a3ac83dbab61387">kernel::debug::find_entry_owner</a> (uint64_t value)</td></tr>
+<tr class="memdesc:a094fd17ebd41a3d23a3ac83dbab61387"><td class="mdescLeft">&#160;</td><td class="mdescRight">If <span class="tt">value</span> matches a recently-created task's <span class="tt"><a class="el" href="elf_8hpp.html#a6aac0a1a7d70f8270f9bb1222445f370" title="Virtual address of entry point.">entry</a></span>, return that task's TCB address; else 0.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Diagnostic dump functions for kernel debugging. All functions use arch::IrqGuard internally to disable IRQs during output. Output goes to serial via Logger::raw_write/print_hex/print_dec. </p>
+<div class="textblock"><p>Diagnostic dump functions for kernel debugging. All functions use <a class="el" href="classarch_1_1_irq_guard.html" title="RAII guard that disables interrupts on construction and restores the previous interrupt state on dest...">arch::IrqGuard</a> internally to disable IRQs during output. Output goes to serial via Logger::raw_write/print_hex/print_dec. </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

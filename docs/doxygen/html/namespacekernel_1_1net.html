@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,13 +119,53 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 </div><!--header-->
 <div class="contents">
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:Ipv4Addr" id="r_Ipv4Addr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1net_1_1_ipv4_addr.html">Ipv4Addr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPv4 address (4 bytes, network-byte-order).  <a href="structkernel_1_1net_1_1_ipv4_addr.html#details">More...</a><br /></td></tr>
+<tr class="memitem:MacAddr" id="r_MacAddr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1net_1_1_mac_addr.html">MacAddr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ethernet MAC address (6 bytes).  <a href="structkernel_1_1net_1_1_mac_addr.html#details">More...</a><br /></td></tr>
+<tr class="memitem:Nic" id="r_Nic"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1net_1_1_nic.html">Nic</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">NIC (Network Interface Card) abstraction exposed to the network stack.  <a href="structkernel_1_1net_1_1_nic.html#details">More...</a><br /></td></tr>
+<tr class="memitem:VirtioNetDevice" id="r_VirtioNetDevice"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1net_1_1_virtio_net_device.html">VirtioNetDevice</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio-net NIC driver state.  <a href="structkernel_1_1net_1_1_virtio_net_device.html#details">More...</a><br /></td></tr>
+<tr class="memitem:VirtioNetHdr" id="r_VirtioNetHdr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1net_1_1_virtio_net_hdr.html">VirtioNetHdr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio-net header (prepended to each packet by the device).  <a href="structkernel_1_1net_1_1_virtio_net_hdr.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:ac79735cf719349d1a7d42f5c788b1406" id="r_ac79735cf719349d1a7d42f5c788b1406"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac79735cf719349d1a7d42f5c788b1406">virtio_net_probe</a> (Nic &amp;nic)</td></tr>
+<tr class="memitem:ac79735cf719349d1a7d42f5c788b1406" id="r_ac79735cf719349d1a7d42f5c788b1406"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac79735cf719349d1a7d42f5c788b1406">virtio_net_probe</a> (<a class="el" href="structnet_1_1_nic.html">Nic</a> &amp;nic)</td></tr>
 <tr class="memitem:ad963f2495bdf069ba09023e4b584c4b2" id="r_ad963f2495bdf069ba09023e4b584c4b2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad963f2495bdf069ba09023e4b584c4b2">virtio_net_poll</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buf, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> &amp;len)</td></tr>
 <tr class="memitem:af8019b1cd8dcf090045eb65e97779e2b" id="r_af8019b1cd8dcf090045eb65e97779e2b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af8019b1cd8dcf090045eb65e97779e2b">virtio_net_destroy</a> ()</td></tr>
+<tr class="memitem:afe0409339432dc6c20999f9546e4f831" id="r_afe0409339432dc6c20999f9546e4f831"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1net_1_1_virtio_net_hdr.html">kernel::net::VirtioNetHdr</a>&#160;</td><td class="memItemRight"><a class="el" href="#afe0409339432dc6c20999f9546e4f831">__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:ad963f2495bdf069ba09023e4b584c4b2" id="r_ad963f2495bdf069ba09023e4b584c4b2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad963f2495bdf069ba09023e4b584c4b2">virtio_net_poll</a> (uint8_t *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> &amp;len)</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:ad345498ecb7601f76e0af8f2b57acee1" id="r_ad345498ecb7601f76e0af8f2b57acee1"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad345498ecb7601f76e0af8f2b57acee1">VIRTIO_NET_HDR_SIZE</a> = sizeof(<a class="el" href="structkernel_1_1net_1_1_virtio_net_hdr.html">VirtioNetHdr</a>)</td></tr>
+<tr class="memitem:ad1a0583fe930593c5698468802a84868" id="r_ad1a0583fe930593c5698468802a84868"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ad1a0583fe930593c5698468802a84868">VIRTIO_NET_QUEUE_RX</a> = 0</td></tr>
+<tr class="memitem:a791e8db7fbc529ecbdabdfcc31c4f859" id="r_a791e8db7fbc529ecbdabdfcc31c4f859"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a791e8db7fbc529ecbdabdfcc31c4f859">VIRTIO_NET_QUEUE_TX</a> = 1</td></tr>
+<tr class="memitem:ab3a4abd2b12f76a6b17a0bb8e763bc22" id="r_ab3a4abd2b12f76a6b17a0bb8e763bc22"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1net_1_1_virtio_net_device.html">kernel::net::VirtioNetDevice</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab3a4abd2b12f76a6b17a0bb8e763bc22">__attribute__</a></td></tr>
+<tr class="memitem:a8a0e19cfd124c4121eda1a92ac391f5a" id="r_a8a0e19cfd124c4121eda1a92ac391f5a"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8a0e19cfd124c4121eda1a92ac391f5a">MAX_PACKET_SIZE</a></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="afe0409339432dc6c20999f9546e4f831" name="afe0409339432dc6c20999f9546e4f831"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afe0409339432dc6c20999f9546e4f831">&#9670;&#160;</a></span>__attribute__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct <a class="el" href="structkernel_1_1net_1_1_virtio_net_hdr.html">kernel::net::VirtioNetHdr</a> kernel::net::__attribute__ </td>
+          <td>(</td>
+          <td class="paramtype">(packed)</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="af8019b1cd8dcf090045eb65e97779e2b" name="af8019b1cd8dcf090045eb65e97779e2b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#af8019b1cd8dcf090045eb65e97779e2b">&#9670;&#160;</a></span>virtio_net_destroy()</h2>
 
@@ -140,6 +180,7 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>Destroy a probed Virtio-net device: clears the global before freeing so late poll/send calls null-check and never dereference freed memory. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -150,7 +191,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="ad963f2495bdf069ba09023e4b584c4b2" name="ad963f2495bdf069ba09023e4b584c4b2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad963f2495bdf069ba09023e4b584c4b2">&#9670;&#160;</a></span>virtio_net_poll()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad963f2495bdf069ba09023e4b584c4b2">&#9670;&#160;</a></span>virtio_net_poll() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -176,6 +217,35 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ad963f2495bdf069ba09023e4b584c4b2" name="ad963f2495bdf069ba09023e4b584c4b2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad963f2495bdf069ba09023e4b584c4b2">&#9670;&#160;</a></span>virtio_net_poll() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::net::virtio_net_poll </td>
+          <td>(</td>
+          <td class="paramtype">uint8_t *</td>          <td class="paramname"><span class="paramname"><em>buf</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>len</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Poll for a received frame. Non-blocking — returns false if nothing available. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">buf</td><td>Buffer to copy the frame into. </td></tr>
+    <tr><td class="paramname">len</td><td>On success, set to the number of bytes written. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if a frame was received. </dd></dl>
+
+</div>
+</div>
 <a id="ac79735cf719349d1a7d42f5c788b1406" name="ac79735cf719349d1a7d42f5c788b1406"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac79735cf719349d1a7d42f5c788b1406">&#9670;&#160;</a></span>virtio_net_probe()</h2>
 
@@ -185,17 +255,127 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::net::virtio_net_probe </td>
           <td>(</td>
-          <td class="paramtype">Nic &amp;</td>          <td class="paramname"><span class="paramname"><em>nic</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structnet_1_1_nic.html">Nic</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>nic</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>Probe and initialize a Virtio-net device. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">nic</td><td>The NIC abstraction to populate. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if a Virtio-net device was found and initialized. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1net_ac79735cf719349d1a7d42f5c788b1406_cgraph.png" border="0" usemap="#anamespacekernel_1_1net_ac79735cf719349d1a7d42f5c788b1406_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 2 -->
 </div>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="ab3a4abd2b12f76a6b17a0bb8e763bc22" name="ab3a4abd2b12f76a6b17a0bb8e763bc22"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab3a4abd2b12f76a6b17a0bb8e763bc22">&#9670;&#160;</a></span>__attribute__</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct <a class="el" href="structkernel_1_1net_1_1_virtio_net_device.html">kernel::net::VirtioNetDevice</a> kernel::net::__attribute__</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8a0e19cfd124c4121eda1a92ac391f5a" name="a8a0e19cfd124c4121eda1a92ac391f5a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8a0e19cfd124c4121eda1a92ac391f5a">&#9670;&#160;</a></span>MAX_PACKET_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> net::MAX_PACKET_SIZE</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad345498ecb7601f76e0af8f2b57acee1" name="ad345498ecb7601f76e0af8f2b57acee1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad345498ecb7601f76e0af8f2b57acee1">&#9670;&#160;</a></span>VIRTIO_NET_HDR_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::net::VIRTIO_NET_HDR_SIZE = sizeof(<a class="el" href="structkernel_1_1net_1_1_virtio_net_hdr.html">VirtioNetHdr</a>)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad1a0583fe930593c5698468802a84868" name="ad1a0583fe930593c5698468802a84868"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad1a0583fe930593c5698468802a84868">&#9670;&#160;</a></span>VIRTIO_NET_QUEUE_RX</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t kernel::net::VIRTIO_NET_QUEUE_RX = 0</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a791e8db7fbc529ecbdabdfcc31c4f859" name="a791e8db7fbc529ecbdabdfcc31c4f859"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a791e8db7fbc529ecbdabdfcc31c4f859">&#9670;&#160;</a></span>VIRTIO_NET_QUEUE_TX</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t kernel::net::VIRTIO_NET_QUEUE_TX = 1</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
 
 </div>
 </div>

@@ -10,5 +10,6 @@ var test__vmm_8cpp =
     [ "JARVIS_TEST", "test__vmm_8cpp.html#ace9196839b1bd0cba4696d6b3f2df78a", null ],
     [ "JARVIS_TEST", "test__vmm_8cpp.html#a8aef89a1240107fcb8d051a0c83d485b", null ],
     [ "JARVIS_TEST", "test__vmm_8cpp.html#a01f4d4c4f908802bd78fc5b7f8c1cd90", null ],
+    [ "JARVIS_TEST", "test__vmm_8cpp.html#ae164d0a2af88f67bfec1ec9f6f0fa760", null ],
     [ "register_vmm_tests", "test__vmm_8cpp.html#ab039ea1d1bf1b4ff96a90765af430dae", null ]
 ];

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -130,9 +130,13 @@ Collaboration diagram for kernel::vfs::FileDescription:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a623e148f5c96cdfeb6d5c2e2f0b10b1b" id="r_a623e148f5c96cdfeb6d5c2e2f0b10b1b"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">Vnode</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a623e148f5c96cdfeb6d5c2e2f0b10b1b">vnode</a></td></tr>
+<tr class="memdesc:a623e148f5c96cdfeb6d5c2e2f0b10b1b"><td class="mdescLeft">&#160;</td><td class="mdescRight">The vnode this descriptor refers to.  <br /></td></tr>
 <tr class="memitem:a988f9fd889c1789e54a69d69025904b8" id="r_a988f9fd889c1789e54a69d69025904b8"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a988f9fd889c1789e54a69d69025904b8">offset</a></td></tr>
+<tr class="memdesc:a988f9fd889c1789e54a69d69025904b8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current read/write offset.  <br /></td></tr>
 <tr class="memitem:abd69e8d405de3769fb3b277e6f0bd3a0" id="r_abd69e8d405de3769fb3b277e6f0bd3a0"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#abd69e8d405de3769fb3b277e6f0bd3a0">flags</a></td></tr>
+<tr class="memdesc:abd69e8d405de3769fb3b277e6f0bd3a0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Open flags (e.g. O_NONBLOCK).  <br /></td></tr>
 <tr class="memitem:abfe9f3336b359ecf184eacfe0e088a17" id="r_abfe9f3336b359ecf184eacfe0e088a17"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abfe9f3336b359ecf184eacfe0e088a17">used</a></td></tr>
+<tr class="memdesc:abfe9f3336b359ecf184eacfe0e088a17"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether this descriptor slot is in use.  <br /></td></tr>
 </table>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="abd69e8d405de3769fb3b277e6f0bd3a0" name="abd69e8d405de3769fb3b277e6f0bd3a0"></a>
@@ -146,6 +150,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Open flags (e.g. O_NONBLOCK). </p>
 
 </div>
 </div>
@@ -161,6 +167,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Current read/write offset. </p>
+
 </div>
 </div>
 <a id="abfe9f3336b359ecf184eacfe0e088a17" name="abfe9f3336b359ecf184eacfe0e088a17"></a>
@@ -175,6 +183,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Whether this descriptor slot is in use. </p>
+
 </div>
 </div>
 <a id="a623e148f5c96cdfeb6d5c2e2f0b10b1b" name="a623e148f5c96cdfeb6d5c2e2f0b10b1b"></a>
@@ -188,6 +198,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>The vnode this descriptor refers to. </p>
 
 </div>
 </div>

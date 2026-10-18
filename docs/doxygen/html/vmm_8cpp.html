@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('vmm_8cpp.html'
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vmm__path_8hpp_source.html">kernel/memory/vmm_path.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vmm__internal_8hpp_source.html">kernel/memory/vmm_internal.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="frame_8hpp_source.html">kernel/cap/frame.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="mmio_8hpp_source.html">kernel/cap/mmio.hpp</a>&gt;</code><br />
@@ -134,41 +136,33 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('vmm_8cpp.html'
 Include dependency graph for vmm.cpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="vmm_8cpp__incl.png" border="0" usemap="#asrc_2kernel_2memory_2vmm_8cpp" loading="lazy" alt=""/></div>
-<map name="asrc_2kernel_2memory_2vmm_8cpp" id="asrc_2kernel_2memory_2vmm_8cpp">
-<area shape="rect" title=" " alt="" coords="174,5,362,32"/>
-<area shape="rect" href="vmm_8hpp.html" title="Virtual Memory Manager — x86&#45;64 page table management." alt="" coords="5,155,171,181"/>
-<area shape="poly" title=" " alt="" coords="197,34,154,53,133,66,115,82,99,110,92,141,87,139,94,108,111,78,130,61,152,48,201,31"/>
-<area shape="rect" href="pmm_8hpp.html" title="Physical Memory Manager — bitmap&#45;based page allocator with owner tracking." alt="" coords="125,80,291,107"/>
-<area shape="poly" title=" " alt="" coords="259,31,230,70,226,66,256,34"/>
-<area shape="rect" href="constants_8hpp.html" title="Central hardware and memory&#45;layout constants (no magic numbers)." alt="" coords="246,155,349,181"/>
-<area shape="poly" title=" " alt="" coords="278,30,294,53,305,79,309,110,306,141,301,138,303,111,300,81,289,55,277,35"/>
-<area shape="rect" href="assert_8hpp.html" title="Debug assertion macros and the panic handler declaration." alt="" coords="366,80,448,107"/>
-<area shape="poly" title=" " alt="" coords="292,30,371,72,366,73,292,35"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="213,229,291,256"/>
-<area shape="poly" title=" " alt="" coords="117,179,212,221,207,224,116,184"/>
-<area shape="poly" title=" " alt="" coords="213,105,236,181,246,215,241,213,231,182,210,109"/>
-<area shape="poly" title=" " alt="" coords="224,105,273,145,267,145,223,110"/>
-<area shape="poly" title=" " alt="" coords="292,181,270,218,266,214,287,183"/>
-<area shape="poly" title=" " alt="" coords="405,106,390,144,363,183,333,207,301,225,299,220,330,203,359,180,385,142,401,109"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 </table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
-Enumerations</h2></td></tr>
-<tr class="memitem:a3efc8e156bdfc3151ae0b713482b1b76" id="r_a3efc8e156bdfc3151ae0b713482b1b76"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76">kernel::TestTouchWarn</a> { <br />
-&#160;&#160;<a class="el" href="namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76a7c08c5d7293555a01f96e45c5bda679a">kernel::kMapL1</a>
-, <a class="el" href="namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76ac6ade7a2363248a06b0b4b867339edfc">kernel::kMapPd</a>
-, <a class="el" href="namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76aeeaf371b06deba7b2cc1be7045e17f12">kernel::kUnmapL0</a>
-, <a class="el" href="namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76a97a69bbd59f34061aaafe4ad56d2a659">kernel::kUnmapPml4</a>
-, <br />
-&#160;&#160;<a class="el" href="namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76a0edbdcae5dc159be1ce3b046ec939f3d">kernel::kAccessPml4</a>
-<br />
- }</td></tr>
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a6b5ee8c17a9a6bdac4152aff1443b58b" id="r_a6b5ee8c17a9a6bdac4152aff1443b58b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a6b5ee8c17a9a6bdac4152aff1443b58b">kernel::warn_test_kernel_touch</a> (bool gate, <a class="el" href="namespacekernel.html#a3efc8e156bdfc3151ae0b713482b1b76">TestTouchWarn</a> warn, uint64_t va, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> idx)</td></tr>
+<tr class="memdesc:a6b5ee8c17a9a6bdac4152aff1443b58b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Warn (once per boot) when a test touches kernel-half tables.  <br /></td></tr>
+<tr class="memitem:af888157a072690618fcf43fcc15dce42" id="r_af888157a072690618fcf43fcc15dce42"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#af888157a072690618fcf43fcc15dce42">kernel::arm_test_touch_flags</a> (bool arm_hhdm, bool arm_identity)</td></tr>
+<tr class="memdesc:af888157a072690618fcf43fcc15dce42"><td class="mdescLeft">&#160;</td><td class="mdescRight">Arm the HHDM/identity modification flags for the snapshot backend.  <br /></td></tr>
+<tr class="memitem:a58d591caf1b230899994e1ab11a29415" id="r_a58d591caf1b230899994e1ab11a29415"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a58d591caf1b230899994e1ab11a29415">kernel::write_hex_debugcon</a> (uint64_t val)</td></tr>
+<tr class="memdesc:a58d591caf1b230899994e1ab11a29415"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hex-value diagnostic writer (debugcon port IO only).  <br /></td></tr>
+<tr class="memitem:affaa475d1e0ac61cef604410e598aef5" id="r_affaa475d1e0ac61cef604410e598aef5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#affaa475d1e0ac61cef604410e598aef5">kernel::note_silent_drop_once</a> (const char *tag, uint64_t val)</td></tr>
+<tr class="memdesc:affaa475d1e0ac61cef604410e598aef5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bounded one-shot diagnostic for silently-dropped mappings.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a7fdb73e6730222d5636d80395632a9aa" id="r_a7fdb73e6730222d5636d80395632a9aa"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a7fdb73e6730222d5636d80395632a9aa">kernel::_text_start</a> []</td></tr>
+<tr class="memitem:abae787512a0bab504ffe9f94dcdcb024" id="r_abae787512a0bab504ffe9f94dcdcb024"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#abae787512a0bab504ffe9f94dcdcb024">kernel::_text_end</a> []</td></tr>
+<tr class="memitem:ada132dea01d5f298bbecbdf0e958a569" id="r_ada132dea01d5f298bbecbdf0e958a569"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ada132dea01d5f298bbecbdf0e958a569">kernel::_rodata_start</a> []</td></tr>
+<tr class="memitem:aa3b295738ea25bb991ff05d8e2edcd65" id="r_aa3b295738ea25bb991ff05d8e2edcd65"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aa3b295738ea25bb991ff05d8e2edcd65">kernel::_rodata_end</a> []</td></tr>
+<tr class="memitem:a9db5e9141b48e9013ce152a1de20fcd6" id="r_a9db5e9141b48e9013ce152a1de20fcd6"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a9db5e9141b48e9013ce152a1de20fcd6">kernel::_data_start</a> []</td></tr>
+<tr class="memitem:af4ccf862ab4a23e3ea1f99cd6679deae" id="r_af4ccf862ab4a23e3ea1f99cd6679deae"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#af4ccf862ab4a23e3ea1f99cd6679deae">kernel::_bss_end</a> []</td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

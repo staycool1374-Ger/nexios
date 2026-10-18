@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -170,22 +170,26 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('concepts_8hpp_
 <div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span> </div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno"><a class="line" href="conceptkernel_1_1_error_enum.html">   52</a></span><span class="keyword">concept </span><a class="code hl_concept" href="conceptkernel_1_1_error_enum.html">ErrorEnum</a> = __is_enum(T);</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span> </div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</div>
-<div class="foldopen" id="foldopen00055" data-start="{" data-end="}">
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno"><a class="line" href="conceptkernel_1_1_lockable.html">   55</a></span><span class="keyword">concept </span><a class="code hl_concept" href="conceptkernel_1_1_lockable.html">Lockable</a> = <span class="keyword">requires</span>(T t) {</div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    { t.lock() };</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    { t.unlock() };</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>};</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span></div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno"><a class="line" href="conceptkernel_1_1_enum.html">   57</a></span><span class="keyword">concept </span><a class="code hl_concept" href="conceptkernel_1_1_enum.html">Enum</a> = __is_enum(T);</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span> </div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</div>
+<div class="foldopen" id="foldopen00060" data-start="{" data-end="}">
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno"><a class="line" href="conceptkernel_1_1_lockable.html">   60</a></span><span class="keyword">concept </span><a class="code hl_concept" href="conceptkernel_1_1_lockable.html">Lockable</a> = <span class="keyword">requires</span>(T t) {</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    { t.lock() };</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    { t.unlock() };</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>};</div>
 </div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span> </div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span> </div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="aconceptkernel_1_1_enum_html"><div class="ttname"><a href="conceptkernel_1_1_enum.html">kernel::Enum</a></div><div class="ttdoc">Any scoped/unscoped enumeration (issue #348-D: constrains kernel::to_underlying without dragging erro...</div><div class="ttdef"><b>Definition</b> concepts.hpp:57</div></div>
 <div class="ttc" id="aconceptkernel_1_1_error_enum_html"><div class="ttname"><a href="conceptkernel_1_1_error_enum.html">kernel::ErrorEnum</a></div><div class="ttdef"><b>Definition</b> concepts.hpp:52</div></div>
 <div class="ttc" id="aconceptkernel_1_1_integral_html"><div class="ttname"><a href="conceptkernel_1_1_integral.html">kernel::Integral</a></div><div class="ttdef"><b>Definition</b> concepts.hpp:43</div></div>
-<div class="ttc" id="aconceptkernel_1_1_lockable_html"><div class="ttname"><a href="conceptkernel_1_1_lockable.html">kernel::Lockable</a></div><div class="ttdef"><b>Definition</b> concepts.hpp:55</div></div>
+<div class="ttc" id="aconceptkernel_1_1_lockable_html"><div class="ttname"><a href="conceptkernel_1_1_lockable.html">kernel::Lockable</a></div><div class="ttdef"><b>Definition</b> concepts.hpp:60</div></div>
 <div class="ttc" id="aconceptkernel_1_1_trivially_copiable_html"><div class="ttname"><a href="conceptkernel_1_1_trivially_copiable.html">kernel::TriviallyCopiable</a></div><div class="ttdef"><b>Definition</b> concepts.hpp:46</div></div>
 <div class="ttc" id="aconceptkernel_1_1_value_type_html"><div class="ttname"><a href="conceptkernel_1_1_value_type.html">kernel::ValueType</a></div><div class="ttdef"><b>Definition</b> concepts.hpp:49</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anamespacekernel_html_a3fb2836fc67f3791312d86a01372cc32"><div class="ttname"><a href="namespacekernel.html#a3fb2836fc67f3791312d86a01372cc32">kernel::_is_integral_v</a></div><div class="ttdeci">constexpr bool _is_integral_v</div><div class="ttdef"><b>Definition</b> concepts.hpp:24</div></div>
 <div class="ttc" id="anamespacekernel_html_a7fd1aa46e37cee18841f905e8fa47ea2"><div class="ttname"><a href="namespacekernel.html#a7fd1aa46e37cee18841f905e8fa47ea2">kernel::_is_reference_v</a></div><div class="ttdeci">constexpr bool _is_reference_v</div><div class="ttdef"><b>Definition</b> concepts.hpp:38</div></div>
 </div><!-- fragment --></div><!-- contents -->

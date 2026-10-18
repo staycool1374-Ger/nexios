@@ -1,5 +1,6 @@
 var structkernel_1_1vfs_1_1_fd_table =
 [
+    [ "FdTable", "structkernel_1_1vfs_1_1_fd_table.html#a0f2d4cc68ec61e0999b611d694ba89fd", null ],
     [ "alloc", "structkernel_1_1vfs_1_1_fd_table.html#ad3ac2531da920e48b0b7ba804a72ab9c", null ],
     [ "alloc_err", "structkernel_1_1vfs_1_1_fd_table.html#ad22ffd7651288f4b0e84a37b77434348", null ],
     [ "free", "structkernel_1_1vfs_1_1_fd_table.html#a6dfd64a5f7abbd8917c2b99dc11d1197", null ],

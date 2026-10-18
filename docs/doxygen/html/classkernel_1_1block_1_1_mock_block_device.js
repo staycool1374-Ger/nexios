@@ -1,7 +1,7 @@
 var classkernel_1_1block_1_1_mock_block_device =
 [
     [ "MockBlockDevice", "classkernel_1_1block_1_1_mock_block_device.html#a431fb18bfd095e5efa8b3f98720b7e3b", null ],
-    [ "MockBlockDevice", "classkernel_1_1block_1_1_mock_block_device.html#a94338a75b59928eafa582a98ac51c186", null ],
+    [ "MockBlockDevice", "classkernel_1_1block_1_1_mock_block_device.html#aad0f87de509d6e1edf2f29ac00448923", null ],
     [ "~MockBlockDevice", "classkernel_1_1block_1_1_mock_block_device.html#a4febebbdfb230e0186a0dc3cea5a4d7f", null ],
     [ "is_read_only", "classkernel_1_1block_1_1_mock_block_device.html#ac719baee4294c876514ce78b7e397ccd", null ],
     [ "raw_buffer", "classkernel_1_1block_1_1_mock_block_device.html#ae24edafc94232b75f331de14e324d4e0", null ],

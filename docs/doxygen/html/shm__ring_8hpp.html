@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -147,7 +147,7 @@ Data Structures</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Ashm" id="r_kernel_3A_3Ashm"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1shm.html">kernel::shm</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
@@ -165,7 +165,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a8ba8ae68551cd9afd15186cd5bd576a8" id="r_a8ba8ae68551cd9afd15186cd5bd576a8"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1shm.html#a8ba8ae68551cd9afd15186cd5bd576a8">kernel::shm::shm_ring_push</a> (<a class="el" href="structkernel_1_1shm_1_1_shared_ring_header.html">SharedRingHeader</a> *header, uint8_t *data_base, const uint8_t *src)</td></tr>
 <tr class="memdesc:a8ba8ae68551cd9afd15186cd5bd576a8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Producer push: copy <code class="param">src</code> (element_size bytes) into the ring at the head. Returns false when full or not initialised. Head is published with release after the payload write (SPSC protocol).  <br /></td></tr>
 <tr class="memitem:ade7741ed3caa4f38200b3b55c548d7ac" id="r_ade7741ed3caa4f38200b3b55c548d7ac"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1shm.html#ade7741ed3caa4f38200b3b55c548d7ac">kernel::shm::shm_ring_pop</a> (<a class="el" href="structkernel_1_1shm_1_1_shared_ring_header.html">SharedRingHeader</a> *header, uint8_t *data_base, uint8_t *dst)</td></tr>
-<tr class="memdesc:ade7741ed3caa4f38200b3b55c548d7ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consumer pop: copy the element at the tail into <code class="param">dst</code>. Returns false when empty or not initialised. Tail is published with release after the payload read (SPSC protocol).  <br /></td></tr>
+<tr class="memdesc:ade7741ed3caa4f38200b3b55c548d7ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consumer pop: copy the element at the tail into <code class="param">dst</code>. Returns false when empty or not initialised. Tail is published with release after the payload read (SPSC protocol). A zero capacity/element_size (hostile or corrupt peer header) fails closed before the tail/element_size division (issue #343) — mirrors shm_ring_has_space.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
