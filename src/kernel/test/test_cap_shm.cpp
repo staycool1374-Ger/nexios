@@ -132,10 +132,10 @@ JARVIS_TEST(frame_user_map_unmap_roundtrip, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(t != nullptr);
-    // Real user PML4 (kernel half cloned) so the frame map registry can map
-    // into current_task()->page_table_.  Ring 0 execution is unaffected
-    // (kernel half is copied); cleanup frees the clone.
-    t->page_table_ = VMM::clone_kernel_pml4();
+    // create() already installs a real user PML4 (kernel half cloned, MP-1.2);
+    // a second manual clone here would orphan the factory PML4 (+1 PMM,
+    // issue #371).  Ring 0 execution is unaffected (kernel half is copied);
+    // cleanup frees the clone.
     JARVIS_ASSERT(t->page_table_ != 0);
     Scheduler::add_task(*t);
     Scheduler::reschedule();
@@ -282,7 +282,7 @@ JARVIS_TEST(shm_ring_producer_consumer, "PRE: none | POST: none") {
         },
         20, 10);
     JARVIS_ASSERT(producer != nullptr);
-    producer->page_table_ = VMM::clone_kernel_pml4();
+    // Factory PML4 from create() (see above); no second manual clone.
     JARVIS_ASSERT(producer->page_table_ != 0);
     Scheduler::add_task(*producer);
     Scheduler::reschedule();
@@ -381,7 +381,7 @@ JARVIS_TEST(shm_ring_task_death_drain, "PRE: none | POST: none") {
         },
         30, 10);
     JARVIS_ASSERT(t != nullptr);
-    t->page_table_ = VMM::clone_kernel_pml4();
+    // Factory PML4 from create() (see above); no second manual clone.
     JARVIS_ASSERT(t->page_table_ != 0);
     Scheduler::add_task(*t);
     Scheduler::reschedule();
@@ -448,7 +448,7 @@ JARVIS_TEST(shm_ring_revocation_cleanup, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(t != nullptr);
-    t->page_table_ = VMM::clone_kernel_pml4();
+    // Factory PML4 from create() (see above); no second manual clone.
     JARVIS_ASSERT(t->page_table_ != 0);
 
     size_t base = cap::FrameUserMap::live_count();
