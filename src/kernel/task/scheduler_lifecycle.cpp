@@ -55,8 +55,10 @@ using sched_queue::edf_ready_;
 using sched_queue::edf_remove;
 using sched_queue::invalidate_pending_switch_to;
 using sched_verify::task_stack_ptr;
+using sched_verify::validate_task_ptr;
 
 void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "release_zombie"));
     // Invariant: a zombie must never be in the ready queue.  terminate()
     // calls dequeue_ready() before reaching us; self-termination also
     // dequeues first.
@@ -342,6 +344,7 @@ void Scheduler::cleanup_step_try() noexcept {
 /// waiting forever on a child that exited via a path other than sys_exit.
 /// @param child The just-terminated child task.
 void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
+    ENSURE(validate_task_ptr(&child, "wake_waiting_parent"));
     if (child.parent_id == 0)
         return;
     auto *p = Scheduler::find_task(child.parent_id);
@@ -453,6 +456,7 @@ void Scheduler::fb_terminated_line(const char *name, uint64_t id) noexcept {
 // ---------------------------------------------------------------------------
 
 void Scheduler::note_termination_and_free(TaskControlBlock *t) noexcept {
+    ENSURE(validate_task_ptr(t, "note_termination_and_free"));
     if (!suppress_terminated_log_) {
         Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
                      t->id);
@@ -674,6 +678,7 @@ void Scheduler::cleanup_test_tasks() noexcept {
 // ---------------------------------------------------------------------------
 
 void Scheduler::defer_kill(TaskControlBlock *task) noexcept {
+    ENSURE(validate_task_ptr(task, "defer_kill"));
     // Callers always hold scheduler_lock_ (deadline_miss_handler runs under
     // the on_tick/scan_deadlines guard) — see design §4.C VAR-08.
     if (s_deferred_kill_count < MAX_DEFERRED_KILLS) {

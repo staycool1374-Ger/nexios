@@ -22,6 +22,8 @@
 
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_queue_internal.hpp>
+#include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
+#include <assert.hpp>                              // issue #369 T1b ENSURE
 #include <kernel/debug/ipc_sched_trace.hpp> // CONFIG_DEBUG_IPC_SCHED
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
@@ -232,6 +234,7 @@ using sched_queue::edf_remove;
 using sched_queue::edf_resort;
 using sched_queue::invalidate_pending_switch_to;
 using sched_queue::migrate_dispatch_queue;
+using sched_verify::validate_task_ptr;
 
 // ---------------------------------------------------------------------------
 // Scheduler member functions — ready-queue / EDF routing (issue #323).
@@ -259,6 +262,7 @@ uint64_t Scheduler::effective_priority(const TaskControlBlock *t) noexcept {
 }
 
 void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "enqueue_ready"));
     // H2 liveness guard (ROADMAP §v0.4.0 direction #1): the scheduler must not
     // enqueue a TCB it no longer owns.  A task removed from id_table_ (via
     // release_zombie / remove_task) is dead — the harness can still re-run
@@ -324,6 +328,7 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
 // Deschedule-side consume only (the task is leaving the CPU, so linking
 // it cannot create a queued-while-current window).
 void Scheduler::enqueue_ready_inner(TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "enqueue_ready_inner"));
     // Issue #25 C1: shared-TSS backstop — user tasks never leave CPU0 no
     // matter what the mask says (set_affinity clamps persistently; this
     // covers every other path to AP execution).
@@ -353,6 +358,7 @@ void Scheduler::enqueue_ready_inner(TaskControlBlock &task) noexcept {
 }
 
 void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "dequeue_ready"));
     if (task.in_edf_queue_) [[unlikely]]
         edf_remove(task, queue_target(task));
     rq_task(task).remove(task, effective_priority(&task));
@@ -380,6 +386,7 @@ void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
 // causing missed preemptions or priority inversion.
 void Scheduler::move_priority(TaskControlBlock &task, uint64_t old_prio,
                               uint64_t new_prio) noexcept {
+    ENSURE(validate_task_ptr(&task, "move_priority"));
     // Issue #19: EDF tasks are not bitmap members — re-sort the deadline
     // list instead (priority feeds the tie-break), never touch the bitmap.
     if (task.in_edf_queue_) {
@@ -401,6 +408,7 @@ uint64_t Scheduler::queue_depth(uint64_t cpu) noexcept {
 
 bool Scheduler::set_sched_policy(TaskControlBlock &task,
                                  SchedPolicy policy) noexcept {
+    ENSURE(validate_task_ptr(&task, "set_sched_policy"));
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     if (policy == SchedPolicy::EDF) {
@@ -417,6 +425,7 @@ bool Scheduler::set_sched_policy(TaskControlBlock &task,
 }
 
 void Scheduler::set_edf_exempt(TaskControlBlock &task, bool exempt) noexcept {
+    ENSURE(validate_task_ptr(&task, "set_edf_exempt"));
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     task.edf_exempt = exempt;
@@ -426,6 +435,7 @@ void Scheduler::set_edf_exempt(TaskControlBlock &task, bool exempt) noexcept {
 }
 
 void Scheduler::assign_deadline_priority(TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "assign_deadline_priority"));
     // Deadline-monotonic: shorter relative deadline (period) maps to a
     // higher fixed priority.  Log2 compression maps the unbounded period
     // domain into the DM band; the clamp keeps idle/background (0-1) and

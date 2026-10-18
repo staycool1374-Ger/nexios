@@ -22,6 +22,8 @@
 
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_admission_internal.hpp>
+#include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
+#include <assert.hpp>                              // issue #369 T1b ENSURE
 
 namespace kernel {
 
@@ -40,8 +42,10 @@ using sched_admission::LIU_LEYLAND_BOUNDS;
 using sched_admission::LIU_LEYLAND_LIMIT;
 using sched_admission::LIU_LEYLAND_MAX_TASKS;
 using sched_admission::server_budget_for_admission;
+using sched_verify::validate_task_ptr;
 
 bool Scheduler::admission_exempted(const TaskControlBlock &t) noexcept {
+    ENSURE(validate_task_ptr(&t, "admission_exempted"));
     if (is_idle_task(&t))
         return true;
     if (t.magic != TaskControlBlock::TCB_MAGIC)
@@ -79,6 +83,7 @@ errors::SchedulerError Scheduler::admission_check_locked(
 errors::SchedulerError Scheduler::admission_check_cpu_locked(
     const TaskControlBlock &candidate, uint64_t cpu, uint64_t *out_util,
     uint32_t *out_bound) noexcept {
+    ENSURE(validate_task_ptr(&candidate, "admission_check_cpu_locked"));
     cpu %= CONFIG_MAX_CPUS;
     // Audit S3 (issue #20): exemption precedes WCET-validity, matching the
     // I-8 scope text exactly ("periodic non-exempt tasks only").  An

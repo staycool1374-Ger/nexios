@@ -22,6 +22,8 @@
 
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_id_table_internal.hpp>
+#include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
+#include <assert.hpp>                              // issue #369 T1b ENSURE
 
 namespace kernel {
 
@@ -29,6 +31,7 @@ namespace kernel {
 // byte-identical; mirror the old home's TU-wide using (allowed in .cpp
 // files per CODING_STYLE §3; headers stay using-free).
 using namespace errors;
+using sched_verify::validate_task_ptr;
 
 TaskControlBlock *Scheduler::find_task(uint64_t id) noexcept {
     return id_table_find(id);
@@ -43,6 +46,7 @@ uint64_t Scheduler::id_table_probe(uint64_t id) {
 }
 
 bool Scheduler::id_table_insert(uint64_t id, TaskControlBlock *tcb) {
+    ENSURE(validate_task_ptr(tcb, "id_table_insert"));
     uint64_t idx = id_table_probe(id);
     for (uint64_t probes = 0; probes < ID_TABLE_SIZE; ++probes) {
         if (id_table_[idx] == nullptr || id_table_[idx] == ID_TOMBSTONE) {
@@ -83,6 +87,7 @@ void Scheduler::reset_next_task_id(uint64_t id) noexcept {
 }
 
 void Scheduler::id_table_remove(TaskControlBlock *task) {
+    ENSURE(validate_task_ptr(task, "id_table_remove"));
     uint64_t idx = id_table_probe(task->id);
     for (uint64_t probe = 0; probe < ID_TABLE_SIZE; ++probe) {
         if (id_table_[idx] == nullptr)

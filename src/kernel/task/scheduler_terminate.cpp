@@ -23,6 +23,8 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_switch_internal.hpp>
 #include <kernel/task/scheduler_queue_internal.hpp>
+#include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
+#include <assert.hpp>                              // issue #369 T1b ENSURE
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -32,10 +34,12 @@
 namespace kernel {
 
 using sched_queue::edf_peek_valid_own;
+using sched_verify::validate_task_ptr;
 
 errors::SchedulerError
 Scheduler::terminate_err(TaskControlBlock &task,
                          uint64_t exit_code) noexcept {
+    ENSURE(validate_task_ptr(&task, "terminate_err"));
     arch::IrqGuard irq_guard{};
     // Issue #197: refuse to terminate a task that is current on ANOTHER
     // CPU (evaluated before taking scheduler_lock_ — leaf-only reads, no
