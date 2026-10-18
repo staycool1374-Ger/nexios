@@ -377,6 +377,17 @@ bool snapshot_create() {
     // nested guard that silently re-enabled IRQs panics at the source.
     ENSURE(!arch::interrupts_enabled());
 #endif
+    // ---- Harness CSpace pre-creation (issue #360) ----
+    // The harness (PID 1 test runner) installs caps during tests.  Its
+    // root CNode must pre-date EVERY snapshot capture (MemPool bitmap
+    // AND counters) — otherwise the first ensure_cspace() after a
+    // restore mints it mid-test and reads as a +1 CNode residual.
+    // Paired with the restore-time keep in restore_task_fields(): the
+    // pointer persists across cycles while the pool rewind resets slot
+    // content to this baseline-empty state.  MemPool-backed only (no
+    // PMM/PT-pool interaction), so all captures below stay exact.
+    if (auto *harness = Scheduler::get_harness_task())
+        harness->ensure_cspace();
     // Issue #25 C1: quiesce the AP across the scheduler window (flag +
     // cancel all arms per the spec order).  Placed AFTER the snapshot
     // allocation below so an alloc-failure early-return cannot leak a

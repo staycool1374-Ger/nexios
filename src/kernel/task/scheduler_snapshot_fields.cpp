@@ -134,7 +134,15 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             // (pre-snapshot grants: ramdisk frames, watchdog supervision)
             // — preserve the pointer, otherwise every restore orphans
             // live grants and the next ensure mints an empty replacement.
-            t->detach_all_objects(daemon::is_managed(t->id));
+            // Issue #360: the harness (PID 1 test runner) is persistent
+            // suite state too — detaching its CNode makes every harness
+            // ensure_cspace() mint a +1 CNode per test.  Kept pointers
+            // stay safe: the pool rewind resets block bytes to the
+            // baseline (slots empty), so no test-installed slot survives
+            // into the next cycle.
+            bool keep_cspace =
+                daemon::is_managed(t->id) || t == harness;
+            t->detach_all_objects(keep_cspace);
             t->runq_next_ = saved[j].runq_next;
             t->runq_prev_ = saved[j].runq_prev;
             t->in_ready_queue_ = saved[j].in_ready_queue;

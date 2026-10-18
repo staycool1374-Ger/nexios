@@ -869,6 +869,9 @@ JARVIS_TEST(ioport_revoke_clears_live_bits, "PRE: none | POST: none") {
                 Scheduler::terminate(*cur, 0);
                 return;
             }
+            // Slot holds a reference; drop the creator's (install_frame
+            // convention, issue #360) so worker death disposes the cap.
+            mmio->release();
             uint64_t h = cap::encode_handle(
                 cs->cspace_id, static_cast<uint32_t>(s),
                 cs->slot_gen(static_cast<uint32_t>(s)));
@@ -876,8 +879,8 @@ JARVIS_TEST(ioport_revoke_clears_live_bits, "PRE: none | POST: none") {
                 static_cast<uint64_t>(SyscallNumber::IOPORT_GRANT), h, 0x3F8,
                 8, 0, nullptr);
             if (r != 0) {
+                // Creator ref already dropped above; remove() disposes.
                 cs->remove(static_cast<uint32_t>(s));
-                mmio->release();
                 Scheduler::terminate(*cur, 0);
                 return;
             }
