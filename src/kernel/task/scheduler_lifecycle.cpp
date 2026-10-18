@@ -22,6 +22,7 @@
 
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_lifecycle_internal.hpp>
+#include <kernel/task/scheduler_path.hpp>  // issue #324 Tick 13 teardown trace
 #include <kernel/task/scheduler_queue_internal.hpp>
 #include <kernel/task/scheduler_integrity.hpp>
 #include <kernel/task/sporadic_server.hpp>
@@ -45,11 +46,16 @@ namespace sched_lifecycle {
 // P5a: Deferred-kill list.
 constinit TaskControlBlock *s_deferred_kill_tasks[MAX_DEFERRED_KILLS] = {};
 constinit uint64_t s_deferred_kill_count = 0;
+// Issue #324 Tick 11: parallel generation snapshot (ABA guard on TCB slot
+// reuse — see process_deferred_kills).  TU-local: only defer_kill and
+// process_deferred_kills below use it.
+static constinit uint32_t s_deferred_kill_gens[MAX_DEFERRED_KILLS] = {};
 
 }  // namespace sched_lifecycle
 
 using sched_lifecycle::MAX_DEFERRED_KILLS;
 using sched_lifecycle::s_deferred_kill_count;
+using sched_lifecycle::s_deferred_kill_gens;
 using sched_lifecycle::s_deferred_kill_tasks;
 using sched_queue::edf_ready_;
 using sched_queue::edf_remove;
@@ -76,6 +82,14 @@ void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
     // current task's own switch-away arm targets a successor, so this is a
     // no-op for that path.
     invalidate_pending_switch_to(task.id);
+    // Issue #324 Tick 5: table-ownership map — dequeue (bitmap+EDF) is
+    // owned by dequeue_ready() (callers dequeue before release; the
+    // ENSURE above enforces it); deadline/all_tasks/id_table removals
+    // here are idempotent (membership-guarded), so the destroy() path's
+    // second pass via remove_task() and the drain-pop edf_remove guards
+    // are provably no-op safety nets, not double-frees.  H2 invalidation
+    // is co-located with id_table removal (here + reap arm); remove_task
+    // /unregister_task clear all four switch atoms instead.
 
     task.zombie_next_ = nullptr;
     // Issue #25 C1: list linkage under the zombie leaf lock (caller holds
@@ -91,6 +105,8 @@ void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
         }
         __atomic_add_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
     }
+    // Issue #324 Tick 13: teardown trace — tables released, list pushed.
+    teardown_step(SchedTeardownSteps::Release);
 }
 uint64_t Scheduler::snapshot_zombies(TaskControlBlock **out,
                                      uint64_t max_out) noexcept {
@@ -123,7 +139,8 @@ void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
             if (!task)
                 break;
             // Check magic before accessing any field past offset 0.
-            if (task->magic != TaskControlBlock::TCB_MAGIC) {
+            // Issue #324 Tick 14: corruption leg is cold.
+            if (task->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
                 zombie_head_ = nullptr;
                 zombie_tail_ = nullptr;
                 zombie_count_ = 0;
@@ -166,6 +183,8 @@ void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
             if (task->in_edf_queue_)
                 edf_remove(*task, queue_target(*task));
             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+            // Issue #324 Tick 13: drain-pop commit — free follows.
+            teardown_step(SchedTeardownSteps::DrainPop);
         }
         if (task->magic == TaskControlBlock::TCB_MAGIC) {
             task->cleanup();
@@ -196,7 +215,8 @@ void Scheduler::drain_zombie_list() noexcept {
             task = zombie_head_;
             if (!task)
                 return;
-            if (task->magic != TaskControlBlock::TCB_MAGIC) {
+            // Issue #324 Tick 14: corruption leg is cold.
+            if (task->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
                 zombie_head_ = nullptr;
                 zombie_tail_ = nullptr;
                 zombie_count_ = 0;
@@ -244,6 +264,8 @@ void Scheduler::drain_zombie_list() noexcept {
             if (task->in_edf_queue_)
                 edf_remove(*task, queue_target(*task));
             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+            // Issue #324 Tick 13: drain-pop commit — free follows.
+            teardown_step(SchedTeardownSteps::DrainPop);
         }
         // IRQs on — cleanup and free without holding any lock.
         task->cleanup();
@@ -264,7 +286,8 @@ void Scheduler::cleanup_step() noexcept {
         if (!task)
             return;
         // Check magic before touching any field past offset 0 (may be freed).
-        if (task->magic != TaskControlBlock::TCB_MAGIC) {
+        // Issue #324 Tick 14: corruption leg is cold.
+        if (task->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
             zombie_head_ = nullptr;
             zombie_tail_ = nullptr;
             zombie_count_ = 0;
@@ -289,6 +312,8 @@ void Scheduler::cleanup_step() noexcept {
         if (task->in_edf_queue_)
             edf_remove(*task, queue_target(*task));
         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+        // Issue #324 Tick 13: drain-pop commit — free follows.
+        teardown_step(SchedTeardownSteps::DrainPop);
     }
     // IRQs on — cleanup and free without holding any lock.
     task->cleanup();
@@ -310,7 +335,8 @@ void Scheduler::cleanup_step_try() noexcept {
         task = zombie_head_;
         if (!task)
             return;
-        if (task->magic != TaskControlBlock::TCB_MAGIC) {
+        // Issue #324 Tick 14: corruption leg is cold.
+        if (task->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
             zombie_head_ = nullptr;
             zombie_tail_ = nullptr;
             zombie_count_ = 0;
@@ -334,6 +360,8 @@ void Scheduler::cleanup_step_try() noexcept {
         if (task->in_edf_queue_)
             edf_remove(*task, queue_target(*task));
         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+        // Issue #324 Tick 13: drain-pop commit — free follows.
+        teardown_step(SchedTeardownSteps::DrainPop);
     }
     task->cleanup();
     MemPool::free(task);
@@ -483,7 +511,9 @@ void Scheduler::reap_orphans() noexcept {
     for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
         if (num_to_reap >= MAX_REAP)
             break;
-        if (t->magic != TaskControlBlock::TCB_MAGIC)
+        // Issue #324 Tick 14: poisoned-slot leg is cold (snapshot-rewind
+        // artifact, never a live task).
+        if (t->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]]
             continue;
         if (t->state != TaskState::TERMINATED)
             continue;
@@ -522,31 +552,32 @@ void Scheduler::reap_orphans() noexcept {
         if (can_reap && MemPool::is_block_pinned(t))
             can_reap = false;
         if (!can_reap) {
-            bool parent_found = false;
-            for (TaskIter it(0);;) {
-                auto *p = it.next();
-                if (!p)
-                    break;
-                if (p->id == t->parent_id) {
-                    parent_found = true;
-                    const bool terminated =
-                        (p->state == TaskState::TERMINATED);
-                    // Issue #221: reap only when the parent is dead.  A live
-                    // parent owns its un-reaped children (Unix zombie
-                    // semantics): the waitpid in-trap wait re-scans on wake
-                    // and must find the TERMINATED child still linked —
-                    // reaping it first makes the rescan miss (WAITPID-FAILED
-                    // on an already-satisfied wait).  Fire-and-forget children
-                    // linger until the parent exits (bounded: parent lifetime,
-                    // MAX_TASKS cap); adoption above re-homes them to init on
-                    // the way.  A parent blocked in waitpid is covered too
-                    // (live ⇒ deferred regardless of waiting state).
-                    can_reap = terminated;
-                    break;
-                }
-            }
-            if (!parent_found)
+            // Issue #324 Tick 12 (JRVS-SCHED-006 remainder): O(1)-ish
+            // parent lookup via the id table instead of a full TaskIter
+            // scan — the scan made reap O(n^2) worst case on the tick path.
+            // id_table and all_tasks_ stay in sync on every add/remove path,
+            // so the verdict matches the scan on all consistent states
+            // (pairing e.g. release_zombie lifecycle:74-75).
+            auto *p = Scheduler::id_table_find(t->parent_id);
+            if (p != nullptr) {
+                const bool terminated =
+                    (p->state == TaskState::TERMINATED);
+                // Issue #221: reap only when the parent is dead.  A live
+                // parent owns its un-reaped children (Unix zombie
+                // semantics): the waitpid in-trap wait re-scans on wake
+                // and must find the TERMINATED child still linked —
+                // reaping it first makes the rescan miss (WAITPID-FAILED
+                // on an already-satisfied wait).  Fire-and-forget children
+                // linger until the parent exits (bounded: parent lifetime,
+                // MAX_TASKS cap); adoption above re-homes them to init on
+                // the way.  A parent blocked in waitpid is covered too
+                // (live ⇒ deferred regardless of waiting state).
+                can_reap = terminated;
+            } else {
+                // Parent left the tables (dead and unregistered, or never
+                // registered): the child is an orphan — reap it.
                 can_reap = true;
+            }
         }
 
         if (!can_reap)
@@ -568,6 +599,8 @@ void Scheduler::reap_orphans() noexcept {
         // H2: the task is leaving id_table_ — a pending deferred-switch arm to
         // it must not survive the free below (see release_zombie).
         invalidate_pending_switch_to(t->id);
+        // Issue #324 Tick 13: reap-arm drain commit — note_termination frees.
+        teardown_step(SchedTeardownSteps::DrainPop);
         if (t == idle_task_) {
             auto *created = TaskControlBlock::create(
                 kernel::integrity::idle_task_main, 0,
@@ -684,6 +717,7 @@ void Scheduler::defer_kill(TaskControlBlock *task) noexcept {
     // which may run without the global lock — append-only, lock-free;
     // global→leaf order is unaffected (no lock taken here).
     if (s_deferred_kill_count < MAX_DEFERRED_KILLS) {
+        s_deferred_kill_gens[s_deferred_kill_count] = task->generation;
         s_deferred_kill_tasks[s_deferred_kill_count++] = task;
     } else {
         Logger::warn("[DMD] deferred-kill list full, task %lu not added",
@@ -696,16 +730,34 @@ void Scheduler::defer_kill(TaskControlBlock *task) noexcept {
 }
 
 void Scheduler::process_deferred_kills() noexcept {
-    // Called from the on_tick tail under scheduler_lock_; also gated so it
-    // only runs when the lock was acquired this tick (design §4.C VAR-08).
+    // Called from the on_tick gated tail (tick.cpp) with IrqGuard only:
+    // the adopt scope releases scheduler_lock_ before the tail, and the
+    // lock_acquired gate is freshness (the lock WAS taken this tick), not
+    // held.  Lock-free is REQUIRED here, not merely allowed: destroy()
+    // takes the global per item via remove_task(), whose no-reentrant-take
+    // ENSURE would fire on entry under lock.  Issue #324 Tick 1: the prior
+    // "under scheduler_lock_" comment was stale (same class as #369 T2b).
+    ENSURE(scheduler_lock_.holder() == nullptr);
+    // Issue #324 Tick 11: compact-and-retain (matches the drain/flush spare
+    // pattern).  Both KILL arms are one-shot — the watchdog scan disarms on
+    // fire, the deadline scan skips TERMINATED — so a spared AP-live entry
+    // would otherwise lose the kill until reap.  Retained entries re-check
+    // the generation snapshot below (ABA guard on slot reuse).
+    uint64_t kept = 0;
     for (uint64_t i = 0; i < s_deferred_kill_count; ++i) {
         auto *task = s_deferred_kill_tasks[i];
-        if (!task || task->magic != TaskControlBlock::TCB_MAGIC)
+        const uint32_t gen = s_deferred_kill_gens[i];
+        // Issue #324 Tick 14: stale-entry leg is cold (freed/recycled slot).
+        if (!task || task->magic != TaskControlBlock::TCB_MAGIC ||
+            task->generation != gen) [[unlikely]]
             continue;
         // Issue #197: spare AP-live tasks (never free a live stack) —
-        // skip this entry; a still-missed deadline re-fires defer_kill
-        // on the next scan, so no kill intent is lost.
+        // retain the entry (compacted); the kill completes once the task
+        // deschedules.
         if (is_current_on_any_cpu(task)) {
+            s_deferred_kill_tasks[kept] = task;
+            s_deferred_kill_gens[kept] = gen;
+            ++kept;
             continue;
         }
 
@@ -725,7 +777,7 @@ void Scheduler::process_deferred_kills() noexcept {
                      task->name);
         TaskControlBlock::destroy(task);
     }
-    s_deferred_kill_count = 0;
+    s_deferred_kill_count = kept;
 }
 
 }  // namespace kernel

@@ -78,6 +78,9 @@ extern "C" void debug_write_dec(uint64_t value);
 // Fault-injection mask for dispatch_step() (issue #347 Slice B,
 // declared in scheduler_path.hpp). Test-only; absent in release.
 uint64_t kernel::g_test_skip_dispatch_step = 0;
+// Fault-injection mask for teardown_step() (issue #324 Tick 13,
+// declared in scheduler_path.hpp). Test-only; absent in release.
+uint64_t kernel::g_test_skip_teardown_step = 0;
 #endif
 
 // Issue #323 switch strand: current_sp() moved to the shared

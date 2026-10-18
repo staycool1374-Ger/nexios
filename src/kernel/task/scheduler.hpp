@@ -422,20 +422,24 @@ class Scheduler {
     static void scan_deadlines() noexcept;
     /// @brief Per-task watchdog expiry scan (issue #41): single bounded
     ///        pass over the task set; armed tasks past wdog_expiry_tick
-    ///        are disarmed (one-shot) and handed to
-    ///        watchdog_expiry_handler(). Caller holds scheduler_lock_
-    ///        (on_tick window).
+    ///        are disarmed (one-shot, generation bumped) and handed to
+    ///        watchdog_expiry_handler(). Caller holds IrqGuard only
+    ///        (lock-free on_tick tail window, issue #369 T2a); `_locked`
+    ///        is historical, not the global lock.
     static void scan_watchdogs_locked(uint64_t now) noexcept;
     /// @brief Fire a flagged stall's armed+expired watchdog (issues
-    ///        #43/#285, P6-thin). Takes scheduler_lock_; exact replica
-    ///        of the scan_watchdogs_locked fire sequence (re-check under
-    ///        lock, disarm-first, pinned ring-only, same weak
+    ///        #43/#285, P6-thin). Takes scheduler_lock_; re-check under
+    ///        lock, generation handshake (issue #324 Tick 3: skips when
+    ///        the vetted generation mismatches — the lock-free scan or
+    ///        teardown disarmed first), disarm-first with generation
+    ///        bump, pinned ring-only, same weak
     ///        watchdog_expiry_handler — all CONFIG_WATCHDOG_ACTION
-    ///        dispositions preserved). Called from the idle escalation
-    ///        seam; the tick scan remains the other firer. Disarm-first
-    ///        ordering means no double-fire whichever observes first.
+    ///        dispositions preserved. Called from the idle escalation
+    ///        seam with the vetted generation; the tick scan remains the
+    ///        other firer.
     static void fire_stall_watchdog(TaskControlBlock &task,
-                                    uint64_t now) noexcept;
+                                     uint64_t now,
+                                     uint64_t expect_gen) noexcept;
     /// @brief Ensures the deadline-monitor task exists and is valid.
     ///        Re-spawns it if the TCB was killed (e.g. by reload_daemon_tasks
     ///        during snapshot restore).  Safe to call multiple times.

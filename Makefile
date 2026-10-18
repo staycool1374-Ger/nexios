@@ -1233,6 +1233,15 @@ endif
 QEMU_TAG_NAME := jarvis-$(CHECKOUT_TAG)
 QEMU_NAME_FLAG := -name $(QEMU_TAG_NAME)
 QEMU_TAG_ERE := jarvis-$(CHECKOUT_TAG)([^A-Za-z0-9_]|$$)
+# CAVEATS (multi-checkout coexistence is naming-convention only, not hard
+# isolation — see issue #372):
+#   - Same-basename checkouts share a tag: TAG derives from the directory
+#     basename only, so ~/jarvis and /tmp/jarvis would collide on QEMU
+#     names AND /tmp files.  Keep checkout dirnames unique per host.
+#   - GDB flows are NOT namespaced: debug-test / rr-replay use the hardcoded
+#     :1234 stub — concurrent debug sessions from two checkouts still fight
+#     over that port.  Only test/dump-counts/debug-shell spawn paths carry
+#     the tag.
 TEST_SERIAL_LOG := /tmp/jarvis-serial-$(CHECKOUT_TAG).log
 # COM1 forensics log (guest UART device, file backend).  Not matched by the
 # harness — kept for post-mortem only.

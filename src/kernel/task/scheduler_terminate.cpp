@@ -21,6 +21,7 @@
 ///        Pure move out of scheduler.cpp: no logic changes.
 
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/scheduler_path.hpp>            // issue #324 Tick 13 teardown trace
 #include <kernel/task/scheduler_switch_internal.hpp>
 #include <kernel/task/scheduler_queue_internal.hpp>
 #include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
@@ -48,7 +49,8 @@ Scheduler::terminate_err(TaskControlBlock &task,
     // (GPF in edf_remove / switch-corruption ENSURE under -smp 2).
     // Self-termination always succeeds (exempted below). No mutation on
     // refusal: no dequeue, no state write, no release, no reaper poke.
-    if (is_current_on_any_cpu(&task) && &task != current_task()) {
+    // Issue #324 Tick 14: refusal leg is cold (fail-closed exception).
+    if (is_current_on_any_cpu(&task) && &task != current_task()) [[unlikely]] {
         kernel::Logger::warn("sched: terminate id=%u refused (remote-current)",
                              static_cast<unsigned>(task.id));
         // Issue #234: fail-closed refusal enters the ring as WARN.
@@ -82,6 +84,9 @@ Scheduler::terminate_err(TaskControlBlock &task,
     // If the parent is blocked in waitpid for this child, wake it now so it
     // does not deadlock waiting for a child that exited without sys_exit.
     wake_waiting_parent(task);
+    // Issue #324 Tick 13: teardown trace — termination mutation complete
+    // (dequeue + TERMINATED mark + parent wake); release_zombie steps next.
+    teardown_step(SchedTeardownSteps::Terminate);
 
     // Release into the zombie list for deferred cleanup by the idle task.
     // For non-self termination this is the final step.
@@ -137,7 +142,8 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
     // callers are own-CPU paths where refusal is unreachable). Fallible
     // callers use terminate_err directly.
     const errors::SchedulerError err = terminate_err(task, exit_code);
-    if (err != errors::SCHED_ERR_OK) {
+    // Issue #324 Tick 14: refusal leg is cold (own-CPU callers never refuse).
+    if (err != errors::SCHED_ERR_OK) [[unlikely]] {
         kernel::Logger::warn("sched: terminate id=%u refused (err=%u)",
                              static_cast<unsigned>(task.id),
                              static_cast<unsigned>(err));

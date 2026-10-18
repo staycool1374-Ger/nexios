@@ -221,10 +221,15 @@ void idle_escalate_stall(IdleScanCursor &cursor, uint64_t budget,
     const auto escalate = [now](TaskControlBlock *t) noexcept {
         if (!t->stuck_suspected)
             return;
+        // Issue #324 Tick 3: vetted generation for the fire handshake —
+        // captured inside the armed branch below (a tick ISR may disarm
+        // between vetting and the call; mismatch then skips, safe side).
+        uint64_t arm_gen = 0;
         if (t->wdog_armed && t->wdog_gen != 0) {
             // An armed watchdog owns the episode: unexpired → silent
             // (it will fire or be kicked; reporting would noise every
             // supervised task once). Expired → route below.
+            arm_gen = t->wdog_gen;
             if (now < t->wdog_expiry_tick)
                 return;
         } else {
@@ -245,7 +250,7 @@ void idle_escalate_stall(IdleScanCursor &cursor, uint64_t budget,
         // CONFIG_WATCHDOG_ACTION dispositions preserved). Marks the
         // episode handled so a disarmed survivor reports at most the
         // single WARN above instead of re-firing.
-        Scheduler::fire_stall_watchdog(*t, now);
+        Scheduler::fire_stall_watchdog(*t, now, arm_gen);
         t->stall_reported = true;
     };
     scan_chunk(cursor, budget, escalate);

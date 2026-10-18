@@ -41,6 +41,7 @@
 
 #include <types.hpp>
 #include <kernel/core/path_tracer.hpp>
+#include <kernel/task/scheduler_path.hpp>
 
 namespace kernel {
 
@@ -98,12 +99,47 @@ inline constexpr uint64_t k_task_cleanup_pinned_expected =
     path_expected(TaskCleanupSteps::Validate,
                   TaskCleanupSteps::WatchdogDisarm);
 
+/// @brief Full terminate→release→drain→free chain (issue #324 Tick 13):
+///        scheduler-side prefix (terminate_err, release_zombie, drain-pop
+///        commit) followed by all 14 cleanup blocks. Terminal paths record
+///        a prefix: reap arm (DrainPop + cleanup, no terminate/release),
+///        deferred destroy (cleanup only, via destroy()), reboot teardown
+///        (Release + DrainPop + cleanup, via release_zombie + drain),
+///        OOM/VMM drain pops (DrainPop + cleanup), pinned note
+///        (Validate + WatchdogDisarm, no free).
+inline constexpr uint64_t k_teardown_canonical_expected = path_expected(
+    SchedTeardownSteps::Terminate, SchedTeardownSteps::Release,
+    SchedTeardownSteps::DrainPop, TaskCleanupSteps::Validate,
+    TaskCleanupSteps::WatchdogDisarm, TaskCleanupSteps::ExitStats,
+    TaskCleanupSteps::Unregister, TaskCleanupSteps::ParentUnbind,
+    TaskCleanupSteps::TimerDrain, TaskCleanupSteps::SyncDetach,
+    TaskCleanupSteps::Notify, TaskCleanupSteps::VfsDrain,
+    TaskCleanupSteps::MemFree, TaskCleanupSteps::PageTeardown,
+    TaskCleanupSteps::IpcDestroy, TaskCleanupSteps::CapRelease,
+    TaskCleanupSteps::Finalize);
+
+/// @brief Reap-arm prefix: direct drain commit, no terminate/release.
+inline constexpr uint64_t k_teardown_reap_expected = path_expected(
+    SchedTeardownSteps::DrainPop, TaskCleanupSteps::Validate,
+    TaskCleanupSteps::WatchdogDisarm, TaskCleanupSteps::ExitStats,
+    TaskCleanupSteps::Unregister, TaskCleanupSteps::ParentUnbind,
+    TaskCleanupSteps::TimerDrain, TaskCleanupSteps::SyncDetach,
+    TaskCleanupSteps::Notify, TaskCleanupSteps::VfsDrain,
+    TaskCleanupSteps::MemFree, TaskCleanupSteps::PageTeardown,
+    TaskCleanupSteps::IpcDestroy, TaskCleanupSteps::CapRelease,
+    TaskCleanupSteps::Finalize);
+
 // Non-zero and pairwise-distinct from the empty chain — a fold-value typo
 // or a broken mix would collapse these.
 static_assert(k_task_create_expected != 0);
 static_assert(k_task_cleanup_expected != k_task_create_expected);
 static_assert(k_task_cleanup_pinned_expected != k_task_create_expected);
 static_assert(k_task_cleanup_pinned_expected != k_task_cleanup_expected);
+// Teardown chains extend the cleanup fold with a scheduler prefix —
+// a fold-value typo or a broken mix would collapse these.
+static_assert(k_teardown_canonical_expected != k_task_cleanup_expected);
+static_assert(k_teardown_reap_expected != k_task_cleanup_expected);
+static_assert(k_teardown_canonical_expected != k_teardown_reap_expected);
 
 // Bit-distinctness: create uses bits 0..4, cleanup bits 0..13 — a
 // duplicated bit (e.g. after a renumbering) would hide a skipped step.

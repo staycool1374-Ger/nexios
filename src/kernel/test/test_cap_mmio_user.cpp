@@ -148,10 +148,10 @@ JARVIS_TEST(mmio_user_syscall_dispatch, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(t != nullptr);
-    // Give the task a real user PML4 (kernel half cloned) so the MMIO map
-    // registry can map into current_task()->page_table_.  Ring 0 execution is
-    // unaffected (kernel half is copied); cleanup frees the clone.
-    t->page_table_ = VMM::clone_kernel_pml4();
+    // create() already installs a real user PML4 (kernel half cloned, MP-1.2);
+    // a second manual clone here would orphan the factory PML4 (+1 PMM,
+    // issue #371).  Ring 0 execution is unaffected (kernel half is copied);
+    // cleanup frees the clone.
     JARVIS_ASSERT(t->page_table_ != 0);
     Scheduler::add_task(*t);
     Scheduler::reschedule();
@@ -326,6 +326,10 @@ JARVIS_TEST(mmio_user_cleanup_drains_maps, "PRE: none | POST: none") {
         JARVIS_ASSERT(va != static_cast<uint64_t>(-1));
         JARVIS_ASSERT_EQ(static_cast<size_t>(1), cap::MmioUserMap::live_count());
         // SimpleTaskPtr dtor: remove_task + cleanup -> MmioUserMap::drain_task.
+        // Drop the creator ref (install_frame convention, issues #360/#371):
+        // the registry pin is released by the death drain, the creator's
+        // here — otherwise the cap outlives the test (+1 Cap/MemPool[2]).
+        mmio->release();
     }
     JARVIS_ASSERT_EQ(static_cast<size_t>(0), cap::MmioUserMap::live_count());
     JARVIS_ASSERT(!cap::MmioUserMap::is_owner(*Scheduler::current_task(), va));

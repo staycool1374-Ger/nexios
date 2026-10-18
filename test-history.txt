@@ -3784,8 +3784,26 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 00:30:00 scheduler_dispatch_path PASSED: 4 FAILED: 0 TIME: 282ms STATUS: 369-T3a-revert-verify
 2026-10-18 00:30:00 task_path PASSED: 5 FAILED: 0 TIME: 339ms STATUS: 369-T3a-revert-verify
 2026-10-18 00:30:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1919ms STATUS: 369-T3a-revert-verify
+2026-10-18 13:01:41 task_watchdog PASSED: 6 FAILED: 0 TIME: 529ms STATUS: 324-T1
+2026-10-18 13:06:51 task_watchdog PASSED: 6 FAILED: 0 TIME: 518ms STATUS: 324-T3
+2026-10-18 13:06:51 scheduler_idle PASSED: 40 FAILED: 0 TIME: 2895ms STATUS: 324-T3
+2026-10-18 13:10:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 534ms STATUS: 324-T11
+2026-10-18 13:12:00 deadline PASSED: 145 FAILED: 1 TIME: 0 STATUS: 324-T11-flake-single-unidentified-identical-rerun-green
+2026-10-18 13:15:09 deadline PASSED: 146 FAILED: 0 TIME: 34412ms STATUS: 324-T11-rerun
+2026-10-18 13:18:29 task_lifecycle PASSED: 9 FAILED: 0 TIME: 648ms STATUS: 324-T12
+2026-10-18 13:18:29 scheduler_core PASSED: 21 FAILED: 0 TIME: 1883ms STATUS: 324-T12
+2026-10-18 13:33:04 core PASSED: 0 FAILED: 0 TIME: 0 STATUS: STALL-UNRECOVERED-load-7-identical-retry
+2026-10-18 13:33:04 task_path PASSED: 6 FAILED: 0 TIME: 412ms STATUS: 324-T13
+2026-10-18 13:33:04 core PASSED: 579 FAILED: 0 TIME: 47614ms STATUS: 324-T13
+2026-10-18 13:37:05 task_lifecycle PASSED: 9 FAILED: 0 TIME: 646ms STATUS: 324-T14
+2026-10-18 13:37:05 task_watchdog PASSED: 6 FAILED: 0 TIME: 520ms STATUS: 324-T14
+2026-10-18 13:37:05 scheduler_core PASSED: 21 FAILED: 0 TIME: 1833ms STATUS: 324-T14
+2026-10-18 13:55:03 cap_pager PASSED: 15 FAILED: 0 TIME: 1242ms
+2026-10-18 13:55:29 cap_mmio PASSED: 20 FAILED: 0 TIME: 1327ms
 2026-10-18 13:58:00 dump-counts PASSED: 0 FAILED: 0 TIME: unknown STATUS: TCOUNT-only-no-summary core_basic=98 core_sync=93 core_sched=112 core_task=52 core_memory=118 core_syscall=85 core_tracing=20 CONSISTENCY-warn-expected-rows-were-0
 2026-10-18 13:58:59 dump-counts PASSED: 0 FAILED: 0 TIME: 44s STATUS: TCOUNT-verified core_*=98/93/112/52/118/85/20 CONSISTENCY-1826-ge-1812-overlap-14
+2026-10-18 14:02:04 cap_pager PASSED: 15 FAILED: 0 TIME: 1087ms
+2026-10-18 14:03:26 cap_mmio PASSED: 20 FAILED: 0 TIME: 1397ms
 2026-10-18 14:04:15 core_basic PASSED: 98 FAILED: 0 TIME: 6397ms
 2026-10-18 14:04:15 core_sync PASSED: 93 FAILED: 0 TIME: 6473ms
 2026-10-18 14:04:15 core_sched PASSED: 112 FAILED: 0 TIME: 11368ms
@@ -3794,18 +3812,36 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 14:04:15 core_syscall PASSED: 85 FAILED: 0 TIME: 6490ms
 2026-10-18 14:04:15 core_tracing PASSED: 0 FAILED: 0 TIME: 6s STATUS: HARNESS-SIGTERM-pre-QEMU-no-guest-output
 2026-10-18 14:04:15 core_tracing PASSED: 20 FAILED: 0 TIME: 1271ms STATUS: RERUN-green-after-transient-SIGTERM
+2026-10-18 14:05:45 cap_mmio PASSED: 20 FAILED: 0 TIME: 1342ms
+2026-10-18 14:06:09 cap_pager PASSED: 15 FAILED: 0 TIME: 1037ms
+2026-10-18 14:07:15 capability PASSED: 155 FAILED: 0 TIME: 10747ms
+2026-10-18 14:08:06 capability PASSED: 155 FAILED: 0 TIME: 10650ms STATUS: HEAD-control-no360fix
+2026-10-18 14:08:45 selftest PASSED: 147 FAILED: 0 TIME: 11717ms
 2026-10-18 14:16:44 core_tracing PASSED: 20 FAILED: 0 TIME: ~19s STATUS: SIGTERM-repro-run1-green-no-recurrence
 2026-10-18 14:16:44 core_tracing PASSED: 20 FAILED: 0 TIME: ~19s STATUS: SIGTERM-repro-run2-green-no-recurrence
 2026-10-18 14:16:44 core_tracing PASSED: 20 FAILED: 0 TIME: ~19s STATUS: SIGTERM-repro-run3-green-no-recurrence
 2026-10-18 14:16:44 core_tracing PASSED: 20 FAILED: 0 TIME: ~19s STATUS: SIGTERM-repro-run4-green-no-recurrence
 2026-10-18 14:16:44 core_tracing PASSED: 20 FAILED: 0 TIME: ~19s STATUS: SIGTERM-repro-run5-green-no-recurrence
 2026-10-18 14:16:44 core_tracing PASSED: 20 FAILED: 0 TIME: ~19s STATUS: SIGTERM-repro-run6-green-no-recurrence
+2026-10-18 14:23:43 cap_shm PASSED: 7 FAILED: 0 TIME: 491ms STATUS: TEMP-HUNT371-bisect
+2026-10-18 14:24:42 cap_shm PASSED: 7 FAILED: 0 TIME: 493ms STATUS: TEMP-HUNT371-census
+2026-10-18 14:26:50 cap_shm PASSED: 7 FAILED: 0 TIME: 508ms STATUS: TEMP-HUNT371-census
+2026-10-18 14:28:44 cap_shm PASSED: 7 FAILED: 0 TIME: 498ms STATUS: TEMP-HUNT371-census
+2026-10-18 14:29:30 cap_shm PASSED: 7 FAILED: 0 TIME: 494ms STATUS: TEMP-HUNT371-bisect2
+2026-10-18 14:30:21 cap_shm PASSED: 7 FAILED: 0 TIME: 489ms STATUS: TEMP-HUNT371-census
+2026-10-18 14:31:21 cap_shm PASSED: 7 FAILED: 0 TIME: 520ms STATUS: TEMP-HUNT371-census
 2026-10-18 14:32:33 core_tracing PASSED: 20 FAILED: 0 TIME: 18s STATUS: #372-verify-namespaced-logs-scoping-proof
+2026-10-18 14:32:55 cap_shm PASSED: 7 FAILED: 0 TIME: 508ms
+2026-10-18 14:33:22 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 596ms
+2026-10-18 14:33:52 capability PASSED: 155 FAILED: 0 TIME: 10153ms
+2026-10-18 14:34:44 selftest PASSED: 147 FAILED: 0 TIME: 11478ms
 2026-10-18 14:39:45 proc_elf PASSED: 127 FAILED: 0 TIME: 35s STATUS: #303-reverify-cross_boundary-libc-iocd-read-delivery-green
 2026-10-18 14:39:45 core_memory PASSED: 118 FAILED: 0 TIME: 13s STATUS: #303-reverify-pointer-overflow-regression-live-green
+2026-10-18 14:45:06 core_tracing PASSED: 21 FAILED: 0 TIME: 1374ms STATUS: 1xWARN-task_cleanup_pinned_terminal-preexisting-followup
+2026-10-18 14:47:21 capability PASSED: 155 FAILED: 0 TIME: 11290ms
+2026-10-18 14:47:55 selftest PASSED: 147 FAILED: 0 TIME: 11899ms
 2026-10-18 14:53:04 proc_elf PASSED: 130 FAILED: 1 TIME: 46s STATUS: #303-RED-errno_mapping-eno0-no-hosted-mapping-leak-tag-failpath-artifact
 2026-10-18 14:53:04 proc_elf PASSED: 131 FAILED: 0 TIME: 46s STATUS: #303-BranchB-green-4-libc_thread
 2026-10-18 14:53:28 tls PASSED: 13 FAILED: 0 TIME: 18s STATUS: #303-in-tree-errno-path-untouched
 2026-10-18 14:53:51 bench PASSED: 28 FAILED: 0 TIME: 19s STATUS: #303-image-append-no-regression
-2026-10-18 14:55:28 proc_elf PASSED: 131
-131 FAILED: 0 TIME: 45s STATUS: #303-final-comment-fix-rebuild
+2026-10-18 14:55:28 proc_elf PASSED: 131 FAILED: 0 TIME: 45s STATUS: #303-final-comment-fix-rebuild

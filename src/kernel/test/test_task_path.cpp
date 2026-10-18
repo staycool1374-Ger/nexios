@@ -28,6 +28,7 @@
 #include <logger.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/task_path.hpp>
+#include <kernel/task/scheduler.hpp>
 #include <kernel/core/path_tracer.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
@@ -147,6 +148,28 @@ static void test_task_path_registry_math() {
     JARVIS_ASSERT(k_task_cleanup_expected != k_task_create_expected);
 }
 
+// Canonical teardown chain (issue #324 Tick 13): terminate_err →
+// release_zombie → cleanup_step pop → free records Terminate, Release,
+// DrainPop + all 14 cleanup blocks in order. Drives an unregistered task
+// synchronously under IrqGuard (no dispatch, no ISR pollution).
+static void test_task_teardown_canonical_chain() {
+    auto *tcb = TaskControlBlock::create(task_path_noop_entry, 20,
+                                         TaskControlBlock::NO_PERIOD);
+    JARVIS_ASSERT(tcb != nullptr);
+    bool chain_ok = false;
+    {
+        arch::IrqGuard guard{};
+        path_reset();
+        const errors::SchedulerError err =
+            Scheduler::terminate_err(*tcb, 0);
+        Scheduler::cleanup_step();
+        chain_ok = (err == errors::SCHED_ERR_OK) &&
+                   path_validate(k_teardown_canonical_expected);
+        path_reset();
+    }
+    JARVIS_ASSERT(chain_ok);
+}
+
 } // namespace
 
 void register_task_path_tests() {
@@ -154,5 +177,6 @@ void register_task_path_tests() {
     JARVIS_REGISTER_TEST(task_cleanup_full_path_segment);
     JARVIS_REGISTER_TEST(task_cleanup_pinned_terminal);
     JARVIS_REGISTER_TEST(task_cleanup_skip_detected);
+    JARVIS_REGISTER_TEST(task_teardown_canonical_chain);
     JARVIS_REGISTER_TEST(task_path_registry_math);
 }
