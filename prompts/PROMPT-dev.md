@@ -2,7 +2,7 @@
 name: dev_coder
 description: Primary implementation agent for kernel changes for NexIOS Real-Time-Operating-System
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode-go/muse-spark-1.3-contributor
 reasoning_effort: high
 temperature: 0.0
 ---
