@@ -138,6 +138,34 @@ void report_corruption(const char *label) {
 #endif
 }
 
+bool validate_task_ptr(const TaskControlBlock *t,
+                       const char *label) noexcept {
+    if (!t) {
+        Logger::raw_write("[SCHED] ");
+        Logger::raw_write(label);
+        Logger::raw_write(": task=null\n");
+        return false;
+    }
+    auto addr = reinterpret_cast<uint64_t>(t);
+    if (addr < CONFIG_HHDM_OFFSET) {
+        Logger::raw_write("[SCHED] ");
+        Logger::raw_write(label);
+        Logger::raw_write(": task low 0x");
+        Logger::print_hex(addr);
+        Logger::raw_write("\n");
+        return false;
+    }
+    if (t->magic != TaskControlBlock::TCB_MAGIC) {
+        Logger::raw_write("[SCHED] ");
+        Logger::raw_write(label);
+        Logger::raw_write(": task magic=0x");
+        Logger::print_hex(t->magic);
+        Logger::raw_write("\n");
+        return false;
+    }
+    return true;
+}
+
 bool is_boot_stack_rsp(uint64_t rsp) noexcept {
     const uint64_t base = reinterpret_cast<uint64_t>(_stack_start);
     const uint64_t end = reinterpret_cast<uint64_t>(_stack_end);

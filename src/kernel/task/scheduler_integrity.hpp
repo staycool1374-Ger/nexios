@@ -69,6 +69,17 @@ bool rsp_in_stack_range(uint64_t rsp, const TaskControlBlock *t,
 bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
                      const char *label);
 
+/// @brief Validate a task pointer at a Scheduler:: entry point (issue #369
+///        T1a: the common non-null + higher-half + magic prefix of
+///        validate_switch, factored for registry/queue admission paths).
+///        Logs the first failure and returns false; callers ENSURE
+///        (hard-fail everywhere per #369 policy).  References are validated
+///        by address: the object may still be poisoned, which is exactly
+///        what the magic check catches (spec §D5: magic holds until
+///        remove_task/unregister_task).
+bool validate_task_ptr(const TaskControlBlock *t,
+                       const char *label) noexcept;
+
 /// @brief Bump @c scheduler_corruption_count and (in DEBUG) fail loudly.
 ///        Called by the scheduler when a validator above returns false.
 void report_corruption(const char *label);

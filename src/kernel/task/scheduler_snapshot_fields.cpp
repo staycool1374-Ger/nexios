@@ -36,8 +36,10 @@ namespace kernel {
 using sched_switch::current_sp;
 using sched_queue::edf_insert;
 using sched_verify::task_stack_ptr;
+using sched_verify::validate_task_ptr;
 
 void Scheduler::read_times(TaskControlBlock &task, TaskTimes &out) noexcept {
+    ENSURE(validate_task_ptr(&task, "read_times"));
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     if (&task == current_task())

@@ -23,6 +23,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_registry_internal.hpp>
 #include <kernel/task/scheduler_admission_internal.hpp> // issue #323 LIU bounds/exempt
+#include <kernel/task/scheduler_integrity.hpp>         // issue #369 T1a validate_task_ptr
 #include <kernel/task/scheduler_queue_internal.hpp>    // issue #323 edf_remove
 #include <kernel/task/scheduler_switch_internal.hpp>    // issue #323 SwSlots (remove_task_err)
 #include <kernel/task/idle_monitor.hpp>                 // issue #323 idle_note_progress
@@ -50,6 +51,7 @@ using sched_admission::LIU_LEYLAND_LIMIT;
 using sched_admission::LIU_LEYLAND_MAX_TASKS;
 using sched_admission::server_budget_for_admission;
 using sched_queue::edf_remove;
+using sched_verify::validate_task_ptr;
 
 TaskControlBlock *const Scheduler::ID_TOMBSTONE =
     reinterpret_cast<TaskControlBlock *>(static_cast<uintptr_t>(1));
@@ -82,6 +84,7 @@ uint64_t Scheduler::loadavg_15min_ = 0;
 
 void Scheduler::set_priority(TaskControlBlock &task,
                              uint64_t new_prio) noexcept {
+    ENSURE(validate_task_ptr(&task, "set_priority"));
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     if (new_prio == task.priority)
@@ -127,6 +130,7 @@ static uint64_t affinity_allowed_mask(uint64_t up) noexcept {
 
 errors::SchedulerError
 Scheduler::set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept {
+    ENSURE(validate_task_ptr(&task, "set_affinity_err"));
     // Quiesce window fences the lock-free AP current-apply path (spec
     // §3.4.5): with arms cancelled and AP dispatch parked, the running
     // check below is stable across the dequeue+enqueue.
@@ -266,10 +270,12 @@ uint64_t Scheduler::migration_count(uint64_t cpu) noexcept {
 }
 
 uint64_t Scheduler::get_affinity(const TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "get_affinity"));
     return task.cpu_affinity;
 }
 
 bool Scheduler::is_rt_task(const TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "is_rt_task"));
     return task.period_ticks != 0 &&
            task.period_ticks != TaskControlBlock::NO_PERIOD;
 }
@@ -384,6 +390,7 @@ void Scheduler::balancer_tick() noexcept {
 }
 
 void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "set_task_ready"));
     arch::IrqGuard irq_guard{};
     // Issue #250 (audit): capture liveness BEFORE the READY write below.
     // The wake-while-current defer guard must observe the pre-wake state:
@@ -505,6 +512,7 @@ TaskControlBlock *Scheduler::create_ap_idle(uint64_t cpu) noexcept {
 }
 
 void Scheduler::register_task(TaskControlBlock &task) {
+    ENSURE(validate_task_ptr(&task, "register_task"));
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     ENSURE(id_table_insert(task.id, &task) && "id_table full");
     all_tasks_.append(task);
@@ -519,6 +527,7 @@ void Scheduler::register_task(TaskControlBlock &task) {
 
 void Scheduler::add_task(TaskControlBlock &task) {
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    ENSURE(validate_task_ptr(&task, "add_task"));
     ENSURE(task.state == TaskState::READY);
     ENSURE(id_table_insert(task.id, &task) && "id_table full");
     all_tasks_.append(task);
@@ -634,6 +643,7 @@ void Scheduler::remove_task(TaskControlBlock &task) {
 }
 
 bool Scheduler::unregister_task(TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "unregister_task"));
     if (!scheduler_lock_.try_lock())
         return false;
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_, adopt_lock);
@@ -708,6 +718,7 @@ SchedulerError Scheduler::init_err(const SchedulerConfig &cfg) {
 }
 
 SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
+    ENSURE(validate_task_ptr(&task, "add_task_err"));
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     if (all_tasks_.size() >= MAX_TASKS)
         return SCHED_ERR_TABLE_FULL;
@@ -754,6 +765,7 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
 }
 
 SchedulerError Scheduler::remove_task_err(TaskControlBlock &task) {
+    ENSURE(validate_task_ptr(&task, "remove_task_err"));
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     if (id_table_find(task.id) == nullptr)
         return SCHED_ERR_NOT_FOUND;
