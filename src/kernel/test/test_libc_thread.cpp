@@ -63,6 +63,7 @@ constexpr uint64_t kJmpOk = 1;
 // entry/failed are asserted; eno is observed only (hosted mapping missing).
 constexpr uint64_t kErrnoFresh = 0;
 constexpr uint64_t kOpenFailed = 1;
+constexpr uint64_t kEnoent = 2; // sys/errno.h ENOENT (glue open-failure map)
 
 } // namespace
 
@@ -111,15 +112,13 @@ JARVIS_TEST(libc_thread_atomic_sweep, "PRE: vfsd | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: Hosted errno cell contract, honest subset: the cell is fresh-
-// zero at dispatch and the nonexistent open fails. The mapped code is NOT
-// asserted: observed 2026-10-18 the hosted open() failure leaves errno at
-// 0 (no kernel→errno mapping in the hosted path — developer work, same
-// category as #361). Asserting ENOENT here would certify a mapping that
-// does not exist.
+// Testidea: Hosted errno cell contract: the cell is fresh-zero at dispatch
+// and the nonexistent open fails with ENOENT recorded by the glue (issue
+// #303 item 1: the kernel reports only fail-closed GENERIC_FAIL, so the
+// glue maps open-failure to ENOENT deterministically).
 // Input: Dispatch; parse the errno_probe triple.
-// Expect: "LIBC_VERIFY: errno_probe 0 1 <unasserted>" (entry 0, open failed).
-// Depends: picolibc errno cell (Ring 3).
+// Expect: "LIBC_VERIFY: errno_probe 0 1 2" (entry 0, open failed, ENOENT).
+// Depends: picolibc errno cell (Ring 3), nexios_glue open wrapper.
 JARVIS_TEST(libc_thread_errno_mapping, "PRE: vfsd | POST: none") {
     char capture[kCapSize]{};
     test::ring3::Outcome o = test::ring3::run(nullptr, nullptr, capture, kCapSize);
@@ -132,7 +131,8 @@ JARVIS_TEST(libc_thread_errno_mapping, "PRE: vfsd | POST: none") {
                       "errno at entry %lu != 0 (cell not fresh)", v[0]);
     JARVIS_ASSERT_FMT(v[1] == kOpenFailed,
                       "nonexistent open unexpectedly succeeded");
-    // v[2] (eno) deliberately unasserted: hosted mapping missing.
+    JARVIS_ASSERT_FMT(v[2] == kEnoent,
+                      "open-failure errno %lu != ENOENT (%lu)", v[2], kEnoent);
     JARVIS_TEST_PASS();
 }
 

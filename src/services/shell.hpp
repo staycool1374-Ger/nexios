@@ -234,4 +234,10 @@ private:
     static void cmd_lspci(int argc, const char** argv);
 };
 
+/// @brief Test seam (issue #303 item 3): P2 central keyboard/serial input
+///        poll (serial → iocd daemon → hardware ring). Zero-logic wrapper
+///        over the internal poll; lets a shell-level test drive the exact
+///        production path including daemon delivery.
+bool shell_try_get_key(char &out);
+
 } // namespace service

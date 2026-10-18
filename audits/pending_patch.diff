@@ -1,214 +1,322 @@
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 0040fe9af..80907d170 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -1942,6 +1942,12 @@ void TaskControlBlock::cleanup() noexcept {
-         kernel::diag::dump_tcb_write_log("[CLEANUP] poisoned TCB");
-         return;
-     }
-+    // Issue #373: a fully torn-down TCB must never re-run teardown.
-+    // Direct re-cleanup (e.g. a double-drain) is a safe no-op; the
-+    // pinned-deferred case never sets the flag (see complete_teardown).
-+    if (teardown_completed_) {
-+        return;
-+    }
-     state = TaskState::REAPED;
-     kernel::task_step(kernel::TaskCleanupSteps::Validate); // issue #347 Slice C
- 
-@@ -1962,6 +1968,16 @@ void TaskControlBlock::cleanup() noexcept {
-     // (MemPool::free on a pinned block is a no-op).
-     if (kernel::MemPool::is_block_pinned(this))
-         return;
-+    complete_teardown();
-+}
-+
-+void TaskControlBlock::complete_teardown() noexcept {
-+    // Issue #373: deferred tail of cleanup() — runs ExitStats..Finalize
-+    // exactly as cleanup() would after the pinned check. Only destroy()
-+    // calls this, only on REAPED-with-resources-pending TCBs (pinned at
-+    // first destroy, unpinned since). Table removal already happened on
-+    // the first destroy; the Unregister block below re-runs the idempotent
-+    // remove path (same as the normal unregister-then-remove_task order).
- 
-     // Issue #294: snapshot user-task exit stats before teardown frees
-     // anything (post-mortem ring for `monstat user`). Scalar copy only,
-@@ -2247,6 +2263,9 @@ void TaskControlBlock::cleanup() noexcept {
-         Scheduler::reset_monitor_task();
- #endif
-     kernel::task_step(kernel::TaskCleanupSteps::Finalize); // issue #347 Slice C
-+    // Issue #373: teardown ran to completion — any further cleanup() or
-+    // destroy() on this TCB is a safe no-op, never a re-teardown.
-+    teardown_completed_ = true;
- }
- 
- } // namespace kernel
-@@ -2292,6 +2311,15 @@ void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
-         if (tcb->state != TaskState::REAPED) {
-             tcb->cleanup();
-             Scheduler::remove_task(*tcb);
-+        } else if (!tcb->teardown_completed_ &&
-+                   !kernel::MemPool::is_block_pinned(tcb)) {
-+            // Issue #373: REAPED-with-resources-pending — the first
-+            // destroy ran on a pinned TCB (teardown skipped, block kept)
-+            // and the block has since been unpinned. Complete the
-+            // deferred resource teardown now. Table removal already
-+            // happened on the first destroy and the tail's Unregister
-+            // block is idempotent, so remove_task() must NOT run again.
-+            tcb->complete_teardown();
-         }
-         // Baseline-owned (pinned) blocks are never freed: the snapshot
-         // owns the block and restore rewinds it (cleanup() already skips
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index 2e2401fbd..0c51422c7 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -668,6 +668,14 @@ struct TaskControlBlock {
-     /// on teardown — the on_tick scan skips disarmed tasks outright.
-     bool wdog_armed = false;
- 
-+    /// @brief True once cleanup() ran ExitStats..Finalize to completion
-+    ///        (issue #373). Distinguishes "REAPED-with-resources-pending"
-+    ///        (pinned at first destroy: REAPED but teardown skipped) from
-+    ///        "REAPED-after-full-teardown" (second destroy must be a safe
-+    ///        no-op, never a re-teardown). False after every memset site;
-+    ///        debug/release parity: plain bool, never CONFIG_DEBUG-gated.
-+    bool teardown_completed_ = false;
-+
-     /// @brief Watchdog period in ticks (from SYS_WATCHDOG_CREATE arg0).
-     uint64_t wdog_period_ticks = 0;
- 
-@@ -962,9 +970,12 @@ struct TaskControlBlock {
-     /// @brief Destroys a TCB and returns its MemPool block (H-5: single
-     ///        pool-aware teardown path replacing raw `delete` on RT error
-     ///        paths — CODING_STYLE §4 forbids new/delete on RT paths).
--    ///        State-aware: a REAPED TCB (cleanup already run) is only freed;
--    ///        otherwise cleanup() + remove_task() run first.  No-op on nullptr.
--    ///        Mirrors operator delete() semantics exactly.
-+    ///        State-aware three-way branch (issue #373): a live TCB runs
-+    ///        cleanup() + remove_task(); a REAPED-with-resources-pending
-+    ///        TCB (pinned at first destroy, unpinned since) completes the
-+    ///        deferred teardown without re-running table removal; a
-+    ///        REAPED-after-full-teardown TCB is only freed (safe no-op).
-+    ///        No-op on nullptr. Mirrors operator delete() semantics exactly.
-     static void destroy(TaskControlBlock *tcb) noexcept;
- 
-     /// @brief Save the current register context into this TCB.
-@@ -978,6 +989,15 @@ struct TaskControlBlock {
-     ///        Called by WAITPID after reaping a TERMINATED child.
-     void cleanup() noexcept;
- 
-+    /// @brief Completes a teardown deferred by the pinned early-return
-+    ///        (issue #373): runs ExitStats..Finalize exactly as cleanup()
-+    ///        would after the pinned check, without re-running table
-+    ///        removal (the first destroy already removed this task) and
-+    ///        without touching scheduler membership beyond the idempotent
-+    ///        unregister. Only destroy() calls this, only on
-+    ///        REAPED-with-resources-pending TCBs.
-+    void complete_teardown() noexcept;
-+
-     /// @brief Unregisters this TCB from the scheduler (tasks_[] / id_table_ /
-     ///        ready queue) and returns its memory to the MemPool.
-     ///        Mandatory before the block is reused: a TCB freed via `delete`
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 0087671be..6ef537036 100644
+index 6ef537036..3b3965f29 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -295,7 +295,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"core_task",           52,   0,       0      },  // task_* + fpu_invariants + kernel_top + per_cpu (#364; measured)
-     {"core_memory",         119,  0,       0      },  // all memory_* (#364; measured) + kernel-half runtime NX (#376)
-     {"core_syscall",        85,   0,       0      },  // syscall_* + debug_syscall + tls (#364; measured)
--    {"core_tracing",        24,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361, +2 rollback fail-first/past-end)
-+    {"core_tracing",        25,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361, +2 rollback fail-first/past-end, +1 destroy-after-teardown noop #373)
-     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
-     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
-     {"proc_elf",            131,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD + 4 drift (#340 P1/P2 + #348, unrecorded) + 4 libc_thread (#303 M12)
-diff --git a/src/kernel/test/test_task_path.cpp b/src/kernel/test/test_task_path.cpp
-index 1e624a76d..f8afc1235 100644
---- a/src/kernel/test/test_task_path.cpp
-+++ b/src/kernel/test/test_task_path.cpp
-@@ -29,6 +29,7 @@
- #include <kernel/task/task.hpp>
- #include <kernel/task/task_path.hpp>
- #include <kernel/task/scheduler.hpp>
-+#include <kernel/test/resource_tracker.hpp>
- #include <kernel/core/path_tracer.hpp>
- #include <kernel/memory/mempool.hpp>
- #include <kernel/arch/hal/irq_guard.hpp>
-@@ -76,6 +77,12 @@ static void test_task_cleanup_full_path_segment() {
+@@ -224,7 +224,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"network_core",          18,   0,       0      },  // MAC/IPv4/ARP/checksum + mock-NIC RX dispatch + ICMP wire-order request (#138, #179) + malformed-length/version/truncation rejection (#178) + UDP build/poll/set_reply
+ 
+     // shell / ui
+-    {"shell_interaction",    19,    0,       0      },  // shell commands (+ tasks memory columns)
++    {"shell_interaction",    20,    0,       0      },  // shell commands (+ tasks memory columns) + P2 key-delivery seam test (#303 item 3)
+     {"shell_redirect",        3,    0,       0      },  // shell I/O redirection
+     {"shell_textutils",       1,    0,       0      },  // text utilities
+     {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
+@@ -313,7 +313,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
+     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
+     {"deadline",            147,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 budget-denied-at-fork (#328) + 1 wall accuracy bound (#319) + 1 validate-id-range-gate (#374) + 1 pre-existing aggregate drift at HEAD
+-    {"ui",                  73,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
++    {"ui",                  74,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231) + 1 P2 key-delivery seam test (#303 item 3); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
+     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
+     {"random",              17,   0,       0      },  // random_* (issue #173)
+     {"bench",               28,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303) + 1 path_tracer overhead (#347-E)
+diff --git a/src/kernel/test/test_libc_thread.cpp b/src/kernel/test/test_libc_thread.cpp
+index 4eb55945e..8d3f76218 100644
+--- a/src/kernel/test/test_libc_thread.cpp
++++ b/src/kernel/test/test_libc_thread.cpp
+@@ -63,6 +63,7 @@ constexpr uint64_t kJmpOk = 1;
+ // entry/failed are asserted; eno is observed only (hosted mapping missing).
+ constexpr uint64_t kErrnoFresh = 0;
+ constexpr uint64_t kOpenFailed = 1;
++constexpr uint64_t kEnoent = 2; // sys/errno.h ENOENT (glue open-failure map)
+ 
+ } // namespace
+ 
+@@ -111,15 +112,13 @@ JARVIS_TEST(libc_thread_atomic_sweep, "PRE: vfsd | POST: none") {
  }
  
- static void test_task_cleanup_pinned_terminal() {
-+    // Issue #373 regression: the unpin+destroy leg must complete the
-+    // deferred resource teardown (kstack + PML4 + IPC objects) instead of
-+    // freeing the block intact. Capture the tracker baseline before
-+    // create so the post-teardown delta must be exactly zero.
-+    test::ResourceCounters case_before;
-+    test::ResourceTracker::instance().capture(case_before);
-     auto *tcb = TaskControlBlock::create(task_path_noop_entry, 20,
-                                          TaskControlBlock::NO_PERIOD);
-     JARVIS_ASSERT(tcb != nullptr);
-@@ -83,15 +90,55 @@ static void test_task_cleanup_pinned_terminal() {
-     bool pinned_ok = false;
-     {
-         arch::IrqGuard guard{};
-+        // Tracker symmetry: destroy()'s teardown ends in
-+        // track_task_remove, which pairs with the track_task_add in
-+        // add_task. Drive a scheduler-managed TCB (added, never
-+        // dispatched: remove_task runs inside this same guard).
-+        Scheduler::add_task(*tcb);
-         path_reset();
-         TaskControlBlock::destroy(tcb); // pinned: teardown skipped, block kept
-         pinned_ok = path_validate(k_task_cleanup_pinned_expected);
-         path_reset();
-         MemPool::unpin_block(tcb);
--        TaskControlBlock::destroy(tcb); // now frees the block
-+        TaskControlBlock::destroy(tcb); // completes teardown, frees block
-         path_reset();
-     }
-     JARVIS_ASSERT(pinned_ok);
-+    test::ResourceCounters case_after;
-+    test::ResourceTracker::instance().capture(case_after);
-+    JARVIS_ASSERT_EQ(case_before.pmm_pages_used, case_after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(case_before.tasks, case_after.tasks);
-+    JARVIS_ASSERT_EQ(case_before.msg_queues, case_after.msg_queues);
-+    JARVIS_ASSERT_EQ(case_before.notifies, case_after.notifies);
-+    JARVIS_ASSERT_EQ(case_before.event_groups, case_after.event_groups);
+ // Runmode: kernel
+-// Testidea: Hosted errno cell contract, honest subset: the cell is fresh-
+-// zero at dispatch and the nonexistent open fails. The mapped code is NOT
+-// asserted: observed 2026-10-18 the hosted open() failure leaves errno at
+-// 0 (no kernel→errno mapping in the hosted path — developer work, same
+-// category as #361). Asserting ENOENT here would certify a mapping that
+-// does not exist.
++// Testidea: Hosted errno cell contract: the cell is fresh-zero at dispatch
++// and the nonexistent open fails with ENOENT recorded by the glue (issue
++// #303 item 1: the kernel reports only fail-closed GENERIC_FAIL, so the
++// glue maps open-failure to ENOENT deterministically).
+ // Input: Dispatch; parse the errno_probe triple.
+-// Expect: "LIBC_VERIFY: errno_probe 0 1 <unasserted>" (entry 0, open failed).
+-// Depends: picolibc errno cell (Ring 3).
++// Expect: "LIBC_VERIFY: errno_probe 0 1 2" (entry 0, open failed, ENOENT).
++// Depends: picolibc errno cell (Ring 3), nexios_glue open wrapper.
+ JARVIS_TEST(libc_thread_errno_mapping, "PRE: vfsd | POST: none") {
+     char capture[kCapSize]{};
+     test::ring3::Outcome o = test::ring3::run(nullptr, nullptr, capture, kCapSize);
+@@ -132,7 +131,8 @@ JARVIS_TEST(libc_thread_errno_mapping, "PRE: vfsd | POST: none") {
+                       "errno at entry %lu != 0 (cell not fresh)", v[0]);
+     JARVIS_ASSERT_FMT(v[1] == kOpenFailed,
+                       "nonexistent open unexpectedly succeeded");
+-    // v[2] (eno) deliberately unasserted: hosted mapping missing.
++    JARVIS_ASSERT_FMT(v[2] == kEnoent,
++                      "open-failure errno %lu != ENOENT (%lu)", v[2], kEnoent);
+     JARVIS_TEST_PASS();
+ }
+ 
+diff --git a/src/kernel/test/test_shell_interaction.cpp b/src/kernel/test/test_shell_interaction.cpp
+index 531ae7423..cbce20103 100644
+--- a/src/kernel/test/test_shell_interaction.cpp
++++ b/src/kernel/test/test_shell_interaction.cpp
+@@ -25,6 +25,10 @@
+ #include <services/shell.hpp>
+ #include <services/terminal/terminal.hpp>
+ #include <kernel/arch/io.hpp>
++#include <kernel/arch/timer.hpp>
++#include <kernel/arch/keyboard.hpp>
++#include <kernel/driver/iocd.hpp>
++#include <kernel/ipc/ipc.hpp>
+ #include <constants.hpp>
+ 
+ using namespace kernel;
+@@ -531,6 +535,53 @@ JARVIS_TEST(shell_clear_command, "PRE: vfsd, iocd | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: shell P2 key-delivery consumes a daemon-owned byte through
++//           the production poll (issue #303 item 3 seam; the #340 P2 path
++//           the tracker left manual-only).
++// Input: ownership on; inject 'a' press (set-1 0x1E) via 0xD2 + genuine
++//        handle_irq; tick-spin until the daemon queues it; drive the SEAM
++//        (service::shell_try_get_key) twice. Ownership cleared before
++//        asserts so an abort cannot leak the routing.
++// Expect: first seam call true + 'a'; second call false (exactly-once);
++//         kernel hardware ring empty (no double delivery).
++// Depends: shell_try_get_key seam + iocd decode/queue + ownership routing.
++JARVIS_TEST(shell_key_delivery_via_seam, "PRE: vfsd, iocd | POST: none") {
++    uint64_t iocd_pid = kernel::iocd::get_iocd_pid();
++    JARVIS_ASSERT_FMT(iocd_pid != 0, "iocd not running");
++    serial_flush_rx();
++    arch::Keyboard::flush();
++
++    kernel::iocd::set_keyboard_owned(true);
++    arch::outb(0x64, 0xD2); // i8042: write keyboard output buffer
++    arch::outb(0x60, 0x1E); // 'a' press
++    arch::Keyboard::handle_irq();
++
++    // The daemon needs timer ticks to run; spin until a seam poll
++    // observes the byte (bounded: 50-tick window, cross_boundary idiom).
++    char got = 0;
++    bool delivered = false;
++    const uint64_t deadline = arch::Timer::ticks() + 50;
++    while (!delivered && arch::Timer::ticks() < deadline) {
++        if (service::shell_try_get_key(got))
++            delivered = true;
++        else
++            arch::pause();
++    }
++    // Exactly-once + single ownership, collected before asserts.
++    char second = 0;
++    const bool second_empty = !service::shell_try_get_key(second);
++    char ring_byte = 0;
++    const bool ring_empty = !arch::Keyboard::getchar(ring_byte);
++    kernel::iocd::set_keyboard_owned(false);
++
++    JARVIS_ASSERT_FMT(delivered, "seam saw no byte within 50 ticks");
++    JARVIS_ASSERT_FMT(got == 'a', "seam byte 0x%x != 'a'", got);
++    JARVIS_ASSERT_FMT(second_empty, "seam delivered twice");
++    JARVIS_ASSERT_FMT(ring_empty, "byte duplicated into kernel ring");
++    JARVIS_TEST_PASS();
 +}
 +
-+static void test_task_destroy_after_full_teardown_is_noop() {
-+    // Issue #373 branch (c): destroy on a REAPED-after-full-teardown TCB
-+    // is a safe no-op (magic 0xDD skip) — never a re-teardown. The second
-+    // destroy must not fault, must not double-free, and must leave zero
-+    // tracker delta.
-+    test::ResourceCounters case_before;
-+    test::ResourceTracker::instance().capture(case_before);
-+    auto *tcb = TaskControlBlock::create(task_path_noop_entry, 20,
-+                                         TaskControlBlock::NO_PERIOD);
-+    JARVIS_ASSERT(tcb != nullptr);
-+    {
-+        arch::IrqGuard guard{};
-+        // Tracker symmetry (see pinned test): add pairs with the
-+        // track_task_remove in teardown. Never dispatched: destroy
-+        // removes it inside this same guard.
-+        Scheduler::add_task(*tcb);
-+        TaskControlBlock::destroy(tcb); // full teardown, block freed
-+        TaskControlBlock::destroy(tcb); // no-op: already freed, skip
-+    }
-+    test::ResourceCounters case_after;
-+    test::ResourceTracker::instance().capture(case_after);
-+    JARVIS_ASSERT_EQ(case_before.pmm_pages_used, case_after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(case_before.tasks, case_after.tasks);
-+    JARVIS_ASSERT_EQ(case_before.msg_queues, case_after.msg_queues);
-+    JARVIS_ASSERT_EQ(case_before.notifies, case_after.notifies);
-+    JARVIS_ASSERT_EQ(case_before.event_groups, case_after.event_groups);
+ void register_shell_interaction_tests() {
+     Logger::info("Registering shell interaction tests");
+     JARVIS_REGISTER_RELEASE_TEST(shell_loopback_manual_string);
+@@ -552,5 +603,6 @@ void register_shell_interaction_tests() {
+     JARVIS_REGISTER_RELEASE_TEST(shell_sleep_zero);
+     JARVIS_REGISTER_RELEASE_TEST(shell_clear_command);
+     JARVIS_REGISTER_RELEASE_TEST(shell_tasks_memory_columns);
++    JARVIS_REGISTER_TEST(shell_key_delivery_via_seam);
+ }
+ #endif
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index f00b1c47c..be7482d72 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -138,7 +138,10 @@ void shell_input_timeout_fire(void *context) {
+ // by the single-ownership invariant, and draining it would risk double
+ // delivery. Never blocks on the daemon beyond one send_sync round-trip
+ // (fail-open); shell liveness never depends on iocd.
+-bool shell_try_get_key(char &out) {
++// Issue #303 item 3: service::-scope test seam (declared in shell.hpp)
++// so the P2 key-delivery path is automatable by a shell-level test.
++// Zero logic change on the move out of the anonymous namespace.
++bool shell_try_get_key_impl(char &out) {
+     if (arch::Serial::poll_getchar(out))
+         return true;
+     uint64_t pid = kernel::iocd::get_iocd_pid();
+@@ -203,6 +206,14 @@ void shell_idle_nap(uint64_t timeout_us) {
+ }
+ } // namespace
+ 
++/// @brief Test seam (issue #303 item 3): P2 key-delivery poll exposed so a
++///        shell-level test can drive the exact production path (serial →
++///        iocd daemon → hardware ring). Zero-logic wrapper over the
++///        internal poll above.
++bool shell_try_get_key(char &out) {
++    return shell_try_get_key_impl(out);
++}
++
+ static void background_task_wrapper() {
+     auto* task = kernel::Scheduler::current_task();
+     auto* entry = task ? reinterpret_cast<void (*)()>(task->user_data) : nullptr;
+diff --git a/src/services/shell.hpp b/src/services/shell.hpp
+index 1200ac4a4..07d998f4a 100644
+--- a/src/services/shell.hpp
++++ b/src/services/shell.hpp
+@@ -234,4 +234,10 @@ private:
+     static void cmd_lspci(int argc, const char** argv);
+ };
+ 
++/// @brief Test seam (issue #303 item 3): P2 central keyboard/serial input
++///        poll (serial → iocd daemon → hardware ring). Zero-logic wrapper
++///        over the internal poll; lets a shell-level test drive the exact
++///        production path including daemon delivery.
++bool shell_try_get_key(char &out);
++
+ } // namespace service
+diff --git a/tools/build-picolibc.sh b/tools/build-picolibc.sh
+index 72428562c..f0cc6b9be 100755
+--- a/tools/build-picolibc.sh
++++ b/tools/build-picolibc.sh
+@@ -53,6 +53,7 @@ meson setup "$BLD_BASE/bld" "$BLD_BASE/src" \
+     -Dpicocrt=true \
+     -Dposix-console=true \
+     -Dthread-local-storage=false \
++    -Derrno-function=__errno \
+     -Dspecsdir=lib
+ ninja -C "$BLD_BASE/bld"
+ ninja -C "$BLD_BASE/bld" install
+diff --git a/userspace/picolibc/nexios_glue.c b/userspace/picolibc/nexios_glue.c
+index ab504c37b..c1a20cccc 100644
+--- a/userspace/picolibc/nexios_glue.c
++++ b/userspace/picolibc/nexios_glue.c
+@@ -8,16 +8,22 @@
+  * Everything else comes from the picolibc sysroot. */
+ 
+ #include <sys/time.h> // first: declares struct timeval for syscall.h
+-                       // sys_gettod (sysroot header; LP64 layout matches)
++                        // sys_gettod (sysroot header; LP64 layout matches)
+ #include <syscall.h>
++#include <errno.h> // sysroot errno: BSS cell pre-rebuild, TP cell after
++                   // (#303 item 2, errno-function knob)
+ 
+ /* #71 stubs (build/libc/picolib_stubs.o, linked explicitly — NOT the
+- * whole in-tree archive, which would duplicate errno/_exit). */
+-long _read(int fd, char *buf, int count);
+-long _write(int fd, char *buf, int count);
+-long _close(int fd);
++ * whole in-tree archive, which would duplicate errno/_exit).
++ * Signatures MUST match the int-returning definitions byte-for-byte:
++ * declaring them long (as here historically) suppresses the call-site
++ * sign-extension, so a -1 return arrives as +4294967295 and the errno
++ * sets below never fire (issue #303 item 1 root cause). */
++int _read(int fd, char *buf, int count);
++int _write(int fd, char *buf, int count);
++int _close(int fd);
+ long _lseek(int fd, long offset, int whence);
+-long _open(const char *path, int flags, int mode);
++int _open(const char *path, int flags, int mode);
+ 
+ void _exit(int status) {
+     __syscall5(SYS_EXIT, (long)status, 0, 0, 0);
+@@ -41,22 +47,83 @@ void *sbrk(long increment) {
+     return (ret == new_brk) ? old : (void *)-1;
  }
  
- static void test_task_cleanup_skip_detected() {
-@@ -176,6 +223,7 @@ void register_task_path_tests() {
-     JARVIS_REGISTER_TEST(task_create_path_segment);
-     JARVIS_REGISTER_TEST(task_cleanup_full_path_segment);
-     JARVIS_REGISTER_TEST(task_cleanup_pinned_terminal);
-+    JARVIS_REGISTER_TEST(task_destroy_after_full_teardown_is_noop);
-     JARVIS_REGISTER_TEST(task_cleanup_skip_detected);
-     JARVIS_REGISTER_TEST(task_teardown_canonical_chain);
-     JARVIS_REGISTER_TEST(task_path_registry_math);
++/* Issue #303 item 1 (hosted errno mapping): the `_` stubs return -1 on
++ * failure but the kernel reports only fail-closed GENERIC_FAIL, so no
++ * specific code survives the trap. The glue therefore records a
++ * documented generic errno on every failed wrapper (open → ENOENT,
++ * read/write/lseek/close → EIO), overwriting deterministically. Known
++ * approximation: the stub's O_TRUNC-on-nonempty ENOSYS is superseded by
++ * ENOENT here — revisit when the kernel returns specific negated codes.
++ * Via <errno.h> this hits the BSS cell pre-rebuild and the TP cell after
++ * the errno-function rebuild (item 2) with zero source change. */
+ long read(int fd, void *buf, unsigned long count) {
+-    return _read(fd, (char *)buf, (int)count);
++    long ret = _read(fd, (char *)buf, (int)count);
++    if (ret < 0)
++        errno = EIO;
++    return ret;
+ }
+ 
+ long write(int fd, const void *buf, unsigned long count) {
+-    return _write(fd, (char *)buf, (int)count);
++    long ret = _write(fd, (char *)buf, (int)count);
++    if (ret < 0)
++        errno = EIO;
++    return ret;
+ }
+ 
+ long lseek(int fd, long offset, int whence) {
+-    return _lseek(fd, offset, whence);
++    long ret = _lseek(fd, offset, whence);
++    if (ret < 0)
++        errno = EIO;
++    return ret;
+ }
+ 
+ long close(int fd) {
+-    return _close(fd);
++    long ret = _close(fd);
++    if (ret < 0)
++        errno = EIO;
++    return ret;
+ }
+ 
+ long open(const char *path, int flags) {
+-    return _open(path, flags, 0);
++    long ret = _open(path, flags, 0);
++    if (ret < 0)
++        errno = ENOENT;
++    return ret;
++}
++
++/* Issue #303 item 2 (hosted TP-wiring): errno-cell provider for the
++ * picolibc errno-function path (sysroot rebuilt with
++ * -Derrno-function=__errno; thread-local-storage stays off, so no
++ * PT_TLS — locality comes from TP alone). Reads the task's
++ * TP-published control
++ * block — errno_value at offset 0, layout shared by value with struct
++ * nexios_tcb in src/libc/errno.h (separate lib domain: the TU cannot be
++ * shared, the 3-arch sequence mirrors src/libc/errno.c:read_tp).
++ * TP == 0 (pre-TLS_SET) falls back to a function-static cell, never a
++ * null dereference. Dormant while the sysroot uses BSS errno. */
++static unsigned long glue_read_tp(void) {
++#if defined(__x86_64__)
++    unsigned long v = 0;
++    __asm__ volatile("rdfsbase %0" : "=r"(v));
++    return v;
++#elif defined(__aarch64__)
++    unsigned long v = 0;
++    __asm__ volatile("mrs %0, tpidr_el0" : "=r"(v));
++    return v;
++#elif defined(__riscv)
++    unsigned long v = 0;
++    __asm__ volatile("mv %0, tp" : "=r"(v));
++    return v;
++#else
++    return 0;
++#endif
++}
++
++int *__errno(void) {
++    unsigned long tp = glue_read_tp();
++    if (tp == 0) {
++        static int fallback_errno = 0;
++        return &fallback_errno;
++    }
++    return (int *)tp; // offset-0 errno_value (see src/libc/errno.h)
+ }
