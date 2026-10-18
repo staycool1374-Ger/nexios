@@ -287,7 +287,15 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // Structural/semantic aggregates (issue #173).  Values are filled
     // from measured `dump-counts` output; 0 disables validation.
-    {"core",                579,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70) + 1 non-#PF vector gate (#252) + 1 null-slot round-trip (#263) + 1 ring claim (#264) + 2 block-arm tests (issue #212) + 7 idle_monitor (issue #282) + 6 P4 metrics (issue #283) + 5 P5a memory (issue #284) + 6 P6 stall (issue #285) + 5 exit records (issue #294) + 4 term_fmt (issue #286) + 4 stack_cookie + 5 pointer_isolation + 2 release_build (issue #303) + 1 count overflow (issue #337) + 1 ring3 errno cell (#338) + 1 stack-marker span (#327) + 2 map_page_err (#325-B) + 64 pre-existing aggregate drift at HEAD + 21 path-tracer groups: path_tracer 7 + scheduler_dispatch_path 4 + task_path 6 + vmm_path 4 (#347/#362) + 1 unmap-err hole (#366) + 1 teardown chain (#324 Tick 13)
+    // core_* — split of the former `core` aggregate (issue #364). Values
+    // filled from measured `dump-counts` output; 0 disables validation.
+    {"core_basic",          98,   0,       0      },  // basic + data_structures + stack_cookie + pointer_isolation (#364; measured)
+    {"core_sync",           93,   0,       0      },  // all synchronization_* incl. pip/pcp/pi_donation/err_api (#364; measured)
+    {"core_sched",          112,  0,       0      },  // all scheduler_* (#364; measured)
+    {"core_task",           52,   0,       0      },  // task_* + fpu_invariants + kernel_top + per_cpu (#364; measured)
+    {"core_memory",         118,  0,       0      },  // all memory_* (#364; measured)
+    {"core_syscall",        85,   0,       0      },  // syscall_* + debug_syscall + tls (#364; measured)
+    {"core_tracing",        21,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13)
     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
     {"proc_elf",            123,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD
@@ -360,7 +368,9 @@ inline void validate_all_consistency() {
     // `hal` and `smp` (HAL devices AND SMP coordination primitives), and
     // `testrunner` names both a fine class and its aggregate.
     static constexpr const char *k_aggregates[] = {
-        "core",         "ipc",      "capability", "proc_elf",
+        "core_basic",   "core_sync",  "core_sched", "core_task",
+        "core_memory",  "core_syscall", "core_tracing",
+        "ipc",      "capability", "proc_elf",
         "storage",      "servers",  "drivers",    "hal",
         "smp",          "smp_multicpu", "deadline", "ui",
         "logging_debug", "random",  "bench",      "testrunner",

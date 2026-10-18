@@ -15,10 +15,10 @@ cd "$(dirname "$0")/.."
 ARCH="${1:-x86_64}"
 BUILD="${2:-debug}"
 
-# 16 aggregates + 4 standalone specials.  testrunner runs last: its
+# 22 aggregates + 4 standalone specials.  testrunner runs last: its
 # expected-panic test halts the kernel, so it gets its own boot at the
 # end and deterministic log ordering.
-CLASSES="core ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu ahci_live iommu_live testrunner"
+CLASSES="core_basic core_sync core_sched core_task core_memory core_syscall core_tracing ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu ahci_live iommu_live testrunner"
 
 # Issue #207: riscv64 runs its own green-evidenced class set (arch_riscv64
 # 24/24 incl. full daemon boot, scheduler_zombie 5/5).  The generic
@@ -81,13 +81,17 @@ for c in $RUN; do
     fi
 done
 
-LOGDIR=/tmp/jarvis_classruns
+LOGDIR=/tmp/jarvis_classruns-$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')
 mkdir -p "$LOGDIR"
 
 total=0; passed_classes=0; failed_classes=0
 for c in $RUN; do
     total=$((total+1))
-    pkill -9 -f qemu-system 2>/dev/null
+    # Scope cleanup to this checkout's QEMU (issue #372): the -name tag is
+    # added by the Makefile, with a trailing-delimiter guard so tag `jarvis`
+    # never matches `jarvis_test` artifacts. Never blanket-kill qemu-system:
+    # a sibling checkout may be testing concurrently.
+    pkill -9 -f "qemu-system.*-name jarvis-$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')([^A-Za-z0-9_]|$)" 2>/dev/null || true
     log="$LOGDIR/$c.log"
     start=$(date +%s%N)
     timeout "$OUTER_TIMEOUT" make execute-test "$ARCH" "$BUILD" "$c" > "$log" 2>&1

@@ -1034,7 +1034,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // the standalone specials (ahci_live, iommu_live, task_fpu,
     // task_tcb_log) run by `make test-full`, they cover the full test
     // base previously run as `all`.
-    {"core",
+    // ---- core_*: split of the former 578-test `core` aggregate (issue
+    // #364).  Disjoint partition of the same run_*_group() helpers; the
+    // union registers the identical test set.  Each class runs standalone
+    // and in `make test-full`.
+    {"core_basic",
      []() {
          run_basic_lib_group();
          run_basic_atomic_group();
@@ -1043,6 +1047,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_data_structures_spsc_group();
          run_data_structures_buffer_pool_group();
          run_data_structures_buffer_pool_deterministic_group();
+         run_stack_cookie_group();      // issue #303
+         run_pointer_isolation_group(); // issue #303
+     }},
+    {"core_sync",
+     []() {
          run_synchronization_spinlock_group();
          run_synchronization_sync_group();
          run_synchronization_locking_group();
@@ -1053,6 +1062,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_synchronization_pcp_group();
          run_synchronization_pi_donation_group();
          run_synchronization_err_api_group();
+     }},
+    {"core_sched",
+     []() {
          run_scheduler_core_group();
          run_scheduler_o1_group();
          run_scheduler_atomic_group();
@@ -1062,12 +1074,18 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_scheduler_budget_group();
          run_scheduler_cpu_load_group();
          run_scheduler_starvation_group();
+     }},
+    {"core_task",
+     []() {
          run_task_core_group();
          run_task_lifecycle_group();
          run_task_init_group();
          run_fpu_invariants_group();
          run_kernel_top_group();
          run_per_cpu_group();
+     }},
+    {"core_memory",
+     []() {
          run_memory_pmm_group();
          run_memory_mempool_group();
          run_memory_slab_group();
@@ -1075,12 +1093,6 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_memory_determinism_group();
          run_memory_checked_ptr_group();
          run_memory_checked_ptr_api_group();
-         run_path_tracer_group(); // issue #347 Slice A (core primitive)
-         run_sched_dispatch_path_group(); // issue #347 Slice B (dispatch)
-         run_task_path_group(); // issue #347 Slice C (create/cleanup)
-         run_vmm_path_group(); // issue #347 Slice D (map/rollback)
-         run_stack_cookie_group();      // issue #303
-         run_pointer_isolation_group(); // issue #303
          run_memory_integrity_group();
          run_memory_resource_exhaustion_group();
          run_memory_stack_alloc_group();
@@ -1091,12 +1103,22 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_memory_kernel_isolation_group();
          run_memory_isolation_group();
          run_memory_vmm_group();
+     }},
+    {"core_syscall",
+     []() {
          run_syscall_core_group();
          run_debug_syscall_group();
          run_syscall_fuzz_group();
-          run_syscall_fastpath_group();
-          run_syscall_affinity_group();
-          run_tls_group();
+         run_syscall_fastpath_group();
+         run_syscall_affinity_group();
+         run_tls_group();
+     }},
+    {"core_tracing",
+     []() {
+         run_path_tracer_group(); // issue #347 Slice A (core primitive)
+         run_sched_dispatch_path_group(); // issue #347 Slice B (dispatch)
+         run_task_path_group(); // issue #347 Slice C (create/cleanup)
+         run_vmm_path_group(); // issue #347 Slice D (map/rollback)
      }},
     {"ipc",
      []() {

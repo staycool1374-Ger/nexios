@@ -16,7 +16,16 @@ cd "$(dirname "$0")/.."
 
 ARCH=x86_64
 BUILD=debug
-SERIAL=/tmp/jarvis-serial.log
+# Per-checkout tag (issue #372): same basename+sed transform as the Makefile
+# CHECKOUT_TAG so this script watches the SAME namespaced serial log its
+# inner `make execute-test` writes, and its pkill only matches this
+# checkout's QEMU (prefix trap: match requires a trailing non-identifier
+# char so tag `jarvis` never matches `jarvis_test` artifacts).
+TAG=$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')
+[ -n "$TAG" ] || TAG=checkout
+SERIAL=/tmp/jarvis-serial-$TAG.log
+MATRIX_BUILD_LOG=/tmp/jarvis-matrix-build-$TAG.log
+MATRIX_RUN_LOG=/tmp/jarvis-matrix-run-$TAG.log
 PASS=0
 FAIL=0
 MATRIX_FAILS=""
@@ -30,13 +39,13 @@ run_action() {
 
     # Kill any leftover QEMU from a previous (e.g. killed PANIC) run so the
     # next boot starts clean and does not stall on a busy port/lock.
-    pkill -9 qemu-system-x86_64 2>/dev/null || true
+    pkill -9 -f "qemu-system-x86_64.*-name jarvis-$TAG([^A-Za-z0-9_]|$)" 2>/dev/null || true
     sleep 1
 
     make clean >/dev/null 2>&1
     if ! make "$BUILD" CONFIG_DEFS="-DCONFIG_DEADLINE_ACTION=$action" NO_LTO=1 \
-            >/tmp/jarvis-matrix-build.log 2>&1; then
-        echo "[MATRIX]   BUILD FAILED — see /tmp/jarvis-matrix-build.log"
+            >"$MATRIX_BUILD_LOG" 2>&1; then
+        echo "[MATRIX]   BUILD FAILED — see $MATRIX_BUILD_LOG"
         FAIL=$((FAIL + 1))
         MATRIX_FAILS="$MATRIX_FAILS action$action(build)"
         return
@@ -45,10 +54,10 @@ run_action() {
     # Cap the QEMU run; the PANIC case halts the kernel and the host-side
     # watchdog eventually kills QEMU, so this must not block indefinitely.
     timeout 180 make execute-test "$ARCH" "$BUILD" deadline_action NO_LTO=1 \
-            >/tmp/jarvis-matrix-run.log 2>&1
+            >"$MATRIX_RUN_LOG" 2>&1
     # Let the tee'd serial log fully flush before we grep it.
     sync; sleep 1
-    cp "$SERIAL" "/tmp/matrix-action$action.log" 2>/dev/null || true
+    cp "$SERIAL" "/tmp/matrix-action$action-$TAG.log" 2>/dev/null || true
 
     if [ "$expect_panic" = "1" ]; then
         if grep -q "action=PANIC" "$SERIAL"; then
