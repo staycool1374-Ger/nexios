@@ -1,289 +1,186 @@
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index f236a130b..f9698f026 100644
+index 75c2095d0..0aa5d471b 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -298,11 +298,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"core_tracing",        20,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured)
+@@ -240,7 +240,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"path_tracer",           7,    0,       0      },  // PathTracer core primitive (issue #347 Slice A, #362): chain math, missing/duplicate/reorder detection, checkpoint/resume, scoped-enum steps, reset
+     {"scheduler_dispatch_path", 4, 0,      0      },  // dispatch segments (issue #347 Slice B): reschedule arm, next_task select, skip-one-step negative, registry math
+     {"task_path",             6,    0,       0      },  // task create/cleanup segments (issue #347 Slice C + #324 Tick 13): create path, full 14-block cleanup, pinned terminal, skip-one-step negative, canonical teardown chain, registry math
+-    {"vmm_path",              5,    0,       0      },  // VMM map/rollback segments (issue #347 Slice D): range-map reject, success, skip-one-step negative, runtime rollback via table-alloc injector (issue #361), registry math
++    {"vmm_path",              7,    0,       0      },  // VMM map/rollback segments (issue #347 Slice D): range-map reject, success, skip-one-step negative, runtime rollback via table-alloc injector (issue #361), fail-first + past-end rollback, registry math
+ 
+     // random
+     {"random_core",           7,    0,       0      },  // RNG smoke/non-repeating
+@@ -295,7 +295,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"core_task",           52,   0,       0      },  // task_* + fpu_invariants + kernel_top + per_cpu (#364; measured)
+     {"core_memory",         118,  0,       0      },  // all memory_* (#364; measured)
+     {"core_syscall",        85,   0,       0      },  // syscall_* + debug_syscall + tls (#364; measured)
+-    {"core_tracing",        22,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361)
++    {"core_tracing",        24,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361, +2 rollback fail-first/past-end)
      {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
      {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
--    {"proc_elf",            123,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD
-+    {"proc_elf",            131,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD + 4 drift (#340 P1/P2 + #348, unrecorded) + 4 libc_thread (#303 M12)
-     {"libc_verify",          8,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77) + Ring-3 create/trunc flag-translation probe (#341)
-     {"libc_stdio",            5,    0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (#303, x86_64-only)
-     {"libc_malloc",           5,    0,       0      },  // malloc0/align/calloc/realloc+OOM/cycle-no-leak (#303, x86_64-only)
-     {"libc_string",           3,    0,       0      },  // ring3 exact+sweep + kernel api sweep (#303)
-+    {"libc_thread",           4,    0,       0      },  // atomic exact+sweep + errno mapping+freshness (#303 M12, x86_64-only)
-     {"libc_syscall",          4,    0,       0      },  // image size + getpid + write-cross + no-corruption (#303, x86_64-only)
-     {"cross_boundary",        3,    0,       0      },  // ring3 vfsd chain + iocd register/forward (#303, x86_64-only) + iocd keyboard-read delivery (#340 P0)
-     {"storage",             167,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333) + 1 readdir mount overlay (#346)
-diff --git a/src/kernel/test/test_libc_thread.cpp b/src/kernel/test/test_libc_thread.cpp
-new file mode 100644
-index 000000000..4eb55945e
---- /dev/null
-+++ b/src/kernel/test/test_libc_thread.cpp
-@@ -0,0 +1,182 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file test_libc_thread.cpp
-+/// @brief Threads & atomics coverage (issue #303, Phase 6 module 12).
-+///
-+///        The IN-TREE errno path (crt0 TLS_SET + TP-cell macro, second-
-+///        task isolation) is owned by test_tls.cpp (`tls_errno_ring3_cell`,
-+///        issue #338) and is NOT repeated here.  This file owns the
-+///        HOSTED picolibc path through the shared `libc_verify` image:
-+///        the errno cell contract that hosted programs actually use,
-+///        atomic builtins, and setjmp/longjmp.
-+///
-+///        errno addressing (verified by nm on the linked image): the image
-+///        links in-tree `T __errno_location` but picolibc was built
-+///        WITHOUT `__PICOLIBC_ERRNO_FUNCTION`, so hosted `errno` is the
-+///        plain BSS cell (`B errno`) — writable and fresh per dispatch,
-+///        but NOT the TP cell. Worse (observed 2026-10-18): the hosted
-+///        open() failure path does NOT write errno at all (eno stays 0),
-+///        so the kernel→errno mapping is missing for hosted programs —
-+///        developer work, same category as #361. The mapping test below
-+///        therefore pins what IS true (fresh cell, open fails) and records
-+///        the missing mapping without asserting it. True
-+///        thread-sharing-an-address-space isolation for hosted code needs
-+///        a `__errno`→TP override (developer).
-+
-+#include <test.hpp>
-+#include <logger.hpp>
-+#include "test_ring3_vehicle.hpp"
-+
-+using namespace kernel;
-+
-+#if defined(CONFIG_ARCH_X86_64)
-+
-+namespace {
-+
-+constexpr size_t kCapSize = 2048;
-+constexpr int kSweepDispatches = 3;
-+
-+// Field order of the image marker (libc_verify.c):
-+//   LIBC_VERIFY: atomic <final> <all_ok> <jmp_ok>
-+constexpr uint64_t kAtomicFinal = 1000;
-+constexpr uint64_t kAtomicOk = 1;
-+constexpr uint64_t kJmpOk = 1;
-+
-+// Field order of the image marker (libc_verify.c):
-+//   LIBC_VERIFY: errno_probe <entry> <failed> <eno>
-+// entry/failed are asserted; eno is observed only (hosted mapping missing).
-+constexpr uint64_t kErrnoFresh = 0;
-+constexpr uint64_t kOpenFailed = 1;
-+
-+} // namespace
-+
-+// Runmode: kernel
-+// Testidea: Hosted atomic builtins + setjmp/longjmp round-trip, exact pin:
-+// 1000x __sync_fetch_and_add lands on 1000, setjmp returns via longjmp(7).
-+// Input: Dispatch; parse the atomic triple marker.
-+// Expect: "LIBC_VERIFY: atomic 1000 1 1".
-+// Depends: picolibc atomics + setjmp/longjmp (Ring 3).
-+JARVIS_TEST(libc_thread_atomic_exact, "PRE: vfsd | POST: none") {
-+    char capture[kCapSize]{};
-+    test::ring3::Outcome o = test::ring3::run(nullptr, nullptr, capture, kCapSize);
-+    JARVIS_ASSERT(o.joined);
-+    uint64_t v[3] = {};
-+    JARVIS_ASSERT(test::ring3::parse_tag_line(capture, "LIBC_VERIFY: atomic", v,
-+                                        3, kCapSize));
-+    JARVIS_ASSERT_FMT(v[0] == kAtomicFinal, "atomic final %lu != 1000", v[0]);
-+    JARVIS_ASSERT_FMT(v[1] == kAtomicOk, "atomic ok-flag %lu != 1", v[1]);
-+    JARVIS_ASSERT_FMT(v[2] == kJmpOk, "setjmp/longjmp flag %lu != 1", v[2]);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Atomic/jmp determinism: the identical triple on every fresh
-+// dispatch (no flake tolerance, no ranges — exact match N times).
-+// Input: Dispatch kSweepDispatches times; parse the triple each time.
-+// Expect: (1000, 1, 1) on all 3 runs.
-+// Depends: picolibc atomics + setjmp/longjmp (Ring 3).
-+JARVIS_TEST(libc_thread_atomic_sweep, "PRE: vfsd | POST: none") {
-+    for (int i = 0; i < kSweepDispatches; ++i) {
-+        char capture[kCapSize]{};
-+        test::ring3::Outcome o =
-+            test::ring3::run(nullptr, nullptr, capture, kCapSize);
-+        JARVIS_ASSERT_FMT(o.joined, "sweep dispatch %d did not join", i);
-+        uint64_t v[3] = {};
-+        JARVIS_ASSERT_FMT(test::ring3::parse_tag_line(capture,
-+                                                       "LIBC_VERIFY: atomic",
-+                                                       v, 3, kCapSize),
-+                          "sweep dispatch %d missing atomic marker", i);
-+        JARVIS_ASSERT_FMT(v[0] == kAtomicFinal && v[1] == kAtomicOk &&
-+                              v[2] == kJmpOk,
-+                          "sweep dispatch %d triple (%lu,%lu,%lu) != (1000,1,1)",
-+                          i, v[0], v[1], v[2]);
-+    }
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Hosted errno cell contract, honest subset: the cell is fresh-
-+// zero at dispatch and the nonexistent open fails. The mapped code is NOT
-+// asserted: observed 2026-10-18 the hosted open() failure leaves errno at
-+// 0 (no kernel→errno mapping in the hosted path — developer work, same
-+// category as #361). Asserting ENOENT here would certify a mapping that
-+// does not exist.
-+// Input: Dispatch; parse the errno_probe triple.
-+// Expect: "LIBC_VERIFY: errno_probe 0 1 <unasserted>" (entry 0, open failed).
-+// Depends: picolibc errno cell (Ring 3).
-+JARVIS_TEST(libc_thread_errno_mapping, "PRE: vfsd | POST: none") {
-+    char capture[kCapSize]{};
-+    test::ring3::Outcome o = test::ring3::run(nullptr, nullptr, capture, kCapSize);
-+    JARVIS_ASSERT(o.joined);
-+    uint64_t v[3] = {};
-+    JARVIS_ASSERT(test::ring3::parse_tag_line(capture,
-+                                              "LIBC_VERIFY: errno_probe", v,
-+                                              3, kCapSize));
-+    JARVIS_ASSERT_FMT(v[0] == kErrnoFresh,
-+                      "errno at entry %lu != 0 (cell not fresh)", v[0]);
-+    JARVIS_ASSERT_FMT(v[1] == kOpenFailed,
-+                      "nonexistent open unexpectedly succeeded");
-+    // v[2] (eno) deliberately unasserted: hosted mapping missing.
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: No errno contamination across dispatches: a second fresh
-+// task observes a zero cell (separate address spaces today; guards
-+// against future image/BSS reuse leaking one task's errno into the
-+// next — NOT a TP-sharing proof, see file doc-block).
-+// Input: Dispatch twice; parse errno_probe entry field both times.
-+// Expect: entry == 0 on both runs.
-+// Depends: ELF loader BSS discipline + hosted errno cell (Ring 3).
-+JARVIS_TEST(libc_thread_errno_fresh_per_dispatch,
-+            "PRE: vfsd | POST: none") {
-+    for (int i = 0; i < 2; ++i) {
-+        char capture[kCapSize]{};
-+        test::ring3::Outcome o =
-+            test::ring3::run(nullptr, nullptr, capture, kCapSize);
-+        JARVIS_ASSERT_FMT(o.joined, "freshness dispatch %d did not join",
-+                          i);
-+        uint64_t v[3] = {};
-+        JARVIS_ASSERT_FMT(test::ring3::parse_tag_line(
-+                              capture, "LIBC_VERIFY: errno_probe", v, 3,
-+                              kCapSize),
-+                          "freshness dispatch %d missing errno marker", i);
-+        JARVIS_ASSERT_FMT(v[0] == kErrnoFresh,
-+                          "dispatch %d entry errno %lu != 0 (leak)", i,
-+                          v[0]);
-+    }
-+    JARVIS_TEST_PASS();
-+}
-+
-+#endif // CONFIG_ARCH_X86_64
-+
-+// Runmode: kernel
-+// Testidea: Registers all libc thread tests.
-+// Input: None
-+// Expect: All thread tests registered
-+// Depends: test framework
-+void register_libc_thread_tests() {
-+    Logger::info("Registering libc thread tests");
-+#if defined(CONFIG_ARCH_X86_64)
-+    JARVIS_REGISTER_TEST(libc_thread_atomic_exact);
-+    JARVIS_REGISTER_TEST(libc_thread_atomic_sweep);
-+    JARVIS_REGISTER_TEST(libc_thread_errno_mapping);
-+    JARVIS_REGISTER_TEST(libc_thread_errno_fresh_per_dispatch);
-+#endif
-+}
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 863ee2c61..e0b648b97 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -299,6 +299,7 @@ void register_cs_bench_tests();
- void register_libc_stdio_tests();
- void register_libc_malloc_tests();
- void register_libc_string_tests();
-+void register_libc_thread_tests();
- void register_libc_syscall_tests();
- void register_cross_boundary_tests();
- void register_stress_24h_tests();
-@@ -607,6 +608,7 @@ static void run_cs_bench_group() { register_cs_bench_tests(); }
- static void run_libc_stdio_group() { register_libc_stdio_tests(); }
- static void run_libc_malloc_group() { register_libc_malloc_tests(); }
- static void run_libc_string_group() { register_libc_string_tests(); }
-+static void run_libc_thread_group() { register_libc_thread_tests(); }
- static void run_libc_syscall_group() { register_libc_syscall_tests(); }
- static void run_cross_boundary_group() { register_cross_boundary_tests(); }
- static void run_stress_24h_group() { register_stress_24h_tests(); }
-@@ -747,6 +749,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"libc_stdio", []() { run_libc_stdio_group(); }},
-     {"libc_malloc", []() { run_libc_malloc_group(); }},
-     {"libc_string", []() { run_libc_string_group(); }},
-+    {"libc_thread", []() { run_libc_thread_group(); }},
-     {"libc_syscall", []() { run_libc_syscall_group(); }},
-     {"cross_boundary", []() { run_cross_boundary_group(); }},
-     {"elf_shared", []() { run_elf_shared_group(); }},
-@@ -1171,6 +1174,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-          run_libc_stdio_group();   // issue #303
-          run_libc_malloc_group();  // issue #303
-          run_libc_string_group();  // issue #303
-+         run_libc_thread_group();  // issue #303
-          run_libc_syscall_group(); // issue #303
-          run_cross_boundary_group(); // issue #303
-      }},
-diff --git a/userspace/picolibc/libc_verify.c b/userspace/picolibc/libc_verify.c
-index f1b195328..1ea296339 100644
---- a/userspace/picolibc/libc_verify.c
-+++ b/userspace/picolibc/libc_verify.c
-@@ -30,6 +30,7 @@
- #include <unistd.h>
- #include <fcntl.h>
- #include <setjmp.h>
-+#include <errno.h>
- 
- static unsigned long rdtsc_now(void) {
-     unsigned lo, hi;
-@@ -38,6 +39,11 @@ static unsigned long rdtsc_now(void) {
+     {"proc_elf",            131,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD + 4 drift (#340 P1/P2 + #348, unrecorded) + 4 libc_thread (#303 M12)
+diff --git a/src/kernel/test/test_vmm_path.cpp b/src/kernel/test/test_vmm_path.cpp
+index c414942d4..81e9aef53 100644
+--- a/src/kernel/test/test_vmm_path.cpp
++++ b/src/kernel/test/test_vmm_path.cpp
+@@ -252,6 +252,151 @@ static void test_vmm_map_range_rollback_segment() {
+     JARVIS_ASSERT(rollback_ok);
  }
  
- int main(void) {
-+    /* Stash entry errno BEFORE any syscall: proves the cell starts clean
-+     * on a fresh dispatch (BSS-fresh today; TP-cell when the hosted path
-+     * is wired — see test_libc_thread.cpp). Printed at the end so the
-+     * #75 512 B prefix window is untouched. */
-+    int errno_at_entry = errno;
-     printf("LIBC_VERIFY: hello\n");
- 
-     void *b0 = sbrk(0);
-@@ -279,5 +285,22 @@ int main(void) {
-         printf("LIBC_VERIFY: atomic %d %d %d\n", av, aok, jok);
-     }
- 
-+    /* ---- #303 M12: hosted errno probe (test_libc_thread.cpp) ----
-+     * Writable cell check + failing-open mapping. failed==1 pins fd<0
-+     * (parse_tag_line is unsigned-only, so the sign is folded here);
-+     * eno pins the mapped errno (ENOENT==2 expected via the glue).
-+     * Saved/restored so earlier markers' errno state is untouched. */
-+    {
-+        int saved = errno;
-+        errno = 0;
-+        int fd = open("/nonexistent_libc_thread_probe", O_RDONLY);
-+        int eno = errno;
-+        printf("LIBC_VERIFY: errno_probe %d %d %d\n",
-+               errno_at_entry, (fd < 0) ? 1 : 0, eno);
-+        if (fd >= 0)
-+            close(fd);
-+        errno = saved;
-+    }
++/// @brief Rollback fail-first test (issue #361): with the injector armed
++///        to fail the 1st table allocation, the same 2-page cross-boundary
++///        range installs nothing. Expect VMM_ERR_PAGE_ALLOC + the Rollback
++///        chain, BOTH PD slots still the boot huge entries (verified via
++///        unchanged virt_to_phys on both VAs), and zero PMM delta.
++///        Debug-only; trivial pass elsewhere (count-row pin).
++static void test_vmm_map_range_rollback_first_fail() {
++    bool rollback_ok = true; // not applicable without the debug injection
++#if defined(CONFIG_DEBUG)
++    const uint64_t va1 = kVmmScratchVa;
++    const uint64_t va0 = va1 - arch::PAGE_SIZE;
++    size_t idx0 = 0;
++    uint64_t *pd0 = scratch_pd_at(va0, idx0);
++    size_t idx1 = 0;
++    uint64_t *pd1 = scratch_pd_at(va1, idx1);
++    JARVIS_ASSERT(pd0 == pd1);
++    JARVIS_ASSERT(idx1 == idx0 + 1);
++    const uint64_t boot0 = pd0[idx0];
++    const uint64_t boot1 = pd1[idx1];
++    JARVIS_ASSERT(boot0 != 0);
++    JARVIS_ASSERT(boot1 != 0);
++    // Baseline translations through the boot huge entries: nothing will
++    // be installed, so these must read back unchanged afterwards.
++    const uint64_t base0 = VMM::virt_to_phys(va0);
++    const uint64_t base1 = VMM::virt_to_phys(va1);
++    JARVIS_ASSERT(base0 != 0);
++    JARVIS_ASSERT(base1 != 0);
 +
-     return 0;
++    const uint64_t phys = PMM::alloc_contiguous(2);
++    JARVIS_ASSERT(phys != 0);
++    const uint64_t pmm_before = PMM::free_pages_ref();
++
++    bool chain_ok = false;
++    bool untouched_ok = false;
++    {
++        arch::IrqGuard guard{}; // issue #200: HHDM PD surgery is IRQ-critical
++        VmmTableFailGuard fail_at_first(1); // alloc #1 (va0 PT) fails:
++                                            // nothing installs at all
++        path_reset();
++        const errors::VmmError err = VMM::map_phys_range_try(
++            va0, phys, 2, false, VMM::get_kernel_pml4(), false);
++        chain_ok = (err == errors::VMM_ERR_PAGE_ALLOC) &&
++                   path_validate(k_vmm_map_rollback_expected);
++        untouched_ok = (pd0[idx0] == boot0) && (pd1[idx1] == boot1) &&
++                       (VMM::virt_to_phys(va0) == base0) &&
++                       (VMM::virt_to_phys(va1) == base1);
++        path_reset();
++    }
++    PMM::free_page(phys);
++    PMM::free_page(phys + arch::PAGE_SIZE);
++    rollback_ok = chain_ok && untouched_ok &&
++                  (PMM::free_pages_ref() == pmm_before + 2);
++#endif
++    JARVIS_ASSERT(rollback_ok);
++}
++
++/// @brief Rollback past-end test (issue #361): armed past the last needed
++///        allocation (arm(3) for a 2-PT range), the mapping must succeed
++///        exactly like the unarmed path — proving the injector is
++///        transparent when it never fires. A repeat mapping after guard
++///        scope exit proves the RAII disarm left no stuck-armed state.
++///        Debug-only; trivial pass elsewhere (count-row pin).
++static void test_vmm_map_range_rollback_past_end() {
++    bool past_end_ok = true; // not applicable without the debug injection
++#if defined(CONFIG_DEBUG)
++    const uint64_t va1 = kVmmScratchVa;
++    const uint64_t va0 = va1 - arch::PAGE_SIZE;
++    size_t idx0 = 0;
++    uint64_t *pd0 = scratch_pd_at(va0, idx0);
++    size_t idx1 = 0;
++    uint64_t *pd1 = scratch_pd_at(va1, idx1);
++    JARVIS_ASSERT(pd0 == pd1);
++    JARVIS_ASSERT(idx1 == idx0 + 1);
++    const uint64_t boot0 = pd0[idx0];
++    const uint64_t boot1 = pd1[idx1];
++    JARVIS_ASSERT(boot0 != 0);
++    JARVIS_ASSERT(boot1 != 0);
++
++    const uint64_t phys = PMM::alloc_contiguous(2);
++    JARVIS_ASSERT(phys != 0);
++    const uint64_t pmm_before = PMM::free_pages_ref();
++
++    bool success_ok = false;
++    {
++        arch::IrqGuard guard{}; // issue #200: HHDM PD surgery is IRQ-critical
++        VmmTableFailGuard never_fires(3); // 2 allocs needed: success path
++        path_reset();
++        const errors::VmmError err = VMM::map_phys_range_try(
++            va0, phys, 2, false, VMM::get_kernel_pml4(), false);
++        success_ok = (err == errors::VMM_ERR_OK) &&
++                     path_validate(k_vmm_map_success_expected) &&
++                     (VMM::virt_to_phys(va0) == phys) &&
++                     (VMM::virt_to_phys(va1) == phys + arch::PAGE_SIZE);
++        // Teardown mirrors the success segment: unmap both, restore both
++        // boot huge entries, free both split PT pages.
++        VMM::unmap_page(va0);
++        VMM::unmap_page(va1);
++        const uint64_t split_pt0 = pd0[idx0] & kX86TableFrameMask;
++        const uint64_t split_pt1 = pd1[idx1] & kX86TableFrameMask;
++        pd0[idx0] = boot0;
++        pd1[idx1] = boot1;
++        arch::ArchPageTable::tlb_flush(va0);
++        arch::ArchPageTable::tlb_flush(va1);
++        PMM::free_page(split_pt0);
++        PMM::free_page(split_pt1);
++        path_reset();
++    }
++    PMM::free_page(phys);
++    PMM::free_page(phys + arch::PAGE_SIZE);
++    past_end_ok = success_ok && (PMM::free_pages_ref() == pmm_before + 2);
++    // Guard scope exited: a repeat mapping must still succeed (no stuck
++    // armed state). Fresh frames: the first pair is already freed and may
++    // be reused elsewhere. Teardown identical to the success segment.
++    if (past_end_ok) {
++        const uint64_t phys2 = PMM::alloc_contiguous(2);
++        bool repeat_ok = (phys2 != 0);
++        if (repeat_ok) {
++            arch::IrqGuard guard{};
++            path_reset();
++            const errors::VmmError err = VMM::map_phys_range_try(
++                va0, phys2, 2, false, VMM::get_kernel_pml4(), false);
++            repeat_ok = (err == errors::VMM_ERR_OK);
++            VMM::unmap_page(va0);
++            VMM::unmap_page(va1);
++            const uint64_t split_pt0 = pd0[idx0] & kX86TableFrameMask;
++            const uint64_t split_pt1 = pd1[idx1] & kX86TableFrameMask;
++            pd0[idx0] = boot0;
++            pd1[idx1] = boot1;
++            arch::ArchPageTable::tlb_flush(va0);
++            arch::ArchPageTable::tlb_flush(va1);
++            PMM::free_page(split_pt0);
++            PMM::free_page(split_pt1);
++            path_reset();
++        }
++        if (phys2 != 0) {
++            PMM::free_page(phys2);
++            PMM::free_page(phys2 + arch::PAGE_SIZE);
++        }
++        past_end_ok = repeat_ok &&
++                      (PMM::free_pages_ref() == pmm_before + 2);
++    }
++#endif
++    JARVIS_ASSERT(past_end_ok);
++}
++
+ #endif // CONFIG_ARCH_X86_64
+ 
+ } // namespace
+@@ -263,5 +408,7 @@ void register_vmm_path_tests() {
+     JARVIS_REGISTER_TEST(vmm_map_range_success_segment);
+     JARVIS_REGISTER_TEST(vmm_map_range_skip_detected);
+     JARVIS_REGISTER_TEST(vmm_map_range_rollback_segment);
++    JARVIS_REGISTER_TEST(vmm_map_range_rollback_first_fail);
++    JARVIS_REGISTER_TEST(vmm_map_range_rollback_past_end);
+ #endif
  }
