@@ -763,6 +763,15 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
 
     {
         arch::IrqGuard ig{};
+        // Issue #369 T4b: release stays INSIDE the IRQ-off window on
+        // purpose. Releasing before the guard would open an
+        // unlocked+unpublished+IRQ-on window where a timer ISR runs a
+        // full nested tick (lock is free, so its try_lock succeeds) and
+        // publishes its own arm — which this publish then overwrites
+        // (stranded nested target + stale ArmSwitch record; the T3a
+        // rejected-hoist finding). Generation ordering would keep it
+        // correct, but the narrower window avoids the interleaving
+        // entirely. Do not hoist without a re-audit.
         release_lock();
         // H2 ring: an ARM published while a previous arm is still pending
         // (save_rsp_to != 0) strands the previous arm's dequeued target; an
@@ -812,6 +821,15 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                          __ATOMIC_RELEASE);
         kernel::dispatch_step(kernel::SchedDispatchSteps::ArmSwitch); // #347
 
+        // Issue #369 T4b: CR0.TS set stays INSIDE the IRQ-off window on
+        // purpose. It arms the lazy-FPU #NM trap for the incoming task.
+        // After the guard closes, IRQs are live again: a timer ISR firing
+        // before a hoisted TS-set would run with TS in the previous
+        // task's state (possibly clear), and any FPU use there — or by
+        // the next task before the deferred set — would silently use the
+        // wrong registers instead of trapping (no proof exists that no
+        // ISR path touches FPU). Do not hoist without a full ISR-FPU
+        // audit plus GDB-captured ordering evidence.
         uint64_t cr0 = arch::read_cr0();
         cr0 |= (1ULL << 3);
         arch::write_cr0(cr0);

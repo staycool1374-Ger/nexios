@@ -1120,11 +1120,17 @@ void Scheduler::rate_monotonic_schedule() noexcept {
 }
 
 void Scheduler::reschedule() noexcept {
-    // Single-core UP: read-only ready-queue peek needs only IRQ-safety, not
-    // the full scheduler_lock_.  Holding the lock here prevents the timer
-    // ISR's try_lock() from succeeding in rate_monotonic_schedule(),
-    // blocking the deferred switch from being applied (the ipc_blocking
-    // test harness spins in `while (state != TERMINATED) reschedule();`).
+    // Single-core UP: read-only ready-queue peek needs only IRQ-safety,
+    // not the full scheduler_lock_ (issue #369 T4b: it is IF=0 — not a
+    // held lock — that prevents the timer ISR from running at all here,
+    // so its try_lock() in rate_monotonic_schedule() never even fires;
+    // without this guard an ISR tick between the peek below and the
+    // switch_to_task() call could dispatch a different task first,
+    // stranding this reschedule's pick for a tick (latency, not
+    // corruption — the generation re-verify still orders the applies).
+    // Lock-free by design: the ipc_blocking harness spins in
+    // `while (state != TERMINATED) reschedule();` — a blocking take here
+    // would self-deadlock any holder (see T2b no-reentrant-take rule).
     arch::IrqGuard irq_guard{};
 
     if (all_tasks_.size() <= 1)
