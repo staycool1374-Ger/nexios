@@ -45,6 +45,8 @@
 - Checked-unmap discipline (#366): reworked `_err` probes presence BEFORE delegating to the side-effecting void twin; cap-unmap twins skip revoked/IO checks (revoke path unmaps itself); revoke/teardown fold-and-ignore with `(void)` (no logging under registry locks — lock-order hazard), log-and-continue only on already-logging boot/teardown paths; hole-coverage tests ship in the same commit (probe-guarded, never unmap live kernel state); test-history rows carry measured times only (re-run, don't estimate).
 - Audit check #7 needs per-change artifacts (#324): session-start graphify/vault retrieval does not cover later increments — every non-trivial tick posts its own query + dispositions or eats a process-only REJECT.
 - One-shot safety arms must retain, never rely on re-detection (#324): a disarming scan or TERMINATED-skipping scan never re-fires, so a spared kill intent is lost until reap — compact-and-retain with a generation guard; same handshake closes lock-free check-then-act races (skip is the safe direction).
+- Harness task is persistent suite state (#360): keep its CNode across snapshot_restore (daemon parity, #275) + pre-create it before the baseline capture, or every harness ensure_cspace mints a +1 CNode residual; kept pointers stay safe because the pool rewind resets slot bytes to baseline-empty.
+- Never re-create what the factory installs (#371): create() ships a private cloned PML4 (MP-1.2) — a manual re-clone orphans the factory page (+1 PMM/test); drop creator refs on every cap path (creator/slot/pin ledger — a missing release reads as +1 Cap/MemPool, #360/#371).
 
 ## Entry format
 
@@ -56,6 +58,18 @@
 ```
 
 ## Entries
+
+### #371 — capability residual WARNs (PMM +1 x5, small-cap +1) (audits APPROVED, commit landed)
+
+- **Learned:** (1) A manual `t->page_table_ = clone_kernel_pml4()` on a create()d task orphans the factory PML4 — create() installs a private clone since MP-1.2 (task.cpp:1136); all 5 Family-A tests shared the shape. (2) Conviction ladder for counter-vs-reality divergence: bisection (skip MAP still WARNs ⇒ not the map path; skip clone clears it) + post-drain is_allocated census on every footprint page (PML4/frame/kstack-span all clear yet counter +1 ⇒ lost-pointer orphan, not a teardown skip) + exact arithmetic (+18 = 16 kstack + factory PML4 + manual PML4). (3) A registry-map (not install) creator ref leaks identically to the install case — the delta-clean twin with release is the discriminator.
+- **Adapted:** 5 clone deletions + 1 creator release (test-only); gates capability 155/155 zero WARNs (HEAD stash control: 24). Report `audits/report-2026-10-18T12-36-01Z.md`.
+- **Style re-surface:** single-funnel init (never re-create factory resources); explicit refcount ledger per path (creator/slot/pin/lookup); test-history rows carry measured times only.
+
+### #360 — harness-CNode + ioport creator-ref residuals (audits APPROVED, commit landed)
+
+- **Learned:** (1) `restore_task_fields` detach NULLs the persistent harness cspace every cycle → each harness ensure_cspace mints +1 CNode; keep parity with daemons (#275) + pre-baseline creation cures it. (2) Worker-installed caps need the creator-ref drop even without slot-remove when death-drain disposes via the CNode. (3) The [RESOURCE] WARN call stack is the check path (addr2line), never the leak site — resolve frames before theorizing.
+- **Adapted:** harness keep in scheduler_snapshot_fields.cpp + pre-create in snapshot_create; ioport worker release. Gates cap_pager 15/15 + cap_mmio 20/20 zero WARNs; capability 155/155 (control 24). Report `audits/report-20261018-121007.md`.
+- **Style re-surface:** slot-holds-reference convention at every install site; snapshot/restore pointer-vs-content discipline (pointer persists, bytes rewind to baseline).
 
 ### #362 — order-sensitive path-tracer fold (audit APPROVED, commit pending)
 
