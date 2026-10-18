@@ -3835,9 +3835,16 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 14:33:22 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 596ms
 2026-10-18 14:33:52 capability PASSED: 155 FAILED: 0 TIME: 10153ms
 2026-10-18 14:34:44 selftest PASSED: 147 FAILED: 0 TIME: 11478ms
+2026-10-18 14:39:45 proc_elf PASSED: 127 FAILED: 0 TIME: 35s STATUS: #303-reverify-cross_boundary-libc-iocd-read-delivery-green
+2026-10-18 14:39:45 core_memory PASSED: 118 FAILED: 0 TIME: 13s STATUS: #303-reverify-pointer-overflow-regression-live-green
 2026-10-18 14:45:06 core_tracing PASSED: 21 FAILED: 0 TIME: 1374ms STATUS: 1xWARN-task_cleanup_pinned_terminal-preexisting-followup
 2026-10-18 14:47:21 capability PASSED: 155 FAILED: 0 TIME: 11290ms
 2026-10-18 14:47:55 selftest PASSED: 147 FAILED: 0 TIME: 11899ms
+2026-10-18 14:53:04 proc_elf PASSED: 130 FAILED: 1 TIME: 46s STATUS: #303-RED-errno_mapping-eno0-no-hosted-mapping-leak-tag-failpath-artifact
+2026-10-18 14:53:04 proc_elf PASSED: 131 FAILED: 0 TIME: 46s STATUS: #303-BranchB-green-4-libc_thread
+2026-10-18 14:53:28 tls PASSED: 13 FAILED: 0 TIME: 18s STATUS: #303-in-tree-errno-path-untouched
+2026-10-18 14:53:51 bench PASSED: 28 FAILED: 0 TIME: 19s STATUS: #303-image-append-no-regression
+2026-10-18 14:55:28 proc_elf PASSED: 131 FAILED: 0 TIME: 45s STATUS: #303-final-comment-fix-rebuild
 2026-10-18 15:09:11 vmm_path PASSED: 5 FAILED: 0 TIME: 328ms
 2026-10-18 15:09:39 core_tracing PASSED: 22 FAILED: 0 TIME: 1402ms STATUS: 1xWARN-task_cleanup_pinned_terminal-preexisting-#373
 2026-10-18 15:10:12 capability PASSED: 155 FAILED: 0 TIME: 10255ms
@@ -3845,6 +3852,11 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 15:11:52 vmm_path PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-0-tests-debug-only-class
 2026-10-18 15:12:59 memory_page_tables PASSED: 11 FAILED: 0 TIME: 747ms
 2026-10-18 15:13:28 selftest PASSED: 147 FAILED: 0 TIME: 11497ms
+2026-10-18 15:34:23 core_tracing PASSED: 21 FAILED: 0 TIME: 19s STATUS: post-merge-ff9925193-Tick13-green
+2026-10-18 15:34:23 proc_elf PASSED: 131 FAILED: 0 TIME: 46s STATUS: post-merge-ff9925193-libc_thread-green
+2026-10-18 15:34:23 capability PASSED: 155 FAILED: 0 TIME: 26s STATUS: post-merge-ff9925193-isolate-changes-green
+2026-10-18 15:39:22 core_tracing PASSED: 23 FAILED: 1 TIME: 19s STATUS: #361-RED-past_end-PMM-accounting-test-bug-plus4-should-be-plus2
+2026-10-18 15:39:22 core_tracing PASSED: 24 FAILED: 0 TIME: 19s STATUS: #361-fail-first-past-end-green
 2026-10-18 15:42:26 bench_path_tracer PASSED: 1 FAILED: 0 TIME: 91ms
 2026-10-18 15:47:10 scheduler_core PASSED: 21 FAILED: 0 TIME: 1863ms
 2026-10-18 15:47:40 core_sched PASSED: 112 FAILED: 0 TIME: 13523ms
@@ -3874,3 +3886,9 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 16:30:00 core_memory PASSED: 119 FAILED: 0 TIME: 12054ms
 2026-10-18 16:31:00 capability PASSED: 155 FAILED: 0 TIME: 10384ms
 2026-10-18 16:33:00 proc_elf PASSED: 127 FAILED: 0 TIME: 34358ms
+2026-10-18 15:27:33 vmm_path PASSED: 7 FAILED: 0 TIME: 483ms
+2026-10-18 15:27:33 core_tracing PASSED: 24 FAILED: 0 TIME: 1602ms
+2026-10-18 15:27:33 libc_thread PASSED: 4 FAILED: 0 TIME: 7469ms
+2026-10-18 15:27:33 proc_elf PASSED: 131 FAILED: 0 TIME: 41598ms
+2026-10-18 15:27:33 memory_page_tables PASSED: 12 FAILED: 0 TIME: 834ms
+2026-10-18 15:27:33 sched_admission PASSED: 10 FAILED: 0 TIME: 693ms

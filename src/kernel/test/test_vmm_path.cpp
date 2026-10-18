@@ -252,6 +252,151 @@ static void test_vmm_map_range_rollback_segment() {
     JARVIS_ASSERT(rollback_ok);
 }
 
+/// @brief Rollback fail-first test (issue #361): with the injector armed
+///        to fail the 1st table allocation, the same 2-page cross-boundary
+///        range installs nothing. Expect VMM_ERR_PAGE_ALLOC + the Rollback
+///        chain, BOTH PD slots still the boot huge entries (verified via
+///        unchanged virt_to_phys on both VAs), and zero PMM delta.
+///        Debug-only; trivial pass elsewhere (count-row pin).
+static void test_vmm_map_range_rollback_first_fail() {
+    bool rollback_ok = true; // not applicable without the debug injection
+#if defined(CONFIG_DEBUG)
+    const uint64_t va1 = kVmmScratchVa;
+    const uint64_t va0 = va1 - arch::PAGE_SIZE;
+    size_t idx0 = 0;
+    uint64_t *pd0 = scratch_pd_at(va0, idx0);
+    size_t idx1 = 0;
+    uint64_t *pd1 = scratch_pd_at(va1, idx1);
+    JARVIS_ASSERT(pd0 == pd1);
+    JARVIS_ASSERT(idx1 == idx0 + 1);
+    const uint64_t boot0 = pd0[idx0];
+    const uint64_t boot1 = pd1[idx1];
+    JARVIS_ASSERT(boot0 != 0);
+    JARVIS_ASSERT(boot1 != 0);
+    // Baseline translations through the boot huge entries: nothing will
+    // be installed, so these must read back unchanged afterwards.
+    const uint64_t base0 = VMM::virt_to_phys(va0);
+    const uint64_t base1 = VMM::virt_to_phys(va1);
+    JARVIS_ASSERT(base0 != 0);
+    JARVIS_ASSERT(base1 != 0);
+
+    const uint64_t phys = PMM::alloc_contiguous(2);
+    JARVIS_ASSERT(phys != 0);
+    const uint64_t pmm_before = PMM::free_pages_ref();
+
+    bool chain_ok = false;
+    bool untouched_ok = false;
+    {
+        arch::IrqGuard guard{}; // issue #200: HHDM PD surgery is IRQ-critical
+        VmmTableFailGuard fail_at_first(1); // alloc #1 (va0 PT) fails:
+                                            // nothing installs at all
+        path_reset();
+        const errors::VmmError err = VMM::map_phys_range_try(
+            va0, phys, 2, false, VMM::get_kernel_pml4(), false);
+        chain_ok = (err == errors::VMM_ERR_PAGE_ALLOC) &&
+                   path_validate(k_vmm_map_rollback_expected);
+        untouched_ok = (pd0[idx0] == boot0) && (pd1[idx1] == boot1) &&
+                       (VMM::virt_to_phys(va0) == base0) &&
+                       (VMM::virt_to_phys(va1) == base1);
+        path_reset();
+    }
+    PMM::free_page(phys);
+    PMM::free_page(phys + arch::PAGE_SIZE);
+    rollback_ok = chain_ok && untouched_ok &&
+                  (PMM::free_pages_ref() == pmm_before + 2);
+#endif
+    JARVIS_ASSERT(rollback_ok);
+}
+
+/// @brief Rollback past-end test (issue #361): armed past the last needed
+///        allocation (arm(3) for a 2-PT range), the mapping must succeed
+///        exactly like the unarmed path — proving the injector is
+///        transparent when it never fires. A repeat mapping after guard
+///        scope exit proves the RAII disarm left no stuck-armed state.
+///        Debug-only; trivial pass elsewhere (count-row pin).
+static void test_vmm_map_range_rollback_past_end() {
+    bool past_end_ok = true; // not applicable without the debug injection
+#if defined(CONFIG_DEBUG)
+    const uint64_t va1 = kVmmScratchVa;
+    const uint64_t va0 = va1 - arch::PAGE_SIZE;
+    size_t idx0 = 0;
+    uint64_t *pd0 = scratch_pd_at(va0, idx0);
+    size_t idx1 = 0;
+    uint64_t *pd1 = scratch_pd_at(va1, idx1);
+    JARVIS_ASSERT(pd0 == pd1);
+    JARVIS_ASSERT(idx1 == idx0 + 1);
+    const uint64_t boot0 = pd0[idx0];
+    const uint64_t boot1 = pd1[idx1];
+    JARVIS_ASSERT(boot0 != 0);
+    JARVIS_ASSERT(boot1 != 0);
+
+    const uint64_t phys = PMM::alloc_contiguous(2);
+    JARVIS_ASSERT(phys != 0);
+    const uint64_t pmm_before = PMM::free_pages_ref();
+
+    bool success_ok = false;
+    {
+        arch::IrqGuard guard{}; // issue #200: HHDM PD surgery is IRQ-critical
+        VmmTableFailGuard never_fires(3); // 2 allocs needed: success path
+        path_reset();
+        const errors::VmmError err = VMM::map_phys_range_try(
+            va0, phys, 2, false, VMM::get_kernel_pml4(), false);
+        success_ok = (err == errors::VMM_ERR_OK) &&
+                     path_validate(k_vmm_map_success_expected) &&
+                     (VMM::virt_to_phys(va0) == phys) &&
+                     (VMM::virt_to_phys(va1) == phys + arch::PAGE_SIZE);
+        // Teardown mirrors the success segment: unmap both, restore both
+        // boot huge entries, free both split PT pages.
+        VMM::unmap_page(va0);
+        VMM::unmap_page(va1);
+        const uint64_t split_pt0 = pd0[idx0] & kX86TableFrameMask;
+        const uint64_t split_pt1 = pd1[idx1] & kX86TableFrameMask;
+        pd0[idx0] = boot0;
+        pd1[idx1] = boot1;
+        arch::ArchPageTable::tlb_flush(va0);
+        arch::ArchPageTable::tlb_flush(va1);
+        PMM::free_page(split_pt0);
+        PMM::free_page(split_pt1);
+        path_reset();
+    }
+    PMM::free_page(phys);
+    PMM::free_page(phys + arch::PAGE_SIZE);
+    past_end_ok = success_ok && (PMM::free_pages_ref() == pmm_before + 2);
+    // Guard scope exited: a repeat mapping must still succeed (no stuck
+    // armed state). Fresh frames: the first pair is already freed and may
+    // be reused elsewhere. Teardown identical to the success segment.
+    if (past_end_ok) {
+        const uint64_t phys2 = PMM::alloc_contiguous(2);
+        bool repeat_ok = (phys2 != 0);
+        if (repeat_ok) {
+            arch::IrqGuard guard{};
+            path_reset();
+            const errors::VmmError err = VMM::map_phys_range_try(
+                va0, phys2, 2, false, VMM::get_kernel_pml4(), false);
+            repeat_ok = (err == errors::VMM_ERR_OK);
+            VMM::unmap_page(va0);
+            VMM::unmap_page(va1);
+            const uint64_t split_pt0 = pd0[idx0] & kX86TableFrameMask;
+            const uint64_t split_pt1 = pd1[idx1] & kX86TableFrameMask;
+            pd0[idx0] = boot0;
+            pd1[idx1] = boot1;
+            arch::ArchPageTable::tlb_flush(va0);
+            arch::ArchPageTable::tlb_flush(va1);
+            PMM::free_page(split_pt0);
+            PMM::free_page(split_pt1);
+            path_reset();
+        }
+        if (phys2 != 0) {
+            PMM::free_page(phys2);
+            PMM::free_page(phys2 + arch::PAGE_SIZE);
+        }
+        past_end_ok = repeat_ok &&
+                      (PMM::free_pages_ref() == pmm_before + 2);
+    }
+#endif
+    JARVIS_ASSERT(past_end_ok);
+}
+
 #endif // CONFIG_ARCH_X86_64
 
 } // namespace
@@ -263,5 +408,7 @@ void register_vmm_path_tests() {
     JARVIS_REGISTER_TEST(vmm_map_range_success_segment);
     JARVIS_REGISTER_TEST(vmm_map_range_skip_detected);
     JARVIS_REGISTER_TEST(vmm_map_range_rollback_segment);
+    JARVIS_REGISTER_TEST(vmm_map_range_rollback_first_fail);
+    JARVIS_REGISTER_TEST(vmm_map_range_rollback_past_end);
 #endif
 }

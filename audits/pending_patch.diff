@@ -1,205 +1,186 @@
-diff --git a/Makefile b/Makefile
-index 32bad9dd5..e45054d7a 100644
---- a/Makefile
-+++ b/Makefile
-@@ -1216,20 +1216,40 @@ renode-test:
- # GDB showed the vCPU frozen in Logger::putchar with an unresponsive stub):
- # with file backends a lagging observer only delays verdict matching, it can
- # never freeze the guest.  Single consistent path for all automated runs.
--TEST_SERIAL_LOG := /tmp/jarvis-serial.log
-+# Per-checkout harness tag (issue #372): concurrent `execute-test` runs from
-+# two checkouts on one host must never signal each other's QEMU nor share
-+# /tmp state.  basename `jarvis`->`jarvis`, `jarvis_test`->`jarvis_test`
-+# (already ERE-safe); the sed fallback keeps any exotic checkout name safe
-+# to interpolate into pkill ERE patterns and -name values.
-+CHECKOUT_TAG := $(shell basename $(CURDIR) | sed 's/[^A-Za-z0-9_]/_/g')
-+ifeq ($(CHECKOUT_TAG),)
-+CHECKOUT_TAG := checkout
-+endif
-+# NOTE (prefix trap): tag `jarvis` is a substring of tag `jarvis_test`, so
-+# every match on QEMU_TAG_NAME MUST require a trailing delimiter via
-+# QEMU_TAG_ERE — never match the bare name, or checkout `jarvis` matches
-+# checkout `jarvis_test` artifacts.  QEMU_TAG_ERE is the ONLY pattern any
-+# pkill site may use; no site hand-writes its own.
-+QEMU_TAG_NAME := jarvis-$(CHECKOUT_TAG)
-+QEMU_NAME_FLAG := -name $(QEMU_TAG_NAME)
-+QEMU_TAG_ERE := jarvis-$(CHECKOUT_TAG)([^A-Za-z0-9_]|$$)
-+TEST_SERIAL_LOG := /tmp/jarvis-serial-$(CHECKOUT_TAG).log
- # COM1 forensics log (guest UART device, file backend).  Not matched by the
- # harness — kept for post-mortem only.
--TEST_COM1_LOG := /tmp/jarvis-com1.log
-+TEST_COM1_LOG := /tmp/jarvis-com1-$(CHECKOUT_TAG).log
- # Verdict file: the expect script writes its machine-readable verdict here so it
- # is never lost to pipe buffering. The Makefile reads it back to set the exit code.
--TEST_VERDICT_LOG := /tmp/jarvis-verdict.log
-+TEST_VERDICT_LOG := /tmp/jarvis-verdict-$(CHECKOUT_TAG).log
-+# Per-checkout start/end timestamp files (shared by _run_test_qemu only).
-+TEST_START_TS := /tmp/test-start-$(CHECKOUT_TAG).timestamp
-+TEST_END_TS := /tmp/test-end-$(CHECKOUT_TAG).timestamp
- # File-backend QEMU flags for test runs: derived from $(QEMU_FLAGS) by swapping
- # the stdio-mux console triple for file backends (debugcon carries the Logger
- # verdict stream during test runs; COM1 is forensics-only; the monitor is
- # unused by the harness).  Covers all QEMU_FLAGS variants (base, iommu_live,
- # ahci_live) since they share the token spellings.
- comma := ,
--QEMU_FLAGS_FILE = $(subst -mon chardev=dbg,-mon none,$(subst -monitor chardev:dbg,-monitor none,$(subst -serial chardev:dbg,-serial file:$(TEST_COM1_LOG),$(subst -chardev stdio$(comma)id=dbg$(comma)mux=on,-chardev file$(comma)path=$(TEST_SERIAL_LOG)$(comma)id=dbg,$(QEMU_FLAGS)))))
-+QEMU_FLAGS_FILE = $(subst -mon chardev=dbg,-mon none,$(subst -monitor chardev:dbg,-monitor none,$(subst -serial chardev:dbg,-serial file:$(TEST_COM1_LOG),$(subst -chardev stdio$(comma)id=dbg$(comma)mux=on,-chardev file$(comma)path=$(TEST_SERIAL_LOG)$(comma)id=dbg,$(QEMU_FLAGS))))) $(QEMU_NAME_FLAG)
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 75c2095d0..0aa5d471b 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -240,7 +240,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"path_tracer",           7,    0,       0      },  // PathTracer core primitive (issue #347 Slice A, #362): chain math, missing/duplicate/reorder detection, checkpoint/resume, scoped-enum steps, reset
+     {"scheduler_dispatch_path", 4, 0,      0      },  // dispatch segments (issue #347 Slice B): reschedule arm, next_task select, skip-one-step negative, registry math
+     {"task_path",             6,    0,       0      },  // task create/cleanup segments (issue #347 Slice C + #324 Tick 13): create path, full 14-block cleanup, pinned terminal, skip-one-step negative, canonical teardown chain, registry math
+-    {"vmm_path",              5,    0,       0      },  // VMM map/rollback segments (issue #347 Slice D): range-map reject, success, skip-one-step negative, runtime rollback via table-alloc injector (issue #361), registry math
++    {"vmm_path",              7,    0,       0      },  // VMM map/rollback segments (issue #347 Slice D): range-map reject, success, skip-one-step negative, runtime rollback via table-alloc injector (issue #361), fail-first + past-end rollback, registry math
  
- # Timing model (single source of truth, correctly scaled):
- #   - expect waits up to TEST_TIMEOUT_* for the kernel's TEST SUMMARY.
-@@ -1279,8 +1299,8 @@ define _run_test_qemu
- 	VERDICT=""; \
- 	while [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; do \
- 	    ATTEMPT=$$(( ATTEMPT + 1 )); \
--	    rm -f "$(TEST_SERIAL_LOG)" "$(TEST_COM1_LOG)" "$(TEST_VERDICT_LOG)" /tmp/test-start.timestamp /tmp/test-end.timestamp; \
--	    date +%s > /tmp/test-start.timestamp; \
-+    rm -f "$(TEST_SERIAL_LOG)" "$(TEST_COM1_LOG)" "$(TEST_VERDICT_LOG)" "$(TEST_START_TS)" "$(TEST_END_TS)"; \
-+    date +%s > "$(TEST_START_TS)"; \
- 	    ( \
- 	        trap "exit 0" TERM; \
- 	        LAST_SIZE=-1; \
-@@ -1291,8 +1311,8 @@ define _run_test_qemu
- 	            if [ "$$CUR_SIZE" = "$$LAST_SIZE" ]; then \
- 	                STALL=$$((STALL + 1)); \
- 	                if [ $$STALL -ge $(WATCHDOG_STALL) ]; then \
--	                    echo "[HOST-WATCHDOG] Tests interrupted — no serial output for $(WATCHDOG_STALL) s" | tee -a "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)"; \
--	                    pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null; \
-+                    echo "[HOST-WATCHDOG] Tests interrupted — no serial output for $(WATCHDOG_STALL) s" | tee -a "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)"; \
-+                    pkill -f "$(QEMU_SYSTEM).*[ -]name[ =]$(QEMU_TAG_ERE).*nexios-rtos|nexios-rtos.*[ -]name[ =]$(QEMU_TAG_ERE)" 2>/dev/null; \
- 	                    exit 1; \
- 	                fi; \
- 	            else \
-@@ -1306,8 +1326,8 @@ define _run_test_qemu
- 	        sh tools/qemu-file-log.sh "$(TEST_SERIAL_LOG)" "$(TEST_COM1_LOG)" \
- 	        $(QEMU_SYSTEM) $(QEMU_FLAGS_FILE) -display none -no-reboot $(QEMU_DEBUG_EXIT) \
- 	        $(QEMU_ICOUNT) $(QEMU_TRACE_EVENTS); \
--	    date +%s > /tmp/test-end.timestamp; \
--	    pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null || true; \
-+	    date +%s > "$(TEST_END_TS)"; \
-+	    pkill -f "$(QEMU_SYSTEM).*[ -]name[ =]$(QEMU_TAG_ERE).*nexios-rtos|nexios-rtos.*[ -]name[ =]$(QEMU_TAG_ERE)" 2>/dev/null || true; \
- 	    kill $$MONITOR_PID 2>/dev/null; \
- 	    wait $$MONITOR_PID 2>/dev/null; \
- 	    if [ -f "$(TEST_VERDICT_LOG)" ]; then \
-@@ -1334,8 +1354,8 @@ define _run_test_qemu
- 	    esac; \
- 	done; \
- 	echo "$$VERDICT"; \
--	START_S=$$(cat /tmp/test-start.timestamp 2>/dev/null || echo 0); \
--	END_S=$$(cat /tmp/test-end.timestamp 2>/dev/null || echo 0); \
-+	START_S=$$(cat "$(TEST_START_TS)" 2>/dev/null || echo 0); \
-+	END_S=$$(cat "$(TEST_END_TS)" 2>/dev/null || echo 0); \
- 	echo "[HOST] start=$${START_S}s end=$${END_S}s elapsed=$$(( END_S - START_S ))s"; \
- 	if [ -n "$$STALL_STATUS" ]; then echo "[HOST] $$STALL_STATUS"; fi; \
- 	case "$$VERDICT" in \
-@@ -1352,7 +1372,7 @@ endef
+     // random
+     {"random_core",           7,    0,       0      },  // RNG smoke/non-repeating
+@@ -295,7 +295,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"core_task",           52,   0,       0      },  // task_* + fpu_invariants + kernel_top + per_cpu (#364; measured)
+     {"core_memory",         118,  0,       0      },  // all memory_* (#364; measured)
+     {"core_syscall",        85,   0,       0      },  // syscall_* + debug_syscall + tls (#364; measured)
+-    {"core_tracing",        22,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361)
++    {"core_tracing",        24,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361, +2 rollback fail-first/past-end)
+     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
+     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
+     {"proc_elf",            131,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD + 4 drift (#340 P1/P2 + #348, unrecorded) + 4 libc_thread (#303 M12)
+diff --git a/src/kernel/test/test_vmm_path.cpp b/src/kernel/test/test_vmm_path.cpp
+index c414942d4..81e9aef53 100644
+--- a/src/kernel/test/test_vmm_path.cpp
++++ b/src/kernel/test/test_vmm_path.cpp
+@@ -252,6 +252,151 @@ static void test_vmm_map_range_rollback_segment() {
+     JARVIS_ASSERT(rollback_ok);
+ }
  
- # Usage: $(call _run_dump_counts_qemu)
- # Runs QEMU, captures all TCOUNT lines to stdout, exits cleanly.
--DUMP_COUNTS_LOG := /tmp/jarvis-dump-counts.log
-+DUMP_COUNTS_LOG := /tmp/jarvis-dump-counts-$(CHECKOUT_TAG).log
- define _run_dump_counts_qemu
- 	if ! command -v $(QEMU_SYSTEM) >/dev/null 2>&1; then echo "QEMU missing."; echo $(PKG_HINT); exit 1; fi; \
- 	printf '  %-7s %s\n'  'TCOUNT' 'Dumping per-class registration counts…'; \
-@@ -1364,7 +1384,7 @@ define _run_dump_counts_qemu
- 	else \
- 	    echo "ERROR: QEMU_FLAGS has neither '-serial chardev:dbg' nor '-serial mon:stdio' to redirect"; exit 1; \
- 	fi; \
--	$(QEMU_SYSTEM) $$_DQ_FLAGS -display none -no-reboot $(QEMU_DEBUG_EXIT) 2>&1 & \
-+	$(QEMU_SYSTEM) $$_DQ_FLAGS $(QEMU_NAME_FLAG) -display none -no-reboot $(QEMU_DEBUG_EXIT) 2>&1 & \
- 	QEMU_PID=$$!; \
- 	sleep 30; \
- 	kill $$QEMU_PID 2>/dev/null; wait $$QEMU_PID 2>/dev/null || true; \
-@@ -1401,7 +1421,7 @@ debug-shell:
- 	expect -c ' \
- 	    fconfigure stdout -buffering none; \
- 	    set timeout 120; \
--	    spawn $(QEMU_SYSTEM) $(QEMU_FLAGS) -s -S -display none -no-reboot $(QEMU_DEBUG_EXIT); \
-+	    spawn $(QEMU_SYSTEM) $(QEMU_FLAGS) $(QEMU_NAME_FLAG) -s -S -display none -no-reboot $(QEMU_DEBUG_EXIT); \
- 	    for {set i 0} {$$i < 8} {incr i} { \
- 	        if {[catch {exec nc -z localhost 1234}] == 0} { break }; \
- 	        after 1000; \
-@@ -1425,7 +1445,7 @@ debug-shell:
- 	    exit 0; \
- 	'; \
- 	rc=$$?; \
--	pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null || true; \
-+	pkill -f "$(QEMU_SYSTEM).*[ -]name[ =]$(QEMU_TAG_ERE).*nexios-rtos|nexios-rtos.*[ -]name[ =]$(QEMU_TAG_ERE)" 2>/dev/null || true; \
- 	exit $$rc
++/// @brief Rollback fail-first test (issue #361): with the injector armed
++///        to fail the 1st table allocation, the same 2-page cross-boundary
++///        range installs nothing. Expect VMM_ERR_PAGE_ALLOC + the Rollback
++///        chain, BOTH PD slots still the boot huge entries (verified via
++///        unchanged virt_to_phys on both VAs), and zero PMM delta.
++///        Debug-only; trivial pass elsewhere (count-row pin).
++static void test_vmm_map_range_rollback_first_fail() {
++    bool rollback_ok = true; // not applicable without the debug injection
++#if defined(CONFIG_DEBUG)
++    const uint64_t va1 = kVmmScratchVa;
++    const uint64_t va0 = va1 - arch::PAGE_SIZE;
++    size_t idx0 = 0;
++    uint64_t *pd0 = scratch_pd_at(va0, idx0);
++    size_t idx1 = 0;
++    uint64_t *pd1 = scratch_pd_at(va1, idx1);
++    JARVIS_ASSERT(pd0 == pd1);
++    JARVIS_ASSERT(idx1 == idx0 + 1);
++    const uint64_t boot0 = pd0[idx0];
++    const uint64_t boot1 = pd1[idx1];
++    JARVIS_ASSERT(boot0 != 0);
++    JARVIS_ASSERT(boot1 != 0);
++    // Baseline translations through the boot huge entries: nothing will
++    // be installed, so these must read back unchanged afterwards.
++    const uint64_t base0 = VMM::virt_to_phys(va0);
++    const uint64_t base1 = VMM::virt_to_phys(va1);
++    JARVIS_ASSERT(base0 != 0);
++    JARVIS_ASSERT(base1 != 0);
++
++    const uint64_t phys = PMM::alloc_contiguous(2);
++    JARVIS_ASSERT(phys != 0);
++    const uint64_t pmm_before = PMM::free_pages_ref();
++
++    bool chain_ok = false;
++    bool untouched_ok = false;
++    {
++        arch::IrqGuard guard{}; // issue #200: HHDM PD surgery is IRQ-critical
++        VmmTableFailGuard fail_at_first(1); // alloc #1 (va0 PT) fails:
++                                            // nothing installs at all
++        path_reset();
++        const errors::VmmError err = VMM::map_phys_range_try(
++            va0, phys, 2, false, VMM::get_kernel_pml4(), false);
++        chain_ok = (err == errors::VMM_ERR_PAGE_ALLOC) &&
++                   path_validate(k_vmm_map_rollback_expected);
++        untouched_ok = (pd0[idx0] == boot0) && (pd1[idx1] == boot1) &&
++                       (VMM::virt_to_phys(va0) == base0) &&
++                       (VMM::virt_to_phys(va1) == base1);
++        path_reset();
++    }
++    PMM::free_page(phys);
++    PMM::free_page(phys + arch::PAGE_SIZE);
++    rollback_ok = chain_ok && untouched_ok &&
++                  (PMM::free_pages_ref() == pmm_before + 2);
++#endif
++    JARVIS_ASSERT(rollback_ok);
++}
++
++/// @brief Rollback past-end test (issue #361): armed past the last needed
++///        allocation (arm(3) for a 2-PT range), the mapping must succeed
++///        exactly like the unarmed path — proving the injector is
++///        transparent when it never fires. A repeat mapping after guard
++///        scope exit proves the RAII disarm left no stuck-armed state.
++///        Debug-only; trivial pass elsewhere (count-row pin).
++static void test_vmm_map_range_rollback_past_end() {
++    bool past_end_ok = true; // not applicable without the debug injection
++#if defined(CONFIG_DEBUG)
++    const uint64_t va1 = kVmmScratchVa;
++    const uint64_t va0 = va1 - arch::PAGE_SIZE;
++    size_t idx0 = 0;
++    uint64_t *pd0 = scratch_pd_at(va0, idx0);
++    size_t idx1 = 0;
++    uint64_t *pd1 = scratch_pd_at(va1, idx1);
++    JARVIS_ASSERT(pd0 == pd1);
++    JARVIS_ASSERT(idx1 == idx0 + 1);
++    const uint64_t boot0 = pd0[idx0];
++    const uint64_t boot1 = pd1[idx1];
++    JARVIS_ASSERT(boot0 != 0);
++    JARVIS_ASSERT(boot1 != 0);
++
++    const uint64_t phys = PMM::alloc_contiguous(2);
++    JARVIS_ASSERT(phys != 0);
++    const uint64_t pmm_before = PMM::free_pages_ref();
++
++    bool success_ok = false;
++    {
++        arch::IrqGuard guard{}; // issue #200: HHDM PD surgery is IRQ-critical
++        VmmTableFailGuard never_fires(3); // 2 allocs needed: success path
++        path_reset();
++        const errors::VmmError err = VMM::map_phys_range_try(
++            va0, phys, 2, false, VMM::get_kernel_pml4(), false);
++        success_ok = (err == errors::VMM_ERR_OK) &&
++                     path_validate(k_vmm_map_success_expected) &&
++                     (VMM::virt_to_phys(va0) == phys) &&
++                     (VMM::virt_to_phys(va1) == phys + arch::PAGE_SIZE);
++        // Teardown mirrors the success segment: unmap both, restore both
++        // boot huge entries, free both split PT pages.
++        VMM::unmap_page(va0);
++        VMM::unmap_page(va1);
++        const uint64_t split_pt0 = pd0[idx0] & kX86TableFrameMask;
++        const uint64_t split_pt1 = pd1[idx1] & kX86TableFrameMask;
++        pd0[idx0] = boot0;
++        pd1[idx1] = boot1;
++        arch::ArchPageTable::tlb_flush(va0);
++        arch::ArchPageTable::tlb_flush(va1);
++        PMM::free_page(split_pt0);
++        PMM::free_page(split_pt1);
++        path_reset();
++    }
++    PMM::free_page(phys);
++    PMM::free_page(phys + arch::PAGE_SIZE);
++    past_end_ok = success_ok && (PMM::free_pages_ref() == pmm_before + 2);
++    // Guard scope exited: a repeat mapping must still succeed (no stuck
++    // armed state). Fresh frames: the first pair is already freed and may
++    // be reused elsewhere. Teardown identical to the success segment.
++    if (past_end_ok) {
++        const uint64_t phys2 = PMM::alloc_contiguous(2);
++        bool repeat_ok = (phys2 != 0);
++        if (repeat_ok) {
++            arch::IrqGuard guard{};
++            path_reset();
++            const errors::VmmError err = VMM::map_phys_range_try(
++                va0, phys2, 2, false, VMM::get_kernel_pml4(), false);
++            repeat_ok = (err == errors::VMM_ERR_OK);
++            VMM::unmap_page(va0);
++            VMM::unmap_page(va1);
++            const uint64_t split_pt0 = pd0[idx0] & kX86TableFrameMask;
++            const uint64_t split_pt1 = pd1[idx1] & kX86TableFrameMask;
++            pd0[idx0] = boot0;
++            pd1[idx1] = boot1;
++            arch::ArchPageTable::tlb_flush(va0);
++            arch::ArchPageTable::tlb_flush(va1);
++            PMM::free_page(split_pt0);
++            PMM::free_page(split_pt1);
++            path_reset();
++        }
++        if (phys2 != 0) {
++            PMM::free_page(phys2);
++            PMM::free_page(phys2 + arch::PAGE_SIZE);
++        }
++        past_end_ok = repeat_ok &&
++                      (PMM::free_pages_ref() == pmm_before + 2);
++    }
++#endif
++    JARVIS_ASSERT(past_end_ok);
++}
++
+ #endif // CONFIG_ARCH_X86_64
  
- test: $(KERNEL)
-diff --git a/scripts/run_all_classes.sh b/scripts/run_all_classes.sh
-index d9277f545..95bcf1035 100755
---- a/scripts/run_all_classes.sh
-+++ b/scripts/run_all_classes.sh
-@@ -81,13 +81,17 @@ for c in $RUN; do
-     fi
- done
- 
--LOGDIR=/tmp/jarvis_classruns
-+LOGDIR=/tmp/jarvis_classruns-$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')
- mkdir -p "$LOGDIR"
- 
- total=0; passed_classes=0; failed_classes=0
- for c in $RUN; do
-     total=$((total+1))
--    pkill -9 -f qemu-system 2>/dev/null
-+    # Scope cleanup to this checkout's QEMU (issue #372): the -name tag is
-+    # added by the Makefile, with a trailing-delimiter guard so tag `jarvis`
-+    # never matches `jarvis_test` artifacts. Never blanket-kill qemu-system:
-+    # a sibling checkout may be testing concurrently.
-+    pkill -9 -f "qemu-system.*-name jarvis-$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')([^A-Za-z0-9_]|$)" 2>/dev/null || true
-     log="$LOGDIR/$c.log"
-     start=$(date +%s%N)
-     timeout "$OUTER_TIMEOUT" make execute-test "$ARCH" "$BUILD" "$c" > "$log" 2>&1
-diff --git a/tools/deadline_matrix.sh b/tools/deadline_matrix.sh
-index 910c5182d..13c2d2f42 100755
---- a/tools/deadline_matrix.sh
-+++ b/tools/deadline_matrix.sh
-@@ -16,7 +16,16 @@ cd "$(dirname "$0")/.."
- 
- ARCH=x86_64
- BUILD=debug
--SERIAL=/tmp/jarvis-serial.log
-+# Per-checkout tag (issue #372): same basename+sed transform as the Makefile
-+# CHECKOUT_TAG so this script watches the SAME namespaced serial log its
-+# inner `make execute-test` writes, and its pkill only matches this
-+# checkout's QEMU (prefix trap: match requires a trailing non-identifier
-+# char so tag `jarvis` never matches `jarvis_test` artifacts).
-+TAG=$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')
-+[ -n "$TAG" ] || TAG=checkout
-+SERIAL=/tmp/jarvis-serial-$TAG.log
-+MATRIX_BUILD_LOG=/tmp/jarvis-matrix-build-$TAG.log
-+MATRIX_RUN_LOG=/tmp/jarvis-matrix-run-$TAG.log
- PASS=0
- FAIL=0
- MATRIX_FAILS=""
-@@ -30,13 +39,13 @@ run_action() {
- 
-     # Kill any leftover QEMU from a previous (e.g. killed PANIC) run so the
-     # next boot starts clean and does not stall on a busy port/lock.
--    pkill -9 qemu-system-x86_64 2>/dev/null || true
-+    pkill -9 -f "qemu-system-x86_64.*-name jarvis-$TAG([^A-Za-z0-9_]|$)" 2>/dev/null || true
-     sleep 1
- 
-     make clean >/dev/null 2>&1
-     if ! make "$BUILD" CONFIG_DEFS="-DCONFIG_DEADLINE_ACTION=$action" NO_LTO=1 \
--            >/tmp/jarvis-matrix-build.log 2>&1; then
--        echo "[MATRIX]   BUILD FAILED — see /tmp/jarvis-matrix-build.log"
-+            >"$MATRIX_BUILD_LOG" 2>&1; then
-+        echo "[MATRIX]   BUILD FAILED — see $MATRIX_BUILD_LOG"
-         FAIL=$((FAIL + 1))
-         MATRIX_FAILS="$MATRIX_FAILS action$action(build)"
-         return
-@@ -45,10 +54,10 @@ run_action() {
-     # Cap the QEMU run; the PANIC case halts the kernel and the host-side
-     # watchdog eventually kills QEMU, so this must not block indefinitely.
-     timeout 180 make execute-test "$ARCH" "$BUILD" deadline_action NO_LTO=1 \
--            >/tmp/jarvis-matrix-run.log 2>&1
-+            >"$MATRIX_RUN_LOG" 2>&1
-     # Let the tee'd serial log fully flush before we grep it.
-     sync; sleep 1
--    cp "$SERIAL" "/tmp/matrix-action$action.log" 2>/dev/null || true
-+    cp "$SERIAL" "/tmp/matrix-action$action-$TAG.log" 2>/dev/null || true
- 
-     if [ "$expect_panic" = "1" ]; then
-         if grep -q "action=PANIC" "$SERIAL"; then
+ } // namespace
+@@ -263,5 +408,7 @@ void register_vmm_path_tests() {
+     JARVIS_REGISTER_TEST(vmm_map_range_success_segment);
+     JARVIS_REGISTER_TEST(vmm_map_range_skip_detected);
+     JARVIS_REGISTER_TEST(vmm_map_range_rollback_segment);
++    JARVIS_REGISTER_TEST(vmm_map_range_rollback_first_fail);
++    JARVIS_REGISTER_TEST(vmm_map_range_rollback_past_end);
+ #endif
+ }

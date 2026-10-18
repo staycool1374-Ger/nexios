@@ -43,7 +43,8 @@ constexpr size_t kBenchSteps = 100000;
 // Input: kBenchSteps path_step() calls on the own-CPU chain.
 // Expect: mean cycles/step under a loose TCG-tolerant bound; validate
 //         cost reported alongside. TF_BENCH (never a correctness gate).
-// Depends: kernel::path_step, arch::Timer::raw_counter
+// Depends: kernel::path_step, arch::Timer::raw_counter (cross-arch;
+//         x86 rdtsc / aarch64 cntpct / riscv rdtime — issue #367)
 JARVIS_TEST(bench_path_trace_step_overhead, "PRE: none | POST: none") {
     path_reset();
 

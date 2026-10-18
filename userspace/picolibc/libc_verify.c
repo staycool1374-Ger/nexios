@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <setjmp.h>
+#include <errno.h>
 
 static unsigned long rdtsc_now(void) {
     unsigned lo, hi;
@@ -38,6 +39,11 @@ static unsigned long rdtsc_now(void) {
 }
 
 int main(void) {
+    /* Stash entry errno BEFORE any syscall: proves the cell starts clean
+     * on a fresh dispatch (BSS-fresh today; TP-cell when the hosted path
+     * is wired — see test_libc_thread.cpp). Printed at the end so the
+     * #75 512 B prefix window is untouched. */
+    int errno_at_entry = errno;
     printf("LIBC_VERIFY: hello\n");
 
     void *b0 = sbrk(0);
@@ -277,6 +283,26 @@ int main(void) {
             jok = 1;
         }
         printf("LIBC_VERIFY: atomic %d %d %d\n", av, aok, jok);
+    }
+
+    /* ---- #303 M12: hosted errno probe (test_libc_thread.cpp) ----
+     * Writable-cell check + failing-open probe. failed==1 pins fd<0
+     * (parse_tag_line is unsigned-only, so the sign is folded here);
+     * eno is observed only — 2026-10-18 the hosted open() failure leaves
+     * errno at 0 (no kernel→errno mapping in the hosted path; the TP
+     * cell exists but picolibc was built without __PICOLIBC_ERRNO_FUNCTION,
+     * so hosted errno is plain BSS). Saved/restored so earlier markers'
+     * errno state is untouched. */
+    {
+        int saved = errno;
+        errno = 0;
+        int fd = open("/nonexistent_libc_thread_probe", O_RDONLY);
+        int eno = errno;
+        printf("LIBC_VERIFY: errno_probe %d %d %d\n",
+               errno_at_entry, (fd < 0) ? 1 : 0, eno);
+        if (fd >= 0)
+            close(fd);
+        errno = saved;
     }
 
     return 0;

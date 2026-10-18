@@ -200,3 +200,5 @@
 - src/kernel/arch/x86_64/hal/percpu.{hpp,cpp}: Per-CPU state block (4 KiB page per CPU, GS_BASE), isr_nesting_depth/irq_entry_tsc/fpu_owner/current_task migration, percpu_init_bsp/ap, CONFIG_MAX_CPUS=1 default.
 - BUGS.md: elf_loader H2-family flake logged (2026-08-14).
 - Makefile/scripts harness checkout-scoped (#372): CHECKOUT_TAG + `-name jarvis-<TAG>` on all QEMU spawns, tag-scoped pkill (prefix-trap guard), namespaced /tmp logs/timestamps/LOGDIR (testbed `jarvis_test`, main checkout `jarvis`).
+- #303 M12 closed on testbed: test_libc_thread.cpp (hosted atomics, errno fresh-cell + open-fails, per-dispatch isolation), proc_elf 131/131; hosted eno mapping + TP-wiring + iocd→shell seam + MMIO handler are developer-side items recorded in #303.
+- #361 closed: fail-first arm(1) + past-end arm(3) rollback tests (test_vmm_path.cpp), core_tracing 24/24 green, audit APPROVED.
