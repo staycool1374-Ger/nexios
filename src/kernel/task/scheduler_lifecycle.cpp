@@ -110,10 +110,11 @@ uint64_t Scheduler::snapshot_zombies(TaskControlBlock **out,
     return copied;
 }
 void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
-    // Caller (on_tick tail) holds the global lock; take the leaf here
-    // (order global→leaf). List surgery under both; free() runs per item
-    // with NEITHER held (two-phase — a VMM-nested cleanup_step_try skips
-    // instead of deadlocking).
+    // Caller: on_tick tail. NOTE (issue #369 T2a): the tail runs WITHOUT
+    // the global lock (adopt scope closes before the tail); taking only
+    // the leaf here is order-correct (never leaf→global). List surgery
+    // under the leaf; free() runs per item with NEITHER held (two-phase
+    // — a VMM-nested cleanup_step_try skips instead of deadlocking).
     for (uint64_t i = 0; i < max_flush; ++i) {
         TaskControlBlock *task;
         {

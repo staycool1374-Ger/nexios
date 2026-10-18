@@ -903,7 +903,10 @@ void Scheduler::on_tick() noexcept {
             }
             daemon::restart_stale_daemons();
         }
-    }  // end: gated tail sections (lock_acquired && IrqGuard)
+    }  // end: gated tail sections (gated on lock_acquired && IrqGuard;
+       // NOTE (issue #369 T2a): gated on the *bool*, but the adopted
+       // scheduler_lock_ scope already closed above — the tail runs
+       // lock-free (takes no scheduler/zombie/wake locks itself).
 
     // Harness owns lifecycle (see harness_owns_lifecycle): tests drive
     // balancer_tick() directly so placement asserts stay deterministic.
