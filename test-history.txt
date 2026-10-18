@@ -3892,3 +3892,9 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 15:27:33 proc_elf PASSED: 131 FAILED: 0 TIME: 41598ms
 2026-10-18 15:27:33 memory_page_tables PASSED: 12 FAILED: 0 TIME: 834ms
 2026-10-18 15:27:33 sched_admission PASSED: 10 FAILED: 0 TIME: 693ms
+2026-10-18 15:35:18 deadline PASSED: 146 FAILED: 1 TIME: 0 STATUS: edf_exempt_daemon_stays_fixed-in_ready_queue-flake-identical-rerun-pending
+2026-10-18 15:35:18 deadline PASSED: 147 FAILED: 0 TIME: 34584ms STATUS: identical-binary-green-rerun-confirms-flake
+2026-10-18 15:35:18 debug_syscall PASSED: 29 FAILED: 0 TIME: 2246ms
+2026-10-18 15:35:18 scheduler_idle PASSED: 40 FAILED: 0 TIME: 2921ms
+2026-10-18 15:35:18 task_watchdog PASSED: 6 FAILED: 0 TIME: 516ms
+2026-10-18 15:35:18 core_sched PASSED: 112 FAILED: 0 TIME: 11644ms
