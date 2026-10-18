@@ -21,6 +21,7 @@
 ///        Pure move out of scheduler.cpp: no logic changes.
 
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/scheduler_path.hpp>            // issue #324 Tick 13 teardown trace
 #include <kernel/task/scheduler_switch_internal.hpp>
 #include <kernel/task/scheduler_queue_internal.hpp>
 #include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
@@ -82,6 +83,9 @@ Scheduler::terminate_err(TaskControlBlock &task,
     // If the parent is blocked in waitpid for this child, wake it now so it
     // does not deadlock waiting for a child that exited without sys_exit.
     wake_waiting_parent(task);
+    // Issue #324 Tick 13: teardown trace — termination mutation complete
+    // (dequeue + TERMINATED mark + parent wake); release_zombie steps next.
+    teardown_step(SchedTeardownSteps::Terminate);
 
     // Release into the zombie list for deferred cleanup by the idle task.
     // For non-self termination this is the final step.

@@ -17,7 +17,8 @@
  */
 
 /// @file scheduler_path.hpp
-/// @brief Dispatch-path step registry (issue #347 Slice B).
+/// @brief Dispatch-path step registry (issue #347 Slice B) + teardown
+///        segment (issue #324 Tick 13).
 ///
 /// One traced segment per dispatch phase; segments are independent
 /// scratch records (tests own the reset discipline — production never
@@ -27,6 +28,13 @@
 /// against nothing. switch_to_task() is file-static, so its apply
 /// segment is exercised by the suite (observe-only) and covered by
 /// inspection; reschedule()/next_task() segments are driven by tests.
+///
+/// The teardown segment traces the scheduler side of task death
+/// (terminate_err → release_zombie → drain-pop commit); the TCB side
+/// (all 14 cleanup blocks) is traced by task_path.hpp into the same
+/// per-CPU slot, so one chain covers death end to end. Terminal paths
+/// (reap arm, deferred destroy, pinned spare, OOM legs) record the
+/// documented prefix and validate against the prefix expected value.
 ///
 /// The registry lives in its own header (not function-scoped) so the
 /// #323 split moves it together with the dispatch code, zero renumbering.
@@ -67,6 +75,28 @@ inline constexpr uint64_t k_dispatch_apply_expected =
                   SchedDispatchSteps::FrameGuard, SchedDispatchSteps::Publish,
                   SchedDispatchSteps::ArmSwitch);
 
+/// @brief Scheduler-side teardown steps (issue #324 Tick 13) — one unique
+///        bit each, own registry (bit VALUES may coincide with other
+///        registries; sequences never mix without a reset between them).
+enum class SchedTeardownSteps : uint64_t {
+    Terminate = 1ULL << 0, ///< terminate_err mutation done, zombie listed
+    Release   = 1ULL << 1, ///< release_zombie tables+H2 done, list pushed
+    DrainPop  = 1ULL << 2, ///< drain-pop commit (pop+unlink); free follows
+};
+
+/// @brief Scheduler-side teardown prefix: terminate, release, drain-pop.
+inline constexpr uint64_t k_teardown_sched_prefix_expected =
+    path_expected(SchedTeardownSteps::Terminate,
+                  SchedTeardownSteps::Release,
+                  SchedTeardownSteps::DrainPop);
+
+// Three distinct single bits covering 0..2 — a collision (two steps
+// sharing a bit) breaks the build.
+static_assert((static_cast<uint64_t>(to_underlying(SchedTeardownSteps::Terminate)) |
+               static_cast<uint64_t>(to_underlying(SchedTeardownSteps::Release)) |
+               static_cast<uint64_t>(to_underlying(SchedTeardownSteps::DrainPop))) ==
+              0x7ULL);
+
 // Nine distinct single bits covering 0..8 — a collision (two steps
 // sharing a bit, e.g. after the #323 split moves code) breaks the build.
 static_assert((static_cast<uint64_t>(to_underlying(SchedDispatchSteps::Arm)) |
@@ -85,6 +115,9 @@ static_assert((static_cast<uint64_t>(to_underlying(SchedDispatchSteps::Arm)) |
 ///        are skipped by dispatch_step(). Compiled out in release —
 ///        production can never observe or set it.
 extern uint64_t g_test_skip_dispatch_step;
+/// @brief Fault-injection mask (test-only) for teardown_step().
+///        Compiled out in release.
+extern uint64_t g_test_skip_teardown_step;
 #endif
 
 /// @brief Record one dispatch step (honors the test skip mask in debug).
@@ -100,6 +133,21 @@ inline void dispatch_step(uint64_t step_bit) noexcept {
 /// @brief Record one dispatch step from the registry.
 inline void dispatch_step(SchedDispatchSteps step_value) noexcept {
     dispatch_step(static_cast<uint64_t>(to_underlying(step_value)));
+}
+
+/// @brief Record one teardown step (honors the test skip mask in debug).
+inline void teardown_step(uint64_t step_bit) noexcept {
+#if defined(CONFIG_DEBUG)
+    if ((g_test_skip_teardown_step & step_bit) != 0) {
+        return;
+    }
+#endif
+    path_step(step_bit);
+}
+
+/// @brief Record one teardown step from the registry.
+inline void teardown_step(SchedTeardownSteps step_value) noexcept {
+    teardown_step(static_cast<uint64_t>(to_underlying(step_value)));
 }
 
 } // namespace kernel

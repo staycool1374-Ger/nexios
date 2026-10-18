@@ -22,6 +22,7 @@
 
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_lifecycle_internal.hpp>
+#include <kernel/task/scheduler_path.hpp>  // issue #324 Tick 13 teardown trace
 #include <kernel/task/scheduler_queue_internal.hpp>
 #include <kernel/task/scheduler_integrity.hpp>
 #include <kernel/task/sporadic_server.hpp>
@@ -104,6 +105,8 @@ void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
         }
         __atomic_add_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
     }
+    // Issue #324 Tick 13: teardown trace — tables released, list pushed.
+    teardown_step(SchedTeardownSteps::Release);
 }
 uint64_t Scheduler::snapshot_zombies(TaskControlBlock **out,
                                      uint64_t max_out) noexcept {
@@ -179,6 +182,8 @@ void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
             if (task->in_edf_queue_)
                 edf_remove(*task, queue_target(*task));
             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+            // Issue #324 Tick 13: drain-pop commit — free follows.
+            teardown_step(SchedTeardownSteps::DrainPop);
         }
         if (task->magic == TaskControlBlock::TCB_MAGIC) {
             task->cleanup();
@@ -257,6 +262,8 @@ void Scheduler::drain_zombie_list() noexcept {
             if (task->in_edf_queue_)
                 edf_remove(*task, queue_target(*task));
             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+            // Issue #324 Tick 13: drain-pop commit — free follows.
+            teardown_step(SchedTeardownSteps::DrainPop);
         }
         // IRQs on — cleanup and free without holding any lock.
         task->cleanup();
@@ -302,6 +309,8 @@ void Scheduler::cleanup_step() noexcept {
         if (task->in_edf_queue_)
             edf_remove(*task, queue_target(*task));
         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+        // Issue #324 Tick 13: drain-pop commit — free follows.
+        teardown_step(SchedTeardownSteps::DrainPop);
     }
     // IRQs on — cleanup and free without holding any lock.
     task->cleanup();
@@ -347,6 +356,8 @@ void Scheduler::cleanup_step_try() noexcept {
         if (task->in_edf_queue_)
             edf_remove(*task, queue_target(*task));
         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+        // Issue #324 Tick 13: drain-pop commit — free follows.
+        teardown_step(SchedTeardownSteps::DrainPop);
     }
     task->cleanup();
     MemPool::free(task);
@@ -582,6 +593,8 @@ void Scheduler::reap_orphans() noexcept {
         // H2: the task is leaving id_table_ — a pending deferred-switch arm to
         // it must not survive the free below (see release_zombie).
         invalidate_pending_switch_to(t->id);
+        // Issue #324 Tick 13: reap-arm drain commit — note_termination frees.
+        teardown_step(SchedTeardownSteps::DrainPop);
         if (t == idle_task_) {
             auto *created = TaskControlBlock::create(
                 kernel::integrity::idle_task_main, 0,
