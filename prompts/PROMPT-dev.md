@@ -1,5 +1,5 @@
 ---
-name: coder
+name: dev_coder
 description: Primary implementation agent for kernel changes for NexIOS Real-Time-Operating-System
 mode: subagent
 model: opencode-go/deepseek-v4-flash

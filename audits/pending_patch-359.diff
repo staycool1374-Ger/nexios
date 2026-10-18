@@ -1,0 +1,99 @@
+diff --git a/docs/specs/deadline.md b/docs/specs/deadline.md
+index f669af44c..bdda42d57 100644
+--- a/docs/specs/deadline.md
++++ b/docs/specs/deadline.md
+@@ -178,3 +178,19 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
+ - **`CONFIG_DEBUG_IPC_SCHED`** (`ipc_sched_trace.hpp`) must be **undefined** for
+   release gates: the `[TICK]`/`[SW]`/`[APPLY]`/`[RMS]` traces perturb
+   timing-sensitive tests.
++- **TCG wall-time truth (issue #359, decided DOCUMENT, 2026-10-18):**
++  no in-guest wall reference finer than the 1 s RTC exists, and the TCG
++  TSC rate is workload-dependent (PIO exits retard it, pause-spins yield
++  the vCPU), so no boot-time scalar can be wall-true for all regimes —
++  and a tick-servo would chase the wrong target (ticks and ns run in
++  *divergent* virtual clock domains: periodic-APIC bus vs PIT-calibrated
++  TSC). APIC-bus circularity reviewed: TSC calibrates via PIT before any
++  APIC use and the TSC-deadline path never touches `bus_freq_hz_`
++  (correct order, no code). Tick-0.8x verdict: TCG-wide virtual-time
++  dilation + workload-dependent TSC rate, not a kernel miscalibration
++  (bus≈TSC≈666–672 MHz intra-evening; wider variance across days/loads).
++  CPUID 0x15/0x16 dropped: absent-or-static under TCG, cannot track a
++  dynamic rate. Consequences: `hrt_wall_accuracy_bound` warn-skips on
++  hypervisor; `OVERALL_CAP_S` stays 3600; suite summaries carry
++  `TSC_CYCLES` (rewind-proof, unlike snapshot-rewound `ticks_`) for
++  host-side guest-vs-wall analysis. Accuracy gate is KVM/HW.
+diff --git a/prompts/AGENTS-KERNEL-BRIEFING.md b/prompts/AGENTS-KERNEL-BRIEFING.md
+index 188f27ed6..86a879839 100644
+--- a/prompts/AGENTS-KERNEL-BRIEFING.md
++++ b/prompts/AGENTS-KERNEL-BRIEFING.md
+@@ -170,6 +170,7 @@ make execute-test x86 release selftest    # CI gate
+ 16. **RSP-owner resolution in switch_to_task** — The O(n) scan that resolves the physically-running task by kernel-stack ownership is retained in debug builds and for release-build drift detection. It cannot be removed while mixed kslot/HHDM stacks exist (SCHED-008 was reverted for this reason).
+ 17. **riscv64 x2-IS-sp aliasing in trap asm** — every `sp` write is an `x2` write: `la sp` before the OFF_SP save records the frame (not user sp); recomputing the frame base from `sp` after a conditional `x2` load faults (user_sp−296 is unmapped). Save user-sp via a dead scratch *before* reloading sp; never read sp relatively after an x2 load on the U-path (issue #206).
+ 18. **riscv64 SPP is stale for nested traps** — it records trapped-from, so a nested S-tick inside a U-handler takes the U path over the live frame. `csrci sstatus, 2` as the first trap insn (needs no scratch) forbids nesting, making SPP provably fresh; `sret` restores SIE from SPIE so U-ticks survive (issue #206, closes #219 entry aspect; return-window aspect still open).
++19. **TCG wall-clock variance is a known limitation, not a kernel bug** — under QEMU TCG the PIT/APIC/bus/TSC virtual clocks diverge from each other and from host wall (ns up to ~4x fast, ticks ~0.8x wall, cal 250–670 MHz across boots; issue #359, decided DOCUMENT): no boot scalar or tick-servo can be wall-true for all regimes (no sub-second in-guest wall reference; workload-dependent TSC rate). Kernel timeouts are self-consistent (single-domain). Accuracy gate is KVM/HW; TCG `hrt_wall_accuracy_bound` warn-skips on hypervisor. `OVERALL_CAP_S` stays 3600 (not re-tightened without proof). Suite summaries carry `TSC_CYCLES` (TSC never rewinds, unlike snapshot-rewound `ticks_`) for host-side analysis.
+ 
+ ## 13. Enforcement Rules (MANDATORY — violations halt and require human input)
+ 
+diff --git a/src/lib/test.cpp b/src/lib/test.cpp
+index 5222ee749..c09439892 100644
+--- a/src/lib/test.cpp
++++ b/src/lib/test.cpp
+@@ -58,6 +58,11 @@ size_t Registry::class_count_ = 0;
+ size_t Registry::expected_count_ = 0;
+ const char *Registry::current_name_ = nullptr;
+ 
++// Issue #359 P0: TSC at run start (raw_counter never rewinds, unlike
++// Timer::ticks_ which snapshot_restore rewinds after every test).
++// Set by every run_* entry point next to its start_ns sample.
++static uint64_t g_run_start_tsc = 0;
++
+ // PfA-A: the harness injects one TestContext so the scheduler's ISR-visible
+ // test flags live here (not as scheduler globals).  Production boots with
+ // Scheduler::get_test_context() == nullptr.
+@@ -394,6 +399,7 @@ void run_all() {
+     print_table_header();
+ 
+     uint64_t start_ns = arch::Timer::ns();
++    g_run_start_tsc = arch::Timer::raw_counter();
+ 
+     for (size_t i = 0; i < n; ++i) {
+         auto& tc = Registry::tests()[i];
+@@ -420,6 +426,7 @@ void run_safe() {
+     print_table_header();
+ 
+     uint64_t start_ns = arch::Timer::ns();
++    g_run_start_tsc = arch::Timer::raw_counter();
+     size_t run_index = 0;
+ 
+     for (size_t i = 0; i < n; ++i) {
+@@ -500,6 +507,7 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
+     }
+ 
+     uint64_t start_ns = arch::Timer::ns();
++    g_run_start_tsc = arch::Timer::raw_counter();
+     Logger::raw_write("[TEST_START] ns=");
+     Logger::print_dec(start_ns);
+     Logger::raw_write("\n");
+@@ -861,6 +869,7 @@ void run_suite(const char* suite_name) {
+     }
+ 
+     uint64_t start_ns = arch::Timer::ns();
++    g_run_start_tsc = arch::Timer::raw_counter();
+     size_t run = 0;
+     print_table_header();
+ 
+@@ -942,6 +951,14 @@ void print_report(uint64_t start_ns, uint64_t end_ns) {
+     Logger::raw_write("  PASSED:          "); write_num(tp); Logger::raw_write("\n");
+     Logger::raw_write("  FAILED:          "); write_num(tf); Logger::raw_write("\n");
+     Logger::raw_write("==============================\n");
++    // Issue #359 P0: guest TSC cycles for the run, for host-side
++    // wall-truth analysis (wall ms per class is recorded host-side;
++    // TSC never rewinds, unlike Timer::ticks_ which snapshot_restore
++    // rewinds after every test).  Placed AFTER the closing ==== so the
++    // expect TEST SUMMARY regex (which ends at FAILED+====) keeps
++    // matching.
++    Logger::raw_write("  TSC_CYCLES:      "); write_num(arch::Timer::raw_counter() - g_run_start_tsc);
++    Logger::raw_write("\n");
+ 
+     if (exp != tt) {
+         Logger::raw_write("[WARN] Expected ");
