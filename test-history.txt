@@ -4030,3 +4030,5 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-18 20:50:51 testrunner PASSED: 0 FAILED: 0 TIME: 2ms
 
 SUMMARY: total=24 ok=24 fail=0
+2026-10-18 21:31:48 task_tcb_log PASSED: 1 FAILED: 0 TIME: 86ms STATUS: table-format-verify
+2026-10-18 21:31:49 random PASSED: 17 FAILED: 0 TIME: 1129ms STATUS: table-format-verify

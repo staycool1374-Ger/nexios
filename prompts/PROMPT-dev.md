@@ -209,20 +209,22 @@ The serial log is captured via `tee` to `/tmp/jarvis-serial.log` for all automat
 The full suite step runs only if selftest passes (`if: success()`). Both steps use the host-side watchdog and expect-based result parsing (extracts PLANNED/EXECUTED/FAILED from the TEST SUMMARY block).
 
 ## Output Format
-Per-test line (no ANSI colors):
+Fixed-column table (no ANSI colors; `S: ` prefix and `n/m: PASS|FAIL` tokens unchanged):
 ```
-S: <testclass> <suite::name> <n/m>: PASS/FAIL [LEAK: Resource +N, ...]
+   CLASS              TEST                                                            N/M: RESULT
+   ------------------ -------------------------------------------------------------- ---------: ------
+S: <testclass>        <suite::name>                                                    <n/m>: PASS/FAIL [LEAK: Resource +N, ...]
 ```
 
-Summary block (after all tests):
+Summary block (after all tests; values aligned, labels/regex stable):
 ```
 ==============================
  TEST SUMMARY
-  PLANNED: 96
-  EXECUTED: 96
+  PLANNED:         96
+  EXECUTED:        96
   TIME_ELAPSED_MS: 4231
-  PASSED: 94
-  FAILED: 2
+  PASSED:          94
+  FAILED:          2
 ==============================
 ```
 
