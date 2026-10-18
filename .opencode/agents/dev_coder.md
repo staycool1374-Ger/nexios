@@ -1,1 +1,1 @@
-../../PROMPT-dev.md
+../../prompts/PROMPT-dev.md
