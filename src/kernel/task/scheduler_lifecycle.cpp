@@ -139,7 +139,8 @@ void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
             if (!task)
                 break;
             // Check magic before accessing any field past offset 0.
-            if (task->magic != TaskControlBlock::TCB_MAGIC) {
+            // Issue #324 Tick 14: corruption leg is cold.
+            if (task->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
                 zombie_head_ = nullptr;
                 zombie_tail_ = nullptr;
                 zombie_count_ = 0;
@@ -214,7 +215,8 @@ void Scheduler::drain_zombie_list() noexcept {
             task = zombie_head_;
             if (!task)
                 return;
-            if (task->magic != TaskControlBlock::TCB_MAGIC) {
+            // Issue #324 Tick 14: corruption leg is cold.
+            if (task->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
                 zombie_head_ = nullptr;
                 zombie_tail_ = nullptr;
                 zombie_count_ = 0;
@@ -284,7 +286,8 @@ void Scheduler::cleanup_step() noexcept {
         if (!task)
             return;
         // Check magic before touching any field past offset 0 (may be freed).
-        if (task->magic != TaskControlBlock::TCB_MAGIC) {
+        // Issue #324 Tick 14: corruption leg is cold.
+        if (task->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
             zombie_head_ = nullptr;
             zombie_tail_ = nullptr;
             zombie_count_ = 0;
@@ -332,7 +335,8 @@ void Scheduler::cleanup_step_try() noexcept {
         task = zombie_head_;
         if (!task)
             return;
-        if (task->magic != TaskControlBlock::TCB_MAGIC) {
+        // Issue #324 Tick 14: corruption leg is cold.
+        if (task->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
             zombie_head_ = nullptr;
             zombie_tail_ = nullptr;
             zombie_count_ = 0;
@@ -507,7 +511,9 @@ void Scheduler::reap_orphans() noexcept {
     for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
         if (num_to_reap >= MAX_REAP)
             break;
-        if (t->magic != TaskControlBlock::TCB_MAGIC)
+        // Issue #324 Tick 14: poisoned-slot leg is cold (snapshot-rewind
+        // artifact, never a live task).
+        if (t->magic != TaskControlBlock::TCB_MAGIC) [[unlikely]]
             continue;
         if (t->state != TaskState::TERMINATED)
             continue;
@@ -741,8 +747,9 @@ void Scheduler::process_deferred_kills() noexcept {
     for (uint64_t i = 0; i < s_deferred_kill_count; ++i) {
         auto *task = s_deferred_kill_tasks[i];
         const uint32_t gen = s_deferred_kill_gens[i];
+        // Issue #324 Tick 14: stale-entry leg is cold (freed/recycled slot).
         if (!task || task->magic != TaskControlBlock::TCB_MAGIC ||
-            task->generation != gen)
+            task->generation != gen) [[unlikely]]
             continue;
         // Issue #197: spare AP-live tasks (never free a live stack) —
         // retain the entry (compacted); the kill completes once the task

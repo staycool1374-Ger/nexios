@@ -49,7 +49,8 @@ Scheduler::terminate_err(TaskControlBlock &task,
     // (GPF in edf_remove / switch-corruption ENSURE under -smp 2).
     // Self-termination always succeeds (exempted below). No mutation on
     // refusal: no dequeue, no state write, no release, no reaper poke.
-    if (is_current_on_any_cpu(&task) && &task != current_task()) {
+    // Issue #324 Tick 14: refusal leg is cold (fail-closed exception).
+    if (is_current_on_any_cpu(&task) && &task != current_task()) [[unlikely]] {
         kernel::Logger::warn("sched: terminate id=%u refused (remote-current)",
                              static_cast<unsigned>(task.id));
         // Issue #234: fail-closed refusal enters the ring as WARN.
@@ -141,7 +142,8 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
     // callers are own-CPU paths where refusal is unreachable). Fallible
     // callers use terminate_err directly.
     const errors::SchedulerError err = terminate_err(task, exit_code);
-    if (err != errors::SCHED_ERR_OK) {
+    // Issue #324 Tick 14: refusal leg is cold (own-CPU callers never refuse).
+    if (err != errors::SCHED_ERR_OK) [[unlikely]] {
         kernel::Logger::warn("sched: terminate id=%u refused (err=%u)",
                              static_cast<unsigned>(task.id),
                              static_cast<unsigned>(err));
