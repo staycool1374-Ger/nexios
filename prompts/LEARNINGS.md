@@ -48,6 +48,7 @@
 - One-shot safety arms must retain, never rely on re-detection (#324): a disarming scan or TERMINATED-skipping scan never re-fires, so a spared kill intent is lost until reap — compact-and-retain with a generation guard; same handshake closes lock-free check-then-act races (skip is the safe direction).
 - Harness task is persistent suite state (#360): keep its CNode across snapshot_restore (daemon parity, #275) + pre-create it before the baseline capture, or every harness ensure_cspace mints a +1 CNode residual; kept pointers stay safe because the pool rewind resets slot bytes to baseline-empty.
 - Never re-create what the factory installs (#371): create() ships a private cloned PML4 (MP-1.2) — a manual re-clone orphans the factory page (+1 PMM/test); drop creator refs on every cap path (creator/slot/pin ledger — a missing release reads as +1 Cap/MemPool, #360/#371).
+- Checkout-scoping is naming-convention only (#372): TAG = dir basename, so same-basename checkouts in different parents still collide — keep dirnames unique per host; GDB :1234 stub is NOT namespaced (debug-test/rr-replay from two checkouts fight over the port).
 - Aggregate splits are pure regroups: script-count moved groups (each exactly once), Σ(new dump-counts)==old value, measured beats hand sums; pre-QEMU SIGTERM with zero guest output is a transient harness kill — identical rerun green, record both rows (#364).
 
 ## Entry format
