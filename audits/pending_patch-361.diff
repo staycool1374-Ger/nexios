@@ -1,0 +1,356 @@
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 05d38c923..cf21d5f11 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -42,6 +42,11 @@ bool VMM::identity_modified_ = false;
+ // Fault-injection mask for vmm_step() (issue #347 Slice D, declared in
+ // vmm_path.hpp). Test-only; absent in release.
+ uint64_t g_test_skip_vmm_step = 0;
++// Countdown state for the test-only table-alloc fault injector
++// (issue #361; VMM:: API declared in vmm.hpp). Test-only; absent in
++// release. fail_at == 0 means disarmed; firing is single-shot.
++static size_t g_test_table_fail_at = 0;
++static size_t g_test_table_fail_remaining = 0;
+ #endif
+ 
+ /// @brief Initialise the VMM: capture current PML4, zero residual bootloader
+@@ -134,8 +139,47 @@ void VMM::init() {
+ /// WCET: intentional flat walk/split (bounded depth, at most one table
+ /// alloc per call); a failed alloc returns nullptr and the caller drops
+ /// the mapping through note_silent_drop_once (never retries in a loop).
++#if defined(CONFIG_DEBUG)
++// Test-only table-alloc fault injector (issue #361).  Countdown covers
++// allocation ATTEMPTS only: every gate sits after the presence/split-need
++// checks, immediately before the PMM::alloc_* call, so present-table hits
++// never consume the countdown and fail-at-n is deterministic.
++void VMM::test_arm_table_alloc_fail_at(size_t alloc_index) noexcept {
++    g_test_table_fail_at = alloc_index;
++    g_test_table_fail_remaining = alloc_index;
++}
++
++void VMM::test_disarm_table_alloc_fail() noexcept {
++    g_test_table_fail_at = 0;
++    g_test_table_fail_remaining = 0;
++}
++
++void VMM::test_table_alloc_fail_begin_call() noexcept {
++    g_test_table_fail_remaining = g_test_table_fail_at;
++}
++
++bool VMM::test_maybe_fail_table_alloc() noexcept {
++    if (g_test_table_fail_at == 0 || g_test_table_fail_remaining == 0)
++        return false;
++    --g_test_table_fail_remaining;
++    if (g_test_table_fail_remaining == 0) {
++        g_test_table_fail_at = 0; // single-shot: firing disarms
++        return true;
++    }
++    return false;
++}
++#endif
++
++void VMM::test_table_alloc_fail_snapshot_reset() noexcept {
++#if defined(CONFIG_DEBUG)
++    g_test_table_fail_at = 0;
++    g_test_table_fail_remaining = 0;
++#endif
++}
++
+ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+                          bool user_alloc) {
++
+     if (table[index] & PAGE_PRESENT) {
+         // Arch child-table decode (issue #363 P2: Sv39 PTE codec vs
+         // frame mask).
+@@ -145,6 +189,10 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+         } else if (vmm_arch_split_needed(table[index])) {
+             if (!create)
+                 return nullptr;
++#if defined(CONFIG_DEBUG)
++            if (test_maybe_fail_table_alloc()) // issue #361: injected fault
++                return nullptr;
++#endif
+             uint64_t new_page = PMM::alloc_page_table();
+             if (!new_page)
+                 return nullptr;
+@@ -167,6 +215,10 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+     if (!create)
+         return nullptr;
+ 
++#if defined(CONFIG_DEBUG)
++    if (test_maybe_fail_table_alloc()) // issue #361: injected fault
++        return nullptr;
++#endif
+     uint64_t new_page =
+         user_alloc ? PMM::alloc_user_page() : PMM::alloc_page_table();
+     if (!new_page)
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index b6660e5b8..a36053365 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -803,6 +803,20 @@ class VMM {
+                                                size_t page_count, bool user,
+                                                uint64_t pml4_phys,
+                                                bool executable);
++#if defined(CONFIG_DEBUG)
++    /// @brief Arms the test-only table-alloc fault injector (issue #361).
++    ///        The n-th table allocation attempt of the next
++    ///        map_phys_range_try() call fails instead of allocating.
++    ///        1-based; 0 disarms.  Single-shot: firing disarms.
++    ///        Test-only; absent in release.  Caller must hold IrqGuard.
++    static void test_arm_table_alloc_fail_at(size_t alloc_index) noexcept;
++    /// @brief Disarms the injector unconditionally (issue #361).  Test-only.
++    static void test_disarm_table_alloc_fail() noexcept;
++#endif
++    /// @brief Clears injector state for snapshot restore (issue #361).
++    ///        Unconditional decl so test_isolate.cpp needs no #if;
++    ///        release def is a no-op.
++    static void test_table_alloc_fail_snapshot_reset() noexcept;
+   private:
+     /// @brief Walks or creates a page-table entry at the given level.
+     /// @param table Pointer to the current-level page table.
+@@ -812,6 +826,14 @@ class VMM {
+     /// @return Pointer to the next-level table, or nullptr.
+     static uint64_t *get_table(uint64_t *table, size_t index, bool create,
+                                bool user_alloc = false);
++#if defined(CONFIG_DEBUG)
++    /// @brief Resets the per-call countdown at range-map entry (issue #361).
++    ///        Called by map_phys_range_try(); not for direct test use.
++    static void test_table_alloc_fail_begin_call() noexcept;
++    /// @brief Returns true when the imminent alloc must fail (issue #361).
++    ///        Call only where an alloc is about to happen.  Test-only.
++    [[nodiscard]] static bool test_maybe_fail_table_alloc() noexcept;
++#endif
+     /// @brief Walk to the leaf PTE for a VA without allocating
+     ///        (issue #271 P0 — shared by the RO primitive + inspector).
+     /// @return Pointer to the leaf entry, or nullptr on any missing
+diff --git a/src/kernel/memory/vmm_cap.cpp b/src/kernel/memory/vmm_cap.cpp
+index 71744ea2b..22d230007 100644
+--- a/src/kernel/memory/vmm_cap.cpp
++++ b/src/kernel/memory/vmm_cap.cpp
+@@ -50,6 +50,9 @@ errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
+                                              size_t page_count, bool user,
+                                              uint64_t pml4_phys,
+                                              bool executable) {
++#if defined(CONFIG_DEBUG)
++    test_table_alloc_fail_begin_call(); // issue #361: per-call countdown
++#endif
+     if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0 ||
+         (phys_addr & (arch::PAGE_SIZE - 1)) != 0) {
+         vmm_step(VmmMapSteps::Reject); // issue #347 Slice D
+diff --git a/src/kernel/memory/vmm_map.cpp b/src/kernel/memory/vmm_map.cpp
+index d23cba035..30fabb84e 100644
+--- a/src/kernel/memory/vmm_map.cpp
++++ b/src/kernel/memory/vmm_map.cpp
+@@ -226,6 +226,10 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
+     }
+ 
+     if (vmm_arch_split_needed(pd[pd_idx])) {
++#if defined(CONFIG_DEBUG)
++        if (VMM::test_maybe_fail_table_alloc()) // issue #361: injected fault
++            return errors::VMM_ERR_PAGE_ALLOC;
++#endif
+         uint64_t new_pt_phys = PMM::alloc_user_page();
+         if (!new_pt_phys) [[unlikely]] {
+             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
+diff --git a/src/kernel/memory/vmm_path.hpp b/src/kernel/memory/vmm_path.hpp
+index 748d517ec..718836f31 100644
+--- a/src/kernel/memory/vmm_path.hpp
++++ b/src/kernel/memory/vmm_path.hpp
+@@ -29,6 +29,18 @@
+ /// Terminal paths: validation failures record Reject + Done only (no
+ /// Validate). Slot is shared with the dispatch/task registries — tests own
+ /// reset and must hold IF=0 across reset → drive → capture.
++///
++/// Table-alloc fault injector contract (issue #361, test-only, absent in
++/// release): VMM::test_arm_table_alloc_fail_at(n) makes the n-th table
++/// allocation attempt of the next map_phys_range_try() call fail instead
++/// of allocating (1-based; 0 disarms; firing is single-shot and disarms).
++/// Countdown covers attempts only — the 3 gates sit after presence/
++/// split-need checks, immediately before the PMM::alloc_* calls
++/// (get_table split + fresh sites, map_page_in_pml4_try split site), so
++/// present-table hits never consume it. map_phys_range_try() resets the
++/// countdown per call. Arm/disarm/snapshot-reset backstop the armed
++/// window; the whole arm → drive → capture → teardown sequence must run
++/// under one IrqGuard on the BSP test thread.
+ 
+ #pragma once
+ 
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 3aeebb01b..b90f012a1 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -240,7 +240,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"path_tracer",           7,    0,       0      },  // PathTracer core primitive (issue #347 Slice A, #362): chain math, missing/duplicate/reorder detection, checkpoint/resume, scoped-enum steps, reset
+     {"scheduler_dispatch_path", 4, 0,      0      },  // dispatch segments (issue #347 Slice B): reschedule arm, next_task select, skip-one-step negative, registry math
+     {"task_path",             6,    0,       0      },  // task create/cleanup segments (issue #347 Slice C + #324 Tick 13): create path, full 14-block cleanup, pinned terminal, skip-one-step negative, canonical teardown chain, registry math
+-    {"vmm_path",              4,    0,       0      },  // VMM map/rollback segments (issue #347 Slice D): range-map reject, success, skip-one-step negative, registry math (rollback = inspection only, follow-up #361)
++    {"vmm_path",              5,    0,       0      },  // VMM map/rollback segments (issue #347 Slice D): range-map reject, success, skip-one-step negative, runtime rollback via table-alloc injector (issue #361), registry math
+ 
+     // random
+     {"random_core",           7,    0,       0      },  // RNG smoke/non-repeating
+@@ -295,7 +295,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"core_task",           52,   0,       0      },  // task_* + fpu_invariants + kernel_top + per_cpu (#364; measured)
+     {"core_memory",         118,  0,       0      },  // all memory_* (#364; measured)
+     {"core_syscall",        85,   0,       0      },  // syscall_* + debug_syscall + tls (#364; measured)
+-    {"core_tracing",        21,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13)
++    {"core_tracing",        22,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361)
+     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
+     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
+     {"proc_elf",            123,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index d20d80d49..362959c9e 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -946,6 +946,11 @@ void snapshot_restore(const char *test_name) {
+     // Reset the event-timer wheel (issue #17) so a test that armed timers
+     // can never leak a live entry or a reusable handle into the next cycle.
+     kernel::time::TimerWheel::snapshot_reset();
++    // Reset the VMM table-alloc fault injector (issue #361) so an armed
++    // injector can never leak into the next cycle (single-shot fire and
++    // RAII-guard teardown already disarm; this is the abort backstop).
++    // Unconditional call — release def is a no-op.
++    VMM::test_table_alloc_fail_snapshot_reset();
+     // Reset the POSIX timer/timerfd registries + clock anchor (issue #76)
+     // so timer slots, waiter registrations, and the REALTIME latch never
+     // leak across snapshot cycles (wheel reset above already disarmed all
+diff --git a/src/kernel/test/test_page_tables.cpp b/src/kernel/test/test_page_tables.cpp
+index 5d085d4c9..db2031e1c 100644
+--- a/src/kernel/test/test_page_tables.cpp
++++ b/src/kernel/test/test_page_tables.cpp
+@@ -118,6 +118,7 @@ JARVIS_TEST(page_tables_free_pages_on_cleanup, "PRE: none | POST: none") {
+     t->cleanup();
+     JARVIS_ASSERT(t->page_table_ == 0);
+     JARVIS_ASSERT(t->user_stack_ == 0);
++    delete t; // free the TCB block (cleanup only tears down resources)
+     JARVIS_TEST_PASS();
+ }
+ 
+diff --git a/src/kernel/test/test_vmm_path.cpp b/src/kernel/test/test_vmm_path.cpp
+index 4bd1a5ddc..c414942d4 100644
+--- a/src/kernel/test/test_vmm_path.cpp
++++ b/src/kernel/test/test_vmm_path.cpp
+@@ -19,14 +19,10 @@
+ /// @file test_vmm_path.cpp
+ /// @brief VMM map/rollback segment tests (issue #347 Slice D): successful
+ ///        transactional range map, validation-reject, skip-one-step
+-///        negative, registry math. Drives VMM::map_phys_range_try() with
+-///        the slot reset/capture under IrqGuard. The Rollback branch is
+-///        instrumented and validated by inspection only: the sole clean
+-///        trigger is a mid-range table-allocation failure, which needs a
+-///        full PMM drain; a drain-based fixture page-faulted the running
+-///        kernel (freed an in-use page), so it is not driven here. Filed
+-///        as a follow-up to add a safe deterministic partial-failure
+-///        injector.
++///        negative, runtime rollback via the deterministic table-alloc
++///        fault injector (issue #361), registry math. Drives
++///        VMM::map_phys_range_try() with the slot reset/capture under
++///        IrqGuard.
+ 
+ #include <test.hpp>
+ #include <logger.hpp>
+@@ -102,6 +98,21 @@ static uint64_t *scratch_pd(size_t &out_idx) {
+     return scratch_pd_at(kVmmScratchVa, out_idx);
+ }
+ 
++#if defined(CONFIG_DEBUG)
++/// @brief RAII injector arm (issue #361): disarms on scope exit, so an
++///        assert-abort (JARVIS_ASSERT returns) cannot leak armed state.
++struct VmmTableFailGuard {
++    explicit VmmTableFailGuard(size_t fail_at) {
++        VMM::test_arm_table_alloc_fail_at(fail_at);
++    }
++    ~VmmTableFailGuard() {
++        VMM::test_disarm_table_alloc_fail();
++    }
++    VmmTableFailGuard(const VmmTableFailGuard &) = delete;
++    VmmTableFailGuard &operator=(const VmmTableFailGuard &) = delete;
++};
++#endif
++
+ static void test_vmm_map_range_success_segment() {
+     const uint64_t phys = PMM::alloc_contiguous(2);
+     JARVIS_ASSERT(phys != 0);
+@@ -172,6 +183,75 @@ static void test_vmm_map_range_skip_detected() {
+     JARVIS_ASSERT(skip_ok);
+ }
+ 
++/// @brief Rollback positive test (issue #361): with the injector armed to
++///        fail the 2nd table allocation, a 2-page range straddling a 2 MiB
++///        boundary maps page 0 (split PT allocated) then fails page 1.
++///        Expect VMM_ERR_PAGE_ALLOC + the Rollback chain, both VAs
++///        unmapped, the second PD slot untouched, and zero PMM delta.
++///        Debug-only; trivial pass elsewhere (count-row pin).
++static void test_vmm_map_range_rollback_segment() {
++    bool rollback_ok = true; // not applicable without the debug injection
++#if defined(CONFIG_DEBUG)
++    // va1 is 2 MiB-aligned (kVmmScratchVa already is); va0 is the last
++    // page of the previous PD slot. Both PD entries are boot huge pages.
++    const uint64_t va1 = kVmmScratchVa;
++    const uint64_t va0 = va1 - arch::PAGE_SIZE;
++    size_t idx0 = 0;
++    uint64_t *pd0 = scratch_pd_at(va0, idx0);
++    size_t idx1 = 0;
++    uint64_t *pd1 = scratch_pd_at(va1, idx1);
++    JARVIS_ASSERT(pd0 == pd1);
++    JARVIS_ASSERT(idx1 == idx0 + 1);
++    const uint64_t boot0 = pd0[idx0];
++    const uint64_t boot1 = pd1[idx1];
++    JARVIS_ASSERT(boot0 != 0);
++    JARVIS_ASSERT(boot1 != 0);
++
++    const uint64_t phys = PMM::alloc_contiguous(2);
++    JARVIS_ASSERT(phys != 0);
++    const uint64_t pmm_before = PMM::free_pages_ref();
++
++    bool chain_ok = false;
++    bool cleared_ok = false;
++    bool prefix_ok = false;
++    bool untouched_ok = false;
++    {
++        arch::IrqGuard guard{}; // issue #200: HHDM PD surgery is IRQ-critical
++        VmmTableFailGuard fail_at_second(2); // alloc #1 (va0 PT) succeeds,
++                                             // alloc #2 (va1 PT) fails
++        path_reset();
++        const errors::VmmError err = VMM::map_phys_range_try(
++            va0, phys, 2, false, VMM::get_kernel_pml4(), false);
++        chain_ok = (err == errors::VMM_ERR_PAGE_ALLOC) &&
++                   path_validate(k_vmm_map_rollback_expected);
++        // Only va0 can read clear: it was mapped then rolled back. va1
++        // was never installed, so it still resolves through the
++        // untouched boot huge entry (which untouched_ok pins below) —
++        // asserting it clear would mistake the baseline mapping for a
++        // rollback leak.
++        cleared_ok = (VMM::virt_to_phys(va0) == 0);
++        // The prefix really installed (else this test would be vacuous):
++        // only then is there a split PT to restore and free.
++        prefix_ok = (pd0[idx0] != boot0);
++        if (prefix_ok) {
++            const uint64_t split_pt = pd0[idx0] & kX86TableFrameMask;
++            pd0[idx0] = boot0;
++            arch::ArchPageTable::tlb_flush(va0);
++            PMM::free_page(split_pt);
++        }
++        untouched_ok = (pd1[idx1] == boot1);
++        path_reset();
++    }
++    PMM::free_page(phys);
++    PMM::free_page(phys + arch::PAGE_SIZE);
++    // pmm_before covers the 2 device frames; both are released above, so
++    // the free count must land exactly 2 above the capture.
++    rollback_ok = chain_ok && cleared_ok && prefix_ok && untouched_ok &&
++                  (PMM::free_pages_ref() == pmm_before + 2);
++#endif
++    JARVIS_ASSERT(rollback_ok);
++}
++
+ #endif // CONFIG_ARCH_X86_64
+ 
+ } // namespace
+@@ -182,5 +262,6 @@ void register_vmm_path_tests() {
+ #if defined(CONFIG_ARCH_X86_64)
+     JARVIS_REGISTER_TEST(vmm_map_range_success_segment);
+     JARVIS_REGISTER_TEST(vmm_map_range_skip_detected);
++    JARVIS_REGISTER_TEST(vmm_map_range_rollback_segment);
+ #endif
+ }
