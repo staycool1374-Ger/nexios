@@ -81,13 +81,17 @@ for c in $RUN; do
     fi
 done
 
-LOGDIR=/tmp/jarvis_classruns
+LOGDIR=/tmp/jarvis_classruns-$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')
 mkdir -p "$LOGDIR"
 
 total=0; passed_classes=0; failed_classes=0
 for c in $RUN; do
     total=$((total+1))
-    pkill -9 -f qemu-system 2>/dev/null
+    # Scope cleanup to this checkout's QEMU (issue #372): the -name tag is
+    # added by the Makefile, with a trailing-delimiter guard so tag `jarvis`
+    # never matches `jarvis_test` artifacts. Never blanket-kill qemu-system:
+    # a sibling checkout may be testing concurrently.
+    pkill -9 -f "qemu-system.*-name jarvis-$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')([^A-Za-z0-9_]|$)" 2>/dev/null || true
     log="$LOGDIR/$c.log"
     start=$(date +%s%N)
     timeout "$OUTER_TIMEOUT" make execute-test "$ARCH" "$BUILD" "$c" > "$log" 2>&1

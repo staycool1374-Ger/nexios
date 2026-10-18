@@ -1216,20 +1216,40 @@ renode-test:
 # GDB showed the vCPU frozen in Logger::putchar with an unresponsive stub):
 # with file backends a lagging observer only delays verdict matching, it can
 # never freeze the guest.  Single consistent path for all automated runs.
-TEST_SERIAL_LOG := /tmp/jarvis-serial.log
+# Per-checkout harness tag (issue #372): concurrent `execute-test` runs from
+# two checkouts on one host must never signal each other's QEMU nor share
+# /tmp state.  basename `jarvis`->`jarvis`, `jarvis_test`->`jarvis_test`
+# (already ERE-safe); the sed fallback keeps any exotic checkout name safe
+# to interpolate into pkill ERE patterns and -name values.
+CHECKOUT_TAG := $(shell basename $(CURDIR) | sed 's/[^A-Za-z0-9_]/_/g')
+ifeq ($(CHECKOUT_TAG),)
+CHECKOUT_TAG := checkout
+endif
+# NOTE (prefix trap): tag `jarvis` is a substring of tag `jarvis_test`, so
+# every match on QEMU_TAG_NAME MUST require a trailing delimiter via
+# QEMU_TAG_ERE — never match the bare name, or checkout `jarvis` matches
+# checkout `jarvis_test` artifacts.  QEMU_TAG_ERE is the ONLY pattern any
+# pkill site may use; no site hand-writes its own.
+QEMU_TAG_NAME := jarvis-$(CHECKOUT_TAG)
+QEMU_NAME_FLAG := -name $(QEMU_TAG_NAME)
+QEMU_TAG_ERE := jarvis-$(CHECKOUT_TAG)([^A-Za-z0-9_]|$$)
+TEST_SERIAL_LOG := /tmp/jarvis-serial-$(CHECKOUT_TAG).log
 # COM1 forensics log (guest UART device, file backend).  Not matched by the
 # harness — kept for post-mortem only.
-TEST_COM1_LOG := /tmp/jarvis-com1.log
+TEST_COM1_LOG := /tmp/jarvis-com1-$(CHECKOUT_TAG).log
 # Verdict file: the expect script writes its machine-readable verdict here so it
 # is never lost to pipe buffering. The Makefile reads it back to set the exit code.
-TEST_VERDICT_LOG := /tmp/jarvis-verdict.log
+TEST_VERDICT_LOG := /tmp/jarvis-verdict-$(CHECKOUT_TAG).log
+# Per-checkout start/end timestamp files (shared by _run_test_qemu only).
+TEST_START_TS := /tmp/test-start-$(CHECKOUT_TAG).timestamp
+TEST_END_TS := /tmp/test-end-$(CHECKOUT_TAG).timestamp
 # File-backend QEMU flags for test runs: derived from $(QEMU_FLAGS) by swapping
 # the stdio-mux console triple for file backends (debugcon carries the Logger
 # verdict stream during test runs; COM1 is forensics-only; the monitor is
 # unused by the harness).  Covers all QEMU_FLAGS variants (base, iommu_live,
 # ahci_live) since they share the token spellings.
 comma := ,
-QEMU_FLAGS_FILE = $(subst -mon chardev=dbg,-mon none,$(subst -monitor chardev:dbg,-monitor none,$(subst -serial chardev:dbg,-serial file:$(TEST_COM1_LOG),$(subst -chardev stdio$(comma)id=dbg$(comma)mux=on,-chardev file$(comma)path=$(TEST_SERIAL_LOG)$(comma)id=dbg,$(QEMU_FLAGS)))))
+QEMU_FLAGS_FILE = $(subst -mon chardev=dbg,-mon none,$(subst -monitor chardev:dbg,-monitor none,$(subst -serial chardev:dbg,-serial file:$(TEST_COM1_LOG),$(subst -chardev stdio$(comma)id=dbg$(comma)mux=on,-chardev file$(comma)path=$(TEST_SERIAL_LOG)$(comma)id=dbg,$(QEMU_FLAGS))))) $(QEMU_NAME_FLAG)
 
 # Timing model (single source of truth, correctly scaled):
 #   - expect waits up to TEST_TIMEOUT_* for the kernel's TEST SUMMARY.
@@ -1279,8 +1299,8 @@ define _run_test_qemu
 	VERDICT=""; \
 	while [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; do \
 	    ATTEMPT=$$(( ATTEMPT + 1 )); \
-	    rm -f "$(TEST_SERIAL_LOG)" "$(TEST_COM1_LOG)" "$(TEST_VERDICT_LOG)" /tmp/test-start.timestamp /tmp/test-end.timestamp; \
-	    date +%s > /tmp/test-start.timestamp; \
+    rm -f "$(TEST_SERIAL_LOG)" "$(TEST_COM1_LOG)" "$(TEST_VERDICT_LOG)" "$(TEST_START_TS)" "$(TEST_END_TS)"; \
+    date +%s > "$(TEST_START_TS)"; \
 	    ( \
 	        trap "exit 0" TERM; \
 	        LAST_SIZE=-1; \
@@ -1291,8 +1311,8 @@ define _run_test_qemu
 	            if [ "$$CUR_SIZE" = "$$LAST_SIZE" ]; then \
 	                STALL=$$((STALL + 1)); \
 	                if [ $$STALL -ge $(WATCHDOG_STALL) ]; then \
-	                    echo "[HOST-WATCHDOG] Tests interrupted — no serial output for $(WATCHDOG_STALL) s" | tee -a "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)"; \
-	                    pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null; \
+                    echo "[HOST-WATCHDOG] Tests interrupted — no serial output for $(WATCHDOG_STALL) s" | tee -a "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)"; \
+                    pkill -f "$(QEMU_SYSTEM).*[ -]name[ =]$(QEMU_TAG_ERE).*nexios-rtos|nexios-rtos.*[ -]name[ =]$(QEMU_TAG_ERE)" 2>/dev/null; \
 	                    exit 1; \
 	                fi; \
 	            else \
@@ -1306,8 +1326,8 @@ define _run_test_qemu
 	        sh tools/qemu-file-log.sh "$(TEST_SERIAL_LOG)" "$(TEST_COM1_LOG)" \
 	        $(QEMU_SYSTEM) $(QEMU_FLAGS_FILE) -display none -no-reboot $(QEMU_DEBUG_EXIT) \
 	        $(QEMU_ICOUNT) $(QEMU_TRACE_EVENTS); \
-	    date +%s > /tmp/test-end.timestamp; \
-	    pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null || true; \
+	    date +%s > "$(TEST_END_TS)"; \
+	    pkill -f "$(QEMU_SYSTEM).*[ -]name[ =]$(QEMU_TAG_ERE).*nexios-rtos|nexios-rtos.*[ -]name[ =]$(QEMU_TAG_ERE)" 2>/dev/null || true; \
 	    kill $$MONITOR_PID 2>/dev/null; \
 	    wait $$MONITOR_PID 2>/dev/null; \
 	    if [ -f "$(TEST_VERDICT_LOG)" ]; then \
@@ -1334,8 +1354,8 @@ define _run_test_qemu
 	    esac; \
 	done; \
 	echo "$$VERDICT"; \
-	START_S=$$(cat /tmp/test-start.timestamp 2>/dev/null || echo 0); \
-	END_S=$$(cat /tmp/test-end.timestamp 2>/dev/null || echo 0); \
+	START_S=$$(cat "$(TEST_START_TS)" 2>/dev/null || echo 0); \
+	END_S=$$(cat "$(TEST_END_TS)" 2>/dev/null || echo 0); \
 	echo "[HOST] start=$${START_S}s end=$${END_S}s elapsed=$$(( END_S - START_S ))s"; \
 	if [ -n "$$STALL_STATUS" ]; then echo "[HOST] $$STALL_STATUS"; fi; \
 	case "$$VERDICT" in \
@@ -1352,7 +1372,7 @@ endef
 
 # Usage: $(call _run_dump_counts_qemu)
 # Runs QEMU, captures all TCOUNT lines to stdout, exits cleanly.
-DUMP_COUNTS_LOG := /tmp/jarvis-dump-counts.log
+DUMP_COUNTS_LOG := /tmp/jarvis-dump-counts-$(CHECKOUT_TAG).log
 define _run_dump_counts_qemu
 	if ! command -v $(QEMU_SYSTEM) >/dev/null 2>&1; then echo "QEMU missing."; echo $(PKG_HINT); exit 1; fi; \
 	printf '  %-7s %s\n'  'TCOUNT' 'Dumping per-class registration counts…'; \
@@ -1364,7 +1384,7 @@ define _run_dump_counts_qemu
 	else \
 	    echo "ERROR: QEMU_FLAGS has neither '-serial chardev:dbg' nor '-serial mon:stdio' to redirect"; exit 1; \
 	fi; \
-	$(QEMU_SYSTEM) $$_DQ_FLAGS -display none -no-reboot $(QEMU_DEBUG_EXIT) 2>&1 & \
+	$(QEMU_SYSTEM) $$_DQ_FLAGS $(QEMU_NAME_FLAG) -display none -no-reboot $(QEMU_DEBUG_EXIT) 2>&1 & \
 	QEMU_PID=$$!; \
 	sleep 30; \
 	kill $$QEMU_PID 2>/dev/null; wait $$QEMU_PID 2>/dev/null || true; \
@@ -1401,7 +1421,7 @@ debug-shell:
 	expect -c ' \
 	    fconfigure stdout -buffering none; \
 	    set timeout 120; \
-	    spawn $(QEMU_SYSTEM) $(QEMU_FLAGS) -s -S -display none -no-reboot $(QEMU_DEBUG_EXIT); \
+	    spawn $(QEMU_SYSTEM) $(QEMU_FLAGS) $(QEMU_NAME_FLAG) -s -S -display none -no-reboot $(QEMU_DEBUG_EXIT); \
 	    for {set i 0} {$$i < 8} {incr i} { \
 	        if {[catch {exec nc -z localhost 1234}] == 0} { break }; \
 	        after 1000; \
@@ -1425,7 +1445,7 @@ debug-shell:
 	    exit 0; \
 	'; \
 	rc=$$?; \
-	pkill -f "$(QEMU_SYSTEM).*nexios-rtos" 2>/dev/null || true; \
+	pkill -f "$(QEMU_SYSTEM).*[ -]name[ =]$(QEMU_TAG_ERE).*nexios-rtos|nexios-rtos.*[ -]name[ =]$(QEMU_TAG_ERE)" 2>/dev/null || true; \
 	exit $$rc
 
 test: $(KERNEL)

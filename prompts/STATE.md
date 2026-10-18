@@ -198,3 +198,4 @@
 - src/kernel/core/global_state.{hpp,cpp}: single definition point for all cross-TU kernel globals (7-phase refactor).
 - src/kernel/arch/x86_64/hal/percpu.{hpp,cpp}: Per-CPU state block (4 KiB page per CPU, GS_BASE), isr_nesting_depth/irq_entry_tsc/fpu_owner/current_task migration, percpu_init_bsp/ap, CONFIG_MAX_CPUS=1 default.
 - BUGS.md: elf_loader H2-family flake logged (2026-08-14).
+- Makefile/scripts harness checkout-scoped (#372): CHECKOUT_TAG + `-name jarvis-<TAG>` on all QEMU spawns, tag-scoped pkill (prefix-trap guard), namespaced /tmp logs/timestamps/LOGDIR (testbed `jarvis_test`, main checkout `jarvis`).
