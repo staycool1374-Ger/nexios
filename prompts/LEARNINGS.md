@@ -25,6 +25,7 @@
 - Zero-S-line TIMEOUT + identical-binary rerun green = TCG stall, not regression (check host load first); debug-green never implies release-green (build release before any full gate).
 - Hunt-loop evidence is file-grade or it didn't happen: tee every loop to `/tmp/jarvis-hunt-<issue>-<YYYYMMDD-HHMMSS>.log`, record per-iteration PASS/TIMEOUT + load average inline, and post the file path + tally as an issue comment the same session (serial log is shared/singleton — raw output not tee'd is lost); never pipe make/test through `head` (SIGPIPE kills the run). GDB stops the guest: one interrupt + full capture + detach, never touch a timed run; `call` lies on the TCG stub (raw reads only); S-lines live in debugcon, not serial.
 - Pure-move splits: boundary-asserted chunks, file-statics to the first-consumer shared home (never per-TU copies), using-decls for every bare cross-TU name, second-`namespace`-blocks closed before reopening (trust the compiler over stale LSP diagnostics); test class names must match the registry exactly (`Unknown test class` = zero tests + QEMU_EXIT stall).
+- Wall-truth telemetry: use rewind-proof raw TSC (`ticks_` is snapshot-rewound); additive summary lines go AFTER the expect `====` terminator; unobservable targets get DOCUMENT decisions, not servos (#359).
 - Readdir lists only the underlying fs: mount points live solely in the VFS mount table, so every `ops->readdir` caller hides them — overlay at the VFS layer (resolve + vnode_identity_match, spelling-independent), never per-fs; synthesized entries need a resolve-fallback for type probes (#346).
 - Timeout wake is edge-triggered: one expiry → one READY wake (skip duplicate READY+queued re-wakes); EDF never returns current (self-pick guard) — both one-line guards, no new locks, stranded READY still rescued (#345).
 - TCG wall dilation is load-bearing: size every timeout tier from measured walls; re-verify flakes before bisecting.
@@ -67,6 +68,12 @@
 ```
 
 ## Entries
+
+### #359 — TCG wall-time truth decided DOCUMENT + TSC_CYCLES telemetry (audit APPROVED, committed, issue CLOSED)
+
+- **Learned:** (1) When measurement proves the target unobservable (no in-guest wall ref finer than 1 s RTC; workload-dependent TCG TSC rate), DOCUMENT-limitation is the correct engineering outcome — a runtime servo can at best fix long-run averages while adding ISR-adjacent SIL3 risk. (2) Ticks and ns are divergent virtual clock domains (periodic-APIC bus vs PIT-calibrated TSC); a servo on one cannot true the other. (3) Per-run telemetry must use a rewind-proof counter (`arch::Timer::raw_counter`, never snapshot-rewound `ticks_`), and additive summary lines go AFTER the expect `====` terminator so verdict parsing (`FAILED+====`, no end-anchor) is provably unaffected. (4) Emulated/self-audits do not close issues — only an independent sil3_auditor APPROVED verdict counts; process-only REJECTs (check #7) are cured with on-thread retrieval artifacts, no code change.
+- **Adapted:** `TSC_CYCLES` summary line (src/lib/test.cpp: static + 4 run_* assignments + post-`====` print) + gotcha #19 in AGENTS-KERNEL-BRIEFING.md + wall-truth section in docs/specs/deadline.md (`OVERALL_CAP_S` stays 3600, accuracy gate is KVM/HW). Gates: hrt_monotonic 6/6, timing_core 19/19 (1 WARN-residual), random 17/17, full gate 25/26 + core_tracing rerun green. Audit APPROVED zero findings (`audits/report-2026-10-18T21-22-40Z.md`, real sil3_auditor; emulated REJECT→APPROVED trail superseded).
+- **Style re-surface:** output-only harness changes still need expect-regex + renode-parser impact analysis; reuse cross-arch APIs (`raw_counter` x3) instead of new arch code; test-history rows carry measured times only.
 
 ### #361 — deterministic table-alloc fault injector + runtime rollback test (audit APPROVED, commit pending)
 
