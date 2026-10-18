@@ -1,322 +1,539 @@
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 6ef537036..3b3965f29 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -224,7 +224,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"network_core",          18,   0,       0      },  // MAC/IPv4/ARP/checksum + mock-NIC RX dispatch + ICMP wire-order request (#138, #179) + malformed-length/version/truncation rejection (#178) + UDP build/poll/set_reply
+diff --git a/src/kernel/driver/iocd.hpp b/src/kernel/driver/iocd.hpp
+index 690bf09d7..a44b83813 100644
+--- a/src/kernel/driver/iocd.hpp
++++ b/src/kernel/driver/iocd.hpp
+@@ -33,6 +33,7 @@ static constexpr uint64_t IOCD_MMIO_UNMAP = 203;
+ static constexpr uint64_t IOCD_KEYBOARD_READ = 204;
+ static constexpr uint64_t IOCD_SERIAL_READ = 205;
+ static constexpr uint64_t IOCD_SERIAL_WRITE = 206;
++static constexpr uint64_t IOCD_UNREGISTER_DEVICE = 207;
  
-     // shell / ui
--    {"shell_interaction",    19,    0,       0      },  // shell commands (+ tasks memory columns)
-+    {"shell_interaction",    20,    0,       0      },  // shell commands (+ tasks memory columns) + P2 key-delivery seam test (#303 item 3)
-     {"shell_redirect",        3,    0,       0      },  // shell I/O redirection
-     {"shell_textutils",       1,    0,       0      },  // text utilities
-     {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
-@@ -313,7 +313,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
-     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
-     {"deadline",            147,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 budget-denied-at-fork (#328) + 1 wall accuracy bound (#319) + 1 validate-id-range-gate (#374) + 1 pre-existing aggregate drift at HEAD
--    {"ui",                  73,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
-+    {"ui",                  74,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231) + 1 P2 key-delivery seam test (#303 item 3); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
-     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
-     {"random",              17,   0,       0      },  // random_* (issue #173)
-     {"bench",               28,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303) + 1 path_tracer overhead (#347-E)
-diff --git a/src/kernel/test/test_libc_thread.cpp b/src/kernel/test/test_libc_thread.cpp
-index 4eb55945e..8d3f76218 100644
---- a/src/kernel/test/test_libc_thread.cpp
-+++ b/src/kernel/test/test_libc_thread.cpp
-@@ -63,6 +63,7 @@ constexpr uint64_t kJmpOk = 1;
- // entry/failed are asserted; eno is observed only (hosted mapping missing).
- constexpr uint64_t kErrnoFresh = 0;
- constexpr uint64_t kOpenFailed = 1;
-+constexpr uint64_t kEnoent = 2; // sys/errno.h ENOENT (glue open-failure map)
+ /// @brief IOCD IPC request message.
+ struct Msg {
+@@ -40,6 +41,23 @@ struct Msg {
+     uint64_t args[7]; ///< Type-specific arguments.
+ };
  
- } // namespace
++/// @brief MMIO policy protocol (issue #303 item 4). The daemon authorizes
++///        WHICH registered driver may use WHICH bar index; the kernel
++///        still enforces WHAT gets mapped via MEMORY-type MmioCaps, and
++///        MmioUserMap::drain_task owns PTE teardown on task exit.
++///        - MMIO_MAP: args[0]=client pid (self-asserted, same trust model
++///          as KEYBOARD_READ), args[1]=bar index in [0, 4). Reply 0 on
++///          grant (idempotent reuse), -1 on unregistered pid, out-of-range
++///          bar, or full grant table.
++///        - MMIO_UNMAP: args[0]=client pid, args[1]=bar index. Reply 0 on
++///          release, -1 when no live record exists.
++///        - UNREGISTER_DEVICE: args[0]=pid. Removes the registration and
++///          drops its grant records (device exit path); -1 if unknown.
++///        Routing caveat: the daemon replies to args[0], never to the IPC
++///        sender (same self-asserted trust model as KEYBOARD_READ). A
++///        request with a bogus args[0] strands the requester's send_sync
++///        — callers must always pass their own live pid.
++
+ /// @brief IOCD IPC reply message.
+ struct Reply {
+     int64_t result;   ///< Return code (negative on error).
+diff --git a/src/kernel/test/test_driver.cpp b/src/kernel/test/test_driver.cpp
+index e5a672c8d..262136c82 100644
+--- a/src/kernel/test/test_driver.cpp
++++ b/src/kernel/test/test_driver.cpp
+@@ -23,7 +23,17 @@
+ #include <logger.hpp>
+ #include <string.hpp>
+ #include <kernel/driver/driver.hpp>
++#include <kernel/driver/iocd.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/ipc/ipc.hpp>
++#include <kernel/cap/cap.hpp>
++#include <kernel/cap/cap_types.hpp>
++#include <kernel/cap/mmio.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <kernel/memory/vmm.hpp>
++#include <kernel/syscall/syscall.hpp>
++#include <kernel/test/test_sched_helpers.hpp>
+ #include <kernel/arch/serial.hpp>
+ #include <kernel/arch/keyboard.hpp>
  
-@@ -111,15 +112,13 @@ JARVIS_TEST(libc_thread_atomic_sweep, "PRE: vfsd | POST: none") {
+@@ -98,13 +108,147 @@ JARVIS_TEST(serial_driver_in_iocd, "PRE: iocd | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++namespace {
++
++/// @brief Daemon round-trip from any kernel task context (fixture-safe:
++///        takes the sender pid explicitly since the daemon replies to
++///        args[0]). Returns the reply result, or -99 on transport failure.
++int64_t drv_mmio_roundtrip(uint64_t self_pid, uint64_t type, uint64_t bar) {
++    const uint64_t iocd_pid = kernel::iocd::get_iocd_pid();
++    if (iocd_pid == 0)
++        return -99;
++    kernel::iocd::Msg req{};
++    req.type = type;
++    req.args[0] = self_pid;
++    req.args[1] = bar;
++    kernel::Message send{};
++    send.sender_id = self_pid;
++    send.type = type;
++    send.data_size = sizeof(req);
++    __builtin_memcpy(send.data, &req, sizeof(req));
++    kernel::Message reply{};
++    if (!kernel::IPC::send_sync(iocd_pid, send, reply))
++        return -99;
++    if (reply.data_size < sizeof(kernel::iocd::Reply))
++        return -99;
++    kernel::iocd::Reply rpl{};
++    __builtin_memcpy(&rpl, reply.data, sizeof(rpl));
++    return rpl.result;
++}
++
++uint64_t g_drv_phys = 0;
++uint64_t g_drv_map_va = 0;
++uint64_t g_drv_sys_unmap = 0;
++int64_t g_drv_reg = -99;
++int64_t g_drv_map = -99;
++int64_t g_drv_unmap = -99;
++int64_t g_drv_unreg = -99;
++
++} // namespace
++
+ // Runmode: kernel
+-// Testidea: STUB - Verifies the driver server can access MMIO regions via
+-// capability-based permissions
+-// Input: None (stub)
+-// Expect: JARVIS_TEST_PASS() (stub, no actual assertion yet)
+-// Depends: Driver server, capability system, MMIO
++// Testidea: Driver MMIO end-to-end across both layers (issue #303 item
++//           4): a fixture driver registers with the live iocd, gets a
++//           policy grant for bar 0, installs a REAL MEMORY MmioCap for a
++//           PMM test page, maps it via SYS_MMIO_MAP in its own cspace,
++//           then unwinds everything (UNMAP, daemon UNMAP, UNREGISTER).
++//           The daemon authorizes WHO/WHICH (policy); the kernel
++//           enforces WHAT via caps — no cap passes through the daemon
++//           (documented split; kernel PTE teardown stays with drain_task).
++// Input: dispatched fixture task drives register → daemon-MAP → cap
++//        install → SYS_MMIO_MAP → SYS_MMIO_UNMAP → daemon-UNMAP →
++//        UNREGISTER; harness joins and asserts.
++// Expect: all daemon results 0; VA in the user MMIO window; sys unmap 0;
++//         MmioUserMap live_count 0; zero tracker delta (harness).
++// Depends: iocd policy handler, MmioCap, MmioUserMap, live IPC.
+ JARVIS_TEST(driver_server_mmio_via_caps, "PRE: iocd | POST: none") {
++    g_drv_phys = PMM::alloc_user_page();
++    JARVIS_ASSERT(g_drv_phys != 0);
++    g_drv_map_va = 0;
++    g_drv_sys_unmap = 0;
++    g_drv_reg = -99;
++    g_drv_map = -99;
++    g_drv_unmap = -99;
++    g_drv_unreg = -99;
++
++    auto *t = TaskControlBlock::create(
++        []() {
++            auto *cur = Scheduler::current_task();
++            const uint64_t self = cur ? cur->id : 0;
++            // Policy leg: register + grant over live IPC.
++            iocd::Msg reg{};
++            reg.type = iocd::IOCD_REGISTER_DEVICE;
++            reg.args[0] = self;
++            reg.args[1] = 0;
++            __builtin_memcpy(&reg.args[2], "drv-mmio", 9);
++            Message sreg{};
++            sreg.sender_id = self;
++            sreg.type = iocd::IOCD_REGISTER_DEVICE;
++            sreg.data_size = sizeof(reg);
++            __builtin_memcpy(sreg.data, &reg, sizeof(reg));
++            Message rreg{};
++            if (IPC::send_sync(iocd::get_iocd_pid(), sreg, rreg) &&
++                rreg.data_size >= sizeof(iocd::Reply)) {
++                iocd::Reply rr{};
++                __builtin_memcpy(&rr, rreg.data, sizeof(rr));
++                g_drv_reg = rr.result;
++            }
++            g_drv_map = drv_mmio_roundtrip(self, iocd::IOCD_MMIO_MAP, 0);
++            // Mechanism leg: real cap + syscall dispatch in own cspace.
++            if (g_drv_reg == 0 && g_drv_map == 0 && cur != nullptr) {
++                cur->ensure_cspace();
++                cap::CNode *cs = cur->get_cspace();
++                auto *mmio = cap::MmioCap::create(
++                    g_drv_phys, arch::PAGE_SIZE,
++                    arch::PciBarType::MEMORY_32);
++                if (mmio != nullptr) {
++                    int s = cs->install(mmio, cap::CapType::Mmio,
++                                        cap::CapRights::WRITE);
++                    if (s >= 0) {
++                        uint64_t h = cap::encode_handle(
++                            cs->cspace_id, static_cast<uint32_t>(s),
++                            cs->slot_gen(static_cast<uint32_t>(s)));
++                        g_drv_map_va = Syscall::handle(
++                            static_cast<uint64_t>(SyscallNumber::MMIO_MAP),
++                            h, 0, 0, 0, nullptr);
++                        if (g_drv_map_va != static_cast<uint64_t>(-1)) {
++                            g_drv_sys_unmap = Syscall::handle(
++                                static_cast<uint64_t>(
++                                    SyscallNumber::MMIO_UNMAP),
++                                g_drv_map_va, 0, 0, 0, nullptr);
++                        }
++                        cs->remove(static_cast<uint32_t>(s));
++                    }
++                    mmio->release();
++                }
++            }
++            g_drv_unmap =
++                drv_mmio_roundtrip(self, iocd::IOCD_MMIO_UNMAP, 0);
++            g_drv_unreg = drv_mmio_roundtrip(
++                self, iocd::IOCD_UNREGISTER_DEVICE, 0);
++            Scheduler::terminate(*cur, 0);
++        },
++        11, 10);
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT(t->get_page_table() != 0);
++    Scheduler::add_task(*t);
++    Scheduler::reschedule();
++    kernel::test::wait_for_termination_safe(t);
++    Scheduler::drain_zombie_list();
++
++    JARVIS_ASSERT_FMT(g_drv_reg == 0, "register: %ld", g_drv_reg);
++    JARVIS_ASSERT_FMT(g_drv_map == 0, "daemon MAP: %ld", g_drv_map);
++    JARVIS_ASSERT_FMT(g_drv_map_va != static_cast<uint64_t>(-1),
++                      "SYS_MMIO_MAP failed");
++    JARVIS_ASSERT_FMT(
++        g_drv_map_va >= CONFIG_USER_MMIO_VA_BASE,
++        "VA 0x%lx outside user MMIO window", g_drv_map_va);
++    JARVIS_ASSERT_FMT(g_drv_sys_unmap == 0, "SYS_MMIO_UNMAP: %lu",
++                      g_drv_sys_unmap);
++    JARVIS_ASSERT_FMT(g_drv_unmap == 0, "daemon UNMAP: %ld", g_drv_unmap);
++    JARVIS_ASSERT_FMT(g_drv_unreg == 0, "UNREGISTER: %ld", g_drv_unreg);
++    JARVIS_ASSERT_EQ(static_cast<size_t>(0), cap::MmioUserMap::live_count());
++    PMM::free_page(g_drv_phys);
+     JARVIS_TEST_PASS();
+ }
+ 
+diff --git a/src/kernel/test/test_iocd.cpp b/src/kernel/test/test_iocd.cpp
+index 5c63a2c4d..953839955 100644
+--- a/src/kernel/test/test_iocd.cpp
++++ b/src/kernel/test/test_iocd.cpp
+@@ -31,6 +31,39 @@
+ 
+ using namespace kernel;
+ 
++namespace {
++
++// Raw iocd round-trip over live IPC: sends type with (pid, bar) args,
++// returns the daemon's reply result, or -99 on transport failure (which
++// fails every == -1/== 0 assertion below with a visible value).
++int64_t iocd_policy_roundtrip(uint64_t type, uint64_t pid, uint64_t bar) {
++    auto *cur = Scheduler::current_task();
++    if (cur == nullptr)
++        return -99;
++    const uint64_t iocd_pid = iocd::get_iocd_pid();
++    if (iocd_pid == 0)
++        return -99;
++    iocd::Msg req{};
++    req.type = type;
++    req.args[0] = pid;
++    req.args[1] = bar;
++    Message send{};
++    send.sender_id = cur->id;
++    send.type = type;
++    send.data_size = sizeof(req);
++    __builtin_memcpy(send.data, &req, sizeof(req));
++    Message reply{};
++    if (!IPC::send_sync(iocd_pid, send, reply))
++        return -99;
++    if (reply.data_size < sizeof(iocd::Reply))
++        return -99;
++    iocd::Reply rpl{};
++    __builtin_memcpy(&rpl, reply.data, sizeof(rpl));
++    return rpl.result;
++}
++
++} // namespace
++
+ // Runmode: kernel
+ // Testidea: IOCD boots and registers with the kernel
+ // Input: None (boot sequence)
+@@ -69,20 +102,120 @@ JARVIS_TEST(iocd_serial_irq_to_event, "PRE: none | POST: iocd") {
  }
  
  // Runmode: kernel
--// Testidea: Hosted errno cell contract, honest subset: the cell is fresh-
--// zero at dispatch and the nonexistent open fails. The mapped code is NOT
--// asserted: observed 2026-10-18 the hosted open() failure leaves errno at
--// 0 (no kernel→errno mapping in the hosted path — developer work, same
--// category as #361). Asserting ENOENT here would certify a mapping that
--// does not exist.
-+// Testidea: Hosted errno cell contract: the cell is fresh-zero at dispatch
-+// and the nonexistent open fails with ENOENT recorded by the glue (issue
-+// #303 item 1: the kernel reports only fail-closed GENERIC_FAIL, so the
-+// glue maps open-failure to ENOENT deterministically).
- // Input: Dispatch; parse the errno_probe triple.
--// Expect: "LIBC_VERIFY: errno_probe 0 1 <unasserted>" (entry 0, open failed).
--// Depends: picolibc errno cell (Ring 3).
-+// Expect: "LIBC_VERIFY: errno_probe 0 1 2" (entry 0, open failed, ENOENT).
-+// Depends: picolibc errno cell (Ring 3), nexios_glue open wrapper.
- JARVIS_TEST(libc_thread_errno_mapping, "PRE: vfsd | POST: none") {
-     char capture[kCapSize]{};
-     test::ring3::Outcome o = test::ring3::run(nullptr, nullptr, capture, kCapSize);
-@@ -132,7 +131,8 @@ JARVIS_TEST(libc_thread_errno_mapping, "PRE: vfsd | POST: none") {
-                       "errno at entry %lu != 0 (cell not fresh)", v[0]);
-     JARVIS_ASSERT_FMT(v[1] == kOpenFailed,
-                       "nonexistent open unexpectedly succeeded");
--    // v[2] (eno) deliberately unasserted: hosted mapping missing.
-+    JARVIS_ASSERT_FMT(v[2] == kEnoent,
-+                      "open-failure errno %lu != ENOENT (%lu)", v[2], kEnoent);
+-// Testidea: STUB - MMIO region unmapped when task exits
+-// Input: None (stub test)
+-// Expect: Passes (stub)
+-// Depends: kernel/task, kernel/ipc, kernel/driver
+-JARVIS_TEST(iocd_mmio_unmap_on_exit, "PRE: none | POST: iocd") {
++// Testidea: MMIO grant lifecycle against the live daemon (issue #303
++//           item 4): register → MAP → reuse → UNMAP → UNMAP-fails →
++//           UNREGISTER (device exit drops grants) → MAP/UNMAP fail.
++// Input: harness registers itself ("test-mmio"), MAPs bar 0 over live
++//        IPC, releases, unregisters. State collected before asserts;
++//        the unregister restores the daemon (zero slot/record residue).
++// Expect: register 0; MAP 0; re-MAP 0 (idempotent reuse); UNMAP 0;
++//         second UNMAP -1; UNREGISTER 0; post-exit MAP -1, UNMAP -1.
++// Depends: iocd MMIO policy handler + UNREGISTER_DEVICE + live IPC.
++JARVIS_TEST(iocd_mmio_unmap_on_exit, "PRE: vfsd, iocd | POST: iocd") {
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT(me != nullptr);
++    const uint64_t pid = me->id;
++
++    // Register self (slot freed by the UNREGISTER leg below).
++    iocd::Msg reg{};
++    reg.type = iocd::IOCD_REGISTER_DEVICE;
++    reg.args[0] = pid;
++    reg.args[1] = 0;
++    __builtin_memcpy(&reg.args[2], "test-mmio", 10);
++    Message sreg{};
++    sreg.sender_id = pid;
++    sreg.type = iocd::IOCD_REGISTER_DEVICE;
++    sreg.data_size = sizeof(reg);
++    __builtin_memcpy(sreg.data, &reg, sizeof(reg));
++    Message rreg{};
++    JARVIS_ASSERT(IPC::send_sync(iocd::get_iocd_pid(), sreg, rreg));
++    iocd::Reply reg_reply{};
++    __builtin_memcpy(&reg_reply, rreg.data, sizeof(reg_reply));
++    JARVIS_ASSERT_FMT(reg_reply.result == 0, "register failed: %ld",
++                      reg_reply.result);
++
++    const int64_t map_first =
++        iocd_policy_roundtrip(iocd::IOCD_MMIO_MAP, pid, 0);
++    const int64_t map_reuse =
++        iocd_policy_roundtrip(iocd::IOCD_MMIO_MAP, pid, 0);
++    const int64_t unmap_once =
++        iocd_policy_roundtrip(iocd::IOCD_MMIO_UNMAP, pid, 0);
++    const int64_t unmap_again =
++        iocd_policy_roundtrip(iocd::IOCD_MMIO_UNMAP, pid, 0);
++    const int64_t unreg =
++        iocd_policy_roundtrip(iocd::IOCD_UNREGISTER_DEVICE, pid, 0);
++    const int64_t map_after_exit =
++        iocd_policy_roundtrip(iocd::IOCD_MMIO_MAP, pid, 0);
++    const int64_t unmap_after_exit =
++        iocd_policy_roundtrip(iocd::IOCD_MMIO_UNMAP, pid, 0);
++
++    JARVIS_ASSERT_FMT(map_first == 0, "MAP failed: %ld", map_first);
++    JARVIS_ASSERT_FMT(map_reuse == 0, "re-MAP failed: %ld", map_reuse);
++    JARVIS_ASSERT_FMT(unmap_once == 0, "UNMAP failed: %ld", unmap_once);
++    JARVIS_ASSERT_FMT(unmap_again == -1, "second UNMAP not -1: %ld",
++                      unmap_again);
++    JARVIS_ASSERT_FMT(unreg == 0, "UNREGISTER failed: %ld", unreg);
++    JARVIS_ASSERT_FMT(map_after_exit == -1, "post-exit MAP not -1: %ld",
++                      map_after_exit);
++    JARVIS_ASSERT_FMT(unmap_after_exit == -1, "post-exit UNMAP not -1: %ld",
++                      unmap_after_exit);
      JARVIS_TEST_PASS();
  }
  
-diff --git a/src/kernel/test/test_shell_interaction.cpp b/src/kernel/test/test_shell_interaction.cpp
-index 531ae7423..cbce20103 100644
---- a/src/kernel/test/test_shell_interaction.cpp
-+++ b/src/kernel/test/test_shell_interaction.cpp
-@@ -25,6 +25,10 @@
- #include <services/shell.hpp>
- #include <services/terminal/terminal.hpp>
- #include <kernel/arch/io.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/arch/keyboard.hpp>
-+#include <kernel/driver/iocd.hpp>
-+#include <kernel/ipc/ipc.hpp>
- #include <constants.hpp>
- 
- using namespace kernel;
-@@ -531,6 +535,53 @@ JARVIS_TEST(shell_clear_command, "PRE: vfsd, iocd | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Runmode: kernel
-+// Testidea: shell P2 key-delivery consumes a daemon-owned byte through
-+//           the production poll (issue #303 item 3 seam; the #340 P2 path
-+//           the tracker left manual-only).
-+// Input: ownership on; inject 'a' press (set-1 0x1E) via 0xD2 + genuine
-+//        handle_irq; tick-spin until the daemon queues it; drive the SEAM
-+//        (service::shell_try_get_key) twice. Ownership cleared before
-+//        asserts so an abort cannot leak the routing.
-+// Expect: first seam call true + 'a'; second call false (exactly-once);
-+//         kernel hardware ring empty (no double delivery).
-+// Depends: shell_try_get_key seam + iocd decode/queue + ownership routing.
-+JARVIS_TEST(shell_key_delivery_via_seam, "PRE: vfsd, iocd | POST: none") {
-+    uint64_t iocd_pid = kernel::iocd::get_iocd_pid();
-+    JARVIS_ASSERT_FMT(iocd_pid != 0, "iocd not running");
-+    serial_flush_rx();
-+    arch::Keyboard::flush();
+ // Runmode: kernel
+-// Testidea: STUB - Unauthorized MMIO map attempt is rejected
+-// Input: None (stub test)
+-// Expect: Passes (stub)
+-// Depends: kernel/task, kernel/ipc, kernel/driver
+-JARVIS_TEST(iocd_unauthorized_mmio_rejected, "PRE: none | POST: iocd") {
++// Testidea: MMIO policy fail-closed against the live daemon (issue #303
++//           item 4): out-of-range bar, record-less UNMAP, and MAP after
++//           the pid leaves the registry all return -1 with zero daemon
++//           state change. NOTE: args[0] is always the live harness pid —
++//           the daemon replies to args[0], never to the IPC sender, so a
++//           bogus args[0] would strand this task's send_sync (documented
++//           in iocd.hpp; same self-asserted trust model as KEYBOARD_READ).
++// Input: MAP bar 0xFF; UNMAP bar 0 (no record); REGISTER self →
++//        UNREGISTER self → MAP bar 0 (unregistered again).
++// Expect: all replies -1 except the register/unregister pair (0/0); the
++//         transient registration is removed — pollution-free.
++// Depends: iocd MMIO policy handler + live IPC.
++JARVIS_TEST(iocd_unauthorized_mmio_rejected, "PRE: vfsd, iocd | POST: iocd") {
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT(me != nullptr);
++    const uint64_t pid = me->id;
 +
-+    kernel::iocd::set_keyboard_owned(true);
-+    arch::outb(0x64, 0xD2); // i8042: write keyboard output buffer
-+    arch::outb(0x60, 0x1E); // 'a' press
-+    arch::Keyboard::handle_irq();
++    const int64_t bad_bar =
++        iocd_policy_roundtrip(iocd::IOCD_MMIO_MAP, pid, 0xFF);
++    const int64_t no_record =
++        iocd_policy_roundtrip(iocd::IOCD_MMIO_UNMAP, pid, 0);
 +
-+    // The daemon needs timer ticks to run; spin until a seam poll
-+    // observes the byte (bounded: 50-tick window, cross_boundary idiom).
-+    char got = 0;
-+    bool delivered = false;
-+    const uint64_t deadline = arch::Timer::ticks() + 50;
-+    while (!delivered && arch::Timer::ticks() < deadline) {
-+        if (service::shell_try_get_key(got))
-+            delivered = true;
-+        else
-+            arch::pause();
++    // Transient registration round-trip (slot freed immediately).
++    iocd::Msg reg{};
++    reg.type = iocd::IOCD_REGISTER_DEVICE;
++    reg.args[0] = pid;
++    reg.args[1] = 0;
++    __builtin_memcpy(&reg.args[2], "test-rej", 9);
++    Message sreg{};
++    sreg.sender_id = pid;
++    sreg.type = iocd::IOCD_REGISTER_DEVICE;
++    sreg.data_size = sizeof(reg);
++    __builtin_memcpy(sreg.data, &reg, sizeof(reg));
++    Message rreg{};
++    int64_t reg_result = -99;
++    if (IPC::send_sync(iocd::get_iocd_pid(), sreg, rreg) &&
++        rreg.data_size >= sizeof(iocd::Reply)) {
++        iocd::Reply rr{};
++        __builtin_memcpy(&rr, rreg.data, sizeof(rr));
++        reg_result = rr.result;
 +    }
-+    // Exactly-once + single ownership, collected before asserts.
-+    char second = 0;
-+    const bool second_empty = !service::shell_try_get_key(second);
-+    char ring_byte = 0;
-+    const bool ring_empty = !arch::Keyboard::getchar(ring_byte);
-+    kernel::iocd::set_keyboard_owned(false);
++    const int64_t unreg =
++        iocd_policy_roundtrip(iocd::IOCD_UNREGISTER_DEVICE, pid, 0);
++    const int64_t map_after_exit =
++        iocd_policy_roundtrip(iocd::IOCD_MMIO_MAP, pid, 0);
 +
-+    JARVIS_ASSERT_FMT(delivered, "seam saw no byte within 50 ticks");
-+    JARVIS_ASSERT_FMT(got == 'a', "seam byte 0x%x != 'a'", got);
-+    JARVIS_ASSERT_FMT(second_empty, "seam delivered twice");
-+    JARVIS_ASSERT_FMT(ring_empty, "byte duplicated into kernel ring");
-+    JARVIS_TEST_PASS();
-+}
++    JARVIS_ASSERT_FMT(bad_bar == -1, "out-of-range MAP not -1: %ld", bad_bar);
++    JARVIS_ASSERT_FMT(no_record == -1, "record-less UNMAP not -1: %ld",
++                      no_record);
++    JARVIS_ASSERT_FMT(reg_result == 0, "register failed: %ld", reg_result);
++    JARVIS_ASSERT_FMT(unreg == 0, "UNREGISTER failed: %ld", unreg);
++    JARVIS_ASSERT_FMT(map_after_exit == -1, "post-exit MAP not -1: %ld",
++                      map_after_exit);
+     JARVIS_TEST_PASS();
+ }
+ 
+diff --git a/userspace/iocd.c b/userspace/iocd.c
+index 11d1935dd..2c6a6097a 100644
+--- a/userspace/iocd.c
++++ b/userspace/iocd.c
+@@ -13,6 +13,7 @@
+ #define IOCD_KEYBOARD_READ   204
+ #define IOCD_SERIAL_READ     205
+ #define IOCD_SERIAL_WRITE    206
++#define IOCD_UNREGISTER_DEVICE 207
+ 
+ #define MAX_DEVICES 16
+ 
+@@ -36,6 +37,74 @@ static uint64_t g_my_id = 0;
+ static struct DeviceEntry g_devices[MAX_DEVICES];
+ static size_t g_device_count = 0;
+ 
++/* Issue #303 item 4: MMIO policy layer. The daemon authorizes WHICH
++ * registered driver may use WHICH bar index; the kernel still enforces
++ * WHAT gets mapped via MEMORY-type MmioCaps (drain_task owns PTE
++ * teardown on task exit — authoritative, already covered by cap_mmio*).
++ * Bar indices are the capability namespace [0, IOCD_MAX_BARS); the
++ * physical inventory lives kernel-side when PCI delegation lands, so no
++ * phys table is kept here. Grant records are static bounded (no malloc,
++ * dispatch-loop-only access like the kbd queue above). */
++#define IOCD_MAX_BARS 4
++#define IOCD_MAX_GRANTS 8
 +
- void register_shell_interaction_tests() {
-     Logger::info("Registering shell interaction tests");
-     JARVIS_REGISTER_RELEASE_TEST(shell_loopback_manual_string);
-@@ -552,5 +603,6 @@ void register_shell_interaction_tests() {
-     JARVIS_REGISTER_RELEASE_TEST(shell_sleep_zero);
-     JARVIS_REGISTER_RELEASE_TEST(shell_clear_command);
-     JARVIS_REGISTER_RELEASE_TEST(shell_tasks_memory_columns);
-+    JARVIS_REGISTER_TEST(shell_key_delivery_via_seam);
- }
- #endif
-diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index f00b1c47c..be7482d72 100644
---- a/src/services/shell.cpp
-+++ b/src/services/shell.cpp
-@@ -138,7 +138,10 @@ void shell_input_timeout_fire(void *context) {
- // by the single-ownership invariant, and draining it would risk double
- // delivery. Never blocks on the daemon beyond one send_sync round-trip
- // (fail-open); shell liveness never depends on iocd.
--bool shell_try_get_key(char &out) {
-+// Issue #303 item 3: service::-scope test seam (declared in shell.hpp)
-+// so the P2 key-delivery path is automatable by a shell-level test.
-+// Zero logic change on the move out of the anonymous namespace.
-+bool shell_try_get_key_impl(char &out) {
-     if (arch::Serial::poll_getchar(out))
-         return true;
-     uint64_t pid = kernel::iocd::get_iocd_pid();
-@@ -203,6 +206,14 @@ void shell_idle_nap(uint64_t timeout_us) {
- }
- } // namespace
- 
-+/// @brief Test seam (issue #303 item 3): P2 key-delivery poll exposed so a
-+///        shell-level test can drive the exact production path (serial →
-+///        iocd daemon → hardware ring). Zero-logic wrapper over the
-+///        internal poll above.
-+bool shell_try_get_key(char &out) {
-+    return shell_try_get_key_impl(out);
-+}
++struct IocdGrant {
++    uint64_t pid;
++    uint64_t bar;
++    int live;
++};
 +
- static void background_task_wrapper() {
-     auto* task = kernel::Scheduler::current_task();
-     auto* entry = task ? reinterpret_cast<void (*)()>(task->user_data) : nullptr;
-diff --git a/src/services/shell.hpp b/src/services/shell.hpp
-index 1200ac4a4..07d998f4a 100644
---- a/src/services/shell.hpp
-+++ b/src/services/shell.hpp
-@@ -234,4 +234,10 @@ private:
-     static void cmd_lspci(int argc, const char** argv);
- };
- 
-+/// @brief Test seam (issue #303 item 3): P2 central keyboard/serial input
-+///        poll (serial → iocd daemon → hardware ring). Zero-logic wrapper
-+///        over the internal poll; lets a shell-level test drive the exact
-+///        production path including daemon delivery.
-+bool shell_try_get_key(char &out);
++static struct IocdGrant g_grants[IOCD_MAX_GRANTS];
++static size_t g_grant_count = 0;
 +
- } // namespace service
-diff --git a/tools/build-picolibc.sh b/tools/build-picolibc.sh
-index 72428562c..f0cc6b9be 100755
---- a/tools/build-picolibc.sh
-+++ b/tools/build-picolibc.sh
-@@ -53,6 +53,7 @@ meson setup "$BLD_BASE/bld" "$BLD_BASE/src" \
-     -Dpicocrt=true \
-     -Dposix-console=true \
-     -Dthread-local-storage=false \
-+    -Derrno-function=__errno \
-     -Dspecsdir=lib
- ninja -C "$BLD_BASE/bld"
- ninja -C "$BLD_BASE/bld" install
-diff --git a/userspace/picolibc/nexios_glue.c b/userspace/picolibc/nexios_glue.c
-index ab504c37b..c1a20cccc 100644
---- a/userspace/picolibc/nexios_glue.c
-+++ b/userspace/picolibc/nexios_glue.c
-@@ -8,16 +8,22 @@
-  * Everything else comes from the picolibc sysroot. */
- 
- #include <sys/time.h> // first: declares struct timeval for syscall.h
--                       // sys_gettod (sysroot header; LP64 layout matches)
-+                        // sys_gettod (sysroot header; LP64 layout matches)
- #include <syscall.h>
-+#include <errno.h> // sysroot errno: BSS cell pre-rebuild, TP cell after
-+                   // (#303 item 2, errno-function knob)
- 
- /* #71 stubs (build/libc/picolib_stubs.o, linked explicitly — NOT the
-- * whole in-tree archive, which would duplicate errno/_exit). */
--long _read(int fd, char *buf, int count);
--long _write(int fd, char *buf, int count);
--long _close(int fd);
-+ * whole in-tree archive, which would duplicate errno/_exit).
-+ * Signatures MUST match the int-returning definitions byte-for-byte:
-+ * declaring them long (as here historically) suppresses the call-site
-+ * sign-extension, so a -1 return arrives as +4294967295 and the errno
-+ * sets below never fire (issue #303 item 1 root cause). */
-+int _read(int fd, char *buf, int count);
-+int _write(int fd, char *buf, int count);
-+int _close(int fd);
- long _lseek(int fd, long offset, int whence);
--long _open(const char *path, int flags, int mode);
-+int _open(const char *path, int flags, int mode);
- 
- void _exit(int status) {
-     __syscall5(SYS_EXIT, (long)status, 0, 0, 0);
-@@ -41,22 +47,83 @@ void *sbrk(long increment) {
-     return (ret == new_brk) ? old : (void *)-1;
- }
- 
-+/* Issue #303 item 1 (hosted errno mapping): the `_` stubs return -1 on
-+ * failure but the kernel reports only fail-closed GENERIC_FAIL, so no
-+ * specific code survives the trap. The glue therefore records a
-+ * documented generic errno on every failed wrapper (open → ENOENT,
-+ * read/write/lseek/close → EIO), overwriting deterministically. Known
-+ * approximation: the stub's O_TRUNC-on-nonempty ENOSYS is superseded by
-+ * ENOENT here — revisit when the kernel returns specific negated codes.
-+ * Via <errno.h> this hits the BSS cell pre-rebuild and the TP cell after
-+ * the errno-function rebuild (item 2) with zero source change. */
- long read(int fd, void *buf, unsigned long count) {
--    return _read(fd, (char *)buf, (int)count);
-+    long ret = _read(fd, (char *)buf, (int)count);
-+    if (ret < 0)
-+        errno = EIO;
-+    return ret;
- }
- 
- long write(int fd, const void *buf, unsigned long count) {
--    return _write(fd, (char *)buf, (int)count);
-+    long ret = _write(fd, (char *)buf, (int)count);
-+    if (ret < 0)
-+        errno = EIO;
-+    return ret;
- }
- 
- long lseek(int fd, long offset, int whence) {
--    return _lseek(fd, offset, whence);
-+    long ret = _lseek(fd, offset, whence);
-+    if (ret < 0)
-+        errno = EIO;
-+    return ret;
- }
- 
- long close(int fd) {
--    return _close(fd);
-+    long ret = _close(fd);
-+    if (ret < 0)
-+        errno = EIO;
-+    return ret;
- }
- 
- long open(const char *path, int flags) {
--    return _open(path, flags, 0);
-+    long ret = _open(path, flags, 0);
-+    if (ret < 0)
-+        errno = ENOENT;
-+    return ret;
-+}
-+
-+/* Issue #303 item 2 (hosted TP-wiring): errno-cell provider for the
-+ * picolibc errno-function path (sysroot rebuilt with
-+ * -Derrno-function=__errno; thread-local-storage stays off, so no
-+ * PT_TLS — locality comes from TP alone). Reads the task's
-+ * TP-published control
-+ * block — errno_value at offset 0, layout shared by value with struct
-+ * nexios_tcb in src/libc/errno.h (separate lib domain: the TU cannot be
-+ * shared, the 3-arch sequence mirrors src/libc/errno.c:read_tp).
-+ * TP == 0 (pre-TLS_SET) falls back to a function-static cell, never a
-+ * null dereference. Dormant while the sysroot uses BSS errno. */
-+static unsigned long glue_read_tp(void) {
-+#if defined(__x86_64__)
-+    unsigned long v = 0;
-+    __asm__ volatile("rdfsbase %0" : "=r"(v));
-+    return v;
-+#elif defined(__aarch64__)
-+    unsigned long v = 0;
-+    __asm__ volatile("mrs %0, tpidr_el0" : "=r"(v));
-+    return v;
-+#elif defined(__riscv)
-+    unsigned long v = 0;
-+    __asm__ volatile("mv %0, tp" : "=r"(v));
-+    return v;
-+#else
++static int iocd_pid_registered(uint64_t pid) {
++    if (pid == 0)
++        return 0;
++    for (size_t i = 0; i < g_device_count; ++i) {
++        if (g_devices[i].pid == pid)
++            return 1;
++    }
 +    return 0;
-+#endif
 +}
 +
-+int *__errno(void) {
-+    unsigned long tp = glue_read_tp();
-+    if (tp == 0) {
-+        static int fallback_errno = 0;
-+        return &fallback_errno;
++static int iocd_grant_find(uint64_t pid, uint64_t bar) {
++    for (size_t i = 0; i < g_grant_count; ++i) {
++        if (g_grants[i].live && g_grants[i].pid == pid &&
++            g_grants[i].bar == bar)
++            return 1;
 +    }
-+    return (int *)tp; // offset-0 errno_value (see src/libc/errno.h)
++    return 0;
++}
++
++static int iocd_grant_add(uint64_t pid, uint64_t bar) {
++    if (g_grant_count >= IOCD_MAX_GRANTS)
++        return 0;
++    g_grants[g_grant_count].pid = pid;
++    g_grants[g_grant_count].bar = bar;
++    g_grants[g_grant_count].live = 1;
++    ++g_grant_count;
++    return 1;
++}
++
++static int iocd_grant_remove(uint64_t pid, uint64_t bar) {
++    for (size_t i = 0; i < g_grant_count; ++i) {
++        if (g_grants[i].live && g_grants[i].pid == pid &&
++            g_grants[i].bar == bar) {
++            g_grants[i].live = 0;
++            return 1;
++        }
++    }
++    return 0;
++}
++
++/* Drop every grant held by pid (device exit/unregister path). */
++static void iocd_grants_drop_pid(uint64_t pid) {
++    for (size_t i = 0; i < g_grant_count; ++i) {
++        if (g_grants[i].live && g_grants[i].pid == pid)
++            g_grants[i].live = 0;
++    }
++}
++
+ /* Issue #340 P0: set-1 scancode tables (values copied from
+  * src/kernel/arch/x86_64/keyboard.cpp scancode_lower/scancode_upper —
+  * the daemon cannot include kernel headers; hal_keyboard_decode pins
+@@ -162,13 +231,54 @@ static int iocd_handle_irq_event(struct IocdMsg* msg, struct IocdReply* reply) {
  }
+ 
+ static int iocd_handle_mmio_map(struct IocdMsg* msg, struct IocdReply* reply) {
+-    (void)msg;
+-    reply->result = -1;
++    /* Issue #303 item 4: policy gate — the sender self-identifies via
++     * args[0] (same trust model as KEYBOARD_READ; authentication stays
++     * kernel-side via MmioCaps). Registered device + in-range bar +
++     * no live duplicate → record, 0. Idempotent reuse returns 0. */
++    uint64_t pid = msg->args[0];
++    uint64_t bar = msg->args[1];
++    if (!iocd_pid_registered(pid) || bar >= IOCD_MAX_BARS) {
++        reply->result = -1;
++        return 0;
++    }
++    if (iocd_grant_find(pid, bar)) {
++        reply->result = 0;
++        return 0;
++    }
++    if (!iocd_grant_add(pid, bar)) {
++        reply->result = -1;
++        return 0;
++    }
++    reply->result = 0;
+     return 0;
+ }
+ 
+ static int iocd_handle_mmio_unmap(struct IocdMsg* msg, struct IocdReply* reply) {
+-    (void)msg;
++    /* Issue #303 item 4: release a live record; unknown (pid, bar) fails
++     * closed. Kernel-side PTE teardown on task exit is authoritative. */
++    if (!iocd_grant_remove(msg->args[0], msg->args[1])) {
++        reply->result = -1;
++        return 0;
++    }
++    reply->result = 0;
++    return 0;
++}
++
++static int iocd_handle_unregister_device(struct IocdMsg* msg,
++                                         struct IocdReply* reply) {
++    /* Issue #303 item 4: device exit path — remove the registration
++     * (swap-with-last, order irrelevant) and drop its grant records so
++     * no stale authorization survives the device. Unknown pid → -1. */
++    uint64_t pid = msg->args[0];
++    for (size_t i = 0; i < g_device_count; ++i) {
++        if (g_devices[i].pid == pid) {
++            g_devices[i] = g_devices[g_device_count - 1];
++            --g_device_count;
++            iocd_grants_drop_pid(pid);
++            reply->result = 0;
++            return 0;
++        }
++    }
+     reply->result = -1;
+     return 0;
+ }
+@@ -207,6 +317,7 @@ static int iocd_dispatch(struct IocdMsg* msg, struct IocdReply* reply) {
+         case IOCD_IRQ_EVENT:       return iocd_handle_irq_event(msg, reply);
+         case IOCD_MMIO_MAP:        return iocd_handle_mmio_map(msg, reply);
+         case IOCD_MMIO_UNMAP:      return iocd_handle_mmio_unmap(msg, reply);
++        case IOCD_UNREGISTER_DEVICE: return iocd_handle_unregister_device(msg, reply);
+         case IOCD_KEYBOARD_READ:   return iocd_handle_keyboard_read(msg, reply);
+         case IOCD_SERIAL_READ:     return iocd_handle_serial_read(msg, reply);
+         case IOCD_SERIAL_WRITE:    return iocd_handle_serial_write(msg, reply);

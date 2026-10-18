@@ -33,12 +33,30 @@ static constexpr uint64_t IOCD_MMIO_UNMAP = 203;
 static constexpr uint64_t IOCD_KEYBOARD_READ = 204;
 static constexpr uint64_t IOCD_SERIAL_READ = 205;
 static constexpr uint64_t IOCD_SERIAL_WRITE = 206;
+static constexpr uint64_t IOCD_UNREGISTER_DEVICE = 207;
 
 /// @brief IOCD IPC request message.
 struct Msg {
     uint64_t type;    ///< Message type (IOCD_REGISTER_DEVICE, etc.).
     uint64_t args[7]; ///< Type-specific arguments.
 };
+
+/// @brief MMIO policy protocol (issue #303 item 4). The daemon authorizes
+///        WHICH registered driver may use WHICH bar index; the kernel
+///        still enforces WHAT gets mapped via MEMORY-type MmioCaps, and
+///        MmioUserMap::drain_task owns PTE teardown on task exit.
+///        - MMIO_MAP: args[0]=client pid (self-asserted, same trust model
+///          as KEYBOARD_READ), args[1]=bar index in [0, 4). Reply 0 on
+///          grant (idempotent reuse), -1 on unregistered pid, out-of-range
+///          bar, or full grant table.
+///        - MMIO_UNMAP: args[0]=client pid, args[1]=bar index. Reply 0 on
+///          release, -1 when no live record exists.
+///        - UNREGISTER_DEVICE: args[0]=pid. Removes the registration and
+///          drops its grant records (device exit path); -1 if unknown.
+///        Routing caveat: the daemon replies to args[0], never to the IPC
+///        sender (same self-asserted trust model as KEYBOARD_READ). A
+///        request with a bogus args[0] strands the requester's send_sync
+///        — callers must always pass their own live pid.
 
 /// @brief IOCD IPC reply message.
 struct Reply {

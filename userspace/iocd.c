@@ -13,6 +13,7 @@
 #define IOCD_KEYBOARD_READ   204
 #define IOCD_SERIAL_READ     205
 #define IOCD_SERIAL_WRITE    206
+#define IOCD_UNREGISTER_DEVICE 207
 
 #define MAX_DEVICES 16
 
@@ -35,6 +36,74 @@ struct DeviceEntry {
 static uint64_t g_my_id = 0;
 static struct DeviceEntry g_devices[MAX_DEVICES];
 static size_t g_device_count = 0;
+
+/* Issue #303 item 4: MMIO policy layer. The daemon authorizes WHICH
+ * registered driver may use WHICH bar index; the kernel still enforces
+ * WHAT gets mapped via MEMORY-type MmioCaps (drain_task owns PTE
+ * teardown on task exit — authoritative, already covered by cap_mmio*).
+ * Bar indices are the capability namespace [0, IOCD_MAX_BARS); the
+ * physical inventory lives kernel-side when PCI delegation lands, so no
+ * phys table is kept here. Grant records are static bounded (no malloc,
+ * dispatch-loop-only access like the kbd queue above). */
+#define IOCD_MAX_BARS 4
+#define IOCD_MAX_GRANTS 8
+
+struct IocdGrant {
+    uint64_t pid;
+    uint64_t bar;
+    int live;
+};
+
+static struct IocdGrant g_grants[IOCD_MAX_GRANTS];
+static size_t g_grant_count = 0;
+
+static int iocd_pid_registered(uint64_t pid) {
+    if (pid == 0)
+        return 0;
+    for (size_t i = 0; i < g_device_count; ++i) {
+        if (g_devices[i].pid == pid)
+            return 1;
+    }
+    return 0;
+}
+
+static int iocd_grant_find(uint64_t pid, uint64_t bar) {
+    for (size_t i = 0; i < g_grant_count; ++i) {
+        if (g_grants[i].live && g_grants[i].pid == pid &&
+            g_grants[i].bar == bar)
+            return 1;
+    }
+    return 0;
+}
+
+static int iocd_grant_add(uint64_t pid, uint64_t bar) {
+    if (g_grant_count >= IOCD_MAX_GRANTS)
+        return 0;
+    g_grants[g_grant_count].pid = pid;
+    g_grants[g_grant_count].bar = bar;
+    g_grants[g_grant_count].live = 1;
+    ++g_grant_count;
+    return 1;
+}
+
+static int iocd_grant_remove(uint64_t pid, uint64_t bar) {
+    for (size_t i = 0; i < g_grant_count; ++i) {
+        if (g_grants[i].live && g_grants[i].pid == pid &&
+            g_grants[i].bar == bar) {
+            g_grants[i].live = 0;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Drop every grant held by pid (device exit/unregister path). */
+static void iocd_grants_drop_pid(uint64_t pid) {
+    for (size_t i = 0; i < g_grant_count; ++i) {
+        if (g_grants[i].live && g_grants[i].pid == pid)
+            g_grants[i].live = 0;
+    }
+}
 
 /* Issue #340 P0: set-1 scancode tables (values copied from
  * src/kernel/arch/x86_64/keyboard.cpp scancode_lower/scancode_upper —
@@ -162,13 +231,54 @@ static int iocd_handle_irq_event(struct IocdMsg* msg, struct IocdReply* reply) {
 }
 
 static int iocd_handle_mmio_map(struct IocdMsg* msg, struct IocdReply* reply) {
-    (void)msg;
-    reply->result = -1;
+    /* Issue #303 item 4: policy gate — the sender self-identifies via
+     * args[0] (same trust model as KEYBOARD_READ; authentication stays
+     * kernel-side via MmioCaps). Registered device + in-range bar +
+     * no live duplicate → record, 0. Idempotent reuse returns 0. */
+    uint64_t pid = msg->args[0];
+    uint64_t bar = msg->args[1];
+    if (!iocd_pid_registered(pid) || bar >= IOCD_MAX_BARS) {
+        reply->result = -1;
+        return 0;
+    }
+    if (iocd_grant_find(pid, bar)) {
+        reply->result = 0;
+        return 0;
+    }
+    if (!iocd_grant_add(pid, bar)) {
+        reply->result = -1;
+        return 0;
+    }
+    reply->result = 0;
     return 0;
 }
 
 static int iocd_handle_mmio_unmap(struct IocdMsg* msg, struct IocdReply* reply) {
-    (void)msg;
+    /* Issue #303 item 4: release a live record; unknown (pid, bar) fails
+     * closed. Kernel-side PTE teardown on task exit is authoritative. */
+    if (!iocd_grant_remove(msg->args[0], msg->args[1])) {
+        reply->result = -1;
+        return 0;
+    }
+    reply->result = 0;
+    return 0;
+}
+
+static int iocd_handle_unregister_device(struct IocdMsg* msg,
+                                         struct IocdReply* reply) {
+    /* Issue #303 item 4: device exit path — remove the registration
+     * (swap-with-last, order irrelevant) and drop its grant records so
+     * no stale authorization survives the device. Unknown pid → -1. */
+    uint64_t pid = msg->args[0];
+    for (size_t i = 0; i < g_device_count; ++i) {
+        if (g_devices[i].pid == pid) {
+            g_devices[i] = g_devices[g_device_count - 1];
+            --g_device_count;
+            iocd_grants_drop_pid(pid);
+            reply->result = 0;
+            return 0;
+        }
+    }
     reply->result = -1;
     return 0;
 }
@@ -207,6 +317,7 @@ static int iocd_dispatch(struct IocdMsg* msg, struct IocdReply* reply) {
         case IOCD_IRQ_EVENT:       return iocd_handle_irq_event(msg, reply);
         case IOCD_MMIO_MAP:        return iocd_handle_mmio_map(msg, reply);
         case IOCD_MMIO_UNMAP:      return iocd_handle_mmio_unmap(msg, reply);
+        case IOCD_UNREGISTER_DEVICE: return iocd_handle_unregister_device(msg, reply);
         case IOCD_KEYBOARD_READ:   return iocd_handle_keyboard_read(msg, reply);
         case IOCD_SERIAL_READ:     return iocd_handle_serial_read(msg, reply);
         case IOCD_SERIAL_WRITE:    return iocd_handle_serial_write(msg, reply);
