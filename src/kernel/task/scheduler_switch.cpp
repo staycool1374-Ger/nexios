@@ -48,6 +48,7 @@ using sched_verify::task_stack_ptr;
 using sched_verify::validate_switch;
 using sched_verify::is_boot_stack_rsp;
 using sched_verify::report_corruption;
+using sched_verify::validate_task_ptr;
 #if defined(CONFIG_ARCH_X86_64)
 using sched_verify::validate_iret_frame;
 #endif
@@ -155,6 +156,7 @@ void Scheduler::set_current_task(TaskControlBlock *t) noexcept {
 }
 
 void Scheduler::set_current(TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "set_current"));
     auto *old = current_task();
     if (old == &task) {
         // Same-task set_current: a no-op, but a pending deferred-switch arm

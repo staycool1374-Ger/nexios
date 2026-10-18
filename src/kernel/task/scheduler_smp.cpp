@@ -22,6 +22,7 @@
 ///        the AP dispatch tick.  Pure move out of scheduler.cpp.
 
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1c validate_task_ptr
 #include <kernel/kernel.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -32,6 +33,7 @@
 #include <assert.hpp>
 
 namespace kernel {
+using sched_verify::validate_task_ptr;
 
 void Scheduler::cancel_pending_switch_cpu(uint64_t cpu) noexcept {
     cpu %= CONFIG_MAX_CPUS;
@@ -90,6 +92,7 @@ void Scheduler::quiesce_exit() noexcept {
 }
 
 void Scheduler::mailbox_publish(uint64_t cpu, TaskControlBlock &task) noexcept {
+    ENSURE(validate_task_ptr(&task, "mailbox_publish"));
     cpu %= CONFIG_MAX_CPUS;
     // IF=0 across the publish (internal guard): a same-CPU ISR can never
     // preempt mid-publish, so the blocking leaf take below can only

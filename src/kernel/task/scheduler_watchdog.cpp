@@ -22,6 +22,7 @@
 
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_watchdog_internal.hpp>
+#include <kernel/task/scheduler_integrity.hpp>       // issue #369 T1c validate_task_ptr
 #include <kernel/task/scheduler_debug_internal.hpp> // issue #323 g_diag_* (STALLDUMP beacon)
 #include <kernel/task/sporadic_server.hpp>      // issue #323 State::EXHAUSTED
 #include <kernel/task/test_context.hpp>         // issue #323 TestContext (static def)
@@ -38,6 +39,8 @@
 #include <assert.hpp>
 
 namespace kernel {
+
+using sched_verify::validate_task_ptr;
 
 #if defined(CONFIG_DEBUG)
 using sched_debug::g_diag_rms_count;
@@ -378,6 +381,7 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
 // whichever observes the expiry first.
 void Scheduler::fire_stall_watchdog(TaskControlBlock &task,
                                      uint64_t now) noexcept {
+    ENSURE(validate_task_ptr(&task, "fire_stall_watchdog"));
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     if (!watchdog_due(task, now))
         return;
