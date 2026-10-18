@@ -365,7 +365,14 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
             continue;
         // One-shot: disarm before dispatch so a slow handler cannot
         // re-fire on the same arm; re-CREATE re-arms with a fresh gen.
+        // Issue #324 Tick 3: bump the generation on disarm — the idle-seam
+        // fire path vets a generation and skips on mismatch, closing the
+        // scan-vs-seam double-fire window (no common lock exists between
+        // this lock-free scan and the seam's global take).
         t->wdog_armed = false;
+        ++t->wdog_gen;
+        if (t->wdog_gen == 0)
+            t->wdog_gen = 1;
         if (kernel::MemPool::is_block_pinned(t)) {
             // Test-isolation baseline (issue #277): pinned TCBs are part
             // of the snapshot (daemons in the test harness). Killing one
@@ -387,14 +394,29 @@ void Scheduler::scan_watchdogs_locked(uint64_t now) noexcept {
 // ordering means the tick scan and the idle seam never double-fire,
 // whichever observes the expiry first.
 void Scheduler::fire_stall_watchdog(TaskControlBlock &task,
-                                     uint64_t now) noexcept {
+                                     uint64_t now,
+                                     uint64_t expect_gen) noexcept {
 
     ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "fire_stall_watchdog"));
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     if (!watchdog_due(task, now))
         return;
+    // Issue #324 Tick 3: scan-vs-seam handshake — the lock-free tick scan
+    // disarms (bumping wdog_gen) without this lock, so re-check-then-disarm
+    // alone cannot exclude a scan that already passed its due check (a tick
+    // ISR landing between the check above and the disarm below double-fires
+    // the handler: double defer_kill → double destroy → UAF read on the
+    // freed block).  The seam passes the generation it vetted; a mismatch
+    // means the scan (or teardown) disarmed first — stale arm, skip.  Skip
+    // is always the safe direction: a re-armed watchdog fails the due
+    // check above, a torn-down task must not fire.
+    if (task.wdog_gen != expect_gen)
+        return;
     task.wdog_armed = false;
+    ++task.wdog_gen;
+    if (task.wdog_gen == 0)
+        task.wdog_gen = 1;
     if (kernel::MemPool::is_block_pinned(&task)) {
         note_pinned_watchdog_expiry(task, now - task.wdog_expiry_tick);
         return;
