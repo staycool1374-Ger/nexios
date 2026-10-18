@@ -864,6 +864,15 @@ class VMM {
     static bool vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out);
     static bool vmm_arch_leaf_is_executable(uint64_t leaf);
     static uint64_t vmm_arch_block_base(uint64_t entry, bool huge);
+    /// @brief Walk geometry shims (issue #378): table levels from the root
+    ///        (4 on x86_64/aarch64, 3 on Sv39 riscv64) + the per-level VA
+    ///        index vector (idx[levels] valid, idx[3] zeroed on 3-level).
+    ///        One definition per arch TU; lets the five VMM walk sites
+    ///        share index computation instead of per-arch #if branches.
+    ///        Walk BODIES stay VMM-private by design (#363 P4: snapshot
+    ///        pairing, ENSUREs, drop notes are policy, not geometry).
+    static unsigned vmm_arch_walk_levels();
+    static void vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]);
     /// @brief Recursive merge worker (issue #96): converge @p dst_table
     ///        toward @p src_table over [@p start, 512).  Zero allocations.
     static void merge_table_level(uint64_t *src_table, uint64_t *dst_table,

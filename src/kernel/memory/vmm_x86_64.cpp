@@ -101,6 +101,15 @@ uint64_t VMM::vmm_arch_block_base(uint64_t entry, bool huge) {
     return entry & (huge ? PAGE_HUGE_FRAME_MASK : PAGE_FRAME_MASK);
 }
 
+unsigned VMM::vmm_arch_walk_levels() { return 4; }
+
+void VMM::vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]) {
+    idx[0] = arch::ArchPageTable::pml4_index(virt_addr);
+    idx[1] = arch::ArchPageTable::pdpt_index(virt_addr);
+    idx[2] = arch::ArchPageTable::pd_index(virt_addr);
+    idx[3] = arch::ArchPageTable::pt_index(virt_addr);
+}
+
 #endif // CONFIG_ARCH_X86_64
 
 } // namespace kernel

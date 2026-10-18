@@ -396,81 +396,77 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
 /// @param pml4_phys Physical address of the target PML4.
 /// @return Physical address, or 0 if not mapped.
 uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+    // Issue #378: shared index computation; the translate bodies stay
+    // per-arch (block-leaf handling differs: Sv39 L1 2MB vs x86 PD 2MB,
+    // plus the #206 Sv39 invalid-leaf fail-closed).
+    size_t idx[4] = {0, 0, 0, 0};
+    vmm_arch_walk_indices(virt_addr, idx);
 #if defined(CONFIG_ARCH_RISCV64)
     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
 
-    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
-
-    if (!(l0[l0_idx] & PAGE_PRESENT))
+    if (!(l0[idx[0]] & PAGE_PRESENT))
         return 0;
     // Arch child-table decode (issue #363 P2: Sv39 PTE codec vs mask).
     auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            vmm_arch_table_child(l0[l0_idx]));
+                                            vmm_arch_table_child(l0[idx[0]]));
 
-    if (!(l1[l1_idx] & PAGE_PRESENT))
+    if (!(l1[idx[1]] & PAGE_PRESENT))
         return 0;
     auto *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            vmm_arch_table_child(l1[l1_idx]));
+                                            vmm_arch_table_child(l1[idx[1]]));
 
     // Check for 2MB block mapping (leaf at L1 level).  Arch block test +
     // base decode (issue #363 P2).
-    if ((l1[l1_idx] & PAGE_PRESENT) && vmm_arch_split_needed(l1[l1_idx])) {
-        return vmm_arch_block_base(l1[l1_idx], true) +
+    if ((l1[idx[1]] & PAGE_PRESENT) && vmm_arch_split_needed(l1[idx[1]])) {
+        return vmm_arch_block_base(l1[idx[1]], true) +
                (virt_addr & kHuge2MOffsetMask);
     }
 
-    if (!(l2[l2_idx] & PAGE_PRESENT))
+    if (!(l2[idx[2]] & PAGE_PRESENT))
         return 0;
     // Issue #206: Sv39 has no level below L2 — a V=1,RWX=0 entry here is
     // invalid (never created by this backend); fail closed, do not descend
     // into garbage as the old 4-level fallback did.
-    if (!VMM::sv39_is_leaf(l2[l2_idx]))
+    if (!VMM::sv39_is_leaf(l2[idx[2]]))
         return 0;
-    return vmm_arch_block_base(l2[l2_idx], false) +
+    return vmm_arch_block_base(l2[idx[2]], false) +
            (virt_addr & kPageOffsetMask);
 #else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                               (pml4_phys & PAGE_TABLE_ADDR_MASK));
 
-    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
-
-    if (!(pml4[pml4_idx] & PAGE_PRESENT))
+    if (!(pml4[idx[0]] & PAGE_PRESENT))
         return 0;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     // Arch child-table decode (issue #363 P2).
     auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                               vmm_arch_table_child(
-                                                  pml4[pml4_idx]));
+                                                  pml4[idx[0]]));
 
-    if (!(pdpt[pdpt_idx] & PAGE_PRESENT))
+    if (!(pdpt[idx[1]] & PAGE_PRESENT))
         return 0;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                             vmm_arch_table_child(
-                                                pdpt[pdpt_idx]));
+                                                pdpt[idx[1]]));
 
     // Arch block-leaf test + base decode (issue #363 P2).
-    if (vmm_arch_split_needed(pd[pd_idx])) {
-        return vmm_arch_block_base(pd[pd_idx], true) +
+    if (vmm_arch_split_needed(pd[idx[2]])) {
+        return vmm_arch_block_base(pd[idx[2]], true) +
                (virt_addr & kHuge2MOffsetMask);
     }
 
-    if (!(pd[pd_idx] & PAGE_PRESENT))
+    if (!(pd[idx[2]] & PAGE_PRESENT))
         return 0;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            vmm_arch_table_child(pd[pd_idx]));
+                                            vmm_arch_table_child(pd[idx[2]]));
 
-    if (!(pt[pt_idx] & PAGE_PRESENT))
+    if (!(pt[idx[3]] & PAGE_PRESENT))
         return 0;
-    return vmm_arch_block_base(pt[pt_idx], false) +
+    return vmm_arch_block_base(pt[idx[3]], false) +
            (virt_addr & kPageOffsetMask);
 #endif
 }

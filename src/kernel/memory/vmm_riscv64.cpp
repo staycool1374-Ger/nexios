@@ -114,6 +114,15 @@ uint64_t VMM::vmm_arch_block_base(uint64_t entry, bool huge) {
     return VMM::sv39_pte_phys(entry);
 }
 
+unsigned VMM::vmm_arch_walk_levels() { return 3; }
+
+void VMM::vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]) {
+    idx[0] = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+    idx[1] = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+    idx[2] = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
+    idx[3] = 0;
+}
+
 #endif // CONFIG_ARCH_RISCV64
 
 } // namespace kernel
