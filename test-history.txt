@@ -3784,3 +3784,13 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 00:30:00 scheduler_dispatch_path PASSED: 4 FAILED: 0 TIME: 282ms STATUS: 369-T3a-revert-verify
 2026-10-18 00:30:00 task_path PASSED: 5 FAILED: 0 TIME: 339ms STATUS: 369-T3a-revert-verify
 2026-10-18 00:30:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1919ms STATUS: 369-T3a-revert-verify
+2026-10-18 13:58:00 dump-counts PASSED: 0 FAILED: 0 TIME: unknown STATUS: TCOUNT-only-no-summary core_basic=98 core_sync=93 core_sched=112 core_task=52 core_memory=118 core_syscall=85 core_tracing=20 CONSISTENCY-warn-expected-rows-were-0
+2026-10-18 13:58:59 dump-counts PASSED: 0 FAILED: 0 TIME: 44s STATUS: TCOUNT-verified core_*=98/93/112/52/118/85/20 CONSISTENCY-1826-ge-1812-overlap-14
+2026-10-18 14:04:15 core_basic PASSED: 98 FAILED: 0 TIME: 6397ms
+2026-10-18 14:04:15 core_sync PASSED: 93 FAILED: 0 TIME: 6473ms
+2026-10-18 14:04:15 core_sched PASSED: 112 FAILED: 0 TIME: 11368ms
+2026-10-18 14:04:15 core_task PASSED: 52 FAILED: 0 TIME: 3536ms
+2026-10-18 14:04:15 core_memory PASSED: 118 FAILED: 0 TIME: 12771ms
+2026-10-18 14:04:15 core_syscall PASSED: 85 FAILED: 0 TIME: 6490ms
+2026-10-18 14:04:15 core_tracing PASSED: 0 FAILED: 0 TIME: 6s STATUS: HARNESS-SIGTERM-pre-QEMU-no-guest-output
+2026-10-18 14:04:15 core_tracing PASSED: 20 FAILED: 0 TIME: 1271ms STATUS: RERUN-green-after-transient-SIGTERM

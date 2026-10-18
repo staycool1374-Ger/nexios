@@ -5,6 +5,7 @@
 
 ## Active Summary
 ### Objective
+- **DONE (2026-10-18):** Issue #364 (Divide Core Tests, testbed, uncommitted): split the 578-test `core` aggregate into 7 disjoint `core_*` classes (basic 98, sync 93, sched 112, task 52, memory 118, syscall 85, tracing 20). Planner → implement (61 groups moved exactly once) → audit APPROVED (`report-20261018T000000Z`) → all 7 classes green + dump-counts Σ=578 + CONSISTENCY 1826>=1812. One transient pre-QEMU harness SIGTERM on core_tracing, rerun green. Issue stays OPEN for owner commit/close.
 - **DONE (2026-10-18):** #369 scheduler post-split hardening CLOSED (T1–T5, all committed/audited-APPROVED): T1 validate_task_ptr + entry ENSUREs (T1a registry/snapshot, T1b queue/lifecycle/terminate/id-table/admission, T1c switch/watchdog/smp; 2 REJECT-first-pass); T2 canonical lock-order table + adopt/entry/take-site holder ENSUREs (reverted 3 over-strict: unlocked tail proven by runtime holder==nullptr + brace parse) + 8 stale-comment corrections; T3 negative (publish windows already minimal; dispatch_step hoist REJECTED by auditor for ISR-reentrant nesting — reverted verbatim); T4 SwSlot writer table + RELEASE/ACQUIRE verification + do-not-move rationale docs; T5 nodiscard + cold unlikely (no likely/consteval per policy). Gates: core 578/578, smp_multicpu 18/18, cross-arch objects clean. FEEDBACK entry in LEARNINGS.
 - **DONE (2026-10-16):** #347 XOR path tracing CLOSED; #362 order-sensitive
   fold REPLACED the XOR fold (awaits final commit/push/close). Follow-up

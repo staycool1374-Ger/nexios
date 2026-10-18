@@ -43,6 +43,7 @@
 - Pre-suite stall (#299/#280) is HARNESS STARVATION, not a dead tick or stuck dispatcher: `is_test_active()` gates BOTH the on_tick monitor-wake and the harness-nonpreempt protection, so the window before the suite is marked active leaves the prio-10 harness unprotected against the prio-127 monitor woken every tick. Mark the suite active (inject the test context + set_test_active) BEFORE `ensure_monitor()`/`snapshot_create()`. Distinguish starvation from a dead tick with counters: `ticks`/`rate_monotonic_schedule`/`switch_to_task` advancing = ticks alive (#300 is the dead-tick case: a task-context on_tick corrupts the APIC source).
 - VMM split/flag-day discipline (#363): pure-move splits verify by reconstruction (concatenated chunks == original bytes) with a shared-internal header up front for file-statics (per-TU copies would fork throttle counters); bulk renames need a post-pass token grep (`0xFFF` glues into `kPageOffsetMaskF...`); test leaf-phys extraction must use the canonical translation or production frame mask (NX survives `& ~0xFFF`); HAL reuse needs a bit-identity proof (attr SH/NS+AP diverges); new TUs need gen.mk regen; `-Werror` makes overload removal atomic (missed caller = build break).
 - Checked-unmap discipline (#366): reworked `_err` probes presence BEFORE delegating to the side-effecting void twin; cap-unmap twins skip revoked/IO checks (revoke path unmaps itself); revoke/teardown fold-and-ignore with `(void)` (no logging under registry locks — lock-order hazard), log-and-continue only on already-logging boot/teardown paths; hole-coverage tests ship in the same commit (probe-guarded, never unmap live kernel state); test-history rows carry measured times only (re-run, don't estimate).
+- Aggregate splits are pure regroups: script-count moved groups (each exactly once), Σ(new dump-counts)==old value, measured beats hand sums; pre-QEMU SIGTERM with zero guest output is a transient harness kill — identical rerun green, record both rows (#364).
 
 ## Entry format
 
@@ -54,6 +55,12 @@
 ```
 
 ## Entries
+
+### #364 — core aggregate split into 7 core_* classes (audit APPROVED, uncommitted on testbed)
+
+- **Learned:** (1) Aggregate splits are pure regroups: verify mechanically by script-counting moved group calls (61, each exactly once) + Σ(new dump-counts)==old aggregate value (98+93+112+52+118+85+20=578); measured dump-counts are truth over hand-summed fine rows (core_memory measured 118 vs hand 120 — stale-row drift). (2) Planner-proposed partitions must be checked for silently dropped groups (planner's 518 vs actual 580 — data_structures + pip/pcp/pi_donation dropped from the partition). (3) A pre-QEMU harness SIGTERM (make `Terminated: 15` right after LD, zero guest output, no S-lines) is a transient harness kill, not a test defect — identical rerun green; record both rows STATUS-tagged. Distinct from zero-S-line TCG stalls (guest ran, no summary).
+- **Adapted:** test_registry.cpp (7 core_* lambdas replacing `core`), test_expected_counts.hpp (7 measured rows + k_aggregates[]), scripts/run_all_classes.sh (CLASSES 16→22 aggregates), Makefile (help/timeout-filter/examples) — issue #364.
+- **Style re-surface:** CODING_STYLE.md §2 naming (`core_*` semantic names; no `be*` prefix that trips the is_bench heuristic; exact-strcmp uniqueness vs `core_isolation`) + §8 formatting (4-space, ≤80 cols in the new lambdas).
 
 ### #362 — order-sensitive path-tracer fold (audit APPROVED, commit pending)
 

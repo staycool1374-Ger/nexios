@@ -26,7 +26,7 @@ SHELL := /bin/bash
 #   src/kernel/test/ are built; all other test files are expected in
 #   $(EXTERNAL_TEST_DIR)/src/kernel/test/.
 #
-#   Example: make execute-test x86 debug core EXTERNAL_TEST_DIR=/path/to/tests
+#   Example: make execute-test x86 debug core_sched EXTERNAL_TEST_DIR=/path/to/tests
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -580,13 +580,15 @@ help:
 	@echo "         <class> = none|selftest|<aggregate>|<name>"
 	@echo "           none     → interactive shell (no tests, mon:stdio)"
 	@echo "           selftest → safe class, auto-shutdown (CI gate, 120s)"
-	@echo "           <aggregate> → one of the 16 structural classes"
-	@echo "                      (core ipc capability proc_elf storage servers"
-	@echo "                       drivers hal smp smp_multicpu deadline ui"
+	@echo "           <aggregate> → one of the 22 structural classes"
+	@echo "                      (core_basic core_sync core_sched core_task"
+	@echo "                       core_memory core_syscall core_tracing ipc"
+	@echo "                       capability proc_elf storage servers drivers"
+	@echo "                       hal smp smp_multicpu deadline ui"
 	@echo "                       logging_debug random bench testrunner),"
-	@echo "                       auto-shutdown (120s, 250s for core/smp_multicpu)"
+	@echo "                       auto-shutdown (120s, 250s for core_*/smp_multicpu)"
 	@echo "           <name>   → specific test class, auto-shutdown (120s)"
-	@echo "  [A] make test-full [<arch> <build>]  Full suite: all 16 aggregates +"
+	@echo "  [A] make test-full [<arch> <build>]  Full suite: all 22 aggregates +"
 	@echo "         4 specials (ahci_live iommu_live task_fpu task_tcb_log),"
 	@echo "         one reboot per class (issue #173, replaces 'all')"
 	@echo "  [A] make debug-test <arch> <build> <class> <gdb-script>"
@@ -617,7 +619,7 @@ help:
 	@echo "    make run-release-mode riscv               # interactive RISC-V 64 release QEMU"
 	@echo "    make execute-test x86 debug none          # interactive QEMU (verbose)"
 	@echo "    make execute-test x86 release selftest  # release smoke (safe class)"
-	@echo "    make debug-test x86 debug core tools/gdb/test-batch.gdb  # GDB panic capture"
+	@echo "    make debug-test x86 debug core_sched tools/gdb/test-batch.gdb  # GDB panic capture"
 	@echo "    make debug-shell x86 debug none tools/gdb/init.gdb cmds.txt"
 
 # ------------------------------------------------------------------------------
@@ -1074,7 +1076,7 @@ _do_execute_test:
 	elif [ "$(CLASS)" = "dump-counts" ]; then \
 	    $(call _run_dump_counts_qemu); \
 	else \
-	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter riscv64 riscv,$(ARCH)),$(TEST_TIMEOUT_RISCV),$(if $(filter core smp_multicpu ahci_live iommu_live deadline,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS)))); \
+	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter riscv64 riscv,$(ARCH)),$(TEST_TIMEOUT_RISCV),$(if $(filter core_basic core_sync core_sched core_task core_memory core_syscall core_tracing smp_multicpu ahci_live iommu_live deadline,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS)))); \
 	fi
 
 # Full suite (issue #173, replaces the removed `all` class): run every

@@ -15,10 +15,10 @@ cd "$(dirname "$0")/.."
 ARCH="${1:-x86_64}"
 BUILD="${2:-debug}"
 
-# 16 aggregates + 4 standalone specials.  testrunner runs last: its
+# 22 aggregates + 4 standalone specials.  testrunner runs last: its
 # expected-panic test halts the kernel, so it gets its own boot at the
 # end and deterministic log ordering.
-CLASSES="core ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu ahci_live iommu_live testrunner"
+CLASSES="core_basic core_sync core_sched core_task core_memory core_syscall core_tracing ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu ahci_live iommu_live testrunner"
 
 # Issue #207: riscv64 runs its own green-evidenced class set (arch_riscv64
 # 24/24 incl. full daemon boot, scheduler_zombie 5/5).  The generic
