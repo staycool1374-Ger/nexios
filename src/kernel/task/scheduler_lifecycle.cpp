@@ -76,6 +76,14 @@ void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
     // current task's own switch-away arm targets a successor, so this is a
     // no-op for that path.
     invalidate_pending_switch_to(task.id);
+    // Issue #324 Tick 5: table-ownership map — dequeue (bitmap+EDF) is
+    // owned by dequeue_ready() (callers dequeue before release; the
+    // ENSURE above enforces it); deadline/all_tasks/id_table removals
+    // here are idempotent (membership-guarded), so the destroy() path's
+    // second pass via remove_task() and the drain-pop edf_remove guards
+    // are provably no-op safety nets, not double-frees.  H2 invalidation
+    // is co-located with id_table removal (here + reap arm); remove_task
+    // /unregister_task clear all four switch atoms instead.
 
     task.zombie_next_ = nullptr;
     // Issue #25 C1: list linkage under the zombie leaf lock (caller holds
