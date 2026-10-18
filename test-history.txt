@@ -3845,3 +3845,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 14:53:28 tls PASSED: 13 FAILED: 0 TIME: 18s STATUS: #303-in-tree-errno-path-untouched
 2026-10-18 14:53:51 bench PASSED: 28 FAILED: 0 TIME: 19s STATUS: #303-image-append-no-regression
 2026-10-18 14:55:28 proc_elf PASSED: 131 FAILED: 0 TIME: 45s STATUS: #303-final-comment-fix-rebuild
+2026-10-18 15:34:23 core_tracing PASSED: 21 FAILED: 0 TIME: 19s STATUS: post-merge-ff9925193-Tick13-green
+2026-10-18 15:34:23 proc_elf PASSED: 131 FAILED: 0 TIME: 46s STATUS: post-merge-ff9925193-libc_thread-green
+2026-10-18 15:34:23 capability PASSED: 155 FAILED: 0 TIME: 26s STATUS: post-merge-ff9925193-isolate-changes-green
