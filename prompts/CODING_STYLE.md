@@ -6,7 +6,7 @@
 - **Standard**: C++20 freestanding (`-ffreestanding -fno-exceptions -fno-rtti -nostdlib`)
 - **Target**: `x86_64-elf`; no STL, exceptions, RTTI, stack-protector, thread-safe statics, dynamic linking on RT paths
 - **Optimization**: `-O3` (debug), `-O2` (release)
-- **Cross-arch parity (mandatory):** every new function/feature ships on all three arches (`x86_64`, `aarch64`, `riscv64`) — real implementation or documented arch-equivalent, in both directions. No single-arch-only functionality without a tracked follow-up issue. Done means 3-arch link green + the arch test classes (`arch_aarch64`, `arch_riscv64`) exercised, not just compile-clean elsewhere.
+- **Cross-arch parity (mandatory):** normative rule lives in `AGENTS.md` (§ Cross-Arch Parity) — every new function/feature ships on all three arches (`x86_64`, `aarch64`, `riscv64`); no single-arch-only work.
 
 ## 2. Naming
 
