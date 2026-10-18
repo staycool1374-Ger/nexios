@@ -81,7 +81,10 @@ static void test_task_cleanup_pinned_terminal() {
     // deferred resource teardown (kstack + PML4 + IPC objects) instead of
     // freeing the block intact. Capture the tracker baseline before
     // create so the post-teardown delta must be exactly zero.
-    test::ResourceCounters case_before;
+    // Brace-init: ResourceTracker::capture is a no-op without
+    // CONFIG_DEBUG, so release builds see zeros (vacuous pass); debug
+    // builds fill real baselines (the actual regression gate).
+    test::ResourceCounters case_before{};
     test::ResourceTracker::instance().capture(case_before);
     auto *tcb = TaskControlBlock::create(task_path_noop_entry, 20,
                                          TaskControlBlock::NO_PERIOD);
@@ -104,7 +107,7 @@ static void test_task_cleanup_pinned_terminal() {
         path_reset();
     }
     JARVIS_ASSERT(pinned_ok);
-    test::ResourceCounters case_after;
+    test::ResourceCounters case_after{};
     test::ResourceTracker::instance().capture(case_after);
     JARVIS_ASSERT_EQ(case_before.pmm_pages_used, case_after.pmm_pages_used);
     JARVIS_ASSERT_EQ(case_before.tasks, case_after.tasks);
@@ -118,7 +121,7 @@ static void test_task_destroy_after_full_teardown_is_noop() {
     // is a safe no-op (magic 0xDD skip) — never a re-teardown. The second
     // destroy must not fault, must not double-free, and must leave zero
     // tracker delta.
-    test::ResourceCounters case_before;
+    test::ResourceCounters case_before{};
     test::ResourceTracker::instance().capture(case_before);
     auto *tcb = TaskControlBlock::create(task_path_noop_entry, 20,
                                          TaskControlBlock::NO_PERIOD);
@@ -132,7 +135,7 @@ static void test_task_destroy_after_full_teardown_is_noop() {
         TaskControlBlock::destroy(tcb); // full teardown, block freed
         TaskControlBlock::destroy(tcb); // no-op: already freed, skip
     }
-    test::ResourceCounters case_after;
+    test::ResourceCounters case_after{};
     test::ResourceTracker::instance().capture(case_after);
     JARVIS_ASSERT_EQ(case_before.pmm_pages_used, case_after.pmm_pages_used);
     JARVIS_ASSERT_EQ(case_before.tasks, case_after.tasks);
