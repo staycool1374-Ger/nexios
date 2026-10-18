@@ -364,8 +364,39 @@ JARVIS_TEST(admission_memory_budget_denied_at_fork, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: validate_id() range-gates external IDs (issue #374).
+// Input: live task id, UINT64_MAX, a never-issued high id, and a
+//        stale (terminated+drained) id.
+// Expect: live → true; TASK_INVALID + never-issued → false (no probe);
+//         stale → true (range passes) but find_task() → nullptr —
+//         liveness stays the probe's job.
+// Depends: Scheduler::validate_id, Scheduler::find_task
+JARVIS_TEST(validate_id_range_gate, "PRE: none | POST: none") {
+    sync::Semaphore gate;
+    gate.init(0, 1);
+    auto *live = make_task(1, 100, &gate);
+    JARVIS_ASSERT(live != nullptr);
+    JARVIS_ASSERT(Scheduler::add_task_err(*live) == errors::SCHED_ERR_OK);
+    // Live issued ID passes the gate and resolves.
+    JARVIS_ASSERT(Scheduler::validate_id(live->id));
+    JARVIS_ASSERT(Scheduler::find_task(live->id) == live);
+    // TASK_INVALID and never-issued IDs fail without probing.
+    JARVIS_ASSERT(!Scheduler::validate_id(UINT64_MAX));
+    JARVIS_ASSERT(!Scheduler::validate_id(0x00FFFFFFFFFFFFFFULL));
+    uint64_t stale_id = live->id;
+    gate.post();
+    kernel::test::terminate_and_drain(*live);
+    Scheduler::drain_zombie_list();
+    // Stale-but-issued: range still passes, probe reports absent.
+    JARVIS_ASSERT(Scheduler::validate_id(stale_id));
+    JARVIS_ASSERT(Scheduler::find_task(stale_id) == nullptr);
+    JARVIS_TEST_PASS();
+}
+
 void register_sched_admission_tests() {
     Logger::info("Registering sched_admission tests");
+    JARVIS_REGISTER_TEST(validate_id_range_gate);
     JARVIS_REGISTER_TEST(admission_lub_rejects_overrun);
     JARVIS_REGISTER_TEST(admission_wcet_exceeds_period_rejected);
     JARVIS_REGISTER_TEST(admission_wcet_untracked_exempt_admits);

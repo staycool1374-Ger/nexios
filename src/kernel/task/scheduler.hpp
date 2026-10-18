@@ -107,6 +107,16 @@ class Scheduler {
     /// @return Pointer to the TaskControlBlock, or nullptr.
     static TaskControlBlock *find_task(uint64_t id) noexcept;
 
+    /// @brief Range-gate for externally-supplied task IDs (issue #374).
+    ///        Rejects TASK_INVALID and never-issued IDs (>= the monotonic
+    ///        allocation high-water) WITHOUT probing.  Stale-but-issued IDs
+    ///        PASS — liveness is the probe's job (find_task() → nullptr).
+    ///        INTERNAL callers with rewound counters (reboot_from_table,
+    ///        snapshot restore) must NOT use this gate.
+    /// @param id Task ID to range-check.
+    /// @return True when the ID was issued at some point.
+    [[nodiscard]] static bool validate_id(uint64_t id) noexcept;
+
     /// @brief Register a task in scheduler tables without making it runnable.
     ///        Registers in all_tasks_, deadline_list_, and id_table_ so the task
     ///        is findable via find_task(), but does NOT enqueue in the ready
