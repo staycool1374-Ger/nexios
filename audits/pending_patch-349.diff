@@ -1,0 +1,1279 @@
+diff --git a/docs/specs/irq-early-init.md b/docs/specs/irq-early-init.md
+index 09d79360c..3444a099f 100644
+--- a/docs/specs/irq-early-init.md
++++ b/docs/specs/irq-early-init.md
+@@ -24,10 +24,10 @@ source, which is a success).
+ 
+ | Stage | x86_64 | AArch64 | RISC-V |
+ |---|---|---|---|
+-| IDT | IDT init/load (256 entries) | VBAR_EL1 init/load (64 slots) | stvec init/load (64 slots) |
+-| Controller | 8259A cascade (0x20/0x28), then APIC (fail-open to PIC) | GICv2/v3, Group 0, timer PPI INTID 30 | PLIC threshold 0, SEIE, prio-1 defaults |
+-| Controller ready | `is_apic_supported` + MMIO map | `gic_redist_ready()` (Children_Online; GICv2 = true) | n/a (no probe register) |
+-| Timer | PIT/APIC timer → TSC calibration | CNTP generic counter | SBI timer → mtime (10 MHz QEMU) |
++| IDT | IDT init/load (256 entries) | VBAR_EL1 init/load (256 slots) | stvec init/load (256 slots) |
++| Controller | 8259A cascade (0x20/0x28), then APIC (fail-open to PIC) | GICv2 full init (CTLR, 8 enable banks, IPRIORITY, ITARGETSR=CPU0, ICFGR, GICC PMR, timer PPI INTID 30; v3 path coherent) | PLIC S-context 1 (threshold 0, priorities 1, 3 enable words, SEIE) |
++| Controller ready | `is_apic_supported` + MMIO map | `gic_redist_ready()` (v2: CTLR read-back; v3: Children_Online + CTLR) | n/a (no probe register) |
++| Timer | PIT/APIC timer → TSC calibration | CNTP generic timer, CVAL absolute deadlines | SBI timer → mtime (10 MHz QEMU), absolute deadlines |
+ | AP path | `early_irq_init_ap()`: `APIC::init_ap` + `IDT::load` only | per-core GICR (issue #28) | per-hart PLIC threshold (issue #29) |
+ 
+ ## 3. Error codes
+@@ -46,12 +46,39 @@ source, which is a success).
+   without starting the timer (the distributor itself was already enabled
+   by `init()` — the error stops the bring-up sequence, it does not unwind
+   the controller).
+-- `mask`/`unmask` range guards: GIC `< 64` (snapshot covers words 0..1,
+-  IDT has 64 slots), PLIC `< 32` (single enable word on QEMU virt).
+-  Out-of-window lines are no-ops, never OOB MMIO writes.
+-- RISC-V `IrqState` additionally captures enable word 0; wired-line
+-  priorities default to 1 (lines stay disabled — drivers enable their
+-  own IRQ when registering handlers).
++- `mask`/`unmask` range guards: GIC 0–255 (8 enable banks),
++  PLIC 0–95 (3 S-context enable words). Out-of-window lines are no-ops,
++  never OOB MMIO writes. GIC uses write-1 set/clear registers (no lock);
++  PLIC enable-word RMW runs under `arch::IrqGuard` (thread vs ISR storm
++  interleaving).
++- RISC-V `IrqState` captures threshold + all three S-context enable
++  words; wired-line priorities default to 1 (lines stay disabled —
++  drivers enable their own IRQ when registering handlers).
++- AArch64 `IrqState` captures all 8 GICD enable banks (`gic_mask` keeps
++  banks 0–1 for compatibility); restore never touches CTLR, priorities,
++  targets, or ICFGR.
++- GIC version comes from GICD_PIDR2[7:4] (2 = v2, fail-safe), never
++  from GICD_TYPER[15:11] (not a version field). Re-init is a BOOT_ONLY
++  no-op (latch); readiness is proven by CTLR read-back, not assumed.
++- AArch64 `oneshot`/`periodic` take coarse scheduler ticks at
++  `BootParams::timer_hz` (fallback `CONFIG_TICK_HZ`), arm absolute
++  CVAL deadlines with saturating math, and latch the periodic interval
++  for the ISR re-arm. `remaining()` returns ceil coarse ticks, gated on
++  CTL.ENABLE (a TVAL read is `cval - count`, not a stored zero);
++  `remaining_ns()` derives from the same clamped counter remainder.
++- RISC-V `set_frequency` arms `now + interval` (the old code passed
++  the bare interval as an absolute deadline, firing immediately).
++  `oneshot`/`periodic` convert coarse ticks the same way and latch
++  the periodic interval; `remaining*` stay hard 0 by S-mode hardware
++  constraint (mtimecmp unreadable).
++- EOI ownership: the ack path writes EOIR/ICC_EOIR1 (`eoi()` only for
++  the last-acked INTID on aarch64); `handle_plic_trap` pairs every
++  claim with exactly one complete, and the S-mode `eoi()` is a
++  documented no-op. Spurious vectors (>= 1020 GIC / claim 0 PLIC)
++  are counted, never EOI'd/completed, never dispatched.
++- Storm limiter (`IrqStormLimiter`, `CONFIG_IRQ_STORM_LIMIT` = 256
++  same-INTID dispatches per tick): masks the line + one dmesg ERROR
++  (`ErrorSubsystem::BASE` + 64). The timer INTID is never fed.
+ - Zero-frequency calls are fail-closed on all arches (`set_frequency(0)`
+   and `early_irq_init(0)` program no hardware).
+ - RISC-V `handle_irq` re-arms relative (`now + timer_interval_`, latched
+@@ -66,4 +93,30 @@ source, which is a success).
+ Full production boot paths (#28 aarch64, #29 riscv64), DTB plumbing
+ (#183), teardown validation (#199). `kernel.cpp` keeps its own staged
+ calls; `early_irq_init()` codifies the same order for tests and
+-bring-up reuse.
++bring-up reuse. Out of scope for #349: x86-only remainders (GDT/IDT
++gates, PIC, APIC/LAPIC/IOAPIC, HPET, MSI/MSI-X, SMP/IPI), virtio-MMIO
++transport/IRQ consumers (#350, drivers keep polling), interrupt-driven
++UART RX (#245/#247), SMP per-hart contexts (#351), GICv3 HW validation
++(QEMU cortex-a72 exercises GICv2 only), riscv release (#207), TCG wall
++accuracy (#359/#384), QE test authorship/counts/release-subset.
++
++## 6. Per-arch IRQ routing + timer parity (issue #349)
++
++QEMU-virt INTID map (aarch64): UART0 = 33, RTC = 34, PCIe INTx =
++35–38, virtio-mmio = 48–79 (2 MiB Device leaf at PA `0x0A000000`, L2
++index 80). QEMU-virt PLIC map (riscv64, S-mode context 1): virtio-mmio
++= 1–8, UART = 10, RTC = 11, PCIe INTx = 32–35; S-context addresses are
++`0x0C002080` (enable), `0x0C201000` (threshold), `+4` (claim/complete).
++
++GICv2 programming order: CTLR=0 → disable all banks → IGROUPR=0
++(Group 0) → IPRIORITY = 0xA0 → ITARGETSR = CPU0 for SPIs (reset
++targets are not CPU0) → ICFGR level, edge only for virtio-mmio
++(QEMU virt DT flags it edge-high) → timer PPI enable → CTLR=1 →
++GICC_CTLR=1 with read-back. Version from PIDR2, clamped window
++`min(256, (ITLinesNumber+1)*32)`.
++
++Timer units contract: `oneshot`/`periodic` take coarse scheduler
++ticks; `remaining()` returns ceil coarse ticks (0 disarmed/expired);
++`remaining_ns()` the sub-tick remainder. riscv64 `remaining*` are hard
++0 (S-mode cannot read mtimecmp) — enforcement tests must assert the
++contract, never wall time.
+diff --git a/prompts/AGENTS-KERNEL-BRIEFING.md b/prompts/AGENTS-KERNEL-BRIEFING.md
+index 8dd9e1c1d..6488e2997 100644
+--- a/prompts/AGENTS-KERNEL-BRIEFING.md
++++ b/prompts/AGENTS-KERNEL-BRIEFING.md
+@@ -171,6 +171,7 @@ make execute-test x86 release selftest    # CI gate
+ 17. **riscv64 x2-IS-sp aliasing in trap asm** — every `sp` write is an `x2` write: `la sp` before the OFF_SP save records the frame (not user sp); recomputing the frame base from `sp` after a conditional `x2` load faults (user_sp−296 is unmapped). Save user-sp via a dead scratch *before* reloading sp; never read sp relatively after an x2 load on the U-path (issue #206).
+ 18. **riscv64 SPP is stale for nested traps** — it records trapped-from, so a nested S-tick inside a U-handler takes the U path over the live frame. `csrci sstatus, 2` as the first trap insn (needs no scratch) forbids nesting, making SPP provably fresh; `sret` restores SIE from SPIE so U-ticks survive (issue #206, closes #219 entry aspect; return-window aspect still open).
+ 19. **TCG wall-clock variance is a known limitation, not a kernel bug** — under QEMU TCG the PIT/APIC/bus/TSC virtual clocks diverge from each other and from host wall (ns up to ~4x fast, ticks ~0.8x wall, cal 250–670 MHz across boots; issue #359, decided DOCUMENT): no boot scalar or tick-servo can be wall-true for all regimes (no sub-second in-guest wall reference; workload-dependent TSC rate). Kernel timeouts are self-consistent (single-domain). Accuracy gate is KVM/HW; TCG `hrt_wall_accuracy_bound` warn-skips on hypervisor. `OVERALL_CAP_S` stays 3600 (not re-tightened without proof). Suite summaries carry `TSC_CYCLES` (TSC never rewinds, unlike snapshot-rewound `ticks_`) for host-side analysis. Per-arch (#384, 2026-10-19): aarch64 (cntpct_el0 @ 62.5 MHz) and riscv64 (rdtime @ 10 MHz) show the same TCG unenforceability (wall bound +28%/+27.6% over, strict assert fails where x86 warn-skips — no CPUID hypervisor equivalent off-x86, QE-owned skip design); bare metal is the only quality gate on all arches, no TCG accuracy enforcement anywhere. `timing_core` off-x86 is blocked by the #356 task-spawn fault (ELR/sepc=0 at first test-task spawn, daemons degraded).
++20. **Off-x86 IRQ/timer contracts (issue #349)** — PLIC S-mode context is 1 (`0x0C002080` enable / `0x0C201000` threshold; M-context 0 belongs to OpenSBI, never program it); GICv2 SPIs need ITARGETSR=CPU0 (reset targets are not CPU0) and ICFGR edge only for virtio-mmio (48–79); version from GICD_PIDR2, never TYPER[15:11]. Timer `oneshot`/`periodic` args are coarse ticks at `BootParams::timer_hz` (absolute CVAL/SBI deadlines internally); `remaining()` is coarse ceil gated on the enable bit; riscv64 `remaining*` are hard 0 by S-mode hardware constraint.
+ 
+ ## 13. Enforcement Rules (MANDATORY — violations halt and require human input)
+ 
+diff --git a/src/kernel/arch/aarch64/boot.S b/src/kernel/arch/aarch64/boot.S
+index 5e4e3f635..e3285410d 100644
+--- a/src/kernel/arch/aarch64/boot.S
++++ b/src/kernel/arch/aarch64/boot.S
+@@ -169,6 +169,11 @@ _start:
+     // loaded (silent sync-exception loop in the IRQ path).
+     ldr     x12, =0x8000421       // 0x8000000 | Device: Valid|Block|NS|AF
+     str     x12, [x14, #64*8]
++    // Map virtio-mmio at VA 0xFFFF80000A000000 (PA 0x0A000000), L2 index
++    // 80. One 2MiB Device block covers the virtio-mmio transport region
++    // (INTIDs 48-79, issue #349); reachable through the TTBR1 window.
++    ldr     x12, =0xA000421     // 0xA000000 | Device: Valid|Block|NS|AF
++    str     x12, [x14, #80*8]
+     ldr     x12, =0x40028000
+     orr     x12, x12, #3
+     ldr     x13, =0x40026000  // L1 base
+diff --git a/src/kernel/arch/aarch64/hal/gic.hpp b/src/kernel/arch/aarch64/hal/gic.hpp
+index cc3d3fc33..d54c2012d 100644
+--- a/src/kernel/arch/aarch64/hal/gic.hpp
++++ b/src/kernel/arch/aarch64/hal/gic.hpp
+@@ -38,6 +38,7 @@ inline constexpr uint32_t GICD_ITARGETSR = 0x0800;
+ inline constexpr uint32_t GICD_ICFGR     = 0x0C00;
+ inline constexpr uint32_t GICD_NSACR     = 0x0E00;
+ inline constexpr uint32_t GICD_SGIR      = 0x0F00;
++inline constexpr uint32_t GICD_PIDR2     = 0xFE8;  // peripheral ID2 (version field)
+ 
+ // ─── GICv3 Redistributor RD frame ────────────────────────────────────────
+ inline constexpr uint32_t GICR_WAKER      = 0x0014;
+@@ -121,11 +122,45 @@ inline volatile uint32_t *gicr_sgi_reg(uint32_t offset) {
+ 
+ // ─── QEMU virt INTID map (SPI range) ─────────────────────────────────────
+ inline constexpr uint32_t INTID_UART0   = 33;   // PL011 UART
+-inline constexpr uint32_t INTID_RTC     = 34;   // MC146818 RTC
+-inline constexpr uint32_t INTID_VIRTIO0 = 36;   // virtio-mmio devices
+-inline constexpr uint32_t INTID_VIRTIO1 = 37;
+-inline constexpr uint32_t INTID_VIRTIO2 = 38;
+-inline constexpr uint32_t INTID_VIRTIO3 = 39;
+-inline constexpr uint32_t INTID_VIRTIO4 = 40;
++inline constexpr uint32_t INTID_RTC     = 34;   // RTC (PL031)
++inline constexpr uint32_t INTID_PCIE0   = 35;   // PCIe INTx
++inline constexpr uint32_t INTID_PCIE1   = 36;
++inline constexpr uint32_t INTID_PCIE2   = 37;
++inline constexpr uint32_t INTID_PCIE3   = 38;
++inline constexpr uint32_t INTID_VIRTIO_BASE  = 48;  // virtio-mmio devices
++inline constexpr uint32_t INTID_VIRTIO_COUNT = 32; // 48..79
++/// @brief Highest INTID the kernel addresses (8 enable banks x 32).
++inline constexpr uint32_t GIC_MAX_INTID = 256;
++
++/// @brief GIC version from GICD_PIDR2[7:4] (2 = v2, >= 3 = v3).
++/// 0/unreadable fails safe to v2; GICD_TYPER[15:11] is NOT a version field.
++inline uint32_t gic_version() {
++    volatile uint32_t *pidr2 =
++        reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
++                                              GICD_BASE + GICD_PIDR2);
++    uint32_t ver = (*pidr2 >> 4) & 0xFU;
++    return (ver == 0) ? 2U : ver;
++}
++
++/// @brief Byte offset of an INTID's IPRIORITY byte.
++inline constexpr uint32_t gicd_ipriority_off(uint32_t intid) {
++    return GICD_IPRIORITY + intid;
++}
++
++/// @brief Byte offset of an INTID's ITARGETSR byte (CPU0 = 0x01).
++inline constexpr uint32_t gicd_itargetsr_off(uint32_t intid) {
++    return GICD_ITARGETSR + intid;
++}
++
++/// @brief Word offset and 2-bit shift of an INTID's ICFGR field.
++inline constexpr uint32_t gicd_icfgr_word(uint32_t intid) {
++    return GICD_ICFGR + (intid / 16) * 4;
++}
++inline constexpr uint32_t gicd_icfgr_shift(uint32_t intid) {
++    return (intid % 16) * 2;
++}
++
++/// @brief Word index of an INTID's enable bank (0-7).
++inline constexpr uint32_t gicd_bank(uint32_t intid) { return intid / 32; }
+ 
+ } // namespace arch
+diff --git a/src/kernel/arch/aarch64/interrupt_controller.cpp b/src/kernel/arch/aarch64/interrupt_controller.cpp
+index b7d512968..33ccd5be3 100644
+--- a/src/kernel/arch/aarch64/interrupt_controller.cpp
++++ b/src/kernel/arch/aarch64/interrupt_controller.cpp
+@@ -9,20 +9,44 @@
+ #include <kernel/debug/debug_stop.hpp>
+ #include <signal.hpp>
+ 
++#include <kernel/arch/hal/irq_storm.hpp>
++#include <kernel/log/dmesg.hpp>
++
+ namespace arch {
+ 
+ static bool gic_is_v3 = false;
++/// @brief BOOT_ONLY latch: init() programs hardware exactly once.
++static bool g_gic_initialized = false;
++/// @brief Last acknowledged INTID (EOI ownership, issue #349). Sentinel
++/// ~0ULL = none yet: no valid INTID ever equals it, so a pre-first-IRQ
++/// eoi() mismatches like any stale call instead of closing SGI 0.
++static uint64_t g_last_acked = ~0ULL;
++/// @brief EOI calls for a non-acked vector (diagnostic).
++static uint64_t g_unmatched_eoi = 0;
++/// @brief Spurious INTIDs observed (>= 1020, diagnostic).
++static uint64_t g_spurious_count = 0;
++/// @brief Per-tick same-INTID storm limiter (never fed the timer).
++static IrqStormLimiter g_storm{};
+ 
+ /// @brief Initialise the GIC distributor, CPU interface, and redistributor.
+-/// Detects GICv2 vs GICv3 from GICD_TYPER. Enables Group 1 interrupts
+-/// and the timer PPI (INTID 30). Performs full distributor reset.
++/// Full GICv2 bring-up: version from GICD_PIDR2 (TYPER holds no version),
++/// distributor reset, priority/target/edge programming, timer PPI enable.
++/// BOOT_ONLY: repeat calls return without touching live state.
+ void ArchInterruptController::init() {
++    if (g_gic_initialized) {
++        return;
++    }
+     volatile uint32_t *d = gicd_reg(0);
+     volatile uint32_t *c = gicc_reg(0);
+ 
+-    // Detect GIC version from GICD_TYPER
+-    uint32_t typer = d[GICD_TYPER / 4];
+-    gic_is_v3 = ((typer >> 11) & 0x1F) >= 3;
++    // Version from PIDR2, not TYPER (TYPER[15:11] is not a version field).
++    gic_is_v3 = gic_version() >= 3;
++    // Clamp the programmed window: ITLinesNumber+1 banks, max 256 INTIDs.
++    uint32_t it_lines = (d[GICD_TYPER / 4] & 0x1FU) + 1;
++    uint32_t window = it_lines * 32;
++    if (window > GIC_MAX_INTID) {
++        window = GIC_MAX_INTID;
++    }
+ 
+     // === Distributor init ===
+     // NOTE: QEMU boots the kernel at Secure EL1, so every IAR read is a
+@@ -31,11 +55,40 @@ void ArchInterruptController::init() {
+     // kernel's own group — and do not enable Group 1 delivery.
+     d[GICD_CTLR / 4] = 0;
+     dsb_sy();
+-    d[GICD_ICENABLER / 4] = 0xFFFFFFFF;
+-    d[GICD_ICENABLER / 4 + 1] = 0xFFFFFFFF;
++    for (uint32_t w = 0; w < 8; ++w) {
++        d[GICD_ICENABLER / 4 + w] = 0xFFFFFFFF;
++    }
++    dsb_sy();
++    for (uint32_t w = 0; w < 8; ++w) {
++        d[GICD_IGROUPR / 4 + w] = 0;
++    }
++    dsb_sy();
++    // Priority: 0xA0 for the whole window (all lower than PMR 0xFF).
++    for (uint32_t i = 0; i < window; ++i) {
++        volatile uint8_t *p =
++            reinterpret_cast<volatile uint8_t *>(d) + GICD_IPRIORITY + i;
++        *p = 0xA0;
++    }
++    dsb_sy();
++    // Targets: SPI routing defaults to no CPU; pin SPIs to CPU0.
++    for (uint32_t i = 32; i < window; ++i) {
++        volatile uint8_t *t =
++            reinterpret_cast<volatile uint8_t *>(d) + GICD_ITARGETSR + i;
++        *t = 0x01;
++    }
+     dsb_sy();
+-    d[GICD_IGROUPR / 4] = 0;
+-    d[GICD_IGROUPR / 4 + 1] = 0;
++    // Edge config: clear all 2-bit fields (level), then set edge for the
++    // virtio-mmio SPIs only (QEMU virt DT flags them edge-high).
++    for (uint32_t i = 0; i < window; i += 16) {
++        d[GICD_ICFGR / 4 + i / 16] = 0;
++    }
++    dsb_sy();
++    for (uint32_t i = INTID_VIRTIO_BASE;
++         i < INTID_VIRTIO_BASE + INTID_VIRTIO_COUNT && i < window; ++i) {
++        volatile uint32_t *w =
++            &d[GICD_ICFGR / 4 + (i / 16)];
++        *w |= static_cast<uint32_t>(0x2U << ((i % 16) * 2));
++    }
+     dsb_sy();
+ 
+     if (gic_is_v3) {
+@@ -61,6 +114,11 @@ void ArchInterruptController::init() {
+ 
+         rs[GICR_ISENABLER0 / 4] = (1U << 30);
+         dsb_sy();
++        d[GICD_CTLR / 4] = GICD_CTLR_ENABLE_GRP1;
++        dsb_sy();
++        if ((d[GICD_CTLR / 4] & GICD_CTLR_ENABLE_GRP1) == 0) {
++            return;
++        }
+     } else {
+         c[GICC_CTLR / 4] = 0;
+         dsb_sy();
+@@ -68,17 +126,26 @@ void ArchInterruptController::init() {
+         dsb_sy();
+         d[GICD_ISENABLER / 4] = (1U << 30);
+         dsb_sy();
+-    }
+-
+-    d[GICD_CTLR / 4] = GICD_CTLR_ENABLE;
+-    dsb_sy();
+-    if (!gic_is_v3) {
++        d[GICD_CTLR / 4] = GICD_CTLR_ENABLE;
++        dsb_sy();
++        if ((d[GICD_CTLR / 4] & GICD_CTLR_ENABLE) == 0) {
++            return;
++        }
+         c[GICC_CTLR / 4] = GICC_CTLR_ENABLE;
+         dsb_sy();
++        if ((c[GICC_CTLR / 4] & GICC_CTLR_ENABLE) == 0) {
++            return;
++        }
+     }
+     isb();
++    g_gic_initialized = true;
+ }
+ void ArchInterruptController::eoi(uint8_t vector) {
++    // EOI ownership: only the last acknowledged INTID may be closed.
++    if (static_cast<uint64_t>(vector) != g_last_acked) {
++        ++g_unmatched_eoi;
++        return;
++    }
+     if (gic_is_v3)
+         gic_v3_write_eoir(vector);
+     else
+@@ -87,27 +154,24 @@ void ArchInterruptController::eoi(uint8_t vector) {
+ }
+ 
+ /// @brief Redistributor wake state (issue #198): true when the GICv3
+-///        redistributor reports Children_Online, or when no redistributor
+-///        exists (GICv2 path). Polarity follows the GICv3 spec (online = 1);
+-///        the pre-#198 poll loop tested the inverted bit.
++///        redistributor reports Children_Online, or when the GICv2 path
++///        read-back proves the distributor and CPU interface are enabled.
+ /// @return true when interrupt delivery hardware is usable.
+ bool gic_redist_ready() {
+     if (!gic_is_v3) {
+-        return true;
++        volatile uint32_t *d = gicd_reg(0);
++        volatile uint32_t *c = gicc_reg(0);
++        return ((d[GICD_CTLR / 4] & GICD_CTLR_ENABLE) != 0) &&
++               ((c[GICC_CTLR / 4] & GICC_CTLR_ENABLE) != 0);
+     }
+     volatile uint32_t *rr = gicr_rd_reg(0);
+-    return (rr[GICR_WAKER / 4] & GICR_WAKER_CHILDREN_ONLINE) != 0;
++    volatile uint32_t *d = gicd_reg(0);
++    return ((rr[GICR_WAKER / 4] & GICR_WAKER_CHILDREN_ONLINE) != 0) &&
++           ((d[GICD_CTLR / 4] & GICD_CTLR_ENABLE_GRP1) != 0);
+ }
+ 
+-/// @brief Valid IRQ window for mask/unmask (issue #198): the snapshot covers
+-///        distributor words 0..1 and the IDT has 64 slots, so lines >= 64
+-///        have no defined state and must not touch MMIO.
+-inline constexpr uint8_t GIC_MAX_IRQ = 64;
+-
+ void ArchInterruptController::mask(uint8_t irq) {
+-    if (irq >= GIC_MAX_IRQ) {
+-        return;
+-    }
++    // uint8_t is always < GIC_MAX_INTID (256) by construction.
+     if (gic_is_v3 && irq < 32) {
+         gicr_sgi_reg(GICR_ICENABLER0)[0] = (1U << irq);
+     } else {
+@@ -117,9 +181,7 @@ void ArchInterruptController::mask(uint8_t irq) {
+ }
+ 
+ void ArchInterruptController::unmask(uint8_t irq) {
+-    if (irq >= GIC_MAX_IRQ) {
+-        return;
+-    }
++    // uint8_t is always < GIC_MAX_INTID (256) by construction.
+     if (gic_is_v3 && irq < 32) {
+         gicr_sgi_reg(GICR_ISENABLER0)[0] = (1U << irq);
+     } else {
+@@ -132,44 +194,63 @@ IrqState ArchInterruptController::snapshot() {
+     IrqState s{};
+     s.gic_mask = gicd_reg(GICD_ISENABLER)[0];
+     s.gic_mask |= static_cast<uint64_t>(gicd_reg(GICD_ISENABLER)[1]) << 32;
++    for (uint32_t w = 2; w < 8; ++w) {
++        s.gic_enable_hi[w - 2] = gicd_reg(GICD_ISENABLER)[w];
++    }
+     return s;
+ }
+ 
+ void ArchInterruptController::restore(const IrqState &state) {
+-    gicd_reg(GICD_ICENABLER)[0] = 0xFFFFFFFF;
+-    gicd_reg(GICD_ICENABLER)[1] = 0xFFFFFFFF;
++    for (uint32_t w = 0; w < 8; ++w) {
++        gicd_reg(GICD_ICENABLER)[w] = 0xFFFFFFFF;
++    }
+     dsb_sy();
+     gicd_reg(GICD_ISENABLER)[0] = state.gic_mask & 0xFFFFFFFF;
+     gicd_reg(GICD_ISENABLER)[1] = (state.gic_mask >> 32) & 0xFFFFFFFF;
++    for (uint32_t w = 2; w < 8; ++w) {
++        gicd_reg(GICD_ISENABLER)[w] = state.gic_enable_hi[w - 2];
++    }
+     dsb_sy();
+ }
+ 
+ /// @brief IRQ handler called from vectors.S.
+-/// Dispatches all non-spurious INTIDs via the IDT table.
++/// Dispatches acknowledged INTIDs via the IDT table. Spurious values
++/// (>= 1020) are never EOI'd and never dispatched; the timer INTID is
++/// never fed to the storm limiter.
+ extern "C" void handle_gic_irq(void) {
+     uint64_t intid = gic_is_v3 ? gic_v3_read_iar()
+                                : gicc_reg(GICC_IAR)[0];
+ 
+-    // >= 1020: spurious (1023) or the GICv2/GICv3 "no interrupt available
+-    // for the enabled groups" special values (1020-1022).  EOI and return —
+-    // never dispatch or fall through to the ack path below.
+-    if (intid >= 1020)
+-        goto ack;  // spurious / group-disabled
++    // Spurious / "no interrupt for the enabled groups" (1020-1023):
++    // count and return without EOI (no active state to close).
++    if (intid >= 1020) {
++        ++g_spurious_count;
++        return;
++    }
+ 
+     if (intid == 30) {
+         uint64_t elr{};
+         asm volatile("mrs %0, elr_el1" : "=r"(elr));
+         IDT::handle_interrupt(static_cast<uint64_t>(InterruptVector::TIMER), 0,
+                               elr);
+-    } else if (intid >= 32 && intid < 64) {
+-        // SPI / PPI: use INTID directly as vector (IDT has 64 slots)
+-        uint64_t elr{};
+-        asm volatile("mrs %0, elr_el1" : "=r"(elr));
+-        IDT::handle_interrupt(intid, 0, elr);
++    } else if (intid < GIC_MAX_INTID) {
++        // Storm guard: mask persistently re-asserting lines (not the tick).
++        if (g_storm.observe(intid, arch::Timer::ticks())) {
++            ArchInterruptController::mask(static_cast<uint8_t>(intid));
++            g_storm.note_masked();
++            kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::BASE,
++                                        kernel::log::kDmesgBase_BASE + 64,
++                                        kernel::log::LogSeverity::ERROR,
++                                        "irq storm masked", intid);
++        } else {
++            uint64_t elr{};
++            asm volatile("mrs %0, elr_el1" : "=r"(elr));
++            IDT::handle_interrupt(intid, 0, elr);
++        }
+     }
+-    // INTIDs 0-15 (SGIs), 16-29 (unused PPIs), 31 (PMU), ≥64 are ignored
++    // INTIDs >= 256 cannot occur (uint8_t dispatch window); ignore.
+ 
+-ack:
++    g_last_acked = intid;
+     if (gic_is_v3)
+         gic_v3_write_eoir(intid);
+     else
+diff --git a/src/kernel/arch/aarch64/timer.cpp b/src/kernel/arch/aarch64/timer.cpp
+index 777d98648..7e196c977 100644
+--- a/src/kernel/arch/aarch64/timer.cpp
++++ b/src/kernel/arch/aarch64/timer.cpp
+@@ -22,11 +22,17 @@
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <kernel/arch/idt.hpp>
++#include <kernel/bootparams.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/nexios_config.h>
+ 
+ namespace arch {
+ 
++/// @brief Counter ticks remaining until the armed deadline (0 when the
++/// timer is disabled or expired). Shared by remaining()/remaining_ns().
++/// @return Remaining counter ticks (clamped, never wraps).
++static uint64_t counter_remaining();
++
+ constinit uint64_t Timer::ticks_ = 0;
+ uint64_t Timer::counter_freq_hz_ = 0;
+ uint32_t Timer::tick_interval_ = 0;
+@@ -50,7 +56,9 @@ void Timer::init(uint32_t frequency_hz) {
+ }
+ 
+ /// @brief Set the timer compare value to achieve a given frequency.
+-/// Reads CNTFRQ_EL0 to calculate the interval and writes it to CNTP_TVAL_EL0.
++/// Programs an absolute CNTP_CVAL_EL0 deadline (now + interval) so a late
++/// re-arm cannot land in the past and storm. Re-arming uses CVAL, not the
++/// relative TVAL window.
+ /// @param[in] frequency_hz Desired frequency in Hz.
+ void Timer::set_frequency(uint32_t frequency_hz) {
+     if (frequency_hz == 0) {
+@@ -60,8 +68,12 @@ void Timer::set_frequency(uint32_t frequency_hz) {
+     asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+     counter_freq_hz_ = freq;
+     uint64_t interval = freq / frequency_hz;
+-    tick_interval_ = static_cast<uint32_t>(interval);
+-    asm volatile("msr cntp_tval_el0, %0" : : "r"(interval));
++    tick_interval_ = static_cast<uint32_t>(interval == 0 ? 1 : interval);
++    uint64_t now{};
++    asm volatile("mrs %0, cntpct_el0" : "=r"(now));
++    const uint64_t deadline =
++        (now > ~0ULL - tick_interval_) ? ~0ULL : now + tick_interval_;
++    asm volatile("msr cntp_cval_el0, %0" : : "r"(deadline));
+     asm volatile("msr cntp_ctl_el0, %0" : : "r"(1UL));
+     isb();
+ }
+@@ -85,8 +97,9 @@ uint64_t Timer::ns() {
+ }
+ 
+ /// @brief Handle a timer interrupt: increment tick count and re-arm the timer.
+-/// The compare value must be pushed into the future again, otherwise the
+-/// level-asserted interrupt re-pends immediately after EOI (IRQ storm).
++/// Re-arms via an absolute CVAL deadline (now + latched interval) so a
++/// delayed handler cannot program the past and storm on a level-asserted
++/// line. Saturating tick count (no wrap).
+ /// @param ip Instruction pointer from interrupt frame.
+ void Timer::handle_irq(uint64_t ip) {
+     (void)ip;
+@@ -95,7 +108,11 @@ void Timer::handle_irq(uint64_t ip) {
+     if (interval == 0) {
+         interval = 1;
+     }
+-    asm volatile("msr cntp_tval_el0, %0" : : "r"(interval));
++    uint64_t now{};
++    asm volatile("mrs %0, cntpct_el0" : "=r"(now));
++    const uint64_t deadline =
++        (now > ~0ULL - interval) ? ~0ULL : now + interval;
++    asm volatile("msr cntp_cval_el0, %0" : : "r"(deadline));
+     asm volatile("msr cntp_ctl_el0, %0" : : "r"(1UL));
+     isb();
+ }
+@@ -147,9 +164,9 @@ uint64_t Timer::remaining_ns() {
+     if (freq == 0) {
+         return 0;
+     }
+-    const uint64_t tval = remaining();
+-    return (tval / freq) * 1000000000ULL +
+-           ((tval % freq) * 1000000000ULL) / freq;
++    const uint64_t rem = counter_remaining();
++    return (rem / freq) * 1000000000ULL +
++           ((rem % freq) * 1000000000ULL) / freq;
+ }
+ 
+ /// @brief Override the tick counter (used in test isolation).
+@@ -159,51 +176,119 @@ void Timer::set_ticks_for_test(uint64_t value) {
+ }
+ 
+ /// @brief Arm the timer for a one-shot interrupt after a number of ticks.
+-/// @param[in] ticks_from_now Number of scheduler ticks (ms) from now.
++/// @param[in] ticks_from_now Number of scheduler ticks from now.
++/// Converts coarse ticks (BootParams::timer_hz, fallback CONFIG_TICK_HZ)
++/// to counter ticks and arms an absolute CVAL deadline. Saturating math:
++/// oversized requests clamp to the maximum deadline, never wrap.
++/// 0 disarms (CTL=0); remaining() then reads 0.
+ void Timer::oneshot(uint64_t ticks_from_now) {
+     if (ticks_from_now == 0) {
+         // Disarm: clear the countdown and disable the physical timer so
+-        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
++        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer
++        // contract). CTL-gated remaining() makes the readback exact
++        // (TVAL is count-minus-CVAL derived, not a stored zero).
+         asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
+         asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
+         isb();
+         return;
+     }
+-    uint64_t interval = ticks_from_now * (counter_freq_hz_ / 1000);
+-    if (interval == 0)
++    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz != 0
++                                 ? kernel::BootParams::instance().timer_hz
++                                 : CONFIG_TICK_HZ;
++    const uint64_t freq = counter_freq_hz_;
++    const uint64_t per_coarse = (freq == 0 || boot_hz == 0)
++                                    ? 1ULL
++                                    : freq / boot_hz == 0 ? 1ULL
++                                                          : freq / boot_hz;
++    uint64_t interval = (ticks_from_now > ~0ULL / per_coarse)
++                            ? ~0ULL
++                            : ticks_from_now * per_coarse;
++    if (interval == 0) {
+         interval = 1;
+-    asm volatile("msr cntp_tval_el0, %0" : : "r"(interval));
++    }
++    uint64_t now{};
++    asm volatile("mrs %0, cntpct_el0" : "=r"(now));
++    const uint64_t deadline =
++        (now > ~0ULL - interval) ? ~0ULL : now + interval;
++    asm volatile("msr cntp_cval_el0, %0" : : "r"(deadline));
+     asm volatile("msr cntp_ctl_el0, %0" : : "r"(1UL));
+     isb();
+ }
+ 
+ /// @brief Arm the timer for periodic interrupts.
+-/// @param[in] period_ticks Interval in scheduler ticks (ms).
++/// @param[in] period_ticks Period in scheduler ticks (not Hz). Converts to
++/// counter ticks at BootParams::timer_hz and latches the interval so the
++/// ISR re-arms the same period. 0 disarms (CTL=0).
+ void Timer::periodic(uint64_t period_ticks) {
+     if (period_ticks == 0) {
+         // Disarm: clear the countdown and disable the physical timer so
+-        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
++        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer
++        // contract).
+         asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
+         asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
+         isb();
+         return;
+     }
+-    uint64_t freq{};
+-    asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+-    uint64_t interval = freq / period_ticks;
+-    if (interval == 0)
++    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz != 0
++                                 ? kernel::BootParams::instance().timer_hz
++                                 : CONFIG_TICK_HZ;
++    const uint64_t freq = counter_freq_hz_;
++    const uint64_t per_coarse = (freq == 0 || boot_hz == 0)
++                                    ? 1ULL
++                                    : freq / boot_hz == 0 ? 1ULL
++                                                          : freq / boot_hz;
++    uint64_t interval = (period_ticks > ~0ULL / per_coarse)
++                            ? ~0ULL
++                            : period_ticks * per_coarse;
++    if (interval == 0) {
+         interval = 1;
+-    asm volatile("msr cntp_tval_el0, %0" : : "r"(interval));
++    }
++    tick_interval_ = (interval > 0xFFFFFFFFULL)
++                         ? 0xFFFFFFFFU
++                         : static_cast<uint32_t>(interval);
++    uint64_t now{};
++    asm volatile("mrs %0, cntpct_el0" : "=r"(now));
++    const uint64_t deadline =
++        (now > ~0ULL - interval) ? ~0ULL : now + interval;
++    asm volatile("msr cntp_cval_el0, %0" : : "r"(deadline));
+     asm volatile("msr cntp_ctl_el0, %0" : : "r"(1UL));
+     isb();
+ }
+ 
+-/// @brief Read the remaining time on the timer (CNTP_TVAL_EL0).
+-/// @return Remaining timer value in counter ticks.
++/// @brief Counter ticks remaining until the armed deadline (0 when the
++/// timer is disabled or expired). Shared by remaining()/remaining_ns().
++/// @return Remaining counter ticks (clamped, never wraps).
++static uint64_t counter_remaining() {
++    uint64_t ctl{};
++    asm volatile("mrs %0, cntp_ctl_el0" : "=r"(ctl));
++    if ((ctl & 1ULL) == 0) {
++        return 0;
++    }
++    uint64_t cval{};
++    asm volatile("mrs %0, cntp_cval_el0" : "=r"(cval));
++    uint64_t now{};
++    asm volatile("mrs %0, cntpct_el0" : "=r"(now));
++    return (cval > now) ? (cval - now) : 0;
++}
++
++/// @brief Read the remaining time on the timer in coarse scheduler ticks.
++/// @return Remaining whole+partial ticks (ceil), 0 when disarmed/expired.
+ uint64_t Timer::remaining() {
+-    uint64_t val{};
+-    asm volatile("mrs %0, cntp_tval_el0" : "=r"(val));
+-    return val;
++    const uint64_t rem = counter_remaining();
++    if (rem == 0) {
++        return 0;
++    }
++    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz != 0
++                                 ? kernel::BootParams::instance().timer_hz
++                                 : CONFIG_TICK_HZ;
++    const uint64_t freq = counter_freq_hz_;
++    if (freq == 0 || boot_hz == 0) {
++        return rem;
++    }
++    const uint64_t per_coarse = freq / boot_hz == 0 ? 1 : freq / boot_hz;
++    // Ceil without add-overflow: q + (r != 0), valid for saturated ~0ULL
++    // deadlines where (rem + per_coarse - 1) would wrap (S3 hardening).
++    return rem / per_coarse + (rem % per_coarse != 0 ? 1 : 0);
+ }
+ 
+ } // namespace arch
+diff --git a/src/kernel/arch/hal/idt.hpp b/src/kernel/arch/hal/idt.hpp
+index bd520e6c7..e69520f60 100644
+--- a/src/kernel/arch/hal/idt.hpp
++++ b/src/kernel/arch/hal/idt.hpp
+@@ -154,7 +154,7 @@ class IDT {
+                                  uint64_t rip);
+ 
+   private:
+-    static constexpr size_t NUM_ENTRIES = 64;
++    static constexpr size_t NUM_ENTRIES = 256;
+     static ISRHandler handlers_[NUM_ENTRIES];
+ };
+ 
+diff --git a/src/kernel/arch/hal/interrupt_controller.hpp b/src/kernel/arch/hal/interrupt_controller.hpp
+index a82588a29..1659b4fbb 100644
+--- a/src/kernel/arch/hal/interrupt_controller.hpp
++++ b/src/kernel/arch/hal/interrupt_controller.hpp
+@@ -103,9 +103,10 @@ class ArchInterruptController {
+ #elif defined(CONFIG_ARCH_AARCH64)
+ /// @endcond
+ 
+-/// @brief Snapshot of the AArch64 GIC mask state.
++/// @brief Snapshot of the AArch64 GIC mask state (full 256-INTID window).
+ struct IrqState {
+-    uint64_t gic_mask; ///< GIC interrupt mask.
++    uint64_t gic_mask; ///< GIC distributor enable banks 0-1 (INTIDs 0-63).
++    uint32_t gic_enable_hi[7]; ///< GIC distributor enable banks 2-7 (INTIDs 64-255).
+ };
+ 
+ /// @brief AArch64 GIC (Generic Interrupt Controller) driver.
+@@ -129,10 +130,11 @@ bool gic_redist_ready();
+ #elif defined(CONFIG_ARCH_RISCV64)
+ /// @endcond
+ 
+-/// @brief Snapshot of the RISC-V PLIC threshold + first enable word.
++/// @brief Snapshot of the RISC-V PLIC threshold + S-context enable words.
+ struct IrqState {
+     uint32_t plic_threshold;  ///< PLIC priority threshold.
+     uint32_t plic_enable_first; ///< PLIC enable word for IRQ lines 0–31.
++    uint32_t plic_enable_hi[2]; ///< PLIC S-context enable words 1-2 (lines 32-95).
+ };
+ 
+ /// @brief RISC-V PLIC (Platform-Level Interrupt Controller) driver.
+diff --git a/src/kernel/arch/hal/irq_storm.hpp b/src/kernel/arch/hal/irq_storm.hpp
+new file mode 100644
+index 000000000..f923dae22
+--- /dev/null
++++ b/src/kernel/arch/hal/irq_storm.hpp
+@@ -0,0 +1,74 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file irq_storm.hpp
++/// @brief Allocation-free per-tick same-INTID storm limiter (issue #349).
++/// Shared by the AArch64 and RISC-V interrupt paths. The caller feeds every
++/// dispatched non-timer INTID; when the same INTID repeats
++/// CONFIG_IRQ_STORM_LIMIT times within one tick, observe() returns true and
++/// the caller masks the line plus one dmesg ERROR. ISR-safe: plain integer
++/// fields, no locks, no allocation. Never feed the timer INTID.
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++
++namespace arch {
++
++/// @brief Per-tick same-INTID repetition detector.
++class IrqStormLimiter {
++  public:
++    /// @brief Observe one dispatch of @p intid at tick @p now_tick.
++    /// @return true when this INTID hit the per-tick limit (mask it).
++    bool observe(uint64_t intid, uint64_t now_tick) {
++        if (intid != last_intid_ || now_tick != last_tick_) {
++            last_intid_ = intid;
++            last_tick_ = now_tick;
++            burst_ = 1;
++            return false;
++        }
++        if (burst_ < CONFIG_IRQ_STORM_LIMIT) {
++            ++burst_;
++            return false;
++        }
++        return true;
++    }
++
++    /// @brief Number of times the limiter tripped (diagnostic).
++    /// @return Trip count.
++    uint64_t masked_count() const { return trips_; }
++
++    /// @brief Record that the caller masked the line (diagnostic).
++    void note_masked() { ++trips_; }
++
++    /// @brief Reset burst state (test isolation).
++    void reset() {
++        last_intid_ = 0;
++        last_tick_ = 0;
++        burst_ = 0;
++    }
++
++  private:
++    uint64_t last_intid_ = 0;
++    uint64_t last_tick_ = 0;
++    uint64_t burst_ = 0;
++    uint64_t trips_ = 0;
++};
++
++} // namespace arch
+diff --git a/src/kernel/arch/hal/timer.hpp b/src/kernel/arch/hal/timer.hpp
+index e245693bc..a01405fad 100644
+--- a/src/kernel/arch/hal/timer.hpp
++++ b/src/kernel/arch/hal/timer.hpp
+@@ -182,13 +182,21 @@ class Timer {
+     /// @brief Override the tick counter (test support).
+     static void set_ticks_for_test(uint64_t value);
+ 
+-    /// @brief Schedule a one-shot timer interrupt.
++    /// @brief Schedule a one-shot timer interrupt after coarse ticks.
++    /// Converts coarse ticks (BootParams::timer_hz) to an absolute
++    /// CNTP_CVAL_EL0 deadline. 0 disarms (CTL=0); the periodic tick
++    /// is not preserved across a one-shot (re-arm explicitly).
++    /// @param ticks_from_now Number of coarse scheduler ticks (0 = disarm).
+     static void oneshot(uint64_t ticks_from_now);
+     /// @brief Configure a periodic timer interrupt.
++    /// Latches the converted interval so handle_irq() persists the period.
++    /// @param period_ticks Period in coarse scheduler ticks (0 = disarm).
+     static void periodic(uint64_t period_ticks);
+-    /// @brief Get the remaining ticks on the current timer.
++    /// @brief Get the remaining time in coarse scheduler ticks (ceil).
++    /// @return Remaining ticks (0 when disarmed or expired).
+     static uint64_t remaining();
+-    /// @brief Sub-tick nanoseconds remaining on the current timer.
++    /// @brief Sub-tick nanoseconds remaining on the armed deadline.
++    /// @return Remaining nanoseconds (0 when disarmed or expired).
+     static uint64_t remaining_ns();
+     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
+     static uint64_t tsc_freq_hz();
+@@ -242,13 +250,20 @@ class Timer {
+     /// @brief Override the tick count (test support).
+     static void set_ticks_for_test(uint64_t value);
+ 
+-    /// @brief Schedule a one-shot timer interrupt.
++    /// @brief Schedule a one-shot timer via SBI (absolute mtime deadline).
++    /// Converts coarse ticks (BootParams::timer_hz) via now + interval.
++    /// 0 parks mtimecmp at the maximum (disarm; STIP cannot be cleared).
++    /// @param ticks_from_now Coarse scheduler ticks (0 = disarm).
+     static void oneshot(uint64_t ticks_from_now);
+-    /// @brief Configure a periodic timer interrupt.
++    /// @brief Configure a periodic timer via SBI.
++    /// Latches the converted interval so handle_irq() persists the period.
++    /// @param period_ticks Period in coarse scheduler ticks (0 = disarm).
+     static void periodic(uint64_t period_ticks);
+-    /// @brief Get the remaining ticks on the current timer.
++    /// @brief Get the remaining time (always 0: mtimecmp unreadable in S-mode).
++    /// @return 0.
+     static uint64_t remaining();
+     /// @brief Sub-tick nanoseconds remaining (0: mtimecmp unreadable).
++    /// @return 0.
+     static uint64_t remaining_ns();
+     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
+     static uint64_t tsc_freq_hz();
+diff --git a/src/kernel/arch/riscv64/hal/plic.hpp b/src/kernel/arch/riscv64/hal/plic.hpp
+index e50bd6758..1274bab58 100644
+--- a/src/kernel/arch/riscv64/hal/plic.hpp
++++ b/src/kernel/arch/riscv64/hal/plic.hpp
+@@ -19,8 +19,9 @@
+ ///   1-8 = virtio-mmio devices
+ ///   9   = (unused)
+ ///   10  = UART
+-///   11  = (unused)
++///   11  = RTC (goldfish)
+ ///   12  = keyboard (PS/2)
++///   32-35 = PCIe INTx
+ namespace arch {
+ 
+ inline constexpr uint64_t PLIC_BASE     = 0x0C000000ULL;
+@@ -30,6 +31,19 @@ inline constexpr uint64_t PLIC_ENABLE   = PLIC_BASE + 0x002000;
+ inline constexpr uint64_t PLIC_THRESHOLD = PLIC_BASE + 0x200000;
+ inline constexpr uint64_t PLIC_CLAIM    = PLIC_BASE + 0x200004;
+ 
++/// @brief S-mode context (hart 0) register block (issue #349). The kernel
++/// runs in S-mode: all PLIC programming uses these, never the M-context
++/// aliases above (OpenSBI owns context 0).
++inline constexpr uint64_t PLIC_S_CONTEXT = 1;
++inline constexpr uint64_t PLIC_ENABLE_S =
++    PLIC_BASE + 0x002000 + PLIC_S_CONTEXT * 0x80;
++inline constexpr uint64_t PLIC_THRESHOLD_S =
++    PLIC_BASE + 0x200000 + PLIC_S_CONTEXT * 0x1000;
++inline constexpr uint64_t PLIC_CLAIM_S = PLIC_THRESHOLD_S + 4;
++
++/// @brief Highest source ID the kernel addresses (96 sources, 3 words).
++inline constexpr uint32_t PLIC_MAX_SOURCES = 96;
++
+ /// @brief QEMU virt IRQ numbers.
+ inline constexpr uint32_t IRQ_VIRTIO0 = 1;
+ inline constexpr uint32_t IRQ_VIRTIO1 = 2;
+@@ -37,7 +51,9 @@ inline constexpr uint32_t IRQ_VIRTIO2 = 3;
+ inline constexpr uint32_t IRQ_VIRTIO3 = 4;
+ inline constexpr uint32_t IRQ_VIRTIO4 = 5;
+ inline constexpr uint32_t IRQ_UART    = 10;
++inline constexpr uint32_t IRQ_RTC     = 11;   // Goldfish RTC
+ inline constexpr uint32_t IRQ_KEYBOARD = 12;
++inline constexpr uint32_t IRQ_PCI_BASE = 32;  // PCIe INTx 32-35
+ 
+ // ─── Accessors ───────────────────────────────────────────────────────────
+ inline volatile uint32_t *plic_priority_reg(uint32_t irq) {
+@@ -56,4 +72,48 @@ inline void plic_complete(uint32_t intid) {
+     *reinterpret_cast<volatile uint32_t *>(PLIC_CLAIM) = intid;
+ }
+ 
++// ─── S-context helpers (issue #349) ────────────────────────────────────
++
++/// @brief Set an S-context source priority (0 = never interrupt).
++inline void plic_set_priority(uint32_t irq, uint32_t prio) {
++    if (irq == 0 || irq >= PLIC_MAX_SOURCES) {
++        return;
++    }
++    *reinterpret_cast<volatile uint32_t *>(PLIC_PRIORITY + irq * 4) = prio;
++}
++
++/// @brief Read back an S-context source priority (diagnostic).
++inline uint32_t plic_get_priority(uint32_t irq) {
++    if (irq == 0 || irq >= PLIC_MAX_SOURCES) {
++        return 0;
++    }
++    return *reinterpret_cast<volatile uint32_t *>(PLIC_PRIORITY + irq * 4);
++}
++
++/// @brief Set the S-context priority threshold.
++inline void plic_set_threshold(uint32_t threshold) {
++    *reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD_S) = threshold;
++}
++
++/// @brief Read back the S-context priority threshold.
++inline uint32_t plic_get_threshold() {
++    return *reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD_S);
++}
++
++/// @brief S-context enable word for an IRQ (words 0-2 cover 0-95).
++inline volatile uint32_t *plic_enable_reg_s(uint32_t irq) {
++    return reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S +
++                                                 (irq / 32) * 4);
++}
++
++/// @brief Claim the highest-priority pending S-context interrupt (0 = none).
++inline uint32_t plic_claim_s() {
++    return *reinterpret_cast<volatile uint32_t *>(PLIC_CLAIM_S);
++}
++
++/// @brief Complete an S-context interrupt (must match the claim).
++inline void plic_complete_s(uint32_t intid) {
++    *reinterpret_cast<volatile uint32_t *>(PLIC_CLAIM_S) = intid;
++}
++
+ } // namespace arch
+diff --git a/src/kernel/arch/riscv64/interrupt_controller.cpp b/src/kernel/arch/riscv64/interrupt_controller.cpp
+index 65859b581..b7063526a 100644
+--- a/src/kernel/arch/riscv64/interrupt_controller.cpp
++++ b/src/kernel/arch/riscv64/interrupt_controller.cpp
+@@ -2,6 +2,9 @@
+ #include <kernel/arch/hal/io.hpp>
+ #include <kernel/arch/idt.hpp>
+ #include <kernel/arch/riscv64/hal/plic.hpp>
++#include <kernel/arch/hal/irq_storm.hpp>
++#include <kernel/arch/timer.hpp>
++#include <kernel/log/dmesg.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/debug/debug_stop.hpp>
+@@ -10,39 +13,57 @@
+ 
+ namespace arch {
+ 
++/// @brief BOOT_ONLY latch: init() programs hardware exactly once.
++static bool g_plic_initialized = false;
++/// @brief Last claimed INTID (diagnostic; completion is trap-owned).
++/// Sentinel ~0ULL = none yet: no valid INTID ever equals it.
++static uint64_t g_last_acked = ~0ULL;
++/// @brief Spurious claims (claim == 0, diagnostic).
++static uint64_t g_spurious_count = 0;
++/// @brief Per-tick same-INTID storm limiter (never fed the timer INTID).
++static IrqStormLimiter g_storm{};
++
+ void ArchInterruptController::init() {
+-    auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
+-    *threshold = 0;
+-    // Default priority 1 for the QEMU virt wired lines (priority 0 = never
+-    // interrupt). Lines stay disabled here — drivers enable their own IRQ
+-    // when their IDT handler is registered (no unsolicited delivery).
+-    *plic_priority_reg(IRQ_UART) = 1;
+-    *plic_priority_reg(IRQ_KEYBOARD) = 1;
+-    *plic_priority_reg(IRQ_VIRTIO0) = 1;
+-    *plic_priority_reg(IRQ_VIRTIO1) = 1;
+-    *plic_priority_reg(IRQ_VIRTIO2) = 1;
+-    *plic_priority_reg(IRQ_VIRTIO3) = 1;
+-    *plic_priority_reg(IRQ_VIRTIO4) = 1;
++    if (g_plic_initialized) {
++        return;
++    }
++    // S-mode context 1 (hart 0): threshold 0, priorities, enable words.
++    // Priority 0 = never interrupt; lines stay disabled here — drivers
++    // enable their own IRQ when their IDT handler is registered (no
++    // unsolicited delivery).
++    *reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD_S) = 0;
++    for (uint32_t irq = 1; irq < PLIC_MAX_SOURCES; ++irq) {
++        plic_set_priority(irq, 1);
++    }
++    for (uint32_t w = 0; w < 3; ++w) {
++        *reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S + w * 4) = 0;
++    }
+     asm volatile("fence iorw, iorw" : : : "memory");
+     asm volatile("csrs sie, %0" : : "r"((uint64_t)(1ULL << 9)) : "memory");
++    g_plic_initialized = true;
+ }
+ 
+ void ArchInterruptController::eoi(uint8_t vector) {
+-    plic_complete(vector);
++    // No-op by design (issue #349): completion is owned by
++    // handle_plic_trap (claim+complete pair). A second complete of the
++    // same INTID would corrupt PLIC state, so independent EOI callers
++    // must not write PLIC_CLAIM_S here. Track the ack for diagnostics.
++    (void)vector;
++    g_last_acked = vector;
+ }
+ 
+-/// @brief Valid IRQ window for mask/unmask (issue #198): QEMU virt exposes
+-///        a single 32-line enable word; lines >= 32 have no defined register
+-///        and must not touch MMIO.
+-inline constexpr uint8_t PLIC_MAX_IRQ = 32;
++/// @brief Valid IRQ window: S-context words 0-2 cover sources 0-95.
++/// Lines >= 96 have no defined register and must not touch MMIO.
++inline constexpr uint32_t PLIC_MAX_IRQ = PLIC_MAX_SOURCES;
+ 
+ void ArchInterruptController::mask(uint8_t irq) {
+     if (irq >= PLIC_MAX_IRQ) {
+         return;
+     }
+-    // Single-core early precondition (INV/CONC): no lock needed; the fence
+-    // orders the MMIO write before any subsequent claim/complete.
+-    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
++    // RMW under IrqGuard: a thread-context mask must not interleave with
++    // an ISR storm-mask write to the same word (INV/CONC).
++    arch::IrqGuard irq_guard{};
++    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
+     enable[irq / 32] &= ~(1U << (irq % 32));
+     asm volatile("fence iorw, iorw" : : : "memory");
+ }
+@@ -51,25 +72,30 @@ void ArchInterruptController::unmask(uint8_t irq) {
+     if (irq >= PLIC_MAX_IRQ) {
+         return;
+     }
+-    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
++    arch::IrqGuard irq_guard{};
++    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
+     enable[irq / 32] |= (1U << (irq % 32));
+     asm volatile("fence iorw, iorw" : : : "memory");
+ }
+ 
+ IrqState ArchInterruptController::snapshot() {
+     IrqState s{};
+-    auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
+-    s.plic_threshold = *threshold;
+-    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
++    s.plic_threshold =
++        *reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD_S);
++    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
+     s.plic_enable_first = enable[0];
++    s.plic_enable_hi[0] = enable[1];
++    s.plic_enable_hi[1] = enable[2];
+     return s;
+ }
+ 
+ void ArchInterruptController::restore(const IrqState &state) {
+-    auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
+-    *threshold = state.plic_threshold;
+-    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
++    *reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD_S) =
++        state.plic_threshold;
++    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
+     enable[0] = state.plic_enable_first;
++    enable[1] = state.plic_enable_hi[0];
++    enable[2] = state.plic_enable_hi[1];
+     asm volatile("fence iorw, iorw" : : : "memory");
+ }
+ 
+@@ -82,11 +108,32 @@ extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
+             IDT::handle_interrupt(
+                 static_cast<uint64_t>(InterruptVector::TIMER), 0, sepc);
+         } else if (code == 9) {
+-            uint32_t intid = plic_claim();
+-            if (intid != 0) {
++            uint32_t intid = plic_claim_s();
++            if (intid == 0) {
++                // Spurious claim: no pending source, nothing to complete.
++                ++g_spurious_count;
++                return;
++            }
++            if (intid >= PLIC_MAX_SOURCES) {
++                // Out-of-window source: fail closed (complete + return,
++                // never dispatch).
++                plic_complete_s(intid);
++                return;
++            }
++            if (g_storm.observe(intid, arch::Timer::ticks())) {
++                ArchInterruptController::mask(
++                    static_cast<uint8_t>(intid));
++                g_storm.note_masked();
++                kernel::log::dmesg_push_sev(
++                    kernel::log::ErrorSubsystem::BASE,
++                    kernel::log::kDmesgBase_BASE + 64,
++                    kernel::log::LogSeverity::ERROR,
++                    "irq storm masked", intid);
++            } else {
+                 IDT::handle_interrupt(intid, 0, sepc);
+-                plic_complete(intid);
+             }
++            g_last_acked = intid;
++            plic_complete_s(intid);
+         }
+     }
+ }
+diff --git a/src/kernel/arch/riscv64/timer.cpp b/src/kernel/arch/riscv64/timer.cpp
+index bc1f76928..933645297 100644
+--- a/src/kernel/arch/riscv64/timer.cpp
++++ b/src/kernel/arch/riscv64/timer.cpp
+@@ -22,6 +22,7 @@
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <kernel/arch/idt.hpp>
++#include <kernel/bootparams.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/nexios_config.h>
+ 
+@@ -59,6 +60,15 @@ void Timer::init(uint32_t frequency_hz) {
+                           });
+ }
+ 
++/// @brief Arm the SBI timer for an absolute mtime deadline (EID 0).
++/// @param absolute_deadline mtime value to fire at (MTIMECMP_DISARMED parks).
++static void sbi_set_timer(uint64_t absolute_deadline) {
++    asm volatile("mv a0, %0; mv a7, %1; ecall"
++                 :
++                 : "r"(absolute_deadline), "r"(SBI_LEGACY_SET_TIMER)
++                 : "a0", "a7", "memory");
++}
++
+ void Timer::set_frequency(uint32_t frequency_hz) {
+     if (frequency_hz == 0) {
+         return;
+@@ -67,11 +77,15 @@ void Timer::set_frequency(uint32_t frequency_hz) {
+     timer_freq_hz_ = RISCV_MTIME_FREQ_HZ;
+     const uint64_t interval = timer_freq_hz_ / frequency_hz;
+     timer_interval_ = (interval == 0) ? 1 : interval;
+-    // SBI_SET_TIMER via ecall
+-    asm volatile("mv a0, %0; mv a7, %1; ecall"
+-                 :
+-                 : "r"(interval), "r"(SBI_LEGACY_SET_TIMER)
+-                 : "a0", "a7", "memory");
++    // Absolute deadline (now + interval): the old code passed the bare
++    // interval as the deadline, firing immediately whenever boot mtime
++    // exceeded it (issue #349).
++    uint64_t now{};
++    asm volatile("csrr %0, time" : "=r"(now));
++    const uint64_t deadline = (now > ~0ULL - timer_interval_)
++                                  ? ~0ULL
++                                  : now + timer_interval_;
++    sbi_set_timer(deadline);
+     // Enable STIP in sie
+     uint64_t sie{};
+     asm volatile("csrr %0, sie" : "=r"(sie));
+@@ -111,11 +125,9 @@ void Timer::handle_irq([[maybe_unused]] uint64_t ip) {
+     }
+     uint64_t now{};
+     asm volatile("csrr %0, time" : "=r"(now));
+-    const uint64_t next = now + interval;
+-    asm volatile("mv a0, %0; mv a7, %1; ecall"
+-                 :
+-                 : "r"(next), "r"(SBI_LEGACY_SET_TIMER)
+-                 : "a0", "a7", "memory");
++    const uint64_t deadline =
++        (now > ~0ULL - interval) ? ~0ULL : now + interval;
++    sbi_set_timer(deadline);
+ }
+ 
+ /// @brief Override the tick counter for testing.
+@@ -170,7 +182,7 @@ uint64_t Timer::remaining_ns() {
+ }
+ 
+ /// @brief Arm a one-shot timer via SBI.
+-/// @param ticks_from_now Number of milliseconds from now to fire (0 = disarm:
++/// @param ticks_from_now Coarse scheduler ticks from now (0 = disarm:
+ ///        mtimecmp is parked at the maximum — S-mode cannot clear a pending
+ ///        STIP, only push its deadline out).
+ void Timer::oneshot(uint64_t ticks_from_now) {
+@@ -178,38 +190,53 @@ void Timer::oneshot(uint64_t ticks_from_now) {
+     asm volatile("csrr %0, time" : "=r"(now));
+     uint64_t deadline = MTIMECMP_DISARMED;
+     if (ticks_from_now != 0) {
+-        uint64_t interval = ticks_from_now * (timer_freq_hz_ / 1000);
++        const uint64_t boot_hz = kernel::BootParams::instance().timer_hz != 0
++                                     ? kernel::BootParams::instance().timer_hz
++                                     : CONFIG_TICK_HZ;
++        const uint64_t per_coarse =
++            (timer_freq_hz_ == 0 || boot_hz == 0)
++                ? 1ULL
++                : timer_freq_hz_ / boot_hz == 0
++                      ? 1ULL
++                      : timer_freq_hz_ / boot_hz;
++        uint64_t interval = (ticks_from_now > ~0ULL / per_coarse)
++                                ? ~0ULL
++                                : ticks_from_now * per_coarse;
+         if (interval == 0) {
+             interval = 1;
+         }
+-        deadline = now + interval;
++        deadline = (now > ~0ULL - interval) ? ~0ULL : now + interval;
+     }
+-    asm volatile("mv a0, %0; mv a7, %1; ecall"
+-                 :
+-                 : "r"(deadline), "r"(SBI_LEGACY_SET_TIMER)
+-                 : "a0", "a7", "memory");
++    sbi_set_timer(deadline);
+ }
+ 
+ /// @brief Arm a periodic timer via SBI.
+-/// @param period_ticks Period in ticks (Hz). 0 = disarm (deadline parked at
+-///        the maximum); otherwise the handle_irq re-arm interval is latched
+-///        so the period persists across ticks.
++/// @param period_ticks Period in coarse scheduler ticks (0 = disarm).
++/// Latches the converted interval so handle_irq() persists the period.
+ void Timer::periodic(uint64_t period_ticks) {
+     uint64_t now{};
+     asm volatile("csrr %0, time" : "=r"(now));
+     uint64_t deadline = MTIMECMP_DISARMED;
+     if (period_ticks != 0) {
+-        uint64_t interval = timer_freq_hz_ / period_ticks;
++        const uint64_t boot_hz = kernel::BootParams::instance().timer_hz != 0
++                                     ? kernel::BootParams::instance().timer_hz
++                                     : CONFIG_TICK_HZ;
++        const uint64_t per_coarse =
++            (timer_freq_hz_ == 0 || boot_hz == 0)
++                ? 1ULL
++                : timer_freq_hz_ / boot_hz == 0
++                      ? 1ULL
++                      : timer_freq_hz_ / boot_hz;
++        uint64_t interval = (period_ticks > ~0ULL / per_coarse)
++                                ? ~0ULL
++                                : period_ticks * per_coarse;
+         if (interval == 0) {
+             interval = 1;
+         }
+         timer_interval_ = interval;
+-        deadline = now + interval;
++        deadline = (now > ~0ULL - interval) ? ~0ULL : now + interval;
+     }
+-    asm volatile("mv a0, %0; mv a7, %1; ecall"
+-                 :
+-                 : "r"(deadline), "r"(SBI_LEGACY_SET_TIMER)
+-                 : "a0", "a7", "memory");
++    sbi_set_timer(deadline);
+ }
+ 
+ /// @brief Return time remaining on the current timer.
+diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
+index f5f2ecc7c..4b2db6f73 100644
+--- a/src/kernel/nexios_config.h
++++ b/src/kernel/nexios_config.h
+@@ -116,6 +116,13 @@
+ #define CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY 1
+ #endif
+ 
++/// Same-INTID dispatches per tick before the storm limiter masks the line
++/// (issue #349). The timer INTID is never fed to the limiter.
++/// Default: 256.
++#ifndef CONFIG_IRQ_STORM_LIMIT
++#define CONFIG_IRQ_STORM_LIMIT 256
++#endif
++
+ // ---------------------------------------------------------------------------
+ // Memory Layout Tunables (Architecture-Overridable)
+ // ---------------------------------------------------------------------------

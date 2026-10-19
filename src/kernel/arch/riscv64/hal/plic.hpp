@@ -19,8 +19,9 @@
 ///   1-8 = virtio-mmio devices
 ///   9   = (unused)
 ///   10  = UART
-///   11  = (unused)
+///   11  = RTC (goldfish)
 ///   12  = keyboard (PS/2)
+///   32-35 = PCIe INTx
 namespace arch {
 
 inline constexpr uint64_t PLIC_BASE     = 0x0C000000ULL;
@@ -30,6 +31,19 @@ inline constexpr uint64_t PLIC_ENABLE   = PLIC_BASE + 0x002000;
 inline constexpr uint64_t PLIC_THRESHOLD = PLIC_BASE + 0x200000;
 inline constexpr uint64_t PLIC_CLAIM    = PLIC_BASE + 0x200004;
 
+/// @brief S-mode context (hart 0) register block (issue #349). The kernel
+/// runs in S-mode: all PLIC programming uses these, never the M-context
+/// aliases above (OpenSBI owns context 0).
+inline constexpr uint64_t PLIC_S_CONTEXT = 1;
+inline constexpr uint64_t PLIC_ENABLE_S =
+    PLIC_BASE + 0x002000 + PLIC_S_CONTEXT * 0x80;
+inline constexpr uint64_t PLIC_THRESHOLD_S =
+    PLIC_BASE + 0x200000 + PLIC_S_CONTEXT * 0x1000;
+inline constexpr uint64_t PLIC_CLAIM_S = PLIC_THRESHOLD_S + 4;
+
+/// @brief Highest source ID the kernel addresses (96 sources, 3 words).
+inline constexpr uint32_t PLIC_MAX_SOURCES = 96;
+
 /// @brief QEMU virt IRQ numbers.
 inline constexpr uint32_t IRQ_VIRTIO0 = 1;
 inline constexpr uint32_t IRQ_VIRTIO1 = 2;
@@ -37,7 +51,9 @@ inline constexpr uint32_t IRQ_VIRTIO2 = 3;
 inline constexpr uint32_t IRQ_VIRTIO3 = 4;
 inline constexpr uint32_t IRQ_VIRTIO4 = 5;
 inline constexpr uint32_t IRQ_UART    = 10;
+inline constexpr uint32_t IRQ_RTC     = 11;   // Goldfish RTC
 inline constexpr uint32_t IRQ_KEYBOARD = 12;
+inline constexpr uint32_t IRQ_PCI_BASE = 32;  // PCIe INTx 32-35
 
 // ─── Accessors ───────────────────────────────────────────────────────────
 inline volatile uint32_t *plic_priority_reg(uint32_t irq) {
@@ -54,6 +70,50 @@ inline uint32_t plic_claim() {
 
 inline void plic_complete(uint32_t intid) {
     *reinterpret_cast<volatile uint32_t *>(PLIC_CLAIM) = intid;
+}
+
+// ─── S-context helpers (issue #349) ────────────────────────────────────
+
+/// @brief Set an S-context source priority (0 = never interrupt).
+inline void plic_set_priority(uint32_t irq, uint32_t prio) {
+    if (irq == 0 || irq >= PLIC_MAX_SOURCES) {
+        return;
+    }
+    *reinterpret_cast<volatile uint32_t *>(PLIC_PRIORITY + irq * 4) = prio;
+}
+
+/// @brief Read back an S-context source priority (diagnostic).
+inline uint32_t plic_get_priority(uint32_t irq) {
+    if (irq == 0 || irq >= PLIC_MAX_SOURCES) {
+        return 0;
+    }
+    return *reinterpret_cast<volatile uint32_t *>(PLIC_PRIORITY + irq * 4);
+}
+
+/// @brief Set the S-context priority threshold.
+inline void plic_set_threshold(uint32_t threshold) {
+    *reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD_S) = threshold;
+}
+
+/// @brief Read back the S-context priority threshold.
+inline uint32_t plic_get_threshold() {
+    return *reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD_S);
+}
+
+/// @brief S-context enable word for an IRQ (words 0-2 cover 0-95).
+inline volatile uint32_t *plic_enable_reg_s(uint32_t irq) {
+    return reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S +
+                                                 (irq / 32) * 4);
+}
+
+/// @brief Claim the highest-priority pending S-context interrupt (0 = none).
+inline uint32_t plic_claim_s() {
+    return *reinterpret_cast<volatile uint32_t *>(PLIC_CLAIM_S);
+}
+
+/// @brief Complete an S-context interrupt (must match the claim).
+inline void plic_complete_s(uint32_t intid) {
+    *reinterpret_cast<volatile uint32_t *>(PLIC_CLAIM_S) = intid;
 }
 
 } // namespace arch

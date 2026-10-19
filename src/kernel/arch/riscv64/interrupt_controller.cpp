@@ -2,6 +2,9 @@
 #include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/riscv64/hal/plic.hpp>
+#include <kernel/arch/hal/irq_storm.hpp>
+#include <kernel/arch/timer.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/debug/debug_stop.hpp>
@@ -10,39 +13,57 @@
 
 namespace arch {
 
+/// @brief BOOT_ONLY latch: init() programs hardware exactly once.
+static bool g_plic_initialized = false;
+/// @brief Last claimed INTID (diagnostic; completion is trap-owned).
+/// Sentinel ~0ULL = none yet: no valid INTID ever equals it.
+static uint64_t g_last_acked = ~0ULL;
+/// @brief Spurious claims (claim == 0, diagnostic).
+static uint64_t g_spurious_count = 0;
+/// @brief Per-tick same-INTID storm limiter (never fed the timer INTID).
+static IrqStormLimiter g_storm{};
+
 void ArchInterruptController::init() {
-    auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
-    *threshold = 0;
-    // Default priority 1 for the QEMU virt wired lines (priority 0 = never
-    // interrupt). Lines stay disabled here — drivers enable their own IRQ
-    // when their IDT handler is registered (no unsolicited delivery).
-    *plic_priority_reg(IRQ_UART) = 1;
-    *plic_priority_reg(IRQ_KEYBOARD) = 1;
-    *plic_priority_reg(IRQ_VIRTIO0) = 1;
-    *plic_priority_reg(IRQ_VIRTIO1) = 1;
-    *plic_priority_reg(IRQ_VIRTIO2) = 1;
-    *plic_priority_reg(IRQ_VIRTIO3) = 1;
-    *plic_priority_reg(IRQ_VIRTIO4) = 1;
+    if (g_plic_initialized) {
+        return;
+    }
+    // S-mode context 1 (hart 0): threshold 0, priorities, enable words.
+    // Priority 0 = never interrupt; lines stay disabled here — drivers
+    // enable their own IRQ when their IDT handler is registered (no
+    // unsolicited delivery).
+    *reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD_S) = 0;
+    for (uint32_t irq = 1; irq < PLIC_MAX_SOURCES; ++irq) {
+        plic_set_priority(irq, 1);
+    }
+    for (uint32_t w = 0; w < 3; ++w) {
+        *reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S + w * 4) = 0;
+    }
     asm volatile("fence iorw, iorw" : : : "memory");
     asm volatile("csrs sie, %0" : : "r"((uint64_t)(1ULL << 9)) : "memory");
+    g_plic_initialized = true;
 }
 
 void ArchInterruptController::eoi(uint8_t vector) {
-    plic_complete(vector);
+    // No-op by design (issue #349): completion is owned by
+    // handle_plic_trap (claim+complete pair). A second complete of the
+    // same INTID would corrupt PLIC state, so independent EOI callers
+    // must not write PLIC_CLAIM_S here. Track the ack for diagnostics.
+    (void)vector;
+    g_last_acked = vector;
 }
 
-/// @brief Valid IRQ window for mask/unmask (issue #198): QEMU virt exposes
-///        a single 32-line enable word; lines >= 32 have no defined register
-///        and must not touch MMIO.
-inline constexpr uint8_t PLIC_MAX_IRQ = 32;
+/// @brief Valid IRQ window: S-context words 0-2 cover sources 0-95.
+/// Lines >= 96 have no defined register and must not touch MMIO.
+inline constexpr uint32_t PLIC_MAX_IRQ = PLIC_MAX_SOURCES;
 
 void ArchInterruptController::mask(uint8_t irq) {
     if (irq >= PLIC_MAX_IRQ) {
         return;
     }
-    // Single-core early precondition (INV/CONC): no lock needed; the fence
-    // orders the MMIO write before any subsequent claim/complete.
-    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
+    // RMW under IrqGuard: a thread-context mask must not interleave with
+    // an ISR storm-mask write to the same word (INV/CONC).
+    arch::IrqGuard irq_guard{};
+    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
     enable[irq / 32] &= ~(1U << (irq % 32));
     asm volatile("fence iorw, iorw" : : : "memory");
 }
@@ -51,25 +72,30 @@ void ArchInterruptController::unmask(uint8_t irq) {
     if (irq >= PLIC_MAX_IRQ) {
         return;
     }
-    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
+    arch::IrqGuard irq_guard{};
+    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
     enable[irq / 32] |= (1U << (irq % 32));
     asm volatile("fence iorw, iorw" : : : "memory");
 }
 
 IrqState ArchInterruptController::snapshot() {
     IrqState s{};
-    auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
-    s.plic_threshold = *threshold;
-    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
+    s.plic_threshold =
+        *reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD_S);
+    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
     s.plic_enable_first = enable[0];
+    s.plic_enable_hi[0] = enable[1];
+    s.plic_enable_hi[1] = enable[2];
     return s;
 }
 
 void ArchInterruptController::restore(const IrqState &state) {
-    auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
-    *threshold = state.plic_threshold;
-    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
+    *reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD_S) =
+        state.plic_threshold;
+    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
     enable[0] = state.plic_enable_first;
+    enable[1] = state.plic_enable_hi[0];
+    enable[2] = state.plic_enable_hi[1];
     asm volatile("fence iorw, iorw" : : : "memory");
 }
 
@@ -82,11 +108,32 @@ extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
             IDT::handle_interrupt(
                 static_cast<uint64_t>(InterruptVector::TIMER), 0, sepc);
         } else if (code == 9) {
-            uint32_t intid = plic_claim();
-            if (intid != 0) {
-                IDT::handle_interrupt(intid, 0, sepc);
-                plic_complete(intid);
+            uint32_t intid = plic_claim_s();
+            if (intid == 0) {
+                // Spurious claim: no pending source, nothing to complete.
+                ++g_spurious_count;
+                return;
             }
+            if (intid >= PLIC_MAX_SOURCES) {
+                // Out-of-window source: fail closed (complete + return,
+                // never dispatch).
+                plic_complete_s(intid);
+                return;
+            }
+            if (g_storm.observe(intid, arch::Timer::ticks())) {
+                ArchInterruptController::mask(
+                    static_cast<uint8_t>(intid));
+                g_storm.note_masked();
+                kernel::log::dmesg_push_sev(
+                    kernel::log::ErrorSubsystem::BASE,
+                    kernel::log::kDmesgBase_BASE + 64,
+                    kernel::log::LogSeverity::ERROR,
+                    "irq storm masked", intid);
+            } else {
+                IDT::handle_interrupt(intid, 0, sepc);
+            }
+            g_last_acked = intid;
+            plic_complete_s(intid);
         }
     }
 }

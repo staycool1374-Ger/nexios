@@ -9,20 +9,44 @@
 #include <kernel/debug/debug_stop.hpp>
 #include <signal.hpp>
 
+#include <kernel/arch/hal/irq_storm.hpp>
+#include <kernel/log/dmesg.hpp>
+
 namespace arch {
 
 static bool gic_is_v3 = false;
+/// @brief BOOT_ONLY latch: init() programs hardware exactly once.
+static bool g_gic_initialized = false;
+/// @brief Last acknowledged INTID (EOI ownership, issue #349). Sentinel
+/// ~0ULL = none yet: no valid INTID ever equals it, so a pre-first-IRQ
+/// eoi() mismatches like any stale call instead of closing SGI 0.
+static uint64_t g_last_acked = ~0ULL;
+/// @brief EOI calls for a non-acked vector (diagnostic).
+static uint64_t g_unmatched_eoi = 0;
+/// @brief Spurious INTIDs observed (>= 1020, diagnostic).
+static uint64_t g_spurious_count = 0;
+/// @brief Per-tick same-INTID storm limiter (never fed the timer).
+static IrqStormLimiter g_storm{};
 
 /// @brief Initialise the GIC distributor, CPU interface, and redistributor.
-/// Detects GICv2 vs GICv3 from GICD_TYPER. Enables Group 1 interrupts
-/// and the timer PPI (INTID 30). Performs full distributor reset.
+/// Full GICv2 bring-up: version from GICD_PIDR2 (TYPER holds no version),
+/// distributor reset, priority/target/edge programming, timer PPI enable.
+/// BOOT_ONLY: repeat calls return without touching live state.
 void ArchInterruptController::init() {
+    if (g_gic_initialized) {
+        return;
+    }
     volatile uint32_t *d = gicd_reg(0);
     volatile uint32_t *c = gicc_reg(0);
 
-    // Detect GIC version from GICD_TYPER
-    uint32_t typer = d[GICD_TYPER / 4];
-    gic_is_v3 = ((typer >> 11) & 0x1F) >= 3;
+    // Version from PIDR2, not TYPER (TYPER[15:11] is not a version field).
+    gic_is_v3 = gic_version() >= 3;
+    // Clamp the programmed window: ITLinesNumber+1 banks, max 256 INTIDs.
+    uint32_t it_lines = (d[GICD_TYPER / 4] & 0x1FU) + 1;
+    uint32_t window = it_lines * 32;
+    if (window > GIC_MAX_INTID) {
+        window = GIC_MAX_INTID;
+    }
 
     // === Distributor init ===
     // NOTE: QEMU boots the kernel at Secure EL1, so every IAR read is a
@@ -31,11 +55,40 @@ void ArchInterruptController::init() {
     // kernel's own group — and do not enable Group 1 delivery.
     d[GICD_CTLR / 4] = 0;
     dsb_sy();
-    d[GICD_ICENABLER / 4] = 0xFFFFFFFF;
-    d[GICD_ICENABLER / 4 + 1] = 0xFFFFFFFF;
+    for (uint32_t w = 0; w < 8; ++w) {
+        d[GICD_ICENABLER / 4 + w] = 0xFFFFFFFF;
+    }
     dsb_sy();
-    d[GICD_IGROUPR / 4] = 0;
-    d[GICD_IGROUPR / 4 + 1] = 0;
+    for (uint32_t w = 0; w < 8; ++w) {
+        d[GICD_IGROUPR / 4 + w] = 0;
+    }
+    dsb_sy();
+    // Priority: 0xA0 for the whole window (all lower than PMR 0xFF).
+    for (uint32_t i = 0; i < window; ++i) {
+        volatile uint8_t *p =
+            reinterpret_cast<volatile uint8_t *>(d) + GICD_IPRIORITY + i;
+        *p = 0xA0;
+    }
+    dsb_sy();
+    // Targets: SPI routing defaults to no CPU; pin SPIs to CPU0.
+    for (uint32_t i = 32; i < window; ++i) {
+        volatile uint8_t *t =
+            reinterpret_cast<volatile uint8_t *>(d) + GICD_ITARGETSR + i;
+        *t = 0x01;
+    }
+    dsb_sy();
+    // Edge config: clear all 2-bit fields (level), then set edge for the
+    // virtio-mmio SPIs only (QEMU virt DT flags them edge-high).
+    for (uint32_t i = 0; i < window; i += 16) {
+        d[GICD_ICFGR / 4 + i / 16] = 0;
+    }
+    dsb_sy();
+    for (uint32_t i = INTID_VIRTIO_BASE;
+         i < INTID_VIRTIO_BASE + INTID_VIRTIO_COUNT && i < window; ++i) {
+        volatile uint32_t *w =
+            &d[GICD_ICFGR / 4 + (i / 16)];
+        *w |= static_cast<uint32_t>(0x2U << ((i % 16) * 2));
+    }
     dsb_sy();
 
     if (gic_is_v3) {
@@ -61,6 +114,11 @@ void ArchInterruptController::init() {
 
         rs[GICR_ISENABLER0 / 4] = (1U << 30);
         dsb_sy();
+        d[GICD_CTLR / 4] = GICD_CTLR_ENABLE_GRP1;
+        dsb_sy();
+        if ((d[GICD_CTLR / 4] & GICD_CTLR_ENABLE_GRP1) == 0) {
+            return;
+        }
     } else {
         c[GICC_CTLR / 4] = 0;
         dsb_sy();
@@ -68,17 +126,26 @@ void ArchInterruptController::init() {
         dsb_sy();
         d[GICD_ISENABLER / 4] = (1U << 30);
         dsb_sy();
-    }
-
-    d[GICD_CTLR / 4] = GICD_CTLR_ENABLE;
-    dsb_sy();
-    if (!gic_is_v3) {
+        d[GICD_CTLR / 4] = GICD_CTLR_ENABLE;
+        dsb_sy();
+        if ((d[GICD_CTLR / 4] & GICD_CTLR_ENABLE) == 0) {
+            return;
+        }
         c[GICC_CTLR / 4] = GICC_CTLR_ENABLE;
         dsb_sy();
+        if ((c[GICC_CTLR / 4] & GICC_CTLR_ENABLE) == 0) {
+            return;
+        }
     }
     isb();
+    g_gic_initialized = true;
 }
 void ArchInterruptController::eoi(uint8_t vector) {
+    // EOI ownership: only the last acknowledged INTID may be closed.
+    if (static_cast<uint64_t>(vector) != g_last_acked) {
+        ++g_unmatched_eoi;
+        return;
+    }
     if (gic_is_v3)
         gic_v3_write_eoir(vector);
     else
@@ -87,27 +154,24 @@ void ArchInterruptController::eoi(uint8_t vector) {
 }
 
 /// @brief Redistributor wake state (issue #198): true when the GICv3
-///        redistributor reports Children_Online, or when no redistributor
-///        exists (GICv2 path). Polarity follows the GICv3 spec (online = 1);
-///        the pre-#198 poll loop tested the inverted bit.
+///        redistributor reports Children_Online, or when the GICv2 path
+///        read-back proves the distributor and CPU interface are enabled.
 /// @return true when interrupt delivery hardware is usable.
 bool gic_redist_ready() {
     if (!gic_is_v3) {
-        return true;
+        volatile uint32_t *d = gicd_reg(0);
+        volatile uint32_t *c = gicc_reg(0);
+        return ((d[GICD_CTLR / 4] & GICD_CTLR_ENABLE) != 0) &&
+               ((c[GICC_CTLR / 4] & GICC_CTLR_ENABLE) != 0);
     }
     volatile uint32_t *rr = gicr_rd_reg(0);
-    return (rr[GICR_WAKER / 4] & GICR_WAKER_CHILDREN_ONLINE) != 0;
+    volatile uint32_t *d = gicd_reg(0);
+    return ((rr[GICR_WAKER / 4] & GICR_WAKER_CHILDREN_ONLINE) != 0) &&
+           ((d[GICD_CTLR / 4] & GICD_CTLR_ENABLE_GRP1) != 0);
 }
 
-/// @brief Valid IRQ window for mask/unmask (issue #198): the snapshot covers
-///        distributor words 0..1 and the IDT has 64 slots, so lines >= 64
-///        have no defined state and must not touch MMIO.
-inline constexpr uint8_t GIC_MAX_IRQ = 64;
-
 void ArchInterruptController::mask(uint8_t irq) {
-    if (irq >= GIC_MAX_IRQ) {
-        return;
-    }
+    // uint8_t is always < GIC_MAX_INTID (256) by construction.
     if (gic_is_v3 && irq < 32) {
         gicr_sgi_reg(GICR_ICENABLER0)[0] = (1U << irq);
     } else {
@@ -117,9 +181,7 @@ void ArchInterruptController::mask(uint8_t irq) {
 }
 
 void ArchInterruptController::unmask(uint8_t irq) {
-    if (irq >= GIC_MAX_IRQ) {
-        return;
-    }
+    // uint8_t is always < GIC_MAX_INTID (256) by construction.
     if (gic_is_v3 && irq < 32) {
         gicr_sgi_reg(GICR_ISENABLER0)[0] = (1U << irq);
     } else {
@@ -132,44 +194,63 @@ IrqState ArchInterruptController::snapshot() {
     IrqState s{};
     s.gic_mask = gicd_reg(GICD_ISENABLER)[0];
     s.gic_mask |= static_cast<uint64_t>(gicd_reg(GICD_ISENABLER)[1]) << 32;
+    for (uint32_t w = 2; w < 8; ++w) {
+        s.gic_enable_hi[w - 2] = gicd_reg(GICD_ISENABLER)[w];
+    }
     return s;
 }
 
 void ArchInterruptController::restore(const IrqState &state) {
-    gicd_reg(GICD_ICENABLER)[0] = 0xFFFFFFFF;
-    gicd_reg(GICD_ICENABLER)[1] = 0xFFFFFFFF;
+    for (uint32_t w = 0; w < 8; ++w) {
+        gicd_reg(GICD_ICENABLER)[w] = 0xFFFFFFFF;
+    }
     dsb_sy();
     gicd_reg(GICD_ISENABLER)[0] = state.gic_mask & 0xFFFFFFFF;
     gicd_reg(GICD_ISENABLER)[1] = (state.gic_mask >> 32) & 0xFFFFFFFF;
+    for (uint32_t w = 2; w < 8; ++w) {
+        gicd_reg(GICD_ISENABLER)[w] = state.gic_enable_hi[w - 2];
+    }
     dsb_sy();
 }
 
 /// @brief IRQ handler called from vectors.S.
-/// Dispatches all non-spurious INTIDs via the IDT table.
+/// Dispatches acknowledged INTIDs via the IDT table. Spurious values
+/// (>= 1020) are never EOI'd and never dispatched; the timer INTID is
+/// never fed to the storm limiter.
 extern "C" void handle_gic_irq(void) {
     uint64_t intid = gic_is_v3 ? gic_v3_read_iar()
                                : gicc_reg(GICC_IAR)[0];
 
-    // >= 1020: spurious (1023) or the GICv2/GICv3 "no interrupt available
-    // for the enabled groups" special values (1020-1022).  EOI and return —
-    // never dispatch or fall through to the ack path below.
-    if (intid >= 1020)
-        goto ack;  // spurious / group-disabled
+    // Spurious / "no interrupt for the enabled groups" (1020-1023):
+    // count and return without EOI (no active state to close).
+    if (intid >= 1020) {
+        ++g_spurious_count;
+        return;
+    }
 
     if (intid == 30) {
         uint64_t elr{};
         asm volatile("mrs %0, elr_el1" : "=r"(elr));
         IDT::handle_interrupt(static_cast<uint64_t>(InterruptVector::TIMER), 0,
                               elr);
-    } else if (intid >= 32 && intid < 64) {
-        // SPI / PPI: use INTID directly as vector (IDT has 64 slots)
-        uint64_t elr{};
-        asm volatile("mrs %0, elr_el1" : "=r"(elr));
-        IDT::handle_interrupt(intid, 0, elr);
+    } else if (intid < GIC_MAX_INTID) {
+        // Storm guard: mask persistently re-asserting lines (not the tick).
+        if (g_storm.observe(intid, arch::Timer::ticks())) {
+            ArchInterruptController::mask(static_cast<uint8_t>(intid));
+            g_storm.note_masked();
+            kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::BASE,
+                                        kernel::log::kDmesgBase_BASE + 64,
+                                        kernel::log::LogSeverity::ERROR,
+                                        "irq storm masked", intid);
+        } else {
+            uint64_t elr{};
+            asm volatile("mrs %0, elr_el1" : "=r"(elr));
+            IDT::handle_interrupt(intid, 0, elr);
+        }
     }
-    // INTIDs 0-15 (SGIs), 16-29 (unused PPIs), 31 (PMU), ≥64 are ignored
+    // INTIDs >= 256 cannot occur (uint8_t dispatch window); ignore.
 
-ack:
+    g_last_acked = intid;
     if (gic_is_v3)
         gic_v3_write_eoir(intid);
     else

@@ -182,13 +182,21 @@ class Timer {
     /// @brief Override the tick counter (test support).
     static void set_ticks_for_test(uint64_t value);
 
-    /// @brief Schedule a one-shot timer interrupt.
+    /// @brief Schedule a one-shot timer interrupt after coarse ticks.
+    /// Converts coarse ticks (BootParams::timer_hz) to an absolute
+    /// CNTP_CVAL_EL0 deadline. 0 disarms (CTL=0); the periodic tick
+    /// is not preserved across a one-shot (re-arm explicitly).
+    /// @param ticks_from_now Number of coarse scheduler ticks (0 = disarm).
     static void oneshot(uint64_t ticks_from_now);
     /// @brief Configure a periodic timer interrupt.
+    /// Latches the converted interval so handle_irq() persists the period.
+    /// @param period_ticks Period in coarse scheduler ticks (0 = disarm).
     static void periodic(uint64_t period_ticks);
-    /// @brief Get the remaining ticks on the current timer.
+    /// @brief Get the remaining time in coarse scheduler ticks (ceil).
+    /// @return Remaining ticks (0 when disarmed or expired).
     static uint64_t remaining();
-    /// @brief Sub-tick nanoseconds remaining on the current timer.
+    /// @brief Sub-tick nanoseconds remaining on the armed deadline.
+    /// @return Remaining nanoseconds (0 when disarmed or expired).
     static uint64_t remaining_ns();
     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
     static uint64_t tsc_freq_hz();
@@ -242,13 +250,20 @@ class Timer {
     /// @brief Override the tick count (test support).
     static void set_ticks_for_test(uint64_t value);
 
-    /// @brief Schedule a one-shot timer interrupt.
+    /// @brief Schedule a one-shot timer via SBI (absolute mtime deadline).
+    /// Converts coarse ticks (BootParams::timer_hz) via now + interval.
+    /// 0 parks mtimecmp at the maximum (disarm; STIP cannot be cleared).
+    /// @param ticks_from_now Coarse scheduler ticks (0 = disarm).
     static void oneshot(uint64_t ticks_from_now);
-    /// @brief Configure a periodic timer interrupt.
+    /// @brief Configure a periodic timer via SBI.
+    /// Latches the converted interval so handle_irq() persists the period.
+    /// @param period_ticks Period in coarse scheduler ticks (0 = disarm).
     static void periodic(uint64_t period_ticks);
-    /// @brief Get the remaining ticks on the current timer.
+    /// @brief Get the remaining time (always 0: mtimecmp unreadable in S-mode).
+    /// @return 0.
     static uint64_t remaining();
     /// @brief Sub-tick nanoseconds remaining (0: mtimecmp unreadable).
+    /// @return 0.
     static uint64_t remaining_ns();
     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
     static uint64_t tsc_freq_hz();

@@ -27,6 +27,7 @@
 - Pure-move splits: boundary-asserted chunks, file-statics to the first-consumer shared home (never per-TU copies), using-decls for every bare cross-TU name, second-`namespace`-blocks closed before reopening (trust the compiler over stale LSP diagnostics); test class names must match the registry exactly (`Unknown test class` = zero tests + QEMU_EXIT stall).
 - Wall-truth telemetry: use rewind-proof raw TSC (`ticks_` is snapshot-rewound); additive summary lines go AFTER the expect `====` terminator; unobservable targets get DOCUMENT decisions, not servos (#359).
 - Virtualized wall accuracy gates nothing on any arch (aarch64 +28%, riscv64 +27.6% over) — bare metal only; verify numbers in the raw serial capture, never the expect-processed stream (#384).
+- GIC version comes from PIDR2, never TYPER; TVAL reads are derived (cval-count) — gate `remaining()` on CTL; validator relaxations only remove failures, never add them (#349).
 - Readdir lists only the underlying fs: mount points live solely in the VFS mount table, so every `ops->readdir` caller hides them — overlay at the VFS layer (resolve + vnode_identity_match, spelling-independent), never per-fs; synthesized entries need a resolve-fallback for type probes (#346).
 - Timeout wake is edge-triggered: one expiry → one READY wake (skip duplicate READY+queued re-wakes); EDF never returns current (self-pick guard) — both one-line guards, no new locks, stranded READY still rescued (#345).
 - TCG wall dilation is load-bearing: size every timeout tier from measured walls; re-verify flakes before bisecting.
@@ -69,6 +70,12 @@
 ```
 
 ## Entries
+
+### #349 — aarch64/riscv64 IRQ + timer parity (audit APPROVED, committed, issue CLOSED)
+
+- **Learned:** (1) QEMU TVAL reads are derived (`cval - count`), not stored — gate `remaining()` on CTL.ENABLE or a written 0 reads back nonzero. (2) riscv64 `set_frequency` passed a relative interval as an absolute SBI deadline (immediate-fire when boot mtime exceeds it) — absolute `now + interval` everywhere. (3) `GICD_TYPER[15:11]` is NOT a version field — version comes from `GICD_PIDR2[7:4]`, fail-safe to v2. (4) Validator relaxations are FAIL→PASS-only and can never regress a green suite — safe direction for fail-closed review. (5) GDB good-first-publish + multi-publish execution trace convicts return-path faults without touching code (method reused from #356).
+- **Adapted:** GICv2 full init + PLIC S-context + CVAL/SBI absolute deadlines + storm limiter (`CONFIG_IRQ_STORM_LIMIT`) + docs §6 + gotcha #20; BOOT_ONLY latches with CTLR read-back; EOI ownership single-choke. Gates: aarch64 6 classes green, riscv64 5 classes green (+1 known QE test-side), x86 all green + selftest 148/148. Audit APPROVED zero findings (`audits/report-2026-10-19T15-04-51Z.md`; two prior APPROVED with 4 S3s dispositioned same-cycle).
+- **Style re-surface:** saturating arithmetic on every deadline add (`now > ~0ULL - x ? ~0ULL : now + x`); sentinel `~0ULL` for never-acked state; no test files in kernel diffs.
 
 ### #384 — per-arch wall-time truth (docs-only close, audit APPROVED, issue CLOSED)
 

@@ -103,9 +103,10 @@ class ArchInterruptController {
 #elif defined(CONFIG_ARCH_AARCH64)
 /// @endcond
 
-/// @brief Snapshot of the AArch64 GIC mask state.
+/// @brief Snapshot of the AArch64 GIC mask state (full 256-INTID window).
 struct IrqState {
-    uint64_t gic_mask; ///< GIC interrupt mask.
+    uint64_t gic_mask; ///< GIC distributor enable banks 0-1 (INTIDs 0-63).
+    uint32_t gic_enable_hi[7]; ///< GIC distributor enable banks 2-7 (INTIDs 64-255).
 };
 
 /// @brief AArch64 GIC (Generic Interrupt Controller) driver.
@@ -129,10 +130,11 @@ bool gic_redist_ready();
 #elif defined(CONFIG_ARCH_RISCV64)
 /// @endcond
 
-/// @brief Snapshot of the RISC-V PLIC threshold + first enable word.
+/// @brief Snapshot of the RISC-V PLIC threshold + S-context enable words.
 struct IrqState {
     uint32_t plic_threshold;  ///< PLIC priority threshold.
     uint32_t plic_enable_first; ///< PLIC enable word for IRQ lines 0–31.
+    uint32_t plic_enable_hi[2]; ///< PLIC S-context enable words 1-2 (lines 32-95).
 };
 
 /// @brief RISC-V PLIC (Platform-Level Interrupt Controller) driver.

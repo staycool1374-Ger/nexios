@@ -22,6 +22,7 @@
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/idt.hpp>
+#include <kernel/bootparams.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/nexios_config.h>
 
@@ -59,6 +60,15 @@ void Timer::init(uint32_t frequency_hz) {
                           });
 }
 
+/// @brief Arm the SBI timer for an absolute mtime deadline (EID 0).
+/// @param absolute_deadline mtime value to fire at (MTIMECMP_DISARMED parks).
+static void sbi_set_timer(uint64_t absolute_deadline) {
+    asm volatile("mv a0, %0; mv a7, %1; ecall"
+                 :
+                 : "r"(absolute_deadline), "r"(SBI_LEGACY_SET_TIMER)
+                 : "a0", "a7", "memory");
+}
+
 void Timer::set_frequency(uint32_t frequency_hz) {
     if (frequency_hz == 0) {
         return;
@@ -67,11 +77,15 @@ void Timer::set_frequency(uint32_t frequency_hz) {
     timer_freq_hz_ = RISCV_MTIME_FREQ_HZ;
     const uint64_t interval = timer_freq_hz_ / frequency_hz;
     timer_interval_ = (interval == 0) ? 1 : interval;
-    // SBI_SET_TIMER via ecall
-    asm volatile("mv a0, %0; mv a7, %1; ecall"
-                 :
-                 : "r"(interval), "r"(SBI_LEGACY_SET_TIMER)
-                 : "a0", "a7", "memory");
+    // Absolute deadline (now + interval): the old code passed the bare
+    // interval as the deadline, firing immediately whenever boot mtime
+    // exceeded it (issue #349).
+    uint64_t now{};
+    asm volatile("csrr %0, time" : "=r"(now));
+    const uint64_t deadline = (now > ~0ULL - timer_interval_)
+                                  ? ~0ULL
+                                  : now + timer_interval_;
+    sbi_set_timer(deadline);
     // Enable STIP in sie
     uint64_t sie{};
     asm volatile("csrr %0, sie" : "=r"(sie));
@@ -111,11 +125,9 @@ void Timer::handle_irq([[maybe_unused]] uint64_t ip) {
     }
     uint64_t now{};
     asm volatile("csrr %0, time" : "=r"(now));
-    const uint64_t next = now + interval;
-    asm volatile("mv a0, %0; mv a7, %1; ecall"
-                 :
-                 : "r"(next), "r"(SBI_LEGACY_SET_TIMER)
-                 : "a0", "a7", "memory");
+    const uint64_t deadline =
+        (now > ~0ULL - interval) ? ~0ULL : now + interval;
+    sbi_set_timer(deadline);
 }
 
 /// @brief Override the tick counter for testing.
@@ -170,7 +182,7 @@ uint64_t Timer::remaining_ns() {
 }
 
 /// @brief Arm a one-shot timer via SBI.
-/// @param ticks_from_now Number of milliseconds from now to fire (0 = disarm:
+/// @param ticks_from_now Coarse scheduler ticks from now (0 = disarm:
 ///        mtimecmp is parked at the maximum — S-mode cannot clear a pending
 ///        STIP, only push its deadline out).
 void Timer::oneshot(uint64_t ticks_from_now) {
@@ -178,38 +190,53 @@ void Timer::oneshot(uint64_t ticks_from_now) {
     asm volatile("csrr %0, time" : "=r"(now));
     uint64_t deadline = MTIMECMP_DISARMED;
     if (ticks_from_now != 0) {
-        uint64_t interval = ticks_from_now * (timer_freq_hz_ / 1000);
+        const uint64_t boot_hz = kernel::BootParams::instance().timer_hz != 0
+                                     ? kernel::BootParams::instance().timer_hz
+                                     : CONFIG_TICK_HZ;
+        const uint64_t per_coarse =
+            (timer_freq_hz_ == 0 || boot_hz == 0)
+                ? 1ULL
+                : timer_freq_hz_ / boot_hz == 0
+                      ? 1ULL
+                      : timer_freq_hz_ / boot_hz;
+        uint64_t interval = (ticks_from_now > ~0ULL / per_coarse)
+                                ? ~0ULL
+                                : ticks_from_now * per_coarse;
         if (interval == 0) {
             interval = 1;
         }
-        deadline = now + interval;
+        deadline = (now > ~0ULL - interval) ? ~0ULL : now + interval;
     }
-    asm volatile("mv a0, %0; mv a7, %1; ecall"
-                 :
-                 : "r"(deadline), "r"(SBI_LEGACY_SET_TIMER)
-                 : "a0", "a7", "memory");
+    sbi_set_timer(deadline);
 }
 
 /// @brief Arm a periodic timer via SBI.
-/// @param period_ticks Period in ticks (Hz). 0 = disarm (deadline parked at
-///        the maximum); otherwise the handle_irq re-arm interval is latched
-///        so the period persists across ticks.
+/// @param period_ticks Period in coarse scheduler ticks (0 = disarm).
+/// Latches the converted interval so handle_irq() persists the period.
 void Timer::periodic(uint64_t period_ticks) {
     uint64_t now{};
     asm volatile("csrr %0, time" : "=r"(now));
     uint64_t deadline = MTIMECMP_DISARMED;
     if (period_ticks != 0) {
-        uint64_t interval = timer_freq_hz_ / period_ticks;
+        const uint64_t boot_hz = kernel::BootParams::instance().timer_hz != 0
+                                     ? kernel::BootParams::instance().timer_hz
+                                     : CONFIG_TICK_HZ;
+        const uint64_t per_coarse =
+            (timer_freq_hz_ == 0 || boot_hz == 0)
+                ? 1ULL
+                : timer_freq_hz_ / boot_hz == 0
+                      ? 1ULL
+                      : timer_freq_hz_ / boot_hz;
+        uint64_t interval = (period_ticks > ~0ULL / per_coarse)
+                                ? ~0ULL
+                                : period_ticks * per_coarse;
         if (interval == 0) {
             interval = 1;
         }
         timer_interval_ = interval;
-        deadline = now + interval;
+        deadline = (now > ~0ULL - interval) ? ~0ULL : now + interval;
     }
-    asm volatile("mv a0, %0; mv a7, %1; ecall"
-                 :
-                 : "r"(deadline), "r"(SBI_LEGACY_SET_TIMER)
-                 : "a0", "a7", "memory");
+    sbi_set_timer(deadline);
 }
 
 /// @brief Return time remaining on the current timer.
