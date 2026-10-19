@@ -132,6 +132,7 @@
 
 #### Blocked
 - (none) — aarch64 arch_aarch64 class now 22/22; P9 test-hygiene (testbed) is future work.
+- **#356 QE-blocked (2026-10-19):** developer kernel part landed on main (`efd4eec18`, audited APPROVED): P0 trampoline de-guard (branch-to-0 on entry return, convicted via GDB) + P0b BSS-only segment validation (64K-aligned offset past EOF rejected daemon loads). Gates: timing_core 19/19 ×3 arches, x86 elf_loader 25/25 + selftest 148/148; aarch64/riscv64 elf_loader 7/25 (x86 fixtures EM_X86_64, expected). QE owns on testbed: un-stub task/process/vfsd_auth groups, de-guard test files, per-arch fixtures, count columns, release-subset, hrt skip design (full handoff on #356).
 
 #### aarch64 bring-up fixes landed (issue #100, 2026-08-31 — uncommitted, SIL 3 audit pending)
 - Boot page tables relocated 0x40000000→0x40020000 (was clobbering the QEMU DTB region).

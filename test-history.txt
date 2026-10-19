@@ -4077,3 +4077,7 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-19 09:01:40 timing_core PASSED: 19 FAILED: 0 TIME: 911ms STATUS: #356-P0b-aarch64-daemons-spawn
 2026-10-19 09:02:12 timing_core PASSED: 19 FAILED: 0 TIME: 977ms STATUS: #356-P0b-riscv64-daemons-spawn
 2026-10-19 09:02:49 timing_core PASSED: 19 FAILED: 0 TIME: 1829ms STATUS: #356-P0b-x86-nonregression
+2026-10-19 09:08:22 elf_loader PASSED: 25 FAILED: 0 TIME: 2451ms STATUS: #356-regression-x86-loader-changed
+2026-10-19 09:08:47 elf_loader PASSED: 7 FAILED: 18 TIME: 866ms STATUS: #356-aarch64-x86-fixtures-expected-QE
+2026-10-19 09:09:39 elf_loader PASSED: 7 FAILED: 18 TIME: 955ms STATUS: #356-riscv64-x86-fixtures-expected-QE
+2026-10-19 09:10:26 selftest PASSED: 148 FAILED: 0 TIME: 12523ms STATUS: #356-regression-x86
