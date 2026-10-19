@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -130,45 +130,64 @@ Collaboration diagram for kernel::BufferPool:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:Entry" id="r_Entry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_buffer_pool_1_1_entry.html">Entry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A single buffer-pool entry.  <a href="structkernel_1_1_buffer_pool_1_1_entry.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a8956cc85747b142ea18af302ad8a9589" id="r_a8956cc85747b142ea18af302ad8a9589"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a8956cc85747b142ea18af302ad8a9589">init</a> ()</td></tr>
 <tr class="memdesc:a8956cc85747b142ea18af302ad8a9589"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize the buffer pool (free list, slab allocator).  <br /></td></tr>
-<tr class="memitem:af830a2e54d31f8ce538c9fa562be3e1f" id="r_af830a2e54d31f8ce538c9fa562be3e1f"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#af830a2e54d31f8ce538c9fa562be3e1f">alloc</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task, uint64_t virt_addr)</td></tr>
-<tr class="memdesc:af830a2e54d31f8ce538c9fa562be3e1f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocate a buffer, map it at <code class="param">virt_addr</code> in the given task's address space.  <br /></td></tr>
-<tr class="memitem:a907fc084c5faf0d6f6dbd96b50538178" id="r_a907fc084c5faf0d6f6dbd96b50538178"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a907fc084c5faf0d6f6dbd96b50538178">free</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task, uint64_t handle)</td></tr>
-<tr class="memdesc:a907fc084c5faf0d6f6dbd96b50538178"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free a buffer: unmap, deref, return to pool.  <br /></td></tr>
-<tr class="memitem:a867dd10f5241dad2dab0f55a9711b383" id="r_a867dd10f5241dad2dab0f55a9711b383"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a867dd10f5241dad2dab0f55a9711b383">map</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task, uint64_t handle, uint64_t virt_addr)</td></tr>
-<tr class="memdesc:a867dd10f5241dad2dab0f55a9711b383"><td class="mdescLeft">&#160;</td><td class="mdescRight">Map an existing (transferred) buffer at <code class="param">virt_addr</code> in the caller's space.  <br /></td></tr>
-<tr class="memitem:a779345e42165110c5ca67aec6d64c5f9" id="r_a779345e42165110c5ca67aec6d64c5f9"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a779345e42165110c5ca67aec6d64c5f9">unmap</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task, uint64_t handle)</td></tr>
-<tr class="memdesc:a779345e42165110c5ca67aec6d64c5f9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmap a buffer without freeing it.  <br /></td></tr>
-<tr class="memitem:ae7c1c308c5d59b84c73eba2d15ffa930" id="r_ae7c1c308c5d59b84c73eba2d15ffa930"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ae7c1c308c5d59b84c73eba2d15ffa930">transfer</a> (uint64_t handle, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;from, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;target_task)</td></tr>
-<tr class="memdesc:ae7c1c308c5d59b84c73eba2d15ffa930"><td class="mdescLeft">&#160;</td><td class="mdescRight">Transfer ownership to another task (used by <a class="el" href="classkernel_1_1_i_p_c.html" title="Inter-process communication manager.">IPC</a> send).  <br /></td></tr>
+<tr class="memitem:ac2c5fd0cf88faca9b6a0c2464d2d6f08" id="r_ac2c5fd0cf88faca9b6a0c2464d2d6f08"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ac2c5fd0cf88faca9b6a0c2464d2d6f08">alloc</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task, uint64_t virt_addr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ac2c5fd0cf88faca9b6a0c2464d2d6f08"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocate a buffer, map it at <code class="param">virt_addr</code> in the given task's address space.  <br /></td></tr>
+<tr class="memitem:a77ce96a64c2746fdb9e964bf0f469247" id="r_a77ce96a64c2746fdb9e964bf0f469247"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a77ce96a64c2746fdb9e964bf0f469247">free</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task, uint64_t handle) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a77ce96a64c2746fdb9e964bf0f469247"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free a buffer: unmap, deref, return to pool.  <br /></td></tr>
+<tr class="memitem:aedeae865ccd6a644621cebafe50999b9" id="r_aedeae865ccd6a644621cebafe50999b9"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#aedeae865ccd6a644621cebafe50999b9">map</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task, uint64_t handle, uint64_t virt_addr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:aedeae865ccd6a644621cebafe50999b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Map an existing (transferred) buffer at <code class="param">virt_addr</code> in the caller's space.  <br /></td></tr>
+<tr class="memitem:a0fe2d5495b827534a70820ef0ce5f1e0" id="r_a0fe2d5495b827534a70820ef0ce5f1e0"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a0fe2d5495b827534a70820ef0ce5f1e0">unmap</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task, uint64_t handle) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a0fe2d5495b827534a70820ef0ce5f1e0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmap a buffer without freeing it.  <br /></td></tr>
+<tr class="memitem:a952dad992dc22d0e25782a13c1f05693" id="r_a952dad992dc22d0e25782a13c1f05693"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a952dad992dc22d0e25782a13c1f05693">transfer</a> (uint64_t handle, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;from, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;target_task) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a952dad992dc22d0e25782a13c1f05693"><td class="mdescLeft">&#160;</td><td class="mdescRight">Transfer ownership to another task (used by <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> send).  <br /></td></tr>
 <tr class="memitem:a3861664cbb142b363d3ffda759f32210" id="r_a3861664cbb142b363d3ffda759f32210"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a3861664cbb142b363d3ffda759f32210">unmap_all</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task)</td></tr>
 <tr class="memdesc:a3861664cbb142b363d3ffda759f32210"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmap all buffers owned by a task (called from cleanup/exec).  <br /></td></tr>
-<tr class="memitem:add706306b1abb7a03b40720751d5f754" id="r_add706306b1abb7a03b40720751d5f754"><td class="memItemLeft">static int32_t&#160;</td><td class="memItemRight"><a class="el" href="#add706306b1abb7a03b40720751d5f754">validate</a> (uint64_t handle)</td></tr>
-<tr class="memdesc:add706306b1abb7a03b40720751d5f754"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate a handle and return its index, or -1.  <br /></td></tr>
+<tr class="memitem:ab3bab59c54c5d6d9f70b06e5413796e9" id="r_ab3bab59c54c5d6d9f70b06e5413796e9"><td class="memItemLeft">static int32_t&#160;</td><td class="memItemRight"><a class="el" href="#ab3bab59c54c5d6d9f70b06e5413796e9">validate</a> (uint64_t handle) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ab3bab59c54c5d6d9f70b06e5413796e9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate a handle and return its index, or -1.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
 <tr class="memitem:a8c2ccff8f592a1a81f1c2888be2c5334" id="r_a8c2ccff8f592a1a81f1c2888be2c5334"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8c2ccff8f592a1a81f1c2888be2c5334">MAX_BUFFERS</a> = 1024</td></tr>
 <tr class="memitem:aa4ef45437f4cd270fcc25f31f2e688ee" id="r_aa4ef45437f4cd270fcc25f31f2e688ee"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa4ef45437f4cd270fcc25f31f2e688ee">BUFFER_SIZE</a> = <a class="el" href="namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af">arch::PAGE_SIZE</a></td></tr>
+<tr class="memitem:a68f3350f3c64bfe66982391e5dc79ad2" id="r_a68f3350f3c64bfe66982391e5dc79ad2"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a68f3350f3c64bfe66982391e5dc79ad2">POOL_PAGES</a> = <a class="el" href="aarch64_2serial_8cpp.html#a4bb3575fefad83e2c4c0679539f0e1b1">CONFIG_BUFFER_POOL_PAGES</a></td></tr>
+<tr class="memitem:a4c7db952fb6a5685db2f1d0afd7314ce" id="r_a4c7db952fb6a5685db2f1d0afd7314ce"><td class="memItemLeft">static constexpr int64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4c7db952fb6a5685db2f1d0afd7314ce">LIST_EMPTY</a> = -1</td></tr>
+<tr class="memitem:a2e5e78cbd85dec8fdf68335229ffa27a" id="r_a2e5e78cbd85dec8fdf68335229ffa27a"><td class="memItemLeft">static constexpr int64_t&#160;</td><td class="memItemRight"><a class="el" href="#a2e5e78cbd85dec8fdf68335229ffa27a">BUF_INVALID_HANDLE</a> = -2</td></tr>
+<tr class="memitem:a9c19f2fd3a787eafcf621d206bd86ff8" id="r_a9c19f2fd3a787eafcf621d206bd86ff8"><td class="memItemLeft">static constexpr int64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9c19f2fd3a787eafcf621d206bd86ff8">BUF_INVALID_INDEX</a> = -3</td></tr>
 <tr class="memitem:a2474f2d8ccd55972ee764a9372077e0f" id="r_a2474f2d8ccd55972ee764a9372077e0f"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_buffer_pool_1_1_entry.html">Entry</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2474f2d8ccd55972ee764a9372077e0f">entries</a> [<a class="el" href="#a8c2ccff8f592a1a81f1c2888be2c5334">MAX_BUFFERS</a>]</td></tr>
+<tr class="memitem:a639980fc57831d3b883cbb580984b173" id="r_a639980fc57831d3b883cbb580984b173"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a639980fc57831d3b883cbb580984b173">entries_guard_</a> = 0xCACACACACACACACAULL</td></tr>
+<tr class="memdesc:a639980fc57831d3b883cbb580984b173"><td class="mdescLeft">&#160;</td><td class="mdescRight">Red-zone guard word placed IMMEDIATELY AFTER <span class="tt"><a class="el" href="#a2474f2d8ccd55972ee764a9372077e0f">entries</a>[]</span>. BUGS.md#020: an out-of-bounds <span class="tt"><a class="el" href="#a2474f2d8ccd55972ee764a9372077e0f">entries</a>[idx]</span> write (idx &gt;= MAX_BUFFERS) lands here and corrupts this sentinel instead of adjacent globals (scheduler/TCB structures). Checked on every <a class="el" href="classkernel_1_1_buffer_pool.html">BufferPool</a> op so the overflow is caught at its source with a precise message.  <br /></td></tr>
+<tr class="memitem:ad12fdd693107abc1a3e5da56a3285256" id="r_ad12fdd693107abc1a3e5da56a3285256"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad12fdd693107abc1a3e5da56a3285256">ENTRIES_GUARD_MAGIC</a> = 0xCACACACACACACACAULL</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-member-group" class="groupheader"><a id="member-group" name="member-group"></a>
 Test-isolation helpers (snapshot / restore)</h2></td></tr>
-<tr><td class="ititle" colspan="2"><p>Copy all entries + free_head + next_cookie into flat buffer. </p>
+<tr><td class="ititle" colspan="2"><p>Copy all entries + free_head + next_cookie into flat buffer.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">dst</td><td>Destination view; must hold at least <a class="el" href="#ae4032724b5c90784fef6f5193dc2d357" title="Bytes needed for BufferPool state capture.">state_bytes()</a> (ENSUREd — snapshot sizing bugs fail closed, issue #348-D2). </td></tr>
+  </table>
+  </dd>
+</dl>
 </td></tr>
-<tr class="memitem:aa669530261c5bf7fbdf0439ad56ff093" id="r_aa669530261c5bf7fbdf0439ad56ff093"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aa669530261c5bf7fbdf0439ad56ff093">capture_state</a> (uint8_t *dst, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> max_bytes)</td></tr>
-<tr class="memitem:a82e7e5db6fa028c86db003bb77fab73b" id="r_a82e7e5db6fa028c86db003bb77fab73b"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a82e7e5db6fa028c86db003bb77fab73b">restore_state</a> (const uint8_t *src, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> max_bytes)</td></tr>
-<tr class="memdesc:a82e7e5db6fa028c86db003bb77fab73b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore entries + free_head + next_cookie from flat buffer.  <br /></td></tr>
+<tr class="memitem:aa9d0784f7329be09b8fb8ab2afd745e7" id="r_aa9d0784f7329be09b8fb8ab2afd745e7"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aa9d0784f7329be09b8fb8ab2afd745e7">capture_state</a> (<a class="el" href="classkernel_1_1_span.html">kernel::Span</a>&lt; uint8_t &gt; dst)</td></tr>
+<tr class="memdesc:aa9d0784f7329be09b8fb8ab2afd745e7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot pool state into a flat buffer (test isolation).  <br /></td></tr>
+<tr class="memitem:ae9095a080324d088d1cc67ad2f119dcb" id="r_ae9095a080324d088d1cc67ad2f119dcb"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae9095a080324d088d1cc67ad2f119dcb">restore_state</a> (<a class="el" href="classkernel_1_1_span.html">kernel::Span</a>&lt; const uint8_t &gt; src)</td></tr>
+<tr class="memdesc:ae9095a080324d088d1cc67ad2f119dcb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore entries + free_head + next_cookie from flat buffer.  <br /></td></tr>
 <tr class="memitem:ae4032724b5c90784fef6f5193dc2d357" id="r_ae4032724b5c90784fef6f5193dc2d357"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae4032724b5c90784fef6f5193dc2d357">state_bytes</a> ()</td></tr>
 <tr class="memdesc:ae4032724b5c90784fef6f5193dc2d357"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bytes needed for <a class="el" href="classkernel_1_1_buffer_pool.html">BufferPool</a> state capture.  <br /></td></tr>
+<tr class="memitem:aba0ff765b4555e0c52bee9041974e9ec" id="r_aba0ff765b4555e0c52bee9041974e9ec"><td class="memItemLeft">static <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aba0ff765b4555e0c52bee9041974e9ec">pool_count_debug</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:aba0ff765b4555e0c52bee9041974e9ec"><td class="mdescLeft">&#160;</td><td class="mdescRight">Debug-only: current cached page count (v0.3.11 leak pinning).  <br /></td></tr>
+<tr class="memitem:ab3548005fd4d3bb059c7534d0e7149bb" id="r_ab3548005fd4d3bb059c7534d0e7149bb"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab3548005fd4d3bb059c7534d0e7149bb">pool_page_debug</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> i) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ab3548005fd4d3bb059c7534d0e7149bb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Debug-only: read the i-th cached page phys (v0.3.11).  <br /></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
-<a id="af830a2e54d31f8ce538c9fa562be3e1f" name="af830a2e54d31f8ce538c9fa562be3e1f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af830a2e54d31f8ce538c9fa562be3e1f">&#9670;&#160;</a></span>alloc()</h2>
+<a id="ac2c5fd0cf88faca9b6a0c2464d2d6f08" name="ac2c5fd0cf88faca9b6a0c2464d2d6f08"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac2c5fd0cf88faca9b6a0c2464d2d6f08">&#9670;&#160;</a></span>alloc()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -184,29 +203,30 @@ Test-isolation helpers (snapshot / restore)</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>va</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>Allocate a buffer, map it at <code class="param">virt_addr</code> in the given task's address space. </p>
+<p>Allocate a buffer, map it at virtual address <code class="param">va</code> in the given task's space.</p>
 <dl class="section return"><dt>Returns</dt><dd>handle, or 0 on failure. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_buffer_pool_af830a2e54d31f8ce538c9fa562be3e1f_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_af830a2e54d31f8ce538c9fa562be3e1f_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="classkernel_1_1_buffer_pool_ac2c5fd0cf88faca9b6a0c2464d2d6f08_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_ac2c5fd0cf88faca9b6a0c2464d2d6f08_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 1 -->
 </div>
 
 </div>
 </div>
-<a id="aa669530261c5bf7fbdf0439ad56ff093" name="aa669530261c5bf7fbdf0439ad56ff093"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa669530261c5bf7fbdf0439ad56ff093">&#9670;&#160;</a></span>capture_state()</h2>
+<a id="aa9d0784f7329be09b8fb8ab2afd745e7" name="aa9d0784f7329be09b8fb8ab2afd745e7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa9d0784f7329be09b8fb8ab2afd745e7">&#9670;&#160;</a></span>capture_state()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -217,12 +237,8 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::BufferPool::capture_state </td>
           <td>(</td>
-          <td class="paramtype">uint8_t *</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1_span.html">kernel::Span</a>&lt; uint8_t &gt;</td>          <td class="paramname"><span class="paramname"><em>dst</em></span></td><td>)</td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>max_bytes</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -232,10 +248,18 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Snapshot pool state into a flat buffer (test isolation). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_buffer_pool_aa9d0784f7329be09b8fb8ab2afd745e7_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_aa9d0784f7329be09b8fb8ab2afd745e7_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
 </div>
 </div>
-<a id="a907fc084c5faf0d6f6dbd96b50538178" name="a907fc084c5faf0d6f6dbd96b50538178"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a907fc084c5faf0d6f6dbd96b50538178">&#9670;&#160;</a></span>free()</h2>
+<a id="a77ce96a64c2746fdb9e964bf0f469247" name="a77ce96a64c2746fdb9e964bf0f469247"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a77ce96a64c2746fdb9e964bf0f469247">&#9670;&#160;</a></span>free()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -256,17 +280,19 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>Free a buffer: unmap, deref, return to pool. </p>
+<p>Free a buffer: unmap, free the physical page, return entry to pool.</p>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_buffer_pool_a907fc084c5faf0d6f6dbd96b50538178_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_a907fc084c5faf0d6f6dbd96b50538178_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<div class="center"><img src="classkernel_1_1_buffer_pool_a77ce96a64c2746fdb9e964bf0f469247_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_a77ce96a64c2746fdb9e964bf0f469247_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -295,11 +321,18 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialize the buffer pool (free list, slab allocator). </p>
+<p>Initialise the pool — build the free list, pre-allocate pages. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_buffer_pool_a8956cc85747b142ea18af302ad8a9589_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_a8956cc85747b142ea18af302ad8a9589_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
 
 </div>
 </div>
-<a id="a867dd10f5241dad2dab0f55a9711b383" name="a867dd10f5241dad2dab0f55a9711b383"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a867dd10f5241dad2dab0f55a9711b383">&#9670;&#160;</a></span>map()</h2>
+<a id="aedeae865ccd6a644621cebafe50999b9" name="aedeae865ccd6a644621cebafe50999b9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aedeae865ccd6a644621cebafe50999b9">&#9670;&#160;</a></span>map()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -320,28 +353,84 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>&#160;)</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>va</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>Map an existing (transferred) buffer at <code class="param">virt_addr</code> in the caller's space. </p>
+<p>Map an existing (transferred) buffer at virtual address <code class="param">va</code>.</p>
+<p>H-2/M-6 (audit-ipc-cap-syscalls-v0.4.2): reject unless the caller owns the buffer (<a class="el" href="#aedeae865ccd6a644621cebafe50999b9" title="Map an existing (transferred) buffer at virt_addr in the caller&#39;s space.">map()</a> must never take over another task's buffer), require a page-aligned VA within USER_SPACE_LIMIT, and refuse to map over an already populated PTE (mapping the same VA twice silently overwrites PTEs and a later <a class="el" href="#a77ce96a64c2746fdb9e964bf0f469247" title="Free a buffer: unmap, deref, return to pool.">free()</a> deletes another buffer's PTE). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_buffer_pool_a867dd10f5241dad2dab0f55a9711b383_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_a867dd10f5241dad2dab0f55a9711b383_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<div class="center"><img src="classkernel_1_1_buffer_pool_aedeae865ccd6a644621cebafe50999b9_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_aedeae865ccd6a644621cebafe50999b9_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
 </div>
 
 </div>
 </div>
-<a id="a82e7e5db6fa028c86db003bb77fab73b" name="a82e7e5db6fa028c86db003bb77fab73b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a82e7e5db6fa028c86db003bb77fab73b">&#9670;&#160;</a></span>restore_state()</h2>
+<a id="aba0ff765b4555e0c52bee9041974e9ec" name="aba0ff765b4555e0c52bee9041974e9ec"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aba0ff765b4555e0c52bee9041974e9ec">&#9670;&#160;</a></span>pool_count_debug()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::BufferPool::pool_count_debug </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Debug-only: current cached page count (v0.3.11 leak pinning). </p>
+
+</div>
+</div>
+<a id="ab3548005fd4d3bb059c7534d0e7149bb" name="ab3548005fd4d3bb059c7534d0e7149bb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab3548005fd4d3bb059c7534d0e7149bb">&#9670;&#160;</a></span>pool_page_debug()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::BufferPool::pool_page_debug </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>i</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Debug-only: read the i-th cached page phys (v0.3.11). </p>
+
+</div>
+</div>
+<a id="ae9095a080324d088d1cc67ad2f119dcb" name="ae9095a080324d088d1cc67ad2f119dcb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae9095a080324d088d1cc67ad2f119dcb">&#9670;&#160;</a></span>restore_state()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -352,12 +441,8 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::BufferPool::restore_state </td>
           <td>(</td>
-          <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1_span.html">kernel::Span</a>&lt; const uint8_t &gt;</td>          <td class="paramname"><span class="paramname"><em>src</em></span></td><td>)</td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>max_bytes</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -368,6 +453,19 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Restore entries + free_head + next_cookie from flat buffer. </p>
+<p>Restore pool state from a flat buffer (test isolation).</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">src</td><td>Source view; must hold at least <a class="el" href="#ae4032724b5c90784fef6f5193dc2d357" title="Bytes needed for BufferPool state capture.">state_bytes()</a> (ENSUREd). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_buffer_pool_ae9095a080324d088d1cc67ad2f119dcb_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_ae9095a080324d088d1cc67ad2f119dcb_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
 
 </div>
 </div>
@@ -398,8 +496,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="ae7c1c308c5d59b84c73eba2d15ffa930" name="ae7c1c308c5d59b84c73eba2d15ffa930"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae7c1c308c5d59b84c73eba2d15ffa930">&#9670;&#160;</a></span>transfer()</h2>
+<a id="a952dad992dc22d0e25782a13c1f05693" name="a952dad992dc22d0e25782a13c1f05693"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a952dad992dc22d0e25782a13c1f05693">&#9670;&#160;</a></span>transfer()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -425,23 +523,24 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
-<p>Transfer ownership to another task (used by <a class="el" href="classkernel_1_1_i_p_c.html" title="Inter-process communication manager.">IPC</a> send). </p>
+<p>Transfer ownership to another task (used by <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> send). </p>
+<p>Transfer buffer ownership from one task to another (<a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> send path). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_buffer_pool_ae7c1c308c5d59b84c73eba2d15ffa930_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_ae7c1c308c5d59b84c73eba2d15ffa930_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<div class="center"><img src="classkernel_1_1_buffer_pool_a952dad992dc22d0e25782a13c1f05693_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_a952dad992dc22d0e25782a13c1f05693_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
 </div>
 
 </div>
 </div>
-<a id="a779345e42165110c5ca67aec6d64c5f9" name="a779345e42165110c5ca67aec6d64c5f9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a779345e42165110c5ca67aec6d64c5f9">&#9670;&#160;</a></span>unmap()</h2>
+<a id="a0fe2d5495b827534a70820ef0ce5f1e0" name="a0fe2d5495b827534a70820ef0ce5f1e0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0fe2d5495b827534a70820ef0ce5f1e0">&#9670;&#160;</a></span>unmap()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -462,17 +561,18 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>Unmap a buffer without freeing it. </p>
+<p>Unmap a buffer (PTE clear, list remove) without freeing the page. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_buffer_pool_a779345e42165110c5ca67aec6d64c5f9_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_a779345e42165110c5ca67aec6d64c5f9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<div class="center"><img src="classkernel_1_1_buffer_pool_a0fe2d5495b827534a70820ef0ce5f1e0_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_a0fe2d5495b827534a70820ef0ce5f1e0_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -501,17 +601,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Unmap all buffers owned by a task (called from cleanup/exec). </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_buffer_pool_a3861664cbb142b363d3ffda759f32210_cgraph.png" border="0" usemap="#aclasskernel_1_1_buffer_pool_a3861664cbb142b363d3ffda759f32210_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
-</div>
+<p>Unmap and free all buffers owned by a task (called from cleanup/exec). </p>
 
 </div>
 </div>
-<a id="add706306b1abb7a03b40720751d5f754" name="add706306b1abb7a03b40720751d5f754"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#add706306b1abb7a03b40720751d5f754">&#9670;&#160;</a></span>validate()</h2>
+<a id="ab3bab59c54c5d6d9f70b06e5413796e9" name="ab3bab59c54c5d6d9f70b06e5413796e9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab3bab59c54c5d6d9f70b06e5413796e9">&#9670;&#160;</a></span>validate()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -528,7 +623,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -538,6 +633,50 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a id="a2e5e78cbd85dec8fdf68335229ffa27a" name="a2e5e78cbd85dec8fdf68335229ffa27a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2e5e78cbd85dec8fdf68335229ffa27a">&#9670;&#160;</a></span>BUF_INVALID_HANDLE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">int64_t kernel::BufferPool::BUF_INVALID_HANDLE = -2</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9c19f2fd3a787eafcf621d206bd86ff8" name="a9c19f2fd3a787eafcf621d206bd86ff8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9c19f2fd3a787eafcf621d206bd86ff8">&#9670;&#160;</a></span>BUF_INVALID_INDEX</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">int64_t kernel::BufferPool::BUF_INVALID_INDEX = -3</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="aa4ef45437f4cd270fcc25f31f2e688ee" name="aa4ef45437f4cd270fcc25f31f2e688ee"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aa4ef45437f4cd270fcc25f31f2e688ee">&#9670;&#160;</a></span>BUFFER_SIZE</h2>
 
@@ -582,6 +721,74 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a639980fc57831d3b883cbb580984b173" name="a639980fc57831d3b883cbb580984b173"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a639980fc57831d3b883cbb580984b173">&#9670;&#160;</a></span>entries_guard_</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::BufferPool::entries_guard_ = 0xCACACACACACACACAULL</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Red-zone guard word placed IMMEDIATELY AFTER <span class="tt"><a class="el" href="#a2474f2d8ccd55972ee764a9372077e0f">entries</a>[]</span>. BUGS.md#020: an out-of-bounds <span class="tt"><a class="el" href="#a2474f2d8ccd55972ee764a9372077e0f">entries</a>[idx]</span> write (idx &gt;= MAX_BUFFERS) lands here and corrupts this sentinel instead of adjacent globals (scheduler/TCB structures). Checked on every <a class="el" href="classkernel_1_1_buffer_pool.html">BufferPool</a> op so the overflow is caught at its source with a precise message. </p>
+
+</div>
+</div>
+<a id="ad12fdd693107abc1a3e5da56a3285256" name="ad12fdd693107abc1a3e5da56a3285256"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad12fdd693107abc1a3e5da56a3285256">&#9670;&#160;</a></span>ENTRIES_GUARD_MAGIC</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::BufferPool::ENTRIES_GUARD_MAGIC = 0xCACACACACACACACAULL</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4c7db952fb6a5685db2f1d0afd7314ce" name="a4c7db952fb6a5685db2f1d0afd7314ce"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4c7db952fb6a5685db2f1d0afd7314ce">&#9670;&#160;</a></span>LIST_EMPTY</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">int64_t kernel::BufferPool::LIST_EMPTY = -1</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a8c2ccff8f592a1a81f1c2888be2c5334" name="a8c2ccff8f592a1a81f1c2888be2c5334"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a8c2ccff8f592a1a81f1c2888be2c5334">&#9670;&#160;</a></span>MAX_BUFFERS</h2>
 
@@ -593,6 +800,28 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::BufferPool::MAX_BUFFERS = 1024</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a68f3350f3c64bfe66982391e5dc79ad2" name="a68f3350f3c64bfe66982391e5dc79ad2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a68f3350f3c64bfe66982391e5dc79ad2">&#9670;&#160;</a></span>POOL_PAGES</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::BufferPool::POOL_PAGES = <a class="el" href="aarch64_2serial_8cpp.html#a4bb3575fefad83e2c4c0679539f0e1b1">CONFIG_BUFFER_POOL_PAGES</a></td>
         </tr>
       </table>
   </td>

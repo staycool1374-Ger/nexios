@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classkernel_1_
 </div><!--header-->
 <div class="contents">
 
+<p>Abstract base class for block devices.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="block__device_8hpp_source.html">block_device.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Inheritance diagram for kernel::block::BlockDevice:</div>
@@ -137,12 +140,19 @@ Collaboration diagram for kernel::block::BlockDevice:</div>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:acf49f308065355d5afbed60fbf10bf08" id="r_acf49f308065355d5afbed60fbf10bf08"><td class="memItemLeft">virtual&#160;</td><td class="memItemRight"><a class="el" href="#acf49f308065355d5afbed60fbf10bf08">~BlockDevice</a> ()=default</td></tr>
 <tr class="memitem:a6caeec0ca8f2b83f8bbaa29eeb74ea25" id="r_a6caeec0ca8f2b83f8bbaa29eeb74ea25"><td class="memItemLeft">virtual bool&#160;</td><td class="memItemRight"><a class="el" href="#a6caeec0ca8f2b83f8bbaa29eeb74ea25">read_sector</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lba, <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buffer)=0</td></tr>
+<tr class="memdesc:a6caeec0ca8f2b83f8bbaa29eeb74ea25"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read a single sector.  <br /></td></tr>
 <tr class="memitem:a7b5cf59b19211ba94309727e73ffef60" id="r_a7b5cf59b19211ba94309727e73ffef60"><td class="memItemLeft">virtual bool&#160;</td><td class="memItemRight"><a class="el" href="#a7b5cf59b19211ba94309727e73ffef60">write_sector</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lba, const <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buffer)=0</td></tr>
+<tr class="memdesc:a7b5cf59b19211ba94309727e73ffef60"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a single sector.  <br /></td></tr>
 <tr class="memitem:acce1608b55153216bf752ee1fd9211b0" id="r_acce1608b55153216bf752ee1fd9211b0"><td class="memItemLeft">virtual <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#acce1608b55153216bf752ee1fd9211b0">sector_count</a> () const =0</td></tr>
+<tr class="memdesc:acce1608b55153216bf752ee1fd9211b0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total number of sectors.  <br /></td></tr>
 <tr class="memitem:a23f79506430cc318765da0aa8cbaab8c" id="r_a23f79506430cc318765da0aa8cbaab8c"><td class="memItemLeft">virtual <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a23f79506430cc318765da0aa8cbaab8c">sector_size</a> () const =0</td></tr>
+<tr class="memdesc:a23f79506430cc318765da0aa8cbaab8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of each sector in bytes.  <br /></td></tr>
 <tr class="memitem:a095720dc5cc42bb71113753a74159922" id="r_a095720dc5cc42bb71113753a74159922"><td class="memItemLeft">virtual bool&#160;</td><td class="memItemRight"><a class="el" href="#a095720dc5cc42bb71113753a74159922">is_read_only</a> () const =0</td></tr>
+<tr class="memdesc:a095720dc5cc42bb71113753a74159922"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether the device reports as read-only.  <br /></td></tr>
 </table>
-<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Abstract base class for block devices. </p>
+</div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="acf49f308065355d5afbed60fbf10bf08" name="acf49f308065355d5afbed60fbf10bf08"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#acf49f308065355d5afbed60fbf10bf08">&#9670;&#160;</a></span>~BlockDevice()</h2>
 
@@ -192,6 +202,8 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Whether the device reports as read-only. </p>
+
 <p>Implemented in <a class="el" href="classkernel_1_1block_1_1_ahci_driver.html#afab32d435a03b684777d3afbccbaa482">kernel::block::AhciDriver</a>, <a class="el" href="classkernel_1_1block_1_1_ata_pio_driver.html#a0d4e80cc74e43b85cddd753f1d235d17">kernel::block::AtaPioDriver</a>, <a class="el" href="classkernel_1_1block_1_1_mock_block_device.html#ac719baee4294c876514ce78b7e397ccd">kernel::block::MockBlockDevice</a>, and <a class="el" href="classkernel_1_1block_1_1_virtio_blk_driver.html#a23cbd39753479a156f68f8dde5376d5f">kernel::block::VirtioBlkDriver</a>.</p>
 
 </div>
@@ -223,6 +235,16 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Read a single sector. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lba</td><td>Logical block address. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Output buffer (must be at least <a class="el" href="#a23f79506430cc318765da0aa8cbaab8c" title="Size of each sector in bytes.">sector_size()</a> bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
+
 <p>Implemented in <a class="el" href="classkernel_1_1block_1_1_ahci_driver.html#ae8a751068cb12582e54c8a42771152b6">kernel::block::AhciDriver</a>, <a class="el" href="classkernel_1_1block_1_1_ata_pio_driver.html#a2a4b7bd6f929b0a87fa4479af7133521">kernel::block::AtaPioDriver</a>, <a class="el" href="classkernel_1_1block_1_1_mock_block_device.html#a40c741cb67366ab86e82f5c178973c20">kernel::block::MockBlockDevice</a>, and <a class="el" href="classkernel_1_1block_1_1_virtio_blk_driver.html#aab7dc1975eda4602343bbb66d191c83d">kernel::block::VirtioBlkDriver</a>.</p>
 
 </div>
@@ -250,6 +272,8 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Total number of sectors. </p>
+
 <p>Implemented in <a class="el" href="classkernel_1_1block_1_1_ahci_driver.html#a04f4921264641433192db832f57e4380">kernel::block::AhciDriver</a>, <a class="el" href="classkernel_1_1block_1_1_ata_pio_driver.html#af7ad5b1036c45633784ea626cb38fd75">kernel::block::AtaPioDriver</a>, <a class="el" href="classkernel_1_1block_1_1_mock_block_device.html#a2c1dcfda3dbd79955d6db9d3ea82793a">kernel::block::MockBlockDevice</a>, and <a class="el" href="classkernel_1_1block_1_1_virtio_blk_driver.html#aa63cbcf938a9cb9dc5d55f1986338e27">kernel::block::VirtioBlkDriver</a>.</p>
 
 </div>
@@ -276,6 +300,8 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Size of each sector in bytes. </p>
 
 <p>Implemented in <a class="el" href="classkernel_1_1block_1_1_ahci_driver.html#a4a48682bd0410dfca5c1b6e185a2445d">kernel::block::AhciDriver</a>, <a class="el" href="classkernel_1_1block_1_1_ata_pio_driver.html#a210c05a8bf1603ec248ab96d0c21c565">kernel::block::AtaPioDriver</a>, <a class="el" href="classkernel_1_1block_1_1_mock_block_device.html#ac13533e9634e6bceeeea71fa4181b493">kernel::block::MockBlockDevice</a>, and <a class="el" href="classkernel_1_1block_1_1_virtio_blk_driver.html#a509254cf9ad5ceba089e8427436f06ad">kernel::block::VirtioBlkDriver</a>.</p>
 
@@ -307,6 +333,16 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Write a single sector. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lba</td><td>Logical block address. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Input buffer (must be at least <a class="el" href="#a23f79506430cc318765da0aa8cbaab8c" title="Size of each sector in bytes.">sector_size()</a> bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 
 <p>Implemented in <a class="el" href="classkernel_1_1block_1_1_ahci_driver.html#aa99c80fea14ae9d8ecb91828c518ec87">kernel::block::AhciDriver</a>, <a class="el" href="classkernel_1_1block_1_1_ata_pio_driver.html#a67e90318b6075777fc4494b19381c316">kernel::block::AtaPioDriver</a>, <a class="el" href="classkernel_1_1block_1_1_mock_block_device.html#abd5625d73de2742f08bd34618b788e36">kernel::block::MockBlockDevice</a>, and <a class="el" href="classkernel_1_1block_1_1_virtio_blk_driver.html#afee1d23f846e35528bd2827fa1462ea5">kernel::block::VirtioBlkDriver</a>.</p>
 

@@ -88,6 +88,9 @@ Before writing or modifying kernel tests, run `git branch --show-current`:
 
 If the branch does not match the intended role, do not proceed.
 
+## Cross-Arch Parity (MANDATORY — effective immediately)
+Every implementation ships on all three architectures (`x86_64`, `aarch64`, `riscv64`) in the same cycle — real implementation or documented arch-equivalent, in both directions. Single-arch-only work is not done: no deferring the other two arches to "later" without a tracked follow-up issue, and a follow-up issue does not substitute for shipping. Done means all three arches build and link green plus the arch test classes (`arch_aarch64`, `arch_riscv64`) exercised where the change touches arch-visible behavior. A planner plan scoped to one arch without the other two is rejected; an audit finding single-arch-only code without the above evidence is REJECTED.
+
 ## Session Start
 - Determine current branch with `git branch --show-current`
 - Ask the user: **"Developer or Quality Engineer?"**

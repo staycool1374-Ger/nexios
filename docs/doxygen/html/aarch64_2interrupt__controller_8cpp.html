@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -145,7 +145,7 @@ Functions</h2></td></tr>
 <tr class="memitem:ac7375681b455a01cbd2c161dbb0409c2" id="r_ac7375681b455a01cbd2c161dbb0409c2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ac7375681b455a01cbd2c161dbb0409c2">arch::gic_redist_ready</a> ()</td></tr>
 <tr class="memdesc:ac7375681b455a01cbd2c161dbb0409c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or when no redistributor exists (GICv2 path). Polarity follows the GICv3 spec (online = 1); the pre-#198 poll loop tested the inverted bit.  <br /></td></tr>
 <tr class="memitem:af44c28e0176ac64b504464bbd30f31b2" id="r_af44c28e0176ac64b504464bbd30f31b2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#af44c28e0176ac64b504464bbd30f31b2">arch::handle_gic_irq</a> (void)</td></tr>
-<tr class="memdesc:af44c28e0176ac64b504464bbd30f31b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">IRQ handler called from vectors.S. Dispatches all non-spurious INTIDs via the IDT table.  <br /></td></tr>
+<tr class="memdesc:af44c28e0176ac64b504464bbd30f31b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">IRQ handler called from vectors.S. Dispatches all non-spurious INTIDs via the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> table.  <br /></td></tr>
 <tr class="memitem:a02f1e46be9bd915e24696367061cebf5" id="r_a02f1e46be9bd915e24696367061cebf5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a02f1e46be9bd915e24696367061cebf5">arch::aarch64_el0_fault_handler</a> ()</td></tr>
 <tr class="memdesc:a02f1e46be9bd915e24696367061cebf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL0 synchronous-fault handler called from vectors.S (issues #184/#28). Non-SVC faults from EL0 land here. Latch ESR/FAR/ELR for post-mortem GDB, mark the faulting task TERMINATED (exit_code = -SIGSEGV), and switch off it — mirroring the sys_exit self-termination path. Runs with interrupts masked (vector entry); must not re-enable IRQs, and must NOT call Scheduler::terminate (ISR-unsafe: switch_to_task resolves the live exception RSP as the save owner — see <a class="el" href="syscall__handlers__misc_8cpp.html" title="Syscall handlers for miscellaneous operations: yield, print, get_ticks, exit, etc.">syscall_handlers_misc.cpp</a>). The asm caller applies the pending switch via irq_context_switch_common; if no task is current (no user context to kill) park as a last resort. A parent BLOCKED in waitpid IS woken (issue #217: wake_waiting_parent delivers status + PID before the switch); polled waiters (wait_for_termination_safe) observe TERMINATED.  <br /></td></tr>
 <tr class="memitem:a3269bc0a72901a59c9d013f16c8d903a" id="r_a3269bc0a72901a59c9d013f16c8d903a"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a3269bc0a72901a59c9d013f16c8d903a">arch::aarch64_last_el0_esr</a> ()</td></tr>
@@ -156,7 +156,7 @@ Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
 <tr class="memitem:afd9b85181132acd76811d0e433804c37" id="r_afd9b85181132acd76811d0e433804c37"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#afd9b85181132acd76811d0e433804c37">arch::GIC_MAX_IRQ</a> = 64</td></tr>
-<tr class="memdesc:afd9b85181132acd76811d0e433804c37"><td class="mdescLeft">&#160;</td><td class="mdescRight">Valid IRQ window for mask/unmask (issue #198): the snapshot covers distributor words 0..1 and the IDT has 64 slots, so lines &gt;= 64 have no defined state and must not touch MMIO.  <br /></td></tr>
+<tr class="memdesc:afd9b85181132acd76811d0e433804c37"><td class="mdescLeft">&#160;</td><td class="mdescRight">Valid IRQ window for mask/unmask (issue #198): the snapshot covers distributor words 0..1 and the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> has 64 slots, so lines &gt;= 64 have no defined state and must not touch MMIO.  <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

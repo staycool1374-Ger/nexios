@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -132,38 +132,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('sync_8hpp.html
 Include dependency graph for sync.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="sync_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2sync_2sync_8hpp" loading="lazy" alt=""/></div>
-<map name="asrc_2kernel_2sync_2sync_8hpp" id="asrc_2kernel_2sync_2sync_8hpp">
-<area shape="rect" title=" " alt="" coords="382,5,549,32"/>
-<area shape="rect" href="semaphore_8hpp.html" title=" " alt="" coords="5,80,187,107"/>
-<area shape="poly" title=" " alt="" coords="399,35,176,79,175,74,402,30"/>
-<area shape="rect" href="mutex_8hpp.html" title=" " alt="" coords="211,80,365,107"/>
-<area shape="poly" title=" " alt="" coords="432,34,334,76,332,71,437,31"/>
-<area shape="rect" href="queue_8hpp.html" title=" " alt="" coords="389,80,542,107"/>
-<area shape="poly" title=" " alt="" coords="467,30,468,66,463,63,464,35"/>
-<area shape="rect" href="notify_8hpp.html" title=" " alt="" coords="565,80,712,107"/>
-<area shape="poly" title=" " alt="" coords="496,30,597,73,592,74,495,35"/>
-<area shape="rect" href="eventgroup_8hpp.html" title=" " alt="" coords="736,80,917,107"/>
-<area shape="poly" title=" " alt="" coords="529,30,751,76,746,77,529,35"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="428,304,506,331"/>
-<area shape="poly" title=" " alt="" coords="109,105,187,174,241,216,300,254,357,280,415,302,410,302,356,285,297,258,238,220,184,178,108,110"/>
-<area shape="rect" href="task_8hpp.html" title="Task control block and state definitions for the kernel scheduler." alt="" coords="374,155,514,181"/>
-<area shape="poly" title=" " alt="" coords="157,105,370,149,366,153,157,110"/>
-<area shape="poly" title=" " alt="" coords="403,181,370,197,343,214,328,233,327,243,332,255,348,273,368,287,415,307,410,307,365,291,344,277,327,257,322,244,323,231,339,210,368,192,398,183"/>
-<area shape="rect" href="vfs_8hpp.html" title=" " alt="" coords="341,229,467,256"/>
-<area shape="poly" title=" " alt="" coords="439,180,420,218,417,214,435,183"/>
-<area shape="rect" href="signal_8hpp.html" title="Signal definitions used by the kernel for user exception delivery." alt="" coords="490,229,571,256"/>
-<area shape="poly" title=" " alt="" coords="460,179,507,220,502,219,458,184"/>
-<area shape="poly" title=" " alt="" coords="416,254,448,293,443,291,414,259"/>
-<area shape="poly" title=" " alt="" coords="522,255,489,294,487,290,517,258"/>
-<area shape="poly" title=" " alt="" coords="288,105,288,137,291,176,300,217,321,254,340,273,363,287,415,308,410,307,361,292,337,277,317,258,295,219,285,176,283,137,285,110"/>
-<area shape="poly" title=" " alt="" coords="315,105,406,147,400,148,315,110"/>
-<area shape="poly" title=" " alt="" coords="483,104,509,126,538,154,565,189,585,228,589,243,585,257,572,273,557,286,521,304,520,299,554,282,569,270,580,255,584,243,580,230,561,192,534,157,506,129,482,110"/>
-<area shape="poly" title=" " alt="" coords="463,105,454,141,450,138,460,109"/>
-<area shape="poly" title=" " alt="" coords="641,105,642,137,638,176,627,219,605,258,587,275,566,289,521,307,520,302,563,284,584,271,601,254,622,217,633,175,637,136,638,109"/>
-<area shape="poly" title=" " alt="" coords="602,108,493,151,491,146,607,106"/>
-<area shape="poly" title=" " alt="" coords="817,106,742,178,688,220,631,258,575,284,521,304,520,298,573,280,628,254,685,216,738,174,812,108"/>
-<area shape="poly" title=" " alt="" coords="757,108,526,154,525,149,762,106"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
@@ -183,7 +152,7 @@ This graph shows which files directly or indirectly include this file:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Async" id="r_kernel_3A_3Async"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1sync.html">kernel::sync</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>

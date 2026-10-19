@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -133,10 +133,15 @@ Collaboration diagram for kernel::fat32::MbrPartition:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:ab39c8a4f90e6fab934744fdd61040db6" id="r_ab39c8a4f90e6fab934744fdd61040db6"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ab39c8a4f90e6fab934744fdd61040db6">status</a></td></tr>
+<tr class="memdesc:ab39c8a4f90e6fab934744fdd61040db6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Partition status byte (0x80 = active).  <br /></td></tr>
 <tr class="memitem:a793c6c637455aa59c73f6c7b259a54f6" id="r_a793c6c637455aa59c73f6c7b259a54f6"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a793c6c637455aa59c73f6c7b259a54f6">partition_type</a></td></tr>
+<tr class="memdesc:a793c6c637455aa59c73f6c7b259a54f6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Partition type code.  <br /></td></tr>
 <tr class="memitem:a33c15866ceda30253efead9193ed4d5d" id="r_a33c15866ceda30253efead9193ed4d5d"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a33c15866ceda30253efead9193ed4d5d">lba_start</a></td></tr>
+<tr class="memdesc:a33c15866ceda30253efead9193ed4d5d"><td class="mdescLeft">&#160;</td><td class="mdescRight">LBA of the first sector.  <br /></td></tr>
 <tr class="memitem:aae11c01a89aa7f7c973e53e819994fe7" id="r_aae11c01a89aa7f7c973e53e819994fe7"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#aae11c01a89aa7f7c973e53e819994fe7">sector_count</a></td></tr>
+<tr class="memdesc:aae11c01a89aa7f7c973e53e819994fe7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of sectors in the partition.  <br /></td></tr>
 <tr class="memitem:adfb0a4590657a328742f33e10cdb2475" id="r_adfb0a4590657a328742f33e10cdb2475"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#adfb0a4590657a328742f33e10cdb2475">valid</a></td></tr>
+<tr class="memdesc:adfb0a4590657a328742f33e10cdb2475"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether this entry is valid.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Parsed MBR partition entry. </p>
@@ -153,6 +158,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>LBA of the first sector. </p>
+
 </div>
 </div>
 <a id="a793c6c637455aa59c73f6c7b259a54f6" name="a793c6c637455aa59c73f6c7b259a54f6"></a>
@@ -166,6 +173,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Partition type code. </p>
 
 </div>
 </div>
@@ -181,6 +190,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Number of sectors in the partition. </p>
+
 </div>
 </div>
 <a id="ab39c8a4f90e6fab934744fdd61040db6" name="ab39c8a4f90e6fab934744fdd61040db6"></a>
@@ -195,6 +206,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Partition status byte (0x80 = active). </p>
+
 </div>
 </div>
 <a id="adfb0a4590657a328742f33e10cdb2475" name="adfb0a4590657a328742f33e10cdb2475"></a>
@@ -208,6 +221,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Whether this entry is valid. </p>
 
 </div>
 </div>

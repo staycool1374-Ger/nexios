@@ -205,6 +205,21 @@ class VMM {
     /// @note Concurrency/caller contract (issue #366): Lock: none.
     ///       Context: boot-only (single call). SMP: boot-single-CPU.
     static void snapshot_kernel_template();
+    /// @brief Harden boot-established kernel-half permissions to W^X
+    ///        (issue #376 epic remainder): text RX, rodata RO+NX, data/bss
+    ///        RW+NX over the linker section ranges. Splits boot huge/block
+    ///        entries to 4K as needed (split fills preserve flags, see the
+    ///        arch notes), then applies per-page bits. TLB flushed per
+    ///        page as each leaf reaches its final state, plus one full
+    ///        flush at the end. Call ONCE at end of bring-up after PMM/VMM
+    ///        init and
+    ///        BEFORE snapshot_kernel_template() so the template and every
+    ///        later clone_kernel_pml4 inherit hardened flags by value.
+    ///        Panics on any mapping failure (a half-hardened root must
+    ///        never boot). Single-threaded BSP, IRQs off; no locks taken.
+    /// @note Concurrency/caller contract (issue #366): Lock: none.
+    ///       Context: boot-only (single call). SMP: boot-single-CPU.
+    static void harden_kernel_half();
     /// @brief True when @p a_pml4 and @p b_pml4 agree on every kernel-half
     ///        entry (256..511), compared recursively through shared
     ///        tables (present+equal u64, or both-absent, at each level).
@@ -863,7 +878,24 @@ class VMM {
     static uint64_t vmm_arch_encode_ro(uint64_t leaf, bool executable);
     static bool vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out);
     static bool vmm_arch_leaf_is_executable(uint64_t leaf);
+    /// @brief Ensure EL1/kernel-mode executability on a kernel-half leaf
+    ///        (issue #376 boot-text W^X). The 5-arg map path installs
+    ///        non-executable kernel leaves by policy (slice-1 data default),
+    ///        so the harden pass restores X on text leaves through this
+    ///        hook after the RO encode. Kernel-half only — never applied
+    ///        to user pages (aarch64 keeps PXN there as ret2usr backstop).
+    ///        x86_64 clears NX; aarch64 clears UXN+PXN; riscv64 sets X.
+    static uint64_t vmm_arch_kernel_text_exec(uint64_t leaf);
     static uint64_t vmm_arch_block_base(uint64_t entry, bool huge);
+    /// @brief Walk geometry shims (issue #378): table levels from the root
+    ///        (4 on x86_64/aarch64, 3 on Sv39 riscv64) + the per-level VA
+    ///        index vector (idx[levels] valid, idx[3] zeroed on 3-level).
+    ///        One definition per arch TU; lets the five VMM walk sites
+    ///        share index computation instead of per-arch #if branches.
+    ///        Walk BODIES stay VMM-private by design (#363 P4: snapshot
+    ///        pairing, ENSUREs, drop notes are policy, not geometry).
+    static unsigned vmm_arch_walk_levels();
+    static void vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]);
     /// @brief Recursive merge worker (issue #96): converge @p dst_table
     ///        toward @p src_table over [@p start, 512).  Zero allocations.
     static void merge_table_level(uint64_t *src_table, uint64_t *dst_table,

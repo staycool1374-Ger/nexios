@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.2.21</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structarch_1_1
 </div><!--header-->
 <div class="contents">
 
+<p>x86-64 <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> descriptor (10-byte packed, used with LIDT).  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="hal_2idt_8hpp_source.html">idt.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for arch::IDTDescriptor:</div>
@@ -129,10 +132,14 @@ Collaboration diagram for arch::IDTDescriptor:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:af991856aee182732e30f8cd4de9e3fc4" id="r_af991856aee182732e30f8cd4de9e3fc4"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af991856aee182732e30f8cd4de9e3fc4">limit</a></td></tr>
-<tr class="memitem:aa24ece407c7abdd692f8128a3ab6be3b" id="r_aa24ece407c7abdd692f8128a3ab6be3b"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa24ece407c7abdd692f8128a3ab6be3b">base</a></td></tr>
+<tr class="memitem:af991856aee182732e30f8cd4de9e3fc4" id="r_af991856aee182732e30f8cd4de9e3fc4"><td class="memItemLeft"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af991856aee182732e30f8cd4de9e3fc4">limit</a></td></tr>
+<tr class="memdesc:af991856aee182732e30f8cd4de9e3fc4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> minus one.  <br /></td></tr>
+<tr class="memitem:aa24ece407c7abdd692f8128a3ab6be3b" id="r_aa24ece407c7abdd692f8128a3ab6be3b"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa24ece407c7abdd692f8128a3ab6be3b">base</a></td></tr>
+<tr class="memdesc:aa24ece407c7abdd692f8128a3ab6be3b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Linear address of the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a>.  <br /></td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>x86-64 <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> descriptor (10-byte packed, used with LIDT). </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="aa24ece407c7abdd692f8128a3ab6be3b" name="aa24ece407c7abdd692f8128a3ab6be3b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aa24ece407c7abdd692f8128a3ab6be3b">&#9670;&#160;</a></span>base</h2>
 
@@ -140,10 +147,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::IDTDescriptor::base</td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::IDTDescriptor::base</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Linear address of the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a>. </p>
 
 </div>
 </div>
@@ -154,10 +163,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> arch::IDTDescriptor::limit</td>
+          <td class="memname"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arch::IDTDescriptor::limit</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Size of the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> minus one. </p>
 
 </div>
 </div>

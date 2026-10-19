@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -133,14 +133,23 @@ Collaboration diagram for net::ArpHeader:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a6ef6722f03da7c9cab48f8e1417656bc" id="r_a6ef6722f03da7c9cab48f8e1417656bc"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a6ef6722f03da7c9cab48f8e1417656bc">htype</a></td></tr>
+<tr class="memdesc:a6ef6722f03da7c9cab48f8e1417656bc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hardware type (1 = Ethernet).  <br /></td></tr>
 <tr class="memitem:ad2c02e8c8ebe859b757239a5f9fa5fb8" id="r_ad2c02e8c8ebe859b757239a5f9fa5fb8"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ad2c02e8c8ebe859b757239a5f9fa5fb8">ptype</a></td></tr>
+<tr class="memdesc:ad2c02e8c8ebe859b757239a5f9fa5fb8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Protocol type (0x0800 = IPv4).  <br /></td></tr>
 <tr class="memitem:aea0130d42366132a00905d2201e038bc" id="r_aea0130d42366132a00905d2201e038bc"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#aea0130d42366132a00905d2201e038bc">hlen</a></td></tr>
+<tr class="memdesc:aea0130d42366132a00905d2201e038bc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hardware address length (6).  <br /></td></tr>
 <tr class="memitem:a556d9c37a07cbf2c20e2b0e511695285" id="r_a556d9c37a07cbf2c20e2b0e511695285"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a556d9c37a07cbf2c20e2b0e511695285">plen</a></td></tr>
+<tr class="memdesc:a556d9c37a07cbf2c20e2b0e511695285"><td class="mdescLeft">&#160;</td><td class="mdescRight">Protocol address length (4).  <br /></td></tr>
 <tr class="memitem:a7ed68a61635b3c84f21be56b07b684e6" id="r_a7ed68a61635b3c84f21be56b07b684e6"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a7ed68a61635b3c84f21be56b07b684e6">oper</a></td></tr>
+<tr class="memdesc:a7ed68a61635b3c84f21be56b07b684e6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Operation (1 = request, 2 = reply).  <br /></td></tr>
 <tr class="memitem:a20124baaff254150b0a2353e0fa1e2fb" id="r_a20124baaff254150b0a2353e0fa1e2fb"><td class="memItemLeft"><a class="el" href="structnet_1_1_mac_addr.html">MacAddr</a>&#160;</td><td class="memItemRight"><a class="el" href="#a20124baaff254150b0a2353e0fa1e2fb">sha</a></td></tr>
+<tr class="memdesc:a20124baaff254150b0a2353e0fa1e2fb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sender hardware address.  <br /></td></tr>
 <tr class="memitem:af45c29cea1e726cf1815dd7bad842ee9" id="r_af45c29cea1e726cf1815dd7bad842ee9"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#af45c29cea1e726cf1815dd7bad842ee9">spa</a></td></tr>
+<tr class="memdesc:af45c29cea1e726cf1815dd7bad842ee9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sender protocol address (IPv4, big-endian).  <br /></td></tr>
 <tr class="memitem:a3a208b6fca828c30837e7595b5193f77" id="r_a3a208b6fca828c30837e7595b5193f77"><td class="memItemLeft"><a class="el" href="structnet_1_1_mac_addr.html">MacAddr</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3a208b6fca828c30837e7595b5193f77">tha</a></td></tr>
+<tr class="memdesc:a3a208b6fca828c30837e7595b5193f77"><td class="mdescLeft">&#160;</td><td class="mdescRight">Target hardware address.  <br /></td></tr>
 <tr class="memitem:af68d216b7fe6a3e5bb6387a76bed2a9e" id="r_af68d216b7fe6a3e5bb6387a76bed2a9e"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#af68d216b7fe6a3e5bb6387a76bed2a9e">tpa</a></td></tr>
+<tr class="memdesc:af68d216b7fe6a3e5bb6387a76bed2a9e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Target protocol address (IPv4, big-endian).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>ARP packet header (28 bytes). </p>
@@ -157,6 +166,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Hardware address length (6). </p>
+
 </div>
 </div>
 <a id="a6ef6722f03da7c9cab48f8e1417656bc" name="a6ef6722f03da7c9cab48f8e1417656bc"></a>
@@ -170,6 +181,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Hardware type (1 = Ethernet). </p>
 
 </div>
 </div>
@@ -185,6 +198,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Operation (1 = request, 2 = reply). </p>
+
 </div>
 </div>
 <a id="a556d9c37a07cbf2c20e2b0e511695285" name="a556d9c37a07cbf2c20e2b0e511695285"></a>
@@ -198,6 +213,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Protocol address length (4). </p>
 
 </div>
 </div>
@@ -213,6 +230,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Protocol type (0x0800 = IPv4). </p>
+
 </div>
 </div>
 <a id="a20124baaff254150b0a2353e0fa1e2fb" name="a20124baaff254150b0a2353e0fa1e2fb"></a>
@@ -226,6 +245,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Sender hardware address. </p>
 
 </div>
 </div>
@@ -241,6 +262,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Sender protocol address (IPv4, big-endian). </p>
+
 </div>
 </div>
 <a id="a3a208b6fca828c30837e7595b5193f77" name="a3a208b6fca828c30837e7595b5193f77"></a>
@@ -255,6 +278,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Target hardware address. </p>
+
 </div>
 </div>
 <a id="af68d216b7fe6a3e5bb6387a76bed2a9e" name="af68d216b7fe6a3e5bb6387a76bed2a9e"></a>
@@ -268,6 +293,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Target protocol address (IPv4, big-endian). </p>
 
 </div>
 </div>

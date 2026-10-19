@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,59 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2timer_8hp
 
 <p>Timer abstraction — PIT+TSC (x86_64), generic timer (AArch64), timer (RISC-V).  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for timer.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="hal_2timer_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2arch_2hal_2timer_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="hal_2timer_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2arch_2hal_2timer_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="hal_2timer_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:arch_3A_3ATimer" id="r_arch_3A_3ATimer"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_timer.html">arch::Timer</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 timer driver — PIT + TSC calibration for tick and nanosecond timing.  <a href="classarch_1_1_timer.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
+<tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
+<tr class="memitem:arch_3A_3Adetail" id="r_arch_3A_3Adetail"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1detail.html">arch::detail</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
+Typedefs</h2></td></tr>
+<tr class="memitem:a33e0aad4e0075aca3bd6edc860f671fc" id="r_a33e0aad4e0075aca3bd6edc860f671fc"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a33e0aad4e0075aca3bd6edc860f671fc">arch::ArchTimer</a> = <a class="el" href="classarch_1_1_timer.html">Timer</a></td></tr>
+<tr class="memdesc:a33e0aad4e0075aca3bd6edc860f671fc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Architecture-independent timer type alias.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a244685ac059b1b8e45c20d690aa81bf1" id="r_a244685ac059b1b8e45c20d690aa81bf1"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1">arch::TickSource</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1a0655502f90e66ebc7dab94de8f9a3ef7">arch::PIT</a> = 0
+, <a class="el" href="namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1a28e098175bb05703eb34c5adbb234370">arch::TSC</a> = 1
+, <a class="el" href="namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1a1ad1eaecbffd66d80bad6c30884601e9">arch::TSC_DEADLINE</a> = 2
+, <a class="el" href="namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1ab439b9d3e479ed6d43c9530b558ebbd6">arch::HPET</a> = 3
+, <br />
+&#160;&#160;<a class="el" href="namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1a7159c74a0b8e9c1551d63fc310c163fe">arch::GENERIC_COUNTER</a> = 4
+, <a class="el" href="namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1a2bc25ec844676fc09311e77ffbadf653">arch::MTIME</a> = 5
+, <a class="el" href="namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1a033bd94b1168d7e4f0d644c3c95e35bf">arch::TEST</a> = 6
+<br />
+ }</td></tr>
+<tr class="memdesc:a244685ac059b1b8e45c20d690aa81bf1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tick source backing the HRT monotonic clock (issue #16).  <a href="namespacearch.html#a244685ac059b1b8e45c20d690aa81bf1">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a7dc0bb82bb146a199240170ac5055369" id="r_a7dc0bb82bb146a199240170ac5055369"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1detail.html#a7dc0bb82bb146a199240170ac5055369">arch::detail::monotonic_commit</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *cell, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> now)</td></tr>
+<tr class="memdesc:a7dc0bb82bb146a199240170ac5055369"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lock-free monotonic commit: stores max(*cell, now).  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Timer abstraction — PIT+TSC (x86_64), generic timer (AArch64), timer (RISC-V). </p>
 </div></div><!-- contents -->

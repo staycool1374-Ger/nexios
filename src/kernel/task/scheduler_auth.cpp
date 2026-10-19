@@ -81,7 +81,7 @@ Scheduler::AuthStepResult Scheduler::auth_verify_step(uint64_t &out_task_id,
                 t->ro_verify_state_ =
                     TaskControlBlock::RoVerifyState::VERIFYING;
             cand = t;
-            cand_pml4 = t->page_table_;
+            cand_pml4 = t->get_page_table();
             cand_off = t->ro_verify_off_;
             cand_acc = t->ro_verify_acc_;
             cand_baseline = t->ro_crc32_;
@@ -98,7 +98,7 @@ Scheduler::AuthStepResult Scheduler::auth_verify_step(uint64_t &out_task_id,
         ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
         if (TaskControlBlock::is_valid(cand) &&
-            cand->page_table_ == cand_pml4) {
+            cand->get_page_table() == cand_pml4) {
             cand->ro_verify_off_ = 0;
             cand->ro_verify_acc_ = CRC32::INITIAL;
         }
@@ -152,7 +152,7 @@ Scheduler::AuthStepResult Scheduler::auth_verify_step(uint64_t &out_task_id,
         ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
         if (!TaskControlBlock::is_valid(cand) ||
-            cand->page_table_ != cand_pml4 ||
+            cand->get_page_table() != cand_pml4 ||
             cand->ro_verify_state_ !=
                 TaskControlBlock::RoVerifyState::VERIFYING ||
             cand->ro_verify_off_ != cand_off ||

@@ -257,9 +257,9 @@ JARVIS_TEST(canary_installed_at_segment_boundaries,
         return true;
     };
     uint64_t live = 0;
-    JARVIS_ASSERT(read8(t->canary_before[stk], t->page_table_, live));
+    JARVIS_ASSERT(read8(t->canary_before[stk], t->get_page_table(), live));
     JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (stk + 1)));
-    JARVIS_ASSERT(read8(t->canary_after[stk], t->page_table_, live));
+    JARVIS_ASSERT(read8(t->canary_after[stk], t->get_page_table(), live));
     JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (stk + 1)));
     JARVIS_TEST_PASS();
 }
@@ -285,7 +285,7 @@ JARVIS_TEST(canary_tamper_detected_on_syscall, "PRE: none | POST: none") {
     JARVIS_ASSERT(tamper_va != 0);
 
     // Overwrite the canary with 0xDD (via HHDM through the task's PML4).
-    uint64_t phys = VMM::virt_to_phys_in_pml4(tamper_va, t->page_table_);
+    uint64_t phys = VMM::virt_to_phys_in_pml4(tamper_va, t->get_page_table());
     JARVIS_ASSERT(phys != 0);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys), 0xDD,

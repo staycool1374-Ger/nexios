@@ -695,13 +695,13 @@ JARVIS_TEST(buffer_pool_exec_into_current_clears_buffers,
 
     // 2. Call unmap_all BEFORE swapping page_table_ (this is what
     // exec_into_current does)
-    // BUG: If unmap_all uses task->page_table_ AFTER the swap, it clears
+    // BUG: If unmap_all uses task->get_page_table() AFTER the swap, it clears
     // wrong PML4
     BufferPool::unmap_all(*task);
 
     // 3. Swap page table (simulating exec_into_current line 308)
-    uint64_t old_pml4 = task->page_table_;
-    task->page_table_ = new_pml4;
+    uint64_t old_pml4 = task->get_page_table();
+    task->swap_page_table(new_pml4);
 
     // 4. Free old PML4 (simulating exec_into_current cleanup)
     if (old_pml4 && old_pml4 != VMM::get_kernel_pml4()) {
@@ -1504,7 +1504,7 @@ JARVIS_TEST(buffer_pool_pt_owner_bit_stays_user, "PRE: none | POST: none") {
 
         // PT pages already present under PDPT[1]: stub (PD[0]) + stack
         // (PD[384]).
-        size_t pre = count_pt_pages_under_pdpt(task->page_table_, 0, 1,
+        size_t pre = count_pt_pages_under_pdpt(task->get_page_table(), 0, 1,
                                                nullptr);
 
         // Allocate MAX_BUFFERS buffers spanning 2 PT pages under PDPT[1]:
@@ -1521,7 +1521,7 @@ JARVIS_TEST(buffer_pool_pt_owner_bit_stays_user, "PRE: none | POST: none") {
         JARVIS_ASSERT_EQ(static_cast<int>(BufferPool::MAX_BUFFERS), alloc_count);
 
         // Walk every present PD entry under PDPT[1] and pin the owner bit.
-        size_t post = count_pt_pages_under_pdpt(task->page_table_, 0, 1,
+        size_t post = count_pt_pages_under_pdpt(task->get_page_table(), 0, 1,
                                                 &first_non_user);
         JARVIS_ASSERT_FMT(pre + 2 == post,
                           "allocating 4 MB under PDPT[1] must add exactly 2 "
@@ -1594,7 +1594,7 @@ JARVIS_TEST(buffer_pool_shared_pdpt_walk_frees_all,
         // Count PT pages under the shared PDPT[1] (stub + buffers + stack)
         // before cleanup — every one must be freed by free_user_pages.
         pt_before_cleanup =
-            count_pt_pages_under_pdpt(task->page_table_, 0, 1, nullptr);
+            count_pt_pages_under_pdpt(task->get_page_table(), 0, 1, nullptr);
         JARVIS_ASSERT_FMT(pt_before_cleanup >= 4,
                           "expected stub+buffers+stack PT pages under PDPT[1] "
                           "(got %lu)",
@@ -1635,7 +1635,7 @@ JARVIS_TEST(buffer_pool_4mb_walk_balance, "PRE: none | POST: none") {
             va + alloc_count * arch::PAGE_SIZE - va == 4ULL * 1024 * 1024,
             "MAX_BUFFERS allocs must span exactly 4 MB");
 
-        pt_count = count_pt_pages_under_pdpt(task->page_table_, 0, 1, nullptr);
+        pt_count = count_pt_pages_under_pdpt(task->get_page_table(), 0, 1, nullptr);
         JARVIS_ASSERT_FMT(pt_count >= 4,
                           "expected 4 PT pages under PDPT[1] for the 4 MB "
                           "range + stub + stack (got %lu)",

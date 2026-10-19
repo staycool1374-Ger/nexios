@@ -53,6 +53,7 @@ meson setup "$BLD_BASE/bld" "$BLD_BASE/src" \
     -Dpicocrt=true \
     -Dposix-console=true \
     -Dthread-local-storage=false \
+    -Derrno-function=__errno \
     -Dspecsdir=lib
 ninja -C "$BLD_BASE/bld"
 ninja -C "$BLD_BASE/bld" install

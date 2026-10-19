@@ -136,8 +136,10 @@ JARVIS_TEST(fpu_nm_nesting_impossible, "PRE: none | POST: none") {
 // Expect: Alignment and size hold; fpu_state_gen starts at 0.
 // Depends: TaskControlBlock layout
 JARVIS_TEST(fpu_save_area_alignment, "PRE: none | POST: none") {
-    static_assert(__builtin_offsetof(TaskControlBlock, fpu_state) % 64 == 0,
-                  "fpu_state must be 64-byte aligned (issue #93)");
+    // Issue #377: page_table_ privatization made TaskControlBlock
+    // non-standard-layout, so offsetof() is -Werror — the type-level
+    // alignof/size asserts plus the runtime check below pin the same
+    // guarantees.
     static_assert(sizeof(TaskControlBlock::fpu_state) == 512,
                   "fpu_state must be exactly 512 bytes (FXSAVE)");
     static_assert(alignof(TaskControlBlock::fpu_state) == 64,

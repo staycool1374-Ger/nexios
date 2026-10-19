@@ -1,10 +1,9 @@
 var searchData=
 [
-  ['o_5fcreat_0',['O_CREAT',['../unistd_8h.html#a1cf6b1de1fffedaa1d26b189e9a8d2cc',1,'unistd.h']]],
-  ['o_5fnonblock_1',['O_NONBLOCK',['../unistd_8h.html#a39d33ce33804efd4d52606d59071c6d8',1,'unistd.h']]],
-  ['o_5frawtty_2',['O_RAWTTY',['../unistd_8h.html#a8b6ef4b6d1b448b5fbd1b28747cf75ac',1,'unistd.h']]],
-  ['o_5frdonly_3',['O_RDONLY',['../unistd_8h.html#a7a68c9ffaac7dbcd652225dd7c06a54b',1,'unistd.h']]],
-  ['o_5frdwr_4',['O_RDWR',['../unistd_8h.html#abb0586253488ee61072b73557eeb873b',1,'unistd.h']]],
-  ['o_5fwronly_5',['O_WRONLY',['../unistd_8h.html#a11b644a8526139c4cc1850dac1271ced',1,'unistd.h']]],
-  ['offsetof_6',['offsetof',['../gdt_8cpp.html#afd049f7ad59dbe455f460807475c2841',1,'offsetof:&#160;gdt.cpp'],['../tcb__write__log_8hpp.html#afd049f7ad59dbe455f460807475c2841',1,'offsetof:&#160;tcb_write_log.hpp']]]
+  ['nexios_5fabi_5fmajor_0',['NEXIOS_ABI_MAJOR',['../syscall_8h.html#af57d94f1926a49b8f9d6ae74e7336a64',1,'syscall.h']]],
+  ['nexios_5fabi_5fminor_1',['NEXIOS_ABI_MINOR',['../syscall_8h.html#ae892af29ef45f36551183aa2ca249e4f',1,'syscall.h']]],
+  ['nexios_5ffault_5frecovery_5fkeep_2',['NEXIOS_FAULT_RECOVERY_KEEP',['../checked__ptr_8hpp.html#a54a8246615aceffb29f1c21b5aa404c2',1,'checked_ptr.hpp']]],
+  ['nexios_5fstr_3',['NEXIOS_STR',['../version_8cpp.html#abe889db9390fd1522e71dcaed354b617',1,'version.cpp']]],
+  ['nexios_5fstr_5finner_4',['NEXIOS_STR_INNER',['../version_8cpp.html#a94e7948e976a142813e8eb071c08f6ad',1,'version.cpp']]],
+  ['null_5',['NULL',['../stdlib_8h.html#a070d2ce7b6bb7e5c05602aa8c308d0c4',1,'stdlib.h']]]
 ];

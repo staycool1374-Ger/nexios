@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,59 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ipc_8hpp.html'
 
 <p>Priority-based IPC — send, recv, events, notifications.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="spinlock_8hpp_source.html">kernel/sync/spinlock.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="spinlock__guard_8hpp_source.html">kernel/sync/spinlock_guard.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for ipc.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="ipc_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2ipc_2ipc_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="ipc_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2ipc_2ipc_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="ipc_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3AIPC" id="r_kernel_3A_3AIPC"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_i_p_c.html">kernel::IPC</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structkernel_1_1_message_queue.html" title="Priority-ordered circular message queue embedded in each TCB.">MessageQueue</a> is defined in &lt;<a class="el" href="task_8hpp.html" title="Task control block and state definitions for the kernel scheduler.">kernel/task/task.hpp</a>&gt; and embedded in each <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a>.  <a href="classkernel_1_1_i_p_c.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Acap" id="r_kernel_3A_3Acap"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html">kernel::cap</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:acf26df622e6621b8e36d62ce14d07809" id="r_acf26df622e6621b8e36d62ce14d07809"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#acf26df622e6621b8e36d62ce14d07809">kernel::IpcFlags</a> : uint64_t { <a class="el" href="namespacekernel.html#acf26df622e6621b8e36d62ce14d07809ab50339a10e1de285ac99d4c3990b8693">kernel::NONE</a> = 0
+, <a class="el" href="namespacekernel.html#acf26df622e6621b8e36d62ce14d07809aafc3203b70037086fb9aa7f2ced7a9f0">kernel::NONBLOCK</a> = 1 &lt;&lt; 0
+ }</td></tr>
+<tr class="memdesc:acf26df622e6621b8e36d62ce14d07809"><td class="mdescLeft">&#160;</td><td class="mdescRight">Flags for <a class="el" href="classkernel_1_1_i_p_c.html#aa8b196dbcb9c61d38946fe38c7dfffcd" title="Sends a message to a destination task.">IPC::send()</a>.  <a href="namespacekernel.html#acf26df622e6621b8e36d62ce14d07809">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:aa495f96fbf4a3d25bb1afcace8d3d05c" id="r_aa495f96fbf4a3d25bb1afcace8d3d05c"><td class="memItemLeft">constexpr <a class="el" href="namespacekernel.html#acf26df622e6621b8e36d62ce14d07809">IpcFlags</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aa495f96fbf4a3d25bb1afcace8d3d05c">kernel::operator|</a> (<a class="el" href="namespacekernel.html#acf26df622e6621b8e36d62ce14d07809">IpcFlags</a> lhs, <a class="el" href="namespacekernel.html#acf26df622e6621b8e36d62ce14d07809">IpcFlags</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:aa495f96fbf4a3d25bb1afcace8d3d05c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitwise-or for <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> flags.  <br /></td></tr>
+<tr class="memitem:a482dceb71eed911e238f19118e3b99db" id="r_a482dceb71eed911e238f19118e3b99db"><td class="memItemLeft">constexpr <a class="el" href="namespacekernel.html#acf26df622e6621b8e36d62ce14d07809">IpcFlags</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a482dceb71eed911e238f19118e3b99db">kernel::operator&amp;</a> (<a class="el" href="namespacekernel.html#acf26df622e6621b8e36d62ce14d07809">IpcFlags</a> lhs, <a class="el" href="namespacekernel.html#acf26df622e6621b8e36d62ce14d07809">IpcFlags</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a482dceb71eed911e238f19118e3b99db"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitwise-and for <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> flags (test/mask).  <br /></td></tr>
+<tr class="memitem:aa8f29350abeb2e2625551b6b423b7d73" id="r_aa8f29350abeb2e2625551b6b423b7d73"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aa8f29350abeb2e2625551b6b423b7d73">kernel::fast_msg_to_regs</a> (const <a class="el" href="structkernel_1_1_message.html">Message</a> &amp;msg, uint64_t *regs)</td></tr>
+<tr class="memdesc:aa8f29350abeb2e2625551b6b423b7d73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copy up to <code class="param">data_size</code> bytes of <code class="param">msg.data</code> into the caller's own <code class="param">regs</code>[] kernel-stack frame (issue #11). Kernel mem -&gt; kernel mem, no user-pointer access, no SMAP window. regs must be non-null.  <br /></td></tr>
+<tr class="memitem:a84b584a72f348dbe560361b4f2d8e354" id="r_a84b584a72f348dbe560361b4f2d8e354"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a84b584a72f348dbe560361b4f2d8e354">kernel::fast_regs_to_msg</a> (uint64_t *regs, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> data_size, <a class="el" href="structkernel_1_1_message.html">Message</a> &amp;msg)</td></tr>
+<tr class="memdesc:a84b584a72f348dbe560361b4f2d8e354"><td class="mdescLeft">&#160;</td><td class="mdescRight">Gather up to <code class="param">data_size</code> bytes from the caller's own <code class="param">regs</code>[] frame into <code class="param">msg.data</code> (issue #11). Kernel mem -&gt; kernel mem. regs must be non-null; data_size &lt;= IPC_FAST_PAYLOAD_BYTES.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a1f2097a483b8b9b8bf08efcacf47df7a" id="r_a1f2097a483b8b9b8bf08efcacf47df7a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a1f2097a483b8b9b8bf08efcacf47df7a">kernel::k_fast_word_regs</a> [IPC_FAST_PAYLOAD_BYTES/8]</td></tr>
+<tr class="memdesc:a1f2097a483b8b9b8bf08efcacf47df7a"><td class="mdescLeft">&#160;</td><td class="mdescRight">regs[] indices of the 6 fastpath payload words (issue #11, paper §3.2): rsi(4), rdi(5), r8(7), r9(8), r10(9), r11(10). Single source of truth shared by the fast handlers and the ABI test (anti-drift). rbp(6) is deliberately excluded (frame-pointer safety); rcx(2)/rdx(3) carry type/data_size in the live ABI.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Priority-based IPC — send, recv, events, notifications. </p>
 </div></div><!-- contents -->

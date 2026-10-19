@@ -40,6 +40,7 @@ var namespacekernel_1_1debug =
     [ "debug_validate_handle", "namespacekernel_1_1debug.html#a893cb407d22ea88b636bde7608b880a1", null ],
     [ "debug_write_regs", "namespacekernel_1_1debug.html#ae70a742c8c462e516c06a9af82b55258", null ],
     [ "dump_all_tasks", "namespacekernel_1_1debug.html#a70b0bd6c79eac81164d116b1c7b780d7", null ],
+    [ "dump_cpu_regs", "namespacekernel_1_1debug.html#a8e339ab3b15cf62caa047c7c770b1b21", null ],
     [ "dump_scheduler_info", "namespacekernel_1_1debug.html#a9c80a5a9a3a6f52efef1fabf4192ab72", null ],
     [ "dump_task_info", "namespacekernel_1_1debug.html#ade0bc324da03fcc112cdb93eb35f220b", null ],
     [ "find_entry_owner", "namespacekernel_1_1debug.html#a094fd17ebd41a3d23a3ac83dbab61387", null ],

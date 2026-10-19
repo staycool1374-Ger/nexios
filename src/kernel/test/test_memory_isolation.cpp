@@ -83,14 +83,14 @@ JARVIS_TEST(cross_task_page_fault_isolated, "PRE: none | POST: none") {
     // Map one user page at PROBE_VA in A only.
     uint64_t a_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(a_phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, a_phys, true, false, a->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, a_phys, true, false, a->get_page_table());
 
     // Dispatch A: the probe writes 0xAB to PROBE_VA (mapped → succeeds) and
     // exits.
     Scheduler::add_task(*a);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(a);
-    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(PROBE_VA, a->page_table_) ==
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(PROBE_VA, a->get_page_table()) ==
                   a_phys);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     JARVIS_ASSERT(reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + a_phys)[0] ==
@@ -104,7 +104,7 @@ JARVIS_TEST(cross_task_page_fault_isolated, "PRE: none | POST: none") {
     JARVIS_ASSERT(b->state == TaskState::TERMINATED);
 
     // A is intact: same frame, same value.
-    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(PROBE_VA, a->page_table_) ==
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(PROBE_VA, a->get_page_table()) ==
                   a_phys);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     JARVIS_ASSERT(reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + a_phys)[0] ==
@@ -135,13 +135,13 @@ JARVIS_TEST(hhdm_kernel_reads_user_page, "PRE: none | POST: none") {
     }
     uint64_t a_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(a_phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, a_phys, true, false, a->page_table_);
+    VMM::map_page_in_pml4(PROBE_VA, a_phys, true, false, a->get_page_table());
 
     Scheduler::add_task(*a);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(a);
 
-    uint64_t resolved = VMM::virt_to_phys_in_pml4(PROBE_VA, a->page_table_);
+    uint64_t resolved = VMM::virt_to_phys_in_pml4(PROBE_VA, a->get_page_table());
     JARVIS_ASSERT(resolved == a_phys);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     JARVIS_ASSERT(reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + resolved)[0] ==

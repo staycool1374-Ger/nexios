@@ -2,8 +2,6 @@
 
 ## Branch: testbed only
 
-*Outline — test details to be expanded when implementation begins.*
-
 ### Cross-Boundary Flows — test_cross_boundary.cpp
 - Kernel-to-userspace IPC round-trip with payload
 - Userspace driver (iocd) delivers keyboard input to shell via IPC

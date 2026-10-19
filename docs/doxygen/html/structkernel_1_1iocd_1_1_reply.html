@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
+<p>MMIO policy protocol (issue #303 item 4). The daemon authorizes WHICH registered driver may use WHICH bar index; the kernel still enforces WHAT gets mapped via MEMORY-type MmioCaps, and MmioUserMap::drain_task owns PTE teardown on task exit.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="iocd_8hpp_source.html">iocd.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::iocd::Reply:</div>
@@ -130,9 +133,19 @@ Collaboration diagram for kernel::iocd::Reply:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a75a1c5a083dd02418981bece8c6c1d77" id="r_a75a1c5a083dd02418981bece8c6c1d77"><td class="memItemLeft">int64_t&#160;</td><td class="memItemRight"><a class="el" href="#a75a1c5a083dd02418981bece8c6c1d77">result</a></td></tr>
+<tr class="memdesc:a75a1c5a083dd02418981bece8c6c1d77"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return code (negative on error).  <br /></td></tr>
 <tr class="memitem:ad8de5fc5fb97de34aa74d5412b72ac92" id="r_ad8de5fc5fb97de34aa74d5412b72ac92"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad8de5fc5fb97de34aa74d5412b72ac92">data</a> [4]</td></tr>
+<tr class="memdesc:ad8de5fc5fb97de34aa74d5412b72ac92"><td class="mdescLeft">&#160;</td><td class="mdescRight">Type-specific result data.  <br /></td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>MMIO policy protocol (issue #303 item 4). The daemon authorizes WHICH registered driver may use WHICH bar index; the kernel still enforces WHAT gets mapped via MEMORY-type MmioCaps, and MmioUserMap::drain_task owns PTE teardown on task exit. </p>
+<ul>
+<li>MMIO_MAP: args[0]=client pid (self-asserted, same trust model as KEYBOARD_READ), args[1]=bar index in [0, 4). <a class="el" href="structkernel_1_1iocd_1_1_reply.html" title="MMIO policy protocol (issue #303 item 4). The daemon authorizes WHICH registered driver may use WHICH...">Reply</a> 0 on grant (idempotent reuse), -1 on unregistered pid, out-of-range bar, or full grant table.</li>
+<li>MMIO_UNMAP: args[0]=client pid, args[1]=bar index. <a class="el" href="structkernel_1_1iocd_1_1_reply.html" title="MMIO policy protocol (issue #303 item 4). The daemon authorizes WHICH registered driver may use WHICH...">Reply</a> 0 on release, -1 when no live record exists.</li>
+<li>UNREGISTER_DEVICE: args[0]=pid. Removes the registration and drops its grant records (device exit path); -1 if unknown. Routing caveat: the daemon replies to args[0], never to the <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> sender (same self-asserted trust model as KEYBOARD_READ). A request with a bogus args[0] strands the requester's send_sync — callers must always pass their own live pid.</li>
+</ul>
+<p>IOCD <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> reply message. </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="ad8de5fc5fb97de34aa74d5412b72ac92" name="ad8de5fc5fb97de34aa74d5412b72ac92"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ad8de5fc5fb97de34aa74d5412b72ac92">&#9670;&#160;</a></span>data</h2>
 
@@ -144,6 +157,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Type-specific result data. </p>
 
 </div>
 </div>
@@ -158,6 +173,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Return code (negative on error). </p>
 
 </div>
 </div>

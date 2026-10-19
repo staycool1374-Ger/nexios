@@ -154,7 +154,7 @@ class IDT {
                                  uint64_t rip);
 
   private:
-    static constexpr size_t NUM_ENTRIES = 64;
+    static constexpr size_t NUM_ENTRIES = 256;
     static ISRHandler handlers_[NUM_ENTRIES];
 };
 

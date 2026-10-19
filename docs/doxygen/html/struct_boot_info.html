@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('struct_boot_in
 </div><!--header-->
 <div class="contents">
 
+<p>Boot-time information passed from the early boot stage to the kernel.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="bootinfo_8hpp_source.html">bootinfo.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for BootInfo:</div>
@@ -130,24 +133,36 @@ Collaboration diagram for BootInfo:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:MemRegion" id="r_MemRegion"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="struct_boot_info_1_1_mem_region.html">MemRegion</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A single physical memory region reported by the bootloader.  <a href="struct_boot_info_1_1_mem_region.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a4a058935e6b3c71ac20a9fc03d1b65bf" id="r_a4a058935e6b3c71ac20a9fc03d1b65bf"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a4a058935e6b3c71ac20a9fc03d1b65bf">BootInfo</a> ()</td></tr>
 <tr class="memitem:a1e5fd0e4560046c414477a26127d335f" id="r_a1e5fd0e4560046c414477a26127d335f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1e5fd0e4560046c414477a26127d335f">add_region</a> (uint64_t base, uint64_t size, uint32_t type)</td></tr>
+<tr class="memdesc:a1e5fd0e4560046c414477a26127d335f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Add a memory region if the array is not full.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a2a211c1815bf92035077c9f4b166585b" id="r_a2a211c1815bf92035077c9f4b166585b"><td class="memItemLeft"><a class="el" href="struct_boot_info_1_1_mem_region.html">MemRegion</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2a211c1815bf92035077c9f4b166585b">mem_regions</a> [<a class="el" href="bootinfo_8hpp.html#ae18c071ff80b49d6906bb3f330d42a36">BOOTINFO_MAX_MEM_REGIONS</a>]</td></tr>
+<tr class="memdesc:a2a211c1815bf92035077c9f4b166585b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Memory region array.  <br /></td></tr>
 <tr class="memitem:ab7ac4be9120a76462d2c12204ae42b29" id="r_ab7ac4be9120a76462d2c12204ae42b29"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#ab7ac4be9120a76462d2c12204ae42b29">num_mem_regions</a></td></tr>
+<tr class="memdesc:ab7ac4be9120a76462d2c12204ae42b29"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of valid entries in mem_regions.  <br /></td></tr>
 <tr class="memitem:acdc36296c5511401ddd10b6711ced7be" id="r_acdc36296c5511401ddd10b6711ced7be"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#acdc36296c5511401ddd10b6711ced7be">total_mem_size</a></td></tr>
+<tr class="memdesc:acdc36296c5511401ddd10b6711ced7be"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total usable RAM in bytes.  <br /></td></tr>
 <tr class="memitem:adcd134608f9fb80fe903bd4b7ab676ee" id="r_adcd134608f9fb80fe903bd4b7ab676ee"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#adcd134608f9fb80fe903bd4b7ab676ee">dtb_ptr</a></td></tr>
+<tr class="memdesc:adcd134608f9fb80fe903bd4b7ab676ee"><td class="mdescLeft">&#160;</td><td class="mdescRight">Device-tree blob pointer (0 if not available).  <br /></td></tr>
 <tr class="memitem:a3d5ea67834f4cea4956f680a6dc7a16e" id="r_a3d5ea67834f4cea4956f680a6dc7a16e"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a3d5ea67834f4cea4956f680a6dc7a16e">multiboot_magic</a></td></tr>
+<tr class="memdesc:a3d5ea67834f4cea4956f680a6dc7a16e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Multiboot magic value (0 if not available).  <br /></td></tr>
 <tr class="memitem:aa65aad7d7c3fe3cdc5cec24cffff691f" id="r_aa65aad7d7c3fe3cdc5cec24cffff691f"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa65aad7d7c3fe3cdc5cec24cffff691f">multiboot_info</a></td></tr>
+<tr class="memdesc:aa65aad7d7c3fe3cdc5cec24cffff691f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Multiboot info structure pointer.  <br /></td></tr>
 <tr class="memitem:a8e5e1dc7ba2fa7ae1d8d4ece8416995a" id="r_a8e5e1dc7ba2fa7ae1d8d4ece8416995a"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a8e5e1dc7ba2fa7ae1d8d4ece8416995a">cmdline</a> [256]</td></tr>
+<tr class="memdesc:a8e5e1dc7ba2fa7ae1d8d4ece8416995a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Boot command-line string.  <br /></td></tr>
 <tr class="memitem:af72e1151d1d8f6f522f84d7ee0ab6dae" id="r_af72e1151d1d8f6f522f84d7ee0ab6dae"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#af72e1151d1d8f6f522f84d7ee0ab6dae">hart_id</a></td></tr>
+<tr class="memdesc:af72e1151d1d8f6f522f84d7ee0ab6dae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hart ID (RISC-V 64 only).  <br /></td></tr>
 </table>
-<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Boot-time information passed from the early boot stage to the kernel. </p>
+</div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a4a058935e6b3c71ac20a9fc03d1b65bf" name="a4a058935e6b3c71ac20a9fc03d1b65bf"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a4a058935e6b3c71ac20a9fc03d1b65bf">&#9670;&#160;</a></span>BootInfo()</h2>
 
@@ -206,6 +221,16 @@ Data Fields</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Add a memory region if the array is not full. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">base</td><td>Physical base address. </td></tr>
+    <tr><td class="paramname">size</td><td>Size in bytes. </td></tr>
+    <tr><td class="paramname">type</td><td>Region type (1 = usable, 2 = reserved, 3 = ACPI, 4 = MMIO). </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
@@ -221,6 +246,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Boot command-line string. </p>
+
 </div>
 </div>
 <a id="adcd134608f9fb80fe903bd4b7ab676ee" name="adcd134608f9fb80fe903bd4b7ab676ee"></a>
@@ -234,6 +261,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Device-tree blob pointer (0 if not available). </p>
 
 </div>
 </div>
@@ -249,6 +278,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Hart ID (RISC-V 64 only). </p>
+
 </div>
 </div>
 <a id="a2a211c1815bf92035077c9f4b166585b" name="a2a211c1815bf92035077c9f4b166585b"></a>
@@ -262,6 +293,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Memory region array. </p>
 
 </div>
 </div>
@@ -277,6 +310,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Multiboot info structure pointer. </p>
+
 </div>
 </div>
 <a id="a3d5ea67834f4cea4956f680a6dc7a16e" name="a3d5ea67834f4cea4956f680a6dc7a16e"></a>
@@ -290,6 +325,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Multiboot magic value (0 if not available). </p>
 
 </div>
 </div>
@@ -305,6 +342,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Number of valid entries in mem_regions. </p>
+
 </div>
 </div>
 <a id="acdc36296c5511401ddd10b6711ced7be" name="acdc36296c5511401ddd10b6711ced7be"></a>
@@ -318,6 +357,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Total usable RAM in bytes. </p>
 
 </div>
 </div>

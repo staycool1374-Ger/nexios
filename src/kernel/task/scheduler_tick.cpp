@@ -222,7 +222,7 @@ void Scheduler::on_tick() noexcept {
                     tp = kernel::debug::fmt_u64(
                         tb, tp, effective_priority(t));
                     kernel::debug::fmt_str(tb, tp, " pg=");
-                    tp = kernel::debug::fmt_u64(tb, tp, t->page_table_);
+                    tp = kernel::debug::fmt_u64(tb, tp, t->get_page_table());
                     tb[tp] = 0;
                     kernel::debug::trace(tb);
                 }
@@ -360,7 +360,7 @@ void Scheduler::on_tick() noexcept {
                     tp = kernel::debug::fmt_u64(
                         tb, tp, effective_priority(t));
                     kernel::debug::fmt_str(tb, tp, " pg=");
-                    tp = kernel::debug::fmt_u64(tb, tp, t->page_table_);
+                    tp = kernel::debug::fmt_u64(tb, tp, t->get_page_table());
                     tb[tp] = 0;
                     kernel::debug::trace(tb);
                 }

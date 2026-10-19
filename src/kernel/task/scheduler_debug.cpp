@@ -174,7 +174,10 @@ struct H2Event {
 static constinit H2Event g_h2_ring[H2_RING_SIZE] = {};
 static constinit uint64_t g_h2_idx = 0;
 
-inline void h2_record(uint64_t ev, uint64_t a, uint64_t b, uint64_t c) noexcept {
+// External linkage (declared in debug/ipc_sched_trace.hpp under
+// CONFIG_DEBUG_IPC_SCHED, issue #368); the single definition for all
+// H2_REC users.  Ring storage stays TU-local below.
+void h2_record(uint64_t ev, uint64_t a, uint64_t b, uint64_t c) noexcept {
     // Issue #25 C1: atomic index (two CPUs append concurrently; a torn
     // ENTRY is possible but debug-only — the generation recorded is the
     // CALLER's CPU slot, so ordering per CPU stays coherent).

@@ -2,7 +2,7 @@ var namespacekernel_1_1diag =
 [
     [ "detail", "namespacekernel_1_1diag_1_1detail.html", [
       [ "to_u64", "namespacekernel_1_1diag_1_1detail.html#a5158c54ca5052f45787881210095b06a", null ],
-      [ "to_u64", "namespacekernel_1_1diag_1_1detail.html#a937fcf6a34a94ffcba0dc0bb7b6b4051", null ],
+      [ "to_u64", "namespacekernel_1_1diag_1_1detail.html#ac758e015f84910177a7371b7d8745dc4", null ],
       [ "to_u64", "namespacekernel_1_1diag_1_1detail.html#aa16546220b6eb5a0e89afe5669817235", null ]
     ] ],
     [ "TcbWriteLog", "structkernel_1_1diag_1_1_tcb_write_log.html", "structkernel_1_1diag_1_1_tcb_write_log" ],

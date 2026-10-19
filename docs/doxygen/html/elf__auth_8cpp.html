@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -136,15 +136,19 @@ Include dependency graph for elf_auth.cpp:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Aelf" id="r_kernel_3A_3Aelf"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html">kernel::elf</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a2cd5f8ff1d095878599d2ebd74125fb0" id="r_a2cd5f8ff1d095878599d2ebd74125fb0"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a2cd5f8ff1d095878599d2ebd74125fb0">kernel::elf::collect_ro_ranges</a> (const uint8_t *phdr_image, uint64_t phdr_buf_off, uint16_t phnum, uint64_t phentsize, uint64_t file_size, <a class="el" href="structkernel_1_1_task_control_block_1_1_ro_range.html">TaskControlBlock::RoRange</a> *out, uint64_t max_ranges) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:af4659b6dfe981955594fc4466b5a9dae" id="r_af4659b6dfe981955594fc4466b5a9dae"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#af4659b6dfe981955594fc4466b5a9dae">kernel::elf::collect_ro_ranges</a> (<a class="el" href="classkernel_1_1_span.html">kernel::Span</a>&lt; const uint8_t &gt; image, uint64_t phdr_buf_off, uint16_t phnum, uint64_t phentsize, uint64_t file_size, <a class="el" href="classkernel_1_1_span.html">kernel::Span</a>&lt; <a class="el" href="structkernel_1_1_task_control_block_1_1_ro_range.html">TaskControlBlock::RoRange</a> &gt; out) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:af4659b6dfe981955594fc4466b5a9dae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Collect the covered read-only ranges (issue #46): every PT_LOAD segment without PF_W, as [vaddr, filesz), validated segments only.  <br /></td></tr>
 <tr class="memitem:a9024e1c0be1324638cc1b83724001072" id="r_a9024e1c0be1324638cc1b83724001072"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a9024e1c0be1324638cc1b83724001072">kernel::elf::crc_user_range</a> (uint64_t pml4, uint64_t vaddr, uint64_t len, uint32_t &amp;acc) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a9024e1c0be1324638cc1b83724001072"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fold one mapped range into <code class="param">acc</code> via the target page table.  <br /></td></tr>
 <tr class="memitem:ab17534bb543abbd372af4f9129e7d433" id="r_ab17534bb543abbd372af4f9129e7d433"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#ab17534bb543abbd372af4f9129e7d433">kernel::elf::text_canary_slot</a> (const uint8_t *phdr_image, uint64_t phdr_buf_off, uint16_t phnum, uint64_t phentsize, uint64_t file_size, uint64_t *slot_out) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ab17534bb543abbd372af4f9129e7d433"><td class="mdescLeft">&#160;</td><td class="mdescRight">Locate the TEXT before-canary slot (issue #46): mirrors install_segment_canaries' text_base rule (first PF_X PT_LOAD, page_align_down(vaddr)) so the authenticity coverage can exclude the 8 bytes the canary subsystem owns and checks itself.  <br /></td></tr>
 <tr class="memitem:a202ab589a130ada255a0629cb0fd9e89" id="r_a202ab589a130ada255a0629cb0fd9e89"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a202ab589a130ada255a0629cb0fd9e89">kernel::elf::snapshot_ro_baseline</a> (uint64_t pml4, const uint8_t *phdr_image, uint64_t phdr_buf_off, uint16_t phnum, uint64_t phentsize, uint64_t file_size, bool has_dynamic, uint32_t load_crc, uint64_t canary_slot, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *tcb) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a202ab589a130ada255a0629cb0fd9e89"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture the post-relocation CRC baseline into <code class="param">tcb</code> (issue #46). For static images the scan must equal the incremental chunk-loop CRC (copy-path cross-check); dynamic images adopt the scan. The TEXT before-canary slot (<code class="param">canary_slot</code>, 0 = none) is carved out of the scan — the canary subsystem owns and checks it.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Read-only segment CRC baseline + re-verify primitives (issue #46). </p>

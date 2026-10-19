@@ -1,3 +1,4 @@
+
 2026-08-12 13:29:08 basic_lib PASSED: 15 FAILED: 0 TIME: 390ms
 2026-08-12 13:29:21 basic_atomic PASSED: 12 FAILED: 0 TIME: 455ms
 2026-08-12 13:29:34 configuration_build PASSED: 10 FAILED: 0 TIME: 1033ms
@@ -107,54 +108,54 @@
 2026-08-12 13:52:17 bench_microkernel PASSED: 5 FAILED: 0 TIME: 189ms
 2026-08-12 13:52:30 bench_wcet_memory PASSED: 2 FAILED: 0 TIME: 198ms
 2026-08-12 19:33:56 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 2222ms
-2026-08-12 19:34:39 deadline_ss PASSED: 2 FAILED: 0 TIME: 930ms
-2026-08-12 19:34:39 wcet_overrun PASSED: 2 FAILED: 0 TIME: 158ms
+2026-08-12 19:34:39 deadline_action PASSED: 1 FAILED: 0 TIME: 277ms
 2026-08-12 19:34:39 deadline_miss PASSED: 5 FAILED: 0 TIME: 3653ms
 2026-08-12 19:34:39 deadline_recovery PASSED: 4 FAILED: 0 TIME: 773ms
-2026-08-12 19:34:39 deadline_action PASSED: 1 FAILED: 0 TIME: 277ms
-2026-08-12 19:35:30 servers_vfsd PASSED: 18 FAILED: 0 TIME: 1936ms
-2026-08-12 19:35:30 servers_iocd PASSED: 7 FAILED: 0 TIME: 193ms
+2026-08-12 19:34:39 deadline_ss PASSED: 2 FAILED: 0 TIME: 930ms
+2026-08-12 19:34:39 wcet_overrun PASSED: 2 FAILED: 0 TIME: 158ms
 2026-08-12 19:35:30 servers_daemon_restart PASSED: 0 FAILED: 0 TIME: 3000ms STATUS: EMPTY_CLASS(all tests #if0)
-2026-08-12 19:40:02 task_lifecycle PASSED: 9 FAILED: 0 TIME: 391ms
-2026-08-12 19:40:02 process_lifecycle PASSED: 15 FAILED: 0 TIME: 471ms
-2026-08-12 19:40:02 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 17811ms
-2026-08-12 19:40:02 scheduler_budget PASSED: 6 FAILED: 0 TIME: 218ms
+2026-08-12 19:35:30 servers_iocd PASSED: 7 FAILED: 0 TIME: 193ms
+2026-08-12 19:35:30 servers_vfsd PASSED: 18 FAILED: 0 TIME: 1936ms
 2026-08-12 19:40:02 ipc_pipe PASSED: 6 FAILED: 0 TIME: 812ms
 2026-08-12 19:40:02 memory_resource_exhaustion PASSED: 5 FAILED: 0 TIME: 6076ms
+2026-08-12 19:40:02 process_lifecycle PASSED: 15 FAILED: 0 TIME: 471ms
+2026-08-12 19:40:02 scheduler_budget PASSED: 6 FAILED: 0 TIME: 218ms
+2026-08-12 19:40:02 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 17811ms
+2026-08-12 19:40:02 task_lifecycle PASSED: 9 FAILED: 0 TIME: 391ms
+2026-08-12 19:45:59 ipc_blocking PASSED: 4 FAILED: 0 TIME: 198ms
+2026-08-12 19:45:59 ipc_core PASSED: 23 FAILED: 0 TIME: 741ms
+2026-08-12 19:45:59 ipc_extended PASSED: 9 FAILED: 0 TIME: 324ms
+2026-08-12 19:45:59 ipc_robustness PASSED: 6 FAILED: 0 TIME: 280ms
+2026-08-12 19:45:59 memory_safety PASSED: 11 FAILED: 0 TIME: 309ms
+2026-08-12 19:45:59 process_elf PASSED: 9 FAILED: 0 TIME: 278ms
+2026-08-12 19:45:59 process_secure_exec PASSED: 5 FAILED: 0 TIME: 184ms
 2026-08-12 19:45:59 scheduler_core PASSED: 16 FAILED: 0 TIME: 1899ms
 2026-08-12 19:45:59 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 480ms
 2026-08-12 19:45:59 scheduler_preemption PASSED: 11 FAILED: 0 TIME: 5302ms
-2026-08-12 19:45:59 ipc_core PASSED: 23 FAILED: 0 TIME: 741ms
-2026-08-12 19:45:59 ipc_blocking PASSED: 4 FAILED: 0 TIME: 198ms
-2026-08-12 19:45:59 ipc_extended PASSED: 9 FAILED: 0 TIME: 324ms
-2026-08-12 19:45:59 ipc_robustness PASSED: 6 FAILED: 0 TIME: 280ms
-2026-08-12 19:45:59 process_elf PASSED: 9 FAILED: 0 TIME: 278ms
-2026-08-12 19:45:59 process_secure_exec PASSED: 5 FAILED: 0 TIME: 184ms
-2026-08-12 19:45:59 memory_safety PASSED: 11 FAILED: 0 TIME: 309ms
-2026-08-12 19:47:01 memory_mempool PASSED: 4 FAILED: 0 TIME: 644ms
-2026-08-12 19:47:01 memory_determinism PASSED: 4 FAILED: 0 TIME: 2665ms
-2026-08-12 19:47:01 memory_static_pools PASSED: 4 FAILED: 0 TIME: 153ms
 2026-08-12 19:47:01 hal_core PASSED: 14 FAILED: 0 TIME: 218ms
-2026-08-12 19:47:59 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 2309ms
+2026-08-12 19:47:01 memory_determinism PASSED: 4 FAILED: 0 TIME: 2665ms
+2026-08-12 19:47:01 memory_mempool PASSED: 4 FAILED: 0 TIME: 644ms
+2026-08-12 19:47:01 memory_static_pools PASSED: 4 FAILED: 0 TIME: 153ms
 2026-08-12 19:47:59 deadline_ss PASSED: 2 FAILED: 0 TIME: 235ms
-2026-08-12 19:47:59 servers_vfsd PASSED: 18 FAILED: 0 TIME: 484ms
+2026-08-12 19:47:59 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 2309ms
 2026-08-12 19:47:59 servers_iocd PASSED: 7 FAILED: 0 TIME: 215ms
+2026-08-12 19:47:59 servers_vfsd PASSED: 18 FAILED: 0 TIME: 484ms
 2026-08-12 19:50:28 deadline_ss PASSED: 3 FAILED: 0 TIME: 277ms
 2026-08-12 19:50:28 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 2309ms
 2026-08-12 19:51:14 all PASSED: 858 FAILED: 0 TIME: 218s
 2026-08-12 19:53:03 all PASSED: 84 FAILED: 0 TIME: 3967ms
-2026-08-12 20:24:44 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 551ms
 2026-08-12 20:24:44 deadline_ss PASSED: 3 FAILED: 0 TIME: 272ms
-2026-08-12 20:24:44 servers_vfsd PASSED: 18 FAILED: 0 TIME: 467ms
-2026-08-12 20:24:44 servers_iocd PASSED: 7 FAILED: 0 TIME: 210ms
+2026-08-12 20:24:44 hal_core PASSED: 14 FAILED: 0 TIME: 353ms
 2026-08-12 20:24:44 memory_mempool PASSED: 4 FAILED: 0 TIME: 630ms
 2026-08-12 20:24:44 memory_safety PASSED: 11 FAILED: 0 TIME: 1228ms
-2026-08-12 20:24:44 hal_core PASSED: 14 FAILED: 0 TIME: 353ms
-2026-08-12 20:47:47 all PASSED: 858 FAILED: 0 TIME: 215s
-2026-08-12 20:47:47 all PASSED: 0 FAILED: 0 TIME: 227s STATUS: H2_WATCHDOG_HANG
-2026-08-12 20:47:47 all PASSED: 858 FAILED: 0 TIME: 218s
-2026-08-12 20:47:47 all PASSED: 857 FAILED: 1 TIME: 217s STATUS: timer_period_reload func-fail + leak
+2026-08-12 20:24:44 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 551ms
+2026-08-12 20:24:44 servers_iocd PASSED: 7 FAILED: 0 TIME: 210ms
+2026-08-12 20:24:44 servers_vfsd PASSED: 18 FAILED: 0 TIME: 467ms
 2026-08-12 20:47:47 all PASSED: 0 FAILED: 0 TIME: 220s STATUS: H2_WATCHDOG_HANG
+2026-08-12 20:47:47 all PASSED: 0 FAILED: 0 TIME: 227s STATUS: H2_WATCHDOG_HANG
+2026-08-12 20:47:47 all PASSED: 857 FAILED: 1 TIME: 217s STATUS: timer_period_reload func-fail + leak
+2026-08-12 20:47:47 all PASSED: 858 FAILED: 0 TIME: 215s
+2026-08-12 20:47:47 all PASSED: 858 FAILED: 0 TIME: 218s
 2026-08-12 20:57:11 all PASSED: 857 FAILED: 1 TIME: 217s STATUS: harness_blocked_sender_wakes func-fail
 2026-08-12 20:57:49 testrunner PASSED: 15 FAILED: 1 TIME: -- STATUS: harness_blocked_sender_wakes baseline-flaky (fails identically on baseline)
 2026-08-12 22:05:10 ipc_core PASSED: 23 FAILED: 0 TIME: 730ms (H2 guard validation, 30+ consecutive passes)
@@ -164,25 +165,25 @@
 2026-08-12 22:33:30 all PASSED: 858 FAILED: 0 TIME: 220s
 2026-08-12 22:33:30 all PASSED: 858 FAILED: 0 TIME: 52s
 2026-08-12 22:33:30 all PASSED: 858 FAILED: 0 TIME: 53s
-2026-08-12 22:36:20 all PASSED: 858 FAILED: 0 TIME: 53s
 2026-08-12 22:36:20 all PASSED: 857 FAILED: 1 TIME: -- STATUS: harness_blocked_sender_wakes (pre-existing flake, 0 H2 diag, no watchdog)
 2026-08-12 22:36:20 all PASSED: 858 FAILED: 0 TIME: 51s
+2026-08-12 22:36:20 all PASSED: 858 FAILED: 0 TIME: 53s
 2026-08-12 23:39:32 all PASSED: 859 FAILED: 0 TIME: 53s
 2026-08-12 23:40:09 all PASSED: 84 FAILED: 0 TIME: 4s (release, trace OFF — H2 trace-OFF hang no longer reproduces)
 2026-08-13 00:29:48 all PASSED: 858 FAILED: 1 TIME: 217s STATUS: harness_blocked_sender_wakes (pre-existing v0.4.0 MP-8 timing flake, 0 H2 diag, no watchdog)
 2026-08-13 00:31:39 testrunner PASSED: 15 FAILED: 1 TIME: -- STATUS: harness_blocked_sender_wakes baseline-flaky 1/3 in isolation (identical on pre-rework baseline)
 2026-08-13 07:43:26 testrunner PASSED: 15 FAILED: 0 TIME: -- (harness_blocked_sender_wakes fixed: receiver prio 10->5, 12x consecutive PASS)
-2026-08-13 07:45:20 all PASSED: 859 FAILED: 0 TIME: 52s
 2026-08-13 07:45:20 all PASSED: 859 FAILED: 0 TIME: 221s
 2026-08-13 07:45:20 all PASSED: 859 FAILED: 0 TIME: 48s
+2026-08-13 07:45:20 all PASSED: 859 FAILED: 0 TIME: 52s
 2026-08-13 07:50:21 memory_kernel_isolation PASSED: 4 FAILED: 0 TIME: 187ms (MP-1.1/1.3/1.4 verified + documented)
 2026-08-13 10:37:04 memory_stack_alloc PASSED: 11 FAILED: 0 TIME: 371ms
 2026-08-13 10:37:04 memory_stack_profiler PASSED: 6 FAILED: 0 TIME: 931ms
 2026-08-13 10:37:04 scheduler_core PASSED: 16 FAILED: 0 TIME: 460ms
 2026-08-13 10:45:20 arch_cross PASSED: 18 FAILED: 0 TIME: 1786ms
-2026-08-13 10:45:20 selftest PASSED: 132 FAILED: 0 TIME: 6837ms
-2026-08-13 10:45:20 memory_safety PASSED: 11 FAILED: 0 TIME: 291ms
 2026-08-13 10:45:20 memory_checked_ptr PASSED: 4 FAILED: 0 TIME: 632ms
+2026-08-13 10:45:20 memory_safety PASSED: 11 FAILED: 0 TIME: 291ms
+2026-08-13 10:45:20 selftest PASSED: 132 FAILED: 0 TIME: 6837ms
 2026-08-13 11:24:02 all PASSED: 862 FAILED: 0 TIME: 219s (SMAP=1, trace ON)
 2026-08-13 11:24:51 all PASSED: 84 FAILED: 0 TIME: 4s (release, SMAP=1, trace OFF)
 2026-08-13 23:14:17 process_waitpid PASSED: 3 FAILED: 0 TIME: 193ms (sys_exit stac fix)
@@ -198,33 +199,33 @@
 2026-08-14 13:24:02 selftest PASSED: 132 FAILED: 0 TIME: 7442ms
 2026-08-14 15:37:15 logging_dmesg PASSED: 15 FAILED: 0 TIME: 394ms
 2026-08-14 15:37:15 network_core PASSED: 5 FAILED: 0 TIME: 692ms
-2026-08-14 15:37:15 vfs_fat32 PASSED: 40 FAILED: 0 TIME: 1064ms
 2026-08-14 15:37:15 scheduler_core PASSED: 16 FAILED: 0 TIME: 1839ms
+2026-08-14 15:37:15 vfs_fat32 PASSED: 40 FAILED: 0 TIME: 1064ms
 2026-08-14 19:27:22 logging_dmesg PASSED: 15 FAILED: 0 TIME: 438ms (Phase2 DmesgService)
 2026-08-14 19:27:22 logging_klog PASSED: 8 FAILED: 0 TIME: 1095ms (Phase2 KlogService)
 2026-08-14 19:27:22 selftest PASSED: 132 FAILED: 0 TIME: 32066ms (Phase2)
-2026-08-14 20:09:50 syscall_core PASSED: 15 FAILED: 0 TIME: 601ms (Phase3 global_state)
-2026-08-14 20:09:50 process_secure_exec PASSED: 5 FAILED: 0 TIME: 1034ms (Phase3)
 2026-08-14 20:09:50 memory_safety PASSED: 11 FAILED: 0 TIME: 1516ms (Phase3)
+2026-08-14 20:09:50 process_secure_exec PASSED: 5 FAILED: 0 TIME: 1034ms (Phase3)
 2026-08-14 20:09:50 selftest PASSED: 132 FAILED: 0 TIME: 7858ms (Phase3; 1/3 H2-flake CPU EXCEPTION pre-existing)
+2026-08-14 20:09:50 syscall_core PASSED: 15 FAILED: 0 TIME: 601ms (Phase3 global_state)
 2026-08-14 20:39:19 vfs_core PASSED: 20 FAILED: 0 TIME: 552ms (Phase4 VfsState)
 2026-08-14 20:39:19 vfs_fat32 PASSED: 40 FAILED: 0 TIME: 4684ms (Phase4)
-2026-08-14 20:39:19 vfs_fstab PASSED: 5 FAILED: 0 TIME: 1049ms (Phase4)
 2026-08-14 20:39:19 vfs_fat32_integration PASSED: 14 FAILED: 0 TIME: 2530ms (Phase4)
+2026-08-14 20:39:19 vfs_fstab PASSED: 5 FAILED: 0 TIME: 1049ms (Phase4)
 2026-08-14 20:44:52 network_core PASSED: 5 FAILED: 0 TIME: 1156ms (Phase5 NetState)
-2026-08-14 20:44:52 servers_vfsd PASSED: 18 FAILED: 0 TIME: 2464ms (Phase5)
 2026-08-14 20:44:52 servers_iocd PASSED: 7 FAILED: 0 TIME: 1165ms (Phase5)
-2026-08-14 22:04:53 scheduler_core PASSED: 16 FAILED: 0 TIME: 2180ms (Phase6 asm-globals)
+2026-08-14 20:44:52 servers_vfsd PASSED: 18 FAILED: 0 TIME: 2464ms (Phase5)
+2026-08-14 22:04:53 deadline_recovery PASSED: 4 FAILED: 0 TIME: 3604ms (Phase6)
+2026-08-14 22:04:53 hal_timer PASSED: 5 FAILED: 0 TIME: 239ms (Phase6)
+2026-08-14 22:04:53 ipc_blocking PASSED: 4 FAILED: 0 TIME: 258ms (Phase6)
+2026-08-14 22:04:53 ipc_core PASSED: 23 FAILED: 0 TIME: 3468ms (Phase6; 1/2 H2-flake TIMEOUT pre-existing)
+2026-08-14 22:04:53 memory_safety PASSED: 11 FAILED: 0 TIME: 1637ms (Phase6)
+2026-08-14 22:04:53 process_lifecycle PASSED: 16 FAILED: 0 TIME: 614ms (Phase6)
 2026-08-14 22:04:53 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 297ms (Phase6)
+2026-08-14 22:04:53 scheduler_core PASSED: 16 FAILED: 0 TIME: 2180ms (Phase6 asm-globals)
 2026-08-14 22:04:53 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 616ms (Phase6)
 2026-08-14 22:04:53 task_core PASSED: 6 FAILED: 0 TIME: 336ms (Phase6)
 2026-08-14 22:04:53 task_lifecycle PASSED: 9 FAILED: 0 TIME: 490ms (Phase6)
-2026-08-14 22:04:53 ipc_core PASSED: 23 FAILED: 0 TIME: 3468ms (Phase6; 1/2 H2-flake TIMEOUT pre-existing)
-2026-08-14 22:04:53 ipc_blocking PASSED: 4 FAILED: 0 TIME: 258ms (Phase6)
-2026-08-14 22:04:53 hal_timer PASSED: 5 FAILED: 0 TIME: 239ms (Phase6)
-2026-08-14 22:04:53 deadline_recovery PASSED: 4 FAILED: 0 TIME: 3604ms (Phase6)
-2026-08-14 22:04:53 process_lifecycle PASSED: 16 FAILED: 0 TIME: 614ms (Phase6)
-2026-08-14 22:04:53 memory_safety PASSED: 11 FAILED: 0 TIME: 1637ms (Phase6)
 2026-08-14 22:06:43 all PASSED: 870 FAILED: 0 TIME: 54072ms (Phase7 debug gate, trace ON)
 2026-08-14 22:43:27 logging_dmesg PASSED: 15 FAILED: 0 TIME: 510ms (DmesgBuffer private + friend tests)
 2026-08-14 22:43:27 logging_klog PASSED: 8 FAILED: 0 TIME: 330ms
@@ -404,15 +405,15 @@
 2026-08-25 17:10:03 arch_cross PASSED: 21 FAILED: 0 TIME: 605ms (issue #5 VERIFIED x86_64 SMAP contract regression)
 2026-08-25 18:52:00 cap_mmio PASSED: 10 FAILED: 0 TIME: 374ms (issue #3, after TCB-memset + claimed-slot fixes)
 2026-08-25 18:55:00 cap_core PASSED: 10 FAILED: 0 TIME: 0ms (issue #3 regression)
+2026-08-25 18:55:00 cap_ipc PASSED: 6 FAILED: 0 TIME: 0ms (issue #3 regression)
 2026-08-25 18:55:00 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 0ms (issue #3 regression)
 2026-08-25 18:55:00 cap_syscall PASSED: 8 FAILED: 0 TIME: 0ms (issue #3 regression)
-2026-08-25 18:55:00 cap_ipc PASSED: 6 FAILED: 0 TIME: 0ms (issue #3 regression)
 2026-08-25 18:55:00 cap_untyped PASSED: 9 FAILED: 0 TIME: 0ms (issue #3 regression)
-2026-08-25 18:57:00 scheduler_core PASSED: 16 FAILED: 0 TIME: 0ms (issue #3 regression)
-2026-08-25 18:57:00 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 0ms (issue #3 regression)
 2026-08-25 18:57:00 hal_core PASSED: 14 FAILED: 0 TIME: 0ms (issue #3 regression)
 2026-08-25 18:57:00 hal_idt PASSED: 6 FAILED: 0 TIME: 0ms (issue #3 regression)
 2026-08-25 18:57:00 memory_vmm PASSED: 10 FAILED: 0 TIME: 0ms (issue #3 regression)
+2026-08-25 18:57:00 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 0ms (issue #3 regression)
+2026-08-25 18:57:00 scheduler_core PASSED: 16 FAILED: 0 TIME: 0ms (issue #3 regression)
 2026-08-25 18:59:00 selftest PASSED: 133 FAILED: 0 TIME: 7208ms (issue #3 gate)
 2026-08-25 19:01:30 all PASSED: 942 FAILED: 0 TIME: 55063ms (issue #3 VERIFIED gate, trace OFF, registered 957)
 2026-08-25 19:05:00 all PASSED: 942 FAILED: 0 TIME: 56000ms (issue #3 count fix re-run, no TCOUNT mismatch)
@@ -420,23 +421,23 @@
 2026-08-29 18:18:00 cap_untyped PASSED: 18 FAILED: 0 TIME: 596ms (issue #1 sub-range carve + SYS_CAP_RETYPE)
 2026-08-29 18:20:00 cap_core PASSED: 10 FAILED: 0 TIME: 2578ms (issue #1 regression)
 2026-08-29 18:21:00 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 337ms (issue #1 regression)
-2026-08-29 18:22:00 cap_syscall PASSED: 8 FAILED: 0 TIME: 1644ms (issue #1 regression)
 2026-08-29 18:22:00 cap_ipc PASSED: 6 FAILED: 0 TIME: 362ms (issue #1 regression)
+2026-08-29 18:22:00 cap_syscall PASSED: 8 FAILED: 0 TIME: 1644ms (issue #1 regression)
 2026-08-29 18:23:00 cap_mmio PASSED: 10 FAILED: 0 TIME: 374ms (issue #1 regression)
 2026-08-29 18:35:00 all PASSED: 951 FAILED: 0 TIME: 54171ms (issue #1 VERIFIED gate, trace OFF, registered 966)
 2026-08-29 18:40:00 release_all PASSED: 85 FAILED: 0 TIME: 4209ms (issue #1 release gate, trace OFF)
 2026-08-29 18:42:00 selftest PASSED: 133 FAILED: 0 TIME: 7148ms (issue #1 CI gate)
 2026-08-30 12:30:00 cap_iommu PASSED: 12 FAILED: 0 TIME: 1748ms (issue #4 new class)
 2026-08-30 12:33:09 cap_core PASSED: 10 FAILED: 0 TIME: 356ms (issue #4 regression)
-2026-08-30 12:33:09 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 380ms (issue #4 regression)
-2026-08-30 12:33:09 cap_syscall PASSED: 8 FAILED: 0 TIME: 400ms (issue #4 regression)
-2026-08-30 12:33:09 cap_mmio PASSED: 10 FAILED: 0 TIME: 390ms (issue #4 regression)
-2026-08-30 12:33:09 cap_irq PASSED: 12 FAILED: 0 TIME: 1900ms (issue #4 regression)
-2026-08-30 12:33:09 cap_untyped PASSED: 18 FAILED: 0 TIME: 2200ms (issue #4 regression)
 2026-08-30 12:33:09 cap_ipc PASSED: 6 FAILED: 0 TIME: 450ms (issue #4 regression)
+2026-08-30 12:33:09 cap_irq PASSED: 12 FAILED: 0 TIME: 1900ms (issue #4 regression)
+2026-08-30 12:33:09 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 380ms (issue #4 regression)
+2026-08-30 12:33:09 cap_mmio PASSED: 10 FAILED: 0 TIME: 390ms (issue #4 regression)
+2026-08-30 12:33:09 cap_syscall PASSED: 8 FAILED: 0 TIME: 400ms (issue #4 regression)
+2026-08-30 12:33:09 cap_untyped PASSED: 18 FAILED: 0 TIME: 2200ms (issue #4 regression)
+2026-08-30 12:33:09 drivers_dma PASSED: 19 FAILED: 0 TIME: 800ms (issue #4 regression)
 2026-08-30 12:33:09 memory_pmm PASSED: 5 FAILED: 0 TIME: 500ms (issue #4 regression)
 2026-08-30 12:33:09 memory_vmm PASSED: 10 FAILED: 0 TIME: 700ms (issue #4 regression)
-2026-08-30 12:33:09 drivers_dma PASSED: 19 FAILED: 0 TIME: 800ms (issue #4 regression)
 2026-08-30 12:49:29 cap_iommu PASSED: 12 FAILED: 0 TIME: 449ms (issue #4 after audit fix iter-2)
 2026-08-30 13:06:10 scheduler_idle PASSED: 11 FAILED: 0 TIME: 1700ms (issue #4 gate: CRC bound derived from textlen, was hard-coded 200)
 2026-08-30 13:08:07 all PASSED: 975 FAILED: 0 TIME: 55850ms (issue #4 full debug gate, registered 990)
@@ -458,12 +459,12 @@
 2026-08-30 18:25:07 memory_pmm PASSED: 8 FAILED: 0 TIME: 300ms (issue #100 window tests, x86 regression)
 2026-08-30 18:26:07 all PASSED: 978 FAILED: 0 TIME: 62s (issue #100 x86 regression gate, registered 978)
 2026-08-30 21:21:58 arch_aarch64 PASSED: 0 FAILED: 0 TIME: 40s STATUS: TIMEOUT (issue #100: PMM OOM fixed, boot+scheduler+user-ELF execution restored; harness waits on daemon-ready IPC — follow-up)
-2026-08-30 21:23:38 memory_pmm PASSED: 8 FAILED: 0 TIME: 300ms (issue #100 final x86 check)
 2026-08-30 21:23:38 all PASSED: 978 FAILED: 0 TIME: 61s (issue #100 x86 regression gate, registered 978)
-2026-08-30 22:18:05 memory_pmm PASSED: 8 FAILED: 0 TIME: 300ms (audit-fix iteration 1 x86 check)
+2026-08-30 21:23:38 memory_pmm PASSED: 8 FAILED: 0 TIME: 300ms (issue #100 final x86 check)
 2026-08-30 22:18:05 all PASSED: 978 FAILED: 0 TIME: 62s (audit-fix iteration 1 x86 gate)
-2026-08-30 22:45:20 memory_pmm PASSED: 8 FAILED: 0 TIME: 300ms (audit iteration 2 fix check)
+2026-08-30 22:18:05 memory_pmm PASSED: 8 FAILED: 0 TIME: 300ms (audit-fix iteration 1 x86 check)
 2026-08-30 22:45:20 all PASSED: 978 FAILED: 0 TIME: 62s (audit iteration 2 fix x86 gate)
+2026-08-30 22:45:20 memory_pmm PASSED: 8 FAILED: 0 TIME: 300ms (audit iteration 2 fix check)
 2026-08-31 18:28:53 arch_aarch64 PASSED: 22 FAILED: 0 TIME: 101ms (issue #100: aarch64 bring-up complete, SPSR-IRQ + ABI + page-table fixes, 22/22)
 2026-08-31 18:30:48 all PASSED: 978 FAILED: 0 TIME: 62s (issue #100 x86 regression gate, registered 978)
 2026-08-31 18:33:36 all PASSED: 85 FAILED: 0 TIME: 4s (issue #100 x86 release gate, trace OFF)
@@ -471,8 +472,8 @@
 2026-08-31 18:35:16 all PASSED: 978 FAILED: 0 TIME: 62s (issue #100 x86 regression gate after scheduler arch-guard, registered 978)
 2026-08-31 18:50:41 arch_aarch64 PASSED: 22 FAILED: 0 TIME: 101ms (issue #100 audit-fix: PCI ECAM base 0x3f000000 + TLBI + comments)
 2026-08-31 18:51:05 all PASSED: 85 FAILED: 0 TIME: 4s (issue #100 x86 release after audit-fix, trace OFF)
-2026-08-31 18:59:34 arch_cross PASSED: 16 FAILED: 0 TIME: 100ms (issue #100 audit-fix: init_stack by-ref frame scan)
 2026-08-31 18:59:34 arch_aarch64 PASSED: 22 FAILED: 0 TIME: 101ms (issue #100 audit-fix recheck 2)
+2026-08-31 18:59:34 arch_cross PASSED: 16 FAILED: 0 TIME: 100ms (issue #100 audit-fix: init_stack by-ref frame scan)
 2026-08-31 19:07:12 arch_aarch64 PASSED: 22 FAILED: 0 TIME: 101ms (issue #100 final: S3 reclaim-guard hardening)
 2026-08-31 19:36:37 exc_table PASSED: 3 FAILED: 0 TIME: 929ms
 2026-08-31 19:36:54 hal_idt PASSED: 6 FAILED: 0 TIME: 247ms
@@ -497,12 +498,12 @@
 2026-09-01 08:29:15 all PASSED: 981 FAILED: 0 TIME: 235264ms
 2026-09-01 08:29:31 all PASSED: 85 FAILED: 0 TIME: 4933ms
 2026-09-01 09:11:24 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 346ms (issue #7 NOTIFY mode)
-2026-09-01 09:13:22 cap_irq PASSED: 12 FAILED: 0 TIME: 467ms (issue #7 regression)
 2026-09-01 09:13:22 cap_core PASSED: 10 FAILED: 0 TIME: 357ms (issue #7 regression)
-2026-09-01 09:13:22 cap_syscall PASSED: 8 FAILED: 0 TIME: 1560ms (issue #7 regression)
+2026-09-01 09:13:22 cap_irq PASSED: 12 FAILED: 0 TIME: 467ms (issue #7 regression)
 2026-09-01 09:13:22 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 1244ms (issue #7 regression)
-2026-09-01 09:13:22 scheduler_core PASSED: 16 FAILED: 0 TIME: 522ms (issue #7 regression)
+2026-09-01 09:13:22 cap_syscall PASSED: 8 FAILED: 0 TIME: 1560ms (issue #7 regression)
 2026-09-01 09:13:22 ipc_core PASSED: 23 FAILED: 0 TIME: 3432ms (issue #7 regression)
+2026-09-01 09:13:22 scheduler_core PASSED: 16 FAILED: 0 TIME: 522ms (issue #7 regression)
 2026-09-01 09:13:22 synchronization_sync PASSED: 19 FAILED: 0 TIME: 711ms (issue #7 regression)
 2026-09-01 15:39:34 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 337ms (issue #7 after audit iter-2)
 2026-09-01 15:48:31 all PASSED: 988 FAILED: 0 TIME: 244525ms (issue #7 debug gate, registered 1003)
@@ -510,44 +511,44 @@
 2026-09-01 16:58:35 cap_mmio_user PASSED: 8 FAILED: 0 TIME: 352ms (issue #8 new class)
 2026-09-01 17:02:05 cap_mmio PASSED: 14 FAILED: 0 TIME: 2041ms (issue #8 +4 revocation-closure)
 2026-09-01 17:08:00 cap_core PASSED: 10 FAILED: 0 TIME: 384ms (issue #8 regression)
-2026-09-01 17:08:00 cap_syscall PASSED: 8 FAILED: 0 TIME: 360ms (issue #8 regression)
-2026-09-01 17:08:00 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 1221ms (issue #8 regression)
-2026-09-01 17:08:00 cap_untyped PASSED: 18 FAILED: 0 TIME: 553ms (issue #8 regression)
+2026-09-01 17:08:00 cap_iommu PASSED: 12 FAILED: 0 TIME: 1805ms (issue #8 regression)
 2026-09-01 17:08:00 cap_irq PASSED: 12 FAILED: 0 TIME: 457ms (issue #8 regression)
 2026-09-01 17:08:00 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 1465ms (issue #8 regression)
-2026-09-01 17:08:00 cap_iommu PASSED: 12 FAILED: 0 TIME: 1805ms (issue #8 regression)
+2026-09-01 17:08:00 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 1221ms (issue #8 regression)
+2026-09-01 17:08:00 cap_syscall PASSED: 8 FAILED: 0 TIME: 360ms (issue #8 regression)
+2026-09-01 17:08:00 cap_untyped PASSED: 18 FAILED: 0 TIME: 553ms (issue #8 regression)
 2026-09-01 17:08:00 memory_vmm PASSED: 10 FAILED: 0 TIME: 350ms (issue #8 regression)
 2026-09-01 17:08:00 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 402ms (issue #8 regression)
 2026-09-01 17:08:00 syscall_core PASSED: 15 FAILED: 0 TIME: 575ms (issue #8 regression)
 2026-09-01 17:16:47 cap_mmio PASSED: 14 FAILED: 0 TIME: 505ms (issue #8 after audit iter-2)
 2026-09-01 17:17:18 cap_mmio_user PASSED: 8 FAILED: 0 TIME: 1438ms (issue #8 after audit iter-2)
-2026-09-01 17:25:00 cap_mmio_user PASSED: 8 FAILED: 0 TIME: 1451ms (issue #8 after audit iter-3)
 2026-09-01 17:25:00 cap_mmio PASSED: 14 FAILED: 0 TIME: 531ms (issue #8 after audit iter-3)
-2026-09-01 17:34:54 cap_mmio_user PASSED: 8 FAILED: 0 TIME: 343ms (issue #8 after audit iter-3)
+2026-09-01 17:25:00 cap_mmio_user PASSED: 8 FAILED: 0 TIME: 1451ms (issue #8 after audit iter-3)
 2026-09-01 17:34:54 cap_mmio PASSED: 14 FAILED: 0 TIME: 2236ms (issue #8 after audit iter-3)
+2026-09-01 17:34:54 cap_mmio_user PASSED: 8 FAILED: 0 TIME: 343ms (issue #8 after audit iter-3)
 2026-09-01 17:34:54 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 1671ms (issue #8 after audit iter-3)
 2026-09-01 18:02:39 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 360ms (issue #8 after audit iter-4)
 2026-09-01 18:15:34 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 1576ms (issue #8 after audit iter-5)
 2026-09-01 18:16:18 cap_mmio PASSED: 14 FAILED: 0 TIME: 2224ms (issue #8 after audit iter-5)
 2026-09-01 18:16:18 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 1618ms (issue #8 after audit iter-5)
-2026-09-01 18:26:52 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 378ms (issue #8 after audit iter-6)
 2026-09-01 18:26:52 cap_mmio PASSED: 14 FAILED: 0 TIME: 519ms (issue #8 after audit iter-6)
+2026-09-01 18:26:52 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 378ms (issue #8 after audit iter-6)
 2026-09-01 18:33:32 all PASSED: 1001 FAILED: 0 TIME: 58435ms (issue #8 debug gate, registered 1016)
 2026-09-01 18:34:44 all PASSED: 85 FAILED: 0 TIME: 4257ms (issue #8 release gate, trace OFF)
 2026-09-01 21:59:36 iommu_live PASSED: 5 FAILED: 0 TIME: 256ms (issue #9 q35+intel-iommu variant)
 2026-09-01 21:59:56 cap_iommu PASSED: 12 FAILED: 0 TIME: 442ms (issue #9 regression)
-2026-09-01 22:00:47 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 1518ms (issue #9 regression)
 2026-09-01 22:00:47 cap_mmio PASSED: 14 FAILED: 0 TIME: 509ms (issue #9 regression)
+2026-09-01 22:00:47 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 1518ms (issue #9 regression)
 2026-09-01 22:00:47 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 391ms (issue #9 regression)
 2026-09-01 22:06:36 all PASSED: 1001 FAILED: 0 TIME: 234932ms (issue #9 debug gate, registered 1016)
 2026-09-01 22:07:50 all PASSED: 1001 FAILED: 0 TIME: 48591ms (issue #9 debug gate rerun)
 2026-09-01 22:07:50 iommu_live PASSED: 5 FAILED: 0 TIME: 1071ms (issue #9 rerun)
 2026-09-01 22:12:40 release_all PASSED: 85 FAILED: 0 TIME: 17081ms (issue #9 release gate, trace OFF)
 2026-09-01 22:13:22 all PASSED: 1001 FAILED: 0 TIME: 58080ms (issue #9 debug gate, registered 1016)
-2026-09-01 22:13:22 iommu_live PASSED: 5 FAILED: 0 TIME: 1020ms (issue #9)
 2026-09-01 22:13:22 cap_iommu PASSED: 12 FAILED: 0 TIME: 455ms (issue #9)
-2026-09-01 22:39:18 iommu_live PASSED: 5 FAILED: 0 TIME: 246ms (issue #9 audit iter-2 fix)
+2026-09-01 22:13:22 iommu_live PASSED: 5 FAILED: 0 TIME: 1020ms (issue #9)
 2026-09-01 22:39:18 cap_iommu PASSED: 12 FAILED: 0 TIME: 458ms (issue #9 audit iter-2 fix)
+2026-09-01 22:39:18 iommu_live PASSED: 5 FAILED: 0 TIME: 246ms (issue #9 audit iter-2 fix)
 2026-09-02 09:00:46 cap_msix PASSED: 12 FAILED: 0 TIME: 491ms (issue #10 first full pass)
 2026-09-02 09:05:00 cap_irq PASSED: 12 FAILED: 0 TIME: ~1500ms (issue #10 window regression check)
 2026-09-02 09:07:00 cap_irq_notify PASSED: 7 FAILED: 0 TIME: ~1500ms (issue #10 regression)
@@ -601,11 +602,11 @@
 2026-09-03 18:59:41 fpu_invariants PASSED: 4 FAILED: 0 TIME: 217ms (issue #93 auditor-fix re-run)
 2026-09-03 19:05:30 all PASSED: 1029 FAILED: 0 TIME: 78048ms (issue #93 debug gate, registered 1044)
 2026-09-03 19:06:11 release_all PASSED: 85 FAILED: 0 TIME: 16628ms (issue #93 release gate, trace OFF)
-2026-09-03 20:11:07 cap_shm PASSED: 5 FAILED: 0 TIME: 1166ms
 2026-09-03 20:11:07 cap_mmio PASSED: 14 FAILED: 0 TIME: 499ms
 2026-09-03 20:11:07 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 360ms
-2026-09-03 20:11:07 ipc_robustness PASSED: 7 FAILED: 0 TIME: 488ms
 2026-09-03 20:11:07 cap_shm PASSED: 0 FAILED: 0 TIME: 0ms STATUS: RELEASE-TF_KERNEL-EXCLUDED
+2026-09-03 20:11:07 cap_shm PASSED: 5 FAILED: 0 TIME: 1166ms
+2026-09-03 20:11:07 ipc_robustness PASSED: 7 FAILED: 0 TIME: 488ms
 2026-09-03 21:38:36 ipc_robustness PASSED: 7 FAILED: 0 TIME: 2052ms (issue #106 Part A: priority-ordered wake verification)
 2026-09-03 21:48:51 cap_shm PASSED: 5 FAILED: 0 TIME: 282ms (issue #106 Part B first green run)
 2026-09-03 21:49:20 cap_ipc PASSED: 6 FAILED: 0 TIME: 1375ms (issue #106 regression)
@@ -619,11 +620,11 @@
 2026-09-03 22:14:21 all PASSED: 1035 FAILED: 0 TIME: 96117ms (issue #106 debug gate, registered 1050)
 2026-09-03 22:14:42 release_all PASSED: 85 FAILED: 0 TIME: 17573ms (issue #106 release gate, trace OFF)
 2026-09-04 08:49:00 cap_death PASSED: 9 FAILED: 0 TIME: 367ms (issue #105 Part B first green)
-2026-09-04 08:51:22 cap_shm PASSED: 5 FAILED: 0 TIME: 1088ms (issue #105 regression)
-2026-09-04 08:51:22 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 1383ms (issue #105 regression)
-2026-09-04 08:51:22 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 1435ms (issue #105 regression)
 2026-09-04 08:51:22 cap_core PASSED: 10 FAILED: 0 TIME: 1329ms (issue #105 regression)
+2026-09-04 08:51:22 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 1383ms (issue #105 regression)
 2026-09-04 08:51:22 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 302ms (issue #105 regression)
+2026-09-04 08:51:22 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 1435ms (issue #105 regression)
+2026-09-04 08:51:22 cap_shm PASSED: 5 FAILED: 0 TIME: 1088ms (issue #105 regression)
 2026-09-04 08:51:22 cap_syscall PASSED: 8 FAILED: 0 TIME: 348ms (issue #105 regression)
 2026-09-04 08:51:22 cap_untyped PASSED: 18 FAILED: 0 TIME: 2129ms (issue #105 regression)
 2026-09-04 08:51:22 ipc_robustness PASSED: 7 FAILED: 0 TIME: 470ms (issue #105 regression)
@@ -639,42 +640,42 @@
 2026-09-04 13:49:21 cap_shm PASSED: 5 FAILED: 0 TIME: 1091ms (issue #107 audit iter-3 baseline comparison)
 2026-09-04 14:27:13 cap_pager PASSED: 13 FAILED: 0 TIME: 1576ms (issue #107 stub-first gate)
 2026-09-04 14:58:11 cap_pager PASSED: 13 FAILED: 0 TIME: 2267ms (issue #107 first green; watchdog try_lock S1 fix)
-2026-09-04 15:01:14 cap_death PASSED: 9 FAILED: 0 TIME: 1489ms (issue #107 regression)
-2026-09-04 15:01:14 cap_shm PASSED: 5 FAILED: 0 TIME: 263ms (issue #107 regression)
-2026-09-04 15:01:14 syscall_fastpath PASSED: 5 FAILED: 0 TIME: 798ms (issue #107 regression)
-2026-09-04 15:01:14 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 335ms (issue #107 regression)
-2026-09-04 15:01:14 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 332ms (issue #107 regression)
 2026-09-04 15:01:14 cap_core PASSED: 10 FAILED: 0 TIME: 320ms (issue #107 regression)
+2026-09-04 15:01:14 cap_death PASSED: 9 FAILED: 0 TIME: 1489ms (issue #107 regression)
+2026-09-04 15:01:14 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 332ms (issue #107 regression)
 2026-09-04 15:01:14 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 259ms (issue #107 regression)
+2026-09-04 15:01:14 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 335ms (issue #107 regression)
+2026-09-04 15:01:14 cap_shm PASSED: 5 FAILED: 0 TIME: 263ms (issue #107 regression)
 2026-09-04 15:01:14 cap_syscall PASSED: 8 FAILED: 0 TIME: 343ms (issue #107 regression)
 2026-09-04 15:01:14 cap_untyped PASSED: 18 FAILED: 0 TIME: 503ms (issue #107 regression)
 2026-09-04 15:01:14 ipc_robustness PASSED: 7 FAILED: 0 TIME: 1935ms (issue #107 regression)
+2026-09-04 15:01:14 syscall_fastpath PASSED: 5 FAILED: 0 TIME: 798ms (issue #107 regression)
 2026-09-04 15:18:45 cap_pager PASSED: 13 FAILED: 0 TIME: 560ms (issue #107 auditor S1/S2 fixes: committed-pin table, ISR try_lock, IrqGuard map, unregister authority, count<=cap)
 2026-09-04 15:43:53 cap_pager PASSED: 13 FAILED: 0 TIME: 527ms (issue #107 iter-2 N1/N2 fixes: Work bound, multi-entry invalidate_cap; roundtrip now 2-page)
 2026-09-04 15:52:14 cap_pager PASSED: 13 FAILED: 0 TIME: 2232ms (issue #107 S3 hardening: non-user cap reject, rollback-outside-lock, trim vestigial fields)
-2026-09-04 15:55:57 cap_death PASSED: 9 FAILED: 0 TIME: 1512ms (issue #107 S3 re-verify)
-2026-09-04 15:55:57 cap_shm PASSED: 5 FAILED: 0 TIME: 244ms (issue #107 S3 re-verify)
-2026-09-04 15:55:57 syscall_fastpath PASSED: 5 FAILED: 0 TIME: 754ms (issue #107 S3 re-verify)
-2026-09-04 15:55:57 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 347ms (issue #107 S3 re-verify)
-2026-09-04 15:55:57 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 1979ms (issue #107 S3 re-verify)
 2026-09-04 15:55:57 cap_core PASSED: 10 FAILED: 0 TIME: 322ms (issue #107 S3 re-verify)
+2026-09-04 15:55:57 cap_death PASSED: 9 FAILED: 0 TIME: 1512ms (issue #107 S3 re-verify)
+2026-09-04 15:55:57 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 1979ms (issue #107 S3 re-verify)
 2026-09-04 15:55:57 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 262ms (issue #107 S3 re-verify)
+2026-09-04 15:55:57 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 347ms (issue #107 S3 re-verify)
+2026-09-04 15:55:57 cap_shm PASSED: 5 FAILED: 0 TIME: 244ms (issue #107 S3 re-verify)
 2026-09-04 15:55:57 cap_syscall PASSED: 8 FAILED: 0 TIME: 340ms (issue #107 S3 re-verify)
 2026-09-04 15:55:57 cap_untyped PASSED: 18 FAILED: 0 TIME: 2047ms (issue #107 S3 re-verify)
 2026-09-04 15:55:57 ipc_robustness PASSED: 7 FAILED: 0 TIME: 458ms (issue #107 S3 re-verify)
+2026-09-04 15:55:57 syscall_fastpath PASSED: 5 FAILED: 0 TIME: 754ms (issue #107 S3 re-verify)
 2026-09-04 15:56:54 all PASSED: 1057 FAILED: 0 TIME: 94295ms (issue #107 debug gate, registered 1072)
 2026-09-04 15:57:46 release_all PASSED: 85 FAILED: 0 TIME: 17064ms (issue #107 release gate, trace OFF)
 2026-09-04 17:58:18 ipc_fastpath PASSED: 14 FAILED: 0 TIME: 507ms (issue #11 new class)
+2026-09-04 18:01:45 cap_core PASSED: 10 FAILED: 0 TIME: 335ms (issue #11 regression)
+2026-09-04 18:01:45 cap_death PASSED: 9 FAILED: 0 TIME: 1615ms (issue #11 regression)
+2026-09-04 18:01:45 cap_ipc PASSED: 6 FAILED: 0 TIME: 305ms (issue #11 regression)
+2026-09-04 18:01:45 cap_pager PASSED: 13 FAILED: 0 TIME: 535ms (issue #11 regression)
+2026-09-04 18:01:45 cap_shm PASSED: 5 FAILED: 0 TIME: 278ms (issue #11 regression)
+2026-09-04 18:01:45 cap_syscall PASSED: 8 FAILED: 0 TIME: 1447ms (issue #11 regression)
+2026-09-04 18:01:45 cap_untyped PASSED: 18 FAILED: 0 TIME: 528ms (issue #11 regression)
 2026-09-04 18:01:45 ipc_blocking PASSED: 4 FAILED: 0 TIME: 237ms (issue #11 regression)
 2026-09-04 18:01:45 ipc_robustness PASSED: 7 FAILED: 0 TIME: 1824ms (issue #11 regression)
 2026-09-04 18:01:45 syscall_fastpath PASSED: 5 FAILED: 0 TIME: 765ms (issue #11 regression)
-2026-09-04 18:01:45 cap_ipc PASSED: 6 FAILED: 0 TIME: 305ms (issue #11 regression)
-2026-09-04 18:01:45 cap_pager PASSED: 13 FAILED: 0 TIME: 535ms (issue #11 regression)
-2026-09-04 18:01:45 cap_death PASSED: 9 FAILED: 0 TIME: 1615ms (issue #11 regression)
-2026-09-04 18:01:45 cap_shm PASSED: 5 FAILED: 0 TIME: 278ms (issue #11 regression)
-2026-09-04 18:01:45 cap_core PASSED: 10 FAILED: 0 TIME: 335ms (issue #11 regression)
-2026-09-04 18:01:45 cap_syscall PASSED: 8 FAILED: 0 TIME: 1447ms (issue #11 regression)
-2026-09-04 18:01:45 cap_untyped PASSED: 18 FAILED: 0 TIME: 528ms (issue #11 regression)
 2026-09-04 18:02:46 all PASSED: 1071 FAILED: 0 TIME: 87916ms (issue #11 debug gate, registered 1086)
 2026-09-04 18:03:31 release_all PASSED: 85 FAILED: 0 TIME: 4093ms (issue #11 release gate, trace OFF)
 2026-09-04 18:09:27 ipc_fastpath PASSED: 14 FAILED: 0 TIME: 528ms
@@ -758,38 +759,38 @@
 2026-09-08 16:27:12 safe PASSED:133
 2026-09-08 16:27:24 selftest PASSED:133
 2026-09-08 18:09:12 selftest PASSED: 133 FAILED: 0 TIME: verification-after-123
-2026-09-12 15:26:05 kernel_top PASSED: 8 FAILED: 1 TIME: ~10s
 2026-09-12 15:26:05 kernel_top PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT (no TEST SUMMARY; silent after irq200 create in isr_ack_and_task_entry)
 2026-09-12 15:26:05 kernel_top PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT (repro; same silent wedge)
-2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: ~10s (with temporary Logger DIAG prints in test 8)
+2026-09-12 15:26:05 kernel_top PASSED: 0 FAILED: 0 TIME: 45s STATUS: TIMEOUT (wedge moved to ring_full_reject test 7)
+2026-09-12 15:26:05 kernel_top PASSED: 8 FAILED: 1 TIME: ~10s
 2026-09-12 15:26:05 kernel_top PASSED: 8 FAILED: 1 TIME: ~10s (temporary handler prio 5; test 8 FAILs fast on quiescent as designed)
 2026-09-12 15:26:05 kernel_top PASSED: 8 FAILED: 1 TIME: ~10s (temporary isr_entry skip; test 8 FAILs on acks as designed, suite completes)
-2026-09-12 15:26:05 kernel_top PASSED: 0 FAILED: 0 TIME: 45s STATUS: TIMEOUT (wedge moved to ring_full_reject test 7)
-2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 227ms
 2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 221ms
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 227ms
 2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 231ms
 2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 909ms
-2026-09-12 15:26:05 selftest PASSED: 133 FAILED: 0 TIME: 7779ms
-2026-09-12 15:26:05 memory_checked_ptr_api PASSED: 7 FAILED: 0 TIME: 652ms
-2026-09-12 15:26:05 syscall_core PASSED: 19 FAILED: 0 TIME: 531ms
-2026-09-12 15:26:05 memory_vmm PASSED: 12 FAILED: 0 TIME: 279ms
-2026-09-12 15:26:05 memory_pmm PASSED: 9 FAILED: 0 TIME: 208ms
-2026-09-12 15:26:05 memory_mempool PASSED: 5 FAILED: 0 TIME: 328ms
-2026-09-12 15:26:05 memory_slab PASSED: 5 FAILED: 0 TIME: 473ms
-2026-09-12 15:26:05 memory_safety PASSED: 11 FAILED: 0 TIME: 307ms
-2026-09-12 15:26:05 memory_determinism PASSED: 4 FAILED: 0 TIME: 10799ms
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: ~10s (with temporary Logger DIAG prints in test 8)
 2026-09-12 15:26:05 memory_checked_ptr PASSED: 4 FAILED: 0 TIME: 175ms
+2026-09-12 15:26:05 memory_checked_ptr_api PASSED: 7 FAILED: 0 TIME: 652ms
+2026-09-12 15:26:05 memory_determinism PASSED: 4 FAILED: 0 TIME: 10799ms
 2026-09-12 15:26:05 memory_integrity PASSED: 2 FAILED: 0 TIME: 62ms
+2026-09-12 15:26:05 memory_mempool PASSED: 5 FAILED: 0 TIME: 128ms
+2026-09-12 15:26:05 memory_mempool PASSED: 5 FAILED: 0 TIME: 328ms
+2026-09-12 15:26:05 memory_no_op_new PASSED: 6 FAILED: 0 TIME: 136ms
+2026-09-12 15:26:05 memory_pmm PASSED: 9 FAILED: 0 TIME: 208ms
 2026-09-12 15:26:05 memory_resource_exhaustion PASSED: 5 FAILED: 0 TIME: 12672ms
+2026-09-12 15:26:05 memory_safety PASSED: 11 FAILED: 0 TIME: 307ms
+2026-09-12 15:26:05 memory_slab PASSED: 5 FAILED: 0 TIME: 473ms
 2026-09-12 15:26:05 memory_stack_alloc PASSED: 11 FAILED: 0 TIME: 128ms
 2026-09-12 15:26:05 memory_stack_profiler PASSED: 6 FAILED: 0 TIME: 150ms
 2026-09-12 15:26:05 memory_static_pools PASSED: 4 FAILED: 0 TIME: 101ms
-2026-09-12 15:26:05 memory_no_op_new PASSED: 6 FAILED: 0 TIME: 136ms
 2026-09-12 15:26:05 memory_vmm PASSED: 12 FAILED: 0 TIME: 272ms
-2026-09-12 15:26:05 syscall_core PASSED: 19 FAILED: 0 TIME: 522ms
+2026-09-12 15:26:05 memory_vmm PASSED: 12 FAILED: 0 TIME: 279ms
 2026-09-12 15:26:05 safe PASSED: 133 FAILED: 0 TIME: 7075ms
 2026-09-12 15:26:05 selftest PASSED: 133 FAILED: 0 TIME: 212ms
-2026-09-12 15:26:05 memory_mempool PASSED: 5 FAILED: 0 TIME: 128ms
+2026-09-12 15:26:05 selftest PASSED: 133 FAILED: 0 TIME: 7779ms
+2026-09-12 15:26:05 syscall_core PASSED: 19 FAILED: 0 TIME: 522ms
+2026-09-12 15:26:05 syscall_core PASSED: 19 FAILED: 0 TIME: 531ms
 2026-09-12 23:40:51 all PASSED: 1046 FAILED: 0 TIME: 22s STATUS: PANIC (vmm_huge_page_split_regression, PF at PMM::bitmap_set via VMM::map_page, CR2=0xFFFF800000802FFA)
 2026-09-13 11:38:16 kernel_top PASSED: 9 FAILED: 0 TIME: 269ms
 2026-09-13 11:38:40 kernel_top PASSED: 9 FAILED: 0 TIME: 275ms
@@ -836,36 +837,36 @@
 2026-09-14 00:02:48 memory_checked_ptr_api PASSED: 7 FAILED: 0 TIME: 0ms
 2026-09-14 00:03:28 all PASSED: 85 FAILED: 0 TIME: 0ms
 2026-09-14 11:25:00 all PASSED: 1258 FAILED: 1 TIME: 0ms STATUS: flaky-reap-parent-wait
-2026-09-14 11:25:00 task_lifecycle PASSED: 9 FAILED: 0 TIME: 0ms
 2026-09-14 11:25:00 all PASSED: 1259 FAILED: 0 TIME: 0ms
+2026-09-14 11:25:00 task_lifecycle PASSED: 9 FAILED: 0 TIME: 0ms
 2026-09-14 11:42:13 sched_affinity PASSED: 6 FAILED: 0 TIME: 0ms
 2026-09-14 12:41:04 sched_affinity PASSED: 6 FAILED: 0 TIME: 716ms
 2026-09-14 12:41:04 smp_bringup PASSED: 3 FAILED: 0 TIME: 77ms
 2026-09-14 12:41:04 smp_sched PASSED: 4 FAILED: 0 TIME: 140ms
 2026-09-14 12:41:35 safe PASSED: 133 FAILED: 0 TIME: 7355ms
 2026-09-14 12:42:31 selftest PASSED: 133 FAILED: 0 TIME: 6764ms
-2026-09-14 13:24:39 timing_core PASSED: 18 FAILED: 0 TIME: 6136ms
 2026-09-14 13:24:39 all PASSED: 1269 FAILED: 0 TIME: 106995ms
+2026-09-14 13:24:39 timing_core PASSED: 18 FAILED: 0 TIME: 6136ms
 2026-09-14 13:32:04 all PASSED: 85 FAILED: 0 TIME: 4182ms
 2026-09-14 13:32:33 smp_sched PASSED: 4 FAILED: 0 TIME: 147ms
 2026-09-14 17:12:15 per_cpu PASSED: 3 FAILED: 0 TIME: 76ms
 2026-09-14 17:12:15 sched_affinity PASSED: 6 FAILED: 0 TIME: 159ms
 2026-09-14 17:12:15 smp_bringup PASSED: 3 FAILED: 0 TIME: 79ms
-2026-09-14 17:57:05 safe PASSED: 133 FAILED: 0 TIME: 7081ms
 2026-09-14 17:57:05 apic_tpr PASSED: 5 FAILED: 0 TIME: 487ms
 2026-09-14 17:57:05 cap_msix PASSED: 13 FAILED: 0 TIME: 1694ms
+2026-09-14 17:57:05 safe PASSED: 133 FAILED: 0 TIME: 7081ms
 2026-09-14 18:03:12 apic_tpr PASSED: 5 FAILED: 0 TIME: 489ms
-2026-09-14 18:03:12 per_cpu PASSED: 3 FAILED: 0 TIME: 74ms
 2026-09-14 18:03:12 hal_apic PASSED: 3 FAILED: 0 TIME: 373ms
 2026-09-14 18:03:12 hal_timer PASSED: 5 FAILED: 0 TIME: 484ms
+2026-09-14 18:03:12 per_cpu PASSED: 3 FAILED: 0 TIME: 74ms
 2026-09-14 18:03:12 sched_affinity PASSED: 6 FAILED: 0 TIME: 628ms
 2026-09-14 18:03:12 smp_bringup PASSED: 3 FAILED: 0 TIME: 336ms
 2026-09-14 18:03:12 smp_sched PASSED: 4 FAILED: 0 TIME: 551ms
 2026-09-14 18:03:42 selftest PASSED: 133 FAILED: 0 TIME: 7439ms
 2026-09-14 18:04:42 all PASSED: 1274 FAILED: 0 TIME: 102144ms
 2026-09-14 18:05:58 all PASSED: 85 FAILED: 0 TIME: 16727ms
-2026-09-14 18:18:59 sched_affinity PASSED: 6 FAILED: 0 TIME: 175ms
 2026-09-14 18:18:59 all PASSED: 1274 FAILED: 0 TIME: 87878ms
+2026-09-14 18:18:59 sched_affinity PASSED: 6 FAILED: 0 TIME: 175ms
 2026-09-14 18:19:19 all PASSED: 85 FAILED: 0 TIME: 4154ms
 2026-09-14 18:58:11 memory_vmm PASSED: 13 FAILED: 0 TIME: 1222ms
 2026-09-14 18:58:36 selftest PASSED: 133 FAILED: 0 TIME: 6972ms
@@ -935,8 +936,8 @@
 2026-09-15 16:09:07 scheduler_core PASSED: 16 FAILED: 0 TIME: 20s
 2026-09-15 16:09:32 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 20s
 2026-09-15 16:09:56 syscall_fastpath PASSED: 5 FAILED: 0 TIME: 20s
-2026-09-15 16:12:15 load_balancer PASSED: 4 FAILED: 0 TIME: 20s
 2026-09-15 16:12:15 all PASSED: 0 FAILED: 2 TIME: 50s STATUS: LB_DEPTH_ASSERTS_FIXED
+2026-09-15 16:12:15 load_balancer PASSED: 4 FAILED: 0 TIME: 20s
 2026-09-15 16:13:16 all PASSED: 1359 FAILED: 0 TIME: 105092ms
 2026-09-15 16:14:05 all PASSED: 85 FAILED: 0 TIME: 18358ms
 2026-09-15 16:24:24 cache_coloring PASSED: 4 FAILED: 0 TIME: 20s
@@ -953,18 +954,18 @@
 2026-09-15 16:35:00 all PASSED: 1360 FAILED: 0 TIME: 95348ms
 2026-09-15 16:35:34 all PASSED: 85 FAILED: 0 TIME: 4008ms
 2026-09-15 16:40:13 cache_coloring PASSED: 4 FAILED: 0 TIME: 20s
-2026-09-15 16:40:13 memory_pmm PASSED: 9 FAILED: 0 TIME: 20s
 2026-09-15 16:40:13 memory_determinism PASSED: 4 FAILED: 0 TIME: 20s
+2026-09-15 16:40:13 memory_pmm PASSED: 9 FAILED: 0 TIME: 20s
 2026-09-15 16:42:41 all PASSED: 0 FAILED: 0 TIME: 30s STATUS: HANG_AT_898_PREEXISTING_FLAKE
 2026-09-15 16:43:49 all PASSED: 1360 FAILED: 0 TIME: 445370ms
 2026-09-15 16:44:10 all PASSED: 85 FAILED: 0 TIME: 4122ms
 2026-09-15 17:17:20 timing_core PASSED: 19 FAILED: 0 TIME: 20s
 2026-09-15 17:17:57 timing_core PASSED: 18 FAILED: 1 TIME: 12s STATUS: REVERT_PROOF_NEW_TEST_CATCHES_BUG
-2026-09-15 17:19:14 wcet_overrun PASSED: 2 FAILED: 0 TIME: 20s
 2026-09-15 17:19:14 scheduler_budget PASSED: 6 FAILED: 0 TIME: 20s
 2026-09-15 17:19:14 scheduler_cpu_load PASSED: 5 FAILED: 0 TIME: 20s
-2026-09-15 17:20:00 shell_interaction PASSED: 19 FAILED: 0 TIME: 22s
+2026-09-15 17:19:14 wcet_overrun PASSED: 2 FAILED: 0 TIME: 20s
 2026-09-15 17:20:00 deadline_miss PASSED: 5 FAILED: 0 TIME: 19s
+2026-09-15 17:20:00 shell_interaction PASSED: 19 FAILED: 0 TIME: 22s
 2026-09-15 17:20:58 all PASSED: 1361 FAILED: 0 TIME: 94139ms
 2026-09-15 17:21:19 all PASSED: 85 FAILED: 0 TIME: 4323ms
 2026-09-15 17:37:43 shell_interaction PASSED: 19 FAILED: 0 TIME: 23s
@@ -972,10 +973,10 @@
 2026-09-15 17:43:10 all PASSED: 1361 FAILED: 0 TIME: 95615ms
 2026-09-15 17:43:31 all PASSED: 85 FAILED: 0 TIME: 4556ms
 2026-09-15 18:09:15 task_init PASSED: 5 FAILED: 0 TIME: 20s
-2026-09-15 18:10:27 task_lifecycle PASSED: 9 FAILED: 0 TIME: 19s
 2026-09-15 18:10:27 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 22s
-2026-09-15 18:11:14 servers_vfsd PASSED: 18 FAILED: 0 TIME: 19s
+2026-09-15 18:10:27 task_lifecycle PASSED: 9 FAILED: 0 TIME: 19s
 2026-09-15 18:11:14 servers_iocd PASSED: 7 FAILED: 0 TIME: 20s
+2026-09-15 18:11:14 servers_vfsd PASSED: 18 FAILED: 0 TIME: 19s
 2026-09-15 18:11:58 ipc_core PASSED: 23 FAILED: 0 TIME: 19s
 2026-09-15 18:11:58 ipc_extended PASSED: 9 FAILED: 0 TIME: 20s
 2026-09-15 18:12:23 process_waitpid PASSED: 3 FAILED: 0 TIME: 20s
@@ -985,52 +986,52 @@
 2026-09-15 18:48:53 arch_cross PASSED: 21 FAILED: 0 TIME: 20s
 2026-09-15 18:48:53 elf_loader PASSED: 8 FAILED: 0 TIME: 19s
 2026-09-15 18:48:53 memory_vmm PASSED: 13 FAILED: 0 TIME: 20s
-2026-09-15 18:49:38 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 20s
 2026-09-15 18:49:38 ipc_core PASSED: 23 FAILED: 0 TIME: 20s
+2026-09-15 18:49:38 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 20s
 2026-09-15 18:51:12 all PASSED: 1363 FAILED: 0 TIME: 432431ms
 2026-09-15 18:52:12 all PASSED: 85 FAILED: 0 TIME: 3971ms
-2026-09-15 19:04:52 pcid PASSED: 4 FAILED: 0 TIME: 20s
-2026-09-15 19:04:52 task_lifecycle PASSED: 9 FAILED: 0 TIME: 20s
-2026-09-15 19:04:52 task_core PASSED: 6 FAILED: 0 TIME: 20s
 2026-09-15 19:04:52 elf_loader PASSED: 8 FAILED: 0 TIME: 20s
+2026-09-15 19:04:52 pcid PASSED: 4 FAILED: 0 TIME: 20s
+2026-09-15 19:04:52 task_core PASSED: 6 FAILED: 0 TIME: 20s
+2026-09-15 19:04:52 task_lifecycle PASSED: 9 FAILED: 0 TIME: 20s
 2026-09-15 19:05:56 all PASSED: 1363 FAILED: 0 TIME: 116390ms
 2026-09-15 19:06:58 all PASSED: 85 FAILED: 0 TIME: 4279ms
 2026-09-15 19:29:46 invpcid PASSED: 4 FAILED: 0 TIME: 20s
-2026-09-15 19:30:52 pcid PASSED: 4 FAILED: 0 TIME: 20s
-2026-09-15 19:30:52 memory_vmm PASSED: 13 FAILED: 0 TIME: 19s
 2026-09-15 19:30:52 data_structures_buffer_pool PASSED: 25 FAILED: 0 TIME: 21s
-2026-09-15 19:31:59 ipc_core PASSED: 23 FAILED: 0 TIME: 20s
+2026-09-15 19:30:52 memory_vmm PASSED: 13 FAILED: 0 TIME: 19s
+2026-09-15 19:30:52 pcid PASSED: 4 FAILED: 0 TIME: 20s
 2026-09-15 19:31:59 elf_loader PASSED: 8 FAILED: 0 TIME: 21s
+2026-09-15 19:31:59 ipc_core PASSED: 23 FAILED: 0 TIME: 20s
 2026-09-15 19:31:59 process_lifecycle PASSED: 16 FAILED: 0 TIME: 20s
 2026-09-15 19:33:08 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
-2026-09-15 19:33:08 tlb_latency PASSED: 4 FAILED: 0 TIME: 21s
 2026-09-15 19:33:08 pml4_sync PASSED: 5 FAILED: 0 TIME: 20s
+2026-09-15 19:33:08 tlb_latency PASSED: 4 FAILED: 0 TIME: 21s
 2026-09-15 19:34:10 all PASSED: 1363 FAILED: 0 TIME: 627766ms
 2026-09-15 19:35:05 all PASSED: 85 FAILED: 0 TIME: 4191ms
 2026-09-15 19:50:46 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
 2026-09-15 19:52:03 invpcid PASSED: 4 FAILED: 0 TIME: 21s
-2026-09-15 19:52:03 pcid PASSED: 4 FAILED: 0 TIME: 20s
 2026-09-15 19:52:03 memory_pmm PASSED: 9 FAILED: 0 TIME: 20s
-2026-09-15 19:53:30 memory_vmm PASSED: 13 FAILED: 0 TIME: 19s
-2026-09-15 19:53:30 data_structures_buffer_pool PASSED: 25 FAILED: 0 TIME: 20s
+2026-09-15 19:52:03 pcid PASSED: 4 FAILED: 0 TIME: 20s
 2026-09-15 19:53:30 cap_pager PASSED: 13 FAILED: 0 TIME: 20s
+2026-09-15 19:53:30 data_structures_buffer_pool PASSED: 25 FAILED: 0 TIME: 20s
+2026-09-15 19:53:30 memory_vmm PASSED: 13 FAILED: 0 TIME: 19s
 2026-09-15 19:53:30 timing_core PASSED: 19 FAILED: 0 TIME: 21s
 2026-09-15 19:53:56 testrunner PASSED: 0 FAILED: 0 TIME: 20s STATUS: EXPECTED_PANIC_PATH
 2026-09-15 19:55:03 all PASSED: 1363 FAILED: 0 TIME: 106985ms
 2026-09-15 19:55:27 all PASSED: 85 FAILED: 0 TIME: 4333ms
 2026-09-15 20:08:52 ipi_batching PASSED: 4 FAILED: 0 TIME: 20s
-2026-09-15 20:10:55 smp_ipi PASSED: 2 FAILED: 0 TIME: 20s
 2026-09-15 20:10:55 apic_tpr PASSED: 6 FAILED: 0 TIME: 20s
-2026-09-15 20:10:55 task_init PASSED: 5 FAILED: 0 TIME: 20s
-2026-09-15 20:10:55 smp_sched PASSED: 5 FAILED: 0 TIME: 20s
 2026-09-15 20:10:55 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
+2026-09-15 20:10:55 smp_ipi PASSED: 2 FAILED: 0 TIME: 20s
+2026-09-15 20:10:55 smp_sched PASSED: 5 FAILED: 0 TIME: 20s
+2026-09-15 20:10:55 task_init PASSED: 5 FAILED: 0 TIME: 20s
 2026-09-15 20:12:01 all PASSED: 1363 FAILED: 0 TIME: 106561ms
 2026-09-15 20:12:26 all PASSED: 85 FAILED: 0 TIME: 17059ms
 2026-09-15 20:25:21 tlb_latency PASSED: 4 FAILED: 0 TIME: 20s
-2026-09-15 20:27:06 ipi_batching PASSED: 4 FAILED: 0 TIME: 20s
 2026-09-15 20:27:06 invpcid PASSED: 4 FAILED: 0 TIME: 19s
-2026-09-15 20:27:06 pcid PASSED: 4 FAILED: 0 TIME: 20s
+2026-09-15 20:27:06 ipi_batching PASSED: 4 FAILED: 0 TIME: 20s
 2026-09-15 20:27:06 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
+2026-09-15 20:27:06 pcid PASSED: 4 FAILED: 0 TIME: 20s
 2026-09-15 20:28:13 all PASSED: 1363 FAILED: 0 TIME: 57339ms
 2026-09-15 20:28:35 all PASSED: 85 FAILED: 0 TIME: 4085ms
 2026-09-15 21:22:58 all PASSED: 1363 FAILED: 0 TIME: 363866ms
@@ -1109,49 +1110,49 @@
 2026-09-17 03:13:13 release_all PASSED: 85 FAILED: 0 TIME: 3923ms
 2026-09-17 09:02:51 sched_admission PASSED: 7 FAILED: 0 TIME: 211ms
 2026-09-17 09:04:52 sched_edf PASSED: 7 FAILED: 0 TIME: 124ms
-2026-09-17 09:04:52 timing_core PASSED: 19 FAILED: 0 TIME: 1521ms
 2026-09-17 09:04:52 scheduler_budget PASSED: 6 FAILED: 0 TIME: 159ms
-2026-09-17 09:04:52 task_metering PASSED: 7 FAILED: 0 TIME: 350ms
 2026-09-17 09:04:52 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 2093ms
-2026-09-17 09:06:43 wcet_scheduler PASSED: 2 FAILED: 0 TIME: 2348ms
-2026-09-17 09:06:43 wcet_overrun PASSED: 2 FAILED: 0 TIME: 140ms
+2026-09-17 09:04:52 task_metering PASSED: 7 FAILED: 0 TIME: 350ms
+2026-09-17 09:04:52 timing_core PASSED: 19 FAILED: 0 TIME: 1521ms
 2026-09-17 09:06:43 deadline_miss PASSED: 5 FAILED: 0 TIME: 3593ms
 2026-09-17 09:06:43 deadline_recovery PASSED: 4 FAILED: 0 TIME: 3085ms
+2026-09-17 09:06:43 wcet_overrun PASSED: 2 FAILED: 0 TIME: 140ms
+2026-09-17 09:06:43 wcet_scheduler PASSED: 2 FAILED: 0 TIME: 2348ms
 2026-09-17 09:07:52 deadline_action PASSED: 1 FAILED: 0 TIME: 200ms
-2026-09-17 09:07:52 syscall_core PASSED: 23 FAILED: 0 TIME: 2714ms
 2026-09-17 09:07:52 process_waitpid PASSED: 3 FAILED: 0 TIME: 121ms
-2026-09-17 09:08:57 process_lifecycle PASSED: 16 FAILED: 0 TIME: 890ms
+2026-09-17 09:07:52 syscall_core PASSED: 23 FAILED: 0 TIME: 2714ms
 2026-09-17 09:08:57 process_elf PASSED: 9 FAILED: 0 TIME: 231ms
+2026-09-17 09:08:57 process_lifecycle PASSED: 16 FAILED: 0 TIME: 890ms
 2026-09-17 09:08:57 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 274ms
-2026-09-17 09:11:24 memory_pmm PASSED: 9 FAILED: 0 TIME: 231ms
 2026-09-17 09:11:24 memory_determinism PASSED: 4 FAILED: 0 TIME: 10854ms
+2026-09-17 09:11:24 memory_pmm PASSED: 9 FAILED: 0 TIME: 231ms
 2026-09-17 11:12:08 memory_resource_exhaustion PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT
 2026-09-17 11:12:08 memory_resource_exhaustion PASSED: 5 FAILED: 0 TIME: 25062ms
 2026-09-17 11:12:42 selftest PASSED: 133 FAILED: 0 TIME: 7082ms
-2026-09-17 11:17:05 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 180ms
 2026-09-17 11:17:05 all PASSED: 1392 FAILED: 1 TIME: 38000ms STATUS: atomics_assembly_bridge
+2026-09-17 11:17:05 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 180ms
 2026-09-17 11:21:38 all PASSED: 1393 FAILED: 0 TIME: 98255ms
 2026-09-17 11:24:39 release_all PASSED: 85 FAILED: 0 TIME: 17254ms
 2026-09-17 11:28:05 sched_admission PASSED: 7 FAILED: 0 TIME: 929ms
 2026-09-17 11:28:49 sched_edf PASSED: 7 FAILED: 0 TIME: 2477ms
 2026-09-17 11:28:49 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 549ms
 2026-09-17 11:50:25 aperiodic_servers PASSED: 7 FAILED: 0 TIME: 743ms
-2026-09-17 11:51:52 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 497ms
+2026-09-17 11:51:52 deadline_miss PASSED: 5 FAILED: 0 TIME: 852ms
 2026-09-17 11:51:52 sched_admission PASSED: 7 FAILED: 0 TIME: 217ms
 2026-09-17 11:51:52 sched_edf PASSED: 7 FAILED: 0 TIME: 2504ms
-2026-09-17 11:51:52 deadline_miss PASSED: 5 FAILED: 0 TIME: 852ms
+2026-09-17 11:51:52 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 497ms
 2026-09-17 11:53:18 deadline_recovery PASSED: 4 FAILED: 0 TIME: 3077ms
-2026-09-17 11:53:18 task_metering PASSED: 7 FAILED: 0 TIME: 349ms
-2026-09-17 11:53:18 scheduler_budget PASSED: 6 FAILED: 0 TIME: 152ms
 2026-09-17 11:53:18 process_elf PASSED: 9 FAILED: 0 TIME: 926ms
+2026-09-17 11:53:18 scheduler_budget PASSED: 6 FAILED: 0 TIME: 152ms
+2026-09-17 11:53:18 task_metering PASSED: 7 FAILED: 0 TIME: 349ms
 2026-09-17 11:53:45 selftest PASSED: 133 FAILED: 0 TIME: 6938ms
 2026-09-17 12:04:47 all PASSED: 0 FAILED: 0 TIME: 227000ms STATUS: WATCHDOG-hang-ipc_send_sync_roundtrip
 2026-09-17 12:06:59 all PASSED: 1400 FAILED: 0 TIME: 407798ms
 2026-09-17 12:09:45 release_all PASSED: 85 FAILED: 0 TIME: 4166ms
 2026-09-17 12:38:16 sched_affinity PASSED: 7 FAILED: 0 TIME: 727ms
 2026-09-17 12:40:05 smp_sched PASSED: 10 FAILED: 0 TIME: 313ms
-2026-09-17 12:41:32 sched_edf PASSED: 7 FAILED: 0 TIME: 618ms
 2026-09-17 12:41:32 aperiodic_servers PASSED: 7 FAILED: 0 TIME: 795ms
+2026-09-17 12:41:32 sched_edf PASSED: 7 FAILED: 0 TIME: 618ms
 2026-09-17 12:41:32 syscall_core PASSED: 23 FAILED: 0 TIME: 2775ms
 2026-09-17 12:41:32 wcet_scheduler PASSED: 2 FAILED: 0 TIME: 2324ms
 2026-09-17 12:42:38 deadline_miss PASSED: 5 FAILED: 0 TIME: 852ms
@@ -1163,14 +1164,14 @@
 2026-09-17 12:48:05 all PASSED: 1406 FAILED: 0 TIME: 96493ms
 2026-09-17 12:50:59 release_all PASSED: 85 FAILED: 0 TIME: 4033ms
 2026-09-17 15:22:14 sched_admission_verify PASSED: 7 FAILED: 0 TIME: 178ms
-2026-09-17 15:23:46 scheduler_core PASSED: 16 FAILED: 0 TIME: 1631ms
 2026-09-17 15:23:46 elf_loader PASSED: 8 FAILED: 0 TIME: 340ms
 2026-09-17 15:23:46 process_elf PASSED: 9 FAILED: 0 TIME: 238ms
 2026-09-17 15:23:46 sched_admission PASSED: 7 FAILED: 0 TIME: 264ms
-2026-09-17 15:25:14 smp_sched PASSED: 10 FAILED: 0 TIME: 312ms
-2026-09-17 15:25:14 sched_affinity PASSED: 7 FAILED: 0 TIME: 172ms
+2026-09-17 15:23:46 scheduler_core PASSED: 16 FAILED: 0 TIME: 1631ms
 2026-09-17 15:25:14 aperiodic_servers PASSED: 7 FAILED: 0 TIME: 629ms
 2026-09-17 15:25:14 deadline_action PASSED: 1 FAILED: 0 TIME: 210ms
+2026-09-17 15:25:14 sched_affinity PASSED: 7 FAILED: 0 TIME: 172ms
+2026-09-17 15:25:14 smp_sched PASSED: 10 FAILED: 0 TIME: 312ms
 2026-09-17 15:25:42 selftest PASSED: 133 FAILED: 0 TIME: 7201ms
 2026-09-17 15:28:01 all PASSED: 0 FAILED: 0 TIME: 19000ms STATUS: QEMU_EXIT-test909-post-madt
 2026-09-17 15:30:21 all PASSED: 1413 FAILED: 0 TIME: 93054ms
@@ -1178,8 +1179,8 @@
 2026-09-17 15:36:44 sched_admission_verify PASSED: 7 FAILED: 0 TIME: 179ms
 2026-09-17 15:57:42 all PASSED: 1413 FAILED: 0 TIME: 94570ms
 2026-09-17 15:59:45 all PASSED: 1413 FAILED: 0 TIME: 18747ms
-2026-09-17 16:50:16 drivers_ahci_deep PASSED: 10 FAILED: 0 TIME: 218ms
 2026-09-17 16:50:16 ahci_live PASSED: 5 FAILED: 0 TIME: 8766ms
+2026-09-17 16:50:16 drivers_ahci_deep PASSED: 10 FAILED: 0 TIME: 218ms
 2026-09-17 16:52:01 drivers_block PASSED: 11 FAILED: 0 TIME: 248ms
 2026-09-17 16:52:01 drivers_dma PASSED: 19 FAILED: 0 TIME: 468ms
 2026-09-17 16:52:01 drivers_pci PASSED: 16 FAILED: 0 TIME: 340ms
@@ -1189,10 +1190,10 @@
 2026-09-17 17:04:58 selftest PASSED: 133 FAILED: 0 TIME: 6676ms
 2026-09-17 17:06:08 all PASSED: 1429 FAILED: 0 TIME: 416739ms
 2026-09-17 17:46:21 drivers_virtio_blk_req PASSED: 13 FAILED: 0 TIME: 779ms
-2026-09-17 17:49:00 drivers_virtio PASSED: 11 FAILED: 0 TIME: 2000ms
-2026-09-17 17:49:00 drivers_dma PASSED: 19 FAILED: 0 TIME: 436ms
-2026-09-17 17:49:00 ipc_timeout PASSED: 7 FAILED: 0 TIME: 1136ms
 2026-09-17 17:49:00 drivers_ahci_deep PASSED: 10 FAILED: 0 TIME: 916ms
+2026-09-17 17:49:00 drivers_dma PASSED: 19 FAILED: 0 TIME: 436ms
+2026-09-17 17:49:00 drivers_virtio PASSED: 11 FAILED: 0 TIME: 2000ms
+2026-09-17 17:49:00 ipc_timeout PASSED: 7 FAILED: 0 TIME: 1136ms
 2026-09-17 17:50:30 all PASSED: 1435 FAILED: 0 TIME: 94378ms
 2026-09-17 17:50:56 release_all PASSED: 85 FAILED: 0 TIME: 17733ms
 2026-09-17 17:51:33 selftest PASSED: 133 FAILED: 0 TIME: 5421ms
@@ -1247,9 +1248,9 @@
 2026-09-18 00:49:40 ahci_live PASSED: 5 FAILED: 0 TIME: 6770ms
 2026-09-18 00:50:01 iommu_live PASSED: 6 FAILED: 0 TIME: 726ms
 2026-09-18 00:50:23 testrunner PASSED: 0 FAILED: 0 TIME:  STATUS: EXPECTED_PANIC_PASS
-2026-09-18 00:57:13 smp PASSED: 81 FAILED: 0 TIME: 3622ms
-2026-09-18 00:57:13 deadline PASSED: 115 FAILED: 0 TIME: 44738ms
 2026-09-18 00:57:13 core PASSED: 427 FAILED: 0 TIME: 193781ms
+2026-09-18 00:57:13 deadline PASSED: 115 FAILED: 0 TIME: 44738ms
+2026-09-18 00:57:13 smp PASSED: 81 FAILED: 0 TIME: 3622ms
 2026-09-18 00:57:52 core PASSED: 19 FAILED: 0 TIME: 6ms
 2026-09-18 00:58:04 ipc PASSED: 0 FAILED: 0 TIME: 0ms
 2026-09-18 00:58:16 capability PASSED: 0 FAILED: 0 TIME: 0ms
@@ -1295,11 +1296,11 @@
 2026-09-18 09:15:00 servers_vfsd_auth PASSED: 19 FAILED: 0 TIME: 623ms
 2026-09-18 09:18:28 syscall_core PASSED: 25 FAILED: 0 TIME: 880ms
 2026-09-18 09:27:41 network_core PASSED: 12 FAILED: 0 TIME: 292ms
-2026-09-18 09:31:45 servers_daemon_restart PASSED: 1 FAILED: 0 TIME: 39ms
 2026-09-18 09:31:45 servers PASSED: 57 FAILED: 0 TIME: 1614ms
-2026-09-18 09:41:07 syscall_core PASSED: 28 FAILED: 0 TIME: 1071ms
-2026-09-18 09:41:07 core PASSED: 436 FAILED: 0 TIME: 184312ms
+2026-09-18 09:31:45 servers_daemon_restart PASSED: 1 FAILED: 0 TIME: 39ms
 2026-09-18 09:41:07 capability PASSED: 147 FAILED: 0 TIME: 5054ms
+2026-09-18 09:41:07 core PASSED: 436 FAILED: 0 TIME: 184312ms
+2026-09-18 09:41:07 syscall_core PASSED: 28 FAILED: 0 TIME: 1071ms
 2026-09-18 14:46:33 core PASSED: 436 FAILED: 0 TIME: 48722ms
 2026-09-18 14:49:02 servers_vfsd_auth PASSED: 22 FAILED: 0 TIME: 3247ms
 2026-09-18 14:53:41 servers_vfsd_auth PASSED: 23 FAILED: 0 TIME: 819ms
@@ -1329,8 +1330,8 @@
 2026-09-18 15:23:45 smp_multicpu PASSED: 15 FAILED: 0 TIME: 669ms
 2026-09-18 15:26:29 testrunner PASSED: 0 FAILED: 0 TIME: 120s STATUS: EXPECTED_PANIC_PASS
 2026-09-18 15:47:50 hal PASSED: 109 FAILED: 0 TIME: 3676ms
-2026-09-18 15:51:33 hal PASSED: 109 FAILED: 0 TIME: 963ms
 2026-09-18 15:51:33 hal PASSED: 109 FAILED: 0 TIME: 3548ms
+2026-09-18 15:51:33 hal PASSED: 109 FAILED: 0 TIME: 963ms
 2026-09-18 16:10:10 kernel_top PASSED: 19 FAILED: 0 TIME: 501ms
 2026-09-18 16:12:05 servers_vfsd_auth PASSED: 23 FAILED: 0 TIME: 2767ms
 2026-09-18 16:12:05 syscall_core PASSED: 28 FAILED: 0 TIME: 3286ms
@@ -1340,20 +1341,20 @@
 2026-09-18 16:19:52 basic_lib PASSED: 17 FAILED: 0 TIME: 348ms
 2026-09-18 16:33:37 memory_checked_ptr_api PASSED: 9 FAILED: 0 TIME: 227ms
 2026-09-18 16:33:37 network_core PASSED: 18 FAILED: 0 TIME: 384ms
-2026-09-18 16:42:18 servers PASSED: 62 FAILED: 0 TIME: 1628ms
+2026-09-18 16:42:18 core PASSED: 436 FAILED: 0 TIME: 38020ms
+2026-09-18 16:42:18 core PASSED: 436 FAILED: 0 TIME: 38020ms NOTE: stash-baseline (without QE changes)
+2026-09-18 16:42:18 core PASSED: 448 FAILED: 1 TIME: 25720ms
+2026-09-18 16:42:18 core PASSED: 448 FAILED: 1 TIME: 25720ms NOTE: intermittent reaper race in TaskLimitReached (Tasks -1); passes in isolation + rerun; rerun time shown
+2026-09-18 16:42:18 core PASSED: 449 FAILED: 0 TIME: 25720ms
 2026-09-18 16:42:18 drivers PASSED: 107 FAILED: 0 TIME: 11405ms
 2026-09-18 16:42:18 drivers_dma PASSED: 19 FAILED: 0 TIME: 2736ms
 2026-09-18 16:42:18 memory_resource_exhaustion PASSED: 5 FAILED: 0 TIME: 6094ms
-2026-09-18 16:42:18 core PASSED: 448 FAILED: 1 TIME: 25720ms
-2026-09-18 16:42:18 core PASSED: 436 FAILED: 0 TIME: 38020ms
-2026-09-18 16:42:18 core PASSED: 449 FAILED: 0 TIME: 25720ms
-2026-09-18 16:42:18 core PASSED: 448 FAILED: 1 TIME: 25720ms NOTE: intermittent reaper race in TaskLimitReached (Tasks -1); passes in isolation + rerun; rerun time shown
-2026-09-18 16:42:18 core PASSED: 436 FAILED: 0 TIME: 38020ms NOTE: stash-baseline (without QE changes)
+2026-09-18 16:42:18 servers PASSED: 62 FAILED: 0 TIME: 1628ms
 2026-09-18 16:47:01 safe PASSED: 136 FAILED: 0 TIME: 29426ms
 2026-09-18 17:09:43 syscall_core PASSED: 29 FAILED: 0 TIME: 3416ms
 2026-09-18 17:40:30 exc_table PASSED: 4 FAILED: 0 TIME: 508ms
-2026-09-18 17:40:36 hal PASSED: 110 FAILED: 0 TIME: 3704ms
 2026-09-18 17:40:36 hal PASSED: 0 FAILED: 0 TIME: 0ms STATUS: QEMU_EXIT-flake-on-prior-run-then-green (issue #180 family)
+2026-09-18 17:40:36 hal PASSED: 110 FAILED: 0 TIME: 3704ms
 2026-09-18 17:46:45 selftest PASSED: 136 FAILED: 0 TIME: 28807ms
 2026-09-19 10:28:45 core PASSED: 450 FAILED: 0 TIME: 24953ms
 2026-09-19 10:28:56 ipc PASSED: 79 FAILED: 0 TIME: 13413ms
@@ -1788,9 +1789,9 @@
 2026-09-21 07:15:46 hal PASSED: 121 FAILED: 0 TIME: ms
 2026-09-21 07:16:04 hal PASSED: 121 FAILED: 0 TIME: ms
 2026-09-21 07:16:23 hal PASSED: 121 FAILED: 0 TIME: ms
-2026-09-21 07:20:36 hal PASSED: 121 FAILED: 0 TIME: ms
-2026-09-21 07:20:36 hal PASSED: 119 FAILED: 2 TIME: 65s
 2026-09-21 07:20:36 hal PASSED: 119 FAILED: 2 TIME: 12s
+2026-09-21 07:20:36 hal PASSED: 119 FAILED: 2 TIME: 65s
+2026-09-21 07:20:36 hal PASSED: 121 FAILED: 0 TIME: ms
 2026-09-21 08:30:27 basic_lib PASSED: 20 FAILED: 0 TIME: ms
 2026-09-21 08:57:59 tls PASSED: 12 FAILED: 0 TIME: ms
 2026-09-21 14:40:11 syscall_core PASSED: 31 FAILED: 1 TIME: 4100ms
@@ -1934,13 +1935,13 @@
 2026-09-24 11:38:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 115ms STATUS: #220-t0-park-fix-d3-green-run2of3
 2026-09-24 11:41:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: #220-t0-park-fix-d3-green-run3of3
 2026-09-24 16:49:05 selftest PASSED: 139 FAILED: 0 TIME: 31946ms
-2026-09-24 16:49:31 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 127ms STATUS: M2-baseline-stashed-incremental
 2026-09-24 16:49:31 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: PANIC-full-M2-diff-boot-tables_equal-exc-D
+2026-09-24 16:49:31 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-crt0-fixed-daemon-storm
 2026-09-24 16:49:31 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 100ms STATUS: M2-baseline-clean
+2026-09-24 16:49:31 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 127ms STATUS: M2-baseline-stashed-incremental
 2026-09-24 16:49:31 arch_riscv64 PASSED: 20 FAILED: 2 TIME: 119ms STATUS: M2-test-only-elf-stashed-expected-fails
 2026-09-24 16:49:31 arch_riscv64 PASSED: 22 FAILED: 2 TIME: 161ms STATUS: M2-codec-fixed-exec-assert-plus-smoke-minus11
 2026-09-24 16:49:31 arch_riscv64 PASSED: 23 FAILED: 1 TIME: 161ms STATUS: M2-exec-fixed-smoke-minus11-sepc-putsfd
-2026-09-24 16:49:31 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-crt0-fixed-daemon-storm
 2026-09-24 16:49:31 arch_riscv64 PASSED: 24 FAILED: 0 TIME: 161ms STATUS: M2-SUM-recovery-smoke-PASS-24of25-vfsd-direct-hung
 2026-09-24 18:22:46 arch_riscv64 PASSED: 24 FAILED: 0 TIME: 156ms STATUS: M2-plus-nested-apply-table-disabled
 2026-09-25 02:36:11 arch_riscv64 PASSED: 24 FAILED: 0 TIME: 270s STATUS: full-config-daemons-24of24-issue221-fixed
@@ -2002,19 +2003,19 @@
 2026-09-26 17:10:46 debug_syscall PASSED: 12 FAILED: 0 TIME: 0ms STATUS: ARCH-RISCV64
 2026-09-26 21:13:29 debug_syscall PASSED: 9 FAILED: 3 TIME: 14s STATUS: ARCH-AARCH64 EL1-RECOVERY-FIX
 2026-09-26 21:43:30 debug_syscall PASSED: 9 FAILED: 3 TIME: 14s STATUS: ARCH-AARCH64 TEST8-FIXED
-2026-09-26 22:16:33 debug_syscall PASSED: 3 FAILED: 0 TIME: 131s STATUS: ARCH-X86_64 TIMEOUT
 2026-09-26 22:16:33 debug_syscall PASSED: 12 FAILED: 0 TIME: 520ms STATUS: ARCH-X86_64
+2026-09-26 22:16:33 debug_syscall PASSED: 3 FAILED: 0 TIME: 131s STATUS: ARCH-X86_64 TIMEOUT
 2026-09-26 22:16:55 debug_syscall PASSED: 10 FAILED: 2 TIME: 0ms STATUS: ARCH-AARCH64
 2026-09-27 00:54:40 arch_aarch64 PASSED: 31 FAILED: 0 TIME: 238ms
 2026-09-27 00:54:40 debug_syscall PASSED: 11 FAILED: 1 TIME: 0ms STATUS: ARCH-AARCH64 EL0-FRAME-FIX
 2026-09-27 00:57:16 debug_syscall PASSED: 9 FAILED: 3 TIME: 0ms STATUS: ARCH-AARCH64 PRE-FIX-CONTROL
 2026-09-27 00:58:06 debug_syscall PASSED: 12 FAILED: 0 TIME: 522ms STATUS: ARCH-X86_64
 2026-09-27 07:20:18 debug_syscall PASSED: 11 FAILED: 1 TIME: 0ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN1
-2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 187ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN2
 2026-09-27 07:20:18 debug_syscall PASSED: 11 FAILED: 1 TIME: 0ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN3
-2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 218ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN4
+2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 187ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN2
 2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 215ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN5
 2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 216ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN6
+2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 218ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN4
 2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 221ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN7
 2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 548ms STATUS: ARCH-X86_64 ORPHAN-FIX
 2026-09-27 08:43:19 debug_syscall PASSED: 12 FAILED: 0 TIME: 190ms STATUS: ARCH-AARCH64 CLOSEOUT
@@ -2028,12 +2029,12 @@
 2026-09-27 15:09:57 debug_syscall PASSED: 15 FAILED: 0 TIME: 400s STATUS: ARCH-RISCV64 TIMEOUT-CAP
 2026-09-27 15:20:40 debug_syscall PASSED: 17 FAILED: 0 TIME: 670ms STATUS: ARCH-X86_64 GRANT-FINAL
 2026-09-27 15:21:00 debug_syscall PASSED: 17 FAILED: 0 TIME: 278ms STATUS: ARCH-AARCH64 GRANT-FINAL
-2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-DEBUG-X86
 2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-DEBUG-ARM
 2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-DEBUG-RISCV
-2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-RELEASE-X86
+2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-DEBUG-X86
 2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-RELEASE-ARM
 2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-RELEASE-RISCV
+2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-RELEASE-X86
 2026-09-27 21:04:05 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-RELEASE-X86 CLEAN-BOOT
 2026-09-27 22:15:00 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 538ms
 2026-09-27 22:18:00 arch_aarch64 PASSED: 32 FAILED: 0 TIME: 243ms
@@ -2047,15 +2048,15 @@
 2026-09-28 15:18:49 scheduler_core PASSED: 19 FAILED: 0 TIME: 497ms
 2026-09-28 15:18:49 synchronization_sync PASSED: 20 FAILED: 0 TIME: 2616ms
 2026-09-28 16:30:31 scheduler_core PASSED: 19 FAILED: 0 TIME: 485ms
-2026-09-28 16:54:28 scheduler_core PASSED: 19 FAILED: 0 TIME: 479ms
-2026-09-28 16:54:28 synchronization_sync PASSED: 20 FAILED: 0 TIME: 623ms
 2026-09-28 16:54:28 ipc PASSED: 81 FAILED: 0 TIME: 3462ms
-2026-09-28 16:54:28 scheduler_preemption PASSED: 13 FAILED: 0 TIME: 1368ms
+2026-09-28 16:54:28 process_lifecycle PASSED: 16 FAILED: 0 TIME: 1958ms
+2026-09-28 16:54:28 process_waitpid PASSED: 3 FAILED: 0 TIME: 133ms
+2026-09-28 16:54:28 scheduler_core PASSED: 19 FAILED: 0 TIME: 479ms
 2026-09-28 16:54:28 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 429ms
+2026-09-28 16:54:28 scheduler_preemption PASSED: 13 FAILED: 0 TIME: 1368ms
+2026-09-28 16:54:28 synchronization_sync PASSED: 20 FAILED: 0 TIME: 623ms
 2026-09-28 16:54:28 task_core PASSED: 6 FAILED: 0 TIME: 836ms
 2026-09-28 16:54:28 task_lifecycle PASSED: 9 FAILED: 0 TIME: 1327ms
-2026-09-28 16:54:28 process_waitpid PASSED: 3 FAILED: 0 TIME: 133ms
-2026-09-28 16:54:28 process_lifecycle PASSED: 16 FAILED: 0 TIME: 1958ms
 2026-09-28 16:54:56 core PASSED: 492 FAILED: 0 TIME: 27803ms
 2026-09-28 16:55:10 ipc PASSED: 81 FAILED: 0 TIME: 3449ms
 2026-09-28 16:55:24 capability PASSED: 147 FAILED: 0 TIME: 4178ms
@@ -2137,8 +2138,8 @@
 2026-09-29 19:28:34 cap_core PASSED: 10 FAILED: 0 TIME: 90ms
 2026-09-29 19:28:55 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 186ms
 2026-09-30 00:04:17 cap_untyped PASSED: 18 FAILED: 0 TIME: 414ms
-2026-09-30 00:05:25 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 1031ms
 2026-09-30 00:05:25 cap_irq PASSED: 12 FAILED: 0 TIME: 339ms
+2026-09-30 00:05:25 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 1031ms
 2026-09-30 00:05:57 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 244ms
 2026-09-30 00:05:57 cap_msix PASSED: 13 FAILED: 0 TIME: 469ms
 2026-09-30 00:06:34 cap_ipc PASSED: 6 FAILED: 0 TIME: 211ms
@@ -2149,35 +2150,35 @@
 2026-09-30 05:55:00 shell_commands PASSED: 31 FAILED: 0 TIME: 4284ms
 2026-09-30 05:55:27 elf_loader PASSED: 8 FAILED: 0 TIME: 326ms
 2026-09-30 05:55:48 syscall_core PASSED: 32 FAILED: 0 TIME: 933ms
-2026-09-30 05:56:45 shell_interaction PASSED: 19 FAILED: 0 TIME: 4252ms
 2026-09-30 05:56:45 process_rlimit PASSED: 5 FAILED: 0 TIME: 166ms
-2026-09-30 06:07:24 proc_elf PASSED: 85 FAILED: 0 TIME: 25423ms
+2026-09-30 05:56:45 shell_interaction PASSED: 19 FAILED: 0 TIME: 4252ms
 2026-09-30 06:07:24 proc_elf PASSED: 85 FAILED: 0 TIME: 17118ms STATUS: RERUN
+2026-09-30 06:07:24 proc_elf PASSED: 85 FAILED: 0 TIME: 25423ms
 2026-09-30 06:08:06 libc_verify PASSED: 7 FAILED: 0 TIME: 2163ms
 2026-09-30 06:08:29 scheduler_core PASSED: 21 FAILED: 0 TIME: 5211ms
 2026-09-30 06:09:19 selftest PASSED: 139 FAILED: 0 TIME: 7118ms
-2026-09-30 06:50:42 shell_commands PASSED: 31 FAILED: 0 TIME: 4432ms STATUS: BARE-CONTRACT
 2026-09-30 06:50:42 elf_loader PASSED: 8 FAILED: 0 TIME: 456ms
-2026-09-30 06:51:22 proc_elf PASSED: 85 FAILED: 0 TIME: 27398ms STATUS: POST-REWORK
+2026-09-30 06:50:42 shell_commands PASSED: 31 FAILED: 0 TIME: 4432ms STATUS: BARE-CONTRACT
 2026-09-30 06:51:22 libc_verify PASSED: 7 FAILED: 0 TIME: 16368ms
+2026-09-30 06:51:22 proc_elf PASSED: 85 FAILED: 0 TIME: 27398ms STATUS: POST-REWORK
 2026-09-30 06:51:47 selftest PASSED: 139 FAILED: 0 TIME: 33432ms STATUS: POST-REWORK
-2026-09-30 06:52:25 syscall_core PASSED: 32 FAILED: 0 TIME: 1081ms
 2026-09-30 06:52:25 scheduler_core PASSED: 21 FAILED: 0 TIME: 1540ms
-2026-09-30 06:53:02 shell_interaction PASSED: 19 FAILED: 0 TIME: 4323ms STATUS: POST-REWORK
+2026-09-30 06:52:25 syscall_core PASSED: 32 FAILED: 0 TIME: 1081ms
 2026-09-30 06:53:02 process_rlimit PASSED: 5 FAILED: 0 TIME: 803ms STATUS: POST-REWORK
+2026-09-30 06:53:02 shell_interaction PASSED: 19 FAILED: 0 TIME: 4323ms STATUS: POST-REWORK
 2026-09-30 06:56:53 selftest PASSED: 139 FAILED: 0 TIME: 7894ms STATUS: POST-S3-FIX
 2026-09-30 09:48:48 elf_loader PASSED: 9 FAILED: 0 TIME: 456ms
 2026-09-30 09:49:10 elf_loader PASSED: 8 FAILED: 1 TIME: 0ms STATUS: NOFIX-CONTROL
 2026-09-30 09:53:27 elf_loader PASSED: 8 FAILED: 1 TIME: 0ms STATUS: FLAKY-CANCEL-POST-COMPLETION
 2026-09-30 09:53:27 elf_loader PASSED: 9 FAILED: 0 TIME: 456ms STATUS: RERUN-GREEN
 2026-09-30 09:54:30 storage PASSED: 143 FAILED: 0 TIME: 3861ms
-2026-09-30 09:56:22 selftest PASSED: 139 FAILED: 0 TIME: 44119ms
 2026-09-30 09:56:22 proc_elf PASSED: 86 FAILED: 0 TIME: 24845ms
+2026-09-30 09:56:22 selftest PASSED: 139 FAILED: 0 TIME: 44119ms
 2026-09-30 10:05:05 elf_loader PASSED: 9 FAILED: 0 TIME: 476ms STATUS: OPEN-CLOSE-PROBE
 2026-09-30 10:05:31 elf_loader PASSED: 8 FAILED: 1 TIME: 0ms STATUS: NOFIX-CONTROL
 2026-09-30 10:05:52 elf_loader PASSED: 9 FAILED: 0 TIME: 470ms STATUS: POST-RESTORE
-2026-09-30 10:06:37 storage PASSED: 143 FAILED: 0 TIME: 334ms
 2026-09-30 10:06:37 selftest PASSED: 139 FAILED: 0 TIME: 7982ms
+2026-09-30 10:06:37 storage PASSED: 143 FAILED: 0 TIME: 334ms
 2026-09-30 12:29:59 elf_loader PASSED: 9 FAILED: 0 TIME: 357ms STATUS: WRITE-FB
 2026-09-30 12:29:59 shell_commands PASSED: 31 FAILED: 0 TIME: 977ms STATUS: WRITE-FB
 2026-09-30 12:30:27 selftest PASSED: 139 FAILED: 0 TIME: 7133ms STATUS: WRITE-FB
@@ -2185,16 +2186,16 @@
 2026-09-30 14:06:49 logging_dmesg PASSED: 15 FAILED: 0 TIME: 316ms
 2026-09-30 14:07:41 elf_loader PASSED: 8 FAILED: 1 TIME: 0ms STATUS: NOFIX-CONTROL-2
 2026-09-30 14:08:03 elf_loader PASSED: 9 FAILED: 0 TIME: 315ms STATUS: POST-RESTORE-2
-2026-09-30 14:08:47 storage PASSED: 143 FAILED: 0 TIME: 13825ms
 2026-09-30 14:08:47 selftest PASSED: 139 FAILED: 0 TIME: 30068ms
+2026-09-30 14:08:47 storage PASSED: 143 FAILED: 0 TIME: 13825ms
 2026-09-30 14:09:31 proc_elf PASSED: 86 FAILED: 0 TIME: 20841ms
 2026-09-30 14:19:52 selftest PASSED: 139 FAILED: 0 TIME: 7054ms STATUS: INITRD-SOURCES
 2026-09-30 15:11:20 elf_loader PASSED: 12 FAILED: 0 TIME: 468ms
-2026-09-30 15:19:02 proc_elf PASSED: 89 FAILED: 0 TIME: 4796ms
 2026-09-30 15:19:02 elf_shared PASSED: 9 FAILED: 0 TIME: 392ms
+2026-09-30 15:19:02 proc_elf PASSED: 89 FAILED: 0 TIME: 4796ms
+2026-09-30 15:19:02 scheduler_core PASSED: 21 FAILED: 0 TIME: 1254ms
 2026-09-30 15:19:02 scheduler_idle PASSED: 11 FAILED: 0 TIME: 5153ms
 2026-09-30 15:19:02 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 4199ms
-2026-09-30 15:19:02 scheduler_core PASSED: 21 FAILED: 0 TIME: 1254ms
 2026-09-30 15:19:02 selftest PASSED: 139 FAILED: 0 TIME: 29448ms
 2026-09-30 15:43:38 elf_loader PASSED: 13 FAILED: 0 TIME: 487ms
 2026-09-30 15:57:58 shell_commands PASSED: 31 FAILED: 0 TIME: 1033ms
@@ -2237,10 +2238,10 @@
 2026-09-30 17:33:32 task_fpu PASSED: 0 FAILED: 0 TIME: 132657ms STATUS: NO_TESTS_REGISTERED
 2026-09-30 17:33:47 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
 2026-09-30 17:55:59 shell_commands PASSED: 31 FAILED: 0 TIME: 950ms
-2026-09-30 18:18:29 shell_commands PASSED: 31 FAILED: 0 TIME: 964ms
 2026-09-30 18:18:29 elf_loader PASSED: 13 FAILED: 0 TIME: 502ms
-2026-09-30 18:18:29 proc_elf PASSED: 90 FAILED: 0 TIME: 5524ms
 2026-09-30 18:18:29 elf_shared PASSED: 9 FAILED: 0 TIME: 356ms
+2026-09-30 18:18:29 proc_elf PASSED: 90 FAILED: 0 TIME: 5524ms
+2026-09-30 18:18:29 shell_commands PASSED: 31 FAILED: 0 TIME: 964ms
 2026-09-30 18:18:29 storage PASSED: 147 FAILED: 0 TIME: 13678ms
 2026-09-30 18:18:49 libc_verify PASSED: 7 FAILED: 0 TIME: 9233ms
 2026-09-30 18:19:10 selftest PASSED: 139 FAILED: 0 TIME: 16991ms
@@ -2282,12 +2283,12 @@
 2026-09-30 20:31:10 task_tcb_log PASSED: 0 FAILED: 0 TIME: 1ms
 2026-09-30 20:33:23 task_fpu PASSED: 0 FAILED: 0 TIME: 133026ms STATUS: NO_TESTS_REGISTERED
 2026-09-30 20:33:42 testrunner PASSED: 0 FAILED: 0 TIME: 17ms
-2026-10-01 06:29:50 storage PASSED: 147 FAILED: 0 TIME: 3395ms
-2026-10-01 06:29:50 shell_commands PASSED: 31 FAILED: 0 TIME: 953ms
 2026-10-01 06:29:50 elf_loader PASSED: 13 FAILED: 0 TIME: 1949ms
-2026-10-01 07:51:18 ui_framebuffer PASSED: 6 FAILED: 0 TIME: 179ms
+2026-10-01 06:29:50 shell_commands PASSED: 31 FAILED: 0 TIME: 953ms
+2026-10-01 06:29:50 storage PASSED: 147 FAILED: 0 TIME: 3395ms
 2026-10-01 07:51:18 elf_loader PASSED: 15 FAILED: 0 TIME: 2732ms
 2026-10-01 07:51:18 shell_commands PASSED: 31 FAILED: 0 TIME: 3966ms
+2026-10-01 07:51:18 ui_framebuffer PASSED: 6 FAILED: 0 TIME: 179ms
 2026-10-01 07:51:40 selftest PASSED: 139 FAILED: 0 TIME: 30231ms
 2026-10-01 08:32:24 elf_loader PASSED: 15 FAILED: 0 TIME: 610ms
 2026-10-01 09:52:05 core PASSED: 494 FAILED: 0 TIME: 30545ms
@@ -2329,40 +2330,40 @@
 2026-10-01 10:06:02 task_fpu PASSED: 0 FAILED: 0 TIME: 132340ms STATUS: NO_TESTS_REGISTERED
 2026-10-01 10:06:17 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-01 10:16:18 proc_elf PASSED: 92 FAILED: 0 TIME: 5286ms
-2026-10-01 17:10:03 logging_dmesg PASSED: 20 FAILED: 0 TIME: 408ms
-2026-10-01 17:10:03 logging_debug PASSED: 35 FAILED: 0 TIME: 742ms
-2026-10-01 17:10:03 logging_klog PASSED: 9 FAILED: 0 TIME: 855ms
-2026-10-01 17:10:03 servers PASSED: 62 FAILED: 0 TIME: 6452ms
-2026-10-01 17:10:03 proc_elf PASSED: 91 FAILED: 0 TIME: 14905ms
-2026-10-01 17:10:03 ui PASSED: 70 FAILED: 0 TIME: 5644ms
 2026-10-01 17:10:03 core PASSED: 494 FAILED: 0 TIME: 29450ms
-2026-10-01 17:10:03 selftest PASSED: 139 FAILED: 0 TIME: 7267ms
+2026-10-01 17:10:03 logging_debug PASSED: 35 FAILED: 0 TIME: 742ms
+2026-10-01 17:10:03 logging_dmesg PASSED: 20 FAILED: 0 TIME: 408ms
+2026-10-01 17:10:03 logging_klog PASSED: 9 FAILED: 0 TIME: 855ms
+2026-10-01 17:10:03 proc_elf PASSED: 91 FAILED: 0 TIME: 14905ms
 2026-10-01 17:10:03 proc_elf PASSED: 91 FAILED: 0 TIME: 4535ms
-2026-10-01 18:40:00 logging_dmesg PASSED: 21 FAILED: 0 TIME: 449ms
-2026-10-01 18:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 732ms
-2026-10-01 18:40:00 logging_klog PASSED: 9 FAILED: 0 TIME: 854ms
-2026-10-01 18:40:00 servers PASSED: 62 FAILED: 0 TIME: 1548ms
-2026-10-01 18:40:00 proc_elf PASSED: 91 FAILED: 0 TIME: 19363ms
-2026-10-01 18:40:00 ui PASSED: 70 FAILED: 0 TIME: 24719ms
-2026-10-01 18:40:00 core PASSED: 494 FAILED: 0 TIME: 30604ms
+2026-10-01 17:10:03 selftest PASSED: 139 FAILED: 0 TIME: 7267ms
+2026-10-01 17:10:03 servers PASSED: 62 FAILED: 0 TIME: 6452ms
+2026-10-01 17:10:03 ui PASSED: 70 FAILED: 0 TIME: 5644ms
 2026-10-01 18:40:00 core PASSED: 494 FAILED: 0 TIME: 28612ms
+2026-10-01 18:40:00 core PASSED: 494 FAILED: 0 TIME: 30604ms
+2026-10-01 18:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 732ms
+2026-10-01 18:40:00 logging_dmesg PASSED: 21 FAILED: 0 TIME: 449ms
+2026-10-01 18:40:00 logging_klog PASSED: 9 FAILED: 0 TIME: 854ms
+2026-10-01 18:40:00 proc_elf PASSED: 91 FAILED: 0 TIME: 19363ms
 2026-10-01 18:40:00 selftest PASSED: 139 FAILED: 0 TIME: 7571ms
+2026-10-01 18:40:00 servers PASSED: 62 FAILED: 0 TIME: 1548ms
+2026-10-01 18:40:00 ui PASSED: 70 FAILED: 0 TIME: 24719ms
 2026-10-02 08:09:16 selftest PASSED: 139 FAILED: 0 TIME: 7121ms
-2026-10-02 16:21:11 timing_core PASSED: 19 FAILED: 0 TIME: 1565ms
-2026-10-02 16:21:11 wcet_scheduler PASSED: 2 FAILED: 0 TIME: 10088ms
-2026-10-02 16:21:11 wcet_overrun PASSED: 2 FAILED: 0 TIME: 151ms
 2026-10-02 16:21:11 core PASSED: 494 FAILED: 0 TIME: 128393ms
 2026-10-02 16:21:11 selftest PASSED: 139 FAILED: 0 TIME: 7487ms
+2026-10-02 16:21:11 timing_core PASSED: 19 FAILED: 0 TIME: 1565ms
+2026-10-02 16:21:11 wcet_overrun PASSED: 2 FAILED: 0 TIME: 151ms
+2026-10-02 16:21:11 wcet_scheduler PASSED: 2 FAILED: 0 TIME: 10088ms
 2026-10-02 16:57:19 deadline_action PASSED: 1 FAILED: 0 TIME: 52ms
 2026-10-02 16:57:19 deadline_miss PASSED: 5 FAILED: 0 TIME: 752ms
+2026-10-02 16:57:19 selftest PASSED: 139 FAILED: 0 TIME: 7225ms
 2026-10-02 16:57:19 syscall_fuzz PASSED: 4 FAILED: 0 TIME: 597ms
 2026-10-02 16:57:19 vfs_procfs PASSED: 9 FAILED: 0 TIME: 848ms
-2026-10-02 16:57:19 selftest PASSED: 139 FAILED: 0 TIME: 7225ms
-2026-10-02 18:05:00 timing_core PASSED: 19 FAILED: 0 TIME: 1340ms
 2026-10-02 18:05:00 selftest PASSED: 139 FAILED: 0 TIME: 30012ms
+2026-10-02 18:05:00 timing_core PASSED: 19 FAILED: 0 TIME: 1340ms
 2026-10-02 18:13:01 boot_deterministic PASSED: 3 FAILED: 0 TIME: 312ms
-2026-10-02 18:13:01 task_watchdog PASSED: 6 FAILED: 0 TIME: 132ms
 2026-10-02 18:13:01 deadline PASSED: 124 FAILED: 0 TIME: 185685ms
+2026-10-02 18:13:01 task_watchdog PASSED: 6 FAILED: 0 TIME: 132ms
 2026-10-02 19:46:20 core PASSED: 450 FAILED: 0 TIME: 69975ms
 2026-10-02 19:46:43 ipc PASSED: 79 FAILED: 0 TIME: 12375ms
 2026-10-02 19:47:08 capability PASSED: 147 FAILED: 0 TIME: 15944ms
@@ -2385,67 +2386,67 @@
 2026-10-02 19:55:23 testrunner PASSED: 0 FAILED: 0 TIME: 139914ms STATUS: EXPECTED_PANIC_PASS
 2026-10-02 20:31:04 deadline PASSED: 134 FAILED: 0 TIME: 158956ms
 2026-10-02 21:10:48 task_watchdog PASSED: 6 FAILED: 0 TIME: 382ms
-2026-10-02 21:19:55 task_watchdog PASSED: 6 FAILED: 0 TIME: 414ms
 2026-10-02 21:19:55 task_watchdog PASSED: 6 FAILED: 0 TIME: 398ms
 2026-10-02 21:19:55 task_watchdog PASSED: 6 FAILED: 0 TIME: 411ms
+2026-10-02 21:19:55 task_watchdog PASSED: 6 FAILED: 0 TIME: 414ms
 2026-10-02 21:19:55 watchdog_daemon PASSED: 5 FAILED: 0 TIME: 150ms
 2026-10-02 21:19:55 watchdog_daemon PASSED: 5 FAILED: 0 TIME: 153ms
 2026-10-02 22:30:07 deadline PASSED: 139 FAILED: 0 TIME: 38622ms
 2026-10-02 22:30:07 deadline PASSED: 139 FAILED: 0 TIME: 42367ms
-2026-10-02 22:49:51 vfs_procfs PASSED: 9 FAILED: 0 TIME: 230ms
-2026-10-02 22:49:51 selftest PASSED: 139 FAILED: 0 TIME: 7347ms
-2026-10-02 22:49:51 syscall_fuzz PASSED: 4 FAILED: 0 TIME: 152ms
 2026-10-02 22:49:51 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 183ms
 2026-10-02 22:49:51 cap_syscall PASSED: 9 FAILED: 0 TIME: 291ms
 2026-10-02 22:49:51 deadline PASSED: 139 FAILED: 0 TIME: 87769ms
-2026-10-02 23:32:19 posix_time PASSED: 10 FAILED: 0 TIME: 306ms
-2026-10-02 23:32:19 posix_time PASSED: 10 FAILED: 0 TIME: 284ms
+2026-10-02 22:49:51 selftest PASSED: 139 FAILED: 0 TIME: 7347ms
+2026-10-02 22:49:51 syscall_fuzz PASSED: 4 FAILED: 0 TIME: 152ms
+2026-10-02 22:49:51 vfs_procfs PASSED: 9 FAILED: 0 TIME: 230ms
 2026-10-02 23:32:19 deadline PASSED: 139 FAILED: 0 TIME: 44743ms
+2026-10-02 23:32:19 posix_time PASSED: 10 FAILED: 0 TIME: 284ms
+2026-10-02 23:32:19 posix_time PASSED: 10 FAILED: 0 TIME: 306ms
 2026-10-02 23:32:19 selftest PASSED: 139 FAILED: 0 TIME: 7186ms
-2026-10-03 17:06:45 debug_syscall PASSED: 20 FAILED: 0 TIME: 777ms
 2026-10-03 17:06:45 debug_syscall PASSED: 20 FAILED: 0 TIME: 405ms
+2026-10-03 17:06:45 debug_syscall PASSED: 20 FAILED: 0 TIME: 777ms
 2026-10-03 17:06:45 selftest PASSED: 139 FAILED: 0 TIME: 7624ms
 2026-10-03 17:39:34 boot_deterministic PASSED: 3 FAILED: 0 TIME: 81ms
 2026-10-03 17:39:34 deadline PASSED: 139 FAILED: 0 TIME: 38779ms
 2026-10-03 17:39:34 selftest PASSED: 139 FAILED: 0 TIME: 7832ms
-2026-10-03 18:49:29 scheduler_idle PASSED: 18 FAILED: 0 TIME: 1534ms
-2026-10-03 18:49:29 memory_determinism PASSED: 4 FAILED: 0 TIME: 6201ms
 2026-10-03 18:49:29 boot_deterministic PASSED: 3 FAILED: 0 TIME: 83ms
+2026-10-03 18:49:29 memory_determinism PASSED: 4 FAILED: 0 TIME: 6201ms
+2026-10-03 18:49:29 scheduler_idle PASSED: 18 FAILED: 0 TIME: 1534ms
 2026-10-03 19:27:02 scheduler_idle PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT (host-load transient; rerun green, see next row)
 2026-10-03 19:27:02 scheduler_idle PASSED: 24 FAILED: 0 TIME: 1742ms
-2026-10-03 19:56:25 core PASSED: 509 FAILED: 1 TIME: 38779ms NOTE: klog_read volume assert + secondary leak (fixed this cycle)
 2026-10-03 19:56:25 core PASSED: 0 FAILED: 0 TIME: 220000ms STATUS: TIMEOUT at test 195 breaker (intermittent, standalone green, #280 class)
-2026-10-03 19:56:25 core PASSED: 509 FAILED: 1 TIME: 52000ms NOTE: klog_read volume assert (pre-fix rerun)
 2026-10-03 19:56:25 core PASSED: 0 FAILED: 0 TIME: 250000ms STATUS: TIMEOUT pre-test-1 stall (intermittent, #280 class)
+2026-10-03 19:56:25 core PASSED: 509 FAILED: 1 TIME: 38779ms NOTE: klog_read volume assert + secondary leak (fixed this cycle)
+2026-10-03 19:56:25 core PASSED: 509 FAILED: 1 TIME: 52000ms NOTE: klog_read volume assert (pre-fix rerun)
 2026-10-03 19:56:25 core PASSED: 510 FAILED: 0 TIME: 29449ms
 2026-10-03 19:56:25 scheduler_idle PASSED: 24 FAILED: 0 TIME: 1742ms
 2026-10-03 19:56:25 syscall_core PASSED: 32 FAILED: 0 TIME: 1130ms
 2026-10-03 19:59:35 selftest PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT pre-test-1 stall (intermittent, rerun green, #280 class)
 2026-10-03 19:59:36 selftest PASSED: 139 FAILED: 0 TIME: 7554ms
+2026-10-03 21:33:51 core PASSED: 515 FAILED: 0 TIME: 28811ms
 2026-10-03 21:33:51 scheduler_idle PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT pre-test stall (intermittent, reruns green, #280 class)
 2026-10-03 21:33:51 scheduler_idle PASSED: 29 FAILED: 0 TIME: 1906ms
-2026-10-03 21:33:51 core PASSED: 515 FAILED: 0 TIME: 28811ms
 2026-10-03 21:33:51 selftest PASSED: 139 FAILED: 0 TIME: 7617ms
 2026-10-03 22:30:49 debug_syscall PASSED: 20 FAILED: 0 TIME: 812ms
-2026-10-04 10:08:45 scheduler_idle PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT pre-test stall (intermittent, #280 class)
-2026-10-04 10:08:45 scheduler_idle PASSED: 35 FAILED: 0 TIME: 8786ms
-2026-10-04 10:08:45 task_watchdog PASSED: 6 FAILED: 0 TIME: 1617ms
 2026-10-04 10:08:45 core PASSED: 0 FAILED: 0 TIME: 250000ms STATUS: TIMEOUT pre-test stall (intermittent, #280 class)
 2026-10-04 10:08:45 core PASSED: 521 FAILED: 0 TIME: 123064ms
 2026-10-04 10:08:45 deadline PASSED: 139 FAILED: 0 TIME: 40775ms
+2026-10-04 10:08:45 scheduler_idle PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT pre-test stall (intermittent, #280 class)
+2026-10-04 10:08:45 scheduler_idle PASSED: 35 FAILED: 0 TIME: 8786ms
 2026-10-04 10:08:45 selftest PASSED: 139 FAILED: 0 TIME: 32375ms
-2026-10-04 11:20:53 scheduler_idle PASSED: 40 FAILED: 0 TIME: 2167ms
+2026-10-04 10:08:45 task_watchdog PASSED: 6 FAILED: 0 TIME: 1617ms
 2026-10-04 11:20:53 core PASSED: 526 FAILED: 0 TIME: 29288ms
+2026-10-04 11:20:53 scheduler_idle PASSED: 40 FAILED: 0 TIME: 2167ms
 2026-10-04 11:21:05 selftest PASSED: 139 FAILED: 0 TIME: 8580ms
+2026-10-04 13:41:32 core PASSED: 529 FAILED: 0 TIME: 31056ms
 2026-10-04 13:41:32 debug_syscall PASSED: 23 FAILED: 0 TIME: 926ms
 2026-10-04 13:41:32 shell_commands PASSED: 33 FAILED: 0 TIME: 1051ms
 2026-10-04 13:41:32 ui PASSED: 72 FAILED: 0 TIME: 5878ms
-2026-10-04 13:41:32 core PASSED: 529 FAILED: 0 TIME: 31056ms
 2026-10-04 13:42:05 selftest PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT pre-test stall (intermittent, #280 class)
 2026-10-04 13:42:05 selftest PASSED: 139 FAILED: 0 TIME: 7160ms
+2026-10-05 09:30:15 debug_syscall PASSED: 21 FAILED: 3 TIME: 3000ms STATUS: FAIL-break_insert_hit_clear+step_once+fault_routed (under investigation, host load 2.2+)
 2026-10-05 09:39:47 debug_syscall PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (host load 2.3+, rerun pending)
 2026-10-05 09:43:50 debug_syscall PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (host load 2.65, other sessions active)
-2026-10-05 09:30:15 debug_syscall PASSED: 21 FAILED: 3 TIME: 3000ms STATUS: FAIL-break_insert_hit_clear+step_once+fault_routed (under investigation, host load 2.2+)
 2026-10-05 10:17:30 debug_syscall PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (host load 5.1)
 2026-10-05 10:33:30 debug_syscall PASSED: 24 FAILED: 0 TIME: 902ms
 2026-10-05 10:38:00 shell_commands PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (pre-test stall class)
@@ -2473,8 +2474,8 @@
 2026-10-05 22:50:00 ipc_robustness PASSED: 8 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hung-in-test-9-DestDeath-again (zero DMD this run)
 2026-10-06 09:20:00 ipc_robustness PASSED: 8 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hung-in-test-9 (zero DMD entire run, helpers vanish-or-unpicked)
 2026-10-06 09:25:00 ipc_robustness PASSED: 8 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hang-inside-send_sync-test9 (T9 markers: spawned+delivered+sending, no return; peer alive-never-exits)
-2026-10-06 11:10:00 ipc_robustness PASSED: 8 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hung-in-test-9-DestDeath (peer-dispatch vs tick-death unresolved; mid-wait path kept for coverage, flake disclosed)
 2026-10-06 11:10:00 ipc_blocking PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-pre-TEST_START (DMDx771, zero S:)
+2026-10-06 11:10:00 ipc_robustness PASSED: 8 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-hung-in-test-9-DestDeath (peer-dispatch vs tick-death unresolved; mid-wait path kept for coverage, flake disclosed)
 2026-10-06 11:15:00 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 3000ms (long-budget run, fast pass)
 2026-10-06 11:30:00 scheduler_edf PASSED: 7 FAILED: 0 TIME: 651ms
 2026-10-06 12:00:00 ipc_robustness PASSED: 11 FAILED: 0 TIME: 564ms
@@ -2513,8 +2514,6 @@
 2026-10-06 22:43:45 ahci_live PASSED: 5 FAILED: 0 TIME: 5991ms
 2026-10-06 22:43:58 iommu_live PASSED: 6 FAILED: 0 TIME: 163ms
 2026-10-06 22:46:10 testrunner PASSED: 0 FAILED: 0 TIME: 132022ms STATUS: TIMEOUT
-
-SUMMARY: total=20 ok=14 fail=6
 2026-10-06 22:54:28 logging_debug PASSED: 36 FAILED: 0 TIME: 800ms
 2026-10-06 22:55:04 capability PASSED: 148 FAILED: 0 TIME: 5492ms
 2026-10-06 22:55:27 proc_elf PASSED: 91 FAILED: 0 TIME: 4947ms
@@ -2566,8 +2565,6 @@ SUMMARY: total=20 ok=14 fail=6
 2026-10-07 02:44:46 ahci_live PASSED: 0 FAILED: 0 TIME: 262306ms STATUS: TIMEOUT
 2026-10-07 02:45:00 iommu_live PASSED: 6 FAILED: 0 TIME: 163ms
 2026-10-07 02:47:12 testrunner PASSED: 0 FAILED: 0 TIME: 132019ms STATUS: TIMEOUT
-
-SUMMARY: total=20 ok=11 fail=9
 2026-10-07 02:48:31 core PASSED: 534 FAILED: 0 TIME: 30117ms
 2026-10-07 02:48:52 ipc PASSED: 85 FAILED: 0 TIME: 3794ms
 2026-10-07 02:58:26 capability PASSED: 148 FAILED: 0 TIME: 4904ms
@@ -2596,8 +2593,6 @@ SUMMARY: total=20 ok=11 fail=9
 2026-10-07 03:06:51 task_tcb_log PASSED: 0 FAILED: 0 TIME: 3493ms STATUS: TIMEOUT
 2026-10-07 03:06:55 task_fpu PASSED: 0 FAILED: 0 TIME: 3515ms STATUS: TIMEOUT
 2026-10-07 03:06:58 testrunner PASSED: 0 FAILED: 0 TIME: 3512ms STATUS: TIMEOUT
-
-SUMMARY: total=18 ok=0 fail=18
 2026-10-07 03:09:00 selftest-release PASSED: 85 FAILED: 0 TIME: 7173ms
 2026-10-07 03:09:15 core PASSED: 19 FAILED: 0 TIME: 11ms
 2026-10-07 03:09:30 ipc PASSED: 0 FAILED: 0 TIME: 0ms
@@ -2617,8 +2612,6 @@ SUMMARY: total=18 ok=0 fail=18
 2026-10-07 03:15:04 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-07 03:17:16 task_fpu PASSED: 0 FAILED: 0 TIME: 132753ms STATUS: NO_TESTS_REGISTERED
 2026-10-07 03:17:31 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
-
-SUMMARY: total=18 ok=17 fail=1
 2026-10-07 08:42:27 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 557ms
 2026-10-07 08:43:38 exc_table PASSED: 4 FAILED: 0 TIME: 140ms
 2026-10-07 13:19:41 debug_syscall PASSED: 26 FAILED: 0 TIME: 1002ms
@@ -2643,13 +2636,8 @@ SUMMARY: total=18 ok=17 fail=1
 2026-10-07 14:47:28 ahci_live PASSED: 5 FAILED: 0 TIME: 6033ms
 2026-10-07 14:47:42 iommu_live PASSED: 6 FAILED: 0 TIME: 177ms
 2026-10-07 14:49:54 testrunner PASSED: 0 FAILED: 0 TIME: 131969ms STATUS: TIMEOUT
-
-SUMMARY: total=20 ok=11 fail=9
 2026-10-07 14:50:31 ipc PASSED: 85 FAILED: 0 TIME: 3515ms
 2026-10-07 14:50:51 capability PASSED: 148 FAILED: 0 TIME: 4059ms
-2026-10-07 15:10:26 proc_elf PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (load spell; GDB-pass + low-load-pass prove flake)
-2026-10-07 15:10:26 proc_elf PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (load spell; GDB-pass + low-load-pass prove flake)
-2026-10-07 15:10:26 proc_elf PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (load spell; GDB-pass + low-load-pass prove flake)
 2026-10-07 15:10:26 proc_elf PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (load spell; GDB-pass + low-load-pass prove flake)
 2026-10-07 15:10:26 proc_elf PASSED: 91 FAILED: 0 TIME: 5795ms
 2026-10-07 15:10:53 storage PASSED: 147 FAILED: 0 TIME: 3390ms
@@ -2676,8 +2664,6 @@ SUMMARY: total=20 ok=11 fail=9
 2026-10-07 15:20:25 task_tcb_log PASSED: 0 FAILED: 0 TIME: 1ms
 2026-10-07 15:22:38 task_fpu PASSED: 0 FAILED: 0 TIME: 133290ms STATUS: NO_TESTS_REGISTERED
 2026-10-07 15:22:53 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
-
-SUMMARY: total=18 ok=18 fail=0
 2026-10-07 16:05:10 storage PASSED: 148 FAILED: 0 TIME: 3569ms
 2026-10-07 16:06:40 storage PASSED: 148 FAILED: 0 TIME: 3554ms
 2026-10-07 16:08:10 proc_elf PASSED: 91 FAILED: 0 TIME: 5437ms
@@ -2690,8 +2676,8 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-07 16:18:50 hal_core PASSED: 14 FAILED: 0 TIME: 313ms
 2026-10-07 16:20:50 hal PASSED: 122 FAILED: 0 TIME: 0ms
 2026-10-07 16:23:30 ui PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (zero S: lines; no ui test files edited by #274)
-2026-10-07 16:35:00 shell_commands PASSED: 34 FAILED: 0 TIME: 1177ms
 2026-10-07 16:26:00 ui PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun; runner stall pre-test-1, content exonerated via shell_commands 34/34)
+2026-10-07 16:35:00 shell_commands PASSED: 34 FAILED: 0 TIME: 1177ms
 2026-10-07 16:37:00 ui PASSED: 73 FAILED: 0 TIME: 5864ms
 2026-10-07 16:40:00 servers PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall signature, cf. hal/ui exonerated)
 2026-10-07 16:44:00 servers PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun)
@@ -2719,8 +2705,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-07 20:30:16 ahci_live PASSED: 5 FAILED: 0 TIME: 5992ms
 2026-10-07 20:30:30 iommu_live PASSED: 6 FAILED: 0 TIME: 168ms
 2026-10-07 20:32:42 testrunner PASSED: 0 FAILED: 0 TIME: 132500ms STATUS: EXPECTED_PANIC_PASS
-
-SUMMARY: total=20 ok=15 fail=5
 2026-10-07 20:35:00 capability PASSED: 148 FAILED: 0 TIME: 4152ms
 2026-10-07 20:35:30 drivers PASSED: 107 FAILED: 0 TIME: 2887ms
 2026-10-07 20:36:00 ui PASSED: 73 FAILED: 0 TIME: 8002ms
@@ -2745,14 +2729,12 @@ SUMMARY: total=20 ok=15 fail=5
 2026-10-07 20:55:49 task_tcb_log PASSED: 0 FAILED: 0 TIME: 132878ms STATUS: TIMEOUT
 2026-10-07 20:58:02 task_fpu PASSED: 0 FAILED: 0 TIME: 132819ms STATUS: NO_TESTS_REGISTERED
 2026-10-07 20:58:18 testrunner PASSED: 0 FAILED: 0 TIME: 11ms
-
-SUMMARY: total=18 ok=17 fail=1
 2026-10-07 20:59:00 task_tcb_log-release PASSED: 0 FAILED: 0 TIME: 0ms (vacuous standalone; batch TIMEOUT was runner stall)
 2026-10-07 21:30:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
 2026-10-07 21:32:00 storage PASSED: 152 FAILED: 0 TIME: 18270ms
 2026-10-07 21:35:00 watchdog_daemon PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
-2026-10-07 21:40:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 53142ms
 2026-10-07 21:37:00 watchdog_daemon PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (rerun)
+2026-10-07 21:40:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 53142ms
 2026-10-07 21:41:00 watchdog_daemon PASSED: 5 FAILED: 0 TIME: 780ms
 2026-10-07 21:42:00 ipc_blocking PASSED: 4 FAILED: 0 TIME: 544ms
 2026-10-07 21:50:00 storage PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
@@ -2789,18 +2771,11 @@ SUMMARY: total=18 ok=17 fail=1
 2026-10-08 02:25:24 ahci_live PASSED: 5 FAILED: 0 TIME: 15322ms
 2026-10-08 02:25:39 iommu_live PASSED: 6 FAILED: 0 TIME: 737ms
 2026-10-08 02:27:51 testrunner PASSED: 0 FAILED: 0 TIME: 132408ms STATUS: TIMEOUT
-
-SUMMARY: total=20 ok=16 fail=4
 2026-10-08 02:35:00 hal PASSED: 121 FAILED: 1 TIME: 0ms (pit_set_ticks_for_test ticks()!=42; suspected IRQ0 race, rerunning)
 2026-10-08 02:39:00 hal PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
 2026-10-08 02:43:00 hal PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (pre-test stall x2)
 2026-10-08 02:44:00 hal_core PASSED: 14 FAILED: 0 TIME: 7145ms
 2026-10-08 02:48:00 hal PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (pre-test stall x3)
-2026-10-08 03:10:00 STASH-CONTROL hal on pristine 0a21d19d1: QEMU_EXIT once, then 122/122 PASS (identical binary, different outcomes) => hal flakiness environmental, NOT #275 regression; bisect disables reverted
-2026-10-08 03:14:00 hal PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (pre-test stall)
-2026-10-08 03:20:00 hal PASSED: 122 FAILED: 0 TIME: 0ms (GDB-paced; pit+exc green, environmental confirmed)
-2026-10-08 03:22:00 smp PASSED: 81 FAILED: 0 TIME: 44758ms
-2026-10-08 03:25:00 testrunner PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: EXPECTED_PANIC_PASS
 2026-10-08 03:06:40 core PASSED: 19 FAILED: 0 TIME: 48ms
 2026-10-08 03:06:55 ipc PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-08 03:07:11 capability PASSED: 0 FAILED: 0 TIME: 0ms
@@ -2814,13 +2789,16 @@ SUMMARY: total=20 ok=16 fail=4
 2026-10-08 03:09:17 deadline PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-08 03:09:35 ui PASSED: 19 FAILED: 0 TIME: 6989ms
 2026-10-08 03:09:51 logging_debug PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-08 03:10:00 STASH-CONTROL hal on pristine 0a21d19d1: QEMU_EXIT once, then 122/122 PASS (identical binary, different outcomes) => hal flakiness environmental, NOT #275 regression; bisect disables reverted
 2026-10-08 03:10:07 random PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-08 03:10:22 bench PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-08 03:10:37 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-08 03:12:51 task_fpu PASSED: 0 FAILED: 0 TIME: 133249ms STATUS: NO_TESTS_REGISTERED
 2026-10-08 03:13:06 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
-
-SUMMARY: total=18 ok=18 fail=0
+2026-10-08 03:14:00 hal PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (pre-test stall)
+2026-10-08 03:20:00 hal PASSED: 122 FAILED: 0 TIME: 0ms (GDB-paced; pit+exc green, environmental confirmed)
+2026-10-08 03:22:00 smp PASSED: 81 FAILED: 0 TIME: 44758ms
+2026-10-08 03:25:00 testrunner PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: EXPECTED_PANIC_PASS
 2026-10-08 07:40:00 basic_lib PASSED: 22 FAILED: 0 TIME: 2587ms
 2026-10-08 07:45:00 basic_lib PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall)
 2026-10-08 07:49:00 basic_lib PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-no-summary (runner stall x2)
@@ -2847,8 +2825,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-08 10:01:57 ahci_live PASSED: 5 FAILED: 0 TIME: 6557ms
 2026-10-08 10:02:38 iommu_live PASSED: 6 FAILED: 0 TIME: 1961ms
 2026-10-08 10:04:50 testrunner PASSED: 0 FAILED: 0 TIME: 132472ms STATUS: TIMEOUT
-
-SUMMARY: total=20 ok=15 fail=5
 2026-10-08 11:22:41 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 8766ms
 2026-10-08 11:44:52 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 1210ms
 2026-10-09 20:51:42 basic_lib PASSED: 22 FAILED: 0 TIME: 2566ms
@@ -2872,12 +2848,12 @@ SUMMARY: total=20 ok=15 fail=5
 2026-10-10 12:03:20 storage PASSED: 0 FAILED: 0 TIME: 2s STATUS: STALL
 2026-10-10 12:20:00 storage PASSED: 0 FAILED: 0 TIME: 2s STATUS: STALL
 2026-10-10 12:21:00 ipc PASSED: 86 FAILED: 0 TIME: 11955ms
-2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4217ms
-2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4193ms
-2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4140ms
 2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4044ms
-2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4247ms
+2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4140ms
+2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4193ms
 2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4197ms
+2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4217ms
+2026-10-10 12:40:00 logging_debug PASSED: 36 FAILED: 0 TIME: 4247ms
 2026-10-10 13:30:00 storage PASSED: 0 FAILED: 0 TIME: 120s STATUS: STALL
 2026-10-10 13:36:00 storage PASSED: 161 FAILED: 1 TIME: 70000ms
 2026-10-10 13:45:00 storage PASSED: 162 FAILED: 0 TIME: 64776ms
@@ -2930,20 +2906,20 @@ SUMMARY: total=20 ok=15 fail=5
 2026-10-12 01:31:00 task_metering PASSED: 9 FAILED: 0 TIME: 6697ms
 2026-10-12 02:20:00 shell_commands PASSED: 34 FAILED: 0 TIME: 26860ms
 2026-10-12 02:35:00 shell_interaction PASSED: 19 FAILED: 0 TIME: 6453ms
-2026-10-12 08:54:42 vfs_fat32_integration PASSED: 16 FAILED: 0 TIME: 2039ms
+2026-10-12 08:54:42 servers PASSED: 66 FAILED: 0 TIME: 34917ms
 2026-10-12 08:54:42 servers_vfsd_auth PASSED: 27 FAILED: 0 TIME: 15016ms
-2026-10-12 08:54:42 vfs_fat32 PASSED: 40 FAILED: 0 TIME: 21002ms
 2026-10-12 08:54:42 storage PASSED: 166 FAILED: 0 TIME: 63706ms
 2026-10-12 08:54:42 storage PASSED: 166 FAILED: 0 TIME: 65264ms
-2026-10-12 08:54:42 servers PASSED: 66 FAILED: 0 TIME: 34917ms
-2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1928ms
-2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1973ms
-2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1983ms
+2026-10-12 08:54:42 vfs_fat32 PASSED: 40 FAILED: 0 TIME: 21002ms
+2026-10-12 08:54:42 vfs_fat32_integration PASSED: 16 FAILED: 0 TIME: 2039ms
 2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1926ms
-2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 2063ms
-2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1974ms
+2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1928ms
 2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1944ms
+2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1973ms
+2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1974ms
+2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 1983ms
 2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 2001ms
+2026-10-12 09:58:52 elf_loader PASSED: 15 FAILED: 0 TIME: 2063ms
 2026-10-12 16:47:54 storage PASSED: 166 FAILED: 0 TIME: 414557ms
 2026-10-12 16:47:54 ui PASSED: 73 FAILED: 0 TIME: 14589ms
 2026-10-12 19:06:32 stack_cookie PASSED: 4 FAILED: 0 TIME: 2347ms
@@ -2998,15 +2974,12 @@ SUMMARY: total=20 ok=15 fail=5
 2026-10-12 22:51:13 ahci_live PASSED: 5 FAILED: 0 TIME: 6604ms
 2026-10-12 22:51:29 iommu_live PASSED: 6 FAILED: 0 TIME: 723ms
 2026-10-12 22:53:42 testrunner PASSED: 0 FAILED: 0 TIME: 132928ms STATUS: EXPECTED_PANIC_PASS
-
-SUMMARY: total=20 ok=18 fail=2
 2026-10-12 22:57:00 smp PASSED: 81 FAILED: 0 TIME: 10328ms
-2026-10-12 23:00:00 deadline PASSED: 143 FAILED: 1 TIME: 59370ms
-2026-10-12 23:05:00 deadline PASSED: 144 FAILED: 0 TIME: 59379ms
 2026-10-12 22:59:02 core PASSED: 21 FAILED: 0 TIME: 12ms
 2026-10-12 22:59:21 ipc PASSED: 0 FAILED: 0 TIME: 1ms
 2026-10-12 22:59:39 capability PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-12 22:59:55 proc_elf PASSED: 1 FAILED: 0 TIME: 29ms
+2026-10-12 23:00:00 deadline PASSED: 143 FAILED: 1 TIME: 59370ms
 2026-10-12 23:00:12 storage PASSED: 40 FAILED: 0 TIME: 56ms
 2026-10-12 23:00:28 servers PASSED: 0 FAILED: 0 TIME: 1ms
 2026-10-12 23:00:44 drivers PASSED: 8 FAILED: 0 TIME: 115ms
@@ -3019,10 +2992,9 @@ SUMMARY: total=20 ok=18 fail=2
 2026-10-12 23:02:41 random PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-12 23:02:57 bench PASSED: 0 FAILED: 0 TIME: 1ms
 2026-10-12 23:03:13 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-12 23:05:00 deadline PASSED: 144 FAILED: 0 TIME: 59379ms
 2026-10-12 23:05:29 task_fpu PASSED: 0 FAILED: 0 TIME: 135956ms STATUS: NO_TESTS_REGISTERED
 2026-10-12 23:05:44 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
-
-SUMMARY: total=18 ok=18 fail=0
 2026-10-12 23:28:24 syscall_core PASSED: 33 FAILED: 0 TIME: 4002ms
 2026-10-12 23:28:24 syscall_fastpath PASSED: 5 FAILED: 0 TIME: 1170ms
 2026-10-12 23:28:24 syscall_fuzz PASSED: 4 FAILED: 0 TIME: 541ms
@@ -3050,8 +3022,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-13 02:20:11 ahci_live PASSED: 5 FAILED: 0 TIME: 6542ms
 2026-10-13 02:20:26 iommu_live PASSED: 6 FAILED: 0 TIME: 3204ms
 2026-10-13 02:22:39 testrunner PASSED: 0 FAILED: 0 TIME: 132870ms STATUS: EXPECTED_PANIC_PASS
-
-SUMMARY: total=20 ok=19 fail=1
 2026-10-13 02:24:59 core PASSED: 553 FAILED: 0 TIME: 80681ms
 2026-10-13 02:25:41 core PASSED: 21 FAILED: 0 TIME: 11ms
 2026-10-13 02:25:57 ipc PASSED: 0 FAILED: 0 TIME: 0ms
@@ -3071,11 +3041,9 @@ SUMMARY: total=20 ok=19 fail=1
 2026-10-13 02:29:44 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-13 02:33:59 task_fpu PASSED: 0 FAILED: 0 TIME: 254354ms STATUS: NO_TESTS_REGISTERED
 2026-10-13 02:34:15 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
-
-SUMMARY: total=18 ok=18 fail=0
 2026-10-13 02:42:51 buffer_pool PASSED: 0 FAILED: 0 TIME: 2000ms STATUS: NO_TESTS_REGISTERED-wrong-class-name-use-data_structures_buffer_pool
-2026-10-13 02:43:33 data_structures_buffer_pool PASSED: 25 FAILED: 0 TIME: 13619ms
 2026-10-13 02:43:33 cap_core PASSED: 10 FAILED: 0 TIME: 4941ms
+2026-10-13 02:43:33 data_structures_buffer_pool PASSED: 25 FAILED: 0 TIME: 13619ms
 2026-10-13 02:43:55 ipc_core PASSED: 23 FAILED: 0 TIME: 2847ms
 2026-10-13 02:44:16 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 3980ms
 2026-10-13 02:53:27 core PASSED: 0 FAILED: 0 TIME: 248001ms STATUS: TIMEOUT
@@ -3098,8 +3066,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-13 03:05:35 ahci_live PASSED: 5 FAILED: 0 TIME: 13916ms
 2026-10-13 03:05:51 iommu_live PASSED: 6 FAILED: 0 TIME: 778ms
 2026-10-13 03:10:04 testrunner PASSED: 0 FAILED: 0 TIME: 252979ms STATUS: STALL
-
-SUMMARY: total=20 ok=17 fail=3
 2026-10-13 03:11:10 core PASSED: 553 FAILED: 0 TIME: 91346ms
 2026-10-13 03:11:36 hal PASSED: 122 FAILED: 0 TIME: 0ms
 2026-10-13 03:15:55 testrunner PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: EXPECTED_PANIC_PASS_STALL_RECOVERED
@@ -3121,8 +3087,6 @@ SUMMARY: total=20 ok=17 fail=3
 2026-10-13 03:20:34 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-13 03:24:48 task_fpu PASSED: 0 FAILED: 0 TIME: 253906ms STATUS: NO_TESTS_REGISTERED
 2026-10-13 03:25:04 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
-
-SUMMARY: total=18 ok=18 fail=0
 2026-10-13 03:33:36 hal PASSED: 122 FAILED: 0 TIME: 1047ms
 2026-10-13 03:33:57 timer_wheel PASSED: 8 FAILED: 0 TIME: 3913ms
 2026-10-13 03:34:18 hrt_monotonic PASSED: 5 FAILED: 0 TIME: 616ms
@@ -3150,8 +3114,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-13 03:48:30 ahci_live PASSED: 5 FAILED: 0 TIME: 6567ms
 2026-10-13 03:48:45 iommu_live PASSED: 6 FAILED: 0 TIME: 3133ms
 2026-10-13 03:52:58 testrunner PASSED: 0 FAILED: 0 TIME: 253329ms STATUS: EXPECTED_PANIC_PASS
-
-SUMMARY: total=20 ok=19 fail=1
 2026-10-13 03:55:50 core PASSED: 553 FAILED: 0 TIME: 82769ms
 2026-10-13 03:56:56 core PASSED: 21 FAILED: 0 TIME: 10ms
 2026-10-13 03:57:12 ipc PASSED: 0 FAILED: 0 TIME: 0ms
@@ -3171,8 +3133,6 @@ SUMMARY: total=20 ok=19 fail=1
 2026-10-13 04:01:03 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-13 04:05:18 task_fpu PASSED: 0 FAILED: 0 TIME: 254583ms STATUS: NO_TESTS_REGISTERED
 2026-10-13 04:05:33 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
-
-SUMMARY: total=18 ok=18 fail=0
 2026-10-13 04:10:10 basic_lib PASSED: 26 FAILED: 0 TIME: 2978ms
 2026-10-13 04:10:32 shell_commands PASSED: 34 FAILED: 0 TIME: 4279ms
 2026-10-13 04:10:53 posix_time PASSED: 10 FAILED: 0 TIME: 1225ms
@@ -3196,8 +3156,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-13 04:30:50 ahci_live PASSED: 5 FAILED: 0 TIME: 6606ms
 2026-10-13 04:31:06 iommu_live PASSED: 6 FAILED: 0 TIME: 738ms
 2026-10-13 04:33:19 testrunner PASSED: 0 FAILED: 0 TIME: 133029ms STATUS: EXPECTED_PANIC_PASS
-
-SUMMARY: total=20 ok=15 fail=5
 2026-10-13 04:34:09 smp PASSED: 81 FAILED: 0 TIME: 10629ms
 2026-10-13 04:35:09 core PASSED: 552 FAILED: 1 TIME: 83000ms
 2026-10-13 04:36:04 core PASSED: 553 FAILED: 0 TIME: 85410ms
@@ -3223,8 +3181,6 @@ SUMMARY: total=20 ok=15 fail=5
 2026-10-13 04:55:13 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-13 04:59:26 task_fpu PASSED: 0 FAILED: 0 TIME: 253709ms STATUS: NO_TESTS_REGISTERED
 2026-10-13 04:59:42 testrunner PASSED: 0 FAILED: 0 TIME: 1ms
-
-SUMMARY: total=18 ok=18 fail=0
 2026-10-13 05:08:52 hal PASSED: 122 FAILED: 0 TIME: 2291ms STATUS: STALL_RECOVERED
 2026-10-13 08:08:32 drivers_virtio PASSED: 11 FAILED: 0 TIME: 1369ms
 2026-10-13 08:08:59 drivers_block PASSED: 12 FAILED: 0 TIME: 1419ms
@@ -3252,8 +3208,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-13 08:30:53 ahci_live PASSED: 5 FAILED: 0 TIME: 6695ms
 2026-10-13 08:31:09 iommu_live PASSED: 6 FAILED: 0 TIME: 754ms
 2026-10-13 08:33:22 testrunner PASSED: 0 FAILED: 0 TIME: 132993ms STATUS: EXPECTED_PANIC_PASS
-
-SUMMARY: total=20 ok=18 fail=2
 2026-10-13 08:34:23 core PASSED: 553 FAILED: 0 TIME: 85598ms
 2026-10-13 08:43:34 deadline PASSED: 0 FAILED: 0 TIME: 220000ms STATUS: STALL-wdog-test-hang
 2026-10-13 08:43:34 deadline PASSED: 144 FAILED: 0 TIME: 55886ms
@@ -3275,15 +3229,13 @@ SUMMARY: total=20 ok=18 fail=2
 2026-10-13 08:48:12 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-13 08:52:26 task_fpu PASSED: 0 FAILED: 0 TIME: 253487ms STATUS: NO_TESTS_REGISTERED
 2026-10-13 08:52:42 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
-
-SUMMARY: total=18 ok=18 fail=0
 2026-10-13 08:59:38 storage PASSED: 166 FAILED: 0 TIME: 63475ms
 2026-10-13 09:02:32 vfs_devfs PASSED: 10 FAILED: 0 TIME: 1188ms
 2026-10-13 09:02:49 vfs_procfs_ops PASSED: 6 FAILED: 0 TIME: 766ms
 2026-10-13 09:03:05 vfs_initrd_fs PASSED: 9 FAILED: 0 TIME: 4479ms
 2026-10-13 09:03:22 vfs_errors PASSED: 6 FAILED: 0 TIME: 3182ms
-2026-10-13 09:03:43 proc_elf PASSED: 111 FAILED: 0 TIME: 58756ms
 2026-10-13 09:03:43 elf_loader PASSED: 15 FAILED: 0 TIME: 2183ms
+2026-10-13 09:03:43 proc_elf PASSED: 111 FAILED: 0 TIME: 58756ms
 2026-10-13 09:03:43 servers PASSED: 66 FAILED: 0 TIME: 35476ms
 2026-10-13 09:04:35 core PASSED: 553 FAILED: 0 TIME: 84520ms
 2026-10-13 09:06:57 ipc PASSED: 87 FAILED: 0 TIME: 12736ms STATUS: STALL_RECOVERED
@@ -3305,8 +3257,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-13 09:15:09 ahci_live PASSED: 5 FAILED: 0 TIME: 6574ms
 2026-10-13 09:15:25 iommu_live PASSED: 6 FAILED: 0 TIME: 712ms
 2026-10-13 09:19:39 testrunner PASSED: 0 FAILED: 0 TIME: 254273ms STATUS: STALL
-
-SUMMARY: total=20 ok=19 fail=1
 2026-10-13 09:23:01 testrunner PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: EXPECTED_PANIC_PASS
 2026-10-13 09:24:03 core PASSED: 21 FAILED: 0 TIME: 11ms
 2026-10-13 09:24:19 ipc PASSED: 0 FAILED: 0 TIME: 0ms
@@ -3326,8 +3276,6 @@ SUMMARY: total=20 ok=19 fail=1
 2026-10-13 09:28:07 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-13 09:32:20 task_fpu PASSED: 0 FAILED: 0 TIME: 253670ms STATUS: NO_TESTS_REGISTERED
 2026-10-13 09:32:36 testrunner PASSED: 0 FAILED: 0 TIME: 1ms
-
-SUMMARY: total=18 ok=18 fail=0
 2026-10-13 12:21:47 drivers PASSED: 107 FAILED: 0 TIME: 12760ms
 2026-10-13 12:24:10 capability PASSED: 148 FAILED: 0 TIME: 17528ms
 2026-10-13 12:27:33 safe PASSED: 147 FAILED: 0 TIME: 21248ms
@@ -3350,17 +3298,17 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-13 14:02:51 deadline PASSED: 0 FAILED: 0 TIME: 227s STATUS: TIMEOUT stall-watchdog-group-20/145
 2026-10-13 14:02:51 deadline PASSED: 145 FAILED: 0 TIME: 56030ms
 2026-10-13 14:20:00 tls PASSED: 13 FAILED: 0 TIME: 1819ms
-2026-10-13 14:25:00 core PASSED: 553 FAILED: 1 TIME: 82978ms NOTE: stack_cookie layout latent (fixed test-side)
-2026-10-13 14:26:00 stack_cookie PASSED: 3 FAILED: 1 TIME: 2162ms NOTE: same latent
-2026-10-13 14:28:00 stack_cookie PASSED: 4 FAILED: 0 TIME: 533ms
-2026-10-13 14:30:00 core PASSED: 554 FAILED: 0 TIME: 15874ms
 2026-10-13 14:24:32 core PASSED: 554 FAILED: 0 TIME: 88949ms
 2026-10-13 14:24:53 ipc PASSED: 87 FAILED: 0 TIME: 11853ms
+2026-10-13 14:25:00 core PASSED: 553 FAILED: 1 TIME: 82978ms NOTE: stack_cookie layout latent (fixed test-side)
 2026-10-13 14:25:15 capability PASSED: 149 FAILED: 0 TIME: 18052ms
 2026-10-13 14:25:52 proc_elf PASSED: 112 FAILED: 0 TIME: 57392ms
+2026-10-13 14:26:00 stack_cookie PASSED: 3 FAILED: 1 TIME: 2162ms NOTE: same latent
 2026-10-13 14:26:43 storage PASSED: 166 FAILED: 0 TIME: 404598ms
 2026-10-13 14:27:02 servers PASSED: 66 FAILED: 0 TIME: 8440ms
 2026-10-13 14:27:23 drivers PASSED: 107 FAILED: 0 TIME: 13017ms
+2026-10-13 14:28:00 stack_cookie PASSED: 4 FAILED: 0 TIME: 533ms
+2026-10-13 14:30:00 core PASSED: 554 FAILED: 0 TIME: 15874ms
 2026-10-13 14:31:37 hal PASSED: 0 FAILED: 0 TIME: 253631ms STATUS: STALL
 2026-10-13 14:35:49 smp PASSED: 0 FAILED: 0 TIME: 251994ms STATUS: STALL
 2026-10-13 14:36:06 smp_multicpu PASSED: 18 FAILED: 0 TIME: 2285ms
@@ -3374,13 +3322,6 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-13 14:38:48 ahci_live PASSED: 5 FAILED: 0 TIME: 8859ms
 2026-10-13 14:39:04 iommu_live PASSED: 6 FAILED: 0 TIME: 734ms
 2026-10-13 14:43:19 testrunner PASSED: 0 FAILED: 0 TIME: 254563ms STATUS: STALL
-
-SUMMARY: total=20 ok=17 fail=3
-2026-10-13 15:00:00 hal PASSED: 122 FAILED: 0 TIME: 0ms NOTE: standalone rerun after full-suite STALL
-2026-10-13 15:03:00 smp PASSED: 81 FAILED: 0 TIME: 10741ms NOTE: standalone rerun after full-suite STALL
-2026-10-13 15:06:00 testrunner PASSED: 16 FAILED: 0 TIME: 0ms NOTE: standalone rerun PASS-expected-panic after full-suite STALL
-2026-10-13 15:10:00 tls PASSED: 12 FAILED: 1 TIME: 7898ms NOTE: tls_publish_applies live-register flake, passes on rerun
-2026-10-13 15:12:00 tls PASSED: 13 FAILED: 0 TIME: 182ms
 2026-10-13 14:53:15 core PASSED: 554 FAILED: 0 TIME: 85038ms
 2026-10-13 14:53:36 ipc PASSED: 87 FAILED: 0 TIME: 12042ms
 2026-10-13 14:53:59 capability PASSED: 149 FAILED: 0 TIME: 18092ms
@@ -3391,9 +3332,12 @@ SUMMARY: total=20 ok=17 fail=3
 2026-10-13 14:56:25 hal PASSED: 122 FAILED: 0 TIME: 0ms
 2026-10-13 14:56:44 smp PASSED: 80 FAILED: 1 TIME: 10729ms
 2026-10-13 14:57:01 smp_multicpu PASSED: 18 FAILED: 0 TIME: 2315ms
+2026-10-13 15:00:00 hal PASSED: 122 FAILED: 0 TIME: 0ms NOTE: standalone rerun after full-suite STALL
+2026-10-13 15:03:00 smp PASSED: 81 FAILED: 0 TIME: 10741ms NOTE: standalone rerun after full-suite STALL
 2026-10-13 15:05:19 deadline PASSED: 0 FAILED: 0 TIME: 498122ms STATUS: TIMEOUT
 2026-10-13 15:05:40 ui PASSED: 73 FAILED: 0 TIME: 12362ms
 2026-10-13 15:05:57 logging_debug PASSED: 36 FAILED: 0 TIME: 17577ms
+2026-10-13 15:06:00 testrunner PASSED: 16 FAILED: 0 TIME: 0ms NOTE: standalone rerun PASS-expected-panic after full-suite STALL
 2026-10-13 15:06:14 random PASSED: 17 FAILED: 0 TIME: 8516ms
 2026-10-13 15:06:32 bench PASSED: 27 FAILED: 0 TIME: 19571ms
 2026-10-13 15:06:47 task_tcb_log PASSED: 1 FAILED: 0 TIME: 641ms
@@ -3401,8 +3345,8 @@ SUMMARY: total=20 ok=17 fail=3
 2026-10-13 15:07:23 ahci_live PASSED: 5 FAILED: 0 TIME: 6565ms
 2026-10-13 15:07:39 iommu_live PASSED: 6 FAILED: 0 TIME: 745ms
 2026-10-13 15:09:51 testrunner PASSED: 0 FAILED: 0 TIME: 132344ms STATUS: EXPECTED_PANIC_PASS
-
-SUMMARY: total=20 ok=18 fail=2
+2026-10-13 15:10:00 tls PASSED: 12 FAILED: 1 TIME: 7898ms NOTE: tls_publish_applies live-register flake, passes on rerun
+2026-10-13 15:12:00 tls PASSED: 13 FAILED: 0 TIME: 182ms
 2026-10-13 15:15:00 smp PASSED: 81 FAILED: 0 TIME: 11837ms NOTE: rerun after stall-at-16 + tlb-p99 fail
 2026-10-13 15:18:00 deadline PASSED: 145 FAILED: 0 TIME: 61731ms NOTE: rerun after suite TIMEOUT
 2026-10-13 15:30:00 elf_loader PASSED: 15 FAILED: 1 TIME: 2317ms NOTE: test bug (exec assert on RW page), fixed
@@ -3447,17 +3391,13 @@ SUMMARY: total=20 ok=18 fail=2
 2026-10-14 13:38:59 ahci_live PASSED: 5 FAILED: 0 TIME: 6655ms
 2026-10-14 13:39:15 iommu_live PASSED: 6 FAILED: 0 TIME: 787ms
 2026-10-14 13:43:29 testrunner PASSED: 0 FAILED: 0 TIME: 253895ms STATUS: EXPECTED_PANIC_PASS
-
-SUMMARY: total=20 ok=17 fail=3
-2026-10-14 13:55:00 storage PASSED: 166 FAILED: 0 TIME: 73861ms STATUS: STANDALONE-RERUN (gate-order flake, identical binary)
-2026-10-14 14:00:00 capability PASSED: 149 FAILED: 0 TIME: 18284ms STATUS: STALL-RECOVERED (identical binary)
-2026-10-14 14:02:00 smp_multicpu PASSED: 18 FAILED: 0 TIME: 2298ms
 2026-10-14 13:53:20 core PASSED: 21 FAILED: 0 TIME: 11ms
 2026-10-14 13:53:37 ipc PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-14 13:53:54 capability PASSED: 0 FAILED: 0 TIME: 1ms
 2026-10-14 13:54:11 proc_elf PASSED: 1 FAILED: 0 TIME: 2ms
 2026-10-14 13:54:28 storage PASSED: 40 FAILED: 0 TIME: 2992ms
 2026-10-14 13:54:45 servers PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-14 13:55:00 storage PASSED: 166 FAILED: 0 TIME: 73861ms STATUS: STANDALONE-RERUN (gate-order flake, identical binary)
 2026-10-14 13:55:02 drivers PASSED: 8 FAILED: 0 TIME: 18ms
 2026-10-14 13:55:19 hal PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-14 13:55:36 smp PASSED: 0 FAILED: 0 TIME: 0ms
@@ -3468,10 +3408,10 @@ SUMMARY: total=20 ok=17 fail=3
 2026-10-14 13:57:02 random PASSED: 0 FAILED: 0 TIME: 1ms
 2026-10-14 13:57:19 bench PASSED: 0 FAILED: 0 TIME: 0ms
 2026-10-14 13:57:36 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-14 14:00:00 capability PASSED: 149 FAILED: 0 TIME: 18284ms STATUS: STALL-RECOVERED (identical binary)
 2026-10-14 14:01:50 task_fpu PASSED: 0 FAILED: 0 TIME: 253729ms STATUS: NO_TESTS_REGISTERED
+2026-10-14 14:02:00 smp_multicpu PASSED: 18 FAILED: 0 TIME: 2298ms
 2026-10-14 14:02:08 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
-
-SUMMARY: total=18 ok=18 fail=0
 2026-10-14 17:30:00 proc_elf PASSED: 123 FAILED: 0 TIME: 62158ms STATUS: HUNT-345 iter1 (QEMU_EXIT recovered same-run)
 2026-10-14 17:32:00 proc_elf PASSED: 123 FAILED: 0 TIME: 61199ms STATUS: HUNT-345 iter2
 2026-10-14 17:33:00 proc_elf PASSED: 123 FAILED: 0 TIME: 62640ms STATUS: HUNT-345 iter3
@@ -3566,10 +3506,10 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-16 13:59:49 ipc PASSED: 87 FAILED: 0 TIME: 6397ms
 2026-10-16 14:00:17 capability PASSED: 155 FAILED: 0 TIME: 10337ms
 2026-10-16 14:01:20 proc_elf PASSED: 127 FAILED: 0 TIME: 37751ms
-2026-10-16 14:07:50 scheduler_hrt PASSED: 4 FAILED: 0 TIME: 10579ms
-2026-10-16 14:07:50 bench_ipc_throughput PASSED: 4 FAILED: 0 TIME: 395ms
-2026-10-16 14:07:50 stress_hrt PASSED: 2 FAILED: 0 TIME: 9277ms
 2026-10-16 14:04:47 testrunner PASSED: 16 FAILED: 0 TIME: 120s
+2026-10-16 14:07:50 bench_ipc_throughput PASSED: 4 FAILED: 0 TIME: 395ms
+2026-10-16 14:07:50 scheduler_hrt PASSED: 4 FAILED: 0 TIME: 10579ms
+2026-10-16 14:07:50 stress_hrt PASSED: 2 FAILED: 0 TIME: 9277ms
 2026-10-16 14:21:10 path_tracer PASSED: 6 FAILED: 0 TIME: 396ms
 2026-10-16 14:22:02 core PASSED: 563 FAILED: 0 TIME: 47420ms
 2026-10-16 14:39:27 core PASSED: 566 FAILED: 1 TIME: 47315ms
@@ -3590,9 +3530,9 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-16 15:55:53 core PASSED: 576 FAILED: 0 TIME: 47748ms
 2026-10-16 15:56:22 core PASSED: 21 FAILED: 0 TIME: 13ms
 2026-10-16 16:03:02 core PASSED: 576 FAILED: 0 TIME: 47208ms
-2026-10-16 16:13:31 selftest PASSED: 147 FAILED: 0 TIME: 11805ms
-2026-10-16 16:13:31 memory_vmm PASSED: 13 FAILED: 0 TIME: 829ms
 2026-10-16 16:13:31 memory_page_tables PASSED: 11 FAILED: 0 TIME: 756ms
+2026-10-16 16:13:31 memory_vmm PASSED: 13 FAILED: 0 TIME: 829ms
+2026-10-16 16:13:31 selftest PASSED: 147 FAILED: 0 TIME: 11805ms
 2026-10-16 16:26:40 path_tracer PASSED: 7 FAILED: 0 TIME: 458ms
 2026-10-16 16:27:30 bench_path_tracer PASSED: 1 FAILED: 0 TIME: 90ms
 2026-10-16 16:27:59 core PASSED: 577 FAILED: 0 TIME: 47901ms
@@ -3688,30 +3628,30 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-17 18:11:53 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 629ms
 2026-10-17 18:45:57 core PASSED: 578 FAILED: 0 TIME: 47676ms
 2026-10-17 20:15:08 core PASSED: 578 FAILED: 0 TIME: 47480ms
+2026-10-17 20:23:25 core PASSED: 578 FAILED: 0 TIME: 47593ms
 2026-10-17 20:23:25 sched_admission PASSED: 9 FAILED: 0 TIME: 659ms
 2026-10-17 20:23:25 sched_admission_verify PASSED: 7 FAILED: 0 TIME: 469ms
-2026-10-17 20:23:25 core PASSED: 578 FAILED: 0 TIME: 47593ms
-2026-10-17 20:40:47 scheduler_core PASSED: 21 FAILED: 0 TIME: 1858ms
-2026-10-17 20:40:47 scheduler_preemption PASSED: 13 FAILED: 0 TIME: 1320ms
-2026-10-17 20:40:47 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 930ms
-2026-10-17 20:40:47 scheduler_starvation PASSED: 3 FAILED: 0 TIME: 270ms
-2026-10-17 20:40:47 scheduler_dispatch_path PASSED: 4 FAILED: 0 TIME: 285ms
 2026-10-17 20:40:47 core PASSED: 0 FAILED: 0 TIME: 180000ms STATUS: TIMEOUT-outer-timeout-kill-harness-stall-retry-incomplete
 2026-10-17 20:40:47 core PASSED: 578 FAILED: 0 TIME: 47928ms STATUS: STALL-RECOVERED-identical-binary-rerun-green
-2026-10-17 20:48:20 debug_syscall PASSED: 26 FAILED: 0 TIME: 2000ms
-2026-10-17 20:48:20 debug_core PASSED: 2 FAILED: 0 TIME: 138ms
+2026-10-17 20:40:47 scheduler_core PASSED: 21 FAILED: 0 TIME: 1858ms
+2026-10-17 20:40:47 scheduler_dispatch_path PASSED: 4 FAILED: 0 TIME: 285ms
+2026-10-17 20:40:47 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 930ms
+2026-10-17 20:40:47 scheduler_preemption PASSED: 13 FAILED: 0 TIME: 1320ms
+2026-10-17 20:40:47 scheduler_starvation PASSED: 3 FAILED: 0 TIME: 270ms
 2026-10-17 20:48:20 core PASSED: 578 FAILED: 0 TIME: 50957ms
-2026-10-17 21:02:51 scheduler_core PASSED: 21 FAILED: 0 TIME: 1849ms
-2026-10-17 21:02:51 sched_affinity PASSED: 7 FAILED: 0 TIME: 465ms
-2026-10-17 21:02:51 scheduler_cpu_load PASSED: 5 FAILED: 0 TIME: 333ms
-2026-10-17 21:02:51 smp_multicpu PASSED: 18 FAILED: 0 TIME: 1221ms
-2026-10-17 21:02:51 debug_syscall PASSED: 26 FAILED: 0 TIME: 1974ms
+2026-10-17 20:48:20 debug_core PASSED: 2 FAILED: 0 TIME: 138ms
+2026-10-17 20:48:20 debug_syscall PASSED: 26 FAILED: 0 TIME: 2000ms
 2026-10-17 21:02:51 core PASSED: 577 FAILED: 1 TIME: 47805ms STATUS: FAIL-debug_launch_entry_trap_parks-known-H2-flake-host-load-4
 2026-10-17 21:02:51 core PASSED: 578 FAILED: 0 TIME: 47647ms STATUS: identical-binary-rerun-green
+2026-10-17 21:02:51 debug_syscall PASSED: 26 FAILED: 0 TIME: 1974ms
+2026-10-17 21:02:51 sched_affinity PASSED: 7 FAILED: 0 TIME: 465ms
+2026-10-17 21:02:51 scheduler_core PASSED: 21 FAILED: 0 TIME: 1849ms
+2026-10-17 21:02:51 scheduler_cpu_load PASSED: 5 FAILED: 0 TIME: 333ms
+2026-10-17 21:02:51 smp_multicpu PASSED: 18 FAILED: 0 TIME: 1221ms
+2026-10-17 21:14:49 core PASSED: 578 FAILED: 0 TIME: 47678ms STATUS: STALL-RECOVERED-harness-retry-green
 2026-10-17 21:14:49 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3248ms
 2026-10-17 21:14:49 task_lifecycle PASSED: 9 FAILED: 0 TIME: 649ms
 2026-10-17 21:14:49 ui_framebuffer PASSED: 6 FAILED: 0 TIME: 397ms
-2026-10-17 21:14:49 core PASSED: 578 FAILED: 0 TIME: 47678ms STATUS: STALL-RECOVERED-harness-retry-green
 2026-10-17 21:18:47 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3252ms STATUS: post-S3-comment-fix-rerun
 2026-10-17 21:18:47 task_lifecycle PASSED: 9 FAILED: 0 TIME: 643ms STATUS: post-S3-comment-fix-rerun
 2026-10-17 22:06:21 elf_loader PASSED: 25 FAILED: 0 TIME: 2303ms
@@ -3719,85 +3659,85 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-17 22:06:21 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3119ms STATUS: STALL-RECOVERED-identical-binary-green
 2026-10-17 22:12:24 core PASSED: 0 FAILED: 0 TIME: 238s STATUS: PANIC-GPF-snap_budget_of-0xDD-poisoned-server-harness-watchdog-kill-load-5
 2026-10-17 22:12:24 core PASSED: 578 FAILED: 0 TIME: 47727ms STATUS: identical-binary-rerun-green-load-2
-2026-10-17 22:40:53 core PASSED: 577 FAILED: 1 TIME: 34000ms STATUS: FAIL-debug_launch_entry_trap_parks-552-known-H2-flake-HOST-elapsed
 2026-10-17 22:40:53 core PASSED: 0 FAILED: 0 TIME: 235s STATUS: STALL-HOST-WATCHDOG-no-serial-220s-at-test-203-setup-known-H2-wedge-shape
+2026-10-17 22:40:53 core PASSED: 577 FAILED: 1 TIME: 34000ms STATUS: FAIL-debug_launch_entry_trap_parks-552-known-H2-flake-HOST-elapsed
 2026-10-17 22:40:53 core PASSED: 578 FAILED: 0 TIME: 47963ms STATUS: STALL-RECOVERED-identical-binary-green
 2026-10-17 22:41:13 sched_admission PASSED: 9 FAILED: 0 TIME: 642ms
 2026-10-17 22:41:13 sched_admission_verify PASSED: 7 FAILED: 0 TIME: 451ms
-2026-10-17 22:56:53 scheduler_core PASSED: 21 FAILED: 0 TIME: 1835ms
-2026-10-17 22:56:53 core PASSED: 578 FAILED: 0 TIME: 47397ms
-2026-10-17 23:02:23 scheduler_core PASSED: 21 FAILED: 0 TIME: 1915ms STATUS: post-S3-constinit-fix-rerun
-2026-10-17 23:02:23 core PASSED: 578 FAILED: 0 TIME: 47766ms STATUS: post-S3-constinit-fix-rerun
-2026-10-17 23:19:39 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3149ms
-2026-10-17 23:19:39 task_lifecycle PASSED: 9 FAILED: 0 TIME: 640ms
-2026-10-17 23:19:39 core PASSED: 578 FAILED: 0 TIME: 47497ms STATUS: STALL-RECOVERED-identical-binary-green
-2026-10-17 23:30:02 core PASSED: 577 FAILED: 1 TIME: 34000ms STATUS: FAIL-scheduler_add_duplicate_id-196-timing-flake-under-load-6-elapsed-approx-full-suite-run
-2026-10-17 23:30:02 core PASSED: 578 FAILED: 0 TIME: 47965ms STATUS: identical-binary-green
-2026-10-17 23:42:23 scheduler_core PASSED: 21 FAILED: 0 TIME: 1839ms
-2026-10-17 23:42:23 task_core PASSED: 7 FAILED: 0 TIME: 491ms
-2026-10-17 23:42:23 core PASSED: 577 FAILED: 1 TIME: 34000ms STATUS: FAIL-debug_launch_entry_trap_parks-552-known-H2-flake-host-load-4-elapsed-approx-full-suite-run
-2026-10-17 23:42:23 core PASSED: 578 FAILED: 0 TIME: 47929ms STATUS: identical-binary-green
+2026-10-17 22:49:06 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 415ms
+2026-10-17 22:49:06 scheduler_core PASSED: 21 FAILED: 0 TIME: 1782ms STATUS: post-audit-fix-reaudit
 2026-10-17 22:49:06 scheduler_core PASSED: 21 FAILED: 0 TIME: 1862ms
 2026-10-17 22:49:06 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 938ms
-2026-10-17 22:49:06 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 415ms
 2026-10-17 22:49:06 scheduler_preemption PASSED: 13 FAILED: 0 TIME: 1316ms
-2026-10-17 22:49:06 scheduler_core PASSED: 21 FAILED: 0 TIME: 1782ms STATUS: post-audit-fix-reaudit
+2026-10-17 22:56:53 core PASSED: 578 FAILED: 0 TIME: 47397ms
+2026-10-17 22:56:53 scheduler_core PASSED: 21 FAILED: 0 TIME: 1835ms
+2026-10-17 23:02:23 core PASSED: 578 FAILED: 0 TIME: 47766ms STATUS: post-S3-constinit-fix-rerun
+2026-10-17 23:02:23 scheduler_core PASSED: 21 FAILED: 0 TIME: 1915ms STATUS: post-S3-constinit-fix-rerun
 2026-10-17 23:05:00 deadline PASSED: 146 FAILED: 0 TIME: 30796ms
-2026-10-17 23:05:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 516ms
 2026-10-17 23:05:00 deadline_miss PASSED: 5 FAILED: 0 TIME: 667ms
 2026-10-17 23:05:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1850ms STATUS: watchdog-strand-smoke
-2026-10-17 23:15:00 task_core PASSED: 7 FAILED: 0 TIME: 496ms
+2026-10-17 23:05:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 516ms
 2026-10-17 23:15:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1844ms STATUS: registry-strand-smoke
+2026-10-17 23:15:00 task_core PASSED: 7 FAILED: 0 TIME: 496ms
 2026-10-17 23:15:00 task_lifecycle PASSED: 9 FAILED: 0 TIME: 637ms
-2026-10-17 23:25:00 task_core PASSED: 7 FAILED: 0 TIME: 492ms STATUS: snapshot-strand
+2026-10-17 23:19:39 core PASSED: 578 FAILED: 0 TIME: 47497ms STATUS: STALL-RECOVERED-identical-binary-green
+2026-10-17 23:19:39 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3149ms
+2026-10-17 23:19:39 task_lifecycle PASSED: 9 FAILED: 0 TIME: 640ms
 2026-10-17 23:25:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1928ms STATUS: snapshot-strand-smoke
+2026-10-17 23:25:00 task_core PASSED: 7 FAILED: 0 TIME: 492ms STATUS: snapshot-strand
+2026-10-17 23:30:02 core PASSED: 577 FAILED: 1 TIME: 34000ms STATUS: FAIL-scheduler_add_duplicate_id-196-timing-flake-under-load-6-elapsed-approx-full-suite-run
+2026-10-17 23:30:02 core PASSED: 578 FAILED: 0 TIME: 47965ms STATUS: identical-binary-green
 2026-10-17 23:35:00 core PASSED: 0 FAILED: 0 TIME: 220000ms STATUS: HOST-WATCHDOG-STALL-test-202done-203noserial-nopanic
 2026-10-17 23:35:00 core PASSED: 578 FAILED: 0 TIME: 47911ms STATUS: identical-binary-green
-2026-10-17 23:40:00 task_core PASSED: 7 FAILED: 0 TIME: 500ms STATUS: 369-T1a-validate_task_ptr
 2026-10-17 23:40:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1892ms STATUS: 369-T1a-smoke
+2026-10-17 23:40:00 task_core PASSED: 7 FAILED: 0 TIME: 500ms STATUS: 369-T1a-validate_task_ptr
+2026-10-17 23:42:23 core PASSED: 577 FAILED: 1 TIME: 34000ms STATUS: FAIL-debug_launch_entry_trap_parks-552-known-H2-flake-host-load-4-elapsed-approx-full-suite-run
+2026-10-17 23:42:23 core PASSED: 578 FAILED: 0 TIME: 47929ms STATUS: identical-binary-green
+2026-10-17 23:42:23 scheduler_core PASSED: 21 FAILED: 0 TIME: 1839ms
+2026-10-17 23:42:23 task_core PASSED: 7 FAILED: 0 TIME: 491ms
 2026-10-17 23:50:00 sched_admission PASSED: 9 FAILED: 0 TIME: 625ms STATUS: 369-T1b
-2026-10-17 23:50:00 task_lifecycle PASSED: 9 FAILED: 0 TIME: 652ms STATUS: 369-T1b
-2026-10-17 23:50:00 task_core PASSED: 7 FAILED: 0 TIME: 493ms STATUS: 369-T1b
 2026-10-17 23:50:00 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 927ms STATUS: 369-T1b
-2026-10-17 23:55:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 532ms STATUS: 369-T1c
+2026-10-17 23:50:00 task_core PASSED: 7 FAILED: 0 TIME: 493ms STATUS: 369-T1b
+2026-10-17 23:50:00 task_lifecycle PASSED: 9 FAILED: 0 TIME: 652ms STATUS: 369-T1b
 2026-10-17 23:55:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1896ms STATUS: 369-T1c
 2026-10-17 23:55:00 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 928ms STATUS: 369-T1c
-2026-10-17 23:58:00 task_watchdog PASSED: 0 FAILED: 0 TIME: 0ms STATUS: FAIL-ENSURE-defer_kill-holder-null-unlocked-scan-path-aborted-no-summary
-2026-10-17 23:58:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 534ms STATUS: 369-T2a-reverted
+2026-10-17 23:55:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 532ms STATUS: 369-T1c
 2026-10-17 23:58:00 deadline PASSED: 146 FAILED: 0 TIME: 33965ms STATUS: 369-T2a
 2026-10-17 23:58:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1877ms STATUS: 369-T2a-smoke
-2026-10-18 00:05:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 538ms STATUS: 369-T2a-S3fix
+2026-10-17 23:58:00 task_watchdog PASSED: 0 FAILED: 0 TIME: 0ms STATUS: FAIL-ENSURE-defer_kill-holder-null-unlocked-scan-path-aborted-no-summary
+2026-10-17 23:58:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 534ms STATUS: 369-T2a-reverted
 2026-10-18 00:05:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1869ms STATUS: 369-T2a-S3fix-smoke
+2026-10-18 00:05:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 538ms STATUS: 369-T2a-S3fix
 2026-10-18 00:10:00 core PASSED: 578 FAILED: 0 TIME: 47717ms STATUS: 369-T2b-21-holder-ensures
 2026-10-18 00:15:00 core PASSED: 578 FAILED: 0 TIME: 47651ms STATUS: 369-T2b-take-site-corrections
-2026-10-18 00:30:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1915ms STATUS: 369-T4b-docs
-2026-10-18 00:25:00 task_core PASSED: 7 FAILED: 0 TIME: 491ms STATUS: 369-T5
-2026-10-18 00:25:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1938ms STATUS: 369-T5
-2026-10-18 00:25:00 deadline PASSED: 0 FAILED: 1 TIME: 0ms STATUS: FAIL-single-test-unidentified-log-overwritten
-2026-10-18 00:25:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 539ms STATUS: 369-T5
-2026-10-18 00:25:00 deadline PASSED: 146 FAILED: 0 TIME: 34217ms STATUS: identical-binary-green-rerun
-2026-10-18 00:25:00 smp_multicpu PASSED: 18 FAILED: 0 TIME: 1223ms STATUS: 369-T2c
 2026-10-18 00:20:00 core PASSED: 578 FAILED: 0 TIME: 47609ms STATUS: 369-T2-final
-2026-10-18 00:25:00 scheduler_dispatch_path PASSED: 4 FAILED: 0 TIME: 284ms STATUS: 369-T3a
-2026-10-18 00:25:00 task_path PASSED: 5 FAILED: 0 TIME: 341ms STATUS: 369-T3a
+2026-10-18 00:25:00 deadline PASSED: 0 FAILED: 1 TIME: 0ms STATUS: FAIL-single-test-unidentified-log-overwritten
+2026-10-18 00:25:00 deadline PASSED: 146 FAILED: 0 TIME: 34217ms STATUS: identical-binary-green-rerun
 2026-10-18 00:25:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1875ms STATUS: 369-T3a-smoke
+2026-10-18 00:25:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1938ms STATUS: 369-T5
+2026-10-18 00:25:00 scheduler_dispatch_path PASSED: 4 FAILED: 0 TIME: 284ms STATUS: 369-T3a
+2026-10-18 00:25:00 smp_multicpu PASSED: 18 FAILED: 0 TIME: 1223ms STATUS: 369-T2c
+2026-10-18 00:25:00 task_core PASSED: 7 FAILED: 0 TIME: 491ms STATUS: 369-T5
+2026-10-18 00:25:00 task_path PASSED: 5 FAILED: 0 TIME: 341ms STATUS: 369-T3a
+2026-10-18 00:25:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 539ms STATUS: 369-T5
+2026-10-18 00:30:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1915ms STATUS: 369-T4b-docs
+2026-10-18 00:30:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1919ms STATUS: 369-T3a-revert-verify
 2026-10-18 00:30:00 scheduler_dispatch_path PASSED: 4 FAILED: 0 TIME: 282ms STATUS: 369-T3a-revert-verify
 2026-10-18 00:30:00 task_path PASSED: 5 FAILED: 0 TIME: 339ms STATUS: 369-T3a-revert-verify
-2026-10-18 00:30:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1919ms STATUS: 369-T3a-revert-verify
 2026-10-18 13:01:41 task_watchdog PASSED: 6 FAILED: 0 TIME: 529ms STATUS: 324-T1
-2026-10-18 13:06:51 task_watchdog PASSED: 6 FAILED: 0 TIME: 518ms STATUS: 324-T3
 2026-10-18 13:06:51 scheduler_idle PASSED: 40 FAILED: 0 TIME: 2895ms STATUS: 324-T3
+2026-10-18 13:06:51 task_watchdog PASSED: 6 FAILED: 0 TIME: 518ms STATUS: 324-T3
 2026-10-18 13:10:00 task_watchdog PASSED: 6 FAILED: 0 TIME: 534ms STATUS: 324-T11
 2026-10-18 13:12:00 deadline PASSED: 145 FAILED: 1 TIME: 0 STATUS: 324-T11-flake-single-unidentified-identical-rerun-green
 2026-10-18 13:15:09 deadline PASSED: 146 FAILED: 0 TIME: 34412ms STATUS: 324-T11-rerun
-2026-10-18 13:18:29 task_lifecycle PASSED: 9 FAILED: 0 TIME: 648ms STATUS: 324-T12
 2026-10-18 13:18:29 scheduler_core PASSED: 21 FAILED: 0 TIME: 1883ms STATUS: 324-T12
+2026-10-18 13:18:29 task_lifecycle PASSED: 9 FAILED: 0 TIME: 648ms STATUS: 324-T12
 2026-10-18 13:33:04 core PASSED: 0 FAILED: 0 TIME: 0 STATUS: STALL-UNRECOVERED-load-7-identical-retry
-2026-10-18 13:33:04 task_path PASSED: 6 FAILED: 0 TIME: 412ms STATUS: 324-T13
 2026-10-18 13:33:04 core PASSED: 579 FAILED: 0 TIME: 47614ms STATUS: 324-T13
+2026-10-18 13:33:04 task_path PASSED: 6 FAILED: 0 TIME: 412ms STATUS: 324-T13
+2026-10-18 13:37:05 scheduler_core PASSED: 21 FAILED: 0 TIME: 1833ms STATUS: 324-T14
 2026-10-18 13:37:05 task_lifecycle PASSED: 9 FAILED: 0 TIME: 646ms STATUS: 324-T14
 2026-10-18 13:37:05 task_watchdog PASSED: 6 FAILED: 0 TIME: 520ms STATUS: 324-T14
-2026-10-18 13:37:05 scheduler_core PASSED: 21 FAILED: 0 TIME: 1833ms STATUS: 324-T14
 2026-10-18 13:55:03 cap_pager PASSED: 15 FAILED: 0 TIME: 1242ms
 2026-10-18 13:55:29 cap_mmio PASSED: 20 FAILED: 0 TIME: 1327ms
 2026-10-18 13:58:00 dump-counts PASSED: 0 FAILED: 0 TIME: unknown STATUS: TCOUNT-only-no-summary core_basic=98 core_sync=93 core_sched=112 core_task=52 core_memory=118 core_syscall=85 core_tracing=20 CONSISTENCY-warn-expected-rows-were-0
@@ -3805,11 +3745,11 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 14:02:04 cap_pager PASSED: 15 FAILED: 0 TIME: 1087ms
 2026-10-18 14:03:26 cap_mmio PASSED: 20 FAILED: 0 TIME: 1397ms
 2026-10-18 14:04:15 core_basic PASSED: 98 FAILED: 0 TIME: 6397ms
-2026-10-18 14:04:15 core_sync PASSED: 93 FAILED: 0 TIME: 6473ms
-2026-10-18 14:04:15 core_sched PASSED: 112 FAILED: 0 TIME: 11368ms
-2026-10-18 14:04:15 core_task PASSED: 52 FAILED: 0 TIME: 3536ms
 2026-10-18 14:04:15 core_memory PASSED: 118 FAILED: 0 TIME: 12771ms
+2026-10-18 14:04:15 core_sched PASSED: 112 FAILED: 0 TIME: 11368ms
+2026-10-18 14:04:15 core_sync PASSED: 93 FAILED: 0 TIME: 6473ms
 2026-10-18 14:04:15 core_syscall PASSED: 85 FAILED: 0 TIME: 6490ms
+2026-10-18 14:04:15 core_task PASSED: 52 FAILED: 0 TIME: 3536ms
 2026-10-18 14:04:15 core_tracing PASSED: 0 FAILED: 0 TIME: 6s STATUS: HARNESS-SIGTERM-pre-QEMU-no-guest-output
 2026-10-18 14:04:15 core_tracing PASSED: 20 FAILED: 0 TIME: 1271ms STATUS: RERUN-green-after-transient-SIGTERM
 2026-10-18 14:05:45 cap_mmio PASSED: 20 FAILED: 0 TIME: 1342ms
@@ -3835,8 +3775,8 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 14:33:22 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 596ms
 2026-10-18 14:33:52 capability PASSED: 155 FAILED: 0 TIME: 10153ms
 2026-10-18 14:34:44 selftest PASSED: 147 FAILED: 0 TIME: 11478ms
-2026-10-18 14:39:45 proc_elf PASSED: 127 FAILED: 0 TIME: 35s STATUS: #303-reverify-cross_boundary-libc-iocd-read-delivery-green
 2026-10-18 14:39:45 core_memory PASSED: 118 FAILED: 0 TIME: 13s STATUS: #303-reverify-pointer-overflow-regression-live-green
+2026-10-18 14:39:45 proc_elf PASSED: 127 FAILED: 0 TIME: 35s STATUS: #303-reverify-cross_boundary-libc-iocd-read-delivery-green
 2026-10-18 14:45:06 core_tracing PASSED: 21 FAILED: 0 TIME: 1374ms STATUS: 1xWARN-task_cleanup_pinned_terminal-preexisting-followup
 2026-10-18 14:47:21 capability PASSED: 155 FAILED: 0 TIME: 11290ms
 2026-10-18 14:47:55 selftest PASSED: 147 FAILED: 0 TIME: 11899ms
@@ -3852,9 +3792,277 @@ SUMMARY: total=18 ok=18 fail=0
 2026-10-18 15:11:52 vmm_path PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-0-tests-debug-only-class
 2026-10-18 15:12:59 memory_page_tables PASSED: 11 FAILED: 0 TIME: 747ms
 2026-10-18 15:13:28 selftest PASSED: 147 FAILED: 0 TIME: 11497ms
+2026-10-18 15:27:33 core_tracing PASSED: 24 FAILED: 0 TIME: 1602ms
+2026-10-18 15:27:33 libc_thread PASSED: 4 FAILED: 0 TIME: 7469ms
+2026-10-18 15:27:33 memory_page_tables PASSED: 12 FAILED: 0 TIME: 834ms
+2026-10-18 15:27:33 proc_elf PASSED: 131 FAILED: 0 TIME: 41598ms
+2026-10-18 15:27:33 sched_admission PASSED: 10 FAILED: 0 TIME: 693ms
+2026-10-18 15:27:33 vmm_path PASSED: 7 FAILED: 0 TIME: 483ms
+2026-10-18 15:34:23 capability PASSED: 155 FAILED: 0 TIME: 26s STATUS: post-merge-ff9925193-isolate-changes-green
 2026-10-18 15:34:23 core_tracing PASSED: 21 FAILED: 0 TIME: 19s STATUS: post-merge-ff9925193-Tick13-green
 2026-10-18 15:34:23 proc_elf PASSED: 131 FAILED: 0 TIME: 46s STATUS: post-merge-ff9925193-libc_thread-green
-2026-10-18 15:34:23 capability PASSED: 155 FAILED: 0 TIME: 26s STATUS: post-merge-ff9925193-isolate-changes-green
+2026-10-18 15:35:18 core_sched PASSED: 112 FAILED: 0 TIME: 11644ms
+2026-10-18 15:35:18 deadline PASSED: 146 FAILED: 1 TIME: 0 STATUS: edf_exempt_daemon_stays_fixed-in_ready_queue-flake-identical-rerun-pending
+2026-10-18 15:35:18 deadline PASSED: 147 FAILED: 0 TIME: 34584ms STATUS: identical-binary-green-rerun-confirms-flake
+2026-10-18 15:35:18 debug_syscall PASSED: 29 FAILED: 0 TIME: 2246ms
+2026-10-18 15:35:18 scheduler_idle PASSED: 40 FAILED: 0 TIME: 2921ms
+2026-10-18 15:35:18 task_watchdog PASSED: 6 FAILED: 0 TIME: 516ms
 2026-10-18 15:39:22 core_tracing PASSED: 23 FAILED: 1 TIME: 19s STATUS: #361-RED-past_end-PMM-accounting-test-bug-plus4-should-be-plus2
 2026-10-18 15:39:22 core_tracing PASSED: 24 FAILED: 0 TIME: 19s STATUS: #361-fail-first-past-end-green
+2026-10-18 15:42:26 bench_path_tracer PASSED: 1 FAILED: 0 TIME: 91ms
+2026-10-18 15:45:47 core_sched PASSED: 112 FAILED: 0 TIME: 12005ms
+2026-10-18 15:45:47 core_task PASSED: 52 FAILED: 0 TIME: 3506ms
+2026-10-18 15:45:47 core_tracing PASSED: 25 FAILED: 0 TIME: 1638ms
+2026-10-18 15:45:47 scheduler_core PASSED: 21 FAILED: 0 TIME: 1978ms
+2026-10-18 15:45:47 scheduler_idle PASSED: 40 FAILED: 0 TIME: 2978ms
+2026-10-18 15:45:47 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 3341ms
+2026-10-18 15:47:10 scheduler_core PASSED: 21 FAILED: 0 TIME: 1863ms
+2026-10-18 15:47:40 core_sched PASSED: 112 FAILED: 0 TIME: 13523ms
+2026-10-18 15:50:20 sched_admission PASSED: 10 FAILED: 0 TIME: 705ms
+2026-10-18 15:51:05 core_syscall PASSED: 85 FAILED: 0 TIME: 6499ms
+2026-10-18 15:53:03 scheduler_idle PASSED: 0 FAILED: 0 TIME: 120s STATUS: PANIC-GP-snap_budget_of-after-WDOG-kill-task9-timestamps-derived
+2026-10-18 15:55:46 scheduler_idle PASSED: 40 FAILED: 0 TIME: 3131ms STATUS: pristine-stash-control
+2026-10-18 15:56:20 scheduler_idle PASSED: 40 FAILED: 0 TIME: 3078ms STATUS: with-375-rerun-green
+2026-10-18 15:58:10 scheduler_budget PASSED: 6 FAILED: 0 TIME: 414ms
+2026-10-18 15:58:40 sched_admission_verify PASSED: 7 FAILED: 0 TIME: 475ms
+2026-10-18 15:59:30 core_memory PASSED: 118 FAILED: 0 TIME: 12593ms
+2026-10-18 16:04:20 proc_elf PASSED: 127 FAILED: 0 TIME: 38863ms
+2026-10-18 16:05:00 capability PASSED: 155 FAILED: 0 TIME: 10089ms
+2026-10-18 16:05:40 core_task PASSED: 52 FAILED: 0 TIME: 3388ms
+2026-10-18 16:06:10 pcid PASSED: 4 FAILED: 0 TIME: 432ms
+2026-10-18 16:06:23 cross_boundary PASSED: 3 FAILED: 0 TIME: 1745ms
+2026-10-18 16:06:23 libc_thread PASSED: 4 FAILED: 0 TIME: 9192ms
+2026-10-18 16:06:23 proc_elf PASSED: 131 FAILED: 0 TIME: 47856ms
+2026-10-18 16:06:23 servers_iocd PASSED: 7 FAILED: 0 TIME: 444ms
+2026-10-18 16:06:23 shell_commands PASSED: 34 FAILED: 0 TIME: 2337ms
+2026-10-18 16:06:23 shell_interaction PASSED: 20 FAILED: 0 TIME: 3344ms
+2026-10-18 16:06:23 ui PASSED: 74 FAILED: 0 TIME: 6954ms
+2026-10-18 16:06:40 scheduler_core PASSED: 21 FAILED: 0 TIME: 1914ms
+2026-10-18 16:07:10 data_structures_buffer_pool PASSED: 25 FAILED: 0 TIME: 1674ms
+2026-10-18 16:07:40 fpu_invariants PASSED: 5 FAILED: 0 TIME: 325ms
+2026-10-18 16:08:10 task_tcb_log PASSED: 1 FAILED: 0 TIME: 78ms
+2026-10-18 16:08:40 core_syscall PASSED: 85 FAILED: 0 TIME: 6201ms
+2026-10-18 16:11:03 libc_thread PASSED: 4 FAILED: 0 TIME: 9002ms
+2026-10-18 16:12:30 memory_page_tables PASSED: 11 FAILED: 0 TIME: 744ms
+2026-10-18 16:13:30 core_memory PASSED: 118 FAILED: 0 TIME: 12063ms
+2026-10-18 16:14:10 capability PASSED: 155 FAILED: 0 TIME: 10071ms
+2026-10-18 16:15:00 proc_elf PASSED: 127 FAILED: 0 TIME: 39177ms
+2026-10-18 16:21:40 cross_boundary PASSED: 3 FAILED: 0 TIME: 1745ms
+2026-10-18 16:21:40 drivers PASSED: 107 FAILED: 0 TIME: 7098ms
+2026-10-18 16:21:40 servers_iocd PASSED: 7 FAILED: 0 TIME: 510ms
+2026-10-18 16:21:40 ui PASSED: 74 FAILED: 0 TIME: 6932ms
+2026-10-18 16:28:00 memory_page_tables PASSED: 12 FAILED: 0 TIME: 842ms
+2026-10-18 16:29:00 core_memory PASSED: 117 FAILED: 2 TIME: 0ms STATUS: NX-flip-broke-exact-PTE-asserts-vmm_huge_page_split-vmm_hhdm_access-fixed-next-commit
+2026-10-18 16:30:00 core_memory PASSED: 119 FAILED: 0 TIME: 12054ms
+2026-10-18 16:31:00 capability PASSED: 155 FAILED: 0 TIME: 10384ms
+2026-10-18 16:33:00 proc_elf PASSED: 127 FAILED: 0 TIME: 34358ms
+2026-10-18 17:12:51 cap_mmio PASSED: 20 FAILED: 0 TIME: 1326ms
+2026-10-18 17:12:51 core_memory PASSED: 120 FAILED: 0 TIME: 12693ms
+2026-10-18 17:12:51 core_sched PASSED: 112 FAILED: 0 TIME: 11723ms
+2026-10-18 17:12:51 deadline PASSED: 147 FAILED: 0 TIME: 34678ms
+2026-10-18 17:12:51 elf_loader PASSED: 25 FAILED: 0 TIME: 2320ms
+2026-10-18 17:12:51 memory_isolation PASSED: 3 FAILED: 0 TIME: 240ms
+2026-10-18 17:12:51 memory_page_tables PASSED: 13 FAILED: 0 TIME: 865ms
+2026-10-18 17:12:51 memory_stack_alloc PASSED: 12 FAILED: 0 TIME: 786ms
+2026-10-18 17:12:51 proc_elf-release PASSED: 1 FAILED: 0 TIME: 1ms
+2026-10-18 17:12:51 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 878ms
+2026-10-18 17:12:51 pt_merge PASSED: 6 FAILED: 0 TIME: 391ms
+2026-10-18 17:12:51 scheduler_idle PASSED: 40 FAILED: 0 TIME: 2962ms
+2026-10-18 17:12:51 selftest PASSED: 148 FAILED: 0 TIME: 11859ms
+2026-10-18 17:12:51 selftest-release PASSED: 87 FAILED: 0 TIME: 3094ms
+2026-10-18 17:12:51 vmm_path PASSED: 7 FAILED: 0 TIME: 462ms
+2026-10-18 17:26:13 core_syscall PASSED: 88 FAILED: 0 TIME: 6586ms
+2026-10-18 17:26:13 cross_boundary PASSED: 3 FAILED: 0 TIME: 1431ms
+2026-10-18 17:26:13 drivers PASSED: 107 FAILED: 0 TIME: 7342ms
+2026-10-18 17:26:13 libc_thread PASSED: 4 FAILED: 0 TIME: 7496ms
+2026-10-18 17:26:13 proc_elf PASSED: 131 FAILED: 0 TIME: 41818ms
+2026-10-18 17:26:13 servers_iocd PASSED: 7 FAILED: 0 TIME: 517ms
+2026-10-18 17:26:13 shell_interaction PASSED: 20 FAILED: 0 TIME: 3469ms
+2026-10-18 17:26:13 ui PASSED: 74 FAILED: 0 TIME: 7210ms
 2026-10-18 17:26:46 bench PASSED: 28 FAILED: 0 TIME: 21s STATUS: #367-raw_counter-migration-green-step37-val25
+2026-10-18 19:46:44 core_basic PASSED: 98 FAILED: 0 TIME: 6437ms
+2026-10-18 19:47:06 core_sync PASSED: 93 FAILED: 0 TIME: 6550ms
+2026-10-18 19:47:49 core_basic PASSED: 98 FAILED: 0 TIME: 6423ms
+2026-10-18 19:48:12 core_sync PASSED: 93 FAILED: 0 TIME: 6553ms
+2026-10-18 19:52:12 core_sched PASSED: 0 FAILED: 0 TIME: 240297ms STATUS: TIMEOUT
+2026-10-18 19:52:32 core_task PASSED: 52 FAILED: 0 TIME: 3438ms
+2026-10-18 19:52:59 core_memory PASSED: 120 FAILED: 0 TIME: 12532ms
+2026-10-18 19:53:21 core_syscall PASSED: 88 FAILED: 0 TIME: 6534ms
+2026-10-18 19:53:40 core_tracing PASSED: 25 FAILED: 0 TIME: 1626ms
+2026-10-18 19:54:02 ipc PASSED: 87 FAILED: 0 TIME: 6564ms
+2026-10-18 19:54:26 capability PASSED: 155 FAILED: 0 TIME: 10326ms
+2026-10-18 19:55:15 proc_elf PASSED: 131 FAILED: 0 TIME: 46300ms
+2026-10-18 19:55:56 storage PASSED: 167 FAILED: 0 TIME: 36066ms
+2026-10-18 19:56:17 servers PASSED: 66 FAILED: 0 TIME: 4462ms
+2026-10-18 19:56:39 drivers PASSED: 107 FAILED: 0 TIME: 7337ms
+2026-10-18 19:57:10 hal PASSED: 0 FAILED: 0 TIME: 30389ms STATUS: STALL
+2026-10-18 19:57:32 smp PASSED: 81 FAILED: 0 TIME: 6463ms
+2026-10-18 19:57:52 smp_multicpu PASSED: 0 FAILED: 0 TIME: 20230ms STATUS: STALL
+2026-10-18 19:58:33 deadline PASSED: 147 FAILED: 0 TIME: 34210ms
+2026-10-18 19:58:55 ui PASSED: 74 FAILED: 0 TIME: 7174ms
+2026-10-18 19:59:15 logging_debug PASSED: 36 FAILED: 0 TIME: 2340ms
+2026-10-18 19:59:33 random PASSED: 17 FAILED: 0 TIME: 1131ms
+2026-10-18 19:59:53 bench PASSED: 28 FAILED: 0 TIME: 2606ms
+2026-10-18 20:00:10 task_tcb_log PASSED: 1 FAILED: 0 TIME: 81ms
+2026-10-18 20:00:30 task_fpu PASSED: 0 FAILED: 0 TIME: 20237ms STATUS: STALL
+2026-10-18 20:00:49 ahci_live PASSED: 0 FAILED: 0 TIME: 18018ms STATUS: STALL
+2026-10-18 20:01:07 iommu_live PASSED: 0 FAILED: 0 TIME: 17939ms STATUS: STALL
+2026-10-18 20:03:21 testrunner PASSED: 0 FAILED: 0 TIME: 134173ms STATUS: EXPECTED_PANIC_PASS
+2026-10-18 20:04:35 core_sched PASSED: 112 FAILED: 0 TIME: 11412ms STATUS: RERUN-green-after-gate-TIMEOUT-load-3.85
+2026-10-18 20:05:01 hal PASSED: 122 FAILED: 0 TIME: 8983ms STATUS: RERUN-green-after-gate-STALL
+2026-10-18 20:12:49 smp_multicpu PASSED: 18 FAILED: 0 TIME: 1243ms STATUS: #380-NXE-fix-green
+2026-10-18 20:13:16 hal PASSED: 122 FAILED: 0 TIME: 9027ms STATUS: RERUN-green-after-gate-STALL
+2026-10-18 20:18:27 ahci_live PASSED: 5 FAILED: 0 TIME: 6088ms STATUS: #382-mon-none-fix-green
+2026-10-18 20:18:51 iommu_live PASSED: 6 FAILED: 0 TIME: 396ms STATUS: #382-mon-none-fix-green
+2026-10-18 20:20:57 core_basic PASSED: 98 FAILED: 0 TIME: 6403ms
+2026-10-18 20:21:19 core_sync PASSED: 93 FAILED: 0 TIME: 6515ms
+2026-10-18 20:21:45 core_sched PASSED: 112 FAILED: 0 TIME: 11743ms
+2026-10-18 20:22:05 core_task PASSED: 52 FAILED: 0 TIME: 3410ms
+2026-10-18 20:22:31 core_memory PASSED: 120 FAILED: 0 TIME: 12478ms
+2026-10-18 20:22:53 core_syscall PASSED: 88 FAILED: 0 TIME: 6502ms
+2026-10-18 20:23:11 core_tracing PASSED: 25 FAILED: 0 TIME: 1601ms
+2026-10-18 20:25:33 ipc PASSED: 87 FAILED: 0 TIME: 6564ms STATUS: STALL_RECOVERED
+2026-10-18 20:25:58 capability PASSED: 155 FAILED: 0 TIME: 10343ms
+2026-10-18 20:26:46 proc_elf PASSED: 131 FAILED: 0 TIME: 46390ms
+2026-10-18 20:27:27 storage PASSED: 167 FAILED: 0 TIME: 34944ms
+2026-10-18 20:27:47 servers PASSED: 66 FAILED: 0 TIME: 4399ms
+2026-10-18 20:28:09 drivers PASSED: 107 FAILED: 0 TIME: 7239ms
+2026-10-18 20:28:40 hal PASSED: 122 FAILED: 0 TIME: 9041ms STATUS: STALL_RECOVERED
+2026-10-18 20:29:01 smp PASSED: 81 FAILED: 0 TIME: 6120ms
+2026-10-18 20:29:19 smp_multicpu PASSED: 18 FAILED: 0 TIME: 1217ms
+2026-10-18 20:29:58 deadline PASSED: 146 FAILED: 1 TIME: 30659ms
+2026-10-18 20:30:20 ui PASSED: 74 FAILED: 0 TIME: 7074ms
+2026-10-18 20:30:39 logging_debug PASSED: 36 FAILED: 0 TIME: 2283ms
+2026-10-18 20:30:57 random PASSED: 17 FAILED: 0 TIME: 1098ms
+2026-10-18 20:31:17 bench PASSED: 28 FAILED: 0 TIME: 2505ms
+2026-10-18 20:31:34 task_tcb_log PASSED: 1 FAILED: 0 TIME: 80ms
+2026-10-18 20:31:54 task_fpu PASSED: 0 FAILED: 0 TIME: 20086ms STATUS: NO_TESTS_REGISTERED
+2026-10-18 20:32:14 ahci_live PASSED: 5 FAILED: 0 TIME: 6087ms
+2026-10-18 20:32:31 iommu_live PASSED: 6 FAILED: 0 TIME: 397ms
+2026-10-18 20:36:46 testrunner PASSED: 0 FAILED: 0 TIME: 254808ms STATUS: EXPECTED_PANIC_PASS
+2026-10-18 20:39:06 deadline PASSED: 147 FAILED: 0 TIME: 34216ms STATUS: RERUN-green-after-gate-FAIL-admission-budget-load-flake
+2026-10-18 20:40:14 core_basic PASSED: 17 FAILED: 0 TIME: 11ms
+2026-10-18 20:40:31 core_sync PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:40:48 core_sched PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:41:05 core_task PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:41:23 core_memory PASSED: 4 FAILED: 0 TIME: 2ms
+2026-10-18 20:41:39 core_syscall PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:41:57 core_tracing PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:42:14 ipc PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:42:31 capability PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:42:49 proc_elf PASSED: 1 FAILED: 0 TIME: 1ms
+2026-10-18 20:43:06 storage PASSED: 40 FAILED: 0 TIME: 37ms
+2026-10-18 20:43:24 servers PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:43:41 drivers PASSED: 8 FAILED: 0 TIME: 9ms
+2026-10-18 20:43:58 hal PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:44:15 smp PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:44:33 smp_multicpu PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:44:51 deadline PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:45:10 ui PASSED: 19 FAILED: 0 TIME: 3062ms
+2026-10-18 20:45:27 logging_debug PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:45:44 random PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:46:02 bench PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:46:19 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
+2026-10-18 20:50:34 task_fpu PASSED: 0 FAILED: 0 TIME: 254514ms STATUS: NO_TESTS_REGISTERED
+2026-10-18 20:50:51 testrunner PASSED: 0 FAILED: 0 TIME: 2ms
+2026-10-18 21:31:48 task_tcb_log PASSED: 1 FAILED: 0 TIME: 86ms STATUS: table-format-verify
+2026-10-18 21:31:49 random PASSED: 17 FAILED: 0 TIME: 1129ms STATUS: table-format-verify
+2026-10-18 21:40:00 core_basic PASSED: 98 FAILED: 0 TIME: 6526ms
+2026-10-18 21:40:23 core_sync PASSED: 93 FAILED: 0 TIME: 6694ms
+2026-10-18 21:40:49 core_sched PASSED: 112 FAILED: 0 TIME: 11850ms
+2026-10-18 21:41:09 core_task PASSED: 52 FAILED: 0 TIME: 3492ms
+2026-10-18 21:41:36 core_memory PASSED: 120 FAILED: 0 TIME: 12783ms
+2026-10-18 21:41:59 core_syscall PASSED: 88 FAILED: 0 TIME: 6673ms
+2026-10-18 21:45:59 core_tracing PASSED: 0 FAILED: 0 TIME: 240291ms STATUS: TIMEOUT
+2026-10-18 21:46:21 ipc PASSED: 87 FAILED: 0 TIME: 6398ms
+2026-10-18 21:46:45 capability PASSED: 155 FAILED: 0 TIME: 10432ms
+2026-10-18 21:47:30 proc_elf PASSED: 131 FAILED: 0 TIME: 40868ms
+2026-10-18 21:48:09 storage PASSED: 167 FAILED: 0 TIME: 31963ms
+2026-10-18 21:48:29 servers PASSED: 66 FAILED: 0 TIME: 4460ms
+2026-10-18 21:48:51 drivers PASSED: 107 FAILED: 0 TIME: 7318ms
+2026-10-18 21:49:14 hal PASSED: 122 FAILED: 0 TIME: 9132ms
+2026-10-18 21:49:36 smp PASSED: 81 FAILED: 0 TIME: 6081ms
+2026-10-18 21:49:54 smp_multicpu PASSED: 18 FAILED: 0 TIME: 301ms
+2026-10-18 21:50:34 deadline PASSED: 147 FAILED: 0 TIME: 34056ms
+2026-10-18 21:50:56 ui PASSED: 74 FAILED: 0 TIME: 9238ms
+2026-10-18 21:51:15 logging_debug PASSED: 36 FAILED: 0 TIME: 2275ms
+2026-10-18 21:51:33 random PASSED: 17 FAILED: 0 TIME: 1104ms
+2026-10-18 21:51:52 bench PASSED: 28 FAILED: 0 TIME: 2592ms
+2026-10-18 21:52:10 task_tcb_log PASSED: 1 FAILED: 0 TIME: 82ms
+2026-10-18 21:52:30 task_fpu PASSED: 0 FAILED: 0 TIME: 19979ms STATUS: NO_TESTS_REGISTERED
+2026-10-18 21:52:50 ahci_live PASSED: 5 FAILED: 0 TIME: 6113ms
+2026-10-18 21:53:07 iommu_live PASSED: 6 FAILED: 0 TIME: 264ms
+2026-10-18 21:55:21 testrunner PASSED: 0 FAILED: 0 TIME: 134327ms STATUS: EXPECTED_PANIC_PASS
+2026-10-18 21:56:38 core_tracing PASSED: 25 FAILED: 0 TIME: 1622ms STATUS: RERUN-green-after-gate-TIMEOUT
+2026-10-18 22:05:03 random PASSED: 17 FAILED: 0 TIME: 1106ms STATUS: ticks-line-verify
+2026-10-18 22:06:52 deadline PASSED: 147 FAILED: 0 TIME: 30637ms STATUS: RERUN-green-after-2x-FAIL-load-flake
+2026-10-18 22:09:32 hrt_monotonic PASSED: 6 FAILED: 0 TIME: 407ms STATUS: #359-P0
+2026-10-18 22:11:07 timing_core PASSED: 19 FAILED: 0 TIME: 1781ms STATUS: #359-P0-wall-sample (1 WARN-residual)
+2026-10-18 23:47:33 hrt_monotonic PASSED: 6 FAILED: 0 TIME: 405ms STATUS: #384-P0-x86-baseline
+2026-10-18 23:49:08 timing_core PASSED: 19 FAILED: 0 TIME: 1776ms STATUS: #384-P0-x86-baseline
+2026-10-18 23:49:56 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 2734ms STATUS: #384-P0-aarch64-ungated-wall-bound-fails-under-TCG
+2026-10-18 23:52:24 timing_core PASSED: 0 FAILED: 0 TIME: 134s STATUS: PANIC-EL1sync-ESR0x86000004-ELR0-first-test-task-spawn-vfsd-iocd-degraded
+2026-10-18 23:53:28 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 2724ms STATUS: #384-P0-riscv64-ungated-wall-bound-fails-under-TCG
+2026-10-19 00:00:41 timing_core PASSED: 0 FAILED: 0 TIME: 0 STATUS: PANIC-riscv64-scause0xC-sepc0-first-test-task-spawn-vfsd-iocd-degraded
+2026-10-19 08:43:37 timing_core PASSED: 18 FAILED: 1 TIME: 907ms STATUS: #356-P0-trampoline-fixed-daemon-restart-fails-degraded-P0b
+2026-10-19 08:44:10 timing_core PASSED: 18 FAILED: 1 TIME: 968ms STATUS: #356-P0-trampoline-fixed-daemon-restart-fails-degraded-P0b
+2026-10-19 08:44:53 timing_core PASSED: 19 FAILED: 0 TIME: 1915ms STATUS: #356-P0-x86-nonregression
+2026-10-19 09:01:40 timing_core PASSED: 19 FAILED: 0 TIME: 911ms STATUS: #356-P0b-aarch64-daemons-spawn
+2026-10-19 09:02:12 timing_core PASSED: 19 FAILED: 0 TIME: 977ms STATUS: #356-P0b-riscv64-daemons-spawn
+2026-10-19 09:02:49 timing_core PASSED: 19 FAILED: 0 TIME: 1829ms STATUS: #356-P0b-x86-nonregression
+2026-10-19 09:08:22 elf_loader PASSED: 25 FAILED: 0 TIME: 2451ms STATUS: #356-regression-x86-loader-changed
+2026-10-19 09:08:47 elf_loader PASSED: 7 FAILED: 18 TIME: 866ms STATUS: #356-aarch64-x86-fixtures-expected-QE
+2026-10-19 09:09:39 elf_loader PASSED: 7 FAILED: 18 TIME: 955ms STATUS: #356-riscv64-x86-fixtures-expected-QE
+2026-10-19 09:10:26 selftest PASSED: 148 FAILED: 0 TIME: 12523ms STATUS: #356-regression-x86
+2026-10-19 09:27:33 hal_timer PASSED: 5 FAILED: 0 TIME: 347ms STATUS: #349-P0-x86-baseline
+2026-10-19 09:27:33 ipc_timeout PASSED: 7 FAILED: 0 TIME: 549ms STATUS: #349-P0-x86-baseline
+2026-10-19 09:27:33 irq_early_std PASSED: 7 FAILED: 0 TIME: 575ms STATUS: #349-P0-x86-baseline
+2026-10-19 09:28:36 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1080ms STATUS: #349-P0-aarch64-baseline
+2026-10-19 09:28:36 hal_timer PASSED: 5 FAILED: 0 TIME: 152ms STATUS: #349-P0-aarch64-baseline
+2026-10-19 09:28:36 irq_early_std PASSED: 6 FAILED: 1 TIME: 214ms STATUS: #349-P0-aarch64-oneshot0-disarm-gap-P1-work-item
+2026-10-19 09:29:14 hal PASSED: 55 FAILED: 1 TIME: 1636ms STATUS: #349-P0-aarch64-same-oneshot0-gap
+2026-10-19 09:29:14 ipc_timeout PASSED: 7 FAILED: 0 TIME: 252ms STATUS: #349-P0-aarch64-baseline
+2026-10-19 09:43:36 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 400s STATUS: STALL-UNRECOVERED-hhdm3fail-hang-after-test27-S24-F3
+2026-10-19 09:43:36 hal_timer PASSED: 5 FAILED: 0 TIME: 155ms STATUS: #349-P0-riscv64-baseline
+2026-10-19 09:43:36 irq_early_std PASSED: 7 FAILED: 0 TIME: 214ms STATUS: #349-P0-riscv64-baseline
+2026-10-19 16:08:34 hal PASSED: 55 FAILED: 1 TIME: 1687ms STATUS: #349-P0-riscv64-init_stack-testside-QE
+2026-10-19 16:08:34 ipc_timeout PASSED: 7 FAILED: 0 TIME: 271ms STATUS: #349-P0-riscv64-baseline
+2026-10-19 16:20:53 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1054ms STATUS: #349-P1-aarch64-verified
+2026-10-19 16:20:53 hal_timer PASSED: 5 FAILED: 0 TIME: 155ms STATUS: #349-P1-aarch64-verified
+2026-10-19 16:20:53 irq_early_std PASSED: 7 FAILED: 0 TIME: 212ms STATUS: #349-P1-aarch64-oneshot-fixed
+2026-10-19 16:21:43 hal PASSED: 56 FAILED: 0 TIME: 1641ms STATUS: #349-P1-aarch64-verified
+2026-10-19 16:21:43 ipc_timeout PASSED: 7 FAILED: 0 TIME: 254ms STATUS: #349-P1-aarch64-verified
+2026-10-19 16:21:43 timing_core PASSED: 19 FAILED: 0 TIME: 915ms STATUS: #349-P1-aarch64-verified
+2026-10-19 16:26:42 hal PASSED: 55 FAILED: 1 TIME: 1660ms STATUS: #349-P2-riscv64-known-QE-init_stack
+2026-10-19 16:26:42 hal_timer PASSED: 5 FAILED: 0 TIME: 159ms STATUS: #349-P2-riscv64-verified
+2026-10-19 16:26:42 ipc_timeout PASSED: 7 FAILED: 0 TIME: 269ms STATUS: #349-P2-riscv64-verified
+2026-10-19 16:26:42 irq_early_std PASSED: 7 FAILED: 0 TIME: 225ms STATUS: #349-P2-riscv64-verified
+2026-10-19 16:26:42 timing_core PASSED: 19 FAILED: 0 TIME: 967ms STATUS: #349-P2-riscv64-verified
+2026-10-19 16:28:45 hal_timer PASSED: 5 FAILED: 0 TIME: 348ms STATUS: #349-P3-x86-nonregression
+2026-10-19 16:28:45 ipc_timeout PASSED: 7 FAILED: 0 TIME: 549ms STATUS: #349-P3-x86-nonregression
+2026-10-19 16:28:45 irq_early_std PASSED: 7 FAILED: 0 TIME: 545ms STATUS: #349-P3-x86-nonregression
+2026-10-19 16:28:45 timing_core PASSED: 19 FAILED: 0 TIME: 1836ms STATUS: #349-P3-x86-nonregression
+2026-10-19 16:48:53 hal_timer PASSED: 5 FAILED: 0 TIME: 158ms STATUS: #349-P2-riscv64-S3-verified
+2026-10-19 16:48:53 irq_early_std PASSED: 7 FAILED: 0 TIME: 218ms STATUS: #349-P2-riscv64-S3-verified
+2026-10-19 16:48:53 timing_core PASSED: 19 FAILED: 0 TIME: 960ms STATUS: #349-P2riscv64-S3-verified
+2026-10-19 16:49:56 hal_timer PASSED: 5 FAILED: 0 TIME: 153ms STATUS: #349-P1-aarch64-S3-verified
+2026-10-19 16:49:56 irq_early_std PASSED: 7 FAILED: 0 TIME: 214ms STATUS: #349-P1-aarch64-S3-verified
+2026-10-19 16:49:56 timing_core PASSED: 19 FAILED: 0 TIME: 932ms STATUS: #349-P1-aarch64-S3-verified
+2026-10-19 17:02:14 irq_early_std PASSED: 7 FAILED: 0 TIME: 212ms STATUS: #349-P3-aarch64-final
+2026-10-19 17:02:14 timing_core PASSED: 19 FAILED: 0 TIME: 916ms STATUS: #349-P3-aarch64-final
+2026-10-19 17:03:18 hal_timer PASSED: 5 FAILED: 0 TIME: 159ms STATUS: #349-P3-riscv64-final
+2026-10-19 17:03:18 irq_early_std PASSED: 7 FAILED: 0 TIME: 219ms STATUS: #349-P3-riscv64-final
+2026-10-19 17:03:18 timing_core PASSED: 19 FAILED: 0 TIME: 980ms STATUS: #349-P3-riscv64-final
+SUMMARY: total=18 ok=0 fail=18
+SUMMARY: total=18 ok=17 fail=1
+SUMMARY: total=18 ok=18 fail=0
+SUMMARY: total=20 ok=11 fail=9
+SUMMARY: total=20 ok=14 fail=6
+SUMMARY: total=20 ok=15 fail=5
+SUMMARY: total=20 ok=16 fail=4
+SUMMARY: total=20 ok=17 fail=3
+SUMMARY: total=20 ok=18 fail=2
+SUMMARY: total=20 ok=19 fail=1
+SUMMARY: total=24 ok=24 fail=0
+SUMMARY: total=26 ok=20 fail=6
+SUMMARY: total=26 ok=25 fail=1

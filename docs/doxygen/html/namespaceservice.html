@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -143,6 +143,8 @@ Enumerations</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a16d3f7f60ab906f01523bd7c58625a76" id="r_a16d3f7f60ab906f01523bd7c58625a76"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a16d3f7f60ab906f01523bd7c58625a76">shell_try_get_key</a> (char &amp;out)</td></tr>
+<tr class="memdesc:a16d3f7f60ab906f01523bd7c58625a76"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam (issue #303 item 3): P2 key-delivery poll exposed so a shell-level test can drive the exact production path (serial → iocd daemon → hardware ring). Zero-logic wrapper over the internal poll above.  <br /></td></tr>
 <tr class="memitem:ac166acc18384f5d391e098a0a4a85840" id="r_ac166acc18384f5d391e098a0a4a85840"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac166acc18384f5d391e098a0a4a85840">top_render_frame</a> (uint64_t delay_secs)</td></tr>
 </table>
 <a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
@@ -176,6 +178,26 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a16d3f7f60ab906f01523bd7c58625a76" name="a16d3f7f60ab906f01523bd7c58625a76"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a16d3f7f60ab906f01523bd7c58625a76">&#9670;&#160;</a></span>shell_try_get_key()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool service::shell_try_get_key </td>
+          <td>(</td>
+          <td class="paramtype">char &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Test seam (issue #303 item 3): P2 key-delivery poll exposed so a shell-level test can drive the exact production path (serial → iocd daemon → hardware ring). Zero-logic wrapper over the internal poll above. </p>
+<p>Test seam (issue #303 item 3): P2 central keyboard/serial input poll (serial → iocd daemon → hardware ring). Zero-logic wrapper over the internal poll; lets a shell-level test drive the exact production path including daemon delivery. </p>
+
+</div>
+</div>
 <a id="ac166acc18384f5d391e098a0a4a85840" name="ac166acc18384f5d391e098a0a4a85840"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac166acc18384f5d391e098a0a4a85840">&#9670;&#160;</a></span>top_render_frame()</h2>
 

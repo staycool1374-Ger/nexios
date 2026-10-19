@@ -180,7 +180,11 @@ constexpr bool validate_segment(const ELF64ProgramHeader *phdr, uint64_t file_si
     // VULN-H2: the segment's file-resident bytes must fit inside the actual
     // file buffer.  Previously only a 4_MiB constant bounded phdr->offset;
     // a crafted ELF could read past the PMM::alloc_contiguous() buffer.
-    if (file_size != 0 && phdr->offset + phdr->filesz > file_size)
+    // BSS-only segments (filesz == 0) carry no bytes: a 64 KiB-aligned
+    // linker may place their offset past EOF (issue #356) without any
+    // read occurring, so the bound applies only when bytes are consumed.
+    if (file_size != 0 && phdr->filesz != 0 &&
+        phdr->offset + phdr->filesz > file_size)
         return false;
     // Must be within user space
     if (phdr->vaddr >= USER_SPACE_LIMIT)

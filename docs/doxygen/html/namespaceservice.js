@@ -11,5 +11,6 @@ var namespaceservice =
       [ "NO_ELF", "namespaceservice.html#a827bfc4d7da8410f5f325ee7a9ecd55da656a5d5b77c940ebba6b5c39849ccaa0", null ],
       [ "LOAD_FAILED", "namespaceservice.html#a827bfc4d7da8410f5f325ee7a9ecd55da7b0d329a6efd1e7a527acf8970807616", null ]
     ] ],
+    [ "shell_try_get_key", "namespaceservice.html#a16d3f7f60ab906f01523bd7c58625a76", null ],
     [ "top_render_frame", "namespaceservice.html#ac166acc18384f5d391e098a0a4a85840", null ]
 ];

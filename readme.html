@@ -130,7 +130,7 @@ Ring 3 via a <code>int 0x82</code> syscall gate (47 syscalls). The
 architecture is mid-transition toward a <strong>capability-based
 microkernel</strong>, where drivers, VFS, and block I/O are externalised
 to sandboxed Ring 3 servers communicating through IPC capabilities.</p>
-<p>Current version: <strong>v0.5.3</strong> — User Space Enhancements (ramdiskd microkernel service, initrd /bin + sh PATH/export, runelf envp/fork fixes, send_sync reply contract, CheckedPtr overflow guard; 1768 debug / 89 release tests).
+<p>Current version: <strong>v0.5.4</strong> — Stabilization & Bugfixing (scheduler decomposition, VMM transactions + W^X, path tracing, C++20 sweep, lifecycle hardening; 1836 debug / 89 release tests).
 O(1) priority bitmap scheduler, bounded WCET, hard real-time compliance.</p>
 <hr />
 <h2 id="why-nexios">Why NexIOS</h2>

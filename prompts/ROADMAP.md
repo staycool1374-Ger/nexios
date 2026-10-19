@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.5.2 | **Last Release:** v0.5.2 | **Completed milestones:** v0.2.x — v0.5.2 (see `ROADMAP_done.md`)
+**Build:** v0.5.4 | **Last Release:** v0.5.4 | **Completed milestones:** v0.2.x — v0.5.4 (see `ROADMAP_done.md`)
 
 > **NOTE (2026-09-17):** the user explicitly overrode the "pointers only, no
 > work items" rule for this file and requested a full sorted listing
@@ -54,6 +54,9 @@
 
 ## v0.5.3 — User Space Enhancements (RELEASED 2026-10-12, see ROADMAP_done.md)
 - Milestone "v0.5.3 User space enhancements": 0 open issues at release (all closed: ramdiskd #275, initrd /bin #274, sh PATH/export #310, runelf envp #311 + fork #312, send_sync contract #317, CheckedPtr overflow #337, harness hardening #299/#320/#321/#322, watchdogd #277, XMODEM #276, Rust hello #273, Phase 6 integration coverage #303).
+
+## v0.5.4 — Stabilization & Bugfixing (RELEASED 2026-10-18, see ROADMAP_done.md)
+- Milestone "v0.5.4 Stabilization & Bugfixing" (milestone 25): 0 open issues at release (all 46 closed: scheduler decomposition #323, lifecycle #324, VMM transactions #325, path tracing #347/#362, C++20 sweep #348, harness residuals #360/#361/#371/#372, core split #364, VMM audit #366/#363/#368, hardening batch #373-#379, readdir overlay #346, dump-counts #344, flake tracker #345, cursor stride #358, wall clock #319, stack markers #327; gate-found #380 AP NXE, #381 empty-class, #382 q35 monitor).
 
 ## v0.6.0 — Userspace Subsystems (NEW, OPEN)- #162 [open] Demand paging / CoW subsystem — fault classifier, per-VMA policy, CoW refcounts, pager integration.
 - #163 [open] Stack unwinding in user-space — frame-pointer walk, crash/profiler integration.

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -130,6 +130,14 @@ Collaboration diagram for kernel::elf::ElfLoader:</div>
 <!-- MAP 0 -->
 </div>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-pub-types" class="groupheader"><a id="pub-types" name="pub-types"></a>
+Public Types</h2></td></tr>
+<tr class="memitem:a8286baa9f3c0fec05de8010655439239" id="r_a8286baa9f3c0fec05de8010655439239"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a8286baa9f3c0fec05de8010655439239">RunOutcome</a> : uint8_t { <a class="el" href="#a8286baa9f3c0fec05de8010655439239a696b031073e74bf2cb98e5ef201d4aa3">UNKNOWN</a> = 0
+, <a class="el" href="#a8286baa9f3c0fec05de8010655439239aa88a6a0c276fd853999a1faedf19c00e">CLEAN</a> = 1
+, <a class="el" href="#a8286baa9f3c0fec05de8010655439239a131d2cc9ffea3dcc797a4f1eb41ab4c2">FAULTED</a> = 2
+ }</td></tr>
+<tr class="memdesc:a8286baa9f3c0fec05de8010655439239"><td class="mdescLeft">&#160;</td><td class="mdescRight">Outcome of the retained set's last launch (issue #271 P1).  <a href="#a8286baa9f3c0fec05de8010655439239">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:aeb702b84e85d5ec931afc3ed8acce71c" id="r_aeb702b84e85d5ec931afc3ed8acce71c"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aeb702b84e85d5ec931afc3ed8acce71c">ensure_task</a> ()</td></tr>
@@ -148,6 +156,20 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:aa4ba931eead59458577987f88123df1f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Entry VA latched with the retained completion (issue #231): read hdr_.entry at publish time so a later load cannot move it under the retained TCB. 0 when no completion is retained. Cleared wherever completed_tcb_ is cleared.  <br /></td></tr>
 <tr class="memitem:a2004c846d94d4d05e7bb58ea3e9fd8a1" id="r_a2004c846d94d4d05e7bb58ea3e9fd8a1"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2004c846d94d4d05e7bb58ea3e9fd8a1">release_completed</a> ()</td></tr>
 <tr class="memdesc:a2004c846d94d4d05e7bb58ea3e9fd8a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release (cleanup + delete) the completed TCB. Used by tests / future runelf failure paths.  <br /></td></tr>
+<tr class="memitem:a3750c4dce4f442628affcd26e5f20793" id="r_a3750c4dce4f442628affcd26e5f20793"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a3750c4dce4f442628affcd26e5f20793">has_retained</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a3750c4dce4f442628affcd26e5f20793"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether a rerunnable retention exists (issue #271 P1): a valid set adopted at take, not yet superseded/reset/ released. Rerun refuses unless this is true (P2 checks the outcome gate on top).  <br /></td></tr>
+<tr class="memitem:a7c1cbe4243b154e2e504455bd6584b6d" id="r_a7c1cbe4243b154e2e504455bd6584b6d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a7c1cbe4243b154e2e504455bd6584b6d">note_launched</a> (uint64_t task_id)</td></tr>
+<tr class="memdesc:a7c1cbe4243b154e2e504455bd6584b6d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record a launch of the retained set's task (issue #271 P1). Call after successful add_task of a taken/retained TCB; arms outcome tracking for this task id. Unknown ids in note_task_end stay UNKNOWN (never launched).  <br /></td></tr>
+<tr class="memitem:a9241a9a2968d9c2a01710b04505ec8b4" id="r_a9241a9a2968d9c2a01710b04505ec8b4"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a9241a9a2968d9c2a01710b04505ec8b4">note_task_end</a> (uint64_t task_id, bool clean, uint64_t code)</td></tr>
+<tr class="memdesc:a9241a9a2968d9c2a01710b04505ec8b4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record the end of a tracked launch (issue #271 P1). sys_exit passes clean=true + the exit code; fault/auth-kill/ death paths pass clean=false. Calls for untracked ids are ignored. Rerun requires CLEAN + code 0 (checked at build).  <br /></td></tr>
+<tr class="memitem:a07094fd18d998be896ecb67ecd4c24ce" id="r_a07094fd18d998be896ecb67ecd4c24ce"><td class="memItemLeft">static <a class="el" href="#a8286baa9f3c0fec05de8010655439239">RunOutcome</a>&#160;</td><td class="memItemRight"><a class="el" href="#a07094fd18d998be896ecb67ecd4c24ce">retained_outcome</a> ()</td></tr>
+<tr class="memdesc:a07094fd18d998be896ecb67ecd4c24ce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current outcome of the retained set (tests + P2 gate).  <br /></td></tr>
+<tr class="memitem:a2af9262c176d4d5fe4de7836727822a0" id="r_a2af9262c176d4d5fe4de7836727822a0"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2af9262c176d4d5fe4de7836727822a0">abandon_retention</a> ()</td></tr>
+<tr class="memdesc:a2af9262c176d4d5fe4de7836727822a0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Drop the never-added taker's task ref after an admission failure (shell runelf denials; future pcall sites). Public so <a class="el" href="shell_8cpp.html">shell.cpp</a> can call it outside the elf namespace; IRQ-masked; bounded; never reschedule inside.  <br /></td></tr>
+<tr class="memitem:a1d1c4d68b0003efa9aa37c167fcd779f" id="r_a1d1c4d68b0003efa9aa37c167fcd779f"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a1d1c4d68b0003efa9aa37c167fcd779f">try_rerun</a> (const char **reason)</td></tr>
+<tr class="memdesc:a1d1c4d68b0003efa9aa37c167fcd779f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Try to build a rerun TCB from retention (issue #271 P2). Checks IDLE + valid + static + CLEAN/0; on success returns a fresh TCB (caller owns it, must set settled params before add_task like take_completed). On failure returns nullptr and sets *reason to a static message (no elf loaded / dynamic / not clean / busy / rebuild failed). IRQ-masked for the gate; allocations/mappings run unlocked (may reschedule only via explicit reschedule points outside the lock).  <br /></td></tr>
+<tr class="memitem:ae72ba828f83e55c667fcbe055f4eabc5" id="r_ae72ba828f83e55c667fcbe055f4eabc5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae72ba828f83e55c667fcbe055f4eabc5">unmap_golden</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *tcb)</td></tr>
+<tr class="memdesc:ae72ba828f83e55c667fcbe055f4eabc5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmap every retained-golden page from <code class="param">tcb's</code> table and drop that task's set ref (issue #271 P1). Never frees here: pages are freed only when retention refs == 0 AND task refs == 0 (freed inline at that transition). Called from task teardown paths BEFORE blind free_user_pages (which then naturally skips the unmapped pages). Lock-atomic; IRQ-masked; never held across reschedule.  <br /></td></tr>
 <tr class="memitem:a0b136e926533436c58605666ec2ffc38" id="r_a0b136e926533436c58605666ec2ffc38"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0b136e926533436c58605666ec2ffc38">reset</a> ()</td></tr>
 <tr class="memdesc:a0b136e926533436c58605666ec2ffc38"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test/API contract: if a load is in flight, request cancel; the caller MUST then <a class="el" href="#ab8245317359afbf1038319328b3e5523" title="Spin until the loader returns to IDLE (safe on UP: the loader is more urgent than the harness,...">wait_loader_idle()</a>. Releases any completed TCB and re-inits the wake semaphore (drops stale counts).  <br /></td></tr>
 <tr class="memitem:ab8245317359afbf1038319328b3e5523" id="r_ab8245317359afbf1038319328b3e5523"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab8245317359afbf1038319328b3e5523">wait_loader_idle</a> ()</td></tr>
@@ -156,23 +178,90 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a34f023f52654f67830d355c1a6d5ffb7"><td class="mdescLeft">&#160;</td><td class="mdescRight">The loader task's main loop (scheduler entry via the free elf_loader_task_main bridge). Blocks on the wake semaphore, runs one load per accepted request.  <br /></td></tr>
 <tr class="memitem:a4c2fef2ceece51afc3092a2a8ac33495" id="r_a4c2fef2ceece51afc3092a2a8ac33495"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4c2fef2ceece51afc3092a2a8ac33495">destroy_completed_tcb</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *tcb)</td></tr>
 <tr class="memdesc:a4c2fef2ceece51afc3092a2a8ac33495"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tear down a completed-but-never-scheduled TCB (built by finalize_loaded_task). Skips all scheduler interactions.  <br /></td></tr>
-<tr class="memitem:a825e445a84f991d8223d85d59be220f3" id="r_a825e445a84f991d8223d85d59be220f3"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a825e445a84f991d8223d85d59be220f3">cancel_pending</a> (uint64_t generation)</td></tr>
-<tr class="memdesc:a825e445a84f991d8223d85d59be220f3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-validation-step cancel check (issue #95: shared by the dep-resolve backend in <a class="el" href="elf__shared_8cpp.html" title="Shared-object / dynamic linking implementation (issue #95). DT_NEEDED resolution, GOT/PLT fixups,...">elf_shared.cpp</a>).  <br /></td></tr>
+<tr class="memitem:a1f844588246a7157c567223f6391d2bd" id="r_a1f844588246a7157c567223f6391d2bd"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a1f844588246a7157c567223f6391d2bd">cancel_pending</a> (uint64_t generation) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a1f844588246a7157c567223f6391d2bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-validation-step cancel check (issue #95: shared by the dep-resolve backend in <a class="el" href="elf__shared_8cpp.html" title="Shared-object / dynamic linking implementation (issue #95). DT_NEEDED resolution, GOT/PLT fixups,...">elf_shared.cpp</a>).  <br /></td></tr>
 <tr class="memitem:a829f0d3ed8bed38faa92180dafc1ed36" id="r_a829f0d3ed8bed38faa92180dafc1ed36"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a829f0d3ed8bed38faa92180dafc1ed36">generation</a> ()</td></tr>
-<tr class="memdesc:a829f0d3ed8bed38faa92180dafc1ed36"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current load generation for DepResolveContext setup.  <br /></td></tr>
+<tr class="memdesc:a829f0d3ed8bed38faa92180dafc1ed36"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current load generation for <a class="el" href="structkernel_1_1elf_1_1_dep_resolve_context.html" title="Per-request dependency-resolution context (issue #95). Single instance per top-level resolve; passed ...">DepResolveContext</a> setup.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
 <tr class="memitem:a74afb2615a04ec2c9506b6ec794692a8" id="r_a74afb2615a04ec2c9506b6ec794692a8"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a74afb2615a04ec2c9506b6ec794692a8">kChunkSize</a> = 4096</td></tr>
 <tr class="memitem:a32312834be9f290fc4ade35c7cf390b9" id="r_a32312834be9f290fc4ade35c7cf390b9"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a32312834be9f290fc4ade35c7cf390b9">kLoaderPriority</a> = 15</td></tr>
 <tr class="memitem:ad1de548c4dfecbe2cc0acd9b79d62176" id="r_ad1de548c4dfecbe2cc0acd9b79d62176"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad1de548c4dfecbe2cc0acd9b79d62176">kMaxPath</a> = 128</td></tr>
+<tr class="memitem:a821e03c376d5e250fa15c91875ced90b" id="r_a821e03c376d5e250fa15c91875ced90b"><td class="memItemLeft">static constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a821e03c376d5e250fa15c91875ced90b">kMaxRerunWritableBytes</a> = 1 * 1024 * 1024</td></tr>
+<tr class="memdesc:a821e03c376d5e250fa15c91875ced90b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Writable-byte pin bound for rerun retention (issue #271): images with more RW file bytes are loadable but never retained (explicit refusal at rerun).  <br /></td></tr>
+<tr class="memitem:a2a436a558452ead290dcf8b403c5a86d" id="r_a2a436a558452ead290dcf8b403c5a86d"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2a436a558452ead290dcf8b403c5a86d">kMaxGoldenPages</a></td></tr>
+<tr class="memdesc:a2a436a558452ead290dcf8b403c5a86d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Golden-page bound: RO bytes beyond the #46 scan cap are never retained (same cap, same fail-closed).  <br /></td></tr>
+<tr class="memitem:abdc94dfe5bd9f2453181e109f3809285" id="r_abdc94dfe5bd9f2453181e109f3809285"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#abdc94dfe5bd9f2453181e109f3809285">kMaxGoldenRanges</a> = 8</td></tr>
+<tr class="memdesc:abdc94dfe5bd9f2453181e109f3809285"><td class="mdescLeft">&#160;</td><td class="mdescRight">One retained set max (R6): take overwrites, never appends.  <br /></td></tr>
+<tr class="memitem:a581d40c9545cd4a7e457b124d75770e3" id="r_a581d40c9545cd4a7e457b124d75770e3"><td class="memItemLeft">static constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a581d40c9545cd4a7e457b124d75770e3">kMaxPinRanges</a> = 8</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Background ELF loader singleton. </p>
 <p>Threading model: the shell task only sets request parameters / flags under the spinlock and posts the wake semaphore; the loader task performs all chunk work and is the single owner of every resource it allocates. No lock is ever held across <span class="tt"><a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch.">Scheduler::reschedule()</a></span>. </p>
-</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
-<a id="a825e445a84f991d8223d85d59be220f3" name="a825e445a84f991d8223d85d59be220f3"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a825e445a84f991d8223d85d59be220f3">&#9670;&#160;</a></span>cancel_pending()</h2>
+</div><a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Member Enumeration Documentation</h2>
+<a id="a8286baa9f3c0fec05de8010655439239" name="a8286baa9f3c0fec05de8010655439239"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8286baa9f3c0fec05de8010655439239">&#9670;&#160;</a></span>RunOutcome</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a8286baa9f3c0fec05de8010655439239">kernel::elf::ElfLoader::RunOutcome</a> : uint8_t</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Outcome of the retained set's last launch (issue #271 P1). </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a8286baa9f3c0fec05de8010655439239a696b031073e74bf2cb98e5ef201d4aa3" name="a8286baa9f3c0fec05de8010655439239a696b031073e74bf2cb98e5ef201d4aa3"></a>UNKNOWN&#160;</td><td class="fielddoc"><p>Never launched, or ended by an untracked path. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a8286baa9f3c0fec05de8010655439239aa88a6a0c276fd853999a1faedf19c00e" name="a8286baa9f3c0fec05de8010655439239aa88a6a0c276fd853999a1faedf19c00e"></a>CLEAN&#160;</td><td class="fielddoc"><p>Exited via sys_exit (code recorded). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a8286baa9f3c0fec05de8010655439239a131d2cc9ffea3dcc797a4f1eb41ab4c2" name="a8286baa9f3c0fec05de8010655439239a131d2cc9ffea3dcc797a4f1eb41ab4c2"></a>FAULTED&#160;</td><td class="fielddoc"><p>Killed by fault/auth-kill/death path. </p>
+</td></tr>
+</table>
+
+</div>
+</div>
+<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="a2af9262c176d4d5fe4de7836727822a0" name="a2af9262c176d4d5fe4de7836727822a0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2af9262c176d4d5fe4de7836727822a0">&#9670;&#160;</a></span>abandon_retention()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::elf::ElfLoader::abandon_retention </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Drop the never-added taker's task ref after an admission failure (shell runelf denials; future pcall sites). Public so <a class="el" href="shell_8cpp.html">shell.cpp</a> can call it outside the elf namespace; IRQ-masked; bounded; never reschedule inside. </p>
+
+</div>
+</div>
+<a id="a1f844588246a7157c567223f6391d2bd" name="a1f844588246a7157c567223f6391d2bd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f844588246a7157c567223f6391d2bd">&#9670;&#160;</a></span>cancel_pending()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -189,7 +278,7 @@ Static Public Attributes</h2></td></tr>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -198,7 +287,7 @@ Static Public Attributes</h2></td></tr>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a825e445a84f991d8223d85d59be220f3_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a825e445a84f991d8223d85d59be220f3_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a1f844588246a7157c567223f6391d2bd_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a1f844588246a7157c567223f6391d2bd_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 1 -->
 </div>
 
@@ -282,7 +371,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Tear down a completed-but-never-scheduled TCB (built by finalize_loaded_task). Skips all scheduler interactions. </p>
-<p>Tear down a completed-but-never-scheduled TCB. It was built by finalize_loaded_task and never add_task'd, so cleanup()'s <a class="el" href="classkernel_1_1_scheduler.html#a8ff081fb1988f881f037ef8ed51901a9" title="Best-effort unregister of a TCB from the scheduler&#39;s live tables. Used by TaskControlBlock::cleanup()...">Scheduler::unregister_task</a> / parent / daemon logic must NOT run. Frees the same resources: PML4 user pages + page, user stack, kernel stack, IPC objects, fd table, then the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block. </p>
+<p>Tear down a completed-but-never-scheduled TCB. It was built by finalize_loaded_task and never add_task'd, so cleanup()'s <a class="el" href="classkernel_1_1_scheduler.html#a8ff081fb1988f881f037ef8ed51901a9" title="Best-effort unregister of a TCB from the scheduler&#39;s live tables. Used by TaskControlBlock::cleanup()...">Scheduler::unregister_task</a> / parent / daemon logic must NOT run. Frees the same resources: PML4 user pages + page, user stack, kernel stack, <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> objects, fd table, then the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -348,13 +437,97 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Current load generation for DepResolveContext setup. </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a829f0d3ed8bed38faa92180dafc1ed36_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a829f0d3ed8bed38faa92180dafc1ed36_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<p>Current load generation for <a class="el" href="structkernel_1_1elf_1_1_dep_resolve_context.html" title="Per-request dependency-resolution context (issue #95). Single instance per top-level resolve; passed ...">DepResolveContext</a> setup. </p>
+
 </div>
+</div>
+<a id="a3750c4dce4f442628affcd26e5f20793" name="a3750c4dce4f442628affcd26e5f20793"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3750c4dce4f442628affcd26e5f20793">&#9670;&#160;</a></span>has_retained()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::elf::ElfLoader::has_retained </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Whether a rerunnable retention exists (issue #271 P1): a valid set adopted at take, not yet superseded/reset/ released. Rerun refuses unless this is true (P2 checks the outcome gate on top). </p>
+
+</div>
+</div>
+<a id="a7c1cbe4243b154e2e504455bd6584b6d" name="a7c1cbe4243b154e2e504455bd6584b6d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7c1cbe4243b154e2e504455bd6584b6d">&#9670;&#160;</a></span>note_launched()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::elf::ElfLoader::note_launched </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>task_id</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Record a launch of the retained set's task (issue #271 P1). Call after successful add_task of a taken/retained TCB; arms outcome tracking for this task id. Unknown ids in note_task_end stay UNKNOWN (never launched). </p>
+
+</div>
+</div>
+<a id="a9241a9a2968d9c2a01710b04505ec8b4" name="a9241a9a2968d9c2a01710b04505ec8b4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9241a9a2968d9c2a01710b04505ec8b4">&#9670;&#160;</a></span>note_task_end()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::elf::ElfLoader::note_task_end </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>task_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>clean</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>code</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Record the end of a tracked launch (issue #271 P1). sys_exit passes clean=true + the exit code; fault/auth-kill/ death paths pass clean=false. Calls for untracked ids are ignored. Rerun requires CLEAN + code 0 (checked at build). </p>
 
 </div>
 </div>
@@ -386,7 +559,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a2004c846d94d4d05e7bb58ea3e9fd8a1_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a2004c846d94d4d05e7bb58ea3e9fd8a1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -446,7 +619,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_ad4b037529a02716f60ffd23d522db9ba_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_ad4b037529a02716f60ffd23d522db9ba_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -479,8 +652,35 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a0b136e926533436c58605666ec2ffc38_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a0b136e926533436c58605666ec2ffc38_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 6 -->
 </div>
+
+</div>
+</div>
+<a id="a07094fd18d998be896ecb67ecd4c24ce" name="a07094fd18d998be896ecb67ecd4c24ce"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a07094fd18d998be896ecb67ecd4c24ce">&#9670;&#160;</a></span>retained_outcome()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a8286baa9f3c0fec05de8010655439239">ElfLoader::RunOutcome</a> kernel::elf::ElfLoader::retained_outcome </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Current outcome of the retained set (tests + P2 gate). </p>
 
 </div>
 </div>
@@ -566,7 +766,73 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a34f023f52654f67830d355c1a6d5ffb7_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a34f023f52654f67830d355c1a6d5ffb7_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a id="a1d1c4d68b0003efa9aa37c167fcd779f" name="a1d1c4d68b0003efa9aa37c167fcd779f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1d1c4d68b0003efa9aa37c167fcd779f">&#9670;&#160;</a></span>try_rerun()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::elf::ElfLoader::try_rerun </td>
+          <td>(</td>
+          <td class="paramtype">const char **</td>          <td class="paramname"><span class="paramname"><em>reason</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Try to build a rerun TCB from retention (issue #271 P2). Checks IDLE + valid + static + CLEAN/0; on success returns a fresh TCB (caller owns it, must set settled params before add_task like take_completed). On failure returns nullptr and sets *reason to a static message (no elf loaded / dynamic / not clean / busy / rebuild failed). IRQ-masked for the gate; allocations/mappings run unlocked (may reschedule only via explicit reschedule points outside the lock). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a1d1c4d68b0003efa9aa37c167fcd779f_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a1d1c4d68b0003efa9aa37c167fcd779f_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 8 -->
+</div>
+
+</div>
+</div>
+<a id="ae72ba828f83e55c667fcbe055f4eabc5" name="ae72ba828f83e55c667fcbe055f4eabc5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae72ba828f83e55c667fcbe055f4eabc5">&#9670;&#160;</a></span>unmap_golden()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::elf::ElfLoader::unmap_golden </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Unmap every retained-golden page from <code class="param">tcb's</code> table and drop that task's set ref (issue #271 P1). Never frees here: pages are freed only when retention refs == 0 AND task refs == 0 (freed inline at that transition). Called from task teardown paths BEFORE blind free_user_pages (which then naturally skips the unmapped pages). Lock-atomic; IRQ-masked; never held across reschedule. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_ae72ba828f83e55c667fcbe055f4eabc5_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_ae72ba828f83e55c667fcbe055f4eabc5_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -599,7 +865,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_ab8245317359afbf1038319328b3e5523_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_ab8245317359afbf1038319328b3e5523_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -649,6 +915,56 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a2a436a558452ead290dcf8b403c5a86d" name="a2a436a558452ead290dcf8b403c5a86d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2a436a558452ead290dcf8b403c5a86d">&#9670;&#160;</a></span>kMaxGoldenPages</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::elf::ElfLoader::kMaxGoldenPages</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<b>Initial value:</b><div class="fragment"><div class="line">                                    =</div>
+<div class="line"><span class="keyword">static_cast&lt;</span><span class="keywordtype">size_t</span><span class="keyword">&gt;</span>(1024 * 1024 * 4) / 4096</div>
+</div><!-- fragment -->
+<p>Golden-page bound: RO bytes beyond the #46 scan cap are never retained (same cap, same fail-closed). </p>
+
+</div>
+</div>
+<a id="abdc94dfe5bd9f2453181e109f3809285" name="abdc94dfe5bd9f2453181e109f3809285"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abdc94dfe5bd9f2453181e109f3809285">&#9670;&#160;</a></span>kMaxGoldenRanges</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::elf::ElfLoader::kMaxGoldenRanges = 8</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>One retained set max (R6): take overwrites, never appends. </p>
+
+</div>
+</div>
 <a id="ad1de548c4dfecbe2cc0acd9b79d62176" name="ad1de548c4dfecbe2cc0acd9b79d62176"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ad1de548c4dfecbe2cc0acd9b79d62176">&#9670;&#160;</a></span>kMaxPath</h2>
 
@@ -668,6 +984,52 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a581d40c9545cd4a7e457b124d75770e3" name="a581d40c9545cd4a7e457b124d75770e3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a581d40c9545cd4a7e457b124d75770e3">&#9670;&#160;</a></span>kMaxPinRanges</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::elf::ElfLoader::kMaxPinRanges = 8</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a821e03c376d5e250fa15c91875ced90b" name="a821e03c376d5e250fa15c91875ced90b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a821e03c376d5e250fa15c91875ced90b">&#9670;&#160;</a></span>kMaxRerunWritableBytes</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::elf::ElfLoader::kMaxRerunWritableBytes = 1 * 1024 * 1024</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Writable-byte pin bound for rerun retention (issue #271): images with more RW file bytes are loadable but never retained (explicit refusal at rerun). </p>
 
 </div>
 </div>

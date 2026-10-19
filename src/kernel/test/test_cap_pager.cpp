@@ -326,10 +326,10 @@ JARVIS_TEST(pager_fault_roundtrip, "PRE: none | POST: none") {
     // Both mapped pages in the client PML4 resolve to the pager's frames.
     // (Check while the probe's PML4 is still alive.)
     JARVIS_ASSERT_EQ(phys, VMM::virt_to_phys_in_pml4(0x10000000,
-                                                     t->page_table_));
+                                                     t->get_page_table()));
     JARVIS_ASSERT_EQ(phys + arch::PAGE_SIZE,
                      VMM::virt_to_phys_in_pml4(0x10000000 + arch::PAGE_SIZE,
-                                               t->page_table_));
+                                               t->get_page_table()));
 
     // Client resumes; the faulting write to 0x10000000 now succeeds; _exit(0).
     kernel::test::wait_for_termination_safe(t);
@@ -395,7 +395,7 @@ JARVIS_TEST(pager_map_after_timeout_denied, "PRE: none | POST: none") {
     // re-faults on the poisoned VA and SIGSEGV-terminates; check before the
     // cleanup frees the PML4).
     JARVIS_ASSERT_EQ(0ULL,
-                     VMM::virt_to_phys_in_pml4(0x10000000, t->page_table_));
+                     VMM::virt_to_phys_in_pml4(0x10000000, t->get_page_table()));
 
     // The probe re-faults on the poisoned VA -> SIGSEGV -> terminated.
     kernel::test::wait_for_termination_safe(t);

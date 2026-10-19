@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -140,7 +140,7 @@ Files</h2></td></tr>
 <tr class="memitem:dump_2Ecpp" id="r_dump_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dump_8cpp.html">dump.cpp</a></td></tr>
 <tr class="memdesc:dump_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Diagnostic dump implementation — scheduler, CPU registers, task state. <br /></td></tr>
 <tr class="memitem:dump_2Ehpp" id="r_dump_2Ehpp"><td class="memItemLeft"><a href="dump_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="dump_8hpp.html">dump.hpp</a></td></tr>
-<tr class="memdesc:dump_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Diagnostic dump functions for kernel debugging. All functions use arch::IrqGuard internally to disable IRQs during output. Output goes to serial via Logger::raw_write/print_hex/print_dec. <br /></td></tr>
+<tr class="memdesc:dump_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Diagnostic dump functions for kernel debugging. All functions use <a class="el" href="classarch_1_1_irq_guard.html" title="RAII guard that disables interrupts on construction and restores the previous interrupt state on dest...">arch::IrqGuard</a> internally to disable IRQs during output. Output goes to serial via Logger::raw_write/print_hex/print_dec. <br /></td></tr>
 <tr class="memitem:ipc_5Fsched_5Ftrace_2Ehpp" id="r_ipc_5Fsched_5Ftrace_2Ehpp"><td class="memItemLeft"><a href="ipc__sched__trace_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="ipc__sched__trace_8hpp.html">ipc_sched_trace.hpp</a></td></tr>
 <tr class="memdesc:ipc__sched__trace_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reusable diagnostic harness for IPC reply-loss (H1) and deferred- switch self-deadlock (H2) analysis in the scheduler/IPC subsystem. <br /></td></tr>
 </table>

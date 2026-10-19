@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -134,8 +134,8 @@ Collaboration diagram for kernel::cap::MmioUserMap:</div>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:afdd1e85f6b3cb6f4573f13a55b0a1c13" id="r_afdd1e85f6b3cb6f4573f13a55b0a1c13"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#afdd1e85f6b3cb6f4573f13a55b0a1c13">map</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> &amp;mmio)</td></tr>
 <tr class="memdesc:afdd1e85f6b3cb6f4573f13a55b0a1c13"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps <code class="param">mmio's</code> memory BAR into <code class="param">task's</code> user VA window.  <br /></td></tr>
-<tr class="memitem:a9902842094632bdb6c4b8c0b39393b6c" id="r_a9902842094632bdb6c4b8c0b39393b6c"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a9902842094632bdb6c4b8c0b39393b6c">unmap</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, uint64_t va)</td></tr>
-<tr class="memdesc:a9902842094632bdb6c4b8c0b39393b6c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps the mapping at <code class="param">va</code> if it belongs to <code class="param">task</code>.  <br /></td></tr>
+<tr class="memitem:aca79557047d7233162aa8aff27325008" id="r_aca79557047d7233162aa8aff27325008"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#aca79557047d7233162aa8aff27325008">unmap</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, uint64_t va) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:aca79557047d7233162aa8aff27325008"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmaps the mapping at <code class="param">va</code> if it belongs to <code class="param">task</code>.  <br /></td></tr>
 <tr class="memitem:ae27abc439253bc04d09bb3e244694fc5" id="r_ae27abc439253bc04d09bb3e244694fc5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae27abc439253bc04d09bb3e244694fc5">invalidate_cap</a> (<a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">cap::MmioCap</a> *mmio)</td></tr>
 <tr class="memdesc:ae27abc439253bc04d09bb3e244694fc5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Immediately removes every live mapping backed by <code class="param">mmio</code> (revocation closure, issue #8). Called from <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html#a1f04618a572ab877022a7ebf94058403" title="Final teardown: releases the MemPool block (device memory is never freed). Also retroactively removes...">MmioCap::dispose</a>/ revoke before the cap block is freed. Pointer-equality only — never dereferenced.  <br /></td></tr>
 <tr class="memitem:a05718d06a5241b89daaec876f0facf16" id="r_a05718d06a5241b89daaec876f0facf16"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a05718d06a5241b89daaec876f0facf16">drain_task</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task)</td></tr>
@@ -144,8 +144,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:af04b5a232d6d39a8c541f66b43f2bf84"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clears the whole registry (test isolation snapshot restore).  <br /></td></tr>
 <tr class="memitem:a2664a39bec5747af26307d496e1f878f" id="r_a2664a39bec5747af26307d496e1f878f"><td class="memItemLeft">static <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2664a39bec5747af26307d496e1f878f">live_count</a> ()</td></tr>
 <tr class="memdesc:a2664a39bec5747af26307d496e1f878f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of live mappings (test accessor).  <br /></td></tr>
-<tr class="memitem:aa27cd367f9107aaf671eaf3cf862ac85" id="r_aa27cd367f9107aaf671eaf3cf862ac85"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#aa27cd367f9107aaf671eaf3cf862ac85">is_owner</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, uint64_t va)</td></tr>
-<tr class="memdesc:aa27cd367f9107aaf671eaf3cf862ac85"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether <code class="param">task</code> currently owns the mapping at <code class="param">va</code> (test accessor).  <br /></td></tr>
+<tr class="memitem:aafbf93f411eff9f77fa5e0a963efc022" id="r_aafbf93f411eff9f77fa5e0a963efc022"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#aafbf93f411eff9f77fa5e0a963efc022">is_owner</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, uint64_t va) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:aafbf93f411eff9f77fa5e0a963efc022"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether <code class="param">task</code> currently owns the mapping at <code class="param">va</code> (test accessor).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>User-space MMIO page-frame mapping registry (issue #8). A static bounded table keyed by task id (<a class="el" href="classkernel_1_1_irq_delivery.html" title="User-space IRQ delivery engine (issue #2).">IrqDelivery</a> pattern) that maps an <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html" title="A capability-gated MMIO/BAR range. Does NOT own physical memory (device memory is never PMM-owned) — ...">MmioCap</a>'s memory BAR into a fixed user VA window for Ring 3 drivers via the SYS_MMIO_MAP/SYS_MMIO_UNMAP syscall surface. Keyed by owner_task_id + a per-slot generation (recycled-slot stale-VA defense). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; g_iopb_lock -&gt; mmio map lock (never held across <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> map/unmap or reschedule). </p>
@@ -216,8 +216,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="aa27cd367f9107aaf671eaf3cf862ac85" name="aa27cd367f9107aaf671eaf3cf862ac85"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa27cd367f9107aaf671eaf3cf862ac85">&#9670;&#160;</a></span>is_owner()</h2>
+<a id="aafbf93f411eff9f77fa5e0a963efc022" name="aafbf93f411eff9f77fa5e0a963efc022"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aafbf93f411eff9f77fa5e0a963efc022">&#9670;&#160;</a></span>is_owner()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -238,7 +238,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -345,8 +345,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a9902842094632bdb6c4b8c0b39393b6c" name="a9902842094632bdb6c4b8c0b39393b6c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9902842094632bdb6c4b8c0b39393b6c">&#9670;&#160;</a></span>unmap()</h2>
+<a id="aca79557047d7233162aa8aff27325008" name="aca79557047d7233162aa8aff27325008"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aca79557047d7233162aa8aff27325008">&#9670;&#160;</a></span>unmap()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -367,7 +367,7 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -377,7 +377,7 @@ Here is the call graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1cap_1_1_mmio_user_map_a9902842094632bdb6c4b8c0b39393b6c_cgraph.png" border="0" usemap="#aclasskernel_1_1cap_1_1_mmio_user_map_a9902842094632bdb6c4b8c0b39393b6c_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="classkernel_1_1cap_1_1_mmio_user_map_aca79557047d7233162aa8aff27325008_cgraph.png" border="0" usemap="#aclasskernel_1_1cap_1_1_mmio_user_map_aca79557047d7233162aa8aff27325008_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 5 -->
 </div>
 

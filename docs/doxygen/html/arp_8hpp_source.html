@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -118,14 +118,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('arp_8hpp_sourc
   <div class="headertitle"><div class="title">arp.hpp</div></div>
 </div><!--header-->
 <div class="contents">
-<a href="arp_8hpp.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#pragma once</span></div>
-<div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span> </div>
-<div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="comment">/*</span></div>
-<div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="comment"> * NexIOS RTOS — Development Roadmap / Kernel Core</span></div>
-<div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="comment"> * Copyright (C) 2026 Arnold Hasshold</span></div>
-<div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="comment"> *</span></div>
-<div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span><span class="comment"> * This program is free software: you can redistribute it and/or modify</span></div>
-<div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span><span class="comment"> * it under the terms of the GNU General Public License as published by</span></div>
+<a href="arp_8hpp.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno"><a class="line" href="arp_8hpp.html#ab4891e9b77eb26f33d21cfde982564cb">    1</a></span><span class="preprocessor">#pragma once</span></div>
+<div class="line"><a id="l00002" name="l00002"></a><span class="lineno"><a class="line" href="arp_8hpp.html#aff25a69752648654e56c4ff3e0b1b226">    2</a></span> </div>
+<div class="line"><a id="l00003" name="l00003"></a><span class="lineno"><a class="line" href="arp_8hpp.html#ae414f6c2299d9cf0eff8aa8e81f538d8">    3</a></span><span class="comment">/*</span></div>
+<div class="line"><a id="l00004" name="l00004"></a><span class="lineno"><a class="line" href="arp_8hpp.html#ab35932285f9c007075b755333d3a2f94">    4</a></span><span class="comment"> * NexIOS RTOS — Development Roadmap / Kernel Core</span></div>
+<div class="line"><a id="l00005" name="l00005"></a><span class="lineno"><a class="line" href="arp_8hpp.html#a9bdc2cb963ceafba4f481d22daefda25">    5</a></span><span class="comment"> * Copyright (C) 2026 Arnold Hasshold</span></div>
+<div class="line"><a id="l00006" name="l00006"></a><span class="lineno"><a class="line" href="arp_8hpp.html#a1240a1cea4b508557b7bc9cd305d7f19">    6</a></span><span class="comment"> *</span></div>
+<div class="line"><a id="l00007" name="l00007"></a><span class="lineno"><a class="line" href="arp_8hpp.html#adefce83f011eb7eee2560177ff051ea8">    7</a></span><span class="comment"> * This program is free software: you can redistribute it and/or modify</span></div>
+<div class="line"><a id="l00008" name="l00008"></a><span class="lineno"><a class="line" href="arp_8hpp.html#a02cfdacdf408d69651fe548a79c5124c">    8</a></span><span class="comment"> * it under the terms of the GNU General Public License as published by</span></div>
 <div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span><span class="comment"> * the Free Software Foundation, either version 3 of the License, or</span></div>
 <div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span><span class="comment"> * (at your option) any later version.</span></div>
 <div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="comment"> *</span></div>
@@ -139,69 +139,97 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('arp_8hpp_sourc
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#pragma once</span></div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#include &lt;<a class="code" href="ether_8hpp.html">kernel/net/ether.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#include &lt;<a class="code" href="ether_8hpp.html">kernel/net/ether.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span> </div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacenet.html">net</a> {</div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacenet.html">net</a> {</div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span> </div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> ARP_CACHE_SIZE = 32;</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span></div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">struct </span>ArpHeader {</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> htype; </div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> ptype; </div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> hlen;   </div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> plen;   </div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> oper;  </div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>    MacAddr sha;    </div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> spa;   </div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    MacAddr tha;    </div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> tpa;   </div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>} <a class="code hl_function" href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">__attribute__</a>((packed));</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span></div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> ARP_HTYPE_ETHER = 1;</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> ARP_OPER_REQUEST = 1;</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> ARP_OPER_REPLY = 2;</div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span></div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span><span class="keyword">struct </span>ArpCacheEntry {</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> ip; </div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    MacAddr mac; </div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <span class="keywordtype">bool</span> valid;  </div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>};</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span></div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span><span class="keyword">class </span>ArpCache {</div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>  <span class="keyword">public</span>:</div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    ArpCache();</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span></div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8">lookup</a>(uint32_t ip, MacAddr &amp;mac) <span class="keyword">const</span>;</div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span></div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <span class="keywordtype">void</span> update(uint32_t ip, MacAddr mac);</div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span></div>
-<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <span class="keywordtype">void</span> remove(uint32_t ip);</div>
-<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span></div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <span class="keywordtype">void</span> clear();</div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span></div>
-<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    <span class="keyword">const</span> ArpCacheEntry *entries()<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>        <span class="keywordflow">return</span> entries_;</div>
-<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    }</div>
-<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span> </div>
-<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>  <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    ArpCacheEntry entries_[ARP_CACHE_SIZE];</div>
-<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span> </div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    <span class="keywordtype">int</span> <a class="code hl_function" href="namespaceinitrd.html#a08db2dcf48cc3117394e849a12e1fc19">find</a>(uint32_t ip) <span class="keyword">const</span>;</div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    <span class="keywordtype">int</span> find_empty() <span class="keyword">const</span>;</div>
-<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>};</div>
-<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span> </div>
-<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>} <span class="comment">// namespace net</span></div>
+<div class="foldopen" id="foldopen00029" data-start="{" data-end="}">
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno"><a class="line" href="namespacenet.html#ac7db56eb36db03ea6f642b3895d2665a">   29</a></span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="namespacenet.html#a9e24fa6457b5a663358906e621531a74">ARP_CACHE_SIZE</a> = 32;</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span></div>
+<div class="foldopen" id="foldopen00032" data-start="{" data-end="};">
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_header.html">   32</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structnet_1_1_arp_header.html">ArpHeader</a> {</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_header.html#a6ef6722f03da7c9cab48f8e1417656bc">   33</a></span>    uint16_t <a class="code hl_variable" href="structnet_1_1_arp_header.html#a6ef6722f03da7c9cab48f8e1417656bc">htype</a>; </div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_header.html#ad2c02e8c8ebe859b757239a5f9fa5fb8">   34</a></span>    uint16_t <a class="code hl_variable" href="structnet_1_1_arp_header.html#ad2c02e8c8ebe859b757239a5f9fa5fb8">ptype</a>; </div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_header.html#aea0130d42366132a00905d2201e038bc">   35</a></span>    uint8_t <a class="code hl_variable" href="structnet_1_1_arp_header.html#aea0130d42366132a00905d2201e038bc">hlen</a>;   </div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_header.html#a556d9c37a07cbf2c20e2b0e511695285">   36</a></span>    uint8_t <a class="code hl_variable" href="structnet_1_1_arp_header.html#a556d9c37a07cbf2c20e2b0e511695285">plen</a>;   </div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_header.html#a7ed68a61635b3c84f21be56b07b684e6">   37</a></span>    uint16_t <a class="code hl_variable" href="structnet_1_1_arp_header.html#a7ed68a61635b3c84f21be56b07b684e6">oper</a>;  </div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_header.html#a20124baaff254150b0a2353e0fa1e2fb">   38</a></span>    <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> <a class="code hl_variable" href="structnet_1_1_arp_header.html#a20124baaff254150b0a2353e0fa1e2fb">sha</a>;    </div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_header.html#af45c29cea1e726cf1815dd7bad842ee9">   39</a></span>    uint32_t <a class="code hl_variable" href="structnet_1_1_arp_header.html#af45c29cea1e726cf1815dd7bad842ee9">spa</a>;   </div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_header.html#a3a208b6fca828c30837e7595b5193f77">   40</a></span>    <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> <a class="code hl_variable" href="structnet_1_1_arp_header.html#a3a208b6fca828c30837e7595b5193f77">tha</a>;    </div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_header.html#af68d216b7fe6a3e5bb6387a76bed2a9e">   41</a></span>    uint32_t <a class="code hl_variable" href="structnet_1_1_arp_header.html#af68d216b7fe6a3e5bb6387a76bed2a9e">tpa</a>;   </div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>} <a class="code hl_variable" href="namespacenet.html#abc797c4b5188f5f8f09cab0d2d841de7">__attribute__</a>((packed));</div>
+</div>
+</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span></div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno"><a class="line" href="namespacenet.html#adcb0d71a014ebd7ab1c224c73db6f1de">   45</a></span><span class="keyword">constexpr</span> uint16_t <a class="code hl_variable" href="namespacenet.html#adcb0d71a014ebd7ab1c224c73db6f1de">ARP_HTYPE_ETHER</a> = 1;</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno"><a class="line" href="namespacenet.html#a0109abfbe5b20b685075948205bfd513">   47</a></span><span class="keyword">constexpr</span> uint16_t <a class="code hl_variable" href="namespacenet.html#a0109abfbe5b20b685075948205bfd513">ARP_OPER_REQUEST</a> = 1;</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno"><a class="line" href="namespacenet.html#a3588b3ee19b07fd8a16b2eac318f7fcb">   49</a></span><span class="keyword">constexpr</span> uint16_t <a class="code hl_variable" href="namespacenet.html#a3588b3ee19b07fd8a16b2eac318f7fcb">ARP_OPER_REPLY</a> = 2;</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span></div>
+<div class="foldopen" id="foldopen00052" data-start="{" data-end="};">
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_cache_entry.html">   52</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structnet_1_1_arp_cache_entry.html">ArpCacheEntry</a> {</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_cache_entry.html#a2287025139b70aff9be1e85ce5f24796">   53</a></span>    uint32_t <a class="code hl_variable" href="structnet_1_1_arp_cache_entry.html#a2287025139b70aff9be1e85ce5f24796">ip</a>; </div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_cache_entry.html#a237d6cbb45dfcacace3a1e9ed7286208">   54</a></span>    <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> <a class="code hl_variable" href="structnet_1_1_arp_cache_entry.html#a237d6cbb45dfcacace3a1e9ed7286208">mac</a>; </div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno"><a class="line" href="structnet_1_1_arp_cache_entry.html#af8e6797a4d221cc1901c4c8b4f0f1b53">   55</a></span>    <span class="keywordtype">bool</span> <a class="code hl_variable" href="structnet_1_1_arp_cache_entry.html#af8e6797a4d221cc1901c4c8b4f0f1b53">valid</a>;  </div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno"><a class="line" href="namespacenet.html#abc797c4b5188f5f8f09cab0d2d841de7">   56</a></span>};</div>
+</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span></div>
+<div class="foldopen" id="foldopen00059" data-start="{" data-end="};">
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno"><a class="line" href="classnet_1_1_arp_cache.html">   59</a></span><span class="keyword">class </span><a class="code hl_function" href="classnet_1_1_arp_cache.html#abd0798daa96364063223838784a8925f">ArpCache</a> {</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>  <span class="keyword">public</span>:</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    <a class="code hl_function" href="classnet_1_1_arp_cache.html#abd0798daa96364063223838784a8925f">ArpCache</a>();</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span></div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="classnet_1_1_arp_cache.html#a4239af47aa869c8d61f291781b1e6dd1">lookup</a>(uint32_t ip, <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> &amp;mac) <span class="keyword">const</span>;</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span></div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classnet_1_1_arp_cache.html#af1a9de58388688381eea4b134148a640">update</a>(uint32_t ip, <a class="code hl_struct" href="structnet_1_1_mac_addr.html">MacAddr</a> mac);</div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span></div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classnet_1_1_arp_cache.html#a04c79ec3181bb756d93d4449994be6b7">remove</a>(uint32_t ip);</div>
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span></div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classnet_1_1_arp_cache.html#a3173cc31c474d70125de7823675c5c0f">clear</a>();</div>
+<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span></div>
+<div class="foldopen" id="foldopen00077" data-start="{" data-end="}">
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno"><a class="line" href="classnet_1_1_arp_cache.html#acf5d1e02f1923a955c60df92a2bdd3b9">   77</a></span>    <span class="keyword">const</span> <a class="code hl_struct" href="structnet_1_1_arp_cache_entry.html">ArpCacheEntry</a> *<a class="code hl_function" href="classnet_1_1_arp_cache.html#acf5d1e02f1923a955c60df92a2bdd3b9">entries</a>()<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>        <span class="keywordflow">return</span> entries_;</div>
+<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    }</div>
+</div>
+<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span> </div>
+<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>  <span class="keyword">private</span>:</div>
+<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    <a class="code hl_struct" href="structnet_1_1_arp_cache_entry.html">ArpCacheEntry</a> entries_[<a class="code hl_variable" href="namespacenet.html#a9e24fa6457b5a663358906e621531a74">ARP_CACHE_SIZE</a>];</div>
+<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span> </div>
+<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    <span class="keywordtype">int</span> find(uint32_t ip) <span class="keyword">const</span>;</div>
+<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>    <span class="keywordtype">int</span> find_empty() <span class="keyword">const</span>;</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>};</div>
+</div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span> </div>
+<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>} <span class="comment">// namespace net</span></div>
+<div class="ttc" id="aclassnet_1_1_arp_cache_html_a04c79ec3181bb756d93d4449994be6b7"><div class="ttname"><a href="classnet_1_1_arp_cache.html#a04c79ec3181bb756d93d4449994be6b7">net::ArpCache::remove</a></div><div class="ttdeci">void remove(uint32_t ip)</div><div class="ttdoc">Remove an entry.</div><div class="ttdef"><b>Definition</b> arp.cpp:58</div></div>
+<div class="ttc" id="aclassnet_1_1_arp_cache_html_a3173cc31c474d70125de7823675c5c0f"><div class="ttname"><a href="classnet_1_1_arp_cache.html#a3173cc31c474d70125de7823675c5c0f">net::ArpCache::clear</a></div><div class="ttdeci">void clear()</div><div class="ttdoc">Clear all entries.</div><div class="ttdef"><b>Definition</b> arp.cpp:66</div></div>
+<div class="ttc" id="aclassnet_1_1_arp_cache_html_a4239af47aa869c8d61f291781b1e6dd1"><div class="ttname"><a href="classnet_1_1_arp_cache.html#a4239af47aa869c8d61f291781b1e6dd1">net::ArpCache::lookup</a></div><div class="ttdeci">bool lookup(uint32_t ip, MacAddr &amp;mac) const</div><div class="ttdoc">Look up a MAC address for the given IP.</div><div class="ttdef"><b>Definition</b> arp.cpp:34</div></div>
+<div class="ttc" id="aclassnet_1_1_arp_cache_html_abd0798daa96364063223838784a8925f"><div class="ttname"><a href="classnet_1_1_arp_cache.html#abd0798daa96364063223838784a8925f">net::ArpCache::ArpCache</a></div><div class="ttdeci">ArpCache()</div><div class="ttdoc">Construct an empty ARP cache.</div><div class="ttdef"><b>Definition</b> arp.cpp:28</div></div>
+<div class="ttc" id="aclassnet_1_1_arp_cache_html_acf5d1e02f1923a955c60df92a2bdd3b9"><div class="ttname"><a href="classnet_1_1_arp_cache.html#acf5d1e02f1923a955c60df92a2bdd3b9">net::ArpCache::entries</a></div><div class="ttdeci">const ArpCacheEntry * entries() const</div><div class="ttdoc">Get a pointer to the entry array (for direct iteration).</div><div class="ttdef"><b>Definition</b> arp.hpp:77</div></div>
+<div class="ttc" id="aclassnet_1_1_arp_cache_html_af1a9de58388688381eea4b134148a640"><div class="ttname"><a href="classnet_1_1_arp_cache.html#af1a9de58388688381eea4b134148a640">net::ArpCache::update</a></div><div class="ttdeci">void update(uint32_t ip, MacAddr mac)</div><div class="ttdoc">Update the cache with a new IP→MAC mapping.</div><div class="ttdef"><b>Definition</b> arp.cpp:45</div></div>
 <div class="ttc" id="aether_8hpp_html"><div class="ttname"><a href="ether_8hpp.html">ether.hpp</a></div><div class="ttdoc">Ethernet frame types and constants.</div></div>
-<div class="ttc" id="anamespacearch_html_aa151be51b9f762a1628c2336d87ebd5d"><div class="ttname"><a href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">arch::uint16_t</a></div><div class="ttdeci">unsigned short uint16_t</div><div class="ttdef"><b>Definition</b> serial.cpp:26</div></div>
-<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
-<div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
-<div class="ttc" id="anamespaceinitrd_html_a00c53aee04ed1b36b1a86a010b49ef61"><div class="ttname"><a href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">initrd::__attribute__</a></div><div class="ttdeci">struct initrd::CpioNewcHeader __attribute__((packed))</div></div>
-<div class="ttc" id="anamespaceinitrd_html_a08db2dcf48cc3117394e849a12e1fc19"><div class="ttname"><a href="namespaceinitrd.html#a08db2dcf48cc3117394e849a12e1fc19">initrd::find</a></div><div class="ttdeci">InitrdFile find(const char *path)</div><div class="ttdef"><b>Definition</b> initrd.cpp:72</div></div>
-<div class="ttc" id="anamespacekernel_1_1cap_html_af858a03da6c7b9cd2bcce101005847c8"><div class="ttname"><a href="namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8">kernel::cap::lookup</a></div><div class="ttdeci">KernelObject * lookup(CNode *cspace, uint64_t handle, CapType want, uint32_t need_rights) noexcept</div><div class="ttdoc">Looks up handle in cspace and returns a PREFIX-reference (target-&gt;acquire() already taken) if the slo...</div><div class="ttdef"><b>Definition</b> cap.cpp:163</div></div>
-<div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> global_state.hpp:59</div></div>
+<div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> global_state.hpp:61</div></div>
+<div class="ttc" id="anamespacenet_html_a0109abfbe5b20b685075948205bfd513"><div class="ttname"><a href="namespacenet.html#a0109abfbe5b20b685075948205bfd513">net::ARP_OPER_REQUEST</a></div><div class="ttdeci">constexpr uint16_t ARP_OPER_REQUEST</div><div class="ttdoc">ARP operation: request.</div><div class="ttdef"><b>Definition</b> arp.hpp:47</div></div>
+<div class="ttc" id="anamespacenet_html_a3588b3ee19b07fd8a16b2eac318f7fcb"><div class="ttname"><a href="namespacenet.html#a3588b3ee19b07fd8a16b2eac318f7fcb">net::ARP_OPER_REPLY</a></div><div class="ttdeci">constexpr uint16_t ARP_OPER_REPLY</div><div class="ttdoc">ARP operation: reply.</div><div class="ttdef"><b>Definition</b> arp.hpp:49</div></div>
+<div class="ttc" id="anamespacenet_html_a9e24fa6457b5a663358906e621531a74"><div class="ttname"><a href="namespacenet.html#a9e24fa6457b5a663358906e621531a74">net::ARP_CACHE_SIZE</a></div><div class="ttdeci">constexpr size_t ARP_CACHE_SIZE</div><div class="ttdef"><b>Definition</b> arp.hpp:29</div></div>
+<div class="ttc" id="anamespacenet_html_abc797c4b5188f5f8f09cab0d2d841de7"><div class="ttname"><a href="namespacenet.html#abc797c4b5188f5f8f09cab0d2d841de7">net::__attribute__</a></div><div class="ttdeci">struct net::ArpCacheEntry __attribute__</div></div>
+<div class="ttc" id="anamespacenet_html_adcb0d71a014ebd7ab1c224c73db6f1de"><div class="ttname"><a href="namespacenet.html#adcb0d71a014ebd7ab1c224c73db6f1de">net::ARP_HTYPE_ETHER</a></div><div class="ttdeci">constexpr uint16_t ARP_HTYPE_ETHER</div><div class="ttdoc">ARP hardware type: Ethernet.</div><div class="ttdef"><b>Definition</b> arp.hpp:45</div></div>
+<div class="ttc" id="astructnet_1_1_arp_cache_entry_html"><div class="ttname"><a href="structnet_1_1_arp_cache_entry.html">net::ArpCacheEntry</a></div><div class="ttdoc">A single ARP cache entry.</div><div class="ttdef"><b>Definition</b> arp.hpp:52</div></div>
+<div class="ttc" id="astructnet_1_1_arp_cache_entry_html_a2287025139b70aff9be1e85ce5f24796"><div class="ttname"><a href="structnet_1_1_arp_cache_entry.html#a2287025139b70aff9be1e85ce5f24796">net::ArpCacheEntry::ip</a></div><div class="ttdeci">uint32_t ip</div><div class="ttdoc">IPv4 address (big-endian).</div><div class="ttdef"><b>Definition</b> arp.hpp:53</div></div>
+<div class="ttc" id="astructnet_1_1_arp_cache_entry_html_a237d6cbb45dfcacace3a1e9ed7286208"><div class="ttname"><a href="structnet_1_1_arp_cache_entry.html#a237d6cbb45dfcacace3a1e9ed7286208">net::ArpCacheEntry::mac</a></div><div class="ttdeci">MacAddr mac</div><div class="ttdoc">Resolved MAC address.</div><div class="ttdef"><b>Definition</b> arp.hpp:54</div></div>
+<div class="ttc" id="astructnet_1_1_arp_cache_entry_html_af8e6797a4d221cc1901c4c8b4f0f1b53"><div class="ttname"><a href="structnet_1_1_arp_cache_entry.html#af8e6797a4d221cc1901c4c8b4f0f1b53">net::ArpCacheEntry::valid</a></div><div class="ttdeci">bool valid</div><div class="ttdoc">Whether this entry contains valid data.</div><div class="ttdef"><b>Definition</b> arp.hpp:55</div></div>
+<div class="ttc" id="astructnet_1_1_arp_header_html"><div class="ttname"><a href="structnet_1_1_arp_header.html">net::ArpHeader</a></div><div class="ttdoc">ARP packet header (28 bytes).</div><div class="ttdef"><b>Definition</b> arp.hpp:32</div></div>
+<div class="ttc" id="astructnet_1_1_arp_header_html_a20124baaff254150b0a2353e0fa1e2fb"><div class="ttname"><a href="structnet_1_1_arp_header.html#a20124baaff254150b0a2353e0fa1e2fb">net::ArpHeader::sha</a></div><div class="ttdeci">MacAddr sha</div><div class="ttdoc">Sender hardware address.</div><div class="ttdef"><b>Definition</b> arp.hpp:38</div></div>
+<div class="ttc" id="astructnet_1_1_arp_header_html_a3a208b6fca828c30837e7595b5193f77"><div class="ttname"><a href="structnet_1_1_arp_header.html#a3a208b6fca828c30837e7595b5193f77">net::ArpHeader::tha</a></div><div class="ttdeci">MacAddr tha</div><div class="ttdoc">Target hardware address.</div><div class="ttdef"><b>Definition</b> arp.hpp:40</div></div>
+<div class="ttc" id="astructnet_1_1_arp_header_html_a556d9c37a07cbf2c20e2b0e511695285"><div class="ttname"><a href="structnet_1_1_arp_header.html#a556d9c37a07cbf2c20e2b0e511695285">net::ArpHeader::plen</a></div><div class="ttdeci">uint8_t plen</div><div class="ttdoc">Protocol address length (4).</div><div class="ttdef"><b>Definition</b> arp.hpp:36</div></div>
+<div class="ttc" id="astructnet_1_1_arp_header_html_a6ef6722f03da7c9cab48f8e1417656bc"><div class="ttname"><a href="structnet_1_1_arp_header.html#a6ef6722f03da7c9cab48f8e1417656bc">net::ArpHeader::htype</a></div><div class="ttdeci">uint16_t htype</div><div class="ttdoc">Hardware type (1 = Ethernet).</div><div class="ttdef"><b>Definition</b> arp.hpp:33</div></div>
+<div class="ttc" id="astructnet_1_1_arp_header_html_a7ed68a61635b3c84f21be56b07b684e6"><div class="ttname"><a href="structnet_1_1_arp_header.html#a7ed68a61635b3c84f21be56b07b684e6">net::ArpHeader::oper</a></div><div class="ttdeci">uint16_t oper</div><div class="ttdoc">Operation (1 = request, 2 = reply).</div><div class="ttdef"><b>Definition</b> arp.hpp:37</div></div>
+<div class="ttc" id="astructnet_1_1_arp_header_html_ad2c02e8c8ebe859b757239a5f9fa5fb8"><div class="ttname"><a href="structnet_1_1_arp_header.html#ad2c02e8c8ebe859b757239a5f9fa5fb8">net::ArpHeader::ptype</a></div><div class="ttdeci">uint16_t ptype</div><div class="ttdoc">Protocol type (0x0800 = IPv4).</div><div class="ttdef"><b>Definition</b> arp.hpp:34</div></div>
+<div class="ttc" id="astructnet_1_1_arp_header_html_aea0130d42366132a00905d2201e038bc"><div class="ttname"><a href="structnet_1_1_arp_header.html#aea0130d42366132a00905d2201e038bc">net::ArpHeader::hlen</a></div><div class="ttdeci">uint8_t hlen</div><div class="ttdoc">Hardware address length (6).</div><div class="ttdef"><b>Definition</b> arp.hpp:35</div></div>
+<div class="ttc" id="astructnet_1_1_arp_header_html_af45c29cea1e726cf1815dd7bad842ee9"><div class="ttname"><a href="structnet_1_1_arp_header.html#af45c29cea1e726cf1815dd7bad842ee9">net::ArpHeader::spa</a></div><div class="ttdeci">uint32_t spa</div><div class="ttdoc">Sender protocol address (IPv4, big-endian).</div><div class="ttdef"><b>Definition</b> arp.hpp:39</div></div>
+<div class="ttc" id="astructnet_1_1_arp_header_html_af68d216b7fe6a3e5bb6387a76bed2a9e"><div class="ttname"><a href="structnet_1_1_arp_header.html#af68d216b7fe6a3e5bb6387a76bed2a9e">net::ArpHeader::tpa</a></div><div class="ttdeci">uint32_t tpa</div><div class="ttdoc">Target protocol address (IPv4, big-endian).</div><div class="ttdef"><b>Definition</b> arp.hpp:41</div></div>
+<div class="ttc" id="astructnet_1_1_mac_addr_html"><div class="ttname"><a href="structnet_1_1_mac_addr.html">net::MacAddr</a></div><div class="ttdoc">Ethernet MAC address (6 bytes).</div><div class="ttdef"><b>Definition</b> ether.hpp:34</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

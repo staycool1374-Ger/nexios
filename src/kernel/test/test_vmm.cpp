@@ -270,16 +270,18 @@ JARVIS_TEST(vmm_free_user_pages_fork_stack_scenario, "PRE: none | POST: none") {
 // Testidea: Regression test for bug #3 — verify map_page splits a 2 MiB huge
 // page in the kernel HHDM and correctly maps a 4 KiB target page while
 // preserving neighbouring translations.
-// Input: Virtual address at HHDM_OFFSET+0x802000 inside a 2 MiB huge page;
-// allocate a different physical page and map it via map_page.
+// Input: Virtual address at HHDM_OFFSET+0x2082000 inside a 2 MiB huge page;
+// allocate a different physical page and map it via map_page. The fixture
+// lives above the hardened image range (issue #376: PD entries covering
+// the image are split to 4K at boot, so low HHDM VAs are no longer huge).
 // Expect: After map, target resolves to new physical page; neighbouring
 // pages still resolve correctly via the newly allocated page table; original
 // mapping is restored.
 // Depends: PMM, VMM, arch
 // v0.3.6: re-enabled with HHDM PD save/restore + hhdm_modified_ flag.
 JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
-    constexpr uint64_t test_vaddr = arch::HHDM_OFFSET + 0x802000;
-    constexpr uint64_t huge_page_base = arch::HHDM_OFFSET + 0x800000;
+    constexpr uint64_t test_vaddr = arch::HHDM_OFFSET + 0x2082000;
+    constexpr uint64_t huge_page_base = arch::HHDM_OFFSET + 0x2080000;
     uint64_t const PAGE_PRESENT = 1ULL << 0;
     uint64_t const PAGE_HUGE = 1ULL << 7;
     uint64_t kernel_pml4 = arch::read_cr3();
@@ -300,16 +302,16 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
     // Resolve physical address from the 2MB huge page entry directly:
     // phys_base = (entry & ~0x1FFFFF), then add page offset.
     uint64_t before = (pd[pd_idx] & ~0x1FFFFFULL) + (test_vaddr & 0x1FFFFFULL);
-    JARVIS_ASSERT(before == 0x802000);
+    JARVIS_ASSERT(before == 0x2082000);
     uint64_t before_base = (pd[pd_idx] & ~0x1FFFFFULL) +
                            (huge_page_base & 0x1FFFFFULL);
-    JARVIS_ASSERT(before_base == 0x800000);
+    JARVIS_ASSERT(before_base == 0x2080000);
     uint64_t before_neighbour = (pd[pd_idx] & ~0x1FFFFFULL) +
                                 ((huge_page_base + 0x1000) & 0x1FFFFFULL);
-    JARVIS_ASSERT(before_neighbour == 0x801000);
+    JARVIS_ASSERT(before_neighbour == 0x2081000);
     uint64_t test_phys = PMM::alloc_page();
     JARVIS_ASSERT(test_phys != 0);
-    JARVIS_ASSERT(test_phys != 0x802000);
+    JARVIS_ASSERT(test_phys != 0x2082000);
     // Issue #200: HHDM PD surgery is IRQ-critical (spec
     // docs/_archive/hhdm-snapshot-restore.md §5.1) — mask the timer ISR
     // and task preemption across map..manual-restore (see
@@ -321,20 +323,26 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
     uint64_t pt_phys = pd[pd_idx] & ~0xFFFULL;
     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
     size_t pt_idx = static_cast<size_t>((test_vaddr & (0x1FFULL << 12)) >> 12);
-    constexpr uint64_t X64_PT_FLAGS = (1ULL << 0) | (1ULL << 1); // PRESENT|WRITE
-    JARVIS_ASSERT(pt[pt_idx] == (test_phys & ~0xFFFULL) + X64_PT_FLAGS);
+    // Split-inherited entries keep the boot huge entry's flags verbatim
+    // (PRESENT|WRITE — boot sets no XD on huge DATA entries, and the
+    // split_fill NX/AP carry only preserves bits already set); only the
+    // explicitly (re)mapped leaf carries NX (issue #376 slice 1).
+    constexpr uint64_t X64_PT_FLAGS = (1ULL << 0) | (1ULL << 1);
+    constexpr uint64_t X64_MAPPED_FLAGS =
+        (1ULL << 0) | (1ULL << 1) | (1ULL << 63); // PRESENT|WRITE|NX
+    JARVIS_ASSERT(pt[pt_idx] == (test_phys & ~0xFFFULL) + X64_MAPPED_FLAGS);
     // The huge page base and neighbour should still resolve via the PT page
     size_t base_pt_idx = static_cast<size_t>((huge_page_base & (0x1FFULL << 12)) >> 12);
-    JARVIS_ASSERT(pt[base_pt_idx] == (0x800000 & ~0xFFFULL) + X64_PT_FLAGS);
+    JARVIS_ASSERT(pt[base_pt_idx] == (0x2080000 & ~0xFFFULL) + X64_PT_FLAGS);
     size_t neigh_pt_idx = static_cast<size_t>(((huge_page_base + 0x1000) & (0x1FFULL << 12)) >> 12);
-    JARVIS_ASSERT(pt[neigh_pt_idx] == (0x801000 & ~0xFFFULL) + X64_PT_FLAGS);
+    JARVIS_ASSERT(pt[neigh_pt_idx] == (0x2081000 & ~0xFFFULL) + X64_PT_FLAGS);
     VMM::unmap_page(test_vaddr);
     // After unmap: PT entry in the just-created PT page should be cleared.
     // The unmap_page guard returns early for kernel VAs during tests, so
     // manually clear it.  The PD restore in snapshot_restore will clean up.
     pt[pt_idx] = 0;
-    VMM::map_page(test_vaddr, 0x802000, false);
-    JARVIS_ASSERT(pt[pt_idx] == (0x802000 & ~0xFFFULL) + X64_PT_FLAGS);
+    VMM::map_page(test_vaddr, 0x2082000, false);
+    JARVIS_ASSERT(pt[pt_idx] == (0x2082000 & ~0xFFFULL) + X64_MAPPED_FLAGS);
     pt_phys = pd[pd_idx] & ~0xFFFULL;
     JARVIS_ASSERT(!(pd[pd_idx] & PAGE_HUGE));
     PMM::free_page(pt_phys);
@@ -347,7 +355,9 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
 JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
     uint64_t kernel_pml4 = VMM::get_kernel_pml4();
     JARVIS_ASSERT(kernel_pml4 != 0);
-    uint64_t v = arch::HHDM_OFFSET + 0x900000;
+    // Fixture above the hardened image range (issue #376: low HHDM PD
+    // entries covering the image are split at boot, no longer huge).
+    uint64_t v = arch::HHDM_OFFSET + 0x2300000;
     uint64_t cr3 = arch::read_cr3();
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + (cr3 & ~0xFFFULL));
     size_t pml4_i = static_cast<size_t>((v & (0x1FFULL << 39)) >> 39);
@@ -372,11 +382,13 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
     uint64_t pt_phys = pd[pd_i] & ~0xFFFULL;
     uint64_t pt_idx = static_cast<size_t>((v & (0x1FFULL << 12)) >> 12);
     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
-    constexpr uint64_t X64_PT_FLAGS_2 = (1ULL << 0) | (1ULL << 1);
+    // Issue #376 slice 1: the explicitly mapped leaf carries NX.
+    constexpr uint64_t X64_PT_FLAGS_2 =
+        (1ULL << 0) | (1ULL << 1) | (1ULL << 63); // PRESENT|WRITE|NX
     JARVIS_ASSERT(pt[pt_idx] == (p & ~0xFFFULL) + X64_PT_FLAGS_2);
     VMM::unmap_page(v);
     JARVIS_ASSERT(pt[pt_idx] == 0);
-    VMM::map_page(v, 0x900000, false);
+    VMM::map_page(v, 0x2300000, false);
     pt_phys = pd[pd_i] & ~0xFFFULL;
     PMM::free_page(pt_phys);
     pd[pd_i] = saved_pd_entry;
@@ -403,9 +415,9 @@ JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
     JARVIS_ASSERT(!VMM::take_identity_modified());
     JARVIS_ASSERT(!VMM::hhdm_was_modified());
     // Set via the real setter: map a scratch HHDM page (2 MiB huge
-    // page at HHDM+0xA00000, same save/split/restore pattern as the
-    // regression test above).
-    constexpr uint64_t scratch_va = arch::HHDM_OFFSET + 0xA02000;
+    // page at HHDM+0x2400000, same save/split/restore pattern as the
+    // regression test above; above the hardened image range, issue #376).
+    constexpr uint64_t scratch_va = arch::HHDM_OFFSET + 0x2402000;
     uint64_t const PAGE_PRESENT = 1ULL << 0;
     uint64_t const PAGE_HUGE = 1ULL << 7;
     uint64_t kernel_pml4 = arch::read_cr3();
@@ -444,7 +456,7 @@ JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                             (pd[pd_i] & ~0xFFFULL));
     pt[pt_i] = 0;
-    VMM::map_page(scratch_va, 0xA02000, false);
+    VMM::map_page(scratch_va, 0x2402000, false);
     uint64_t pt_phys = pd[pd_i] & ~0xFFFULL;
     PMM::free_page(pt_phys);
     pd[pd_i] = saved_pd_entry;

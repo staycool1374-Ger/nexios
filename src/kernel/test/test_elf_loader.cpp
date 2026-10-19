@@ -128,7 +128,7 @@ JARVIS_TEST(loader_load_success, "PRE: vfsd, iocd | POST: none") {
 
     auto *t = elf::ElfLoader::take_completed();
     JARVIS_ASSERT(t != nullptr);
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
     JARVIS_ASSERT(t->is_user_);
 
     // destroy_completed_tcb tears down the never-scheduled TCB
@@ -444,7 +444,7 @@ JARVIS_TEST(loader_tamper_killed, "PRE: vfsd, iocd | POST: none") {
     // the user PML4 R-X mapping, exactly what a rowhammer-style flip or a
     // stray DMA write looks like to the verifier).  Offset 0x200 lands in
     // the NOP sled, past the ELF header/phdrs and any header canary slot.
-    uint64_t phys = VMM::virt_to_phys_in_pml4(0x400200, t->page_table_);
+    uint64_t phys = VMM::virt_to_phys_in_pml4(0x400200, t->get_page_table());
     JARVIS_ASSERT(phys != 0);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     uint8_t *alias = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
@@ -816,26 +816,26 @@ JARVIS_TEST(rerun_ro_perm_first_run, "PRE: none | POST: none") {
                   elf::LoadResult::OK);
     elf::ElfLoader::wait_loader_idle();
     auto *ta = elf::ElfLoader::take_completed();
-    JARVIS_ASSERT(ta != nullptr && ta->page_table_ != 0);
+    JARVIS_ASSERT(ta != nullptr && ta->get_page_table() != 0);
     // NOTE: the inspector writes the exec out-param only for RO
     // leaves; on a writable page it is untouched, so exec is asserted
     // only alongside a true RO result.
     bool exec_a = false;
-    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(0x400000, ta->page_table_, &exec_a));
+    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(0x400000, ta->get_page_table(), &exec_a));
     JARVIS_ASSERT(exec_a);
     JARVIS_ASSERT(
-        !VMM::pte_is_ro_in_pml4(0x402000, ta->page_table_, nullptr));
+        !VMM::pte_is_ro_in_pml4(0x402000, ta->get_page_table(), nullptr));
     elf::ElfLoader::destroy_completed_tcb(ta);
     cleanup_file("/tmp/loadro.elf");
 
     // Path B: direct synchronous load.
     auto *tb = kernel::elf::load(&hdr, img, sz);
-    JARVIS_ASSERT(tb != nullptr && tb->page_table_ != 0);
+    JARVIS_ASSERT(tb != nullptr && tb->get_page_table() != 0);
     bool exec_b = false;
-    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(0x400000, tb->page_table_, &exec_b));
+    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(0x400000, tb->get_page_table(), &exec_b));
     JARVIS_ASSERT(exec_b);
     JARVIS_ASSERT(
-        !VMM::pte_is_ro_in_pml4(0x402000, tb->page_table_, nullptr));
+        !VMM::pte_is_ro_in_pml4(0x402000, tb->get_page_table(), nullptr));
     tb->cleanup();
     delete tb;
     JARVIS_TEST_PASS();
@@ -953,7 +953,7 @@ JARVIS_TEST(rerun_byte_identity_deleted_file, "PRE: none | POST: none") {
     JARVIS_ASSERT(t1 != nullptr);
     JARVIS_ASSERT(elf::ElfLoader::has_retained());
     uint64_t id1 = t1->id;
-    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->page_table_);
+    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->get_page_table());
     JARVIS_ASSERT(g0 != 0);
     elf::ElfLoader::note_launched(id1);
     elf::ElfLoader::note_task_end(id1, true, 0);
@@ -965,13 +965,13 @@ JARVIS_TEST(rerun_byte_identity_deleted_file, "PRE: none | POST: none") {
     const char *reason = nullptr;
     auto *t2 = elf::ElfLoader::try_rerun(&reason);
     JARVIS_ASSERT_FMT(t2 != nullptr, "rerun failed: %s", reason ? reason : "?");
-    JARVIS_ASSERT(t2->page_table_ != 0);
-    uint64_t g2 = VMM::virt_to_phys_in_pml4(0x400000, t2->page_table_);
+    JARVIS_ASSERT(t2->get_page_table() != 0);
+    uint64_t g2 = VMM::virt_to_phys_in_pml4(0x400000, t2->get_page_table());
     JARVIS_ASSERT_FMT(g2 == g0, "golden phys diverged 0x%lx vs 0x%lx", g2, g0);
-    uint64_t w2 = VMM::virt_to_phys_in_pml4(0x402000, t2->page_table_);
+    uint64_t w2 = VMM::virt_to_phys_in_pml4(0x402000, t2->get_page_table());
     JARVIS_ASSERT(w2 != 0);
     // Writable content is pin-copied (check first byte)
-    uint64_t wphys = VMM::virt_to_phys_in_pml4(0x402000, t2->page_table_);
+    uint64_t wphys = VMM::virt_to_phys_in_pml4(0x402000, t2->get_page_table());
     uint8_t first = *reinterpret_cast<uint8_t*>(arch::HHDM_OFFSET + wphys);
     JARVIS_ASSERT_FMT(first == 0, "writable pin byte 0x%x != 0", first);
     // Std fds 0/1/2 wired (would have caught the missing open_std_fds).
@@ -1045,7 +1045,7 @@ JARVIS_TEST(rerun_auth_decay_refused, "PRE: none | POST: none") {
     JARVIS_ASSERT(t1 != nullptr);
     JARVIS_ASSERT(elf::ElfLoader::has_retained());
     uint64_t id1 = t1->id;
-    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->page_table_);
+    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->get_page_table());
     JARVIS_ASSERT(g0 != 0);
     elf::ElfLoader::note_launched(id1);
     elf::ElfLoader::note_task_end(id1, true, 0);
@@ -1084,7 +1084,7 @@ JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
     auto *t1 = elf::ElfLoader::take_completed();
     JARVIS_ASSERT(t1 != nullptr);
     uint64_t id1 = t1->id;
-    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->page_table_);
+    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->get_page_table());
     JARVIS_ASSERT(g0 != 0);
     elf::ElfLoader::note_launched(id1);
     elf::ElfLoader::note_task_end(id1, true, 0);
@@ -1111,26 +1111,26 @@ JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
     JARVIS_ASSERT(t2->canary_installed & (1u << stk));
     // TEXT-before: shared phys since load (selective skip), live magic.
     uint64_t tb = 0;
-    JARVIS_ASSERT(read8(t2->canary_before[text], t2->page_table_, tb));
+    JARVIS_ASSERT(read8(t2->canary_before[text], t2->get_page_table(), tb));
     JARVIS_ASSERT(tb == (TaskControlBlock::CANARY_MAGIC ^ (text + 1)));
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(t2->canary_before[text],
-                                            t2->page_table_) == g0);
+                                            t2->get_page_table()) == g0);
     // HEAP + STACK slots: fresh pages, live derived magic both ends.
     uint64_t live = 0;
-    JARVIS_ASSERT(read8(t2->canary_before[heap], t2->page_table_, live));
+    JARVIS_ASSERT(read8(t2->canary_before[heap], t2->get_page_table(), live));
     JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (heap + 1)));
-    JARVIS_ASSERT(read8(t2->canary_after[heap], t2->page_table_, live));
+    JARVIS_ASSERT(read8(t2->canary_after[heap], t2->get_page_table(), live));
     JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (heap + 1)));
-    JARVIS_ASSERT(read8(t2->canary_before[stk], t2->page_table_, live));
+    JARVIS_ASSERT(read8(t2->canary_before[stk], t2->get_page_table(), live));
     JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (stk + 1)));
-    JARVIS_ASSERT(read8(t2->canary_after[stk], t2->page_table_, live));
+    JARVIS_ASSERT(read8(t2->canary_after[stk], t2->get_page_table(), live));
     JARVIS_ASSERT(live == (TaskControlBlock::CANARY_MAGIC ^ (stk + 1)));
     // RO perms on the rerun table: code RO+exec, data writable.
     bool exec = false;
-    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(0x400000, t2->page_table_, &exec));
+    JARVIS_ASSERT(VMM::pte_is_ro_in_pml4(0x400000, t2->get_page_table(), &exec));
     JARVIS_ASSERT(exec);
     JARVIS_ASSERT(
-        !VMM::pte_is_ro_in_pml4(0x402000, t2->page_table_, nullptr));
+        !VMM::pte_is_ro_in_pml4(0x402000, t2->get_page_table(), nullptr));
     t2->cleanup();
     delete t2;
     elf::ElfLoader::reset();
@@ -1174,7 +1174,7 @@ JARVIS_TEST(rerun_bss_only_data_canary, "PRE: none | POST: none") {
     // must be mapped AND hold live magic (pre-fix: unmapped).
     JARVIS_ASSERT(t2->canary_after[data] == 0x402FF8);
     uint64_t phys =
-        VMM::virt_to_phys_in_pml4(0x402FF8, t2->page_table_);
+        VMM::virt_to_phys_in_pml4(0x402FF8, t2->get_page_table());
     JARVIS_ASSERT_FMT(phys != 0, "DATA-after slot unmapped");
     uint64_t live = 0;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -1225,7 +1225,7 @@ JARVIS_TEST(rerun_supersede_while_live, "PRE: none | POST: none") {
     // of the prefix is NOP fill.
     {
         uint64_t phys =
-            VMM::virt_to_phys_in_pml4(0x400000, tA->page_table_);
+            VMM::virt_to_phys_in_pml4(0x400000, tA->get_page_table());
         JARVIS_ASSERT(phys != 0);
         uint64_t slot = 0;
         __builtin_memcpy(&slot, reinterpret_cast<const void *>(
@@ -1237,7 +1237,7 @@ JARVIS_TEST(rerun_supersede_while_live, "PRE: none | POST: none") {
     }
     for (size_t i = 8; i < 24; ++i) {
         uint64_t phys =
-            VMM::virt_to_phys_in_pml4(0x400000 + i, tA->page_table_);
+            VMM::virt_to_phys_in_pml4(0x400000 + i, tA->get_page_table());
         JARVIS_ASSERT(phys != 0);
         uint8_t b = *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
         JARVIS_ASSERT_FMT(b == 0x90, "live byte %lu = 0x%x, want NOP", i,
@@ -1274,13 +1274,13 @@ JARVIS_TEST(rerun_fork_child_private_copy, "PRE: none | POST: none") {
     auto *tA = elf::ElfLoader::take_completed();
     JARVIS_ASSERT(tA != nullptr);
     JARVIS_ASSERT(elf::ElfLoader::has_retained());
-    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, tA->page_table_);
+    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, tA->get_page_table());
     JARVIS_ASSERT(g0 != 0);
     // Fork-equivalent: deep-copy the whole address space into a fresh
     // PML4, like clone() does for a fork child.
     uint64_t child_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(child_pml4 != 0);
-    JARVIS_ASSERT(VMM::deep_copy_user_pages(tA->page_table_, child_pml4));
+    JARVIS_ASSERT(VMM::deep_copy_user_pages(tA->get_page_table(), child_pml4));
     uint64_t gc = VMM::virt_to_phys_in_pml4(0x400000, child_pml4);
     JARVIS_ASSERT(gc != 0);
     JARVIS_ASSERT_FMT(gc != g0, "fork copy shares golden phys 0x%lx", gc);

@@ -119,14 +119,15 @@ JARVIS_TEST(pcid_selective_retention, "PRE: none | POST: none") {
     uint64_t data_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(data_phys != 0);
     VMM::map_page_in_pml4(k_probe_va, data_phys, true, false,
-                          a->page_table_);
-    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_probe_va, a->page_table_) ==
+                          a->get_page_table());
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_probe_va, a->get_page_table()) ==
                   data_phys);
     uint64_t fresh = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(fresh != 0);
-    VMM::free_user_pages(a->page_table_);
-    PMM::free_page(a->page_table_);
-    a->page_table_ = fresh;
+    VMM::free_user_pages(a->get_page_table());
+    PMM::free_page(a->get_page_table());
+    // Issue #377: exec-style swap through the single blessed path.
+    a->swap_page_table(fresh);
     JARVIS_ASSERT(a->pcid_ == pcid_before);
     JARVIS_ASSERT(VMM::kernel_half_equal(fresh, VMM::get_kernel_pml4()));
     a->cleanup();

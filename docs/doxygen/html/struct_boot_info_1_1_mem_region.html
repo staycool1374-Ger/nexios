@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('struct_boot_in
 </div><!--header-->
 <div class="contents">
 
+<p>A single physical memory region reported by the bootloader.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="bootinfo_8hpp_source.html">bootinfo.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for BootInfo::MemRegion:</div>
@@ -130,10 +133,15 @@ Collaboration diagram for BootInfo::MemRegion:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:acd634cdc2e7713aaac2751497f74da64" id="r_acd634cdc2e7713aaac2751497f74da64"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#acd634cdc2e7713aaac2751497f74da64">base</a></td></tr>
+<tr class="memdesc:acd634cdc2e7713aaac2751497f74da64"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical base address.  <br /></td></tr>
 <tr class="memitem:af3ef0583625d7a4ef5d55614202f5877" id="r_af3ef0583625d7a4ef5d55614202f5877"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#af3ef0583625d7a4ef5d55614202f5877">size</a></td></tr>
+<tr class="memdesc:af3ef0583625d7a4ef5d55614202f5877"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size in bytes.  <br /></td></tr>
 <tr class="memitem:a3712a6791b2b9e54b244a417679b3a79" id="r_a3712a6791b2b9e54b244a417679b3a79"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a3712a6791b2b9e54b244a417679b3a79">type</a></td></tr>
+<tr class="memdesc:a3712a6791b2b9e54b244a417679b3a79"><td class="mdescLeft">&#160;</td><td class="mdescRight">1 = usable, 2 = reserved, 3 = ACPI, 4 = MMIO.  <br /></td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>A single physical memory region reported by the bootloader. </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="acd634cdc2e7713aaac2751497f74da64" name="acd634cdc2e7713aaac2751497f74da64"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#acd634cdc2e7713aaac2751497f74da64">&#9670;&#160;</a></span>base</h2>
 
@@ -145,6 +153,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Physical base address. </p>
 
 </div>
 </div>
@@ -160,6 +170,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Size in bytes. </p>
+
 </div>
 </div>
 <a id="a3712a6791b2b9e54b244a417679b3a79" name="a3712a6791b2b9e54b244a417679b3a79"></a>
@@ -173,6 +185,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>1 = usable, 2 = reserved, 3 = ACPI, 4 = MMIO. </p>
 
 </div>
 </div>

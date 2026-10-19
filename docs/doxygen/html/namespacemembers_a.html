@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <li>add_dir_entry()&#160;:&#160;<a class="el" href="namespacekernel_1_1fat32.html#aa9f8a2b8e4f80b05086c924c915f3939">kernel::fat32</a></li>
 <li>add_task_named()&#160;:&#160;<a class="el" href="namespacekernel_1_1test.html#a2f2ad7408a2984ebbc8a46b37f1e6f5f">kernel::test</a></li>
 <li>admission_boot_selftest()&#160;:&#160;<a class="el" href="namespacekernel.html#a5f757c7023bc8616bb0fd21b7c6d8f9f">kernel</a></li>
+<li>AHCI_MAX_CMDS&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#af31677808045bbc11398d87acee6f7d8">kernel::ahci</a></li>
+<li>AHCI_MAX_PORTS&#160;:&#160;<a class="el" href="namespacekernel_1_1block.html#a31c8816e5ee7996c919f6e97261eddcd">kernel::block</a></li>
+<li>AHCI_MAX_PRD&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a93b59a426f268faa6dab8c8619cd0b44">kernel::ahci</a></li>
 <li>alloc_buffer()&#160;:&#160;<a class="el" href="namespacekernel_1_1dma.html#a9ed9bda8444aa6fed65a4d02bb7157d9">kernel::dma</a></li>
 <li>alloc_user_stack_and_heap()&#160;:&#160;<a class="el" href="namespacekernel_1_1elf.html#af0f8dea59eb8cf69559d9199d5b78d10">kernel::elf</a></li>
 <li>ap_count()&#160;:&#160;<a class="el" href="namespacekernel_1_1smp.html#ab58969d3c15f3181c4317a6491b56b12">kernel::smp</a></li>
@@ -131,12 +134,30 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <li>ap_main()&#160;:&#160;<a class="el" href="namespacekernel_1_1smp.html#a56bcb36fec3264043b7ee22403f91ca0">kernel::smp</a></li>
 <li>apply_relocations()&#160;:&#160;<a class="el" href="namespacekernel_1_1elf.html#a30d32c118d2e72c3de96f0a5b0ac13c6">kernel::elf</a></li>
 <li>arch_count()&#160;:&#160;<a class="el" href="namespacekernel_1_1test.html#a6407505c9e51e9aafc535ceb8a0f074f">kernel::test</a></li>
+<li>ArchTimer&#160;:&#160;<a class="el" href="namespacearch.html#a33e0aad4e0075aca3bd6edc860f671fc">arch</a></li>
+<li>arm_test_touch_flags()&#160;:&#160;<a class="el" href="namespacekernel.html#af888157a072690618fcf43fcc15dce42">kernel</a></li>
+<li>ARP_CACHE_SIZE&#160;:&#160;<a class="el" href="namespacenet.html#a9e24fa6457b5a663358906e621531a74">net</a></li>
+<li>ARP_HTYPE_ETHER&#160;:&#160;<a class="el" href="namespacenet.html#adcb0d71a014ebd7ab1c224c73db6f1de">net</a></li>
+<li>ARP_OPER_REPLY&#160;:&#160;<a class="el" href="namespacenet.html#a3588b3ee19b07fd8a16b2eac318f7fcb">net</a></li>
+<li>ARP_OPER_REQUEST&#160;:&#160;<a class="el" href="namespacenet.html#a0109abfbe5b20b685075948205bfd513">net</a></li>
 <li>ATA_ALT_STAT&#160;:&#160;<a class="el" href="namespacearch.html#a1511e1f081ba7386c43b4ed471338e93">arch</a></li>
 <li>ATA_CMD&#160;:&#160;<a class="el" href="namespacearch.html#a26b86ca010ddbdab4e8f588578f2918f">arch</a></li>
-<li>ATA_CMD_IDENTIFY&#160;:&#160;<a class="el" href="namespacearch.html#a0d521749ca2de0ad4577c4eec1da6068">arch</a></li>
+<li>ATA_CMD_FLUSH_CACHE&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a4f3338471ff009be56be1e17fbf4fc49">kernel::ahci</a></li>
+<li>ATA_CMD_FLUSH_CACHE_EXT&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#aa9db48702fa76a606b0284aa6de1a98d">kernel::ahci</a></li>
+<li>ATA_CMD_IDENTIFY&#160;:&#160;<a class="el" href="namespacearch.html#a0d521749ca2de0ad4577c4eec1da6068">arch</a>, <a class="el" href="namespacekernel_1_1ahci.html#a8ee06f86baed52d79b4ac2269d028ddf">kernel::ahci</a></li>
+<li>ATA_CMD_IDLE_IMMEDIATE&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a30fc5fa471db0ba27849ee4463fe9d04">kernel::ahci</a></li>
+<li>ATA_CMD_READ_DMA_EXT&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a613d424f0573b1fa4160adf0a0345f24">kernel::ahci</a></li>
+<li>ATA_CMD_READ_FPDMA_QUEUED&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#ae6e156587495676cd710888ccd07365e">kernel::ahci</a></li>
 <li>ATA_CMD_READ_SECTORS&#160;:&#160;<a class="el" href="namespacearch.html#a2208d22c3255c8859aab07aa2a666fb1">arch</a></li>
+<li>ATA_CMD_SET_FEATURES&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a96809448222daeb7b403105ccc853c4d">kernel::ahci</a></li>
+<li>ATA_CMD_STANDBY_IMMEDIATE&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#af335369ed094f3b69cb1f47b0a03b7b6">kernel::ahci</a></li>
+<li>ATA_CMD_WRITE_DMA_EXT&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#aa6fee3c7f02a04994363b3268d678e6e">kernel::ahci</a></li>
+<li>ATA_CMD_WRITE_FPDMA_QUEUED&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a5423c168f17c6fce3f9160cb9df2d4c9">kernel::ahci</a></li>
 <li>ATA_CMD_WRITE_SECTORS&#160;:&#160;<a class="el" href="namespacearch.html#ac1b3bee439633112527517c7da0c7954">arch</a></li>
 <li>ATA_DATA&#160;:&#160;<a class="el" href="namespacearch.html#a9dbf3da56d6e7895719330168baaee20">arch</a></li>
+<li>ATA_DEV_LBA&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a43eb070a5affe124a9694c6c4cb58f73">kernel::ahci</a></li>
+<li>ATA_DEV_MASTER&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#aa4e29afb28e050ab758ba9e9df90dd1c">kernel::ahci</a></li>
+<li>ATA_DEV_SLAVE&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a892442089a0d549872afd68fe71fb76a">kernel::ahci</a></li>
 <li>ATA_DRIVE&#160;:&#160;<a class="el" href="namespacearch.html#aad9e4ba61c1a65ed85e33f9eb8927a17">arch</a></li>
 <li>ATA_DRIVE_MASTER&#160;:&#160;<a class="el" href="namespacearch.html#ad7dae9e06cf7cd82339d09d0f1ebb560">arch</a></li>
 <li>ATA_DRIVE_SLAVE&#160;:&#160;<a class="el" href="namespacearch.html#a4fa4849684d67f99ae261cd330942aef">arch</a></li>

@@ -52,8 +52,12 @@ bool VMM::vmm_arch_split_needed(uint64_t entry) {
 
 void VMM::vmm_arch_split_fill(uint64_t *new_table, uint64_t src_entry) {
     uint64_t huge_base = src_entry & kHuge2MBaseMask;
+    // Issue #376 (boot W^X): carry UXN/PXN (already) plus the AP access
+    // bits. A post-harden split of an AP_RO block must not silently
+    // re-widen it to AP_RW; same-block EL0 accessibility rides along.
     uint64_t base_flags = src_entry & (PAGE_PRESENT | PAGE_AF | PAGE_UXN |
-                                       PAGE_PXN | PAGE_ATTR_NORMAL);
+                                       PAGE_PXN | PAGE_ATTR_NORMAL |
+                                       PAGE_AP_USER | PAGE_AP_RO);
     for (size_t i = 0; i < 512; ++i) {
         // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set) — bit1=0 at L3
         // is a block-at-invalid-level encoding and faults as a
@@ -85,12 +89,17 @@ uint64_t VMM::vmm_arch_encode_map_leaf(uint64_t phys, bool user,
                                         bool executable) {
     // Same base shape as the kernel leaf; the NX policy adds UXN.
     uint64_t out = PAGE_PRESENT | PAGE_TABLE | PAGE_AF | PAGE_ATTR_NORMAL;
-    if (user)
+    if (user) {
         out |= PAGE_AP_USER | PAGE_PXN;
-    else
+        if (!executable)
+            out |= PAGE_UXN; // UXN — not executable at EL0
+    } else if (!executable) {
+        // Kernel data default (slice-1 MMIO policy): neither EL0 nor EL1
+        // may fetch. Kernel + executable (boot-text harden only — no
+        // other caller uses this combination) sets neither UXN nor PXN
+        // so EL1 can fetch; PXN must stay clear or EL1 faults.
         out |= PAGE_UXN | PAGE_PXN;
-    if (!executable)
-        out |= PAGE_UXN; // UXN — not executable at EL0
+    }
     return phys | out;
 }
 
@@ -101,9 +110,22 @@ uint64_t VMM::vmm_arch_encode_ro(uint64_t leaf, bool executable) {
     return leaf | PAGE_AP_RO;
 }
 
+uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
+    // Issue #376: kernel text stays EL1-executable — clear UXN+PXN set by
+    // the data-default 5-arg map. Kernel-half only; user pages keep PXN
+    // as the ret2usr backstop (this hook never runs on them).
+    return leaf & ~(PAGE_UXN | PAGE_PXN);
+}
+
 bool VMM::vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out) {
-    bool ro = (leaf & (PAGE_AP_USER | PAGE_AP_RO)) ==
-              (PAGE_AP_USER | PAGE_AP_RO);
+    // Issue #376 boot-text W^X: AP[1] (PAGE_AP_RO) alone selects
+    // read-only on ARMv8 (AP=10 is EL1-RO, AP=11 is EL1+EL0-RO).
+    // Requiring AP_USER as well misreports EL1-only RO kernel leaves
+    // (hardened text/rodata, AP=10) as writable, failing the
+    // kernel_half_boot_wx_pins text/rodata asserts on aarch64 despite
+    // correct hardware state. User RO leaves (AP=11) still read true;
+    // user/kernel RW leaves (AP=00/01) still read false.
+    bool ro = (leaf & PAGE_AP_RO) != 0;
     if (executable_out != nullptr)
         *executable_out = (leaf & PAGE_UXN) == 0;
     return ro;
@@ -116,6 +138,15 @@ bool VMM::vmm_arch_leaf_is_executable(uint64_t leaf) {
 uint64_t VMM::vmm_arch_block_base(uint64_t entry, bool huge) {
     (void)huge; // frame masks already select the level geometry below
     return entry & (huge ? PAGE_HUGE_FRAME_MASK : PAGE_FRAME_MASK);
+}
+
+unsigned VMM::vmm_arch_walk_levels() { return 4; }
+
+void VMM::vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]) {
+    idx[0] = arch::ArchPageTable::pml4_index(virt_addr);
+    idx[1] = arch::ArchPageTable::pdpt_index(virt_addr);
+    idx[2] = arch::ArchPageTable::pd_index(virt_addr);
+    idx[3] = arch::ArchPageTable::pt_index(virt_addr);
 }
 
 #endif // CONFIG_ARCH_AARCH64

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -139,33 +139,43 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2irq__guar
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#pragma once</span></div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#include &lt;<a class="code" href="hal_2io_8hpp.html">kernel/arch/hal/io.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span> </div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#include &lt;<a class="code" href="hal_2io_8hpp.html">kernel/arch/hal/io.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacearch.html">arch</a> {</div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span></div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keyword">class </span>[[nodiscard]] IrqGuard {</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>  <span class="keyword">public</span>:</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    IrqGuard() noexcept : irq_was_(interrupts_enabled()) {</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>        cli();</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    }</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span></div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    ~IrqGuard() noexcept {</div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>        <span class="keywordflow">if</span> (irq_was_)</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>            sti();</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    }</div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span> </div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    IrqGuard(<span class="keyword">const</span> IrqGuard &amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    IrqGuard &amp;operator=(<span class="keyword">const</span> IrqGuard &amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    IrqGuard(IrqGuard &amp;&amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    IrqGuard &amp;operator=(IrqGuard &amp;&amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span> </div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>  <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    <span class="keywordtype">bool</span> irq_was_;</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>};</div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span> </div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>} <span class="comment">// namespace arch</span></div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacearch.html">arch</a> {</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span></div>
+<div class="foldopen" id="foldopen00032" data-start="{" data-end="};">
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="classarch_1_1_irq_guard.html">   32</a></span><span class="keyword">class </span>[[nodiscard]] <a class="code hl_function" href="classarch_1_1_irq_guard.html#a29ad3304d6a01a2332b7a54420117c70">IrqGuard</a> {</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>  <span class="keyword">public</span>:</div>
+<div class="foldopen" id="foldopen00035" data-start="{" data-end="}">
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno"><a class="line" href="classarch_1_1_irq_guard.html#a29ad3304d6a01a2332b7a54420117c70">   35</a></span>    <a class="code hl_function" href="classarch_1_1_irq_guard.html#a29ad3304d6a01a2332b7a54420117c70">IrqGuard</a>() noexcept : irq_was_(interrupts_enabled()) {</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>        cli();</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    }</div>
+</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span></div>
+<div class="foldopen" id="foldopen00040" data-start="{" data-end="}">
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno"><a class="line" href="classarch_1_1_irq_guard.html#a4eb193b7924504fa2c53482746d5fc10">   40</a></span>    <a class="code hl_function" href="classarch_1_1_irq_guard.html#a4eb193b7924504fa2c53482746d5fc10">~IrqGuard</a>() noexcept {</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>        <span class="keywordflow">if</span> (irq_was_)</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>            sti();</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    }</div>
+</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span> </div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno"><a class="line" href="classarch_1_1_irq_guard.html#ab39124ca59ec3f2487b952ed1f7b9626">   45</a></span>    <a class="code hl_function" href="classarch_1_1_irq_guard.html#ab39124ca59ec3f2487b952ed1f7b9626">IrqGuard</a>(<span class="keyword">const</span> <a class="code hl_function" href="classarch_1_1_irq_guard.html#a29ad3304d6a01a2332b7a54420117c70">IrqGuard</a> &amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno"><a class="line" href="classarch_1_1_irq_guard.html#ab66f51a53ee27c658711244b444bc0f2">   46</a></span>    <a class="code hl_function" href="classarch_1_1_irq_guard.html#a29ad3304d6a01a2332b7a54420117c70">IrqGuard</a> &amp;<a class="code hl_function" href="classarch_1_1_irq_guard.html#ab66f51a53ee27c658711244b444bc0f2">operator=</a>(<span class="keyword">const</span> <a class="code hl_function" href="classarch_1_1_irq_guard.html#a29ad3304d6a01a2332b7a54420117c70">IrqGuard</a> &amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno"><a class="line" href="classarch_1_1_irq_guard.html#a30731f5d6b1685034bae375b4f213e5c">   47</a></span>    <a class="code hl_function" href="classarch_1_1_irq_guard.html#a30731f5d6b1685034bae375b4f213e5c">IrqGuard</a>(<a class="code hl_function" href="classarch_1_1_irq_guard.html#a29ad3304d6a01a2332b7a54420117c70">IrqGuard</a> &amp;&amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno"><a class="line" href="classarch_1_1_irq_guard.html#affa95e6d14cf10cef3aee16772f112fb">   48</a></span>    <a class="code hl_function" href="classarch_1_1_irq_guard.html#a29ad3304d6a01a2332b7a54420117c70">IrqGuard</a> &amp;<a class="code hl_function" href="classarch_1_1_irq_guard.html#affa95e6d14cf10cef3aee16772f112fb">operator=</a>(<a class="code hl_function" href="classarch_1_1_irq_guard.html#a29ad3304d6a01a2332b7a54420117c70">IrqGuard</a> &amp;&amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span> </div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>  <span class="keyword">private</span>:</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    <span class="keywordtype">bool</span> irq_was_;</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>};</div>
+</div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span> </div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>} <span class="comment">// namespace arch</span></div>
+<div class="ttc" id="aclassarch_1_1_irq_guard_html_a29ad3304d6a01a2332b7a54420117c70"><div class="ttname"><a href="classarch_1_1_irq_guard.html#a29ad3304d6a01a2332b7a54420117c70">arch::IrqGuard::IrqGuard</a></div><div class="ttdeci">IrqGuard() noexcept</div><div class="ttdoc">Disable interrupts, saving the previous enabled state.</div><div class="ttdef"><b>Definition</b> irq_guard.hpp:35</div></div>
+<div class="ttc" id="aclassarch_1_1_irq_guard_html_a30731f5d6b1685034bae375b4f213e5c"><div class="ttname"><a href="classarch_1_1_irq_guard.html#a30731f5d6b1685034bae375b4f213e5c">arch::IrqGuard::IrqGuard</a></div><div class="ttdeci">IrqGuard(IrqGuard &amp;&amp;)=delete</div></div>
+<div class="ttc" id="aclassarch_1_1_irq_guard_html_a4eb193b7924504fa2c53482746d5fc10"><div class="ttname"><a href="classarch_1_1_irq_guard.html#a4eb193b7924504fa2c53482746d5fc10">arch::IrqGuard::~IrqGuard</a></div><div class="ttdeci">~IrqGuard() noexcept</div><div class="ttdoc">Restore the interrupt state that was saved at construction.</div><div class="ttdef"><b>Definition</b> irq_guard.hpp:40</div></div>
+<div class="ttc" id="aclassarch_1_1_irq_guard_html_ab39124ca59ec3f2487b952ed1f7b9626"><div class="ttname"><a href="classarch_1_1_irq_guard.html#ab39124ca59ec3f2487b952ed1f7b9626">arch::IrqGuard::IrqGuard</a></div><div class="ttdeci">IrqGuard(const IrqGuard &amp;)=delete</div></div>
+<div class="ttc" id="aclassarch_1_1_irq_guard_html_ab66f51a53ee27c658711244b444bc0f2"><div class="ttname"><a href="classarch_1_1_irq_guard.html#ab66f51a53ee27c658711244b444bc0f2">arch::IrqGuard::operator=</a></div><div class="ttdeci">IrqGuard &amp; operator=(const IrqGuard &amp;)=delete</div></div>
+<div class="ttc" id="aclassarch_1_1_irq_guard_html_affa95e6d14cf10cef3aee16772f112fb"><div class="ttname"><a href="classarch_1_1_irq_guard.html#affa95e6d14cf10cef3aee16772f112fb">arch::IrqGuard::operator=</a></div><div class="ttdeci">IrqGuard &amp; operator=(IrqGuard &amp;&amp;)=delete</div></div>
 <div class="ttc" id="ahal_2io_8hpp_html"><div class="ttname"><a href="hal_2io_8hpp.html">io.hpp</a></div><div class="ttdoc">Port I/O (x86_64) and memory-mapped I/O (AArch64, RISC-V) primitives.</div></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:35</div></div>
 </div><!-- fragment --></div><!-- contents -->

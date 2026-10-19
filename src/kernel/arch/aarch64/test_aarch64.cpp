@@ -134,7 +134,7 @@ JARVIS_TEST(aarch64_fork_marker_smoke, "PRE: none | POST: none") {
         "request_load failed");
     elf::ElfLoader::wait_loader_idle();
     TaskControlBlock *t = elf::ElfLoader::take_completed();
-    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 && t->is_user_,
                       "take_completed failed");
     JARVIS_ASSERT_FMT(t->fd_table.fds[1].used, "fd1 not set by loader");
     test::mark_vfs_touched();
@@ -213,7 +213,7 @@ JARVIS_TEST(aarch64_el0_fault_terminates, "PRE: none | POST: none") {
         "request_load failed");
     elf::ElfLoader::wait_loader_idle();
     TaskControlBlock *t = elf::ElfLoader::take_completed();
-    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 && t->is_user_,
                       "take_completed failed");
     test::mark_vfs_touched();
     // Poison ELR only — SP_EL0/SPSR stay loader-valid so the dispatch
@@ -272,7 +272,7 @@ JARVIS_TEST(aarch64_el0_fault_frame_in_debug_slot, "PRE: none | POST: none") {
         "request_load failed");
     elf::ElfLoader::wait_loader_idle();
     TaskControlBlock *t = elf::ElfLoader::take_completed();
-    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 && t->is_user_,
                       "take_completed failed");
     test::mark_vfs_touched();
     auto *frame = reinterpret_cast<uint64_t *>(t->context.sp_el0);
@@ -367,7 +367,7 @@ JARVIS_TEST(aarch64_el0_fault_wakes_waitpid_parent, "PRE: none | POST: none") {
         "request_load failed");
     elf::ElfLoader::wait_loader_idle();
     TaskControlBlock *t = elf::ElfLoader::take_completed();
-    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 && t->is_user_,
                       "take_completed failed");
     test::mark_vfs_touched();
     auto *frame = reinterpret_cast<uint64_t *>(t->context.sp_el0);

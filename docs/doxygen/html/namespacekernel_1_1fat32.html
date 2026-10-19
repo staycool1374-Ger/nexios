@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,30 +119,65 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 </div><!--header-->
 <div class="contents">
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:MbrPartition" id="r_MbrPartition"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1fat32_1_1_mbr_partition.html">MbrPartition</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Parsed MBR partition entry.  <a href="structkernel_1_1fat32_1_1_mbr_partition.html#details">More...</a><br /></td></tr>
+<tr class="memitem:Fat32Bpb" id="r_Fat32Bpb"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1fat32_1_1_fat32_bpb.html">Fat32Bpb</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Parsed FAT32 BPB fields.  <a href="structkernel_1_1fat32_1_1_fat32_bpb.html#details">More...</a><br /></td></tr>
+<tr class="memitem:Fat32Partition" id="r_Fat32Partition"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A mounted FAT32 partition, backed by a BlockDevice.  <a href="classkernel_1_1fat32_1_1_fat32_partition.html#details">More...</a><br /></td></tr>
+<tr class="memitem:DirEntryRaw" id="r_DirEntryRaw"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1fat32_1_1_dir_entry_raw.html">DirEntryRaw</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Raw 32-byte FAT32 directory entry.  <a href="structkernel_1_1fat32_1_1_dir_entry_raw.html#details">More...</a><br /></td></tr>
+<tr class="memitem:DirEntry" id="r_DirEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1fat32_1_1_dir_entry.html">DirEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Parsed directory entry.  <a href="structkernel_1_1fat32_1_1_dir_entry.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:abbd06a7cfc2786441dacd37ed6e1cbd0" id="r_abbd06a7cfc2786441dacd37ed6e1cbd0"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abbd06a7cfc2786441dacd37ed6e1cbd0">find_fat32_in_mbr</a> (block::BlockDevice &amp;device, uint64_t &amp;partition_lba_out)</td></tr>
+<tr class="memitem:abbd06a7cfc2786441dacd37ed6e1cbd0" id="r_abbd06a7cfc2786441dacd37ed6e1cbd0"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abbd06a7cfc2786441dacd37ed6e1cbd0">find_fat32_in_mbr</a> (<a class="el" href="classkernel_1_1block_1_1_block_device.html">block::BlockDevice</a> &amp;device, uint64_t &amp;partition_lba_out)</td></tr>
 <tr class="memdesc:abbd06a7cfc2786441dacd37ed6e1cbd0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find the first FAT32 partition in the MBR.  <br /></td></tr>
 <tr class="memitem:ad96c400fa4e603f70ae0ecd41241cbbf" id="r_ad96c400fa4e603f70ae0ecd41241cbbf"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad96c400fa4e603f70ae0ecd41241cbbf">format_short_name</a> (const uint8_t raw_name[11], char *out, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> out_size)</td></tr>
 <tr class="memdesc:ad96c400fa4e603f70ae0ecd41241cbbf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Format a raw 8.3 directory entry name into "NAME.EXT".  <br /></td></tr>
-<tr class="memitem:a26ce5bbfe1af8c3aa136fb2f57743383" id="r_a26ce5bbfe1af8c3aa136fb2f57743383"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a26ce5bbfe1af8c3aa136fb2f57743383">read_dir_entry</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, uint64_t &amp;pos, DirEntry &amp;entry)</td></tr>
+<tr class="memitem:a26ce5bbfe1af8c3aa136fb2f57743383" id="r_a26ce5bbfe1af8c3aa136fb2f57743383"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a26ce5bbfe1af8c3aa136fb2f57743383">read_dir_entry</a> (<a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;fs, uint32_t dir_cluster, uint64_t &amp;pos, <a class="el" href="structkernel_1_1fat32_1_1_dir_entry.html">DirEntry</a> &amp;entry)</td></tr>
 <tr class="memdesc:a26ce5bbfe1af8c3aa136fb2f57743383"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the next directory entry from a cluster chain.  <br /></td></tr>
-<tr class="memitem:ae85fd58e1ca6c4db8cc25e966936083c" id="r_ae85fd58e1ca6c4db8cc25e966936083c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae85fd58e1ca6c4db8cc25e966936083c">lookup_in_dir</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name, DirEntry &amp;entry)</td></tr>
+<tr class="memitem:ae85fd58e1ca6c4db8cc25e966936083c" id="r_ae85fd58e1ca6c4db8cc25e966936083c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae85fd58e1ca6c4db8cc25e966936083c">lookup_in_dir</a> (<a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;fs, uint32_t dir_cluster, const char *name, <a class="el" href="structkernel_1_1fat32_1_1_dir_entry.html">DirEntry</a> &amp;entry)</td></tr>
 <tr class="memdesc:ae85fd58e1ca6c4db8cc25e966936083c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Look up a name in a directory cluster chain.  <br /></td></tr>
-<tr class="memitem:ae93a85e2f3b7cee00022a3e34747d9ac" id="r_ae93a85e2f3b7cee00022a3e34747d9ac"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae93a85e2f3b7cee00022a3e34747d9ac">lookup_in_dir_at</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name, DirEntry &amp;entry, uint64_t &amp;out_index)</td></tr>
+<tr class="memitem:ae93a85e2f3b7cee00022a3e34747d9ac" id="r_ae93a85e2f3b7cee00022a3e34747d9ac"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae93a85e2f3b7cee00022a3e34747d9ac">lookup_in_dir_at</a> (<a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;fs, uint32_t dir_cluster, const char *name, <a class="el" href="structkernel_1_1fat32_1_1_dir_entry.html">DirEntry</a> &amp;entry, uint64_t &amp;out_index)</td></tr>
 <tr class="memdesc:ae93a85e2f3b7cee00022a3e34747d9ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Look up a name, reporting the matched on-disk slot index. read_dir_entry leaves pos one past the returned slot (it increments before every true return, including via the skip-recursion), so the matched slot is pos - 1. pos &gt; 0 whenever we return true.  <br /></td></tr>
-<tr class="memitem:ab2b90c3fd678120edc03be6e4d00a917" id="r_ab2b90c3fd678120edc03be6e4d00a917"><td class="memItemLeft">int64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab2b90c3fd678120edc03be6e4d00a917">read_file</a> (Fat32Partition &amp;fs, uint32_t first_cluster, uint32_t file_size, uint64_t offset, uint64_t count, uint8_t *buffer)</td></tr>
+<tr class="memitem:ab2b90c3fd678120edc03be6e4d00a917" id="r_ab2b90c3fd678120edc03be6e4d00a917"><td class="memItemLeft">int64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab2b90c3fd678120edc03be6e4d00a917">read_file</a> (<a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;fs, uint32_t first_cluster, uint32_t file_size, uint64_t offset, uint64_t count, uint8_t *buffer)</td></tr>
 <tr class="memdesc:ab2b90c3fd678120edc03be6e4d00a917"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read data from a file's cluster chain.  <br /></td></tr>
-<tr class="memitem:acaa9ea1e7204014b1ee87d1b18e2786f" id="r_acaa9ea1e7204014b1ee87d1b18e2786f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acaa9ea1e7204014b1ee87d1b18e2786f">free_cluster_chain</a> (Fat32Partition &amp;fs, uint32_t first_cluster)</td></tr>
+<tr class="memitem:acaa9ea1e7204014b1ee87d1b18e2786f" id="r_acaa9ea1e7204014b1ee87d1b18e2786f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acaa9ea1e7204014b1ee87d1b18e2786f">free_cluster_chain</a> (<a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;fs, uint32_t first_cluster)</td></tr>
 <tr class="memdesc:acaa9ea1e7204014b1ee87d1b18e2786f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free an entire cluster chain starting from a given cluster.  <br /></td></tr>
 <tr class="memitem:a85225d8c344ad98eda0442d972d0eb31" id="r_a85225d8c344ad98eda0442d972d0eb31"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a85225d8c344ad98eda0442d972d0eb31">name_to_short_name</a> (const char *name, uint8_t out[11])</td></tr>
 <tr class="memdesc:a85225d8c344ad98eda0442d972d0eb31"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert a filename to 8.3 short name (uppercased, space-padded).  <br /></td></tr>
-<tr class="memitem:aa9f8a2b8e4f80b05086c924c915f3939" id="r_aa9f8a2b8e4f80b05086c924c915f3939"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa9f8a2b8e4f80b05086c924c915f3939">add_dir_entry</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const DirEntryRaw &amp;raw)</td></tr>
+<tr class="memitem:aa9f8a2b8e4f80b05086c924c915f3939" id="r_aa9f8a2b8e4f80b05086c924c915f3939"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa9f8a2b8e4f80b05086c924c915f3939">add_dir_entry</a> (<a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;fs, uint32_t dir_cluster, const <a class="el" href="structkernel_1_1fat32_1_1_dir_entry_raw.html">DirEntryRaw</a> &amp;raw)</td></tr>
 <tr class="memdesc:aa9f8a2b8e4f80b05086c924c915f3939"><td class="mdescLeft">&#160;</td><td class="mdescRight">Add a new directory entry to a directory cluster chain.  <br /></td></tr>
-<tr class="memitem:ac33004927f3699ee2b024a9bdd066f60" id="r_ac33004927f3699ee2b024a9bdd066f60"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac33004927f3699ee2b024a9bdd066f60">remove_dir_entry</a> (Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name)</td></tr>
+<tr class="memitem:ac33004927f3699ee2b024a9bdd066f60" id="r_ac33004927f3699ee2b024a9bdd066f60"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac33004927f3699ee2b024a9bdd066f60">remove_dir_entry</a> (<a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;fs, uint32_t dir_cluster, const char *name)</td></tr>
 <tr class="memdesc:ac33004927f3699ee2b024a9bdd066f60"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove a directory entry by name (mark as free).  <br /></td></tr>
+<tr class="memitem:aee290aec99f4efc28b6c4944ef05b4e1" id="r_aee290aec99f4efc28b6c4944ef05b4e1"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1fat32_1_1_dir_entry_raw.html">kernel::fat32::DirEntryRaw</a>&#160;</td><td class="memItemRight"><a class="el" href="#aee290aec99f4efc28b6c4944ef05b4e1">__attribute__</a> ((packed))</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a5238f2beee4ebe54b7614e2868f4bc44" id="r_a5238f2beee4ebe54b7614e2868f4bc44"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1fat32_1_1_dir_entry.html">kernel::fat32::DirEntry</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5238f2beee4ebe54b7614e2868f4bc44">__attribute__</a></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="aee290aec99f4efc28b6c4944ef05b4e1" name="aee290aec99f4efc28b6c4944ef05b4e1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aee290aec99f4efc28b6c4944ef05b4e1">&#9670;&#160;</a></span>__attribute__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct <a class="el" href="structkernel_1_1fat32_1_1_dir_entry_raw.html">kernel::fat32::DirEntryRaw</a> kernel::fat32::__attribute__ </td>
+          <td>(</td>
+          <td class="paramtype">(packed)</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="aa9f8a2b8e4f80b05086c924c915f3939" name="aa9f8a2b8e4f80b05086c924c915f3939"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aa9f8a2b8e4f80b05086c924c915f3939">&#9670;&#160;</a></span>add_dir_entry()</h2>
 
@@ -152,7 +187,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">bool kernel::fat32::add_dir_entry </td>
           <td>(</td>
-          <td class="paramtype">Fat32Partition &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -162,13 +197,22 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const DirEntryRaw &amp;</td>          <td class="paramname"><span class="paramname"><em>raw</em></span>&#160;)</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1fat32_1_1_dir_entry_raw.html">DirEntryRaw</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>raw</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 <p>Add a new directory entry to a directory cluster chain. </p>
-<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">fs</td><td>Mounted partition. </td></tr>
+    <tr><td class="paramname">dir_cluster</td><td>Starting cluster of the target directory. </td></tr>
+    <tr><td class="paramname">raw</td><td>The raw 32-byte entry to write. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success, false if directory is full (no free entry). </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -187,7 +231,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::fat32::find_fat32_in_mbr </td>
           <td>(</td>
-          <td class="paramtype">block::BlockDevice &amp;</td>          <td class="paramname"><span class="paramname"><em>device</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1block_1_1_block_device.html">block::BlockDevice</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>device</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -198,7 +242,9 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Find the first FAT32 partition in the MBR. </p>
-<dl class="section return"><dt>Returns</dt><dd>true if a FAT32 partition was found. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true if a FAT32 partition was found.</dd>
+<dd>
+true if partition_lba_out has been set. </dd></dl>
 
 </div>
 </div>
@@ -227,12 +273,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Format a raw 8.3 directory entry name into "NAME.EXT". </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacekernel_1_1fat32_ad96c400fa4e603f70ae0ecd41241cbbf_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_ad96c400fa4e603f70ae0ecd41241cbbf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
-</div>
+<p>Format the short name from a raw directory entry into "NAME.EXT". </p>
 
 </div>
 </div>
@@ -245,7 +286,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::fat32::free_cluster_chain </td>
           <td>(</td>
-          <td class="paramtype">Fat32Partition &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -260,7 +301,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1fat32_acaa9ea1e7204014b1ee87d1b18e2786f_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_acaa9ea1e7204014b1ee87d1b18e2786f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 1 -->
 </div>
 
 </div>
@@ -274,7 +315,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::fat32::lookup_in_dir </td>
           <td>(</td>
-          <td class="paramtype">Fat32Partition &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -289,18 +330,28 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">DirEntry &amp;</td>          <td class="paramname"><span class="paramname"><em>entry</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1fat32_1_1_dir_entry.html">DirEntry</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>entry</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 <p>Look up a name in a directory cluster chain. </p>
-<dl class="section return"><dt>Returns</dt><dd>true if found. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true if found.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">fs</td><td>Mounted partition. </td></tr>
+    <tr><td class="paramname">dir_cluster</td><td>Starting cluster of the directory. </td></tr>
+    <tr><td class="paramname">name</td><td>8.3 short name to find. </td></tr>
+    <tr><td class="paramname">entry</td><td>Output parsed entry. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if found, false if not found or error. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1fat32_ae85fd58e1ca6c4db8cc25e966936083c_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_ae85fd58e1ca6c4db8cc25e966936083c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -314,7 +365,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::fat32::lookup_in_dir_at </td>
           <td>(</td>
-          <td class="paramtype">Fat32Partition &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -329,7 +380,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">DirEntry &amp;</td>          <td class="paramname"><span class="paramname"><em>entry</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1fat32_1_1_dir_entry.html">DirEntry</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>entry</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -340,11 +391,19 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Look up a name, reporting the matched on-disk slot index. read_dir_entry leaves pos one past the returned slot (it increments before every true return, including via the skip-recursion), so the matched slot is pos - 1. pos &gt; 0 whenever we return true. </p>
+<p>Look up a name, also reporting the on-disk slot index. Same as lookup_in_dir, but stores the 0-based directory-entry slot of the match in out_index (issue #333: stable identity key input). Slots are never compacted (remove marks 0xE5), so the index is stable until an unlink+reuse cycle recycles the slot.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">out_index</td><td>Slot index of the matched entry (valid iff the return value is true). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if found, false if not found or error. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1fat32_ae93a85e2f3b7cee00022a3e34747d9ac_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_ae93a85e2f3b7cee00022a3e34747d9ac_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -369,12 +428,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Convert a filename to 8.3 short name (uppercased, space-padded). </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacekernel_1_1fat32_a85225d8c344ad98eda0442d972d0eb31_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_a85225d8c344ad98eda0442d972d0eb31_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
-</div>
+<p>Convert a filename (e.g. "MyFile.txt") to 8.3 short name bytes. Pads with spaces, uppercases, strips dots. </p>
 
 </div>
 </div>
@@ -387,7 +441,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::fat32::read_dir_entry </td>
           <td>(</td>
-          <td class="paramtype">Fat32Partition &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -402,18 +456,29 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">DirEntry &amp;</td>          <td class="paramname"><span class="paramname"><em>entry</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1fat32_1_1_dir_entry.html">DirEntry</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>entry</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 <p>Read the next directory entry from a cluster chain. </p>
-<dl class="section return"><dt>Returns</dt><dd>true if a valid entry was read. </dd></dl>
+<p>Read directory entries from a cluster chain.</p>
+<dl class="section return"><dt>Returns</dt><dd>true if a valid entry was read.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">fs</td><td>Mounted partition. </td></tr>
+    <tr><td class="paramname">cluster</td><td>Starting cluster of the directory. </td></tr>
+    <tr><td class="paramname">pos</td><td>Entry index (0-based), updated after read. </td></tr>
+    <tr><td class="paramname">entry</td><td>Output parsed entry. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if an entry was read, false at end of directory. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1fat32_a26ce5bbfe1af8c3aa136fb2f57743383_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_a26ce5bbfe1af8c3aa136fb2f57743383_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -427,7 +492,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">int64_t kernel::fat32::read_file </td>
           <td>(</td>
-          <td class="paramtype">Fat32Partition &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -458,12 +523,25 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Read data from a file's cluster chain. </p>
+<p>Read data from a file (cluster chain).</p>
+<dl class="section return"><dt>Returns</dt><dd>Number of bytes read, or -1 on error.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">fs</td><td>Mounted partition. </td></tr>
+    <tr><td class="paramname">cluster</td><td>First cluster of the file. </td></tr>
+    <tr><td class="paramname">file_size</td><td>Total file size. </td></tr>
+    <tr><td class="paramname">offset</td><td>Byte offset to start reading. </td></tr>
+    <tr><td class="paramname">count</td><td>Number of bytes to read. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Output buffer. </td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="section return"><dt>Returns</dt><dd>Number of bytes read, or -1 on error. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1fat32_ab2b90c3fd678120edc03be6e4d00a917_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_ab2b90c3fd678120edc03be6e4d00a917_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -477,7 +555,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::fat32::remove_dir_entry </td>
           <td>(</td>
-          <td class="paramtype">Fat32Partition &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">Fat32Partition</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>fs</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -493,13 +571,38 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Remove a directory entry by name (mark as free). </p>
-<dl class="section return"><dt>Returns</dt><dd>true if found and removed. </dd></dl>
+<p>Remove (mark as free) a directory entry by name.</p>
+<dl class="section return"><dt>Returns</dt><dd>true if found and removed.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">fs</td><td>Mounted partition. </td></tr>
+    <tr><td class="paramname">dir_cluster</td><td>Starting cluster of the target directory. </td></tr>
+    <tr><td class="paramname">name</td><td>8.3 short name to remove. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if found and removed, false if not found. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1fat32_ac33004927f3699ee2b024a9bdd066f60_cgraph.png" border="0" usemap="#anamespacekernel_1_1fat32_ac33004927f3699ee2b024a9bdd066f60_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 6 -->
 </div>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a5238f2beee4ebe54b7614e2868f4bc44" name="a5238f2beee4ebe54b7614e2868f4bc44"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5238f2beee4ebe54b7614e2868f4bc44">&#9670;&#160;</a></span>__attribute__</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct <a class="el" href="structkernel_1_1fat32_1_1_dir_entry.html">kernel::fat32::DirEntry</a> kernel::fat32::__attribute__</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>

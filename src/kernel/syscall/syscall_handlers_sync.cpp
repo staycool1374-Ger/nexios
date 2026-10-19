@@ -32,6 +32,9 @@ uint64_t Syscall::sys_notify(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
                              uint64_t *) {
     uint64_t target_id = arg0;
     uint64_t value = arg1;
+    // Issue #374: fail fast on never-issued IDs without probing.
+    if (!Scheduler::validate_id(target_id))
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *t = Scheduler::find_task(target_id);
     if (!t)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);

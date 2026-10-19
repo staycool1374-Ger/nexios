@@ -116,6 +116,13 @@
 #define CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY 1
 #endif
 
+/// Same-INTID dispatches per tick before the storm limiter masks the line
+/// (issue #349). The timer INTID is never fed to the limiter.
+/// Default: 256.
+#ifndef CONFIG_IRQ_STORM_LIMIT
+#define CONFIG_IRQ_STORM_LIMIT 256
+#endif
+
 // ---------------------------------------------------------------------------
 // Memory Layout Tunables (Architecture-Overridable)
 // ---------------------------------------------------------------------------

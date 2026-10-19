@@ -6,6 +6,7 @@
 - **Standard**: C++20 freestanding (`-ffreestanding -fno-exceptions -fno-rtti -nostdlib`)
 - **Target**: `x86_64-elf`; no STL, exceptions, RTTI, stack-protector, thread-safe statics, dynamic linking on RT paths
 - **Optimization**: `-O3` (debug), `-O2` (release)
+- **Cross-arch parity (mandatory):** normative rule lives in `AGENTS.md` (§ Cross-Arch Parity) — every new function/feature ships on all three arches (`x86_64`, `aarch64`, `riscv64`); no single-arch-only work.
 
 ## 2. Naming
 

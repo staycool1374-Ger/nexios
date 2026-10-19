@@ -1,4 +1,6 @@
 var searchData=
 [
-  ['handle_0',['Handle',['../structkernel_1_1time_1_1_timer_wheel_1_1_handle.html',1,'kernel::time::TimerWheel']]]
+  ['gdt_0',['GDT',['../classarch_1_1_g_d_t.html',1,'arch']]],
+  ['gdtdescriptor_1',['GDTDescriptor',['../structarch_1_1_g_d_t_descriptor.html',1,'arch']]],
+  ['gdtentry_2',['GDTEntry',['../structarch_1_1_g_d_t_entry.html',1,'arch']]]
 ];

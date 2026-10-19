@@ -15,5 +15,7 @@ var string_8c =
     [ "strncpy", "string_8c.html#a9380f4a95b2c4e3d979b1634d3a8bcc9", null ],
     [ "strrchr", "string_8c.html#af87bb1cdc3d71abcd9aa0bd6d36e50a8", null ],
     [ "strspn", "string_8c.html#a900a0edfa51f601d479244f7451cedd1", null ],
-    [ "strstr", "string_8c.html#ab57319b670052e4c93c1f6822c28d5ce", null ]
+    [ "strstr", "string_8c.html#ab57319b670052e4c93c1f6822c28d5ce", null ],
+    [ "strtok", "string_8c.html#aae31fe06f71db8f18c36217994842ab9", null ],
+    [ "strtok_r", "string_8c.html#a75e1c9768130842c4ba2ad0014bc2136", null ]
 ];

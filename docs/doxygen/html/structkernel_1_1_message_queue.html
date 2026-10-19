@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -142,7 +142,7 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a4a8b5699fccf8f2fd24701dc1c874fee" id="r_a4a8b5699fccf8f2fd24701dc1c874fee"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4a8b5699fccf8f2fd24701dc1c874fee">pop</a> (<a class="el" href="structkernel_1_1_message.html">Message</a> &amp;msg)</td></tr>
 <tr class="memdesc:a4a8b5699fccf8f2fd24701dc1c874fee"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove the highest-priority message (FIFO within same priority).  <br /></td></tr>
 <tr class="memitem:abea5b684d416c4467bb309fe146cbb8a" id="r_abea5b684d416c4467bb309fe146cbb8a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abea5b684d416c4467bb309fe146cbb8a">pop_clamped</a> (<a class="el" href="structkernel_1_1_message.html">Message</a> &amp;msg, uint32_t max_size)</td></tr>
-<tr class="memdesc:abea5b684d416c4467bb309fe146cbb8a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pop the highest-priority message only if it fits <code class="param">max_size</code>. Fail-closed for the IPC fastpath (issue #11, paper §3.9): an oversized best match is NOT removed (returns false). Callers disambiguate empty-vs-oversized with <a class="el" href="#a5fa4160216201932e9dba8f57706b5f9">is_empty()</a>.  <br /></td></tr>
+<tr class="memdesc:abea5b684d416c4467bb309fe146cbb8a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pop the highest-priority message only if it fits <code class="param">max_size</code>. Fail-closed for the <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> fastpath (issue #11, paper §3.9): an oversized best match is NOT removed (returns false). Callers disambiguate empty-vs-oversized with <a class="el" href="#a5fa4160216201932e9dba8f57706b5f9">is_empty()</a>.  <br /></td></tr>
 <tr class="memitem:a7f429d387e8487c71ebe9c84ff296f03" id="r_a7f429d387e8487c71ebe9c84ff296f03"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a7f429d387e8487c71ebe9c84ff296f03">pop_from_sender</a> (<a class="el" href="structkernel_1_1_message.html">Message</a> &amp;out, uint64_t sender_id)</td></tr>
 <tr class="memdesc:a7f429d387e8487c71ebe9c84ff296f03"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pop the highest-priority message from <code class="param">sender_id</code> only (issue #296): non-matching messages are never touched, so a send_sync waiter cannot eat another sender's message as its reply. FIFO within a priority among matching (INV-P kept).  <br /></td></tr>
 <tr class="memitem:a41431013e685903689304dd877cc2bbe" id="r_a41431013e685903689304dd877cc2bbe"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a41431013e685903689304dd877cc2bbe">pop_from_sender_clamped</a> (<a class="el" href="structkernel_1_1_message.html">Message</a> &amp;out, uint32_t max_size, uint64_t sender_id)</td></tr>
@@ -400,7 +400,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Pop the highest-priority message only if it fits <code class="param">max_size</code>. Fail-closed for the IPC fastpath (issue #11, paper §3.9): an oversized best match is NOT removed (returns false). Callers disambiguate empty-vs-oversized with <a class="el" href="#a5fa4160216201932e9dba8f57706b5f9">is_empty()</a>. </p>
+<p>Pop the highest-priority message only if it fits <code class="param">max_size</code>. Fail-closed for the <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> fastpath (issue #11, paper §3.9): an oversized best match is NOT removed (returns false). Callers disambiguate empty-vs-oversized with <a class="el" href="#a5fa4160216201932e9dba8f57706b5f9">is_empty()</a>. </p>
 <p>Remove the highest-priority message only if it fits <code class="param">max_size</code>.</p>
 <dl class="section return"><dt>Returns</dt><dd>true if a fitting message was dequeued; false if the queue is empty OR the best match is oversized (NOT removed — fail-closed, issue #11 paper §3.9). Callers disambiguate with <a class="el" href="#a5fa4160216201932e9dba8f57706b5f9">is_empty()</a>. </dd></dl>
 <div class="dynheader">

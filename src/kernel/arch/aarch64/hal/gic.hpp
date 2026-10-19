@@ -38,6 +38,7 @@ inline constexpr uint32_t GICD_ITARGETSR = 0x0800;
 inline constexpr uint32_t GICD_ICFGR     = 0x0C00;
 inline constexpr uint32_t GICD_NSACR     = 0x0E00;
 inline constexpr uint32_t GICD_SGIR      = 0x0F00;
+inline constexpr uint32_t GICD_PIDR2     = 0xFE8;  // peripheral ID2 (version field)
 
 // ─── GICv3 Redistributor RD frame ────────────────────────────────────────
 inline constexpr uint32_t GICR_WAKER      = 0x0014;
@@ -121,11 +122,45 @@ inline volatile uint32_t *gicr_sgi_reg(uint32_t offset) {
 
 // ─── QEMU virt INTID map (SPI range) ─────────────────────────────────────
 inline constexpr uint32_t INTID_UART0   = 33;   // PL011 UART
-inline constexpr uint32_t INTID_RTC     = 34;   // MC146818 RTC
-inline constexpr uint32_t INTID_VIRTIO0 = 36;   // virtio-mmio devices
-inline constexpr uint32_t INTID_VIRTIO1 = 37;
-inline constexpr uint32_t INTID_VIRTIO2 = 38;
-inline constexpr uint32_t INTID_VIRTIO3 = 39;
-inline constexpr uint32_t INTID_VIRTIO4 = 40;
+inline constexpr uint32_t INTID_RTC     = 34;   // RTC (PL031)
+inline constexpr uint32_t INTID_PCIE0   = 35;   // PCIe INTx
+inline constexpr uint32_t INTID_PCIE1   = 36;
+inline constexpr uint32_t INTID_PCIE2   = 37;
+inline constexpr uint32_t INTID_PCIE3   = 38;
+inline constexpr uint32_t INTID_VIRTIO_BASE  = 48;  // virtio-mmio devices
+inline constexpr uint32_t INTID_VIRTIO_COUNT = 32; // 48..79
+/// @brief Highest INTID the kernel addresses (8 enable banks x 32).
+inline constexpr uint32_t GIC_MAX_INTID = 256;
+
+/// @brief GIC version from GICD_PIDR2[7:4] (2 = v2, >= 3 = v3).
+/// 0/unreadable fails safe to v2; GICD_TYPER[15:11] is NOT a version field.
+inline uint32_t gic_version() {
+    volatile uint32_t *pidr2 =
+        reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
+                                              GICD_BASE + GICD_PIDR2);
+    uint32_t ver = (*pidr2 >> 4) & 0xFU;
+    return (ver == 0) ? 2U : ver;
+}
+
+/// @brief Byte offset of an INTID's IPRIORITY byte.
+inline constexpr uint32_t gicd_ipriority_off(uint32_t intid) {
+    return GICD_IPRIORITY + intid;
+}
+
+/// @brief Byte offset of an INTID's ITARGETSR byte (CPU0 = 0x01).
+inline constexpr uint32_t gicd_itargetsr_off(uint32_t intid) {
+    return GICD_ITARGETSR + intid;
+}
+
+/// @brief Word offset and 2-bit shift of an INTID's ICFGR field.
+inline constexpr uint32_t gicd_icfgr_word(uint32_t intid) {
+    return GICD_ICFGR + (intid / 16) * 4;
+}
+inline constexpr uint32_t gicd_icfgr_shift(uint32_t intid) {
+    return (intid % 16) * 2;
+}
+
+/// @brief Word index of an INTID's enable bank (0-7).
+inline constexpr uint32_t gicd_bank(uint32_t intid) { return intid / 32; }
 
 } // namespace arch

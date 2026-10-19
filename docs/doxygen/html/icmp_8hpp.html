@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,11 +121,140 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('icmp_8hpp.html
 
 <p>ICMP (Internet Control Message Protocol) — echo request/reply types and checksum.  
 <a href="#details">More...</a></p>
-
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for icmp.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="icmp_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2net_2icmp_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
+This graph shows which files directly or indirectly include this file:</div>
+<div class="dyncontent">
+<div class="center"><img src="icmp_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2net_2icmp_8hppdep" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+</div>
 <p><a href="icmp_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:net_3A_3AIcmpHeader" id="r_net_3A_3AIcmpHeader"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structnet_1_1_icmp_header.html">net::IcmpHeader</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">ICMP echo request/reply header (8 bytes).  <a href="structnet_1_1_icmp_header.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:net" id="r_net"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html">net</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ac7db56eb36db03ea6f642b3895d2665a" id="r_ac7db56eb36db03ea6f642b3895d2665a"><td class="memItemLeft">struct <a class="el" href="structnet_1_1_arp_header.html">net::ArpHeader</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#ac7db56eb36db03ea6f642b3895d2665a">net::__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:a2094f6a05de95cefca75935db3def6a0" id="r_a2094f6a05de95cefca75935db3def6a0"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a2094f6a05de95cefca75935db3def6a0">net::icmp_checksum</a> (const uint8_t *data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> len)</td></tr>
+<tr class="memdesc:a2094f6a05de95cefca75935db3def6a0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Compute a 16-bit one's-complement checksum over <code class="param">len</code> bytes. Used for ICMP and IPv4 header checksums.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a39c804ae1186c1ddefcd5915588042d1" id="r_a39c804ae1186c1ddefcd5915588042d1"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a39c804ae1186c1ddefcd5915588042d1">net::ICMP_TYPE_ECHO_REPLY</a> = 0</td></tr>
+<tr class="memdesc:a39c804ae1186c1ddefcd5915588042d1"><td class="mdescLeft">&#160;</td><td class="mdescRight">ICMP Echo Reply message type.  <br /></td></tr>
+<tr class="memitem:afeda5127c2c4b0f02bd99a52a48c94d9" id="r_afeda5127c2c4b0f02bd99a52a48c94d9"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#afeda5127c2c4b0f02bd99a52a48c94d9">net::ICMP_TYPE_ECHO_REQUEST</a> = 8</td></tr>
+<tr class="memdesc:afeda5127c2c4b0f02bd99a52a48c94d9"><td class="mdescLeft">&#160;</td><td class="mdescRight">ICMP Echo Request message type.  <br /></td></tr>
+<tr class="memitem:ad99c8a4c765e5f577ee8a344497288f4" id="r_ad99c8a4c765e5f577ee8a344497288f4"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#ad99c8a4c765e5f577ee8a344497288f4">net::ICMP_HEADER_LEN</a> = 8</td></tr>
+<tr class="memdesc:ad99c8a4c765e5f577ee8a344497288f4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of the ICMP header (type + code + checksum + ident + seq).  <br /></td></tr>
+<tr class="memitem:a1d127017fb298b889f4ba24752d08b8e" id="r_a1d127017fb298b889f4ba24752d08b8e"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a1d127017fb298b889f4ba24752d08b8e">type</a></td></tr>
+<tr class="memdesc:a1d127017fb298b889f4ba24752d08b8e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Message type (ECHO_REQUEST = 8, ECHO_REPLY = 0).  <br /></td></tr>
+<tr class="memitem:a966576744a473fafb7687f8e5649941f" id="r_a966576744a473fafb7687f8e5649941f"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a966576744a473fafb7687f8e5649941f">code</a></td></tr>
+<tr class="memdesc:a966576744a473fafb7687f8e5649941f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Code (0 for echo).  <br /></td></tr>
+<tr class="memitem:a6796c847bbd16253ce2538754c250bd6" id="r_a6796c847bbd16253ce2538754c250bd6"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a6796c847bbd16253ce2538754c250bd6">checksum</a></td></tr>
+<tr class="memdesc:a6796c847bbd16253ce2538754c250bd6"><td class="mdescLeft">&#160;</td><td class="mdescRight">ICMP header + data checksum (big-endian).  <br /></td></tr>
+<tr class="memitem:a778fd3f83b301f89ae998cdd04ad9921" id="r_a778fd3f83b301f89ae998cdd04ad9921"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a778fd3f83b301f89ae998cdd04ad9921">ident</a></td></tr>
+<tr class="memdesc:a778fd3f83b301f89ae998cdd04ad9921"><td class="mdescLeft">&#160;</td><td class="mdescRight">Identifier (big-endian).  <br /></td></tr>
+<tr class="memitem:a0a97914b75ed3ab7d0e13d8b200d758a" id="r_a0a97914b75ed3ab7d0e13d8b200d758a"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a0a97914b75ed3ab7d0e13d8b200d758a">seq</a></td></tr>
+<tr class="memdesc:a0a97914b75ed3ab7d0e13d8b200d758a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sequence number (big-endian).  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>ICMP (Internet Control Message Protocol) — echo request/reply types and checksum. </p>
-</div></div><!-- contents -->
+</div><a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a6796c847bbd16253ce2538754c250bd6" name="a6796c847bbd16253ce2538754c250bd6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6796c847bbd16253ce2538754c250bd6">&#9670;&#160;</a></span>checksum</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t checksum</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>ICMP header + data checksum (big-endian). </p>
+
+</div>
+</div>
+<a id="a966576744a473fafb7687f8e5649941f" name="a966576744a473fafb7687f8e5649941f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a966576744a473fafb7687f8e5649941f">&#9670;&#160;</a></span>code</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t code</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Code (0 for echo). </p>
+
+</div>
+</div>
+<a id="a778fd3f83b301f89ae998cdd04ad9921" name="a778fd3f83b301f89ae998cdd04ad9921"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a778fd3f83b301f89ae998cdd04ad9921">&#9670;&#160;</a></span>ident</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t ident</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Identifier (big-endian). </p>
+
+</div>
+</div>
+<a id="a0a97914b75ed3ab7d0e13d8b200d758a" name="a0a97914b75ed3ab7d0e13d8b200d758a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0a97914b75ed3ab7d0e13d8b200d758a">&#9670;&#160;</a></span>seq</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t seq</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Sequence number (big-endian). </p>
+
+</div>
+</div>
+<a id="a1d127017fb298b889f4ba24752d08b8e" name="a1d127017fb298b889f4ba24752d08b8e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1d127017fb298b889f4ba24752d08b8e">&#9670;&#160;</a></span>type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Message type (ECHO_REQUEST = 8, ECHO_REPLY = 0). </p>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

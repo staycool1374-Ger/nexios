@@ -13,13 +13,13 @@
 
 <p align="center">
   <a href="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml"><img src="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml/badge.svg" alt="CI Build"/></a>
-  <img src="https://img.shields.io/badge/tests-1768%20debug%20%7C%2089%20release-2ea44f?style=flat-square" alt="Tests"/>
+  <img src="https://img.shields.io/badge/tests-1836%20debug%20%7C%2089%20release-2ea44f?style=flat-square" alt="Tests"/>
   <img src="https://img.shields.io/badge/C++20-freestanding-00599C?style=flat-square&logo=cplusplus" alt="C++20 Freestanding"/>
   <img src="https://img.shields.io/badge/arch-x86__64%20%7C%20ARM64%2FRISCV%20planned-1f425f?style=flat-square" alt="x86_64"/>
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
   <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
   <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
-  <img src="https://img.shields.io/badge/version-v0.5.3-blue?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-v0.5.4-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
@@ -33,7 +33,7 @@ Currently a hybrid kernel actively transitioning toward a capability-based micro
 
 * **Target:** x86_64, ARM64 & RISC-V
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.5.3 — User Space Enhancements (1768 debug tests, 89 release tests: ramdiskd microkernel service, initrd /bin + sh PATH/export, runelf envp/fork fixes, send_sync reply contract, CheckedPtr overflow guard)
+* **Status:** v0.5.4 — Stabilization & Bugfixing (1836 debug tests, 89 release tests: scheduler decomposition, VMM transactions + rollback, path-tracer slices, C++20 sweep, lifecycle hardening, release-gate triple-fault/harness fixes)
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
@@ -90,15 +90,14 @@ Done roadmap archived in `prompts/README_done.md`.
 
 ## Recent Release Highlights
 
+### **v0.5.4 — Stabilization & Bugfixing**
+* **Scheduler Decomposition & Lifecycle:** scheduler split into 16 focused TUs (#323), task creation/lifecycle/cleanup audit with deferred-kill handshake (#324), scheduler post-split hardening (#369).
+* **Tracing & Modernization:** XOR→order-sensitive path-tracer fold (#347/#362), C++20 nodiscard/span/concepts sweep (#348), core aggregate split into 7 classes (#364), count reconciliation (#342).
+
 ### **v0.5.3 — User Space Enhancements**
 * **Microkernel Services Live:** ramdiskd block service (8×2 MiB, chunked IPC, lazy mapping) with ramdisk_fs mount/file ops + loadelf/runelf support, 
 * **XMODEM Utilities:** host XMODEM/upload tooling, and the watchdogd supervision daemon.
 * **Userspace enhancements* initrd /bin hierarchy, sh PATH lookup + export, English shell strings + unified terminal core, and Rust no_std hello-world user ELF with pinned toolchain.
-
-### **v0.5.2 — User-ELF Bring-up to Run**
-* **End-to-End User ELF Execution:** `runelf` loads and runs general ELFs as strictly periodic user tasks with deadline registration, Liu-Leyland + memory-budget admission, TLS setup, and `/etc/rc` integration.
-* **Kernel Hygiene H1–H8:** pure-refactor cleanup across memory (PMM/VMM/MemPool), scheduler/task lifecycle, and sync primitives — zero functional change, SIL 3 PRE+POST approved per part.
-* **Debugger Surface:** `runelf --debug` integration, stop-event snapshot budget export, and the bare-metal debug-discipline audit (gaps filed as follow-ups).
 
 ---
 
@@ -116,8 +115,8 @@ Have questions about the architecture, CSpace capabilities, or real-time schedul
 #### Using Docker (recommended)
 
 ```bash
-docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.3
-docker run --rm -it ghcr.io/staycool1374-ger/nexios-env:v0.5.3
+docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.4
+docker run --rm -it ghcr.io/staycool1374-ger/nexios-env:v0.5.4
 # inside the container:
 make build
 make execute-test x86_64 debug debug_syscall
@@ -134,7 +133,7 @@ make execute-test x86_64 debug debug_syscall
 Run a gate directly without an interactive shell:
 
 ```bash
-docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.3 \
+docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.4 \
     make execute-test x86_64 debug debug_syscall
 ```
 

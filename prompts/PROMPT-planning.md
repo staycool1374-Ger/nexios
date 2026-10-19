@@ -2,7 +2,7 @@
 name: planner
 description: Architectural & execution planning agent for NexIOS kernel changes
 mode: subagent
-model: opencode-go/DeepSeek-V4-Pro
+model: opencode-go/deepseek-v4.1-flash
 reasoning_effort: high
 temperature: 0.2
 permission:

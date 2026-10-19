@@ -233,10 +233,12 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
         }
 
         uint64_t offset_in_region = phdr->vaddr - vaddr_base;
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + seg_phys +
-                                        offset_in_region),
-               file_data + phdr->offset, phdr->filesz);
+        if (phdr->filesz != 0) {
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + seg_phys +
+                                            offset_in_region),
+                   file_data + phdr->offset, phdr->filesz);
+        }
 
         if (phdr->memsz > phdr->filesz) {
             uint64_t zero_offset =
@@ -571,7 +573,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     tcb->ready_deferred_ = false;
     tcb->remaining_ticks = 0;
     tcb->deadline_ticks = arch::Timer::ticks();
-    tcb->page_table_ = 0;
+    tcb->clear_page_table();
     tcb->stack_phys_ = 0;
     tcb->kernel_stack = nullptr;
     tcb->kernel_stack_top = 0;
@@ -599,7 +601,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_virt);
     tcb->kernel_stack_top = kstack_virt + TaskControlBlock::STACK_SIZE;
 
-    tcb->page_table_ = pml4;
+    tcb->install_page_table(pml4);
     tcb->is_user_ = true;
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
     // Issue #156: eager PCID assignment (see task.cpp birth sites).
@@ -752,20 +754,20 @@ static void install_segment_canaries(TaskControlBlock *tcb,
         tcb->canary_before[text] = text_base;
         canary_write_at(text_base,
                         TaskControlBlock::CANARY_MAGIC ^ (text + 1),
-                        tcb->page_table_);
+                        tcb->get_page_table());
         tcb->canary_installed |= (1u << text);
     }
     if (text_after) {
         tcb->canary_after[text] = text_after;
         canary_write_at(text_after,
                         TaskControlBlock::CANARY_MAGIC ^ (text + 1),
-                        tcb->page_table_);
+                        tcb->get_page_table());
     }
     if (data_after) {
         tcb->canary_after[data] = data_after;
         canary_write_at(data_after,
                         TaskControlBlock::CANARY_MAGIC ^ (data + 1),
-                        tcb->page_table_);
+                        tcb->get_page_table());
         tcb->canary_installed |= (1u << data);
     }
 
@@ -819,7 +821,7 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     // pager-mapped ledger PTE cannot outlive the frames it references.
     kernel::ipc::PagerRegistry::drain_task(*tcb);
 
-    uint64_t old_pml4 = tcb->page_table_;
+    uint64_t old_pml4 = tcb->get_page_table();
     // Issue #92 canary relocation: the scheduler now samples user-task segment
     // canaries at every context switch and on a bounded tick cadence
     // (canary_check_in_scheduler_hooks).  Between the page_table_ swap below
@@ -831,7 +833,7 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     // canary_installed so the verify loop is a no-op until the new canaries are
     // armed below (install_segment_canaries re-ORs the bits).
     tcb->canary_installed = 0;
-    tcb->page_table_ = new_pml4;
+    tcb->swap_page_table(new_pml4);
     tcb->is_user_ = true;
     // Issue #74: exec reuses the live TCB — the old image's TLS base must not
     // survive into the new image. Reset the field and clear the live register

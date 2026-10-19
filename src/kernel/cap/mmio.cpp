@@ -145,7 +145,7 @@ uint64_t MmioUserMap::map(kernel::TaskControlBlock &task, cap::MmioCap &mmio) {
     if (pages * arch::PAGE_SIZE > CONFIG_USER_MMIO_REGION_SIZE)
         return static_cast<uint64_t>(-1); // range exceeds one fixed region
 
-    uint64_t pml4 = task.page_table_;
+    uint64_t pml4 = task.get_page_table();
     if (pml4 == 0)
         return static_cast<uint64_t>(-1); // kernel task — no user PML4
 

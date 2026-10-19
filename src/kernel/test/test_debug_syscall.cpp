@@ -185,8 +185,8 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out,
         PMM::free_page(phys);
         return nullptr;
     }
-    VMM::map_page_in_pml4(kSpinStubVa, phys, true, true, t->page_table_);
-    if (VMM::virt_to_phys_in_pml4(kSpinStubVa, t->page_table_) != phys) {
+    VMM::map_page_in_pml4(kSpinStubVa, phys, true, true, t->get_page_table());
+    if (VMM::virt_to_phys_in_pml4(kSpinStubVa, t->get_page_table()) != phys) {
         PMM::free_page(phys);
         (void)Scheduler::terminate_err(*t, 0);
         Scheduler::drain_zombie_list();
@@ -199,8 +199,8 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out,
     }
     if (!Scheduler::set_sched_policy(*t, SchedPolicy::FIXED)) {
         // Unmap/free BEFORE reaping: reap deletes the TCB, so any later
-        // t->page_table_ read is use-after-free.
-        VMM::unmap_page_in_pml4(kSpinStubVa, t->page_table_);
+        // t->get_page_table() read is use-after-free.
+        VMM::unmap_page_in_pml4(kSpinStubVa, t->get_page_table());
         PMM::free_page(phys);
         debug_reap_child(t);
         return nullptr;
@@ -219,7 +219,7 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out,
 
 void debug_free_spinner_page(TaskControlBlock *t, uint64_t stub_phys) {
     if (t != nullptr && TaskControlBlock::is_valid(t))
-        VMM::unmap_page_in_pml4(kSpinStubVa, t->page_table_);
+        VMM::unmap_page_in_pml4(kSpinStubVa, t->get_page_table());
     if (stub_phys != 0)
         PMM::free_page(stub_phys);
 }
@@ -248,15 +248,15 @@ constexpr uint64_t kDebugScratchVa =
 
 uint64_t debug_map_scratch() {
     TaskControlBlock *me = Scheduler::current_task();
-    if (me == nullptr || me->page_table_ == 0)
+    if (me == nullptr || me->get_page_table() == 0)
         return 0;
     uint64_t phys = PMM::alloc_user_page();
     if (phys == 0)
         return 0;
     VMM::map_page_in_pml4(kDebugScratchVa, phys, true, false,
-                          me->page_table_);
-    if (VMM::virt_to_phys_in_pml4(kDebugScratchVa, me->page_table_) != phys) {
-        VMM::unmap_page_in_pml4(kDebugScratchVa, me->page_table_);
+                          me->get_page_table());
+    if (VMM::virt_to_phys_in_pml4(kDebugScratchVa, me->get_page_table()) != phys) {
+        VMM::unmap_page_in_pml4(kDebugScratchVa, me->get_page_table());
         PMM::free_page(phys);
         return 0;
     }
@@ -265,8 +265,8 @@ uint64_t debug_map_scratch() {
 
 void debug_unmap_scratch(uint64_t phys) {
     TaskControlBlock *me = Scheduler::current_task();
-    if (me != nullptr && me->page_table_ != 0)
-        VMM::unmap_page_in_pml4(kDebugScratchVa, me->page_table_);
+    if (me != nullptr && me->get_page_table() != 0)
+        VMM::unmap_page_in_pml4(kDebugScratchVa, me->get_page_table());
     if (phys != 0)
         PMM::free_page(phys);
 }
@@ -285,7 +285,7 @@ bool debug_ensure_map_pt(uint64_t pt, uint64_t va, uint64_t phys, bool exec) {
 }
 
 bool debug_ensure_map(TaskControlBlock *t, uint64_t va, uint64_t phys) {
-    return debug_ensure_map_pt(t->page_table_, va, phys, false);
+    return debug_ensure_map_pt(t->get_page_table(), va, phys, false);
 }
 
 /// @brief Ensure both the target mapping and the caller scratch mapping
@@ -294,9 +294,9 @@ bool debug_ensure_map(TaskControlBlock *t, uint64_t va, uint64_t phys) {
 bool debug_ensure_all(TaskControlBlock *t, uint64_t va, uint64_t phys,
                       uint64_t scratch_phys) {
     TaskControlBlock *me = Scheduler::current_task();
-    if (me == nullptr || me->page_table_ == 0)
+    if (me == nullptr || me->get_page_table() == 0)
         return false;
-    if (!debug_ensure_map_pt(me->page_table_, kDebugScratchVa, scratch_phys,
+    if (!debug_ensure_map_pt(me->get_page_table(), kDebugScratchVa, scratch_phys,
                              false))
         return false;
     return debug_ensure_map(t, va, phys);
@@ -620,9 +620,9 @@ JARVIS_TEST(debug_mem_partial, "PRE: none | POST: none") {
                           __atomic_load_n(&t->debug_parked, __ATOMIC_ACQUIRE),
                       "park markers wrong");
     // Map the data page only now (post-park: stable by construction).
-    VMM::map_page_in_pml4(kVa, data_phys, true, false, t->page_table_);
+    VMM::map_page_in_pml4(kVa, data_phys, true, false, t->get_page_table());
     JARVIS_ASSERT_FMT(
-        VMM::virt_to_phys_in_pml4(kVa, t->page_table_) == data_phys,
+        VMM::virt_to_phys_in_pml4(kVa, t->get_page_table()) == data_phys,
         "map failed");
     // Full read round-trip (result lands in the scratch page). The
     // mappings are re-verified first (heals + logs per debug_ensure_all).
@@ -667,7 +667,7 @@ JARVIS_TEST(debug_mem_partial, "PRE: none | POST: none") {
         "detach failed");
     // Unmap the private pages (tables freed by task cleanup; data pages
     // are regular PMM and freed explicitly for balance).
-    VMM::unmap_page_in_pml4(kVa, t->page_table_);
+    VMM::unmap_page_in_pml4(kVa, t->get_page_table());
     PMM::free_page(data_phys);
     debug_unmap_scratch(scratch_phys);
     debug_free_spinner_page(t, stub_phys);
@@ -710,7 +710,7 @@ bool debug_wait_event(uint64_t h, uint64_t &kind_out, uint64_t &addr_out,
             auto *scratch = reinterpret_cast<volatile uint64_t *>(
                 arch::HHDM_OFFSET +
                 VMM::virt_to_phys_in_pml4(
-                    kDebugScratchVa, Scheduler::current_task()->page_table_));
+                    kDebugScratchVa, Scheduler::current_task()->get_page_table()));
             if (id_out != nullptr)
                 *id_out = scratch[0];
             if (gen_out != nullptr)
@@ -743,9 +743,9 @@ uint64_t debug_park_and_get_pc(uint64_t h) {
         debug_sleep_ms(2);
     }
     TaskControlBlock *me = Scheduler::current_task();
-    if (me == nullptr || me->page_table_ == 0)
+    if (me == nullptr || me->get_page_table() == 0)
         return 0;
-    uint64_t phys = VMM::virt_to_phys_in_pml4(kDebugScratchVa, me->page_table_);
+    uint64_t phys = VMM::virt_to_phys_in_pml4(kDebugScratchVa, me->get_page_table());
     if (phys == 0)
         return 0;
     auto *scratch = reinterpret_cast<volatile uint64_t *>(arch::HHDM_OFFSET +
@@ -782,12 +782,12 @@ uint64_t debug_park_and_get_pc(uint64_t h) {
 bool debug_write_target_bytes(TaskControlBlock *t, uint64_t va,
                               const uint8_t *bytes, size_t len) {
     if (t == nullptr || !TaskControlBlock::is_valid(t) ||
-        t->page_table_ == 0 || len == 0 || len > 64)
+        t->get_page_table() == 0 || len == 0 || len > 64)
         return false;
     uint64_t page_off = va & 0xFFFULL;
     if (page_off + len > 0x1000ULL)
         return false;
-    uint64_t phys = VMM::virt_to_phys_in_pml4(va, t->page_table_);
+    uint64_t phys = VMM::virt_to_phys_in_pml4(va, t->get_page_table());
     if (phys == 0)
         return false;
     // Walk result is the exact phys (offset included — never add page_off
@@ -835,8 +835,8 @@ TaskControlBlock *debug_spawn_faulter(uint64_t &stub_phys_out) {
         PMM::free_page(phys);
         return nullptr;
     }
-    VMM::map_page_in_pml4(kSpinStubVa, phys, true, true, t->page_table_);
-    if (VMM::virt_to_phys_in_pml4(kSpinStubVa, t->page_table_) != phys) {
+    VMM::map_page_in_pml4(kSpinStubVa, phys, true, true, t->get_page_table());
+    if (VMM::virt_to_phys_in_pml4(kSpinStubVa, t->get_page_table()) != phys) {
         PMM::free_page(phys);
         (void)Scheduler::terminate_err(*t, 0);
         Scheduler::drain_zombie_list();
@@ -849,7 +849,7 @@ TaskControlBlock *debug_spawn_faulter(uint64_t &stub_phys_out) {
     }
     if (!Scheduler::set_sched_policy(*t, SchedPolicy::FIXED)) {
         debug_reap_child(t);
-        VMM::unmap_page_in_pml4(kSpinStubVa, t->page_table_);
+        VMM::unmap_page_in_pml4(kSpinStubVa, t->get_page_table());
         PMM::free_page(phys);
         return nullptr;
     }
@@ -899,7 +899,7 @@ JARVIS_TEST(debug_stop_break_insert_hit_clear, "PRE: none | POST: none") {
                           t->generation);
     }
     // Snapshot the original byte at pc for the restore check below.
-    uint64_t bphys0 = VMM::virt_to_phys_in_pml4(pc, t->page_table_);
+    uint64_t bphys0 = VMM::virt_to_phys_in_pml4(pc, t->get_page_table());
     JARVIS_ASSERT_FMT(bphys0 != 0, "pc unmapped");
     const uint8_t orig0 =
         *reinterpret_cast<volatile uint8_t *>(arch::HHDM_OFFSET + bphys0);
@@ -933,7 +933,7 @@ JARVIS_TEST(debug_stop_break_insert_hit_clear, "PRE: none | POST: none") {
     // Walk-stability proof: the same walk in the same unmodified tables
     // must resolve identically (a differing phys means the walk itself
     // is incoherent, not the store).
-    uint64_t bphys2 = VMM::virt_to_phys_in_pml4(pc, t->page_table_);
+    uint64_t bphys2 = VMM::virt_to_phys_in_pml4(pc, t->get_page_table());
     JARVIS_ASSERT_FMT(bphys2 == bphys0, "walk unstable: 0x%lx vs 0x%lx",
                       bphys2, bphys0);
     // Resume out of the clean park so the breakpoint fires.
@@ -956,7 +956,7 @@ JARVIS_TEST(debug_stop_break_insert_hit_clear, "PRE: none | POST: none") {
     JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelBpClr,
                                 h, pc) == 0,
                       "bp clear failed");
-    uint64_t bphys = VMM::virt_to_phys_in_pml4(pc, t->page_table_);
+    uint64_t bphys = VMM::virt_to_phys_in_pml4(pc, t->get_page_table());
     JARVIS_ASSERT_FMT(bphys != 0, "target unmapped");
     auto *b0 = reinterpret_cast<volatile uint8_t *>(arch::HHDM_OFFSET +
                                                     bphys);
@@ -1027,9 +1027,9 @@ JARVIS_TEST(debug_stop_step_once, "PRE: none | POST: none") {
     constexpr uint64_t kSledVa = 0x43000000ULL;
     uint64_t const sled_phys = PMM::alloc_user_page();
     JARVIS_ASSERT_FMT(sled_phys != 0, "sled alloc failed");
-    VMM::map_page_in_pml4(kSledVa, sled_phys, true, true, t->page_table_);
+    VMM::map_page_in_pml4(kSledVa, sled_phys, true, true, t->get_page_table());
     JARVIS_ASSERT_FMT(
-        VMM::virt_to_phys_in_pml4(kSledVa, t->page_table_) == sled_phys,
+        VMM::virt_to_phys_in_pml4(kSledVa, t->get_page_table()) == sled_phys,
         "sled map failed");
 #if defined(CONFIG_ARCH_AARCH64)
     // AArch64 sled: two nops (the emulated step plants its temp brk at
@@ -1080,7 +1080,7 @@ JARVIS_TEST(debug_stop_step_once, "PRE: none | POST: none") {
     {
         TaskControlBlock *me2 = Scheduler::current_task();
         uint64_t rphys = VMM::virt_to_phys_in_pml4(kDebugScratchVa,
-                                                   me2->page_table_);
+                                                   me2->get_page_table());
         JARVIS_ASSERT_FMT(rphys != 0, "scratch lost");
         auto *rscratch = reinterpret_cast<volatile uint64_t *>(
             arch::HHDM_OFFSET + rphys);
@@ -1142,7 +1142,7 @@ JARVIS_TEST(debug_stop_step_once, "PRE: none | POST: none") {
                       "target not resumed");
     debug_unmap_scratch(scratch_phys);
 #if defined(CONFIG_ARCH_RISCV64) || defined(CONFIG_ARCH_AARCH64)
-    VMM::unmap_page_in_pml4(kSledVa, t->page_table_);
+    VMM::unmap_page_in_pml4(kSledVa, t->get_page_table());
     PMM::free_page(sled_phys);
 #endif
     debug_free_spinner_page(t, stub_phys);
@@ -1385,7 +1385,7 @@ JARVIS_TEST(debug_stop_overflow_death_slot, "PRE: none | POST: none") {
         {
             TaskControlBlock *me2 = Scheduler::current_task();
             uint64_t rphys = VMM::virt_to_phys_in_pml4(kDebugScratchVa,
-                                                       me2->page_table_);
+                                                       me2->get_page_table());
             JARVIS_ASSERT_FMT(rphys != 0, "scratch lost");
             auto *rscratch = reinterpret_cast<volatile uint64_t *>(
                 arch::HHDM_OFFSET + rphys);
@@ -1576,9 +1576,9 @@ JARVIS_TEST(debug_stop_debugger_death, "PRE: none | POST: none") {
     TaskControlBlock *v = TaskControlBlock::create_user(
         reinterpret_cast<void (*)()>(kSpinStubVa), 11, 10, 32_KiB);
     JARVIS_ASSERT_FMT(v != nullptr, "victim spawn failed");
-    VMM::map_page_in_pml4(kSpinStubVa, stub_phys, true, true, v->page_table_);
+    VMM::map_page_in_pml4(kSpinStubVa, stub_phys, true, true, v->get_page_table());
     if (!Scheduler::set_sched_policy(*v, SchedPolicy::FIXED)) {
-        VMM::unmap_page_in_pml4(kSpinStubVa, v->page_table_);
+        VMM::unmap_page_in_pml4(kSpinStubVa, v->get_page_table());
         PMM::free_page(stub_phys);
         debug_reap_child(v);
         debug_reap_child(dbg);
@@ -1618,7 +1618,7 @@ JARVIS_TEST(debug_stop_debugger_death, "PRE: none | POST: none") {
     // Teardown: victim back under T for the shared reaper (D is gone, so
     // no removal from its list — add_child overwrites the stale links).
     me->add_child(v);
-    VMM::unmap_page_in_pml4(kSpinStubVa, v->page_table_);
+    VMM::unmap_page_in_pml4(kSpinStubVa, v->get_page_table());
     PMM::free_page(stub_phys);
     debug_reap_child(v);
     JARVIS_TEST_PASS();
@@ -1739,6 +1739,180 @@ JARVIS_TEST(debug_stop_snapshot_budget_zero_without_server,
     debug_unmap_scratch(scratch_phys);
     debug_free_spinner_page(t, stub_phys);
     debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: watchdog-KILL of a debugger-attached server-backed target
+//           publishes a DEATH stop-event with the live id/gen instead of
+//           faulting on the torn-down sporadic server (issue #379:
+//           snap_budget_of dereferenced a 0xDD-poisoned server after a
+//           1-tick watchdog expiry raced debugger supervision).
+// Input: spinner + init_sporadic_server(60, 1000, 0); attach (no park);
+//        arm wdog period 5 under IrqGuard; tick-poll to TERMINATED/reaped.
+// Expect: DEATH event with matching id/gen; snap_state TERMINATED;
+//         detach ok; no GP/panic; zero ResourceTracker delta (harness).
+// Depends: debug_publish_death, defer_kill, drain_zombie_list,
+//          CONFIG_WATCHDOG_ACTION==3.
+JARVIS_TEST(debug_death_watchdog_kill_while_debugged,
+            "PRE: none | POST: none") {
+#if CONFIG_WATCHDOG_ACTION != 3
+    JARVIS_TEST_PASS();
+#else
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    t->init_sporadic_server(60, 1000, 0);
+    JARVIS_ASSERT_FMT(t->get_sporadic_server() != nullptr, "server missing");
+    const uint64_t want_id = t->id;
+    const uint64_t want_gen = t->generation;
+    uint64_t const scratch_phys = debug_map_scratch();
+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
+    {
+        arch::IrqGuard guard{};
+        t->wdog_period_ticks = 5;
+        t->wdog_last_kick_tick = arch::Timer::ticks();
+        t->wdog_expiry_tick = t->wdog_last_kick_tick + 5;
+        t->wdog_armed = true;
+        t->wdog_gen = 1;
+    }
+    const uint64_t start = arch::Timer::ticks();
+    bool died = false;
+    while (arch::Timer::ticks() - start < 500) {
+        auto *live = Scheduler::find_task(want_id);
+        if (live == nullptr || !TaskControlBlock::is_valid(live) ||
+            live->state == TaskState::TERMINATED) {
+            died = true;
+            break;
+        }
+    }
+    JARVIS_ASSERT_FMT(died, "watchdog did not kill target");
+    Scheduler::drain_zombie_list();
+    t = nullptr; // reaped + freed by the drain; no further TCB access
+    uint64_t kind = 0;
+    uint64_t addr = 0;
+    uint64_t got_id = 0;
+    uint64_t got_gen = 0;
+    uint64_t snap_state = 0;
+    JARVIS_ASSERT_FMT(debug_wait_event(h, kind, addr, &got_id, &got_gen,
+                                       &snap_state, nullptr, nullptr),
+                      "no DEATH event");
+    JARVIS_ASSERT_FMT(kind == kKindDeath, "kind not DEATH: 0x%lx", kind);
+    JARVIS_ASSERT_FMT(got_id == want_id && got_gen == want_gen,
+                      "death id/gen mismatch: 0x%lx/0x%lx vs 0x%lx/0x%lx",
+                      got_id, got_gen, want_id, want_gen);
+    JARVIS_ASSERT_FMT(snap_state ==
+                          static_cast<uint64_t>(TaskState::TERMINATED),
+                      "snap_state not TERMINATED: 0x%lx", snap_state);
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
+                      "dead detach failed");
+    debug_unmap_scratch(scratch_phys);
+    // The spinner page was mapped in the dead target's tables and is
+    // already reclaimed by its teardown — freeing again would double-free.
+    // The stub phys value is intentionally not freed here.
+    (void)stub_phys;
+    JARVIS_TEST_PASS();
+#endif
+}
+
+// Runmode: kernel
+// Testidea: death publish against a stale (freed-poisoned) sporadic-server
+//           pointer fails closed with snap_budget == 0 while the DEATH
+//           event itself still arrives (issue #379 guard pin).
+// Input: spinner + server; attach; overwrite the cached server pointer
+//        with the 0xDD MemPool poison sentinel; publish directly.
+// Expect: DEATH event, matching id/gen, snap_state TERMINATED,
+//         snap_budget == 0; no fault; server pointer restored before
+//         teardown so the ResourceTracker delta stays zero.
+// Depends: snap_budget_of poison/canonical guards, sel2 StopEvent copy.
+JARVIS_TEST(debug_death_publish_poisoned_server_skips_budget,
+            "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    t->init_sporadic_server(60, 1000, 0);
+    auto *live_server = t->get_sporadic_server();
+    JARVIS_ASSERT_FMT(live_server != nullptr, "server missing");
+    const uint64_t want_id = t->id;
+    const uint64_t want_gen = t->generation;
+    uint64_t const scratch_phys = debug_map_scratch();
+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
+    t->sporadic_server = reinterpret_cast<decltype(live_server)>(
+        0xDDDDDDDDDDDDDDDDULL);
+    debug::debug_publish_death(*t);
+    t->sporadic_server = live_server;
+    uint64_t kind = 0;
+    uint64_t addr = 0;
+    uint64_t got_id = 0;
+    uint64_t got_gen = 0;
+    uint64_t snap_state = 0;
+    uint64_t snap_budget = 0xAAAAAAAAAAAAAAAAULL;
+    JARVIS_ASSERT_FMT(debug_wait_event(h, kind, addr, &got_id, &got_gen,
+                                       &snap_state, nullptr, &snap_budget),
+                      "no DEATH event");
+    JARVIS_ASSERT_FMT(kind == kKindDeath, "kind not DEATH: 0x%lx", kind);
+    JARVIS_ASSERT_FMT(got_id == want_id && got_gen == want_gen,
+                      "death id/gen mismatch");
+    JARVIS_ASSERT_FMT(snap_state ==
+                          static_cast<uint64_t>(TaskState::TERMINATED),
+                      "snap_state not TERMINATED: 0x%lx", snap_state);
+    JARVIS_ASSERT_FMT(snap_budget == 0, "snap_budget not zero: 0x%lx",
+                      snap_budget);
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
+                      "detach failed");
+    debug_unmap_scratch(scratch_phys);
+    debug_free_spinner_page(t, stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: death publish against an already-freed (poisoned) TCB skips
+//           silently — no fault, no duplicate event (issue #379 guard pin).
+// Input: spinner; attach; full reap (real DEATH published during cleanup,
+//        then the TCB is freed + poisoned); publish against the dangling
+//        TCB directly.
+// Expect: exactly one DEATH event (the real one, matching id/gen);
+//         the stale publish enqueues nothing (second poll is EAGAIN).
+// Depends: debug_publish_death is_valid entry guard, sel2 StopEvent copy.
+JARVIS_TEST(debug_death_publish_poisoned_tcb_no_fault,
+            "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    const uint64_t want_id = t->id;
+    const uint64_t want_gen = t->generation;
+    uint64_t const scratch_phys = debug_map_scratch();
+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
+    TaskControlBlock *dead = t;
+    debug_reap_child(t);
+    t = nullptr; // freed + poisoned by the reap; no further TCB access
+    debug::debug_publish_death(*dead);
+    uint64_t kind = 0;
+    uint64_t addr = 0;
+    uint64_t got_id = 0;
+    uint64_t got_gen = 0;
+    JARVIS_ASSERT_FMT(debug_wait_event(h, kind, addr, &got_id, &got_gen),
+                      "no DEATH event");
+    JARVIS_ASSERT_FMT(kind == kKindDeath, "kind not DEATH: 0x%lx", kind);
+    JARVIS_ASSERT_FMT(got_id == want_id && got_gen == want_gen,
+                      "death id/gen mismatch");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelPoll,
+                                h, kDebugScratchVa) == Neg(kEagain),
+                      "stale publish enqueued a duplicate event");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
+                      "dead detach failed");
+    debug_unmap_scratch(scratch_phys);
+    // The spinner page was mapped in the dead target's tables and is
+    // already reclaimed by its teardown — freeing again would double-free.
+    // The stub phys value is intentionally not freed here.
+    (void)stub_phys;
     JARVIS_TEST_PASS();
 }
 
@@ -2338,6 +2512,9 @@ void register_debug_syscall_tests() {
     JARVIS_REGISTER_TEST(debug_stop_poll_empty);
     JARVIS_REGISTER_TEST(debug_stop_snapshot_budget_live);
     JARVIS_REGISTER_TEST(debug_stop_snapshot_budget_zero_without_server);
+    JARVIS_REGISTER_TEST(debug_death_watchdog_kill_while_debugged);
+    JARVIS_REGISTER_TEST(debug_death_publish_poisoned_server_skips_budget);
+    JARVIS_REGISTER_TEST(debug_death_publish_poisoned_tcb_no_fault);
     JARVIS_REGISTER_TEST(debug_grant_mint_use);
     JARVIS_REGISTER_TEST(debug_grant_denial_matrix);
     JARVIS_REGISTER_TEST(debug_grant_revoke_parked_disposition);

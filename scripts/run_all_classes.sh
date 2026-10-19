@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Full test-base runner (issue #173, replaces the removed `all` class).
-# Runs the 16 structural/semantic aggregates plus the 4 standalone
+# Runs the 22 structural/semantic aggregates plus the 4 standalone
 # specials, one reboot per class, and records PASS/FAIL/abnormal
 # termination per class into <repo>/test-history.txt using the mandatory
 # AGENTS.md row format:

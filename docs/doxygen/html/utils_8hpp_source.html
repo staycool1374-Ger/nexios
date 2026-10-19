@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -215,15 +215,16 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('utils_8hpp_sou
 </div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span></div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span><span class="keyword">template</span>&lt;kernel::Integral T&gt;</div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span><span class="keyword">static</span> <span class="keyword">constexpr</span> T align_up(T val, T align) {</div>
-<div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>    <span class="keywordflow">return</span> (val + align - 1) &amp; ~(align - 1);</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span><span class="keyword">static</span> <span class="keyword">constexpr</span> T align_up(T val, T <a class="code hl_variable" href="elf_8hpp.html#ae762be4c1d1b1bf587592e9225d96d5c">align</a>) {</div>
+<div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>    <span class="keywordflow">return</span> (val + <a class="code hl_variable" href="elf_8hpp.html#ae762be4c1d1b1bf587592e9225d96d5c">align</a> - 1) &amp; ~(<a class="code hl_variable" href="elf_8hpp.html#ae762be4c1d1b1bf587592e9225d96d5c">align</a> - 1);</div>
 <div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>}</div>
 <div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span></div>
 <div class="line"><a id="l00132" name="l00132"></a><span class="lineno">  132</span><span class="keyword">template</span>&lt;kernel::Integral T&gt;</div>
-<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span><span class="keyword">static</span> <span class="keyword">constexpr</span> T align_down(T val, T align) {</div>
-<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>    <span class="keywordflow">return</span> val &amp; ~(align - 1);</div>
+<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span><span class="keyword">static</span> <span class="keyword">constexpr</span> T align_down(T val, T <a class="code hl_variable" href="elf_8hpp.html#ae762be4c1d1b1bf587592e9225d96d5c">align</a>) {</div>
+<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>    <span class="keywordflow">return</span> val &amp; ~(<a class="code hl_variable" href="elf_8hpp.html#ae762be4c1d1b1bf587592e9225d96d5c">align</a> - 1);</div>
 <div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>}</div>
 <div class="ttc" id="aconcepts_8hpp_html"><div class="ttname"><a href="concepts_8hpp.html">concepts.hpp</a></div></div>
+<div class="ttc" id="aelf_8hpp_html_ae762be4c1d1b1bf587592e9225d96d5c"><div class="ttname"><a href="elf_8hpp.html#ae762be4c1d1b1bf587592e9225d96d5c">align</a></div><div class="ttdeci">uint64_t align</div><div class="ttdoc">Alignment constraint.</div><div class="ttdef"><b>Definition</b> elf.hpp:7</div></div>
 <div class="ttc" id="astructintegral__constant_html"><div class="ttname"><a href="structintegral__constant.html">integral_constant</a></div><div class="ttdoc">Compile-time constant wrapper.</div><div class="ttdef"><b>Definition</b> utils.hpp:76</div></div>
 <div class="ttc" id="astructintegral__constant_html_a07e143946a71db61112a1c57d4238f04"><div class="ttname"><a href="structintegral__constant.html#a07e143946a71db61112a1c57d4238f04">integral_constant::value_type</a></div><div class="ttdeci">T value_type</div><div class="ttdef"><b>Definition</b> utils.hpp:78</div></div>
 <div class="ttc" id="astructintegral__constant_html_a83852f05767121d9b948a9cec5ae1a91"><div class="ttname"><a href="structintegral__constant.html#a83852f05767121d9b948a9cec5ae1a91">integral_constant::type</a></div><div class="ttdeci">integral_constant type</div><div class="ttdef"><b>Definition</b> utils.hpp:79</div></div>

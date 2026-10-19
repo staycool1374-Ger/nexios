@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,48 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('iocd_8hpp.html
 
 <p>I/O Controller Daemon IPC interface and message types.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for iocd.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="iocd_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2driver_2iocd_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="iocd_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2driver_2iocd_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="iocd_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Aiocd_3A_3AMsg" id="r_kernel_3A_3Aiocd_3A_3AMsg"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1iocd_1_1_msg.html">kernel::iocd::Msg</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">IOCD <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> request message.  <a href="structkernel_1_1iocd_1_1_msg.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Aiocd_3A_3AReply" id="r_kernel_3A_3Aiocd_3A_3AReply"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1iocd_1_1_reply.html">kernel::iocd::Reply</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">MMIO policy protocol (issue #303 item 4). The daemon authorizes WHICH registered driver may use WHICH bar index; the kernel still enforces WHAT gets mapped via MEMORY-type MmioCaps, and MmioUserMap::drain_task owns PTE teardown on task exit.  <a href="structkernel_1_1iocd_1_1_reply.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Aiocd" id="r_kernel_3A_3Aiocd"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html">kernel::iocd</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:abb256f04b1e192ba428e9ec86fd4baac" id="r_abb256f04b1e192ba428e9ec86fd4baac"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html#abb256f04b1e192ba428e9ec86fd4baac">kernel::iocd::set_iocd_pid</a> (uint64_t pid)</td></tr>
+<tr class="memdesc:abb256f04b1e192ba428e9ec86fd4baac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record the PID of the I/O Controller Daemon.  <br /></td></tr>
+<tr class="memitem:aa1211fe0fe67ae70efe5f05508b58a63" id="r_aa1211fe0fe67ae70efe5f05508b58a63"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html#aa1211fe0fe67ae70efe5f05508b58a63">kernel::iocd::get_iocd_pid</a> ()</td></tr>
+<tr class="memdesc:aa1211fe0fe67ae70efe5f05508b58a63"><td class="mdescLeft">&#160;</td><td class="mdescRight">Retrieve the recorded IOCD PID.  <br /></td></tr>
+<tr class="memitem:af3dc88f6386fc50faedb450547369a6c" id="r_af3dc88f6386fc50faedb450547369a6c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html#af3dc88f6386fc50faedb450547369a6c">kernel::iocd::is_iocd_task</a> ()</td></tr>
+<tr class="memdesc:af3dc88f6386fc50faedb450547369a6c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the currently running task is the IOCD.  <br /></td></tr>
+<tr class="memitem:abd93cf4565b34e256102ffc1da86ff4e" id="r_abd93cf4565b34e256102ffc1da86ff4e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html#abd93cf4565b34e256102ffc1da86ff4e">kernel::iocd::is_keyboard_owned</a> ()</td></tr>
+<tr class="memdesc:abd93cf4565b34e256102ffc1da86ff4e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Keyboard ownership for input routing (issue #340 P1).  <br /></td></tr>
+<tr class="memitem:ad4eac49d3e542fc56f87583edffa612b" id="r_ad4eac49d3e542fc56f87583edffa612b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html#ad4eac49d3e542fc56f87583edffa612b">kernel::iocd::set_keyboard_owned</a> (bool owned)</td></tr>
+<tr class="memdesc:ad4eac49d3e542fc56f87583edffa612b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set or clear keyboard ownership.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>I/O Controller Daemon IPC interface and message types. </p>
 </div></div><!-- contents -->

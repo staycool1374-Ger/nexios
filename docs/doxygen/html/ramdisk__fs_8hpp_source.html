@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -139,30 +139,30 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ramdisk__fs_8h
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span> </div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="preprocessor">#pragma once</span></div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="preprocessor">#include &lt;<a class="code" href="vfs_8hpp.html">kernel/vfs/vfs.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span> </div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="preprocessor">#include &lt;<a class="code" href="vfs_8hpp.html">kernel/vfs/vfs.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span> </div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1vfs.html">vfs</a> {</div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span></div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="keywordtype">int</span> <a class="code hl_function" href="namespacekernel_1_1vfs.html#acb7b7264f275dc4b5139c6739c46f1f0">ramdisk_fs_try_mount</a>();</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span></div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span><span class="keywordtype">int</span> <a class="code hl_function" href="namespacekernel_1_1vfs.html#adfef1f0d08b703f47ea256474baf1d7a">ramdisk_fs_verify_all</a>();</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span></div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1vfs.html#aa66799fc199574092ebec434d2b6607b">ramdisk_fs_extent</a>(<span class="keyword">const</span> <span class="keywordtype">char</span> *name, uint64_t &amp;start_block,</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>                       uint64_t &amp;block_count, uint32_t &amp;crc);</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1vfs.html">vfs</a> {</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span></div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="keywordtype">int</span> <a class="code hl_function" href="namespacekernel_1_1vfs.html#acb7b7264f275dc4b5139c6739c46f1f0">ramdisk_fs_try_mount</a>();</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span></div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="keywordtype">int</span> <a class="code hl_function" href="namespacekernel_1_1vfs.html#adfef1f0d08b703f47ea256474baf1d7a">ramdisk_fs_verify_all</a>();</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span></div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1vfs.html#aa66799fc199574092ebec434d2b6607b">ramdisk_fs_extent</a>(<span class="keyword">const</span> <span class="keywordtype">char</span> *<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, uint64_t &amp;start_block,</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>                       uint64_t &amp;block_count, uint32_t &amp;crc);</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span> </div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="keyword">extern</span> <a class="code hl_struct" href="structkernel_1_1vfs_1_1_filesystem.html">Filesystem</a> <a class="code hl_variable" href="namespacekernel_1_1vfs.html#a9cbd594b0a8bec4a9857e01f0b325803">ramdisk_fs</a>;</div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span> </div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span><span class="keyword">extern</span> Filesystem <a class="code hl_variable" href="namespacekernel_1_1vfs.html#a9cbd594b0a8bec4a9857e01f0b325803">ramdisk_fs</a>;</div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span> </div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>} <span class="comment">// namespace vfs</span></div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>} <span class="comment">// namespace vfs</span></div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="afat32_8hpp_html_a30308c9b983377042fd2cc8900454fb1"><div class="ttname"><a href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></div><div class="ttdeci">uint8_t name[11]</div><div class="ttdoc">8.3 short name (space-padded).</div><div class="ttdef"><b>Definition</b> fat32.hpp:0</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html"><div class="ttname"><a href="namespacekernel_1_1vfs.html">kernel::vfs</a></div><div class="ttdef"><b>Definition</b> devfs.cpp:33</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_a9cbd594b0a8bec4a9857e01f0b325803"><div class="ttname"><a href="namespacekernel_1_1vfs.html#a9cbd594b0a8bec4a9857e01f0b325803">kernel::vfs::ramdisk_fs</a></div><div class="ttdeci">Filesystem ramdisk_fs</div><div class="ttdef"><b>Definition</b> ramdisk_fs.cpp:899</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_aa66799fc199574092ebec434d2b6607b"><div class="ttname"><a href="namespacekernel_1_1vfs.html#aa66799fc199574092ebec434d2b6607b">kernel::vfs::ramdisk_fs_extent</a></div><div class="ttdeci">bool ramdisk_fs_extent(const char *name, uint64_t &amp;start_block, uint64_t &amp;block_count, uint32_t &amp;crc)</div><div class="ttdoc">Test seam: fetch a file&#39;s extent (start block, block count, stored CRC).</div><div class="ttdef"><b>Definition</b> ramdisk_fs.cpp:865</div></div>
-<div class="ttc" id="anamespacekernel_1_1vfs_html_acb7b7264f275dc4b5139c6739c46f1f0"><div class="ttname"><a href="namespacekernel_1_1vfs.html#acb7b7264f275dc4b5139c6739c46f1f0">kernel::vfs::ramdisk_fs_try_mount</a></div><div class="ttdeci">int ramdisk_fs_try_mount()</div><div class="ttdef"><b>Definition</b> ramdisk_fs.cpp:882</div></div>
+<div class="ttc" id="anamespacekernel_1_1vfs_html_acb7b7264f275dc4b5139c6739c46f1f0"><div class="ttname"><a href="namespacekernel_1_1vfs.html#acb7b7264f275dc4b5139c6739c46f1f0">kernel::vfs::ramdisk_fs_try_mount</a></div><div class="ttdeci">int ramdisk_fs_try_mount()</div><div class="ttdoc">Try to mount the ramdisk filesystem at /mnt/ramdisk. Best-effort and fail-closed: returns nonzero wit...</div><div class="ttdef"><b>Definition</b> ramdisk_fs.cpp:882</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_adfef1f0d08b703f47ea256474baf1d7a"><div class="ttname"><a href="namespacekernel_1_1vfs.html#adfef1f0d08b703f47ea256474baf1d7a">kernel::vfs::ramdisk_fs_verify_all</a></div><div class="ttdeci">int ramdisk_fs_verify_all()</div><div class="ttdoc">Verify every live file&#39;s CRC against ramdisk (test seam — the same per-file check the boot cache-fill...</div><div class="ttdef"><b>Definition</b> ramdisk_fs.cpp:834</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="astructkernel_1_1vfs_1_1_filesystem_html"><div class="ttname"><a href="structkernel_1_1vfs_1_1_filesystem.html">kernel::vfs::Filesystem</a></div><div class="ttdef"><b>Definition</b> vfs.hpp:198</div></div>
 <div class="ttc" id="avfs_8hpp_html"><div class="ttname"><a href="vfs_8hpp.html">vfs.hpp</a></div><div class="ttdoc">Core VFS types, structures, and public API declarations.</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

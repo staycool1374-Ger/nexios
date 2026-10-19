@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['emit_0',['Emit',['../namespacefmt.html#aa8c73e10251050ff7fb01963d16bbd4a',1,'fmt']]],
-  ['expirecallback_1',['ExpireCallback',['../classkernel_1_1time_1_1_timer_wheel.html#a8e0c163853b1a0d016d5b5cb677c30f8',1,'kernel::time::TimerWheel']]]
+  ['chaincallback_0',['ChainCallback',['../classkernel_1_1dma_1_1_ping_pong_dma.html#ac929760defed55981e296d6bf1748247',1,'kernel::dma::PingPongDma']]],
+  ['commandfunc_1',['CommandFunc',['../classservice_1_1_shell.html#a705f545a46e17f1d0a0f9da3f3399728',1,'service::Shell']]]
 ];

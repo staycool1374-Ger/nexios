@@ -1,8 +1,8 @@
 var dir_86f15235f1dbace123bd765dedac1e4b =
 [
     [ "syscall.cpp", "syscall_8cpp.html", "syscall_8cpp" ],
-    [ "syscall.hpp", "syscall_8hpp.html", null ],
-    [ "syscall_errors.hpp", "syscall__errors_8hpp.html", null ],
+    [ "syscall.hpp", "syscall_8hpp.html", "syscall_8hpp" ],
+    [ "syscall_errors.hpp", "syscall__errors_8hpp.html", "syscall__errors_8hpp" ],
     [ "syscall_handlers_cap.cpp", "syscall__handlers__cap_8cpp.html", "syscall__handlers__cap_8cpp" ],
     [ "syscall_handlers_death.cpp", "syscall__handlers__death_8cpp.html", null ],
     [ "syscall_handlers_debug.cpp", "syscall__handlers__debug_8cpp.html", "syscall__handlers__debug_8cpp" ],
@@ -19,5 +19,5 @@ var dir_86f15235f1dbace123bd765dedac1e4b =
     [ "syscall_handlers_sync.cpp", "syscall__handlers__sync_8cpp.html", null ],
     [ "syscall_handlers_tls.cpp", "syscall__handlers__tls_8cpp.html", null ],
     [ "syscall_handlers_watchdog.cpp", "syscall__handlers__watchdog_8cpp.html", "syscall__handlers__watchdog_8cpp" ],
-    [ "syscall_helpers.hpp", "syscall__helpers_8hpp.html", null ]
+    [ "syscall_helpers.hpp", "syscall__helpers_8hpp.html", "syscall__helpers_8hpp" ]
 ];

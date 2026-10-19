@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -137,30 +137,40 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('errno_8h_sourc
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span> </div>
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="preprocessor">#pragma once</span></div>
-<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span> </div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="keyword">extern</span> <span class="keywordtype">int</span> <a class="code hl_variable" href="errno_8c.html#ad65a8842cc674e3ddf69355898c0ecbf">errno</a>;</div>
-<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span> </div>
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno"><a class="line" href="errno_8h.html#add669d31505a077f769cff8e66c780b3">   23</a></span><span class="preprocessor">#define EPERM   1</span></div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno"><a class="line" href="errno_8h.html#a03e689f378f643d16ea7537918528a48">   24</a></span><span class="preprocessor">#define ENOENT  2</span></div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno"><a class="line" href="errno_8h.html#a462e47a8af6288232a5df548221ada4c">   25</a></span><span class="preprocessor">#define ESRCH   3</span></div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno"><a class="line" href="errno_8h.html#a46b83d9f6c23b1b65a8cecfd775ddaed">   26</a></span><span class="preprocessor">#define EINTR   4</span></div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="errno_8h.html#a70979f50f9c83e5aebab3d6a1bd4cf35">   27</a></span><span class="preprocessor">#define EIO     5</span></div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno"><a class="line" href="errno_8h.html#af0fac1cea1165b4debec7f686edf3313">   28</a></span><span class="preprocessor">#define EAGAIN  11</span></div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno"><a class="line" href="errno_8h.html#ac54507d66b43ad12f9356257323c0018">   29</a></span><span class="preprocessor">#define EBADF   9</span></div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno"><a class="line" href="errno_8h.html#a6a05c923dad0c1208043e9c20a58c8e5">   30</a></span><span class="preprocessor">#define ENOMEM  12</span></div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="errno_8h.html#ac2a2e9fa555401f94478f74e01868032">   31</a></span><span class="preprocessor">#define EACCES  13</span></div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="errno_8h.html#a0a3bef9e5c47e42917692b5dae3b5498">   32</a></span><span class="preprocessor">#define EEXIST  17</span></div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="errno_8h.html#ab9b8cc17d1947160d13faaba7a18d6d1">   33</a></span><span class="preprocessor">#define ENODEV  19</span></div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno"><a class="line" href="errno_8h.html#ae22c3a1e0a38f3896de238cc30d0e19b">   34</a></span><span class="preprocessor">#define EISDIR  21</span></div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno"><a class="line" href="errno_8h.html#a2d1678d5a7cc8ce499643f3b8957def4">   35</a></span><span class="preprocessor">#define EINVAL  22</span></div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="errno_8h.html#a088abe8bad2df798edad3053d719b937">   36</a></span><span class="preprocessor">#define ENOSPC  28</span></div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="errno_8h.html#a0e42d4f9fecdcf5fcca2b333252173c3">   37</a></span><span class="preprocessor">#define ESPIPE  29</span></div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno"><a class="line" href="errno_8h.html#acb02bb67dddd7ca8cf82634a0781d58d">   38</a></span><span class="preprocessor">#define EROFS   30</span></div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno"><a class="line" href="errno_8h.html#aa1591a4f3a86360108de5b9ba34980ca">   39</a></span><span class="preprocessor">#define ERANGE  34</span></div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno"><a class="line" href="errno_8h.html#a43785b9969e0bd1af532dbde06c5540b">   40</a></span><span class="preprocessor">#define ENOSYS  38</span></div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="errno_8h.html#a9262fb92f7ef662d0bdd577912a5b101">   41</a></span><span class="preprocessor">#define ENOTDIR 50</span></div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno"><a class="line" href="errno_8h.html#a597718e59a8fc9c4d4ab63f5a34e28b1">   42</a></span><span class="preprocessor">#define ETIMEDOUT 110</span></div>
-<div class="ttc" id="aerrno_8c_html_ad65a8842cc674e3ddf69355898c0ecbf"><div class="ttname"><a href="errno_8c.html#ad65a8842cc674e3ddf69355898c0ecbf">errno</a></div><div class="ttdeci">int errno</div><div class="ttdef"><b>Definition</b> errno.c:1</div></div>
+<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
+<div class="foldopen" id="foldopen00028" data-start="{" data-end="};">
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno"><a class="line" href="structnexios__tcb.html">   28</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structnexios__tcb.html">nexios_tcb</a> {</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno"><a class="line" href="structnexios__tcb.html#a0d1e835c010075f63be46134b97a27b2">   29</a></span>    <span class="keywordtype">int</span> <a class="code hl_variable" href="structnexios__tcb.html#a0d1e835c010075f63be46134b97a27b2">errno_value</a>;</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>};</div>
+</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span></div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="keywordtype">int</span> *<a class="code hl_function" href="errno_8h.html#a4fd616e20294ce1318de576c5b8c1472">__errno_location</a>(<span class="keywordtype">void</span>);</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span></div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno"><a class="line" href="errno_8h.html#ab03f640d90fbc5bcb75285d08a0f25ed">   39</a></span><span class="preprocessor">#define errno (*__errno_location())</span></div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span> </div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="errno_8h.html#add669d31505a077f769cff8e66c780b3">   41</a></span><span class="preprocessor">#define EPERM   1</span></div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno"><a class="line" href="errno_8h.html#a03e689f378f643d16ea7537918528a48">   42</a></span><span class="preprocessor">#define ENOENT  2</span></div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno"><a class="line" href="errno_8h.html#a462e47a8af6288232a5df548221ada4c">   43</a></span><span class="preprocessor">#define ESRCH   3</span></div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno"><a class="line" href="errno_8h.html#a46b83d9f6c23b1b65a8cecfd775ddaed">   44</a></span><span class="preprocessor">#define EINTR   4</span></div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno"><a class="line" href="errno_8h.html#a70979f50f9c83e5aebab3d6a1bd4cf35">   45</a></span><span class="preprocessor">#define EIO     5</span></div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno"><a class="line" href="errno_8h.html#af0fac1cea1165b4debec7f686edf3313">   46</a></span><span class="preprocessor">#define EAGAIN  11</span></div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno"><a class="line" href="errno_8h.html#ac54507d66b43ad12f9356257323c0018">   47</a></span><span class="preprocessor">#define EBADF   9</span></div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno"><a class="line" href="errno_8h.html#a6a05c923dad0c1208043e9c20a58c8e5">   48</a></span><span class="preprocessor">#define ENOMEM  12</span></div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno"><a class="line" href="errno_8h.html#ac2a2e9fa555401f94478f74e01868032">   49</a></span><span class="preprocessor">#define EACCES  13</span></div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno"><a class="line" href="errno_8h.html#a0a3bef9e5c47e42917692b5dae3b5498">   50</a></span><span class="preprocessor">#define EEXIST  17</span></div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno"><a class="line" href="errno_8h.html#ab9b8cc17d1947160d13faaba7a18d6d1">   51</a></span><span class="preprocessor">#define ENODEV  19</span></div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno"><a class="line" href="errno_8h.html#ae22c3a1e0a38f3896de238cc30d0e19b">   52</a></span><span class="preprocessor">#define EISDIR  21</span></div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno"><a class="line" href="errno_8h.html#a2d1678d5a7cc8ce499643f3b8957def4">   53</a></span><span class="preprocessor">#define EINVAL  22</span></div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno"><a class="line" href="errno_8h.html#a088abe8bad2df798edad3053d719b937">   54</a></span><span class="preprocessor">#define ENOSPC  28</span></div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno"><a class="line" href="errno_8h.html#a0e42d4f9fecdcf5fcca2b333252173c3">   55</a></span><span class="preprocessor">#define ESPIPE  29</span></div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno"><a class="line" href="errno_8h.html#acb02bb67dddd7ca8cf82634a0781d58d">   56</a></span><span class="preprocessor">#define EROFS   30</span></div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno"><a class="line" href="errno_8h.html#aa1591a4f3a86360108de5b9ba34980ca">   57</a></span><span class="preprocessor">#define ERANGE  34</span></div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno"><a class="line" href="errno_8h.html#a43785b9969e0bd1af532dbde06c5540b">   58</a></span><span class="preprocessor">#define ENOSYS  38</span></div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno"><a class="line" href="errno_8h.html#a9262fb92f7ef662d0bdd577912a5b101">   59</a></span><span class="preprocessor">#define ENOTDIR 50</span></div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno"><a class="line" href="errno_8h.html#a597718e59a8fc9c4d4ab63f5a34e28b1">   60</a></span><span class="preprocessor">#define ETIMEDOUT 110</span></div>
+<div class="ttc" id="aerrno_8h_html_a4fd616e20294ce1318de576c5b8c1472"><div class="ttname"><a href="errno_8h.html#a4fd616e20294ce1318de576c5b8c1472">__errno_location</a></div><div class="ttdeci">int * __errno_location(void)</div><div class="ttdoc">Address of the calling task&#39;s errno cell (TP + 0). Never NULL after crt0 startup (block registered be...</div><div class="ttdef"><b>Definition</b> errno.c:49</div></div>
+<div class="ttc" id="astructnexios__tcb_html"><div class="ttname"><a href="structnexios__tcb.html">nexios_tcb</a></div><div class="ttdoc">Per-task control block (issue #338 — thread-local errno). Lives in task-private memory; the kernel lo...</div><div class="ttdef"><b>Definition</b> errno.h:28</div></div>
+<div class="ttc" id="astructnexios__tcb_html_a0d1e835c010075f63be46134b97a27b2"><div class="ttname"><a href="structnexios__tcb.html#a0d1e835c010075f63be46134b97a27b2">nexios_tcb::errno_value</a></div><div class="ttdeci">int errno_value</div><div class="ttdef"><b>Definition</b> errno.h:29</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

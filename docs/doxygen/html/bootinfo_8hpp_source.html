@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -139,50 +139,70 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('bootinfo_8hpp_
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#pragma once</span></div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span> </div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span></div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="preprocessor">#define BOOTINFO_MAX_MEM_REGIONS 8</span></div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span></div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="keyword">struct </span>BootInfo {</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    <span class="keyword">struct </span>MemRegion {</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>        <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> base; </div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>        <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> size; </div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>        <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> type; </div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    };</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span> </div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    MemRegion mem_regions[BOOTINFO_MAX_MEM_REGIONS]; </div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <span class="keywordtype">int</span> num_mem_regions;     </div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> total_mem_size; </div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> dtb_ptr;        </div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="code hl_variable" href="global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a">multiboot_magic</a>; </div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> multiboot_info;  </div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <span class="keywordtype">char</span> cmdline[256];        </div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    <span class="keywordtype">int</span> hart_id;              </div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span> </div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    BootInfo()</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>        : num_mem_regions(0), total_mem_size(0), dtb_ptr(0), <a class="code hl_variable" href="global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a">multiboot_magic</a>(0),</div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>          multiboot_info(0), hart_id(0) {</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>        cmdline[0] = <span class="charliteral">&#39;\0&#39;</span>;</div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    }</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span></div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)</span></div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    <span class="keywordtype">void</span> add_region(uint64_t base, uint64_t size, uint32_t type) {</div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>        <span class="keywordflow">if</span> (num_mem_regions &lt; BOOTINFO_MAX_MEM_REGIONS) {</div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>            mem_regions[num_mem_regions].base = base;</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>            mem_regions[num_mem_regions].size = size;</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>            mem_regions[num_mem_regions].type = type;</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>            num_mem_regions++;</div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>            <span class="keywordflow">if</span> (type == 1)</div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>                total_mem_size += size;</div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>        }</div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    }</div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>};</div>
-<div class="ttc" id="aglobal__state_8cpp_html_a16fea7346fbc792334a098eb9b61c77a"><div class="ttname"><a href="global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a">multiboot_magic</a></div><div class="ttdeci">uint64_t multiboot_magic</div><div class="ttdef"><b>Definition</b> global_state.cpp:46</div></div>
-<div class="ttc" id="anamespacearch_html_ab42586e970f36ee70a86a866bb1fd44a"><div class="ttname"><a href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">arch::uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> serial.cpp:27</div></div>
-<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span></div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno"><a class="line" href="bootinfo_8hpp.html#ae18c071ff80b49d6906bb3f330d42a36">   28</a></span><span class="preprocessor">#define BOOTINFO_MAX_MEM_REGIONS 8</span></div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span></div>
+<div class="foldopen" id="foldopen00031" data-start="{" data-end="};">
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="struct_boot_info.html">   31</a></span><span class="keyword">struct </span><a class="code hl_function" href="struct_boot_info.html#a4a058935e6b3c71ac20a9fc03d1b65bf">BootInfo</a> {</div>
+<div class="foldopen" id="foldopen00033" data-start="{" data-end="};">
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="struct_boot_info_1_1_mem_region.html">   33</a></span>    <span class="keyword">struct </span><a class="code hl_struct" href="struct_boot_info_1_1_mem_region.html">MemRegion</a> {</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno"><a class="line" href="struct_boot_info_1_1_mem_region.html#acd634cdc2e7713aaac2751497f74da64">   34</a></span>        uint64_t <a class="code hl_variable" href="struct_boot_info_1_1_mem_region.html#acd634cdc2e7713aaac2751497f74da64">base</a>; </div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno"><a class="line" href="struct_boot_info_1_1_mem_region.html#af3ef0583625d7a4ef5d55614202f5877">   35</a></span>        uint64_t <a class="code hl_variable" href="struct_boot_info_1_1_mem_region.html#af3ef0583625d7a4ef5d55614202f5877">size</a>; </div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="struct_boot_info_1_1_mem_region.html#a3712a6791b2b9e54b244a417679b3a79">   36</a></span>        uint32_t <a class="code hl_variable" href="struct_boot_info_1_1_mem_region.html#a3712a6791b2b9e54b244a417679b3a79">type</a>; </div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    };</div>
+</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span> </div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno"><a class="line" href="struct_boot_info.html#a2a211c1815bf92035077c9f4b166585b">   39</a></span>    <a class="code hl_struct" href="struct_boot_info_1_1_mem_region.html">MemRegion</a> <a class="code hl_variable" href="struct_boot_info.html#a2a211c1815bf92035077c9f4b166585b">mem_regions</a>[<a class="code hl_define" href="bootinfo_8hpp.html#ae18c071ff80b49d6906bb3f330d42a36">BOOTINFO_MAX_MEM_REGIONS</a>]; </div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno"><a class="line" href="struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29">   40</a></span>    <span class="keywordtype">int</span> <a class="code hl_variable" href="struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29">num_mem_regions</a>;     </div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="struct_boot_info.html#acdc36296c5511401ddd10b6711ced7be">   41</a></span>    uint64_t <a class="code hl_variable" href="struct_boot_info.html#acdc36296c5511401ddd10b6711ced7be">total_mem_size</a>; </div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno"><a class="line" href="struct_boot_info.html#adcd134608f9fb80fe903bd4b7ab676ee">   42</a></span>    uint64_t <a class="code hl_variable" href="struct_boot_info.html#adcd134608f9fb80fe903bd4b7ab676ee">dtb_ptr</a>;        </div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno"><a class="line" href="struct_boot_info.html#a3d5ea67834f4cea4956f680a6dc7a16e">   43</a></span>    uint64_t <a class="code hl_variable" href="struct_boot_info.html#a3d5ea67834f4cea4956f680a6dc7a16e">multiboot_magic</a>; </div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno"><a class="line" href="struct_boot_info.html#aa65aad7d7c3fe3cdc5cec24cffff691f">   44</a></span>    uint64_t <a class="code hl_variable" href="struct_boot_info.html#aa65aad7d7c3fe3cdc5cec24cffff691f">multiboot_info</a>;  </div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno"><a class="line" href="struct_boot_info.html#a8e5e1dc7ba2fa7ae1d8d4ece8416995a">   45</a></span>    <span class="keywordtype">char</span> <a class="code hl_variable" href="struct_boot_info.html#a8e5e1dc7ba2fa7ae1d8d4ece8416995a">cmdline</a>[256];        </div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno"><a class="line" href="struct_boot_info.html#af72e1151d1d8f6f522f84d7ee0ab6dae">   46</a></span>    <span class="keywordtype">int</span> <a class="code hl_variable" href="struct_boot_info.html#af72e1151d1d8f6f522f84d7ee0ab6dae">hart_id</a>;              </div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span> </div>
+<div class="foldopen" id="foldopen00048" data-start="{" data-end="}">
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno"><a class="line" href="struct_boot_info.html#a4a058935e6b3c71ac20a9fc03d1b65bf">   48</a></span>    <a class="code hl_function" href="struct_boot_info.html#a4a058935e6b3c71ac20a9fc03d1b65bf">BootInfo</a>()</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>        : <a class="code hl_variable" href="struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29">num_mem_regions</a>(0), <a class="code hl_variable" href="struct_boot_info.html#acdc36296c5511401ddd10b6711ced7be">total_mem_size</a>(0), <a class="code hl_variable" href="struct_boot_info.html#adcd134608f9fb80fe903bd4b7ab676ee">dtb_ptr</a>(0), <a class="code hl_variable" href="struct_boot_info.html#a3d5ea67834f4cea4956f680a6dc7a16e">multiboot_magic</a>(0),</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>          <a class="code hl_variable" href="struct_boot_info.html#aa65aad7d7c3fe3cdc5cec24cffff691f">multiboot_info</a>(0), <a class="code hl_variable" href="struct_boot_info.html#af72e1151d1d8f6f522f84d7ee0ab6dae">hart_id</a>(0) {</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>        <a class="code hl_variable" href="struct_boot_info.html#a8e5e1dc7ba2fa7ae1d8d4ece8416995a">cmdline</a>[0] = <span class="charliteral">&#39;\0&#39;</span>;</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    }</div>
+</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span></div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    <span class="comment">// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)</span></div>
+<div class="foldopen" id="foldopen00059" data-start="{" data-end="}">
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno"><a class="line" href="struct_boot_info.html#a1e5fd0e4560046c414477a26127d335f">   59</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="struct_boot_info.html#a1e5fd0e4560046c414477a26127d335f">add_region</a>(uint64_t <a class="code hl_variable" href="hal_2gdt_8hpp.html#aeca790c0426654358d031f8180e84aca">base</a>, uint64_t size, uint32_t <a class="code hl_variable" href="virtio__blk_8hpp.html#ad44b615021ed3ccb734fcaf583ef4a03">type</a>) {</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>        <span class="keywordflow">if</span> (<a class="code hl_variable" href="struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29">num_mem_regions</a> &lt; <a class="code hl_define" href="bootinfo_8hpp.html#ae18c071ff80b49d6906bb3f330d42a36">BOOTINFO_MAX_MEM_REGIONS</a>) {</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>            <a class="code hl_variable" href="struct_boot_info.html#a2a211c1815bf92035077c9f4b166585b">mem_regions</a>[<a class="code hl_variable" href="struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29">num_mem_regions</a>].base = <a class="code hl_variable" href="hal_2gdt_8hpp.html#aeca790c0426654358d031f8180e84aca">base</a>;</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>            <a class="code hl_variable" href="struct_boot_info.html#a2a211c1815bf92035077c9f4b166585b">mem_regions</a>[<a class="code hl_variable" href="struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29">num_mem_regions</a>].size = size;</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>            <a class="code hl_variable" href="struct_boot_info.html#a2a211c1815bf92035077c9f4b166585b">mem_regions</a>[<a class="code hl_variable" href="struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29">num_mem_regions</a>].type = <a class="code hl_variable" href="virtio__blk_8hpp.html#ad44b615021ed3ccb734fcaf583ef4a03">type</a>;</div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>            <a class="code hl_variable" href="struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29">num_mem_regions</a>++;</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>            <span class="keywordflow">if</span> (<a class="code hl_variable" href="virtio__blk_8hpp.html#ad44b615021ed3ccb734fcaf583ef4a03">type</a> == 1)</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>                <a class="code hl_variable" href="struct_boot_info.html#acdc36296c5511401ddd10b6711ced7be">total_mem_size</a> += size;</div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>        }</div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    }</div>
+</div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>};</div>
+</div>
+<div class="ttc" id="abootinfo_8hpp_html_ae18c071ff80b49d6906bb3f330d42a36"><div class="ttname"><a href="bootinfo_8hpp.html#ae18c071ff80b49d6906bb3f330d42a36">BOOTINFO_MAX_MEM_REGIONS</a></div><div class="ttdeci">#define BOOTINFO_MAX_MEM_REGIONS</div><div class="ttdoc">Maximum number of memory regions that can be reported.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:28</div></div>
+<div class="ttc" id="ahal_2gdt_8hpp_html_aeca790c0426654358d031f8180e84aca"><div class="ttname"><a href="hal_2gdt_8hpp.html#aeca790c0426654358d031f8180e84aca">base</a></div><div class="ttdeci">uint64_t base</div><div class="ttdoc">Linear address of the GDT.</div><div class="ttdef"><b>Definition</b> gdt.hpp:1</div></div>
+<div class="ttc" id="astruct_boot_info_1_1_mem_region_html"><div class="ttname"><a href="struct_boot_info_1_1_mem_region.html">BootInfo::MemRegion</a></div><div class="ttdoc">A single physical memory region reported by the bootloader.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:33</div></div>
+<div class="ttc" id="astruct_boot_info_1_1_mem_region_html_a3712a6791b2b9e54b244a417679b3a79"><div class="ttname"><a href="struct_boot_info_1_1_mem_region.html#a3712a6791b2b9e54b244a417679b3a79">BootInfo::MemRegion::type</a></div><div class="ttdeci">uint32_t type</div><div class="ttdoc">1 = usable, 2 = reserved, 3 = ACPI, 4 = MMIO.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:36</div></div>
+<div class="ttc" id="astruct_boot_info_1_1_mem_region_html_acd634cdc2e7713aaac2751497f74da64"><div class="ttname"><a href="struct_boot_info_1_1_mem_region.html#acd634cdc2e7713aaac2751497f74da64">BootInfo::MemRegion::base</a></div><div class="ttdeci">uint64_t base</div><div class="ttdoc">Physical base address.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:34</div></div>
+<div class="ttc" id="astruct_boot_info_1_1_mem_region_html_af3ef0583625d7a4ef5d55614202f5877"><div class="ttname"><a href="struct_boot_info_1_1_mem_region.html#af3ef0583625d7a4ef5d55614202f5877">BootInfo::MemRegion::size</a></div><div class="ttdeci">uint64_t size</div><div class="ttdoc">Size in bytes.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:35</div></div>
+<div class="ttc" id="astruct_boot_info_html_a1e5fd0e4560046c414477a26127d335f"><div class="ttname"><a href="struct_boot_info.html#a1e5fd0e4560046c414477a26127d335f">BootInfo::add_region</a></div><div class="ttdeci">void add_region(uint64_t base, uint64_t size, uint32_t type)</div><div class="ttdoc">Add a memory region if the array is not full.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:59</div></div>
+<div class="ttc" id="astruct_boot_info_html_a2a211c1815bf92035077c9f4b166585b"><div class="ttname"><a href="struct_boot_info.html#a2a211c1815bf92035077c9f4b166585b">BootInfo::mem_regions</a></div><div class="ttdeci">MemRegion mem_regions[BOOTINFO_MAX_MEM_REGIONS]</div><div class="ttdoc">Memory region array.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:39</div></div>
+<div class="ttc" id="astruct_boot_info_html_a3d5ea67834f4cea4956f680a6dc7a16e"><div class="ttname"><a href="struct_boot_info.html#a3d5ea67834f4cea4956f680a6dc7a16e">BootInfo::multiboot_magic</a></div><div class="ttdeci">uint64_t multiboot_magic</div><div class="ttdoc">Multiboot magic value (0 if not available).</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:43</div></div>
+<div class="ttc" id="astruct_boot_info_html_a4a058935e6b3c71ac20a9fc03d1b65bf"><div class="ttname"><a href="struct_boot_info.html#a4a058935e6b3c71ac20a9fc03d1b65bf">BootInfo::BootInfo</a></div><div class="ttdeci">BootInfo()</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:48</div></div>
+<div class="ttc" id="astruct_boot_info_html_a8e5e1dc7ba2fa7ae1d8d4ece8416995a"><div class="ttname"><a href="struct_boot_info.html#a8e5e1dc7ba2fa7ae1d8d4ece8416995a">BootInfo::cmdline</a></div><div class="ttdeci">char cmdline[256]</div><div class="ttdoc">Boot command-line string.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:45</div></div>
+<div class="ttc" id="astruct_boot_info_html_aa65aad7d7c3fe3cdc5cec24cffff691f"><div class="ttname"><a href="struct_boot_info.html#aa65aad7d7c3fe3cdc5cec24cffff691f">BootInfo::multiboot_info</a></div><div class="ttdeci">uint64_t multiboot_info</div><div class="ttdoc">Multiboot info structure pointer.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:44</div></div>
+<div class="ttc" id="astruct_boot_info_html_ab7ac4be9120a76462d2c12204ae42b29"><div class="ttname"><a href="struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29">BootInfo::num_mem_regions</a></div><div class="ttdeci">int num_mem_regions</div><div class="ttdoc">Number of valid entries in mem_regions.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:40</div></div>
+<div class="ttc" id="astruct_boot_info_html_acdc36296c5511401ddd10b6711ced7be"><div class="ttname"><a href="struct_boot_info.html#acdc36296c5511401ddd10b6711ced7be">BootInfo::total_mem_size</a></div><div class="ttdeci">uint64_t total_mem_size</div><div class="ttdoc">Total usable RAM in bytes.</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:41</div></div>
+<div class="ttc" id="astruct_boot_info_html_adcd134608f9fb80fe903bd4b7ab676ee"><div class="ttname"><a href="struct_boot_info.html#adcd134608f9fb80fe903bd4b7ab676ee">BootInfo::dtb_ptr</a></div><div class="ttdeci">uint64_t dtb_ptr</div><div class="ttdoc">Device-tree blob pointer (0 if not available).</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:42</div></div>
+<div class="ttc" id="astruct_boot_info_html_af72e1151d1d8f6f522f84d7ee0ab6dae"><div class="ttname"><a href="struct_boot_info.html#af72e1151d1d8f6f522f84d7ee0ab6dae">BootInfo::hart_id</a></div><div class="ttdeci">int hart_id</div><div class="ttdoc">Hart ID (RISC-V 64 only).</div><div class="ttdef"><b>Definition</b> bootinfo.hpp:46</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
+<div class="ttc" id="avirtio__blk_8hpp_html_ad44b615021ed3ccb734fcaf583ef4a03"><div class="ttname"><a href="virtio__blk_8hpp.html#ad44b615021ed3ccb734fcaf583ef4a03">type</a></div><div class="ttdeci">uint32_t type</div><div class="ttdoc">Segment type (PT_NULL, PT_LOAD, PT_DYNAMIC, etc.).</div><div class="ttdef"><b>Definition</b> virtio_blk.hpp:0</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

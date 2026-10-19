@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.2.21</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classarch_1_1_
 </div><!--header-->
 <div class="contents">
 
+<p>x86-64 Interrupt Descriptor Table manager.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="hal_2idt_8hpp_source.html">idt.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for arch::IDT:</div>
@@ -130,14 +133,23 @@ Collaboration diagram for arch::IDT:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a1a84d139f0700c6ac5e210151777c51b" id="r_a1a84d139f0700c6ac5e210151777c51b"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a1a84d139f0700c6ac5e210151777c51b">init</a> ()</td></tr>
+<tr class="memdesc:a1a84d139f0700c6ac5e210151777c51b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialise the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> with default gate descriptors.  <br /></td></tr>
 <tr class="memitem:ab5420ac0f951fe56c41843b6591a755a" id="r_ab5420ac0f951fe56c41843b6591a755a"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab5420ac0f951fe56c41843b6591a755a">load</a> ()</td></tr>
+<tr class="memdesc:ab5420ac0f951fe56c41843b6591a755a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Load the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> via the LIDT instruction.  <br /></td></tr>
 <tr class="memitem:a08b6d5356adf2c4fa71bcbb9027f20a2" id="r_a08b6d5356adf2c4fa71bcbb9027f20a2"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a08b6d5356adf2c4fa71bcbb9027f20a2">register_handler</a> (<a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630">InterruptVector</a> vec, <a class="el" href="namespacearch.html#a88ca764670435787bd482678ef7b7084">ISRHandler</a> handler)</td></tr>
-<tr class="memitem:ae55a884dc471272104b5886a4894380d" id="r_ae55a884dc471272104b5886a4894380d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae55a884dc471272104b5886a4894380d">register_handler_raw</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vec, <a class="el" href="namespacearch.html#a88ca764670435787bd482678ef7b7084">ISRHandler</a> handler)</td></tr>
-<tr class="memitem:ae13a09e3a3ca7f187df8ead4b8d34f81" id="r_ae13a09e3a3ca7f187df8ead4b8d34f81"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae13a09e3a3ca7f187df8ead4b8d34f81">handle_interrupt</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip)</td></tr>
-<tr class="memitem:a9a18c4734e7ff3eedef235930b3b262b" id="r_a9a18c4734e7ff3eedef235930b3b262b"><td class="memItemLeft">static const <a class="el" href="structarch_1_1_i_d_t_entry.html">IDTEntry</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a9a18c4734e7ff3eedef235930b3b262b">entry</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vec)</td></tr>
-<tr class="memitem:a220d5e23bf7cb1aad5f26bfe27cee50b" id="r_a220d5e23bf7cb1aad5f26bfe27cee50b"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a220d5e23bf7cb1aad5f26bfe27cee50b">has_handler</a> (<a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> vec)</td></tr>
+<tr class="memdesc:a08b6d5356adf2c4fa71bcbb9027f20a2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a handler for a named interrupt vector.  <br /></td></tr>
+<tr class="memitem:ae55a884dc471272104b5886a4894380d" id="r_ae55a884dc471272104b5886a4894380d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae55a884dc471272104b5886a4894380d">register_handler_raw</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> vec, <a class="el" href="namespacearch.html#a88ca764670435787bd482678ef7b7084">ISRHandler</a> handler)</td></tr>
+<tr class="memdesc:ae55a884dc471272104b5886a4894380d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a handler for a raw vector number.  <br /></td></tr>
+<tr class="memitem:ae13a09e3a3ca7f187df8ead4b8d34f81" id="r_ae13a09e3a3ca7f187df8ead4b8d34f81"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae13a09e3a3ca7f187df8ead4b8d34f81">handle_interrupt</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> vector, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> error_code, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> rip)</td></tr>
+<tr class="memdesc:ae13a09e3a3ca7f187df8ead4b8d34f81"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch an interrupt to the registered handler.  <br /></td></tr>
+<tr class="memitem:a9a18c4734e7ff3eedef235930b3b262b" id="r_a9a18c4734e7ff3eedef235930b3b262b"><td class="memItemLeft">static const <a class="el" href="structarch_1_1_i_d_t_entry.html">IDTEntry</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a9a18c4734e7ff3eedef235930b3b262b">entry</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> vec)</td></tr>
+<tr class="memdesc:a9a18c4734e7ff3eedef235930b3b262b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get a const reference to an <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> entry.  <br /></td></tr>
+<tr class="memitem:a220d5e23bf7cb1aad5f26bfe27cee50b" id="r_a220d5e23bf7cb1aad5f26bfe27cee50b"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a220d5e23bf7cb1aad5f26bfe27cee50b">has_handler</a> (<a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> vec)</td></tr>
+<tr class="memdesc:a220d5e23bf7cb1aad5f26bfe27cee50b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether a handler is registered for a vector.  <br /></td></tr>
 </table>
-<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>x86-64 Interrupt Descriptor Table manager. </p>
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="a9a18c4734e7ff3eedef235930b3b262b" name="a9a18c4734e7ff3eedef235930b3b262b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a9a18c4734e7ff3eedef235930b3b262b">&#9670;&#160;</a></span>entry()</h2>
 
@@ -150,7 +162,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">const <a class="el" href="structarch_1_1_i_d_t_entry.html">IDTEntry</a> &amp; arch::IDT::entry </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vec</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vec</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -160,6 +172,22 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Get a const reference to an <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> entry. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">vec</td><td>Vector index. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Const reference to the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> entry.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">vec</td><td>Interrupt vector number. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Const reference to the <a class="el" href="structarch_1_1_i_d_t_entry.html" title="x86-64 IDT entry (16-byte packed interrupt gate descriptor).">IDTEntry</a>. </dd></dl>
 
 </div>
 </div>
@@ -175,17 +203,17 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">void arch::IDT::handle_interrupt </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>error_code</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>error_code</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rip</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rip</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -194,6 +222,26 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Dispatch an interrupt to the registered handler. </p>
+<p>Dispatch an interrupt to its registered handler.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">vector</td><td>Interrupt vector. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">error_code</td><td>CPU-pushed error code. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">rip</td><td>Faulting instruction address.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">vector</td><td>Interrupt vector number. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">error_code</td><td>Architecture-specific error code. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">pc</td><td>Program counter at the point of interrupt.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">vector</td><td>Interrupt vector number. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">error_code</td><td><a class="el" href="constants_8hpp.html#ab55f54011a8f17279e6e814f97523a91">Error</a> code (zero on RISC-V; included for x86 compat). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">pc</td><td>Program counter at time of interrupt.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">vector</td><td>Interrupt vector number. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">error_code</td><td>CPU-pushed error code (0 for vectors that do not push one). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">rip</td><td>Instruction pointer at the time of the interrupt. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -209,7 +257,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">bool arch::IDT::has_handler </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>vec</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a></td>          <td class="paramname"><span class="paramname"><em>vec</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -219,6 +267,23 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Check whether a handler is registered for a vector. </p>
+<p>Check whether an <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> entry has a non-zero handler address.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">vec</td><td>Vector index. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if a handler exists.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">vec</td><td>Interrupt vector number. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if the entry contains a valid handler address. </dd></dl>
 
 </div>
 </div>
@@ -245,6 +310,17 @@ Static Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Initialise the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> with default gate descriptors. </p>
+<p>Initialise the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> with default ISR entries and special handling for SYSCALL (trap gate, ring-3 accessible) and DOUBLE_FAULT (IST1).</p>
+<p>Set stvec to the assembly trap vector entry point.</p>
+<p>Initialise the exception vector table by setting VBAR_EL1. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classarch_1_1_i_d_t_a1a84d139f0700c6ac5e210151777c51b_cgraph.png" border="0" usemap="#aclassarch_1_1_i_d_t_a1a84d139f0700c6ac5e210151777c51b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
 </div>
 </div>
 <a id="ab5420ac0f951fe56c41843b6591a755a" name="ab5420ac0f951fe56c41843b6591a755a"></a>
@@ -269,6 +345,11 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Load the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> via the LIDT instruction. </p>
+<p>Load the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> into the CPU via the LIDT instruction.</p>
+<p>Ensure stvec is visible (compiler barrier).</p>
+<p>Ensure the new vector table is visible (instruction barrier). </p>
 
 </div>
 </div>
@@ -299,6 +380,23 @@ Static Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Register a handler for a named interrupt vector. </p>
+<p>Register a C++ interrupt handler for a specific interrupt vector.</p>
+<p>Register an interrupt handler for a given vector.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">vec</td><td>Named vector. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">handler</td><td>Handler function.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">vec</td><td>Interrupt vector. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">handler</td><td>Callback function.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">vec</td><td><a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630" title="Named interrupt vectors for x86-64.">InterruptVector</a> enum value. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">handler</td><td>Function pointer to invoke on this vector.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">vec</td><td>The interrupt vector (from the <a class="el" href="namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630" title="Named interrupt vectors for x86-64.">InterruptVector</a> enum). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">handler</td><td>Callback to invoke when the interrupt fires. </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <a id="ae55a884dc471272104b5886a4894380d" name="ae55a884dc471272104b5886a4894380d"></a>
@@ -313,7 +411,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">void arch::IDT::register_handler_raw </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vec</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vec</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -328,11 +426,31 @@ Static Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Register a handler for a raw vector number. </p>
+<p>Register a handler using a raw vector number (bypasses the enum).</p>
+<p>Register a handler for a raw interrupt vector index.</p>
+<p>Register an interrupt handler by raw vector number.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">vec</td><td>Raw vector (0–255). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">handler</td><td>Handler function.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">vec</td><td>Raw interrupt vector index. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">handler</td><td>Callback function.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">vec</td><td>Vector index (0–NUM_ENTRIES-1). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">handler</td><td>Function pointer to invoke on this vector.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">vec</td><td>Interrupt vector number (0–255). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">handler</td><td>Callback to invoke when the interrupt fires. </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <hr/>The documentation for this class was generated from the following files:<ul>
 <li>src/kernel/arch/hal/<a class="el" href="hal_2idt_8hpp_source.html">idt.hpp</a></li>
-<li>src/kernel/arch/x86_64/<a class="el" href="idt_8cpp.html">idt.cpp</a></li>
+<li>src/kernel/arch/aarch64/<a class="el" href="aarch64_2idt_8cpp.html">idt.cpp</a></li>
+<li>src/kernel/arch/riscv64/<a class="el" href="riscv64_2idt_8cpp.html">idt.cpp</a></li>
+<li>src/kernel/arch/x86_64/hal/<a class="el" href="x86__64_2hal_2idt_8cpp.html">idt.cpp</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

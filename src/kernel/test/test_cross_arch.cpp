@@ -647,7 +647,7 @@ JARVIS_TEST(smep_user_exec_kernel_va_pf, "PRE: none | POST: none") {
     uint64_t kernel_va = reinterpret_cast<uint64_t>(&test_smep_user_exec_kernel_va_pf);
     JARVIS_ASSERT(kernel_va >= 0xFFFF800000000000ULL);
     uint64_t g_kva_phys =
-        VMM::virt_to_phys_in_pml4(g_kva_va, t->page_table_);
+        VMM::virt_to_phys_in_pml4(g_kva_va, t->get_page_table());
     JARVIS_ASSERT(g_kva_phys != 0);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     __builtin_memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + g_kva_phys),
@@ -696,7 +696,7 @@ JARVIS_TEST(smap_kernel_deref_user_va_without_ac_pf, "PRE: none | POST: none") {
                 return;
             uint64_t user_va = 0x70000000ULL;
             VMM::map_page_in_pml4(user_va, phys, true, true,
-                                  self->page_table_);
+                                  self->get_page_table());
             // Arm fault recovery, then deliberately write to the present
             // U/S=1 page with AC=0.  With SMAP active this #PFs; the handler
             // redirects to recover_smap (regs[17] = g_user_access_recover_ip).
@@ -742,7 +742,7 @@ JARVIS_TEST(smap_stac_clac_roundtrip_ok, "PRE: none | POST: none") {
                 return;
             uint64_t user_va = 0x70000000ULL;
             VMM::map_page_in_pml4(user_va, phys, true, true,
-                                  self->page_table_);
+                                  self->get_page_table());
             uint64_t val = 0x1122334455667788ULL;
             // safe_copy_to_user internally does stac/memcpy/clac.
             bool ok = kernel::safe_copy_to_user(

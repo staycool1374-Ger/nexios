@@ -122,7 +122,7 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         if (syscall_is_user_task() && status.unsafe_ptr() &&
             VMM::virt_to_phys_in_pml4(
                 reinterpret_cast<uint64_t>(status.unsafe_ptr()),
-                cur->page_table_) == 0) {
+                cur->get_page_table()) == 0) {
             return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
         cur->waiting_child_status = status_ptr;
@@ -291,6 +291,9 @@ uint64_t Syscall::sys_kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     // delivery
     if (sig == static_cast<uint64_t>(kernel::Signal::SIG_NONE))
         return static_cast<uint64_t>(errors::SYS_ERR_OK);
+    // Issue #374: fail fast on never-issued IDs without probing.
+    if (!Scheduler::validate_id(target_pid))
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *t = Scheduler::find_task(target_pid);
     if (!t)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
@@ -340,6 +343,9 @@ uint64_t Syscall::sys_signal(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
 ///        no user-pointer dereference (FULL path only: scheduler call).
 uint64_t Syscall::sys_set_affinity(uint64_t arg0, uint64_t arg1, uint64_t,
                                    uint64_t, uint64_t *) {
+    // Issue #374: fail fast on never-issued IDs without probing.
+    if (arg0 != 0 && !Scheduler::validate_id(arg0))
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
     if (t == nullptr)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
@@ -354,6 +360,9 @@ uint64_t Syscall::sys_set_affinity(uint64_t arg0, uint64_t arg1, uint64_t,
 ///        arg0 = pid (0 = caller).  Unknown pid fails with -1.
 uint64_t Syscall::sys_get_affinity(uint64_t arg0, uint64_t, uint64_t,
                                    uint64_t, uint64_t *) {
+    // Issue #374: fail fast on never-issued IDs without probing.
+    if (arg0 != 0 && !Scheduler::validate_id(arg0))
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
     if (t == nullptr)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
@@ -368,6 +377,9 @@ uint64_t Syscall::sys_get_affinity(uint64_t arg0, uint64_t, uint64_t,
 ///        FULL path only (dereferences a user pointer — never FAST).
 uint64_t Syscall::sys_times(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
                             uint64_t *) {
+    // Issue #374: fail fast on never-issued IDs without probing.
+    if (arg0 != 0 && !Scheduler::validate_id(arg0))
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
     if (t == nullptr)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);

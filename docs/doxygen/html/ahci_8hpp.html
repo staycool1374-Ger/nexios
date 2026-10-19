@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,45 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ahci_8hpp.html
 
 <p>AHCI/SATA driver — extends BlockDevice with DMA and NCQ support. Uses <a class="el" href="ahci__protocol_8hpp.html" title="AHCI register layouts, command structures, and FIS types. Shared between kernel-mode driver and users...">ahci_protocol.hpp</a> for register layouts and DmaBuffer for data.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="block__device_8hpp_source.html">kernel/driver/block_device.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="ahci__protocol_8hpp_source.html">kernel/driver/ahci_protocol.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dma_8hpp_source.html">kernel/driver/dma.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="mutex_8hpp_source.html">kernel/sync/mutex.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="spinlock_8hpp_source.html">kernel/sync/spinlock.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="hal_2pci_8hpp_source.html">kernel/arch/hal/pci.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for ahci.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="ahci_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2driver_2ahci_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="ahci_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2driver_2ahci_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="ahci_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Ablock_3A_3AAhciComplRecord" id="r_kernel_3A_3Ablock_3A_3AAhciComplRecord"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1block_1_1_ahci_compl_record.html">kernel::block::AhciComplRecord</a></td></tr>
+<tr class="memitem:kernel_3A_3Ablock_3A_3AAhciDriver" id="r_kernel_3A_3Ablock_3A_3AAhciDriver"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_ahci_driver.html">kernel::block::AhciDriver</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">AHCI/SATA driver — PCI bus master DMA via native AHCI command list.  <a href="classkernel_1_1block_1_1_ahci_driver.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Ablock" id="r_kernel_3A_3Ablock"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html">kernel::block</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a31c8816e5ee7996c919f6e97261eddcd" id="r_a31c8816e5ee7996c919f6e97261eddcd"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html#a31c8816e5ee7996c919f6e97261eddcd">kernel::block::AHCI_MAX_PORTS</a> = 8</td></tr>
+<tr class="memdesc:a31c8816e5ee7996c919f6e97261eddcd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum number of AHCI ports supported by this driver.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>AHCI/SATA driver — extends BlockDevice with DMA and NCQ support. Uses <a class="el" href="ahci__protocol_8hpp.html" title="AHCI register layouts, command structures, and FIS types. Shared between kernel-mode driver and users...">ahci_protocol.hpp</a> for register layouts and DmaBuffer for data. </p>
 </div></div><!-- contents -->

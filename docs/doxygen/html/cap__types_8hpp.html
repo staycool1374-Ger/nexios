@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -147,7 +147,7 @@ Data Structures</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Acap" id="r_kernel_3A_3Acap"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html">kernel::cap</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
@@ -169,15 +169,29 @@ Enumerations</h2></td></tr>
 <br />
  }</td></tr>
 <tr class="memdesc:a4bea603a315495a20341a4cc2519eb99"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capability target types (iteration-1 slice). Null = empty slot; Task/Endpoint/Frame/CNode are live targets.  <a href="namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99">More...</a><br /></td></tr>
-<tr class="memitem:a8b99d584dbea5c2c8a8d071e2923f5e5" id="r_a8b99d584dbea5c2c8a8d071e2923f5e5"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">kernel::cap::CapRights</a> : uint32_t { <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5adab68b51d572f1b802f432fa54aa580c">kernel::cap::CAP_RIGHT_READ</a> = 1u &lt;&lt; 0
-, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ab512d4006cb9ec087a47d414741f8327">kernel::cap::CAP_RIGHT_WRITE</a> = 1u &lt;&lt; 1
-, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5a25cb8d45a9e8d54082778c74d1c39fbb">kernel::cap::CAP_RIGHT_GRANT</a> = 1u &lt;&lt; 2
-, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5af0177bb4009a7a1acfdc5f6ee2ccd0f5">kernel::cap::CAP_RIGHT_COPY</a> = 1u &lt;&lt; 3
+<tr class="memitem:a8b99d584dbea5c2c8a8d071e2923f5e5" id="r_a8b99d584dbea5c2c8a8d071e2923f5e5"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">kernel::cap::CapRights</a> : uint32_t { <br />
+&#160;&#160;<a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ab50339a10e1de285ac99d4c3990b8693">kernel::cap::NONE</a> = 0
+, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5a3466fab4975481651940ed328aa990e4">kernel::cap::READ</a> = 1u &lt;&lt; 0
+, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ad4b9e47f65b6e79b010582f15785867e">kernel::cap::WRITE</a> = 1u &lt;&lt; 1
+, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ad9fdc8f875b86df6d7a2f5b2aece1ef2">kernel::cap::GRANT</a> = 1u &lt;&lt; 2
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ae8606d021da140a92c7eba8d9b8af84f">kernel::cap::COPY</a> = 1u &lt;&lt; 3
+<br />
  }</td></tr>
-<tr class="memdesc:a8b99d584dbea5c2c8a8d071e2923f5e5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Rights bitmap, checked by the operation that consumes the cap.  <a href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">More...</a><br /></td></tr>
+<tr class="memdesc:a8b99d584dbea5c2c8a8d071e2923f5e5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Rights bitmap, checked by the operation that consumes the cap. Scoped enum (issue #348-D): combine with | test with &amp;, strip with &amp; ~. Convert at u32 boundaries via <a class="el" href="namespacekernel.html#a17e67ea7443b3545f273cbe78f7c1a12">kernel::to_underlying</a>.  <a href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a74affb6e037d566896788022877979d3" id="r_a74affb6e037d566896788022877979d3"><td class="memItemLeft">constexpr <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html#a74affb6e037d566896788022877979d3">kernel::cap::operator|</a> (<a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> lhs, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a74affb6e037d566896788022877979d3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitwise-or for capability rights.  <br /></td></tr>
+<tr class="memitem:a221802bcb2a2842eb3d501497ede6f76" id="r_a221802bcb2a2842eb3d501497ede6f76"><td class="memItemLeft">constexpr <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html#a221802bcb2a2842eb3d501497ede6f76">kernel::cap::operator&amp;</a> (<a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> lhs, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a221802bcb2a2842eb3d501497ede6f76"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitwise-and for capability rights (test/mask).  <br /></td></tr>
+<tr class="memitem:abdce64a9380b5d2ab00e18a3bf8ceeff" id="r_abdce64a9380b5d2ab00e18a3bf8ceeff"><td class="memItemLeft">constexpr <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html#abdce64a9380b5d2ab00e18a3bf8ceeff">kernel::cap::operator~</a> (<a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:abdce64a9380b5d2ab00e18a3bf8ceeff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitwise-not for capability rights (mask-out).  <br /></td></tr>
+<tr class="memitem:a4909907acf81bf83e14f95d1e1f32cf1" id="r_a4909907acf81bf83e14f95d1e1f32cf1"><td class="memItemLeft">constexpr <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html#a4909907acf81bf83e14f95d1e1f32cf1">kernel::cap::operator|=</a> (<a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp;lhs, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a4909907acf81bf83e14f95d1e1f32cf1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Or-assign for capability rights.  <br /></td></tr>
+<tr class="memitem:a115e9152b4f35e4e2b76dde6d79bb490" id="r_a115e9152b4f35e4e2b76dde6d79bb490"><td class="memItemLeft">constexpr <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html#a115e9152b4f35e4e2b76dde6d79bb490">kernel::cap::operator&amp;=</a> (<a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> &amp;lhs, <a class="el" href="namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5">CapRights</a> rhs) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a115e9152b4f35e4e2b76dde6d79bb490"><td class="mdescLeft">&#160;</td><td class="mdescRight">And-assign for capability rights.  <br /></td></tr>
 <tr class="memitem:ade55928be04f23829263375da7b1cb45" id="r_ade55928be04f23829263375da7b1cb45"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html#ade55928be04f23829263375da7b1cb45">kernel::cap::cap_slot_bits</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ade55928be04f23829263375da7b1cb45"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits allocated to the slot index in a capability handle. Derived from CONFIG_CSLOT_COUNT (power of two preferred).  <br /></td></tr>
 <tr class="memitem:ad0673cef188c336d042b38b4d31a68e4" id="r_ad0673cef188c336d042b38b4d31a68e4"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html#ad0673cef188c336d042b38b4d31a68e4">kernel::cap::encode_handle</a> (uint32_t cspace_id, uint32_t slot_index, uint32_t gen) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>

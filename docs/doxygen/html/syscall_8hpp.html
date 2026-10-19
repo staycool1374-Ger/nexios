@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,8 +121,162 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('syscall_8hpp.h
 
 <p>System call interface and dispatcher.  
 <a href="#details">More...</a></p>
-
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for syscall.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="syscall_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2syscall_2syscall_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div>
 <p><a href="syscall_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3ACanaryTrip" id="r_kernel_3A_3ACanaryTrip"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_canary_trip.html">kernel::CanaryTrip</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">v0.4.0 MP-3 canary-trip latch. Set by the syscall canary verify when a segment canary mismatch is detected in test mode; the syscall then returns SYS_ERR_GENERIC_FAIL so the harness survives.  <a href="structkernel_1_1_canary_trip.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3ASyscall" id="r_kernel_3A_3ASyscall"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_syscall.html">kernel::Syscall</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">System call handler and dispatcher.  <a href="classkernel_1_1_syscall.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
+Typedefs</h2></td></tr>
+<tr class="memitem:a44c03e8d156da5c6cedf0ea521220484" id="r_a44c03e8d156da5c6cedf0ea521220484"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a44c03e8d156da5c6cedf0ea521220484">kernel::SyscallHandler</a></td></tr>
+<tr class="memdesc:a44c03e8d156da5c6cedf0ea521220484"><td class="mdescLeft">&#160;</td><td class="mdescRight">System call handler function signature. §2 binding: uint64_t return; success ≥ 0, failure (uint64_t)-errno; libc predicate in <a class="el" href="syscall_8h.html">syscall.h</a>. Reachable failures return codes only.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a210a0a299a55c9ad49ab6b2b4542d270" id="r_a210a0a299a55c9ad49ab6b2b4542d270"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270">kernel::SyscallNumber</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a18e25ac6cc28c2b91bce1fbe629b682a">kernel::YIELD</a> = 0
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a548e51fa67d541384e9585adf0db95dc">kernel::SEND</a> = 1
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a42ddaaef1ffd16ad35901150add8f8f2">kernel::RECEIVE</a> = 2
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a21b0c32adc24f19bdc81425b676053ae">kernel::SEND_SYNC</a> = 3
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270af96eee4e48ee90430f17fb3a8388507b">kernel::PRINT</a> = 4
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a83e990574e4601b663d42b05121bf312">kernel::GET_TICKS</a> = 5
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aa42b2fb0e720a080e79a92f4ca97d927">kernel::EXIT</a> = 6
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a491be84e80b2d9ee558a7c0ab3d9b7d6">kernel::CREATE_MAILBOX</a> = 7
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ac0e9b39754d7e9a33ea37fc69fb104e2">kernel::DESTROY_MAILBOX</a> = 8
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aa38bd5138bf35514df41a1795ebbf5c3">kernel::OPEN</a> = 9
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a3466fab4975481651940ed328aa990e4">kernel::READ</a> = 10
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a7286293c9125ac7d7bace94c190bc16d">kernel::CLOSE</a> = 11
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a81fba48cb5642dcd38bffcf0f7147ea1">kernel::FSTAT</a> = 12
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ad4b9e47f65b6e79b010582f15785867e">kernel::WRITE</a> = 13
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a30f819fd48cfb46bc2a4136759b7a11a">kernel::LSEEK</a> = 14
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a8ac715a414285eb52086b6cc2ed90f50">kernel::IOCTL</a> = 15
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a1e36542efa12c0d5b70478c43512c5cf">kernel::READDIR</a> = 16
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a73f760f8a96d0acec3dec614a688ff79">kernel::STAT</a> = 17
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a89aa2bca1f427b3bba6335129f479f77">kernel::DUP</a> = 18
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a3da339b05f9a3798ee79997a9971a26c">kernel::CHDIR</a> = 19
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270af28b3aad7d43b371527fde69de8d93ff">kernel::EXEC</a> = 20
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aa59a5773c21e7a30b474d0b16ac5e8d2">kernel::FORK</a> = 21
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a8edfe52745344b08b4f3dacd29e47b4a">kernel::WAITPID</a> = 22
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a27beb5c4ac5e1d44c9a9c48260a86043">kernel::GETPID</a> = 23
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a3986dd0914958ae2115e0ae7f10beef3">kernel::KILL</a> = 24
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a6e2dc574a6f6213a0bdee18a31b714fd">kernel::PIPE</a> = 25
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a956eb9c6fa494b7fb17c6c58ab2c5616">kernel::DUP2</a> = 26
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a9d087bfb809874e1b3e9adcbae8ca761">kernel::NOTIFY</a> = 27
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a3f6169628af7f81a8313e2a08a7c06e6">kernel::NOTIFY_WAIT</a> = 28
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270af2ff02adcb4234c6c7939cc47719add2">kernel::EVENT_SET</a> = 29
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ac72f7d516b02fd17e24e45db40bdb6ca">kernel::EVENT_WAIT</a> = 30
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ac023ee28e6cb71d64feec71f0cbac067">kernel::SIGNAL</a> = 31
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270afd63cc543c756aa9558e545d9ddb67d2">kernel::SIGRETURN</a> = 32
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a9de6d0a670ae5a0dee31a6318aa00e8d">kernel::ALARM</a> = 33
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270acff1e0f0bef6d93db592185f3f3d2413">kernel::GETTOD</a> = 34
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a358f6fb7b244ee3b66a8e071d055b542">kernel::UNAME</a> = 35
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a291554596c183e837f0a6bec3767c891">kernel::PAUSE</a> = 36
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a5208dcfc51d53cbde0c38d58343e0e97">kernel::BUF_ALLOC</a> = 37
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aad368dec46e3b1b66ed08a3e095f5f19">kernel::BUF_FREE</a> = 38
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aa92f893dfda86f015146aed133010143">kernel::BUF_MAP</a> = 39
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a3eb4972b6c9edf08411c214df2d47fb6">kernel::BUF_UNMAP</a> = 40
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a54396a6379fdf76909f612cd9537897f">kernel::MKDIR</a> = 41
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aa07e75cb3ec757003bb6b1284024135b">kernel::UNLINK</a> = 42
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aad15ccc1bcc63ac3c1fda097e5ef0d64">kernel::RMDIR</a> = 43
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aec179e4b5a81ff1c9bf2978aec1513d5">kernel::BRK</a> = 44
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aaf7ecf75b39da3b49d57d40ce7b0171a">kernel::GETRLIMIT</a> = 45
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a28a7bb0c23b2f753711604b8429ebace">kernel::SETRLIMIT</a> = 46
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a28cffe05a3dce6d9d9afa6675f1837a7">kernel::GETRANDOM</a> = 47
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ad8c8cf61670a0a7d2526ee3c190434a3">kernel::KLOG</a> = 48
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a65abf85acd7ea0c82f179038bdc375f5">kernel::REBOOT</a> = 49
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270abf2d798abfe8267da4f101692b6cfecd">kernel::HALT</a> = 50
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a2144cbda8a0470001167653086b69f3b">kernel::CAP_GRANT</a> = 51
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aaee0821b93dfe45dbf02bf37a65ad0e9">kernel::CAP_COPY</a> = 52
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a8f9aa80af4c9364b3853f49a69f9e7d6">kernel::CAP_REVOKE</a> = 53
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a317ba42ac1eeb647f691547980150776">kernel::CAP_MINT</a> = 54
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a675bb1cc99553a5ccbda0ab160ef5853">kernel::IOPORT_GRANT</a> = 55
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a0c86c9a34a4875e697931aa2c44a548c">kernel::CAP_RETYPE</a> = 56
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a81b67f199ce7ab95579ded8cf28eb2a3">kernel::IRQ_REGISTER</a> = 57
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270af92c4331832c43280cae8c323511913f">kernel::IRQ_WAIT</a> = 58
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a29768d34f2205666e34d0fb2f689e0e7">kernel::IOMMU_MAP</a> = 59
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a23ece4f6fd61b957753d8ac3d4953979">kernel::IOMMU_UNMAP</a> = 60
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a7425ab7dc8c3e8303fcd9a987df6547b">kernel::MMIO_MAP</a> = 61
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a863cbcbcb36fb755f508402ebadf5411">kernel::MMIO_UNMAP</a> = 62
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a32ed966c2c41c74784c992c3fafefc3d">kernel::FRAME_CREATE</a> = 63
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aefaa07b45b77095aed0b255ecc4d9bb9">kernel::FRAME_MAP</a> = 64
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270abb364f1463965d16095c6d126a45d6a0">kernel::FRAME_UNMAP</a> = 65
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ae900b83ef4c3b91f96857b4dd826a9ee">kernel::DEATH_WATCH</a> = 66
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ac58d18003a989108053c47c9691d349d">kernel::DEATH_RECV</a> = 67
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a16ca9792a9bdfddf963094f6a8f7d06d">kernel::DEATH_UNWATCH</a> = 68
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a8845db5ec239410ff55eed7768584231">kernel::PAGER_REGISTER</a> = 69
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aec5c27d1be4f1c49faf224ce307e0022">kernel::PAGER_RECV</a> = 70
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aa31e639b9cfb09590be094be2836d3e2">kernel::PAGER_MAP</a> = 71
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a8817071ffedcab48e88ce1609afb6ae0">kernel::PAGER_ABORT</a> = 72
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a62fb6ce23c0696da246e1ad2d5aaa3c8">kernel::PAGER_UNREGISTER</a> = 73
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a1c2e112ea60c1b1a83a5410d7dfa4fcd">kernel::SEND_FAST</a> = 74
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a5d465054367acd24c976f3ada51e493a">kernel::RECV_FAST</a> = 75
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a92b091b1c0aac5962a42c441bd5380f1">kernel::SEND_SYNC_FAST</a> = 76
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aca50d6ea66f0a016fd3375e9e965d23d">kernel::SET_AFFINITY</a> = 77
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a7d211c51a7949d5c34fafea8643f8fb7">kernel::GET_AFFINITY</a> = 78
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aa541906f54b023eb41750e762c1e321a">kernel::TIMES</a> = 79
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a7ad848958ad20376a27374772f9e3193">kernel::CLOCK_GETTIME</a> = 80
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a9acaf540e81d3197a4fd42d203578e8c">kernel::NANOSLEEP</a> = 81
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ad3db1128505b1f1c4159c4c63c513f26">kernel::TIMER_CREATE</a> = 82
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ad1c65595cdf7fa48a3cd7f0317081fd3">kernel::TIMERFD_CREATE</a> = 83
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270abc29579fba5bfdf69102c3d9e1295082">kernel::ABI_VERSION</a> = 84
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270afe4981c7cc0066fb7c6ce2ce98ad63e2">kernel::TLS_SET</a> = 85
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a0feaba6da530883bbfc1e8cbecd46060">kernel::TASK_DEBUG_ATTACH</a> = 86
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270adc730f48a71cde735588d52b27c5f83b">kernel::TASK_DEBUG_READ_REGS</a> = 87
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ac677bef91e95dcd274cb4b4ea9659891">kernel::TASK_DEBUG_WRITE_REGS</a> = 88
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a0007884431df3fcca1f48b6286e6aeac">kernel::TASK_DEBUG_READ_MEM</a> = 89
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aca5bb881c2f95858ee342ff9eee28dcf">kernel::TASK_DEBUG_WRITE_MEM</a> = 90
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a7ff49e05e22fa7c23ba548ec34396778">kernel::WATCHDOG_CREATE</a> = 91
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aaac5314412bfa22eed81696ef6790b00">kernel::WATCHDOG_KICK</a> = 92
+, <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a20583d4255e204362b630fbbc2d805da">kernel::MAX_SYSCALL</a> = 93
+<br />
+ }</td></tr>
+<tr class="memdesc:a210a0a299a55c9ad49ab6b2b4542d270"><td class="mdescLeft">&#160;</td><td class="mdescRight">System call numbers recognised by the kernel.  <a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a4714e27a53b879f1a1610a8b77e37b4d" id="r_a4714e27a53b879f1a1610a8b77e37b4d"><td class="memItemLeft">constexpr __uint128_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a4714e27a53b879f1a1610a8b77e37b4d">kernel::syscall_fast_mask_from</a> (const <a class="el" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270">SyscallNumber</a> *list, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> count)</td></tr>
+<tr class="memdesc:a4714e27a53b879f1a1610a8b77e37b4d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Folds a list of FAST syscall numbers into a single bitmask (issue #92). constexpr so SYSCALL_FAST_MASK is a compile-time constant derived from k_syscall_fast[] — the single source of truth. __uint128_t: syscall numbers &gt;= 64 (DEATH_*, PAGER_*, *_FAST) would overflow a 64-bit shift; the widened mask covers numbers &lt; 128.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>System call interface and dispatcher. </p>
 </div></div><!-- contents -->

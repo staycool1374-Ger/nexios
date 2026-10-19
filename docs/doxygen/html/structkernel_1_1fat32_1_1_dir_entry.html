@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -133,11 +133,17 @@ Collaboration diagram for kernel::fat32::DirEntry:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a1ef9640a81f4cc75556b0939020463c1" id="r_a1ef9640a81f4cc75556b0939020463c1"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a1ef9640a81f4cc75556b0939020463c1">name</a> [13]</td></tr>
+<tr class="memdesc:a1ef9640a81f4cc75556b0939020463c1"><td class="mdescLeft">&#160;</td><td class="mdescRight">8.3 null-terminated (8+1+3+1).  <br /></td></tr>
 <tr class="memitem:a272dde2b04ddb04f582be48da624526a" id="r_a272dde2b04ddb04f582be48da624526a"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a272dde2b04ddb04f582be48da624526a">attrs</a></td></tr>
+<tr class="memdesc:a272dde2b04ddb04f582be48da624526a"><td class="mdescLeft">&#160;</td><td class="mdescRight">File attributes.  <br /></td></tr>
 <tr class="memitem:a5a1799d021d0feb93cc5ff3824e1d608" id="r_a5a1799d021d0feb93cc5ff3824e1d608"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a5a1799d021d0feb93cc5ff3824e1d608">cluster</a></td></tr>
+<tr class="memdesc:a5a1799d021d0feb93cc5ff3824e1d608"><td class="mdescLeft">&#160;</td><td class="mdescRight">First cluster number.  <br /></td></tr>
 <tr class="memitem:a42fc4a61e5e3896b93a497ae1cb47c96" id="r_a42fc4a61e5e3896b93a497ae1cb47c96"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a42fc4a61e5e3896b93a497ae1cb47c96">size</a></td></tr>
+<tr class="memdesc:a42fc4a61e5e3896b93a497ae1cb47c96"><td class="mdescLeft">&#160;</td><td class="mdescRight">File size in bytes.  <br /></td></tr>
 <tr class="memitem:a3340e0a0b0dd2215b76cd8ac858c8420" id="r_a3340e0a0b0dd2215b76cd8ac858c8420"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a3340e0a0b0dd2215b76cd8ac858c8420">is_directory</a></td></tr>
+<tr class="memdesc:a3340e0a0b0dd2215b76cd8ac858c8420"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if this is a directory.  <br /></td></tr>
 <tr class="memitem:a9ff2e89c2c080339dc32d37d147af50c" id="r_a9ff2e89c2c080339dc32d37d147af50c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a9ff2e89c2c080339dc32d37d147af50c">valid</a></td></tr>
+<tr class="memdesc:a9ff2e89c2c080339dc32d37d147af50c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether this entry is valid.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Parsed directory entry. </p>
@@ -154,6 +160,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>File attributes. </p>
+
 </div>
 </div>
 <a id="a5a1799d021d0feb93cc5ff3824e1d608" name="a5a1799d021d0feb93cc5ff3824e1d608"></a>
@@ -167,6 +175,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>First cluster number. </p>
 
 </div>
 </div>
@@ -182,6 +192,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>True if this is a directory. </p>
+
 </div>
 </div>
 <a id="a1ef9640a81f4cc75556b0939020463c1" name="a1ef9640a81f4cc75556b0939020463c1"></a>
@@ -195,6 +207,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>8.3 null-terminated (8+1+3+1). </p>
 
 </div>
 </div>
@@ -210,6 +224,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>File size in bytes. </p>
+
 </div>
 </div>
 <a id="a9ff2e89c2c080339dc32d37d147af50c" name="a9ff2e89c2c080339dc32d37d147af50c"></a>
@@ -223,6 +239,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Whether this entry is valid. </p>
 
 </div>
 </div>

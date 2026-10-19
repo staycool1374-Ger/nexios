@@ -856,7 +856,7 @@ uint64_t Syscall::sys_task_debug_read_mem(uint64_t handle, uint64_t uva,
         uint64_t chunk = 0x1000ULL - page_off;
         if (chunk > len - done)
             chunk = len - done;
-        uint64_t phys = VMM::virt_to_phys_in_pml4(va, tgt->page_table_);
+        uint64_t phys = VMM::virt_to_phys_in_pml4(va, tgt->get_page_table());
         if (phys == 0)
             break; // unmapped: stop with bytes-done (EFAULT below)
         // Walk result is the exact phys (offset already included — never
@@ -910,7 +910,7 @@ uint64_t Syscall::sys_task_debug_write_mem(uint64_t handle, uint64_t uva,
         uint64_t chunk = 0x1000ULL - page_off;
         if (chunk > len - done)
             chunk = len - done;
-        uint64_t phys = VMM::virt_to_phys_in_pml4(va, tgt->page_table_);
+        uint64_t phys = VMM::virt_to_phys_in_pml4(va, tgt->get_page_table());
         if (phys == 0)
             break;
         // Walk result is the exact phys (see read path note above).

@@ -129,6 +129,82 @@ void VMM::init() {
 #endif
 }
 
+extern "C" {
+// Linker section bounds (4K-aligned starts on all arches; see
+// linker/linker_{x86_64,aarch64,riscv64}.ld). Mirrors the integrity.hpp
+// _text_start/_text_end declaration idiom.
+extern uint64_t _text_start[];
+extern uint64_t _text_end[];
+extern uint64_t _rodata_start[];
+extern uint64_t _rodata_end[];
+extern uint64_t _data_start[];
+extern uint64_t _bss_end[];
+}
+
+void VMM::harden_kernel_half() {
+    // Issue #376 (boot-text W^X epic remainder): convert the RWX
+    // boot-established mappings over the image to text RX / rodata RO+NX /
+    // data+bss RW+NX. Runs once at end of bring-up (single-threaded BSP,
+    // IRQs off, PMM up) BEFORE snapshot_kernel_template() so the template
+    // and every later clone inherit hardened flags by value. Identity map
+    // and non-image HHDM (boot code/stack, AP trampoline, boot structs)
+    // stay RWX by design. Any mapping failure panics: a half-hardened root
+    // must never boot.
+    const uint64_t pml4 = kernel_pml4_;
+    if (pml4 == 0)
+        panic("VMM: harden with null kernel PML4");
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t text_start = reinterpret_cast<uint64_t>(_text_start);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t text_end = reinterpret_cast<uint64_t>(_text_end);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t rodata_start = reinterpret_cast<uint64_t>(_rodata_start);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t rodata_end = reinterpret_cast<uint64_t>(_rodata_end);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t data_start = reinterpret_cast<uint64_t>(_data_start);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t bss_end = reinterpret_cast<uint64_t>(_bss_end);
+    if (!(text_start < text_end && text_end <= rodata_start &&
+          rodata_start < rodata_end && rodata_end <= data_start &&
+          data_start < bss_end))
+        panic("VMM: harden section bounds disordered");
+
+    // Per-page worker: resolve phys (unmapped holes panic — the image is
+    // contiguous), install a 4K non-user leaf via try (splits boot huge
+    // entries; split fills preserve flags), then encode the region bits.
+    // text: RX (RO encode keeps X via the kernel_text_exec hook);
+    // rodata: RO+NX; data+bss: RW+NX (no RO step).
+    auto harden_page = [&](uint64_t va, bool exec, bool read_only) {
+        const uint64_t phys = virt_to_phys_in_pml4(va, pml4);
+        if (phys == 0)
+            panic("VMM: harden unmapped image page");
+        // Text installs executable (RWX window, never NX — an NX window
+        // on the live text would triple-fault the next fetch after the
+        // map's internal TLB flush); rodata/data install non-executable
+        // (never executed, window safe). The RO encode then clears W.
+        if (map_page_in_pml4_try(va, phys, false, exec, pml4) !=
+            errors::VMM_ERR_OK)
+            panic("VMM: harden map failed");
+        uint64_t *leaf = pte_leaf_in_pml4(va, pml4);
+        if (leaf == nullptr)
+            panic("VMM: harden leaf missing after map");
+        if (read_only)
+            *leaf = vmm_arch_encode_ro(*leaf, exec);
+        if (exec)
+            *leaf = vmm_arch_kernel_text_exec(*leaf);
+        arch::ArchPageTable::tlb_flush(va);
+    };
+
+    for (uint64_t va = text_start; va < text_end; va += arch::PAGE_SIZE)
+        harden_page(va, true, true);
+    for (uint64_t va = rodata_start; va < rodata_end; va += arch::PAGE_SIZE)
+        harden_page(va, false, true);
+    for (uint64_t va = data_start; va < bss_end; va += arch::PAGE_SIZE)
+        harden_page(va, false, false);
+    arch::ArchPageTable::tlb_flush_all();
+}
+
 /// @brief Walk or create a page-table entry at the current level.
 /// @param table     Pointer to the current-level page table.
 /// @param index     Entry index within @p table.

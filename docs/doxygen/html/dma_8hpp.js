@@ -33,6 +33,6 @@ var dma_8hpp =
     [ "byte_count", "dma_8hpp.html#a3897a1c704a4b78dde8b0c538e725386", null ],
     [ "kernel::dma::DMA_MAX_PRD_ENTRIES", "namespacekernel_1_1dma.html#a575880390445bddafd86f288a579b60c", null ],
     [ "kernel::dma::DMA_MAX_SG_ENTRIES", "namespacekernel_1_1dma.html#aad354cd855e6380b46c7779471e09172", null ],
-    [ "flags", "dma_8hpp.html#a1e87af3c18a2fd36c61faf89949bdc3f", null ],
+    [ "flags", "dma_8hpp.html#a773b39d480759f67926cb18ae2219281", null ],
     [ "phys_addr", "dma_8hpp.html#acc7cea6c9ac13d013ad3f298c375f459", null ]
 ];

@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['pid_5ft_0',['pid_t',['../types_8h.html#a288e13e815d43b06e75819f8939524df',1,'types.h']]]
+  ['nullptr_5ft_0',['nullptr_t',['../namespacearch.html#a04efa6b3c0547f1ce0bb801e33467690',1,'arch']]]
 ];

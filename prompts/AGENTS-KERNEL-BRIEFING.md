@@ -70,7 +70,7 @@ verifies OS and user ELF authenticity and runs diagnostic time measurements.
 **Parameters:**
 - `<arch>` — `x86`|`x86_64`|`arm`|`aarch64`|`riscv`|`riscv64` (shorthand accepted, default: x86_64)
 - `<build>` — `debug`|`release`
-- `<class>` — `none` (interactive shell) | `selftest` (CI gate) | `<aggregate>` (16 structural classes, issue #173) | `<name>` (specific class). Full suite (`all` class removed): `make test-full [arch] [build]`
+- `<class>` — `none` (interactive shell) | `selftest` (CI gate) | `<aggregate>` (22 structural classes, issues #173, #364) | `<name>` (specific class). Full suite (`all` class removed): `make test-full [arch] [build]`
 
 **Key behaviours:**
 - Cross-arch: `run-release-mode arm` builds aarch64 release ELF and boots via `qemu-system-aarch64 -kernel`
@@ -85,7 +85,7 @@ make run-debug-mode                       # interactive x86_64 debug
 make run-release-mode                     # interactive x86_64 release
 make run-release-mode arm                 # interactive aarch64 release
 make run-release-mode riscv               # interactive riscv64 release
-make test-full x86 debug               # full debug suite (20 runs, one reboot each)
+make test-full x86 debug               # full debug suite (26 runs, one reboot each)
 make execute-test x86 release selftest    # CI gate
 ```
 
@@ -170,6 +170,8 @@ make execute-test x86 release selftest    # CI gate
 16. **RSP-owner resolution in switch_to_task** — The O(n) scan that resolves the physically-running task by kernel-stack ownership is retained in debug builds and for release-build drift detection. It cannot be removed while mixed kslot/HHDM stacks exist (SCHED-008 was reverted for this reason).
 17. **riscv64 x2-IS-sp aliasing in trap asm** — every `sp` write is an `x2` write: `la sp` before the OFF_SP save records the frame (not user sp); recomputing the frame base from `sp` after a conditional `x2` load faults (user_sp−296 is unmapped). Save user-sp via a dead scratch *before* reloading sp; never read sp relatively after an x2 load on the U-path (issue #206).
 18. **riscv64 SPP is stale for nested traps** — it records trapped-from, so a nested S-tick inside a U-handler takes the U path over the live frame. `csrci sstatus, 2` as the first trap insn (needs no scratch) forbids nesting, making SPP provably fresh; `sret` restores SIE from SPIE so U-ticks survive (issue #206, closes #219 entry aspect; return-window aspect still open).
+19. **TCG wall-clock variance is a known limitation, not a kernel bug** — under QEMU TCG the PIT/APIC/bus/TSC virtual clocks diverge from each other and from host wall (ns up to ~4x fast, ticks ~0.8x wall, cal 250–670 MHz across boots; issue #359, decided DOCUMENT): no boot scalar or tick-servo can be wall-true for all regimes (no sub-second in-guest wall reference; workload-dependent TSC rate). Kernel timeouts are self-consistent (single-domain). Accuracy gate is KVM/HW; TCG `hrt_wall_accuracy_bound` warn-skips on hypervisor. `OVERALL_CAP_S` stays 3600 (not re-tightened without proof). Suite summaries carry `TSC_CYCLES` (TSC never rewinds, unlike snapshot-rewound `ticks_`) for host-side analysis. Per-arch (#384, 2026-10-19): aarch64 (cntpct_el0 @ 62.5 MHz) and riscv64 (rdtime @ 10 MHz) show the same TCG unenforceability (wall bound +28%/+27.6% over, strict assert fails where x86 warn-skips — no CPUID hypervisor equivalent off-x86, QE-owned skip design); bare metal is the only quality gate on all arches, no TCG accuracy enforcement anywhere. `timing_core` off-x86 is blocked by the #356 task-spawn fault (ELR/sepc=0 at first test-task spawn, daemons degraded).
+20. **Off-x86 IRQ/timer contracts (issue #349)** — PLIC S-mode context is 1 (`0x0C002080` enable / `0x0C201000` threshold; M-context 0 belongs to OpenSBI, never program it); GICv2 SPIs need ITARGETSR=CPU0 (reset targets are not CPU0) and ICFGR edge only for virtio-mmio (48–79); version from GICD_PIDR2, never TYPER[15:11]. Timer `oneshot`/`periodic` args are coarse ticks at `BootParams::timer_hz` (absolute CVAL/SBI deadlines internally); `remaining()` is coarse ceil gated on the enable bit; riscv64 `remaining*` are hard 0 by S-mode hardware constraint.
 
 ## 13. Enforcement Rules (MANDATORY — violations halt and require human input)
 
@@ -224,7 +226,7 @@ QEMU; use lldb instead.
 ### Targeted class verification (MANDATORY)
 - Verify kernel code changes using the **smallest applicable test class**, NOT `test-full`.
 - Examples: `storage` for VFS/IPC/daemon changes, `data_structures_buffer_pool` for buffer pool changes, `timing_core` for timer changes, etc.
-- `make test-full` runs 20 classes and takes **tens of minutes** — only use for full release validation.
+- `make test-full` runs 26 classes and takes **tens of minutes** — only use for full release validation.
 
 ### Full-suite log capture (MANDATORY)
 - When running `make test-full`, always capture the full output:

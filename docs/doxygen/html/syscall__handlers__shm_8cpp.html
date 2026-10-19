@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('syscall__handl
 <p>Capability-gated shared-memory syscalls (issue #106 Part B): SYS_FRAME_CREATE — allocate contiguous user frames into a new FrameCap installed in the caller's CSpace (returns the slot). SYS_FRAME_MAP — map a FrameCap's frames into the caller's user VA window (FrameUserMap::map). SYS_FRAME_UNMAP — unmap a user frame mapping by VA. These syscalls touch page tables and MUST stay out of k_syscall_fast[] (issue #92 discipline).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="syscall_8hpp_source.html">kernel/syscall/syscall.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="syscall__errors_8hpp_source.html">kernel/syscall/syscall_errors.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="cap_8hpp_source.html">kernel/cap/cap.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="frame_8hpp_source.html">kernel/cap/frame.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="frame__map_8hpp_source.html">kernel/cap/frame_map.hpp</a>&gt;</code><br />

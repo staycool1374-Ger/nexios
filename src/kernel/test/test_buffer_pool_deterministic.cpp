@@ -114,7 +114,7 @@ JARVIS_TEST(buffer_pool_deterministic_zero_copy_transfer,
                   static_cast<uint32_t>(receiver->id));
 
     // Security check: after transfer, sender's original VA must be unmapped.
-    uint64_t sender_va_phys = VMM::virt_to_phys_in_pml4(va, sender->page_table_);
+    uint64_t sender_va_phys = VMM::virt_to_phys_in_pml4(va, sender->get_page_table());
     JARVIS_ASSERT_FMT(sender_va_phys == 0,
                       "Sender still owns VA 0x%lx (phys 0x%lx) after transfer",
                       va, sender_va_phys);

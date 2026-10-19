@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -152,11 +152,19 @@ Public Types</h2></td></tr>
 , <a class="el" href="#a5a15a3d081ace9f33de0cea3d09f551fa2778dde25400a8e3df508c90229d2657">VERIFIED</a> = 2
 , <a class="el" href="#a5a15a3d081ace9f33de0cea3d09f551fab9e14d9b2886bcff408b85aefa780419">FAILED</a> = 3
  }</td></tr>
-<tr class="memdesc:a5a15a3d081ace9f33de0cea3d09f551f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read-only image authenticity state (issue #46): the loader captures a <a class="el" href="classkernel_1_1_c_r_c32.html">CRC32</a> baseline over the mapped read-only PT_LOAD ranges ([vaddr, vaddr+filesz), post-relocation) and the idle task re-verifies it incrementally, killing the task on mismatch. Single-writer invariant: the loader owns the baseline + ranges + progress until completed_tcb_ publication; the idle slice owns the progress triple after (the lock_ → take_completed → add_task mutex chain orders the handoff). Zero for kernel tasks and direct <a class="el" href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">elf::load</a> images (never verified, never killed).  <a href="#a5a15a3d081ace9f33de0cea3d09f551f">More...</a><br /></td></tr>
+<tr class="memdesc:a5a15a3d081ace9f33de0cea3d09f551f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read-only image authenticity state (issue #46): the loader captures a <a class="el" href="classkernel_1_1_c_r_c32.html">CRC32</a> baseline over the mapped read-only PT_LOAD ranges ([vaddr, vaddr+filesz), post-relocation) and the idle task re-verifies it incrementally, killing the task on mismatch. Single-writer invariant: the loader owns the baseline + ranges + progress until completed_tcb_ publication; the idle slice owns the progress triple after (the lock_ → take_completed → add_task mutex chain orders the handoff). Zero for kernel tasks and direct <a class="el" href="namespacekernel_1_1elf.html#ada05ba431e1699232e0cb0ca87af0a2b" title="Load an ELF binary into a new task.">elf::load</a> images (never verified, never killed).  <a href="#a5a15a3d081ace9f33de0cea3d09f551f">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a9a59d792a7207bc29a804189f0ad7137" id="r_a9a59d792a7207bc29a804189f0ad7137"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> ()</td></tr>
+<tr class="memitem:a5c6fc19dd6c1a6b5165ec4077d380a38" id="r_a5c6fc19dd6c1a6b5165ec4077d380a38"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5c6fc19dd6c1a6b5165ec4077d380a38">get_page_table</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a5c6fc19dd6c1a6b5165ec4077d380a38"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the task's PML4 root (0 = none installed yet).  <br /></td></tr>
+<tr class="memitem:a0853207d11929b933bfc41dd80d90f20" id="r_a0853207d11929b933bfc41dd80d90f20"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0853207d11929b933bfc41dd80d90f20">install_page_table</a> (uint64_t pml4) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a0853207d11929b933bfc41dd80d90f20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Install the factory PML4 on a fresh TCB (issue #377). ENSUREs the slot is empty: a second install without an intervening free orphans a live table (the #371 shape).  <br /></td></tr>
+<tr class="memitem:a3dc3c21ce4d1220b25ddaab403b23140" id="r_a3dc3c21ce4d1220b25ddaab403b23140"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3dc3c21ce4d1220b25ddaab403b23140">swap_page_table</a> (uint64_t new_pml4) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a3dc3c21ce4d1220b25ddaab403b23140"><td class="mdescLeft">&#160;</td><td class="mdescRight">Exec-style live swap (issue #377): replaces a live table. The caller frees the old table (exec frees after the swap so the running task never observes a dead root).  <br /></td></tr>
+<tr class="memitem:a320b02df232a268b3a99f938e5812e00" id="r_a320b02df232a268b3a99f938e5812e00"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a320b02df232a268b3a99f938e5812e00">clear_page_table</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a320b02df232a268b3a99f938e5812e00"><td class="mdescLeft">&#160;</td><td class="mdescRight">Teardown clear (issue #377): the caller freed the table.  <br /></td></tr>
 <tr class="memitem:a4c342fe350f642a64460f9130185880e" id="r_a4c342fe350f642a64460f9130185880e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4c342fe350f642a64460f9130185880e">has_signal_handler</a> (uint64_t sig) const</td></tr>
 <tr class="memdesc:a4c342fe350f642a64460f9130185880e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Checks if the task has a handler registered for a signal.  <br /></td></tr>
 <tr class="memitem:ac01961e7ed10f1efbc39de08b7cf25be" id="r_ac01961e7ed10f1efbc39de08b7cf25be"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac01961e7ed10f1efbc39de08b7cf25be">set_signal_handler</a> (uint64_t sig, <a class="el" href="namespacekernel.html#ae89f8530616ba6e58eebc1f5104f6e5c">sighandler_t</a> handler)</td></tr>
@@ -169,6 +177,8 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:a02994288d778ac145ce6758472227cec"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore the saved register context into CPU registers.  <br /></td></tr>
 <tr class="memitem:a15067eade15b4dd699007f2c3c7673eb" id="r_a15067eade15b4dd699007f2c3c7673eb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a15067eade15b4dd699007f2c3c7673eb">cleanup</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a15067eade15b4dd699007f2c3c7673eb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a TERMINATED child.  <br /></td></tr>
+<tr class="memitem:a99ea3a7fec117ebe5d2d5491a845ebfb" id="r_a99ea3a7fec117ebe5d2d5491a845ebfb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a99ea3a7fec117ebe5d2d5491a845ebfb">complete_teardown</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a99ea3a7fec117ebe5d2d5491a845ebfb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Completes a teardown deferred by the pinned early-return (issue #373): runs ExitStats..Finalize exactly as <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> would after the pinned check, without re-running table removal (the first destroy already removed this task) and without touching scheduler membership beyond the idempotent unregister. Only <a class="el" href="#ab52ff8402135c9d2a8ac6df1c5346f5e" title="Destroys a TCB and returns its MemPool block (H-5: single pool-aware teardown path replacing raw dele...">destroy()</a> calls this, only on REAPED-with-resources-pending TCBs.  <br /></td></tr>
 <tr class="memitem:a9cdd124650c5b54d901b0a704fa4c723" id="r_a9cdd124650c5b54d901b0a704fa4c723"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9cdd124650c5b54d901b0a704fa4c723">operator delete</a> (void *ptr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a9cdd124650c5b54d901b0a704fa4c723"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unregisters this TCB from the scheduler (tasks_[] / id_table_ / ready queue) and returns its memory to the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>. Mandatory before the block is reused: a TCB freed via <span class="tt">delete</span> without unregistration leaves a dangling tasks_[] entry that aliases the next allocation (use-after-free dispatch).  <br /></td></tr>
 <tr class="memitem:aa64afb86912fa0ccc43e1470a1ba830b" id="r_aa64afb86912fa0ccc43e1470a1ba830b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa64afb86912fa0ccc43e1470a1ba830b">init_sporadic_server</a> (uint64_t budget_c, uint64_t period_t, uint64_t bg_prio, uint64_t budget_granularity=<a class="el" href="aarch64_2serial_8cpp.html#a31b2fca43fed672f65115a92304475a2">CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</a>, <a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582c">task::ServerMode</a> mode=<a class="el" href="namespacekernel_1_1task.html#a82f17867b0ea9b01e4ff6c5073fc582ca6fb4e82c2fe41d799e90640dd8465a89">task::ServerMode::SPORADIC</a>) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
@@ -196,6 +206,10 @@ Public Member Functions</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
+<tr class="memitem:af323200712a5e6f52ef61e227937d788" id="r_af323200712a5e6f52ef61e227937d788"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#af323200712a5e6f52ef61e227937d788">is_kernel_address</a> (uint64_t addr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:af323200712a5e6f52ef61e227937d788"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if <span class="tt"><a class="el" href="ether_8hpp.html#a8f7d34f0706997ac57fd475518fa9cb5" title="Octets in network order.">addr</a></span> lies in the kernel address half (issue #323: arch-independent pointer compare). The kernel base is the arch-dependent CONFIG_HHDM_OFFSET. Mirrors the kernel-half test in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">core/global_state.cpp</a>. (Other subsystems still carry raw arch-literal HHDM comparisons — e.g. <a class="el" href="address_8hpp.html" title="Type-safe physical and virtual address wrappers (MISRA C++ 2023 compliant).">memory/address.hpp</a>; their migration is tracked under #323.).  <br /></td></tr>
+<tr class="memitem:a79658af4f1e4b36dd76f4ea1ac7b5fa3" id="r_a79658af4f1e4b36dd76f4ea1ac7b5fa3"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a79658af4f1e4b36dd76f4ea1ac7b5fa3">is_kernel_pointer</a> (const void *p) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a79658af4f1e4b36dd76f4ea1ac7b5fa3"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if <span class="tt">p</span> lies in the kernel address half (see <a class="el" href="#af323200712a5e6f52ef61e227937d788" title="True if addr lies in the kernel address half (issue #323: arch-independent pointer compare)....">is_kernel_address()</a>).  <br /></td></tr>
 <tr class="memitem:ad0f74cc38a41728c771a0a5a052c9904" id="r_ad0f74cc38a41728c771a0a5a052c9904"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ad0f74cc38a41728c771a0a5a052c9904">is_valid</a> (const <a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *t) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ad0f74cc38a41728c771a0a5a052c9904"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if <span class="tt">t</span> is a live, valid TCB. The address-range check MUST come first: a corrupted list pointer (e.g. a freed/overwritten node whose runq_/pri_ links hold a low poison value such as 0xDD or 0x55) would otherwise fault with a General-Protection Fault the moment we read t-&gt;magic. <a class="el" href="classkernel_1_1_mem_pool.html#a1f64a714659b3a9b32efc18eb09e0830" title="Frees a block previously returned by alloc().">MemPool::free()</a> poisons freed blocks with 0xDD under CONFIG_DEBUG, so a freed/reused TCB fails this check and can be skipped safely instead of being dereferenced into a #GP.  <br /></td></tr>
 <tr class="memitem:a82a06cb63bdaa30a038a40e5632fbe9d" id="r_a82a06cb63bdaa30a038a40e5632fbe9d"><td class="memItemLeft">static <a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a82a06cb63bdaa30a038a40e5632fbe9d">create</a> (void(*entry)(), uint64_t priority, uint64_t period_ticks)</td></tr>
@@ -211,7 +225,7 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a3c6d103f4da66b64efa1af7f31a5b763" id="r_a3c6d103f4da66b64efa1af7f31a5b763"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#acfb6c673c29495fd20c2656c972a5632">errors::TaskError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3c6d103f4da66b64efa1af7f31a5b763">clone_err</a> (uint64_t *regs, <a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *&amp;out_tcb)</td></tr>
 <tr class="memdesc:a3c6d103f4da66b64efa1af7f31a5b763"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clones the current task with error code.  <br /></td></tr>
 <tr class="memitem:ab52ff8402135c9d2a8ac6df1c5346f5e" id="r_ab52ff8402135c9d2a8ac6df1c5346f5e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab52ff8402135c9d2a8ac6df1c5346f5e">destroy</a> (<a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *tcb) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:ab52ff8402135c9d2a8ac6df1c5346f5e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destroys a TCB and returns its <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block (H-5: single pool-aware teardown path replacing raw <span class="tt">delete</span> on RT error paths — CODING_STYLE §4 forbids new/delete on RT paths). State-aware: a REAPED TCB (cleanup already run) is only freed; otherwise <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> + remove_task() run first. No-op on nullptr. Mirrors <a class="el" href="#a9cdd124650c5b54d901b0a704fa4c723" title="Unregisters this TCB from the scheduler (tasks_[] / id_table_ / ready queue) and returns its memory t...">operator delete()</a> semantics exactly.  <br /></td></tr>
+<tr class="memdesc:ab52ff8402135c9d2a8ac6df1c5346f5e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destroys a TCB and returns its <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block (H-5: single pool-aware teardown path replacing raw <span class="tt">delete</span> on RT error paths — CODING_STYLE §4 forbids new/delete on RT paths). State-aware three-way branch (issue #373): a live TCB runs <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> + remove_task(); a REAPED-with-resources-pending TCB (pinned at first destroy, unpinned since) completes the deferred teardown without re-running table removal; a REAPED-after-full-teardown TCB is only freed (safe no-op). No-op on nullptr. Mirrors <a class="el" href="#a9cdd124650c5b54d901b0a704fa4c723" title="Unregisters this TCB from the scheduler (tasks_[] / id_table_ / ready queue) and returns its memory t...">operator delete()</a> semantics exactly.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
@@ -272,7 +286,6 @@ Data Fields</h2></td></tr>
 <tr class="memdesc:ae102189cd4ccbb56afe075987f95803d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual address of the kernel-stack window slot (0 = HHDM). Includes guard page at slot_va.  <br /></td></tr>
 <tr class="memitem:aa550e222c9c2fc30c4ac41ff33ed21b2" id="r_aa550e222c9c2fc30c4ac41ff33ed21b2"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa550e222c9c2fc30c4ac41ff33ed21b2">kstack_slot_size_</a></td></tr>
 <tr class="memdesc:aa550e222c9c2fc30c4ac41ff33ed21b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total slot size (stack + guard page). 0 if HHDM.  <br /></td></tr>
-<tr class="memitem:a526b7a7358662cf741e0c2be5077c2ae" id="r_a526b7a7358662cf741e0c2be5077c2ae"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a526b7a7358662cf741e0c2be5077c2ae">page_table_</a></td></tr>
 <tr class="memitem:a3841792e113d81489083a6d822daf7fb" id="r_a3841792e113d81489083a6d822daf7fb"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a3841792e113d81489083a6d822daf7fb">pcid_</a></td></tr>
 <tr class="memdesc:a3841792e113d81489083a6d822daf7fb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Process-context identifier for TLB tagging (issue #156, x86_64 only). 0 = untagged (kernel tasks + unsupported CPUs); user tasks hold an allocated 1..4095. Owned by the TCB (not the PML4): survives exec PML4 swaps, dies with the task so IDs are never reused while live.  <br /></td></tr>
 <tr class="memitem:a3ceaa370cd26d918c7cb88094eb4c8b1" id="r_a3ceaa370cd26d918c7cb88094eb4c8b1"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a3ceaa370cd26d918c7cb88094eb4c8b1">stack_pdpt_phys_</a></td></tr>
@@ -281,7 +294,7 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a8cdd52c0ab23814dee9ece3c8e91d1f5" id="r_a8cdd52c0ab23814dee9ece3c8e91d1f5"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a8cdd52c0ab23814dee9ece3c8e91d1f5">user_stack_size_</a></td></tr>
 <tr class="memitem:af412568a7d9331e3f801598cce45bf50" id="r_af412568a7d9331e3f801598cce45bf50"><td class="memItemLeft">void *&#160;</td><td class="memItemRight"><a class="el" href="#af412568a7d9331e3f801598cce45bf50">user_data</a></td></tr>
 <tr class="memitem:a04a36f07dd89717ab7b4564d7dbe878c" id="r_a04a36f07dd89717ab7b4564d7dbe878c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a04a36f07dd89717ab7b4564d7dbe878c">is_user_</a></td></tr>
-<tr class="memdesc:a04a36f07dd89717ab7b4564d7dbe878c"><td class="mdescLeft">&#160;</td><td class="mdescRight">True for user-mode tasks (own user half in page_table_). v0.4.0 MP-1: every task — kernel AND user — now owns a private PML4 whose kernel half is copied from the kernel PML4, so <span class="tt"><a class="el" href="#a526b7a7358662cf741e0c2be5077c2ae">page_table_</a> != 0</span> is no longer a valid user-task discriminator. This flag is the authoritative one.  <br /></td></tr>
+<tr class="memdesc:a04a36f07dd89717ab7b4564d7dbe878c"><td class="mdescLeft">&#160;</td><td class="mdescRight">True for user-mode tasks (own user half in page_table_). v0.4.0 MP-1: every task — kernel AND user — now owns a private PML4 whose kernel half is copied from the kernel PML4, so <span class="tt">page_table_ != 0</span> is no longer a valid user-task discriminator. This flag is the authoritative one.  <br /></td></tr>
 <tr class="memitem:acae541958dcc7d4008cddcac19f7eef9" id="r_acae541958dcc7d4008cddcac19f7eef9"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#acae541958dcc7d4008cddcac19f7eef9">canary_before</a> [<a class="el" href="#a3625e5ba8c9b4e01d06b4d7ac32056f4af211b464086dcfdc2143ad40d477b266">CANARY_SEGMENTS</a>]</td></tr>
 <tr class="memdesc:acae541958dcc7d4008cddcac19f7eef9"><td class="mdescLeft">&#160;</td><td class="mdescRight">VA of the canary slot before each segment (0 = not installed). The expected value is derived: CANARY_MAGIC ^ (segment + 1).  <br /></td></tr>
 <tr class="memitem:affd2bda554be3cf041d08fd08430acaa" id="r_affd2bda554be3cf041d08fd08430acaa"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#affd2bda554be3cf041d08fd08430acaa">canary_after</a> [<a class="el" href="#a3625e5ba8c9b4e01d06b4d7ac32056f4af211b464086dcfdc2143ad40d477b266">CANARY_SEGMENTS</a>]</td></tr>
@@ -306,7 +319,7 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a44a33df788a2f01e2083ccb4778ab201" id="r_a44a33df788a2f01e2083ccb4778ab201"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a44a33df788a2f01e2083ccb4778ab201">stall_reported</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memdesc:a44a33df788a2f01e2083ccb4778ab201"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stall episode reported (issues #43/#285, P6). Set when the escalate seam reports/routes this flag episode; cleared by progress (idle_note_progress). One report per episode, never log spam.  <br /></td></tr>
 <tr class="memitem:ada7174027da7a42f24fb09d0b5738d8d" id="r_ada7174027da7a42f24fb09d0b5738d8d"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ada7174027da7a42f24fb09d0b5738d8d">text_size_</a></td></tr>
-<tr class="memdesc:ada7174027da7a42f24fb09d0b5738d8d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Loaded user-image segment sizes (bytes), captured at ELF load from the program-header table (PT_LOAD, memsz): text_size_ — executable (PF_X) segments data_size_ — writable (PF_W) segments bss_size_ — zero-filled tail (memsz - filesz), summed 0 for kernel-only tasks (never <a class="el" href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">elf::load</a>'d).  <br /></td></tr>
+<tr class="memdesc:ada7174027da7a42f24fb09d0b5738d8d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Loaded user-image segment sizes (bytes), captured at ELF load from the program-header table (PT_LOAD, memsz): text_size_ — executable (PF_X) segments data_size_ — writable (PF_W) segments bss_size_ — zero-filled tail (memsz - filesz), summed 0 for kernel-only tasks (never <a class="el" href="namespacekernel_1_1elf.html#ada05ba431e1699232e0cb0ca87af0a2b" title="Load an ELF binary into a new task.">elf::load</a>'d).  <br /></td></tr>
 <tr class="memitem:a51ae656be745e8a10013ef83a84b5c96" id="r_a51ae656be745e8a10013ef83a84b5c96"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a51ae656be745e8a10013ef83a84b5c96">data_size_</a></td></tr>
 <tr class="memitem:a99f2dcfd54915c844c7cad97922ceaf8" id="r_a99f2dcfd54915c844c7cad97922ceaf8"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a99f2dcfd54915c844c7cad97922ceaf8">bss_size_</a></td></tr>
 <tr class="memitem:a75f99866876692b76d0b96185e41a618" id="r_a75f99866876692b76d0b96185e41a618"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a75f99866876692b76d0b96185e41a618">ro_crc32_</a></td></tr>
@@ -316,19 +329,19 @@ Data Fields</h2></td></tr>
 <tr class="memitem:ad2bbff5b9ccb3eb85081198bca3079fd" id="r_ad2bbff5b9ccb3eb85081198bca3079fd"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad2bbff5b9ccb3eb85081198bca3079fd">ro_seg_count_</a></td></tr>
 <tr class="memitem:a0796784d6b49233c92a3f5191d171b61" id="r_a0796784d6b49233c92a3f5191d171b61"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block_1_1_ro_range.html">RoRange</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0796784d6b49233c92a3f5191d171b61">ro_ranges_</a> [<a class="el" href="#a65f34a622d5bdc7768f866f3d3da76a4">kMaxRoRanges</a>]</td></tr>
 <tr class="memitem:a6b03f75073eabe0c50a2a78d4b468e4f" id="r_a6b03f75073eabe0c50a2a78d4b468e4f"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a6b03f75073eabe0c50a2a78d4b468e4f">memory_budget_pages_</a></td></tr>
-<tr class="memdesc:a6b03f75073eabe0c50a2a78d4b468e4f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum pages this task may allocate from <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>. 0 = unlimited.  <br /></td></tr>
+<tr class="memdesc:a6b03f75073eabe0c50a2a78d4b468e4f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum pages this task may allocate from <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>. 0 = unlimited. Write-once before publish (create paths); plain reads safe after (issue #375: the limit never mutates on a live task).  <br /></td></tr>
 <tr class="memitem:a900999c32ede31fa0a2839b6060bfdb3" id="r_a900999c32ede31fa0a2839b6060bfdb3"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a900999c32ede31fa0a2839b6060bfdb3">memory_used_pages_</a></td></tr>
-<tr class="memdesc:a900999c32ede31fa0a2839b6060bfdb3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current pages charged to this task.  <br /></td></tr>
+<tr class="memdesc:a900999c32ede31fa0a2839b6060bfdb3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current pages charged to this task (issue #375: §11.6 all-or-nothing — every access via __atomic builtins; only pre-publish zeroing in create paths uses plain stores).  <br /></td></tr>
 <tr class="memitem:a43cabcff61b0fd0cd600cce314f0c561" id="r_a43cabcff61b0fd0cd600cce314f0c561"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a43cabcff61b0fd0cd600cce314f0c561">mem_alloc_ops_</a> = 0</td></tr>
-<tr class="memdesc:a43cabcff61b0fd0cd600cce314f0c561"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle-monitor P5a counters (issues #43/#284). Successful <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> alloc calls attributed to this task (bumped beside every memory_used_pages_ charge) and explicit credits (bumped in credit_task_memory only — <a class="el" href="classkernel_1_1_p_m_m.html#a0daaa2d1b36579ff9c0eb60caddee59d" title="Frees a page regardless of ownership.">PMM::free_page</a> is globally unattributed by design, see spec §2.3). Ops, not pages: page balance already lives in memory_used_pages_.  <br /></td></tr>
+<tr class="memdesc:a43cabcff61b0fd0cd600cce314f0c561"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle-monitor P5a counters (issues #43/#284). Successful <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> alloc calls attributed to this task (bumped beside every memory_used_pages_ charge) and explicit credits (bumped in credit_task_memory only — <a class="el" href="classkernel_1_1_p_m_m.html#a0daaa2d1b36579ff9c0eb60caddee59d" title="Frees a page regardless of ownership.">PMM::free_page</a> is globally unattributed by design, see spec §2.3). Ops, not pages: page balance already lives in memory_used_pages_. Issue #375: same atomic discipline as memory_used_pages_.  <br /></td></tr>
 <tr class="memitem:ac642fa894509be15025d1563202db67d" id="r_ac642fa894509be15025d1563202db67d"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ac642fa894509be15025d1563202db67d">mem_free_ops_</a> = 0</td></tr>
 <tr class="memitem:aab0022957eb6e6a220fe859f417d5aae" id="r_aab0022957eb6e6a220fe859f417d5aae"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aab0022957eb6e6a220fe859f417d5aae">mem_prev_outstanding_</a> = 0</td></tr>
 <tr class="memdesc:aab0022957eb6e6a220fe859f417d5aae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Leak-heuristic snapshot state (issues #43/#284). Previous pass outstanding ops + used pages, and the current consecutive-suspicious-pass streak. Owned by idle_scan_mem.  <br /></td></tr>
 <tr class="memitem:a398284bb0214802da6936a9a65908bf1" id="r_a398284bb0214802da6936a9a65908bf1"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a398284bb0214802da6936a9a65908bf1">mem_prev_used_</a> = 0</td></tr>
 <tr class="memitem:a96b86cc1cdf127fe1a132029d13a4324" id="r_a96b86cc1cdf127fe1a132029d13a4324"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a96b86cc1cdf127fe1a132029d13a4324">mem_leak_streak_</a> = 0</td></tr>
-<tr class="memitem:adeb4989231addd4acf2a1282f5476c6f" id="r_adeb4989231addd4acf2a1282f5476c6f"><td class="memItemLeft">vfs::FdTable&#160;</td><td class="memItemRight"><a class="el" href="#adeb4989231addd4acf2a1282f5476c6f">fd_table</a></td></tr>
+<tr class="memitem:adeb4989231addd4acf2a1282f5476c6f" id="r_adeb4989231addd4acf2a1282f5476c6f"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_fd_table.html">vfs::FdTable</a>&#160;</td><td class="memItemRight"><a class="el" href="#adeb4989231addd4acf2a1282f5476c6f">fd_table</a></td></tr>
 <tr class="memitem:ac08f621d86dbf9a157593002f25b6946" id="r_ac08f621d86dbf9a157593002f25b6946"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#ac08f621d86dbf9a157593002f25b6946">cwd</a> [<a class="el" href="aarch64_2serial_8cpp.html#aab75aa8a7d758ce4e36fa6be7fbce78b">CONFIG_VFS_MAX_PATH</a>]</td></tr>
-<tr class="memitem:ac1748c63af497d80196d5af3e6d79021" id="r_ac1748c63af497d80196d5af3e6d79021"><td class="memItemLeft">vfs::Vnode *&#160;</td><td class="memItemRight"><a class="el" href="#ac1748c63af497d80196d5af3e6d79021">cwd_vnode</a></td></tr>
+<tr class="memitem:ac1748c63af497d80196d5af3e6d79021" id="r_ac1748c63af497d80196d5af3e6d79021"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">vfs::Vnode</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ac1748c63af497d80196d5af3e6d79021">cwd_vnode</a></td></tr>
 <tr class="memitem:a155cc3db9de7e4eedefc57d1d02ec691" id="r_a155cc3db9de7e4eedefc57d1d02ec691"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a155cc3db9de7e4eedefc57d1d02ec691">needed_lib_count</a></td></tr>
 <tr class="memitem:a632970a5d4e55859d1d2e17bf456bb3d" id="r_a632970a5d4e55859d1d2e17bf456bb3d"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a632970a5d4e55859d1d2e17bf456bb3d">needed_libs</a> [<a class="el" href="#a7295583b2f18a1c7c113a24455243c24">kMaxTaskLibs</a>][<a class="el" href="#aa17142485851fd2a94f04c13a7061982">kMaxLibSoname</a>]</td></tr>
 <tr class="memitem:a8386780b7534dd000742e3979dbdcee5" id="r_a8386780b7534dd000742e3979dbdcee5"><td class="memItemLeft"><a class="el" href="classkernel_1_1sync_1_1_spin_lock.html">sync::SpinLock</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8386780b7534dd000742e3979dbdcee5">cwd_lock_</a></td></tr>
@@ -364,6 +377,8 @@ Data Fields</h2></td></tr>
 <tr class="memdesc:a79158a155308511aa1ddb404a7cee72e"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if alarm is armed.  <br /></td></tr>
 <tr class="memitem:a56c237cee4a8cfa3c6a4184d6af874ba" id="r_a56c237cee4a8cfa3c6a4184d6af874ba"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a56c237cee4a8cfa3c6a4184d6af874ba">wdog_armed</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memdesc:a56c237cee4a8cfa3c6a4184d6af874ba"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-task software watchdog armed flag (issue #41). False after every memset site (create/create_user/clone/elf) and on teardown — the on_tick scan skips disarmed tasks outright.  <br /></td></tr>
+<tr class="memitem:ad08f82b28fe3541964cc831148325c18" id="r_ad08f82b28fe3541964cc831148325c18"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad08f82b28fe3541964cc831148325c18">teardown_completed_</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memdesc:ad08f82b28fe3541964cc831148325c18"><td class="mdescLeft">&#160;</td><td class="mdescRight">True once <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> ran ExitStats..Finalize to completion (issue #373). Distinguishes "REAPED-with-resources-pending" (pinned at first destroy: REAPED but teardown skipped) from "REAPED-after-full-teardown" (second destroy must be a safe no-op, never a re-teardown). False after every memset site; debug/release parity: plain bool, never CONFIG_DEBUG-gated.  <br /></td></tr>
 <tr class="memitem:a445779a670a077b284afbe401bdfbbf5" id="r_a445779a670a077b284afbe401bdfbbf5"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a445779a670a077b284afbe401bdfbbf5">wdog_period_ticks</a> = 0</td></tr>
 <tr class="memdesc:a445779a670a077b284afbe401bdfbbf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Watchdog period in ticks (from SYS_WATCHDOG_CREATE arg0).  <br /></td></tr>
 <tr class="memitem:ab3e64bf60d66eef6d2abd01bd3725e32" id="r_ab3e64bf60d66eef6d2abd01bd3725e32"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab3e64bf60d66eef6d2abd01bd3725e32">wdog_last_kick_tick</a> = 0</td></tr>
@@ -393,7 +408,7 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a63c5a6981042ba48308775d7b0d7fa6a" id="r_a63c5a6981042ba48308775d7b0d7fa6a"><td class="memItemLeft"><a class="el" href="structkernel_1_1_message_queue.html">MessageQueue</a>&#160;</td><td class="memItemRight"><a class="el" href="#a63c5a6981042ba48308775d7b0d7fa6a">msg_queue</a></td></tr>
 <tr class="memdesc:a63c5a6981042ba48308775d7b0d7fa6a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Embedded message queue (no separate heap allocation).  <br /></td></tr>
 <tr class="memitem:a9bd3bafef673bfd3f200607b8677829a" id="r_a9bd3bafef673bfd3f200607b8677829a"><td class="memItemLeft"><a class="el" href="classkernel_1_1sync_1_1_notify.html">sync::Notify</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9bd3bafef673bfd3f200607b8677829a">notify</a></td></tr>
-<tr class="memdesc:a9bd3bafef673bfd3f200607b8677829a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-task notification object (embedded). Issue #155: PID 1's instance doubles as the reaper sleep object — PID 1 is the sole waiter on its own notify (no other subsystem may wait on it); wakers are zombie-birth (terminate), daemon IPC (generic BLOCKED wake on send), and the selftest kick.  <br /></td></tr>
+<tr class="memdesc:a9bd3bafef673bfd3f200607b8677829a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-task notification object (embedded). Issue #155: PID 1's instance doubles as the reaper sleep object — PID 1 is the sole waiter on its own notify (no other subsystem may wait on it); wakers are zombie-birth (terminate), daemon <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> (generic BLOCKED wake on send), and the selftest kick.  <br /></td></tr>
 <tr class="memitem:a37e5281a6e1f802045def4607daeeb68" id="r_a37e5281a6e1f802045def4607daeeb68"><td class="memItemLeft"><a class="el" href="classkernel_1_1sync_1_1_event_group.html">sync::EventGroup</a>&#160;</td><td class="memItemRight"><a class="el" href="#a37e5281a6e1f802045def4607daeeb68">event_group</a></td></tr>
 <tr class="memdesc:a37e5281a6e1f802045def4607daeeb68"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-task event-group object (embedded).  <br /></td></tr>
 <tr class="memitem:a6fa0dc332a06d99652dad7d7ee66fcd0" id="r_a6fa0dc332a06d99652dad7d7ee66fcd0"><td class="memItemLeft"><a class="el" href="classkernel_1_1task_1_1_sporadic_server.html">task::SporadicServer</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a6fa0dc332a06d99652dad7d7ee66fcd0">sporadic_server</a></td></tr>
@@ -404,7 +419,7 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a65a9affc522c25beaf1ca7f6d15343e0" id="r_a65a9affc522c25beaf1ca7f6d15343e0"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a65a9affc522c25beaf1ca7f6d15343e0">tls_base_</a></td></tr>
 <tr class="memdesc:a65a9affc522c25beaf1ca7f6d15343e0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Thread-local-storage base, user VA (issue #74). 0 = unset (kernel loads nothing). Set via TLS_SET(85); published in switch_to_task alongside CR3 and applied in the ISR epilogue (x86_64 FS_BASE, aarch64 TPIDR_EL0, riscv64 tp) before user return. Explicitly zeroed at all TCB memset sites (create/create_user/clone.  <br /></td></tr>
 <tr class="memitem:ab240a552f0dfc7bebac6181f5c04484c" id="r_ab240a552f0dfc7bebac6181f5c04484c"><td class="memItemLeft">int32_t&#160;</td><td class="memItemRight"><a class="el" href="#ab240a552f0dfc7bebac6181f5c04484c">buf_list_head</a></td></tr>
-<tr class="memdesc:ab240a552f0dfc7bebac6181f5c04484c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Head of doubly-linked list of buffer handles owned by this task. -1 means the list is empty. Used by the BufferPool for zero-copy IPC.  <br /></td></tr>
+<tr class="memdesc:ab240a552f0dfc7bebac6181f5c04484c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Head of doubly-linked list of buffer handles owned by this task. -1 means the list is empty. Used by the <a class="el" href="classkernel_1_1_buffer_pool.html">BufferPool</a> for zero-copy <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a>.  <br /></td></tr>
 <tr class="memitem:a2b45b2b4d0f90b6c820a3b9672735248" id="r_a2b45b2b4d0f90b6c820a3b9672735248"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a2b45b2b4d0f90b6c820a3b9672735248">task_obj_head_</a></td></tr>
 <tr class="memdesc:a2b45b2b4d0f90b6c820a3b9672735248"><td class="mdescLeft">&#160;</td><td class="mdescRight">Head of the intrusive doubly-linked list of heap-allocated, pool-backed <a class="el" href="classkernel_1_1_kernel_object.html" title="Intrusive shared-reference-counted base for kernel objects.">KernelObject</a> objects owned by this task (e.g. its SporadicServer). The list is the single source of truth for per-task object lifecycle: teardown walks this list and releases every node; snapshot restore detaches every node without releasing. Only mutated outside IRQ context (before add_task, or inside <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> under scheduler_lock_ / IrqGuard).  <br /></td></tr>
 <tr class="memitem:ae0494e9e92436fa6c771c38a076ad34a" id="r_ae0494e9e92436fa6c771c38a076ad34a"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ae0494e9e92436fa6c771c38a076ad34a">task_obj_tail_</a></td></tr>
@@ -414,9 +429,9 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a3b60c97913fca010e1d10cebcbb0741f" id="r_a3b60c97913fca010e1d10cebcbb0741f"><td class="memItemLeft"><a class="el" href="structkernel_1_1_message_queue.html">MessageQueue</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a3b60c97913fca010e1d10cebcbb0741f">blocked_on_queue</a></td></tr>
 <tr class="memdesc:a3b60c97913fca010e1d10cebcbb0741f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pointer to the message queue this task is blocked on (as a sender). Non-null only while the task is in another task's blocked_senders list. Used by <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> to detach before the TCB is freed, preventing dangling pointers in the queue's list.  <br /></td></tr>
 <tr class="memitem:ac0f195ed5ec02c6fc15bb9d5d439d575" id="r_ac0f195ed5ec02c6fc15bb9d5d439d575"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac0f195ed5ec02c6fc15bb9d5d439d575">reply_wait</a></td></tr>
-<tr class="memdesc:ac0f195ed5ec02c6fc15bb9d5d439d575"><td class="mdescLeft">&#160;</td><td class="mdescRight">True while a task is blocked inside IPC::send_sync waiting for a reply on its own message queue. Lets IPC::send wake a reply-waiter when its reply is delivered (otherwise send_sync senders are never unblocked and hang forever).  <br /></td></tr>
+<tr class="memdesc:ac0f195ed5ec02c6fc15bb9d5d439d575"><td class="mdescLeft">&#160;</td><td class="mdescRight">True while a task is blocked inside <a class="el" href="classkernel_1_1_i_p_c.html#ac2f0384a20ddbe330b29d28cbaf351c2" title="Sends and blocks until a reply arrives. Reply matching (issue #296): only a queued message whose send...">IPC::send_sync</a> waiting for a reply on its own message queue. Lets <a class="el" href="classkernel_1_1_i_p_c.html#aa8b196dbcb9c61d38946fe38c7dfffcd" title="Sends a message to a destination task.">IPC::send</a> wake a reply-waiter when its reply is delivered (otherwise send_sync senders are never unblocked and hang forever).  <br /></td></tr>
 <tr class="memitem:a829d2ee992352d66245ce99f555f30e9" id="r_a829d2ee992352d66245ce99f555f30e9"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a829d2ee992352d66245ce99f555f30e9">blocked_in_recv</a></td></tr>
-<tr class="memdesc:a829d2ee992352d66245ce99f555f30e9"><td class="mdescLeft">&#160;</td><td class="mdescRight">True while a task is BLOCKED in a receive wait (sys_receive / sys_recv_fast) for a message on its own queue. Lets IPC::send wake a recv-waiter on message arrival. Set immediately before the BLOCKED transition, cleared on every loop exit (ok / timeout / oversized). Issue #208: without this channel marker, the arrival wake cannot distinguish recv-waiters from tasks blocked in non-IPC channels (waitpid, pager, IRQ) and resumes them with stale wait state.  <br /></td></tr>
+<tr class="memdesc:a829d2ee992352d66245ce99f555f30e9"><td class="mdescLeft">&#160;</td><td class="mdescRight">True while a task is BLOCKED in a receive wait (sys_receive / sys_recv_fast) for a message on its own queue. Lets <a class="el" href="classkernel_1_1_i_p_c.html#aa8b196dbcb9c61d38946fe38c7dfffcd" title="Sends a message to a destination task.">IPC::send</a> wake a recv-waiter on message arrival. Set immediately before the BLOCKED transition, cleared on every loop exit (ok / timeout / oversized). Issue #208: without this channel marker, the arrival wake cannot distinguish recv-waiters from tasks blocked in non-IPC channels (waitpid, pager, IRQ) and resumes them with stale wait state.  <br /></td></tr>
 <tr class="memitem:a08fddc59881c3020171336199a293a34" id="r_a08fddc59881c3020171336199a293a34"><td class="memItemLeft"><a class="el" href="classkernel_1_1sync_1_1_mutex.html">sync::Mutex</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a08fddc59881c3020171336199a293a34">waiting_on_mutex</a></td></tr>
 <tr class="memdesc:a08fddc59881c3020171336199a293a34"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pointer to the mutex this task is blocked on (as a waiter). Used for transitive priority inheritance propagation. Non-null only while the task is in a Mutex's waiter array. Set in Mutex::lock(), cleared in Mutex::wake_one().  <br /></td></tr>
 <tr class="memitem:a0f0b8021de33e1ce631ee98a0fbc0b5b" id="r_a0f0b8021de33e1ce631ee98a0fbc0b5b"><td class="memItemLeft"><a class="el" href="classkernel_1_1sync_1_1_semaphore.html">sync::Semaphore</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0f0b8021de33e1ce631ee98a0fbc0b5b">waiting_on_semaphore</a></td></tr>
@@ -434,7 +449,7 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a1297d6534c1b012aed9ab114fc516b2d" id="r_a1297d6534c1b012aed9ab114fc516b2d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1297d6534c1b012aed9ab114fc516b2d">debug_parked</a></td></tr>
 <tr class="memdesc:a1297d6534c1b012aed9ab114fc516b2d"><td class="mdescLeft">&#160;</td><td class="mdescRight">True while parked by the tick hook for the debugger (issue #225). Distinguishes debugger-parks (detach resumes) from other BLOCKED channels (detach leaves them blocked). Written under scheduler_lock_, read by detach/data calls.  <br /></td></tr>
 <tr class="memitem:a6a79163c5c45d58c8f53b69954f6627e" id="r_a6a79163c5c45d58c8f53b69954f6627e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a6a79163c5c45d58c8f53b69954f6627e">has_utrap_frame</a></td></tr>
-<tr class="memdesc:a6a79163c5c45d58c8f53b69954f6627e"><td class="mdescLeft">&#160;</td><td class="mdescRight">True once this task has entered the kernel through a user-mode trap (issue #225). Gates debugger register reads: the U-trap frame slot (kstack_top - frame size) is only meaningful after the first trap. Set in Syscall::handle, never cleared (monotonic: the slot always holds the last U-trap once set). Never-dispatched tasks read EAGAIN.  <br /></td></tr>
+<tr class="memdesc:a6a79163c5c45d58c8f53b69954f6627e"><td class="mdescLeft">&#160;</td><td class="mdescRight">True once this task has entered the kernel through a user-mode trap (issue #225). Gates debugger register reads: the U-trap frame slot (kstack_top - frame size) is only meaningful after the first trap. Set in <a class="el" href="classkernel_1_1_syscall.html#a4166c97da7594caaa03a16894d8dadf7" title="Dispatch a system call to the appropriate handler.">Syscall::handle</a>, never cleared (monotonic: the slot always holds the last U-trap once set). Never-dispatched tasks read EAGAIN.  <br /></td></tr>
 <tr class="memitem:a72286fa6366cdc2250ca98131e114ca6" id="r_a72286fa6366cdc2250ca98131e114ca6"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a72286fa6366cdc2250ca98131e114ca6">debug_stop_kind</a></td></tr>
 <tr class="memdesc:a72286fa6366cdc2250ca98131e114ca6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stop kind latched when the fault router parks this task (issue #226, StopKind numerics; 0 = cleanly parked, not fault-stopped). Decides the detach disposition (fault-stopped targets terminate, cleanly-stopped resume). ISR-vs-task race: accessed with __atomic ops.  <br /></td></tr>
 <tr class="memitem:a5aba05610b30061238dcccce09806af6" id="r_a5aba05610b30061238dcccce09806af6"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5aba05610b30061238dcccce09806af6">debug_stop_va</a></td></tr>
@@ -525,7 +540,7 @@ Static Public Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Read-only image authenticity state (issue #46): the loader captures a <a class="el" href="classkernel_1_1_c_r_c32.html">CRC32</a> baseline over the mapped read-only PT_LOAD ranges ([vaddr, vaddr+filesz), post-relocation) and the idle task re-verifies it incrementally, killing the task on mismatch. Single-writer invariant: the loader owns the baseline + ranges + progress until completed_tcb_ publication; the idle slice owns the progress triple after (the lock_ → take_completed → add_task mutex chain orders the handoff). Zero for kernel tasks and direct <a class="el" href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">elf::load</a> images (never verified, never killed). </p>
+<p>Read-only image authenticity state (issue #46): the loader captures a <a class="el" href="classkernel_1_1_c_r_c32.html">CRC32</a> baseline over the mapped read-only PT_LOAD ranges ([vaddr, vaddr+filesz), post-relocation) and the idle task re-verifies it incrementally, killing the task on mismatch. Single-writer invariant: the loader owns the baseline + ranges + progress until completed_tcb_ publication; the idle slice owns the progress triple after (the lock_ → take_completed → add_task mutex chain orders the handoff). Zero for kernel tasks and direct <a class="el" href="namespacekernel_1_1elf.html#ada05ba431e1699232e0cb0ca87af0a2b" title="Load an ELF binary into a new task.">elf::load</a> images (never verified, never killed). </p>
 <table class="fieldtable">
 <tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a5a15a3d081ace9f33de0cea3d09f551fa0dda3249de3efdf2a6a33708ec5aa1c3" name="a5a15a3d081ace9f33de0cea3d09f551fa0dda3249de3efdf2a6a33708ec5aa1c3"></a>UNVERIFIED&#160;</td><td class="fielddoc"><p>Baseline stored, idle re-verify pending. </p>
 </td></tr>
@@ -652,13 +667,40 @@ Here is the call graph for this function:</div>
 
 <p>Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a TERMINATED child. </p>
 <p>Frees the private stack PDPT and its PD/PT pages allocated during <a class="el" href="#a1443c8caa63e4d8af39ad150f91d413d" title="Clones the current task — creates a child with copied context.">clone()</a>. Only frees intermediate page-table pages (PD, PT), not leaf pages (those are freed separately by the user_stack_ loop in <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a>). The private stack PDPT is an x86_64 (4-level PML4/PDPT/PD/PT) concept; AArch64/RISC-V use different page-table shapes.</p>
-<p>Releases all resources owned by the task. Unlinks from parent's child list, detaches from message-queue blocked lists, closes file descriptors, frees user/kernel stacks, tears down page tables, destroys IPC objects, and notifies the daemon manager. After this call the TCB must not be used except for <a class="el" href="classkernel_1_1_mem_pool.html#a1f64a714659b3a9b32efc18eb09e0830" title="Frees a block previously returned by alloc().">MemPool::free()</a>. </p>
+<p>Releases all resources owned by the task. Unlinks from parent's child list, detaches from message-queue blocked lists, closes file descriptors, frees user/kernel stacks, tears down page tables, destroys <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> objects, and notifies the daemon manager. After this call the TCB must not be used except for <a class="el" href="classkernel_1_1_mem_pool.html#a1f64a714659b3a9b32efc18eb09e0830" title="Frees a block previously returned by alloc().">MemPool::free()</a>. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a15067eade15b4dd699007f2c3c7673eb_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a15067eade15b4dd699007f2c3c7673eb_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 2 -->
 </div>
+
+</div>
+</div>
+<a id="a320b02df232a268b3a99f938e5812e00" name="a320b02df232a268b3a99f938e5812e00"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a320b02df232a268b3a99f938e5812e00">&#9670;&#160;</a></span>clear_page_table()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::TaskControlBlock::clear_page_table </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Teardown clear (issue #377): the caller freed the table. </p>
 
 </div>
 </div>
@@ -755,6 +797,39 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a99ea3a7fec117ebe5d2d5491a845ebfb" name="a99ea3a7fec117ebe5d2d5491a845ebfb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a99ea3a7fec117ebe5d2d5491a845ebfb">&#9670;&#160;</a></span>complete_teardown()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::TaskControlBlock::complete_teardown </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Completes a teardown deferred by the pinned early-return (issue #373): runs ExitStats..Finalize exactly as <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> would after the pinned check, without re-running table removal (the first destroy already removed this task) and without touching scheduler membership beyond the idempotent unregister. Only <a class="el" href="#ab52ff8402135c9d2a8ac6df1c5346f5e" title="Destroys a TCB and returns its MemPool block (H-5: single pool-aware teardown path replacing raw dele...">destroy()</a> calls this, only on REAPED-with-resources-pending TCBs. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="structkernel_1_1_task_control_block_a99ea3a7fec117ebe5d2d5491a845ebfb_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a99ea3a7fec117ebe5d2d5491a845ebfb_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
+
+</div>
+</div>
 <a id="a82a06cb63bdaa30a038a40e5632fbe9d" name="a82a06cb63bdaa30a038a40e5632fbe9d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a82a06cb63bdaa30a038a40e5632fbe9d">&#9670;&#160;</a></span>create()</h2>
 
@@ -788,21 +863,11 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Creates a new kernel task with the given entry and scheduling parameters. </p>
-<p>Creates a new kernel-space <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a>. Allocates a TCB from <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>, sets up a kernel stack with an architecture-specific initial register frame, and returns it.</p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">entry</td><td>Kernel function pointer to execute. </td></tr>
-    <tr><td class="paramname">priority</td><td>Initial scheduling priority. </td></tr>
-    <tr><td class="paramname">period_ticks</td><td>Period for rate-monotonic scheduling. </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>Pointer to the new TCB, or nullptr on OOM. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a82a06cb63bdaa30a038a40e5632fbe9d_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a82a06cb63bdaa30a038a40e5632fbe9d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -859,7 +924,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a5970a87b395499a88856bb6bf9c1cd57_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a5970a87b395499a88856bb6bf9c1cd57_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -917,7 +982,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_ac1a2ba759b6c98d3c734d755a5380b3f_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_ac1a2ba759b6c98d3c734d755a5380b3f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -980,7 +1045,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_aef2b708bdbeae5ee1d520a8a7f91325b_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_aef2b708bdbeae5ee1d520a8a7f91325b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -1008,12 +1073,12 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Destroys a TCB and returns its <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block (H-5: single pool-aware teardown path replacing raw <span class="tt">delete</span> on RT error paths — CODING_STYLE §4 forbids new/delete on RT paths). State-aware: a REAPED TCB (cleanup already run) is only freed; otherwise <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> + remove_task() run first. No-op on nullptr. Mirrors <a class="el" href="#a9cdd124650c5b54d901b0a704fa4c723" title="Unregisters this TCB from the scheduler (tasks_[] / id_table_ / ready queue) and returns its memory t...">operator delete()</a> semantics exactly. </p>
+<p>Destroys a TCB and returns its <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block (H-5: single pool-aware teardown path replacing raw <span class="tt">delete</span> on RT error paths — CODING_STYLE §4 forbids new/delete on RT paths). State-aware three-way branch (issue #373): a live TCB runs <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> + remove_task(); a REAPED-with-resources-pending TCB (pinned at first destroy, unpinned since) completes the deferred teardown without re-running table removal; a REAPED-after-full-teardown TCB is only freed (safe no-op). No-op on nullptr. Mirrors <a class="el" href="#a9cdd124650c5b54d901b0a704fa4c723" title="Unregisters this TCB from the scheduler (tasks_[] / id_table_ / ready queue) and returns its memory t...">operator delete()</a> semantics exactly. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_ab52ff8402135c9d2a8ac6df1c5346f5e_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_ab52ff8402135c9d2a8ac6df1c5346f5e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -1110,7 +1175,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a8422d326842cf1fb8f471a312996e95f_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a8422d326842cf1fb8f471a312996e95f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -1143,7 +1208,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a1a0b0c99fcacedaf0d60e51d87466052_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a1a0b0c99fcacedaf0d60e51d87466052_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -1172,6 +1237,33 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Returns this task's root CNode (CSpace), or nullptr if it has never touched capabilities. O(1) read cache kept in sync with the intrusive object list; safe to call from ISR context. </p>
+
+</div>
+</div>
+<a id="a5c6fc19dd6c1a6b5165ec4077d380a38" name="a5c6fc19dd6c1a6b5165ec4077d380a38"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5c6fc19dd6c1a6b5165ec4077d380a38">&#9670;&#160;</a></span>get_page_table()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::TaskControlBlock::get_page_table </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel nodiscard">nodiscard</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Read the task's PML4 root (0 = none installed yet). </p>
 
 </div>
 </div>
@@ -1230,7 +1322,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a5c8c3da12f183005dbfe5563e39cb39c_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a5c8c3da12f183005dbfe5563e39cb39c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -1305,7 +1397,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates and initialises a SporadicServer for this task (e.g. a Ring 3 daemon like vfsd / iocd). </p>
-<p>Trampoline wrapper for kernel task entry points. Set as RIP in the ISR save frame; RDI (first argument) is set to the actual entry function. After entry() returns, the task is terminated so its state transitions to TERMINATED and any waiter (e.g. a test harness spinning on task-&gt;state) observes completion. Previously this fell into an infinite hlt loop, leaving the task RUNNING forever and deadlocking any caller that waits for termination (ipc_blocking test hang).</p>
+<p>Trampoline wrapper for kernel task entry points. Set as RIP in the ISR save frame; RDI (first argument) is set to the actual entry function. After <a class="el" href="elf_8hpp.html#a6aac0a1a7d70f8270f9bb1222445f370" title="Virtual address of entry point.">entry()</a> returns, the task is terminated so its state transitions to TERMINATED and any waiter (e.g. a test harness spinning on task-&gt;state) observes completion. Previously this fell into an infinite hlt loop, leaving the task RUNNING forever and deadlocking any caller that waits for termination (ipc_blocking test hang).</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">budget_c</td><td>Execution budget per period (ticks). </td></tr>
@@ -1321,7 +1413,104 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_aa64afb86912fa0ccc43e1470a1ba830b_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_aa64afb86912fa0ccc43e1470a1ba830b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 14 -->
+</div>
+
+</div>
+</div>
+<a id="a0853207d11929b933bfc41dd80d90f20" name="a0853207d11929b933bfc41dd80d90f20"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0853207d11929b933bfc41dd80d90f20">&#9670;&#160;</a></span>install_page_table()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::TaskControlBlock::install_page_table </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>pml4</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Install the factory PML4 on a fresh TCB (issue #377). ENSUREs the slot is empty: a second install without an intervening free orphans a live table (the #371 shape). </p>
+<p>Creates a new kernel-space <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a>. Allocates a TCB from <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>, sets up a kernel stack with an architecture-specific initial register frame, and returns it.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">entry</td><td>Kernel function pointer to execute. </td></tr>
+    <tr><td class="paramname">priority</td><td>Initial scheduling priority. </td></tr>
+    <tr><td class="paramname">period_ticks</td><td>Period for rate-monotonic scheduling. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to the new TCB, or nullptr on OOM. </dd></dl>
+
+</div>
+</div>
+<a id="af323200712a5e6f52ef61e227937d788" name="af323200712a5e6f52ef61e227937d788"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af323200712a5e6f52ef61e227937d788">&#9670;&#160;</a></span>is_kernel_address()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::TaskControlBlock::is_kernel_address </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>addr</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True if <span class="tt"><a class="el" href="ether_8hpp.html#a8f7d34f0706997ac57fd475518fa9cb5" title="Octets in network order.">addr</a></span> lies in the kernel address half (issue #323: arch-independent pointer compare). The kernel base is the arch-dependent CONFIG_HHDM_OFFSET. Mirrors the kernel-half test in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">core/global_state.cpp</a>. (Other subsystems still carry raw arch-literal HHDM comparisons — e.g. <a class="el" href="address_8hpp.html" title="Type-safe physical and virtual address wrappers (MISRA C++ 2023 compliant).">memory/address.hpp</a>; their migration is tracked under #323.). </p>
+
+</div>
+</div>
+<a id="a79658af4f1e4b36dd76f4ea1ac7b5fa3" name="a79658af4f1e4b36dd76f4ea1ac7b5fa3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a79658af4f1e4b36dd76f4ea1ac7b5fa3">&#9670;&#160;</a></span>is_kernel_pointer()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::TaskControlBlock::is_kernel_pointer </td>
+          <td>(</td>
+          <td class="paramtype">const void *</td>          <td class="paramname"><span class="paramname"><em>p</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True if <span class="tt">p</span> lies in the kernel address half (see <a class="el" href="#af323200712a5e6f52ef61e227937d788" title="True if addr lies in the kernel address half (issue #323: arch-independent pointer compare)....">is_kernel_address()</a>). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="structkernel_1_1_task_control_block_a79658af4f1e4b36dd76f4ea1ac7b5fa3_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a79658af4f1e4b36dd76f4ea1ac7b5fa3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 15 -->
 </div>
 
 </div>
@@ -1354,7 +1543,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_ad0f74cc38a41728c771a0a5a052c9904_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_ad0f74cc38a41728c771a0a5a052c9904_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -1387,7 +1576,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a9cdd124650c5b54d901b0a704fa4c723_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a9cdd124650c5b54d901b0a704fa4c723_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -1422,7 +1611,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a56a69234e3f9c078f2eab4f896ef2e7c_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a56a69234e3f9c078f2eab4f896ef2e7c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -1455,7 +1644,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a121ed14dd4f6a9632642bf0dea75416b_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a121ed14dd4f6a9632642bf0dea75416b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -1494,7 +1683,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a02994288d778ac145ce6758472227cec_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a02994288d778ac145ce6758472227cec_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -1560,6 +1749,33 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Registers a signal handler for the given signal. </p>
+
+</div>
+</div>
+<a id="a3dc3c21ce4d1220b25ddaab403b23140" name="a3dc3c21ce4d1220b25ddaab403b23140"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3dc3c21ce4d1220b25ddaab403b23140">&#9670;&#160;</a></span>swap_page_table()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::TaskControlBlock::swap_page_table </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>new_pml4</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Exec-style live swap (issue #377): replaces a live table. The caller frees the old table (exec frees after the swap so the running task never observes a dead root). </p>
 
 </div>
 </div>
@@ -1652,7 +1868,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>True while a task is BLOCKED in a receive wait (sys_receive / sys_recv_fast) for a message on its own queue. Lets IPC::send wake a recv-waiter on message arrival. Set immediately before the BLOCKED transition, cleared on every loop exit (ok / timeout / oversized). Issue #208: without this channel marker, the arrival wake cannot distinguish recv-waiters from tasks blocked in non-IPC channels (waitpid, pager, IRQ) and resumes them with stale wait state. </p>
+<p>True while a task is BLOCKED in a receive wait (sys_receive / sys_recv_fast) for a message on its own queue. Lets <a class="el" href="classkernel_1_1_i_p_c.html#aa8b196dbcb9c61d38946fe38c7dfffcd" title="Sends a message to a destination task.">IPC::send</a> wake a recv-waiter on message arrival. Set immediately before the BLOCKED transition, cleared on every loop exit (ok / timeout / oversized). Issue #208: without this channel marker, the arrival wake cannot distinguish recv-waiters from tasks blocked in non-IPC channels (waitpid, pager, IRQ) and resumes them with stale wait state. </p>
 
 </div>
 </div>
@@ -1744,7 +1960,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Head of doubly-linked list of buffer handles owned by this task. -1 means the list is empty. Used by the BufferPool for zero-copy IPC. </p>
+<p>Head of doubly-linked list of buffer handles owned by this task. -1 means the list is empty. Used by the <a class="el" href="classkernel_1_1_buffer_pool.html">BufferPool</a> for zero-copy <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a>. </p>
 
 </div>
 </div>
@@ -1929,7 +2145,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">vfs::Vnode* kernel::TaskControlBlock::cwd_vnode</td>
+          <td class="memname"><a class="el" href="structkernel_1_1vfs_1_1_vnode.html">vfs::Vnode</a>* kernel::TaskControlBlock::cwd_vnode</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2295,7 +2511,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">vfs::FdTable kernel::TaskControlBlock::fd_table</td>
+          <td class="memname"><a class="el" href="structkernel_1_1vfs_1_1_fd_table.html">vfs::FdTable</a> kernel::TaskControlBlock::fd_table</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2414,7 +2630,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>True once this task has entered the kernel through a user-mode trap (issue #225). Gates debugger register reads: the U-trap frame slot (kstack_top - frame size) is only meaningful after the first trap. Set in Syscall::handle, never cleared (monotonic: the slot always holds the last U-trap once set). Never-dispatched tasks read EAGAIN. </p>
+<p>True once this task has entered the kernel through a user-mode trap (issue #225). Gates debugger register reads: the U-trap frame slot (kstack_top - frame size) is only meaningful after the first trap. Set in <a class="el" href="classkernel_1_1_syscall.html#a4166c97da7594caaa03a16894d8dadf7" title="Dispatch a system call to the appropriate handler.">Syscall::handle</a>, never cleared (monotonic: the slot always holds the last U-trap once set). Never-dispatched tasks read EAGAIN. </p>
 
 </div>
 </div>
@@ -2546,7 +2762,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>True for user-mode tasks (own user half in page_table_). v0.4.0 MP-1: every task — kernel AND user — now owns a private PML4 whose kernel half is copied from the kernel PML4, so <span class="tt"><a class="el" href="#a526b7a7358662cf741e0c2be5077c2ae">page_table_</a> != 0</span> is no longer a valid user-task discriminator. This flag is the authoritative one. </p>
+<p>True for user-mode tasks (own user half in page_table_). v0.4.0 MP-1: every task — kernel AND user — now owns a private PML4 whose kernel half is copied from the kernel PML4, so <span class="tt">page_table_ != 0</span> is no longer a valid user-task discriminator. This flag is the authoritative one. </p>
 
 </div>
 </div>
@@ -2780,7 +2996,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Idle-monitor P5a counters (issues #43/#284). Successful <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> alloc calls attributed to this task (bumped beside every memory_used_pages_ charge) and explicit credits (bumped in credit_task_memory only — <a class="el" href="classkernel_1_1_p_m_m.html#a0daaa2d1b36579ff9c0eb60caddee59d" title="Frees a page regardless of ownership.">PMM::free_page</a> is globally unattributed by design, see spec §2.3). Ops, not pages: page balance already lives in memory_used_pages_. </p>
+<p>Idle-monitor P5a counters (issues #43/#284). Successful <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> alloc calls attributed to this task (bumped beside every memory_used_pages_ charge) and explicit credits (bumped in credit_task_memory only — <a class="el" href="classkernel_1_1_p_m_m.html#a0daaa2d1b36579ff9c0eb60caddee59d" title="Frees a page regardless of ownership.">PMM::free_page</a> is globally unattributed by design, see spec §2.3). Ops, not pages: page balance already lives in memory_used_pages_. Issue #375: same atomic discipline as memory_used_pages_. </p>
 
 </div>
 </div>
@@ -2854,7 +3070,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Maximum pages this task may allocate from <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>. 0 = unlimited. </p>
+<p>Maximum pages this task may allocate from <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>. 0 = unlimited. Write-once before publish (create paths); plain reads safe after (issue #375: the limit never mutates on a live task). </p>
 
 </div>
 </div>
@@ -2870,7 +3086,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Current pages charged to this task. </p>
+<p>Current pages charged to this task (issue #375: §11.6 all-or-nothing — every access via __atomic builtins; only pre-publish zeroing in create paths uses plain stores). </p>
 
 </div>
 </div>
@@ -2984,7 +3200,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Per-task notification object (embedded). Issue #155: PID 1's instance doubles as the reaper sleep object — PID 1 is the sole waiter on its own notify (no other subsystem may wait on it); wakers are zombie-birth (terminate), daemon IPC (generic BLOCKED wake on send), and the selftest kick. </p>
+<p>Per-task notification object (embedded). Issue #155: PID 1's instance doubles as the reaper sleep object — PID 1 is the sole waiter on its own notify (no other subsystem may wait on it); wakers are zombie-birth (terminate), daemon <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> (generic BLOCKED wake on send), and the selftest kick. </p>
 
 </div>
 </div>
@@ -3001,20 +3217,6 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Number of live child processes. </p>
-
-</div>
-</div>
-<a id="a526b7a7358662cf741e0c2be5077c2ae" name="a526b7a7358662cf741e0c2be5077c2ae"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a526b7a7358662cf741e0c2be5077c2ae">&#9670;&#160;</a></span>page_table_</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">uint64_t kernel::TaskControlBlock::page_table_</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
 
 </div>
 </div>
@@ -3284,7 +3486,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>True while a task is blocked inside IPC::send_sync waiting for a reply on its own message queue. Lets IPC::send wake a reply-waiter when its reply is delivered (otherwise send_sync senders are never unblocked and hang forever). </p>
+<p>True while a task is blocked inside <a class="el" href="classkernel_1_1_i_p_c.html#ac2f0384a20ddbe330b29d28cbaf351c2" title="Sends and blocks until a reply arrives. Reply matching (issue #296): only a queued message whose send...">IPC::send_sync</a> waiting for a reply on its own message queue. Lets <a class="el" href="classkernel_1_1_i_p_c.html#aa8b196dbcb9c61d38946fe38c7dfffcd" title="Sends a message to a destination task.">IPC::send</a> wake a reply-waiter when its reply is delivered (otherwise send_sync senders are never unblocked and hang forever). </p>
 
 </div>
 </div>
@@ -3774,6 +3976,22 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ad08f82b28fe3541964cc831148325c18" name="ad08f82b28fe3541964cc831148325c18"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad08f82b28fe3541964cc831148325c18">&#9670;&#160;</a></span>teardown_completed_</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::TaskControlBlock::teardown_completed_ = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>True once <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> ran ExitStats..Finalize to completion (issue #373). Distinguishes "REAPED-with-resources-pending" (pinned at first destroy: REAPED but teardown skipped) from "REAPED-after-full-teardown" (second destroy must be a safe no-op, never a re-teardown). False after every memset site; debug/release parity: plain bool, never CONFIG_DEBUG-gated. </p>
+
+</div>
+</div>
 <a id="ada7174027da7a42f24fb09d0b5738d8d" name="ada7174027da7a42f24fb09d0b5738d8d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ada7174027da7a42f24fb09d0b5738d8d">&#9670;&#160;</a></span>text_size_</h2>
 
@@ -3786,7 +4004,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Loaded user-image segment sizes (bytes), captured at ELF load from the program-header table (PT_LOAD, memsz): text_size_ — executable (PF_X) segments data_size_ — writable (PF_W) segments bss_size_ — zero-filled tail (memsz - filesz), summed 0 for kernel-only tasks (never <a class="el" href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">elf::load</a>'d). </p>
+<p>Loaded user-image segment sizes (bytes), captured at ELF load from the program-header table (PT_LOAD, memsz): text_size_ — executable (PF_X) segments data_size_ — writable (PF_W) segments bss_size_ — zero-filled tail (memsz - filesz), summed 0 for kernel-only tasks (never <a class="el" href="namespacekernel_1_1elf.html#ada05ba431e1699232e0cb0ca87af0a2b" title="Load an ELF binary into a new task.">elf::load</a>'d). </p>
 
 </div>
 </div>

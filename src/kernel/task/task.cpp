@@ -130,7 +130,10 @@ namespace kernel {
 /// spinning on task->state) observes completion.  Previously this fell into
 /// an infinite hlt loop, leaving the task RUNNING forever and deadlocking
 /// any caller that waits for termination (ipc_blocking test hang).
-#if defined(CONFIG_ARCH_X86_64)
+/// All arches: the initial frame leaves the link register zeroed (x86: no
+/// return address above RBP; aarch64: x30=0; riscv: ra=0), so a task whose
+/// entry returns would branch to 0 without this catcher (#356: ELR/sepc=0
+/// faults on aarch64/riscv64).
 // NOT instrumented (coverage builds): _task_trampoline is entered by the
 // context switch with a synthetic frame — there is no return address above
 // RBP, so the -finstrument-functions hook would read the unmapped stack top
@@ -144,7 +147,6 @@ _task_trampoline(void (*entry)()) {
     for (;;)
         arch::hlt();
 }
-#endif
 
 /// @brief Allocates and initialises a SporadicServer for a daemon task
 ///        from the MemPool.  Idempotent (returns early if already set).
@@ -525,13 +527,13 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
     for (size_t i = 0; i < sizeof(kUserYieldStub); ++i)
         dst[i] = kUserYieldStub[i];
 
-    if (!tcb.page_table_) {
+    if (!tcb.get_page_table()) {
         PMM::free_page(stub_phys);
         return false;
     }
     // Issue #363 option-B: stub is executed in user mode — explicit CODE.
     VMM::map_page_in_pml4(kUserYieldStubVa, stub_phys, true, true,
-                          tcb.page_table_);
+                          tcb.get_page_table());
 
 #if defined(CONFIG_ARCH_X86_64)
     // The saved iret frame stores the (placeholder kernel) entry in two slots:
@@ -711,9 +713,17 @@ static void map_kstack_page(uint64_t virt, uint64_t phys) {
         return;
     constexpr uint64_t P = 1ULL << 0; // PAGE_PRESENT
     constexpr uint64_t W = 1ULL << 1; // PAGE_WRITE
+#if defined(CONFIG_ARCH_X86_64)
+    // Issue #376 (boot-text W^X): kernel stacks are data — RW+NX.
+    // x86-only window (other arches use the HHDM fallback, out of scope).
+    constexpr uint64_t NX = 1ULL << 63;
+    const uint64_t leaf_flags = P | W | NX;
+#else
+    const uint64_t leaf_flags = P | W;
+#endif
     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                             s_kstack_pt_pages[pt_idx]);
-    pt[entry] = phys | P | W;
+    pt[entry] = phys | leaf_flags;
     asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
 }
 
@@ -842,7 +852,7 @@ void canary_write_at(uint64_t va, uint64_t value, uint64_t pml4) {
 /// @brief Install the user-stack and initial-heap canaries for @p t
 ///        (call after the user stack + heap are mapped and program_break set).
 void canary_install_user_segments(TaskControlBlock *t) {
-    if (!t || !t->page_table_)
+    if (!t || !t->get_page_table())
         return;
     const uint64_t stk = TaskControlBlock::SEG_STACK;
     if (t->user_stack_size_ > 0) {
@@ -850,9 +860,9 @@ void canary_install_user_segments(TaskControlBlock *t) {
         t->canary_after[stk] =
             mem::STACK_VADDR + arch::PAGE_SIZE + t->user_stack_size_ - 8;
         canary_write_at(t->canary_before[stk], canary_expected(stk),
-                        t->page_table_);
+                        t->get_page_table());
         canary_write_at(t->canary_after[stk], canary_expected(stk),
-                        t->page_table_);
+                        t->get_page_table());
         t->canary_installed |= (1u << stk);
     }
     const uint64_t heap = TaskControlBlock::SEG_HEAP;
@@ -862,9 +872,9 @@ void canary_install_user_segments(TaskControlBlock *t) {
                                  ~(arch::PAGE_SIZE - 1)) -
                                 8;
         canary_write_at(t->canary_before[heap], canary_expected(heap),
-                        t->page_table_);
+                        t->get_page_table());
         canary_write_at(t->canary_after[heap], canary_expected(heap),
-                        t->page_table_);
+                        t->get_page_table());
         t->canary_installed |= (1u << heap);
     }
 }
@@ -889,7 +899,7 @@ bool canary_verify_user_segments(const TaskControlBlock *t,
         for (int k = 0; k < 2; ++k) {
             if (!vas[k])
                 continue;
-            uint64_t phys = VMM::virt_to_phys_in_pml4(vas[k], t->page_table_);
+            uint64_t phys = VMM::virt_to_phys_in_pml4(vas[k], t->get_page_table());
             if (!phys) {
                 bad_segment = static_cast<uint8_t>(i);
                 bad_va = vas[k];
@@ -939,6 +949,30 @@ static_assert(sizeof(TaskControlBlock) <= 16384,
 static_assert(sizeof(TaskControlBlock) <= 8192,
               "TCB exceeds pool8");
 #endif
+void TaskControlBlock::install_page_table(uint64_t pml4) noexcept {
+    // Issue #377: install-onto-live orphans the factory PML4 (+1 PMM,
+    // the #371 shape) — fail loudly instead of leaking silently.
+    ENSURE(page_table_ == 0);
+    ENSURE(pml4 != 0);
+    page_table_ = pml4;
+}
+
+void TaskControlBlock::swap_page_table(uint64_t new_pml4) noexcept {
+    // Issue #377: exec-style swap of a live table (the caller frees the
+    // old root; exec frees after the swap).  Zero-to-zero or zero-new
+    // is a contract violation, not a teardown.
+    ENSURE(page_table_ != 0);
+    ENSURE(new_pml4 != 0);
+    page_table_ = new_pml4;
+}
+
+void TaskControlBlock::clear_page_table() noexcept {
+    // Issue #377: teardown clear — the caller freed the table (cleanup,
+    // elf error paths).  Unconditional: clearing an already-zero slot
+    // on fresh TCBs is a no-op.
+    page_table_ = 0;
+}
+
 TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
                                            uint64_t period_ticks)
 // NOLINTEND(bugprone-easily-swappable-parameters)
@@ -1133,8 +1167,8 @@ done_stack:
     // the shared kslot window) by value from the boot kernel PML4.  The kslot
     // window PD/PT pages are boot-shared (see docs/specs/memory.md §7.1) —
     // per-task private kstack tables are NOT allocated.
-    tcb->page_table_ = VMM::clone_kernel_pml4();
-    if (!tcb->page_table_) {
+    tcb->install_page_table(VMM::clone_kernel_pml4());
+    if (tcb->get_page_table() == 0) {
         ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
         TaskControlBlock::destroy(tcb);
         return nullptr;
@@ -1195,10 +1229,11 @@ done_stack:
                       // timer tick (x86 kernel tasks run with IF=1).
                       // 0x3C5 (all masked) would leave a blocking kernel
                       // task spinning forever on aarch64.
-    *--stack = reinterpret_cast<uint64_t>(entry); // ELR_EL1
+    *--stack = reinterpret_cast<uint64_t>(_task_trampoline); // ELR_EL1
     *--stack = 0; // SP_EL0 (unused for kernel task)
-    for (int i = 0; i < 31; ++i)
-        *--stack = 0; // X0-X30
+    for (int i = 0; i < 30; ++i)
+        *--stack = 0; // X1-X30 (x30=0: trampoline catches the return)
+    *--stack = reinterpret_cast<uint64_t>(entry); // X0 = entry arg
     tcb->context.sp_el0 = reinterpret_cast<uint64_t>(stack);
 #elif defined(CONFIG_ARCH_RISCV64)
     // Build trap frame matching syscall_entry.S save area layout.
@@ -1207,7 +1242,8 @@ done_stack:
     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
     stack -= 37;
     __builtin_memset(stack, 0, 37 * 8);
-    stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
+    stack[31] = reinterpret_cast<uint64_t>(_task_trampoline); // SEPC
+    stack[9] = reinterpret_cast<uint64_t>(entry); // A0 = entry arg
     // SSTATUS bits (issue #348-C): SPIE=1 (prior interrupt enable),
     // SPP=1 (trap returns to S-mode).
     constexpr uint64_t SSTATUS_SPIE = 1ULL << 5;
@@ -1338,7 +1374,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
         TaskControlBlock::destroy(tcb);
         return nullptr;
     }
-    tcb->page_table_ = pml4;
+    tcb->install_page_table(pml4);
     tcb->is_user_ = true;
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
     // Issue #156: eager PCID assignment at birth (0 when unsupported).
@@ -1730,7 +1766,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
             TaskControlBlock::destroy(tcb);
             return nullptr;
         }
-        tcb->page_table_ = new_pml4;
+        tcb->install_page_table(new_pml4);
 
         // Issue #96: converge the kernel half via recursive merge from
         // the live kernel PML4 (link semantics — lower tables stay
@@ -1748,7 +1784,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
         VMM::assert_kernel_half_converged(new_pml4);
 
         // Deep-copy user entries from parent (walk, allocate, copy).
-        if (!VMM::deep_copy_user_pages(parent->page_table_, new_pml4)) {
+        if (!VMM::deep_copy_user_pages(parent->get_page_table(), new_pml4)) {
             ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
             TaskControlBlock::destroy(tcb);
             return nullptr;
@@ -1918,6 +1954,12 @@ void TaskControlBlock::cleanup() noexcept {
         kernel::diag::dump_tcb_write_log("[CLEANUP] poisoned TCB");
         return;
     }
+    // Issue #373: a fully torn-down TCB must never re-run teardown.
+    // Direct re-cleanup (e.g. a double-drain) is a safe no-op; the
+    // pinned-deferred case never sets the flag (see complete_teardown).
+    if (teardown_completed_) {
+        return;
+    }
     state = TaskState::REAPED;
     kernel::task_step(kernel::TaskCleanupSteps::Validate); // issue #347 Slice C
 
@@ -1938,6 +1980,16 @@ void TaskControlBlock::cleanup() noexcept {
     // (MemPool::free on a pinned block is a no-op).
     if (kernel::MemPool::is_block_pinned(this))
         return;
+    complete_teardown();
+}
+
+void TaskControlBlock::complete_teardown() noexcept {
+    // Issue #373: deferred tail of cleanup() — runs ExitStats..Finalize
+    // exactly as cleanup() would after the pinned check. Only destroy()
+    // calls this, only on REAPED-with-resources-pending TCBs (pinned at
+    // first destroy, unpinned since). Table removal already happened on
+    // the first destroy; the Unregister block below re-runs the idempotent
+    // remove path (same as the normal unregister-then-remove_task order).
 
     // Issue #294: snapshot user-task exit stats before teardown frees
     // anything (post-mortem ring for `monstat user`). Scalar copy only,
@@ -2175,15 +2227,15 @@ void TaskControlBlock::cleanup() noexcept {
         arch::pcid_free(pcid_);
         pcid_ = 0;
 #endif
-        VMM::free_user_pages(page_table_);
-        PMM::free_page(page_table_);
+        VMM::free_user_pages(get_page_table());
+        PMM::free_page(get_page_table());
 #if defined(CONFIG_ARCH_X86_64)
         if (stack_pdpt_phys_) {
             free_stack_pdpt(stack_pdpt_phys_);
             stack_pdpt_phys_ = 0;
         }
 #endif // CONFIG_ARCH_X86_64
-        page_table_ = 0;
+        clear_page_table();
     }
     kernel::task_step(kernel::TaskCleanupSteps::PageTeardown); // issue #347 Slice C
 
@@ -2223,6 +2275,9 @@ void TaskControlBlock::cleanup() noexcept {
         Scheduler::reset_monitor_task();
 #endif
     kernel::task_step(kernel::TaskCleanupSteps::Finalize); // issue #347 Slice C
+    // Issue #373: teardown ran to completion — any further cleanup() or
+    // destroy() on this TCB is a safe no-op, never a re-teardown.
+    teardown_completed_ = true;
 }
 
 } // namespace kernel
@@ -2268,6 +2323,15 @@ void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
         if (tcb->state != TaskState::REAPED) {
             tcb->cleanup();
             Scheduler::remove_task(*tcb);
+        } else if (!tcb->teardown_completed_ &&
+                   !kernel::MemPool::is_block_pinned(tcb)) {
+            // Issue #373: REAPED-with-resources-pending — the first
+            // destroy ran on a pinned TCB (teardown skipped, block kept)
+            // and the block has since been unpinned. Complete the
+            // deferred resource teardown now. Table removal already
+            // happened on the first destroy and the tail's Unregister
+            // block is idempotent, so remove_task() must NOT run again.
+            tcb->complete_teardown();
         }
         // Baseline-owned (pinned) blocks are never freed: the snapshot
         // owns the block and restore rewinds it (cleanup() already skips

@@ -32,13 +32,18 @@
 /// PAGE_FRAME_MASK and friends stay in vmm.hpp: they are VMM vocabulary
 /// shared by skeletons and helpers alike.
 ///
-/// Walk-ownership residual (issue #363 P4): arch leaf-codecs moved to the
-/// per-arch TUs (vmm_arch_* helpers, guards-in-file); shared walk
-/// skeletons stay VMM-private by design (snapshot pairing, ENSURE
-/// ownership checks, drop-note throttling are VMM policy, and the HAL
-/// walks current-root tables only). HAL attr_from_flags was deliberately
-/// NOT reused: it adds SH/NS + AP policy bits the VMM map path omits,
-/// so rewiring would change PTE bits (audited rationale).
+/// Walk-ownership residual (issue #363 P4, converged issue #378): arch
+/// leaf-codecs moved to the per-arch TUs (vmm_arch_* helpers,
+/// guards-in-file), plus walk-geometry shims (vmm_arch_walk_levels +
+/// vmm_arch_walk_indices) so all five walk sites share index computation
+/// with no per-arch #if.  Shared walk skeletons stay VMM-private by design
+/// (snapshot pairing, ENSURE ownership checks, drop-note throttling are
+/// VMM policy, and the HAL walks current-root tables only); the two map
+/// bodies keep explicit per-arch descends (split placement, #361 injector
+/// and flag conditions differ), and unmap reuses pte_leaf_in_pml4.
+/// HAL attr_from_flags was deliberately NOT reused: it adds SH/NS + AP
+/// policy bits the VMM map path omits, so rewiring would change PTE bits
+/// (audited rationale).
 
 #pragma once
 

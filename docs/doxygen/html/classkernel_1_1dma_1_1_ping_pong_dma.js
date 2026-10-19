@@ -1,6 +1,6 @@
 var classkernel_1_1dma_1_1_ping_pong_dma =
 [
-    [ "ChainCallback", "classkernel_1_1dma_1_1_ping_pong_dma.html#a566cd0cbf1f59d0abd56cd78e8337acb", null ],
+    [ "ChainCallback", "classkernel_1_1dma_1_1_ping_pong_dma.html#ac929760defed55981e296d6bf1748247", null ],
     [ "PingPongDma", "classkernel_1_1dma_1_1_ping_pong_dma.html#a8bedafe287db01ce0aa987c928cb77de", null ],
     [ "busy", "classkernel_1_1dma_1_1_ping_pong_dma.html#a2abcb2982e4b07286aa757caf7476845", null ],
     [ "completed_count", "classkernel_1_1dma_1_1_ping_pong_dma.html#adcc7897d9ecee72d50fa9237f9fd77d1", null ],

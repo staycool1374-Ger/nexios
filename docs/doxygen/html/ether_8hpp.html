@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,203 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ether_8hpp.htm
 
 <p>Ethernet frame types and constants.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for ether.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="ether_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2net_2ether_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="ether_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2net_2ether_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="ether_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:net_3A_3AMacAddr" id="r_net_3A_3AMacAddr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structnet_1_1_mac_addr.html">net::MacAddr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ethernet MAC address (6 bytes).  <a href="structnet_1_1_mac_addr.html#details">More...</a><br /></td></tr>
+<tr class="memitem:net_3A_3AEtherHeader" id="r_net_3A_3AEtherHeader"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structnet_1_1_ether_header.html">net::EtherHeader</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ethernet frame header (14 bytes).  <a href="structnet_1_1_ether_header.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:net" id="r_net"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html">net</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:aec7aea6ec09ae9699ac4c723e1efb893" id="r_aec7aea6ec09ae9699ac4c723e1efb893"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893">net::EtherType</a> : uint16_t { <a class="el" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893ae796740279ddacddccb6cac4e39e54f1">net::ETH_TYPE_IPV4</a> = 0x0800
+, <a class="el" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893a29bab296a94c929f2f9cf11325ba55f4">net::ETH_TYPE_ARP</a> = 0x0806
+, <a class="el" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893af9970eefc117adefc8691499b49f58d2">net::ETH_TYPE_IPV6</a> = 0x86DD
+ }</td></tr>
+<tr class="memdesc:aec7aea6ec09ae9699ac4c723e1efb893"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893" title="EtherType constants (big-endian wire format).">EtherType</a> constants (big-endian wire format).  <a href="namespacenet.html#aec7aea6ec09ae9699ac4c723e1efb893">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ac7db56eb36db03ea6f642b3895d2665a" id="r_ac7db56eb36db03ea6f642b3895d2665a"><td class="memItemLeft">struct <a class="el" href="structnet_1_1_arp_header.html">net::ArpHeader</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#ac7db56eb36db03ea6f642b3895d2665a">net::__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:a473bb231407012ee7b940769574b571a" id="r_a473bb231407012ee7b940769574b571a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a473bb231407012ee7b940769574b571a">operator==</a> (const MacAddr &amp;o) const</td></tr>
+<tr class="memitem:adb0d2f5bdb13f4c9c877d7af301a0c35" id="r_adb0d2f5bdb13f4c9c877d7af301a0c35"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#adb0d2f5bdb13f4c9c877d7af301a0c35">operator!=</a> (const MacAddr &amp;o) const</td></tr>
+<tr class="memitem:aec73c759dce11f7c64b7cd8e009be90e" id="r_aec73c759dce11f7c64b7cd8e009be90e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aec73c759dce11f7c64b7cd8e009be90e">is_broadcast</a> () const</td></tr>
+<tr class="memitem:a0cd1291386fdebcd6b2280a14bc12052" id="r_a0cd1291386fdebcd6b2280a14bc12052"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a0cd1291386fdebcd6b2280a14bc12052">is_null</a> () const</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a87132e93c24bfd60f72e00a2986f07e1" id="r_a87132e93c24bfd60f72e00a2986f07e1"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a87132e93c24bfd60f72e00a2986f07e1">net::ETH_ADDR_LEN</a> = 6</td></tr>
+<tr class="memitem:ae87d8a50d8ebd248c81b97cc7d2ede0f" id="r_ae87d8a50d8ebd248c81b97cc7d2ede0f"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#ae87d8a50d8ebd248c81b97cc7d2ede0f">net::ETH_HEADER_LEN</a> = 14</td></tr>
+<tr class="memitem:a91dabda33ebaa24d5c6b90c149a09112" id="r_a91dabda33ebaa24d5c6b90c149a09112"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a91dabda33ebaa24d5c6b90c149a09112">net::ETH_MTU</a> = 1500</td></tr>
+<tr class="memitem:a4eb0cbea0baea33fc20fbe5f9ee00efd" id="r_a4eb0cbea0baea33fc20fbe5f9ee00efd"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a4eb0cbea0baea33fc20fbe5f9ee00efd">net::ETH_FRAME_MAX</a> = 1518</td></tr>
+<tr class="memitem:a8f7d34f0706997ac57fd475518fa9cb5" id="r_a8f7d34f0706997ac57fd475518fa9cb5"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a8f7d34f0706997ac57fd475518fa9cb5">addr</a> [ETH_ADDR_LEN]</td></tr>
+<tr class="memdesc:a8f7d34f0706997ac57fd475518fa9cb5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Octets in network order.  <br /></td></tr>
+<tr class="memitem:ad5a420109c2abb655791051ce184c33d" id="r_ad5a420109c2abb655791051ce184c33d"><td class="memItemLeft">constexpr <a class="el" href="structnet_1_1_mac_addr.html">MacAddr</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#ad5a420109c2abb655791051ce184c33d">net::MAC_BROADCAST</a> = {{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}}</td></tr>
+<tr class="memitem:a01aabe2976f3f0d3259a37c323f8f799" id="r_a01aabe2976f3f0d3259a37c323f8f799"><td class="memItemLeft">constexpr <a class="el" href="structnet_1_1_mac_addr.html">MacAddr</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a01aabe2976f3f0d3259a37c323f8f799">net::MAC_NULL</a> = {{0, 0, 0, 0, 0, 0}}</td></tr>
+<tr class="memitem:a4339559c17474d904c4e70f54aa6b2aa" id="r_a4339559c17474d904c4e70f54aa6b2aa"><td class="memItemLeft">MacAddr&#160;</td><td class="memItemRight"><a class="el" href="#a4339559c17474d904c4e70f54aa6b2aa">dst</a></td></tr>
+<tr class="memdesc:a4339559c17474d904c4e70f54aa6b2aa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destination MAC address.  <br /></td></tr>
+<tr class="memitem:a55c144966716230e49e89dbd523641fc" id="r_a55c144966716230e49e89dbd523641fc"><td class="memItemLeft">MacAddr&#160;</td><td class="memItemRight"><a class="el" href="#a55c144966716230e49e89dbd523641fc">src</a></td></tr>
+<tr class="memdesc:a55c144966716230e49e89dbd523641fc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Source MAC address.  <br /></td></tr>
+<tr class="memitem:acb5cfd209ba75c853d03f701e7f91679" id="r_acb5cfd209ba75c853d03f701e7f91679"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#acb5cfd209ba75c853d03f701e7f91679">type</a></td></tr>
+<tr class="memdesc:acb5cfd209ba75c853d03f701e7f91679"><td class="mdescLeft">&#160;</td><td class="mdescRight">EtherType (big-endian).  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Ethernet frame types and constants. </p>
-</div></div><!-- contents -->
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="aec73c759dce11f7c64b7cd8e009be90e" name="aec73c759dce11f7c64b7cd8e009be90e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aec73c759dce11f7c64b7cd8e009be90e">&#9670;&#160;</a></span>is_broadcast()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool __attribute__::is_broadcast </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0cd1291386fdebcd6b2280a14bc12052" name="a0cd1291386fdebcd6b2280a14bc12052"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0cd1291386fdebcd6b2280a14bc12052">&#9670;&#160;</a></span>is_null()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool __attribute__::is_null </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="adb0d2f5bdb13f4c9c877d7af301a0c35" name="adb0d2f5bdb13f4c9c877d7af301a0c35"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adb0d2f5bdb13f4c9c877d7af301a0c35">&#9670;&#160;</a></span>operator!=()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool __attribute__::operator!= </td>
+          <td>(</td>
+          <td class="paramtype">const MacAddr &amp;</td>          <td class="paramname"><span class="paramname"><em>o</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a473bb231407012ee7b940769574b571a" name="a473bb231407012ee7b940769574b571a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a473bb231407012ee7b940769574b571a">&#9670;&#160;</a></span>operator==()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool __attribute__::operator== </td>
+          <td>(</td>
+          <td class="paramtype">const MacAddr &amp;</td>          <td class="paramname"><span class="paramname"><em>o</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a8f7d34f0706997ac57fd475518fa9cb5" name="a8f7d34f0706997ac57fd475518fa9cb5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8f7d34f0706997ac57fd475518fa9cb5">&#9670;&#160;</a></span>addr</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t addr[ETH_ADDR_LEN]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Octets in network order. </p>
+
+</div>
+</div>
+<a id="a4339559c17474d904c4e70f54aa6b2aa" name="a4339559c17474d904c4e70f54aa6b2aa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4339559c17474d904c4e70f54aa6b2aa">&#9670;&#160;</a></span>dst</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">MacAddr dst</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Destination MAC address. </p>
+
+</div>
+</div>
+<a id="a55c144966716230e49e89dbd523641fc" name="a55c144966716230e49e89dbd523641fc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a55c144966716230e49e89dbd523641fc">&#9670;&#160;</a></span>src</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">MacAddr src</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Source MAC address. </p>
+
+</div>
+</div>
+<a id="acb5cfd209ba75c853d03f701e7f91679" name="acb5cfd209ba75c853d03f701e7f91679"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acb5cfd209ba75c853d03f701e7f91679">&#9670;&#160;</a></span>type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>EtherType (big-endian). </p>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

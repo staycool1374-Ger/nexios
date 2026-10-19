@@ -323,7 +323,7 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
     // v0.4.0 MP-1: every task owns a private PML4, so this address-space gate
     // is effectively always open — kernel driver tasks (is_user_ == false)
     // may still map a user buffer through their (otherwise empty) user half.
-    if (!task.page_table_)
+    if (!task.get_page_table())
         return 0;
 
     if (va >= USER_SPACE_LIMIT)
@@ -342,7 +342,7 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
            "BufferPool::alloc: page not user-owned before map_page_in_pml4");
 
     // Issue #325-D: IPC buffers are data (never executable).
-    VMM::map_page_in_pml4(va, phys, true, false, task.page_table_);
+    VMM::map_page_in_pml4(va, phys, true, false, task.get_page_table());
 
     entries[idx].phys_addr = phys;
     entries[idx].generation =
@@ -367,7 +367,7 @@ bool BufferPool::free(TaskControlBlock &task, uint64_t handle) noexcept {
         return false;
 
     if (entries[idx].mapped_va) {
-        clear_pte_in_pml4(entries[idx].mapped_va, task.page_table_);
+        clear_pte_in_pml4(entries[idx].mapped_va, task.get_page_table());
         entries[idx].mapped_va = 0;
     }
 
@@ -401,12 +401,12 @@ bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) noexc
         return false;
     if (va >= USER_SPACE_LIMIT)
         return false;
-    if (VMM::virt_to_phys_in_pml4(va, task.page_table_) != 0)
+    if (VMM::virt_to_phys_in_pml4(va, task.get_page_table()) != 0)
         return false;
 
     // Issue #325-D: IPC buffers are data (never executable).
     VMM::map_page_in_pml4(va, entries[idx].phys_addr, true, false,
-                          task.page_table_);
+                          task.get_page_table());
 
     entries[idx].owner_task = static_cast<uint32_t>(task.id);
     entries[idx].mapped_va = va;
@@ -428,7 +428,7 @@ bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) noexcept {
     if (!entries[idx].mapped_va)
         return false;
 
-    clear_pte_in_pml4(entries[idx].mapped_va, task.page_table_);
+    clear_pte_in_pml4(entries[idx].mapped_va, task.get_page_table());
     entries[idx].mapped_va = 0;
 
     list_remove(task, idx);
@@ -446,7 +446,7 @@ bool BufferPool::transfer(uint64_t handle, TaskControlBlock &from,
         return false;
 
     if (entries[idx].mapped_va) {
-        clear_pte_in_pml4(entries[idx].mapped_va, from.page_table_);
+        clear_pte_in_pml4(entries[idx].mapped_va, from.get_page_table());
         entries[idx].mapped_va = 0;
     }
 
@@ -509,7 +509,7 @@ void BufferPool::unmap_all(TaskControlBlock &task) {
         ENSURE(entries[idx].owner_task == static_cast<uint32_t>(task.id));
 
         if (entries[idx].mapped_va) {
-            clear_pte_in_pml4(entries[idx].mapped_va, task.page_table_);
+            clear_pte_in_pml4(entries[idx].mapped_va, task.get_page_table());
             entries[idx].mapped_va = 0;
         }
 

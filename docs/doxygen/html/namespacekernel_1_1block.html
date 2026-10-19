@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -118,6 +118,197 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
   <div class="headertitle"><div class="title">kernel::block Namespace Reference</div></div>
 </div><!--header-->
 <div class="contents">
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:AhciComplRecord" id="r_AhciComplRecord"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1block_1_1_ahci_compl_record.html">AhciComplRecord</a></td></tr>
+<tr class="memitem:AhciDriver" id="r_AhciDriver"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_ahci_driver.html">AhciDriver</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">AHCI/SATA driver — PCI bus master DMA via native AHCI command list.  <a href="classkernel_1_1block_1_1_ahci_driver.html#details">More...</a><br /></td></tr>
+<tr class="memitem:AtaPioDriver" id="r_AtaPioDriver"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_ata_pio_driver.html">AtaPioDriver</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">PIO-based ATA driver for legacy IDE controllers.  <a href="classkernel_1_1block_1_1_ata_pio_driver.html#details">More...</a><br /></td></tr>
+<tr class="memitem:BlockDevice" id="r_BlockDevice"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_block_device.html">BlockDevice</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Abstract base class for block devices.  <a href="classkernel_1_1block_1_1_block_device.html#details">More...</a><br /></td></tr>
+<tr class="memitem:MockBlockDevice" id="r_MockBlockDevice"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_mock_block_device.html">MockBlockDevice</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mock block device backed by physical memory or an external buffer.  <a href="classkernel_1_1block_1_1_mock_block_device.html#details">More...</a><br /></td></tr>
+<tr class="memitem:VirtioBlkComplRecord" id="r_VirtioBlkComplRecord"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1block_1_1_virtio_blk_compl_record.html">VirtioBlkComplRecord</a></td></tr>
+<tr class="memitem:VirtioBlkDriver" id="r_VirtioBlkDriver"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_virtio_blk_driver.html">VirtioBlkDriver</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio block device driver (modern interface).  <a href="classkernel_1_1block_1_1_virtio_blk_driver.html#details">More...</a><br /></td></tr>
+<tr class="memitem:VirtioBlkReqHdr" id="r_VirtioBlkReqHdr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1block_1_1_virtio_blk_req_hdr.html">VirtioBlkReqHdr</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio block request header (must be 16-byte aligned).  <a href="structkernel_1_1block_1_1_virtio_blk_req_hdr.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:adf5dbe3e60c5de5cfebd65e8303367b3" id="r_adf5dbe3e60c5de5cfebd65e8303367b3"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#adf5dbe3e60c5de5cfebd65e8303367b3">VirtioBlkReqType</a> : uint8_t { <a class="el" href="#adf5dbe3e60c5de5cfebd65e8303367b3af6426ba276b201c84082f50995f35028">VIRTIO_BLK_T_IN</a> = 0
+, <a class="el" href="#adf5dbe3e60c5de5cfebd65e8303367b3a2d1e65aa48eb46505250b4ea949bbe24">VIRTIO_BLK_T_OUT</a> = 1
+, <a class="el" href="#adf5dbe3e60c5de5cfebd65e8303367b3ac15f8cfa6a966c44bd850dac6a3dda3d">VIRTIO_BLK_T_FLUSH</a> = 4
+ }</td></tr>
+<tr class="memdesc:adf5dbe3e60c5de5cfebd65e8303367b3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio block I/O request types.  <a href="#adf5dbe3e60c5de5cfebd65e8303367b3">More...</a><br /></td></tr>
+<tr class="memitem:a1b8885384f857a7a96f07598de9a83d9" id="r_a1b8885384f857a7a96f07598de9a83d9"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#a1b8885384f857a7a96f07598de9a83d9">VirtioBlkStatus</a> : uint8_t { <a class="el" href="#a1b8885384f857a7a96f07598de9a83d9a468cf9e67f4ecd98e4c97db2885591bc">VIRTIO_BLK_S_OK</a> = 0
+, <a class="el" href="#a1b8885384f857a7a96f07598de9a83d9a232c1ad54f6ad5d9878b23bea3cb5fc3">VIRTIO_BLK_S_IOERR</a> = 1
+, <a class="el" href="#a1b8885384f857a7a96f07598de9a83d9a3c8b96c7fbd1a03f1e0569ceee25e6bb">VIRTIO_BLK_S_UNSUP</a> = 2
+ }</td></tr>
+<tr class="memdesc:a1b8885384f857a7a96f07598de9a83d9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtio block response status.  <a href="#a1b8885384f857a7a96f07598de9a83d9">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a90eee3f04cfc9723e3a20ba67e676298" id="r_a90eee3f04cfc9723e3a20ba67e676298"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1block_1_1_virtio_blk_req_hdr.html">kernel::block::VirtioBlkReqHdr</a>&#160;</td><td class="memItemRight"><a class="el" href="#a90eee3f04cfc9723e3a20ba67e676298">__attribute__</a> ((packed))</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a31c8816e5ee7996c919f6e97261eddcd" id="r_a31c8816e5ee7996c919f6e97261eddcd"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a31c8816e5ee7996c919f6e97261eddcd">AHCI_MAX_PORTS</a> = 8</td></tr>
+<tr class="memdesc:a31c8816e5ee7996c919f6e97261eddcd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum number of AHCI ports supported by this driver.  <br /></td></tr>
+<tr class="memitem:a9b4388793f4259a38f5674f5e1522e21" id="r_a9b4388793f4259a38f5674f5e1522e21"><td class="memItemLeft">enum <a class="el" href="#a1b8885384f857a7a96f07598de9a83d9">kernel::block::VirtioBlkStatus</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9b4388793f4259a38f5674f5e1522e21">__attribute__</a></td></tr>
+<tr class="memitem:afe3a6542780d7d32e0e82633376c2fad" id="r_afe3a6542780d7d32e0e82633376c2fad"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afe3a6542780d7d32e0e82633376c2fad">VIRTIO_BLK_WAIT_TIMEOUT_US</a> = 100000</td></tr>
+<tr class="memitem:aff3f91192f77da7f9430f5ac87fcba5f" id="r_aff3f91192f77da7f9430f5ac87fcba5f"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aff3f91192f77da7f9430f5ac87fcba5f">VIRTIO_NO_VECTOR</a> = 0xFFFF</td></tr>
+<tr class="memdesc:aff3f91192f77da7f9430f5ac87fcba5f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Queue-vector "no vector" sentinel (VIRTIO 1.0 §4.1.4.8).  <br /></td></tr>
+</table>
+<a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
+<a id="adf5dbe3e60c5de5cfebd65e8303367b3" name="adf5dbe3e60c5de5cfebd65e8303367b3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adf5dbe3e60c5de5cfebd65e8303367b3">&#9670;&#160;</a></span>VirtioBlkReqType</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum <a class="el" href="#adf5dbe3e60c5de5cfebd65e8303367b3">kernel::block::VirtioBlkReqType</a> : <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Virtio block I/O request types. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="adf5dbe3e60c5de5cfebd65e8303367b3af6426ba276b201c84082f50995f35028" name="adf5dbe3e60c5de5cfebd65e8303367b3af6426ba276b201c84082f50995f35028"></a>VIRTIO_BLK_T_IN&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="adf5dbe3e60c5de5cfebd65e8303367b3a2d1e65aa48eb46505250b4ea949bbe24" name="adf5dbe3e60c5de5cfebd65e8303367b3a2d1e65aa48eb46505250b4ea949bbe24"></a>VIRTIO_BLK_T_OUT&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="adf5dbe3e60c5de5cfebd65e8303367b3ac15f8cfa6a966c44bd850dac6a3dda3d" name="adf5dbe3e60c5de5cfebd65e8303367b3ac15f8cfa6a966c44bd850dac6a3dda3d"></a>VIRTIO_BLK_T_FLUSH&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a id="a1b8885384f857a7a96f07598de9a83d9" name="a1b8885384f857a7a96f07598de9a83d9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1b8885384f857a7a96f07598de9a83d9">&#9670;&#160;</a></span>VirtioBlkStatus</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum <a class="el" href="#a1b8885384f857a7a96f07598de9a83d9">kernel::block::VirtioBlkStatus</a> : <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Virtio block response status. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a1b8885384f857a7a96f07598de9a83d9a468cf9e67f4ecd98e4c97db2885591bc" name="a1b8885384f857a7a96f07598de9a83d9a468cf9e67f4ecd98e4c97db2885591bc"></a>VIRTIO_BLK_S_OK&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a1b8885384f857a7a96f07598de9a83d9a232c1ad54f6ad5d9878b23bea3cb5fc3" name="a1b8885384f857a7a96f07598de9a83d9a232c1ad54f6ad5d9878b23bea3cb5fc3"></a>VIRTIO_BLK_S_IOERR&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a1b8885384f857a7a96f07598de9a83d9a3c8b96c7fbd1a03f1e0569ceee25e6bb" name="a1b8885384f857a7a96f07598de9a83d9a3c8b96c7fbd1a03f1e0569ceee25e6bb"></a>VIRTIO_BLK_S_UNSUP&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a90eee3f04cfc9723e3a20ba67e676298" name="a90eee3f04cfc9723e3a20ba67e676298"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a90eee3f04cfc9723e3a20ba67e676298">&#9670;&#160;</a></span>__attribute__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct <a class="el" href="structkernel_1_1block_1_1_virtio_blk_req_hdr.html">kernel::block::VirtioBlkReqHdr</a> <a class="el" href="namespacearch.html#a8c1dfc1ccf00a08192611433ee7f17b4">kernel::block::__attribute__</a> </td>
+          <td>(</td>
+          <td class="paramtype">(packed)</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a9b4388793f4259a38f5674f5e1522e21" name="a9b4388793f4259a38f5674f5e1522e21"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9b4388793f4259a38f5674f5e1522e21">&#9670;&#160;</a></span>__attribute__</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum <a class="el" href="#a1b8885384f857a7a96f07598de9a83d9">kernel::block::VirtioBlkStatus</a> <a class="el" href="namespacearch.html#a8c1dfc1ccf00a08192611433ee7f17b4">kernel::block::__attribute__</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a31c8816e5ee7996c919f6e97261eddcd" name="a31c8816e5ee7996c919f6e97261eddcd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a31c8816e5ee7996c919f6e97261eddcd">&#9670;&#160;</a></span>AHCI_MAX_PORTS</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> kernel::block::AHCI_MAX_PORTS = 8</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Maximum number of AHCI ports supported by this driver. </p>
+
+</div>
+</div>
+<a id="afe3a6542780d7d32e0e82633376c2fad" name="afe3a6542780d7d32e0e82633376c2fad"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afe3a6542780d7d32e0e82633376c2fad">&#9670;&#160;</a></span>VIRTIO_BLK_WAIT_TIMEOUT_US</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> kernel::block::VIRTIO_BLK_WAIT_TIMEOUT_US = 100000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Blocked-wait bound for one request (#65). Generous vs the retired 1M spin (~single-digit ms): the submitter/pump handoff needs tick dispatch, whose EDF jitter under the ad-hoc test-task overload can exceed 10ms. Still fail-fast next to AHCI's 5s bound. </p>
+
+</div>
+</div>
+<a id="aff3f91192f77da7f9430f5ac87fcba5f" name="aff3f91192f77da7f9430f5ac87fcba5f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aff3f91192f77da7f9430f5ac87fcba5f">&#9670;&#160;</a></span>VIRTIO_NO_VECTOR</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> kernel::block::VIRTIO_NO_VECTOR = 0xFFFF</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Queue-vector "no vector" sentinel (VIRTIO 1.0 §4.1.4.8). </p>
+
+</div>
+</div>
 </div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

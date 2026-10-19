@@ -1,6 +1,6 @@
 var elf__loader_8hpp =
 [
-    [ "kernel::elf::ElfLoader", "classkernel_1_1elf_1_1_elf_loader.html", null ],
+    [ "kernel::elf::ElfLoader", "classkernel_1_1elf_1_1_elf_loader.html", "classkernel_1_1elf_1_1_elf_loader" ],
     [ "kernel::elf::LoadResult", "namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796", [
       [ "kernel::elf::LoadResult::OK", "namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796ae0aa021e21dddbd6d8cecec71e9cf564", null ],
       [ "kernel::elf::LoadResult::ALREADY_LOADING", "namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796a075f821d155d361ff1eca87ebaf126e1", null ],

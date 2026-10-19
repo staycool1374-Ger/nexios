@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -146,7 +146,7 @@ Enumerations</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a99803c705efa5830cf47e3773c2a7fa1" id="r_a99803c705efa5830cf47e3773c2a7fa1"><td class="memItemLeft">BootInfo &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a99803c705efa5830cf47e3773c2a7fa1">boot_info</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a99803c705efa5830cf47e3773c2a7fa1" id="r_a99803c705efa5830cf47e3773c2a7fa1"><td class="memItemLeft"><a class="el" href="struct_boot_info.html">BootInfo</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a99803c705efa5830cf47e3773c2a7fa1">boot_info</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a99803c705efa5830cf47e3773c2a7fa1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the boot information block (memory regions, cmdline, DTB).  <br /></td></tr>
 <tr class="memitem:a9cf2ee789ef1c2659145df7cb409105a" id="r_a9cf2ee789ef1c2659145df7cb409105a"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9cf2ee789ef1c2659145df7cb409105a">get_boot_epoch</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a9cf2ee789ef1c2659145df7cb409105a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read-only access to the boot epoch (UNIX seconds at RTC init).  <br /></td></tr>
@@ -158,7 +158,7 @@ Functions</h2></td></tr>
 <tr class="memdesc:a777f8db451645ac8f03a2602f3672b01"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical pointer to the Multiboot2 info structure.  <br /></td></tr>
 <tr class="memitem:ad022293607976a01f2705ab26d5f1e69" id="r_ad022293607976a01f2705ab26d5f1e69"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad022293607976a01f2705ab26d5f1e69">try_set_multiboot</a> (uint64_t magic, uint64_t info_ptr, const <a class="el" href="structkernel_1_1gs_1_1_write_context.html">WriteContext</a> &amp;ctx) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ad022293607976a01f2705ab26d5f1e69"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record multiboot magic + info pointer. BOOT_ONLY.  <br /></td></tr>
-<tr class="memitem:a4152e958cb714dc370bc870027fefdc9" id="r_a4152e958cb714dc370bc870027fefdc9"><td class="memItemLeft">CanaryTrip &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a4152e958cb714dc370bc870027fefdc9">canary_trip</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a4152e958cb714dc370bc870027fefdc9" id="r_a4152e958cb714dc370bc870027fefdc9"><td class="memItemLeft"><a class="el" href="structkernel_1_1_canary_trip.html">CanaryTrip</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a4152e958cb714dc370bc870027fefdc9">canary_trip</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a4152e958cb714dc370bc870027fefdc9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reference to the canary-trip latch (MP-3). Set by the syscall canary verifier; read/reset by memory-safety tests. Single writer (syscall fault path), fault-atomic — no lock required.  <br /></td></tr>
 <tr class="memitem:a4a8fe12d27aa5831712becc1f446e600" id="r_a4a8fe12d27aa5831712becc1f446e600"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4a8fe12d27aa5831712becc1f446e600">set_canary_trip</a> (uint64_t task_id, uint8_t segment, uint64_t rip) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a4a8fe12d27aa5831712becc1f446e600"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the canary-trip latch fields atomically.  <br /></td></tr>
@@ -182,9 +182,9 @@ Functions</h2></td></tr>
 <tr class="memitem:ae51d0edbf826f7a94642d39f0be0565f" id="r_ae51d0edbf826f7a94642d39f0be0565f"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ae51d0edbf826f7a94642d39f0be0565f">get_kernel_entry_ns</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ae51d0edbf826f7a94642d39f0be0565f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Timer::ns() snapshot at kernel entry (timing printout).  <br /></td></tr>
 <tr class="memitem:af8021e91930153a8aea52bf28c516ee1" id="r_af8021e91930153a8aea52bf28c516ee1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af8021e91930153a8aea52bf28c516ee1">set_kernel_entry_ns</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memitem:aaddae13cb0e072b6574b9aca8667b99a" id="r_aaddae13cb0e072b6574b9aca8667b99a"><td class="memItemLeft">kernel::fat32::Fat32Partition *&#160;</td><td class="memItemRight"><a class="el" href="#aaddae13cb0e072b6574b9aca8667b99a">get_fat32_partition</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:aaddae13cb0e072b6574b9aca8667b99a" id="r_aaddae13cb0e072b6574b9aca8667b99a"><td class="memItemLeft"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">kernel::fat32::Fat32Partition</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aaddae13cb0e072b6574b9aca8667b99a">get_fat32_partition</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:aaddae13cb0e072b6574b9aca8667b99a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current FAT32 partition instance (nullptr when no FAT32 device is mounted). Written at boot by the block-driver probe and by tests. RANGE_CHECKED: must be null or a kernel-half address.  <br /></td></tr>
-<tr class="memitem:a5323c145779af0abf16bd29a28939306" id="r_a5323c145779af0abf16bd29a28939306"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5323c145779af0abf16bd29a28939306">try_set_fat32_partition</a> (kernel::fat32::Fat32Partition *p) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:a5323c145779af0abf16bd29a28939306" id="r_a5323c145779af0abf16bd29a28939306"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5323c145779af0abf16bd29a28939306">try_set_fat32_partition</a> (<a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">kernel::fat32::Fat32Partition</a> *p) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a5323c145779af0abf16bd29a28939306"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the FAT32 partition instance. Rejected unless <code class="param">p</code> is null or lies in the kernel half (&gt;= CONFIG_HHDM_OFFSET) — guards against writing a user-space / garbage pointer.  <br /></td></tr>
 <tr class="memitem:ae914fdd81199b73041a51cd4f195d0d4" id="r_ae914fdd81199b73041a51cd4f195d0d4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae914fdd81199b73041a51cd4f195d0d4">scheduler_on_context_switch</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ae914fdd81199b73041a51cd4f195d0d4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Context-switch bridge called from isr_stubs.asm to apply the deferred task switch. Reads scheduler_next_task_id, updates current_task(), clears the arm, and performs canary/IPC checks.  <br /></td></tr>
@@ -200,20 +200,20 @@ Functions</h2></td></tr>
 <tr class="memdesc:ab0941f6755ee6bd78c9ca27146643f67"><td class="mdescLeft">&#160;</td><td class="mdescRight">Apply-side liveness + ownership re-check for the deferred switch (called from isr_stubs.asm BEFORE <span class="tt">mov rsp,[load_rsp_from]</span>). The arm side (switch_to_task) validates the target's frame at publish time, but the arm can survive past its ISR (nested-ISR depth guard or generation-skip) into a later ISR, and in between the target task can be terminated/freed (IRQs on) or the published RSP can drift from the target's CURRENT kernel stack (snapshot restore / free+reuse). The [H2W] orphan-displacement fires when the apply then iretq's onto the freed/foreign RSP (find_task(id)==null → current-cache lag → [H2W] harness displacement). This re-checks BOTH liveness (id_table_) AND ownership (the published RSP lies inside the target's live kernel_stack, or the harness boot stack) with IRQs disabled — so no task-context removal can interleave — and aborts (clear atoms + bump generation) on any mismatch.  <br /></td></tr>
 <tr class="memitem:a365cc933f3230032561eeee65168855d" id="r_a365cc933f3230032561eeee65168855d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a365cc933f3230032561eeee65168855d">scheduler_abort_switch_fixup</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a365cc933f3230032561eeee65168855d"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue callback for the <span class="tt">.abort_switch</span> path (isr_stubs.asm): the deferred switch was refused because its load RSP fell outside the dispatched task's kernel stack. The arm side may have already repointed TSS.RSP0 at the aborted <span class="tt">next</span> task's kernel stack top (<a class="el" href="scheduler_8cpp.html" title="Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch,...">scheduler.cpp</a>:1991, user-task dispatch). Rebind RSP0 to the CONTINUING task's own kernel stack so the next ring-3→ring-0 transition (int $0x80 trap gate) cannot push its iretq frame onto a freed/foreign stack. Harmless for ring-0-only runs (no privilege transition ever consumes RSP0).  <br /></td></tr>
-<tr class="memitem:accbc52b084b9b7dcc227841d9229f240" id="r_accbc52b084b9b7dcc227841d9229f240"><td class="memItemLeft">::net::Nic *&#160;</td><td class="memItemRight"><a class="el" href="#accbc52b084b9b7dcc227841d9229f240">get_nic</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:accbc52b084b9b7dcc227841d9229f240" id="r_accbc52b084b9b7dcc227841d9229f240"><td class="memItemLeft"><a class="el" href="structnet_1_1_nic.html">::net::Nic</a> *&#160;</td><td class="memItemRight"><a class="el" href="#accbc52b084b9b7dcc227841d9229f240">get_nic</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:accbc52b084b9b7dcc227841d9229f240"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current NIC instance (nullptr before net_init / without a device). Written once at boot; read by the shell network commands. RANGE_CHECKED: must be null or a kernel-half address.  <br /></td></tr>
-<tr class="memitem:af7d35e270dec4bdcec35118534857dac" id="r_af7d35e270dec4bdcec35118534857dac"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af7d35e270dec4bdcec35118534857dac">try_set_nic</a> (::net::Nic *nic) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memitem:af7d35e270dec4bdcec35118534857dac" id="r_af7d35e270dec4bdcec35118534857dac"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af7d35e270dec4bdcec35118534857dac">try_set_nic</a> (<a class="el" href="structnet_1_1_nic.html">::net::Nic</a> *nic) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:af7d35e270dec4bdcec35118534857dac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the NIC instance. Rejected unless null or kernel-half.  <br /></td></tr>
 <tr class="memitem:ab51828f4c0e2fb5d5432283ea644eec7" id="r_ab51828f4c0e2fb5d5432283ea644eec7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab51828f4c0e2fb5d5432283ea644eec7">audit_write</a> (const char *name, bool accepted) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:ab51828f4c0e2fb5d5432283ea644eec7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record a rejected/committed write to the debug audit ring.  <br /></td></tr>
-<tr class="memitem:aa31f97c76439bba6660bced29b435c61" id="r_aa31f97c76439bba6660bced29b435c61"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:aa31f97c76439bba6660bced29b435c61" id="r_aa31f97c76439bba6660bced29b435c61"><td class="memTemplParams" colspan="2">template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kernel::TriviallyCopiable</a> T&gt; </td></tr>
 <tr class="memitem:aa31f97c76439bba6660bced29b435c61 template"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa31f97c76439bba6660bced29b435c61">verify_and_write</a> (T &amp;target, const T &amp;value, <a class="el" href="#a00e4c426a26710ffd22f19060907495d">WriteClass</a> cls, const <a class="el" href="structkernel_1_1gs_1_1_write_context.html">WriteContext</a> &amp;ctx, const char *name) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:aa31f97c76439bba6660bced29b435c61"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verify-and-write primitive: apply <code class="param">cls</code> rules, then commit <code class="param">value</code> into <code class="param">target</code>. Returns false (and skips the store) when the write is illegitimate. The caller must hold the same exclusion the variable normally uses (the setter documents the required lock).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
-<tr class="memitem:a0669429229afe644a00199171051a45a" id="r_a0669429229afe644a00199171051a45a"><td class="memItemLeft">kernel::fat32::Fat32Partition *&#160;</td><td class="memItemRight"><a class="el" href="#a0669429229afe644a00199171051a45a">g_fat32_partition</a> = nullptr</td></tr>
-<tr class="memitem:a2c3eac44f3d01da3e1ecabe828ac68e5" id="r_a2c3eac44f3d01da3e1ecabe828ac68e5"><td class="memItemLeft">::net::Nic *&#160;</td><td class="memItemRight"><a class="el" href="#a2c3eac44f3d01da3e1ecabe828ac68e5">g_nic</a> = nullptr</td></tr>
+<tr class="memitem:a0669429229afe644a00199171051a45a" id="r_a0669429229afe644a00199171051a45a"><td class="memItemLeft"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">kernel::fat32::Fat32Partition</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0669429229afe644a00199171051a45a">g_fat32_partition</a> = nullptr</td></tr>
+<tr class="memitem:a2c3eac44f3d01da3e1ecabe828ac68e5" id="r_a2c3eac44f3d01da3e1ecabe828ac68e5"><td class="memItemLeft"><a class="el" href="structnet_1_1_nic.html">::net::Nic</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a2c3eac44f3d01da3e1ecabe828ac68e5">g_nic</a> = nullptr</td></tr>
 </table>
 <a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
 <a id="a76856024b0a520a9012fad1026c4efaa" name="a76856024b0a520a9012fad1026c4efaa"></a>
@@ -330,7 +330,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">BootInfo &amp; kernel::gs::boot_info </td>
+          <td class="memname"><a class="el" href="struct_boot_info.html">BootInfo</a> &amp; kernel::gs::boot_info </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -357,7 +357,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">CanaryTrip &amp; kernel::gs::canary_trip </td>
+          <td class="memname"><a class="el" href="structkernel_1_1_canary_trip.html">CanaryTrip</a> &amp; kernel::gs::canary_trip </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -465,7 +465,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">kernel::fat32::Fat32Partition * kernel::gs::get_fat32_partition </td>
+          <td class="memname"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">kernel::fat32::Fat32Partition</a> * kernel::gs::get_fat32_partition </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -600,7 +600,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">net::Nic * kernel::gs::get_nic </td>
+          <td class="memname"><a class="el" href="structnet_1_1_nic.html">net::Nic</a> * kernel::gs::get_nic </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -1078,6 +1078,12 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1gs_af8021e91930153a8aea52bf28c516ee1_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_af8021e91930153a8aea52bf28c516ee1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
 
 </div>
 </div>
@@ -1113,7 +1119,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1gs_a082fe817e23eb1e7d79c41af031da04e_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_a082fe817e23eb1e7d79c41af031da04e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -1130,7 +1136,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::gs::try_set_fat32_partition </td>
           <td>(</td>
-          <td class="paramtype">kernel::fat32::Fat32Partition *</td>          <td class="paramname"><span class="paramname"><em>p</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">kernel::fat32::Fat32Partition</a> *</td>          <td class="paramname"><span class="paramname"><em>p</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1193,7 +1199,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::gs::try_set_nic </td>
           <td>(</td>
-          <td class="paramtype">::net::Nic *</td>          <td class="paramname"><span class="paramname"><em>nic</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structnet_1_1_nic.html">::net::Nic</a> *</td>          <td class="paramname"><span class="paramname"><em>nic</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1241,7 +1247,7 @@ Here is the call graph for this function:</div>
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T&gt; </div>
+template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kernel::TriviallyCopiable</a> T&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -1282,7 +1288,7 @@ template&lt;typename T&gt; </div>
 <p>Verify-and-write primitive: apply <code class="param">cls</code> rules, then commit <code class="param">value</code> into <code class="param">target</code>. Returns false (and skips the store) when the write is illegitimate. The caller must hold the same exclusion the variable normally uses (the setter documents the required lock). </p>
 <dl class="tparams"><dt>Template Parameters</dt><dd>
   <table class="tparams">
-    <tr><td class="paramname">T</td><td>Value type (scalar / pointer / enum). </td></tr>
+    <tr><td class="paramname">T</td><td>Value type (scalar / pointer / enum — enforced <a class="el" href="conceptkernel_1_1_trivially_copiable.html">TriviallyCopiable</a> so struct misuse fails at the call site, issue #348-E). </td></tr>
   </table>
   </dd>
 </dl>
@@ -1296,7 +1302,7 @@ template&lt;typename T&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1gs_aa31f97c76439bba6660bced29b435c61_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_aa31f97c76439bba6660bced29b435c61_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -1309,7 +1315,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">kernel::fat32::Fat32Partition* kernel::gs::g_fat32_partition = nullptr</td>
+          <td class="memname"><a class="el" href="classkernel_1_1fat32_1_1_fat32_partition.html">kernel::fat32::Fat32Partition</a>* kernel::gs::g_fat32_partition = nullptr</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -1323,7 +1329,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">::net::Nic* kernel::gs::g_nic = nullptr</td>
+          <td class="memname"><a class="el" href="structnet_1_1_nic.html">::net::Nic</a>* kernel::gs::g_nic = nullptr</td>
         </tr>
       </table>
 </div><div class="memdoc">

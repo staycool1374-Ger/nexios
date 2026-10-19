@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -138,20 +138,36 @@ Collaboration diagram for kernel::block::VirtioBlkDriver:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a4e858e184872512bac2aa96edb83c975" id="r_a4e858e184872512bac2aa96edb83c975"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a4e858e184872512bac2aa96edb83c975">VirtioBlkDriver</a> (<a class="el" href="structarch_1_1_virtio_transport.html">arch::VirtioTransport</a> &amp;transport)</td></tr>
+<tr class="memitem:a4e858e184872512bac2aa96edb83c975" id="r_a4e858e184872512bac2aa96edb83c975"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a4e858e184872512bac2aa96edb83c975">VirtioBlkDriver</a> (arch::VirtioTransport &amp;transport)</td></tr>
 <tr class="memitem:aa8b0fd962bc567f6c54b6d2cf199a780" id="r_aa8b0fd962bc567f6c54b6d2cf199a780"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aa8b0fd962bc567f6c54b6d2cf199a780">~VirtioBlkDriver</a> ()</td></tr>
 <tr class="memitem:a33aaa4031a55127427d27f9735503fae" id="r_a33aaa4031a55127427d27f9735503fae"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a33aaa4031a55127427d27f9735503fae">init</a> ()</td></tr>
 <tr class="memitem:aab7dc1975eda4602343bbb66d191c83d" id="r_aab7dc1975eda4602343bbb66d191c83d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aab7dc1975eda4602343bbb66d191c83d">read_sector</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lba, <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buffer) override</td></tr>
+<tr class="memdesc:aab7dc1975eda4602343bbb66d191c83d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read a single sector.  <br /></td></tr>
 <tr class="memitem:afee1d23f846e35528bd2827fa1462ea5" id="r_afee1d23f846e35528bd2827fa1462ea5"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afee1d23f846e35528bd2827fa1462ea5">write_sector</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lba, const <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buffer) override</td></tr>
+<tr class="memdesc:afee1d23f846e35528bd2827fa1462ea5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a single sector.  <br /></td></tr>
 <tr class="memitem:aa63cbcf938a9cb9dc5d55f1986338e27" id="r_aa63cbcf938a9cb9dc5d55f1986338e27"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa63cbcf938a9cb9dc5d55f1986338e27">sector_count</a> () const override</td></tr>
+<tr class="memdesc:aa63cbcf938a9cb9dc5d55f1986338e27"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total number of sectors.  <br /></td></tr>
 <tr class="memitem:a509254cf9ad5ceba089e8427436f06ad" id="r_a509254cf9ad5ceba089e8427436f06ad"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a509254cf9ad5ceba089e8427436f06ad">sector_size</a> () const override</td></tr>
+<tr class="memdesc:a509254cf9ad5ceba089e8427436f06ad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of each sector in bytes.  <br /></td></tr>
 <tr class="memitem:a23cbd39753479a156f68f8dde5376d5f" id="r_a23cbd39753479a156f68f8dde5376d5f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a23cbd39753479a156f68f8dde5376d5f">is_read_only</a> () const override</td></tr>
+<tr class="memdesc:a23cbd39753479a156f68f8dde5376d5f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether the device reports as read-only.  <br /></td></tr>
+<tr class="memitem:a4bb34560df522038f680967a4dafc3f3" id="r_a4bb34560df522038f680967a4dafc3f3"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4bb34560df522038f680967a4dafc3f3">handle_irq</a> ()</td></tr>
+<tr class="memitem:a74902d5f381140cd1236d73dc0205956" id="r_a74902d5f381140cd1236d73dc0205956"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a74902d5f381140cd1236d73dc0205956">msi_armed</a> () const</td></tr>
+<tr class="memdesc:a74902d5f381140cd1236d73dc0205956"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether an IRQ vector is armed (test introspection).  <br /></td></tr>
+<tr class="memitem:a5ea9b7117862a10241aea3ea710a058c" id="r_a5ea9b7117862a10241aea3ea710a058c"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5ea9b7117862a10241aea3ea710a058c">isr_completions</a> () const</td></tr>
+<tr class="memdesc:a5ea9b7117862a10241aea3ea710a058c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of ISR-recorded completions (test introspection).  <br /></td></tr>
+<tr class="memitem:a8005e5ea1aa1181c83e0ffc3526b7d43" id="r_a8005e5ea1aa1181c83e0ffc3526b7d43"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a8005e5ea1aa1181c83e0ffc3526b7d43">has_armed_waiter</a> () const</td></tr>
+<tr class="memdesc:a8005e5ea1aa1181c83e0ffc3526b7d43"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether a waiter is currently armed (test introspection).  <br /></td></tr>
+<tr class="memitem:ab6481780641b8fd414236458dfb9ea46" id="r_ab6481780641b8fd414236458dfb9ea46"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab6481780641b8fd414236458dfb9ea46">test_simulate_irq_armed</a> ()</td></tr>
+<tr class="memitem:ad66294e9d38284fb4b12230461514788" id="r_ad66294e9d38284fb4b12230461514788"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad66294e9d38284fb4b12230461514788">enable_irq</a> ()</td></tr>
+<tr class="memitem:aab9be44d8b50f9040291f52f85ad820f" id="r_aab9be44d8b50f9040291f52f85ad820f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aab9be44d8b50f9040291f52f85ad820f">disable_irq</a> ()</td></tr>
 <tr class="inherit_header pub_methods_classkernel_1_1block_1_1_block_device"><td colspan="2">Public Member Functions inherited from <a class="el" href="classkernel_1_1block_1_1_block_device.html">kernel::block::BlockDevice</a></td></tr>
 <tr class="memitem:acf49f308065355d5afbed60fbf10bf08 pub_methods_classkernel_1_1block_1_1_block_device" id="r_acf49f308065355d5afbed60fbf10bf08"><td class="memItemLeft">virtual&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_block_device.html#acf49f308065355d5afbed60fbf10bf08">~BlockDevice</a> ()=default</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a54ea2602f8d1d7e8d8c6913fee2c409f" id="r_a54ea2602f8d1d7e8d8c6913fee2c409f"><td class="memItemLeft">static <a class="el" href="#a4e858e184872512bac2aa96edb83c975">VirtioBlkDriver</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a54ea2602f8d1d7e8d8c6913fee2c409f">probe</a> ()</td></tr>
+<tr class="memitem:a3ae751597fe0f003259e4b53fff58b53" id="r_a3ae751597fe0f003259e4b53fff58b53"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a3ae751597fe0f003259e4b53fff58b53">match_completion</a> (<a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> used_before, <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> used_now, <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> used_id, <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> head_idx, bool *out_done)</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Virtio block device driver (modern interface). </p>
@@ -165,7 +181,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">kernel::block::VirtioBlkDriver::VirtioBlkDriver </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structarch_1_1_virtio_transport.html">arch::VirtioTransport</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>transport</em></span></td><td>)</td>
+          <td class="paramtype">arch::VirtioTransport &amp;</td>          <td class="paramname"><span class="paramname"><em>transport</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -197,6 +213,103 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="aab9be44d8b50f9040291f52f85ad820f" name="aab9be44d8b50f9040291f52f85ad820f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aab9be44d8b50f9040291f52f85ad820f">&#9670;&#160;</a></span>disable_irq()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::block::VirtioBlkDriver::disable_irq </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1block_1_1_virtio_blk_driver_aab9be44d8b50f9040291f52f85ad820f_cgraph.png" border="0" usemap="#aclasskernel_1_1block_1_1_virtio_blk_driver_aab9be44d8b50f9040291f52f85ad820f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="ad66294e9d38284fb4b12230461514788" name="ad66294e9d38284fb4b12230461514788"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad66294e9d38284fb4b12230461514788">&#9670;&#160;</a></span>enable_irq()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::block::VirtioBlkDriver::enable_irq </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1block_1_1_virtio_blk_driver_ad66294e9d38284fb4b12230461514788_cgraph.png" border="0" usemap="#aclasskernel_1_1block_1_1_virtio_blk_driver_ad66294e9d38284fb4b12230461514788_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="a4bb34560df522038f680967a4dafc3f3" name="a4bb34560df522038f680967a4dafc3f3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4bb34560df522038f680967a4dafc3f3">&#9670;&#160;</a></span>handle_irq()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::block::VirtioBlkDriver::handle_irq </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>ISR entry — drains the used ring, records the completion and wakes the armed waiter. Interrupt context: no blocking, no allocation, completion lock only, wake applied outside the lock. </p><dl class="section return"><dt>Returns</dt><dd>true when a completion was consumed. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1block_1_1_virtio_blk_driver_a4bb34560df522038f680967a4dafc3f3_cgraph.png" border="0" usemap="#aclasskernel_1_1block_1_1_virtio_blk_driver_a4bb34560df522038f680967a4dafc3f3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
+
+</div>
+</div>
+<a id="a8005e5ea1aa1181c83e0ffc3526b7d43" name="a8005e5ea1aa1181c83e0ffc3526b7d43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8005e5ea1aa1181c83e0ffc3526b7d43">&#9670;&#160;</a></span>has_armed_waiter()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::block::VirtioBlkDriver::has_armed_waiter </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Whether a waiter is currently armed (test introspection). </p>
+
+</div>
+</div>
 <a id="a33aaa4031a55127427d27f9735503fae" name="a33aaa4031a55127427d27f9735503fae"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a33aaa4031a55127427d27f9735503fae">&#9670;&#160;</a></span>init()</h2>
 
@@ -215,7 +328,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1block_1_1_virtio_blk_driver_a33aaa4031a55127427d27f9735503fae_cgraph.png" border="0" usemap="#aclasskernel_1_1block_1_1_virtio_blk_driver_a33aaa4031a55127427d27f9735503fae_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -243,7 +356,108 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Whether the device reports as read-only. </p>
+
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a095720dc5cc42bb71113753a74159922">kernel::block::BlockDevice</a>.</p>
+
+</div>
+</div>
+<a id="a5ea9b7117862a10241aea3ea710a058c" name="a5ea9b7117862a10241aea3ea710a058c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5ea9b7117862a10241aea3ea710a058c">&#9670;&#160;</a></span>isr_completions()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> kernel::block::VirtioBlkDriver::isr_completions </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Number of ISR-recorded completions (test introspection). </p>
+
+</div>
+</div>
+<a id="a3ae751597fe0f003259e4b53fff58b53" name="a3ae751597fe0f003259e4b53fff58b53"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3ae751597fe0f003259e4b53fff58b53">&#9670;&#160;</a></span>match_completion()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::block::VirtioBlkDriver::match_completion </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>used_before</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>used_now</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>used_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>head_idx</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool *</td>          <td class="paramname"><span class="paramname"><em>out_done</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Pure completion matcher (#65, unit-testable without hardware): the single flight completes when the used index advanced past the pre-notify snapshot AND the echoed head id matches. </p>
+
+</div>
+</div>
+<a id="a74902d5f381140cd1236d73dc0205956" name="a74902d5f381140cd1236d73dc0205956"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a74902d5f381140cd1236d73dc0205956">&#9670;&#160;</a></span>msi_armed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::block::VirtioBlkDriver::msi_armed </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Whether an IRQ vector is armed (test introspection). </p>
 
 </div>
 </div>
@@ -273,7 +487,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1block_1_1_virtio_blk_driver_a54ea2602f8d1d7e8d8c6913fee2c409f_cgraph.png" border="0" usemap="#aclasskernel_1_1block_1_1_virtio_blk_driver_a54ea2602f8d1d7e8d8c6913fee2c409f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -305,6 +519,16 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Read a single sector. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lba</td><td>Logical block address. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Output buffer (must be at least <a class="el" href="#a509254cf9ad5ceba089e8427436f06ad" title="Size of each sector in bytes.">sector_size()</a> bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
+
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a6caeec0ca8f2b83f8bbaa29eeb74ea25">kernel::block::BlockDevice</a>.</p>
 
 </div>
@@ -331,6 +555,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Total number of sectors. </p>
 
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#acce1608b55153216bf752ee1fd9211b0">kernel::block::BlockDevice</a>.</p>
 
@@ -359,7 +585,35 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Size of each sector in bytes. </p>
+
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a23f79506430cc318765da0aa8cbaab8c">kernel::block::BlockDevice</a>.</p>
+
+</div>
+</div>
+<a id="ab6481780641b8fd414236458dfb9ea46" name="ab6481780641b8fd414236458dfb9ea46"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab6481780641b8fd414236458dfb9ea46">&#9670;&#160;</a></span>test_simulate_irq_armed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::block::VirtioBlkDriver::test_simulate_irq_armed </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Test-only: simulate an armed IRQ vector without PCI MSI/MSI-X (the mock transport has no MSI capability, so <a class="el" href="#ad66294e9d38284fb4b12230461514788">enable_irq()</a> fail-closes). Delivery is simulated by calling <a class="el" href="#a4bb34560df522038f680967a4dafc3f3">handle_irq()</a> directly. Never touches PCI/IDT state (allocated_ stays false). Not for production. </p>
 
 </div>
 </div>
@@ -389,6 +643,16 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Write a single sector. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lba</td><td>Logical block address. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Input buffer (must be at least <a class="el" href="#a509254cf9ad5ceba089e8427436f06ad" title="Size of each sector in bytes.">sector_size()</a> bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a7b5cf59b19211ba94309727e73ffef60">kernel::block::BlockDevice</a>.</p>
 

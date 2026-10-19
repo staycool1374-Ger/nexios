@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__ahci__de
 <div class="textblock"><p>AHCI deep-path tests (milestone v0.4.3 issue #108). Two layers: </p>
 <ul>
 <li>drivers_ahci_deep (in <span class="tt">all</span>): protocol structure layout and FIS/PRD/NCQ bit-encoding contracts the command path is built from (pure, deterministic).</li>
-<li>ahci_live: drives the REAL AhciDriver command path against the QEMU-emulated ICH9-AHCI (q35 variant, <span class="tt">-device ide-hd</span> on the AHCI bus) — probe/init, raw LBA write/read roundtrip and error paths. Registered outside <span class="tt">all</span>; run with <span class="tt">make execute-test x86_64 debug ahci_live</span>. </li>
+<li>ahci_live: drives the REAL AhciDriver command path against the QEMU-emulated ICH9-AHCI (q35 variant, <span class="tt">-<a class="el" href="ahci__protocol_8hpp.html#a2376f17d1e7367401184b2a3978bcd3a">device</a> ide-hd</span> on the AHCI bus) — probe/init, raw LBA write/read roundtrip and error paths. Registered outside <span class="tt">all</span>; run with <span class="tt">make execute-test x86_64 debug ahci_live</span>. </li>
 </ul>
 </div></div><!-- contents -->
 </div><!-- doc-content -->

@@ -427,7 +427,30 @@ struct TaskControlBlock {
     uint64_t kstack_slot_va_;
     /// @brief Total slot size (stack + guard page).  0 if HHDM.
     uint64_t kstack_slot_size_;
+
+  private:
+    /// @brief Root physical address of the task's private PML4 (issue #377).
+    ///        Privatized: the factory installs exactly once (MP-1.2), exec
+    ///        swaps, teardown clears.  Raw writes orphaned the factory PML4
+    ///        (+1 PMM, issue #371) — all writes go through install /
+    ///        swap / clear below, all reads through get_page_table().
     uint64_t page_table_;
+
+  public:
+    /// @brief Read the task's PML4 root (0 = none installed yet).
+    [[nodiscard]] uint64_t get_page_table() const noexcept {
+        return page_table_;
+    }
+    /// @brief Install the factory PML4 on a fresh TCB (issue #377).
+    ///        ENSUREs the slot is empty: a second install without an
+    ///        intervening free orphans a live table (the #371 shape).
+    void install_page_table(uint64_t pml4) noexcept;
+    /// @brief Exec-style live swap (issue #377): replaces a live table.
+    ///        The caller frees the old table (exec frees after the swap so
+    ///        the running task never observes a dead root).
+    void swap_page_table(uint64_t new_pml4) noexcept;
+    /// @brief Teardown clear (issue #377): the caller freed the table.
+    void clear_page_table() noexcept;
     /// @brief Process-context identifier for TLB tagging (issue #156,
     ///        x86_64 only).  0 = untagged (kernel tasks + unsupported
     ///        CPUs); user tasks hold an allocated 1..4095.  Owned by the
@@ -552,8 +575,12 @@ struct TaskControlBlock {
     RoRange ro_ranges_[kMaxRoRanges];
 
     /// @brief Maximum pages this task may allocate from PMM.  0 = unlimited.
+    ///        Write-once before publish (create paths); plain reads safe
+    ///        after (issue #375: the limit never mutates on a live task).
     uint64_t memory_budget_pages_;
-    /// @brief Current pages charged to this task.
+    /// @brief Current pages charged to this task (issue #375: §11.6
+    ///        all-or-nothing — every access via __atomic builtins; only
+    ///        pre-publish zeroing in create paths uses plain stores).
     uint64_t memory_used_pages_;
     /// @brief Idle-monitor P5a counters (issues #43/#284). Successful PMM
     ///        alloc calls attributed to this task (bumped beside every
@@ -561,6 +588,7 @@ struct TaskControlBlock {
     ///        credit_task_memory only — PMM::free_page is globally
     ///        unattributed by design, see spec §2.3). Ops, not pages:
     ///        page balance already lives in memory_used_pages_.
+    ///        Issue #375: same atomic discipline as memory_used_pages_.
     uint64_t mem_alloc_ops_ = 0;
     uint64_t mem_free_ops_ = 0;
     /// @brief Leak-heuristic snapshot state (issues #43/#284). Previous
@@ -639,6 +667,14 @@ struct TaskControlBlock {
     /// False after every memset site (create/create_user/clone/elf) and
     /// on teardown — the on_tick scan skips disarmed tasks outright.
     bool wdog_armed = false;
+
+    /// @brief True once cleanup() ran ExitStats..Finalize to completion
+    ///        (issue #373). Distinguishes "REAPED-with-resources-pending"
+    ///        (pinned at first destroy: REAPED but teardown skipped) from
+    ///        "REAPED-after-full-teardown" (second destroy must be a safe
+    ///        no-op, never a re-teardown). False after every memset site;
+    ///        debug/release parity: plain bool, never CONFIG_DEBUG-gated.
+    bool teardown_completed_ = false;
 
     /// @brief Watchdog period in ticks (from SYS_WATCHDOG_CREATE arg0).
     uint64_t wdog_period_ticks = 0;
@@ -934,9 +970,12 @@ struct TaskControlBlock {
     /// @brief Destroys a TCB and returns its MemPool block (H-5: single
     ///        pool-aware teardown path replacing raw `delete` on RT error
     ///        paths — CODING_STYLE §4 forbids new/delete on RT paths).
-    ///        State-aware: a REAPED TCB (cleanup already run) is only freed;
-    ///        otherwise cleanup() + remove_task() run first.  No-op on nullptr.
-    ///        Mirrors operator delete() semantics exactly.
+    ///        State-aware three-way branch (issue #373): a live TCB runs
+    ///        cleanup() + remove_task(); a REAPED-with-resources-pending
+    ///        TCB (pinned at first destroy, unpinned since) completes the
+    ///        deferred teardown without re-running table removal; a
+    ///        REAPED-after-full-teardown TCB is only freed (safe no-op).
+    ///        No-op on nullptr. Mirrors operator delete() semantics exactly.
     static void destroy(TaskControlBlock *tcb) noexcept;
 
     /// @brief Save the current register context into this TCB.
@@ -949,6 +988,15 @@ struct TaskControlBlock {
     /// @brief Frees all resources owned by this task (FDs, pages, page tables).
     ///        Called by WAITPID after reaping a TERMINATED child.
     void cleanup() noexcept;
+
+    /// @brief Completes a teardown deferred by the pinned early-return
+    ///        (issue #373): runs ExitStats..Finalize exactly as cleanup()
+    ///        would after the pinned check, without re-running table
+    ///        removal (the first destroy already removed this task) and
+    ///        without touching scheduler membership beyond the idempotent
+    ///        unregister. Only destroy() calls this, only on
+    ///        REAPED-with-resources-pending TCBs.
+    void complete_teardown() noexcept;
 
     /// @brief Unregisters this TCB from the scheduler (tasks_[] / id_table_ /
     ///        ready queue) and returns its memory to the MemPool.

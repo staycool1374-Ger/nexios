@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -147,8 +147,14 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a15aa9d4b3c4606646622f7f12b56f641" id="r_a15aa9d4b3c4606646622f7f12b56f641"><td class="memItemLeft"><a class="el" href="class_spin_lock_guard.html">SpinLockGuard</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a15aa9d4b3c4606646622f7f12b56f641">operator=</a> (<a class="el" href="class_spin_lock_guard.html">SpinLockGuard</a> &amp;&amp;)=delete</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><div class="compoundTemplParams">template&lt;typename Lock&gt;<br />
+<div class="textblock"><div class="compoundTemplParams">template&lt;<a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> Lock&gt;<br />
 class SpinLockGuard&lt; Lock &gt;</div><p>RAII lock guard for any lock type with lock()/unlock() methods. </p>
+<dl class="tparams"><dt>Template Parameters</dt><dd>
+  <table class="tparams">
+    <tr><td class="paramname">Lock</td><td>Lock type satisfying <a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> (issue #348-E). </td></tr>
+  </table>
+  </dd>
+</dl>
 </div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a64ccd78b7926e3b15d716f553886b490" name="a64ccd78b7926e3b15d716f553886b490"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a64ccd78b7926e3b15d716f553886b490">&#9670;&#160;</a></span>SpinLockGuard() <span class="overload">[1/4]</span></h2>
@@ -156,7 +162,7 @@ class SpinLockGuard&lt; Lock &gt;</div><p>RAII lock guard for any lock type with
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename Lock&gt; </div>
+template&lt;<a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> Lock&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -185,7 +191,7 @@ template&lt;typename Lock&gt; </div>
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename Lock&gt; </div>
+template&lt;<a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> Lock&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -218,7 +224,7 @@ template&lt;typename Lock&gt; </div>
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename Lock&gt; </div>
+template&lt;<a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> Lock&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -245,7 +251,7 @@ template&lt;typename Lock&gt; </div>
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename Lock&gt; </div>
+template&lt;<a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> Lock&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -278,7 +284,7 @@ Here is the call graph for this function:</div>
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename Lock&gt; </div>
+template&lt;<a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> Lock&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -312,7 +318,7 @@ Here is the call graph for this function:</div>
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename Lock&gt; </div>
+template&lt;<a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> Lock&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -345,7 +351,7 @@ Here is the call graph for this function:</div>
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename Lock&gt; </div>
+template&lt;<a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> Lock&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -378,7 +384,7 @@ Here is the call graph for this function:</div>
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename Lock&gt; </div>
+template&lt;<a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> Lock&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -407,7 +413,7 @@ template&lt;typename Lock&gt; </div>
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename Lock&gt; </div>
+template&lt;<a class="el" href="conceptkernel_1_1_lockable.html">kernel::Lockable</a> Lock&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">

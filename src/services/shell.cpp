@@ -138,7 +138,10 @@ void shell_input_timeout_fire(void *context) {
 // by the single-ownership invariant, and draining it would risk double
 // delivery. Never blocks on the daemon beyond one send_sync round-trip
 // (fail-open); shell liveness never depends on iocd.
-bool shell_try_get_key(char &out) {
+// Issue #303 item 3: service::-scope test seam (declared in shell.hpp)
+// so the P2 key-delivery path is automatable by a shell-level test.
+// Zero logic change on the move out of the anonymous namespace.
+bool shell_try_get_key_impl(char &out) {
     if (arch::Serial::poll_getchar(out))
         return true;
     uint64_t pid = kernel::iocd::get_iocd_pid();
@@ -202,6 +205,14 @@ void shell_idle_nap(uint64_t timeout_us) {
     // re-queues level-triggered, so the next loop iteration proceeds.
 }
 } // namespace
+
+/// @brief Test seam (issue #303 item 3): P2 key-delivery poll exposed so a
+///        shell-level test can drive the exact production path (serial →
+///        iocd daemon → hardware ring). Zero-logic wrapper over the
+///        internal poll above.
+bool shell_try_get_key(char &out) {
+    return shell_try_get_key_impl(out);
+}
 
 static void background_task_wrapper() {
     auto* task = kernel::Scheduler::current_task();
@@ -1968,7 +1979,7 @@ static void monstat_show_detail(const kernel::TaskControlBlock *t) {
     Terminal::write("/");
     print_uint(t->bss_size_);
     Terminal::write(" pt=");
-    print_hex64(t->page_table_);
+    print_hex64(t->get_page_table());
     Terminal::write(" pcid=");
     print_uint(t->pcid_);
     Terminal::write(" tls=");

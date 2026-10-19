@@ -643,9 +643,10 @@ static void run_aperiodic_servers_group() {
 // ---- Test class table ----
 // Each class maps to a helper above (one definition site per
 // register_*_tests() call).  The "safe" class is the curated TF_RELEASE
-// subset for release builds and `selftest` with no args.  The 16
-// structural/semantic aggregates (issue #173) replace the removed `all`
-// class; the scripted full-suite runner (`make test-full`) runs them.
+// subset for release builds and `selftest` with no args.  The 22
+// structural/semantic aggregates (issues #173, #364 — `core` split into
+// 7 `core_*` classes) replace the removed `all` class; the scripted
+// full-suite runner (`make test-full`) runs them.
 
 static constexpr kernel::test::TestClass g_test_classes[] = {
     // -- testrunner: harness + freelist + infra integrity, expected-panic LAST

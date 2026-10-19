@@ -189,12 +189,12 @@ JARVIS_TEST(task_exit_wakes_blocked_senders, "PRE: none | POST: none") {
 JARVIS_TEST(task_exit_frees_page_tables_correctly, "PRE: none | POST: none") {
     SimpleTaskPtr tcb(TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB));
     JARVIS_ASSERT(tcb != nullptr);
-    JARVIS_ASSERT(tcb->page_table_ != 0);
+    JARVIS_ASSERT(tcb->get_page_table() != 0);
     JARVIS_ASSERT(tcb->user_stack_ != 0);
 
     tcb->cleanup();
 
-    JARVIS_ASSERT(tcb->page_table_ == 0);
+    JARVIS_ASSERT(tcb->get_page_table() == 0);
     JARVIS_ASSERT(tcb->user_stack_ == 0);
     JARVIS_ASSERT(tcb->stack_phys_ == 0);
 

@@ -579,12 +579,12 @@ bool run_user_probe(uint32_t num_a, uint32_t arg0_a, uint64_t arg1_a,
     uint64_t data_phys = PMM::alloc_user_page();
     if (data_phys) {
         VMM::map_page_in_pml4(kUserProbeDataVa, data_phys, true, false,
-                              fixture->page_table_);
+                              fixture->get_page_table());
     }
     uint64_t code_phys = VMM::virt_to_phys_in_pml4(kUserProbeCodeVa,
-                                                   fixture->page_table_);
+                                                   fixture->get_page_table());
     uint64_t data_check = VMM::virt_to_phys_in_pml4(kUserProbeDataVa,
-                                                    fixture->page_table_);
+                                                    fixture->get_page_table());
     if (!data_phys || data_check != data_phys || !code_phys) {
         kernel::test::terminate_and_drain(*fixture);
         return false;
@@ -624,7 +624,7 @@ bool run_user_probe(uint32_t num_a, uint32_t arg0_a, uint64_t arg1_a,
     }
     // Observe BEFORE teardown: drain frees the PML4 and the TCB.
     data_check = VMM::virt_to_phys_in_pml4(kUserProbeDataVa,
-                                           fixture->page_table_);
+                                           fixture->get_page_table());
     bool exited = (fixture->state == TaskState::TERMINATED);
     // Clean EXIT (code 0) is required: a fault-death (e.g. SIGSEGV, -11)
     // also yields TERMINATED but leaves zero-init memory that reads back

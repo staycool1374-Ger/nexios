@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -142,16 +142,28 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a66c53202b7929c0080ac0ea6fda81f4f" id="r_a66c53202b7929c0080ac0ea6fda81f4f"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a66c53202b7929c0080ac0ea6fda81f4f">~AhciDriver</a> ()</td></tr>
 <tr class="memitem:a3cd242d14e4bbdf237045d264645cfb9" id="r_a3cd242d14e4bbdf237045d264645cfb9"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a3cd242d14e4bbdf237045d264645cfb9">init</a> ()</td></tr>
 <tr class="memitem:ae8a751068cb12582e54c8a42771152b6" id="r_ae8a751068cb12582e54c8a42771152b6"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae8a751068cb12582e54c8a42771152b6">read_sector</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lba, <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buffer) override</td></tr>
+<tr class="memdesc:ae8a751068cb12582e54c8a42771152b6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read a single sector.  <br /></td></tr>
 <tr class="memitem:aa99c80fea14ae9d8ecb91828c518ec87" id="r_aa99c80fea14ae9d8ecb91828c518ec87"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa99c80fea14ae9d8ecb91828c518ec87">write_sector</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lba, const <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buffer) override</td></tr>
+<tr class="memdesc:aa99c80fea14ae9d8ecb91828c518ec87"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a single sector.  <br /></td></tr>
 <tr class="memitem:a04f4921264641433192db832f57e4380" id="r_a04f4921264641433192db832f57e4380"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a04f4921264641433192db832f57e4380">sector_count</a> () const override</td></tr>
+<tr class="memdesc:a04f4921264641433192db832f57e4380"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total number of sectors.  <br /></td></tr>
 <tr class="memitem:a4a48682bd0410dfca5c1b6e185a2445d" id="r_a4a48682bd0410dfca5c1b6e185a2445d"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4a48682bd0410dfca5c1b6e185a2445d">sector_size</a> () const override</td></tr>
+<tr class="memdesc:a4a48682bd0410dfca5c1b6e185a2445d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of each sector in bytes.  <br /></td></tr>
 <tr class="memitem:afab32d435a03b684777d3afbccbaa482" id="r_afab32d435a03b684777d3afbccbaa482"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afab32d435a03b684777d3afbccbaa482">is_read_only</a> () const override</td></tr>
+<tr class="memdesc:afab32d435a03b684777d3afbccbaa482"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether the device reports as read-only.  <br /></td></tr>
+<tr class="memitem:ac6879b9b8e2f451303a3e02be3477d04" id="r_ac6879b9b8e2f451303a3e02be3477d04"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac6879b9b8e2f451303a3e02be3477d04">handle_irq</a> ()</td></tr>
+<tr class="memitem:ae4fdfe570740190bd60f0d6213bac92f" id="r_ae4fdfe570740190bd60f0d6213bac92f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae4fdfe570740190bd60f0d6213bac92f">msi_armed</a> () const</td></tr>
+<tr class="memdesc:ae4fdfe570740190bd60f0d6213bac92f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether the MSI completion ISR is armed (test introspection).  <br /></td></tr>
+<tr class="memitem:aacac5dd906b92e15e6e8f60f9fa01374" id="r_aacac5dd906b92e15e6e8f60f9fa01374"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aacac5dd906b92e15e6e8f60f9fa01374">isr_completions</a> () const</td></tr>
+<tr class="memdesc:aacac5dd906b92e15e6e8f60f9fa01374"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of ISR-recorded completions (test introspection).  <br /></td></tr>
 <tr class="inherit_header pub_methods_classkernel_1_1block_1_1_block_device"><td colspan="2">Public Member Functions inherited from <a class="el" href="classkernel_1_1block_1_1_block_device.html">kernel::block::BlockDevice</a></td></tr>
 <tr class="memitem:acf49f308065355d5afbed60fbf10bf08 pub_methods_classkernel_1_1block_1_1_block_device" id="r_acf49f308065355d5afbed60fbf10bf08"><td class="memItemLeft">virtual&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_block_device.html#acf49f308065355d5afbed60fbf10bf08">~BlockDevice</a> ()=default</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:aa258d5a2509fe8f45957670ff024a8d4" id="r_aa258d5a2509fe8f45957670ff024a8d4"><td class="memItemLeft">static <a class="el" href="#a03eb8f36202c96552caa84e3ee5c7133">AhciDriver</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aa258d5a2509fe8f45957670ff024a8d4">probe</a> ()</td></tr>
+<tr class="memitem:a2771471844c6b3263a819bafe46f0f5c" id="r_a2771471844c6b3263a819bafe46f0f5c"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2771471844c6b3263a819bafe46f0f5c">destroy</a> (<a class="el" href="#a03eb8f36202c96552caa84e3ee5c7133">AhciDriver</a> *drv)</td></tr>
+<tr class="memitem:ada59012975b44e1feedc1ef016effda4" id="r_ada59012975b44e1feedc1ef016effda4"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ada59012975b44e1feedc1ef016effda4">match_completions</a> (<a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> busy, <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> armed_mask, <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> is, <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *out_done, <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *out_error)</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>AHCI/SATA driver — PCI bus master DMA via native AHCI command list. </p>
@@ -191,6 +203,56 @@ Static Public Member Functions</h2></td></tr>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="a2771471844c6b3263a819bafe46f0f5c" name="a2771471844c6b3263a819bafe46f0f5c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2771471844c6b3263a819bafe46f0f5c">&#9670;&#160;</a></span>destroy()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::block::AhciDriver::destroy </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a03eb8f36202c96552caa84e3ee5c7133">AhciDriver</a> *</td>          <td class="paramname"><span class="paramname"><em>drv</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Destroy a <a class="el" href="#aa258d5a2509fe8f45957670ff024a8d4">probe()</a>d driver: explicit destructor + <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> page release (mirrors <a class="el" href="#aa258d5a2509fe8f45957670ff024a8d4">probe()</a>'s allocation path — never <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1block_1_1_ahci_driver_a2771471844c6b3263a819bafe46f0f5c_cgraph.png" border="0" usemap="#aclasskernel_1_1block_1_1_ahci_driver_a2771471844c6b3263a819bafe46f0f5c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="ac6879b9b8e2f451303a3e02be3477d04" name="ac6879b9b8e2f451303a3e02be3477d04"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac6879b9b8e2f451303a3e02be3477d04">&#9670;&#160;</a></span>handle_irq()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::block::AhciDriver::handle_irq </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>ISR entry — scans HBA/PORT status, records per-slot completions and wakes armed waiters. Runs in interrupt context: no blocking, no allocation, completions lock only, wakes applied outside the lock. </p><dl class="section return"><dt>Returns</dt><dd>true when the interrupt was consumed by this controller. </dd></dl>
+
+</div>
+</div>
 <a id="a3cd242d14e4bbdf237045d264645cfb9" name="a3cd242d14e4bbdf237045d264645cfb9"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3cd242d14e4bbdf237045d264645cfb9">&#9670;&#160;</a></span>init()</h2>
 
@@ -232,7 +294,117 @@ Static Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Whether the device reports as read-only. </p>
+
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a095720dc5cc42bb71113753a74159922">kernel::block::BlockDevice</a>.</p>
+
+</div>
+</div>
+<a id="aacac5dd906b92e15e6e8f60f9fa01374" name="aacac5dd906b92e15e6e8f60f9fa01374"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aacac5dd906b92e15e6e8f60f9fa01374">&#9670;&#160;</a></span>isr_completions()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> kernel::block::AhciDriver::isr_completions </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Number of ISR-recorded completions (test introspection). </p>
+
+</div>
+</div>
+<a id="ada59012975b44e1feedc1ef016effda4" name="ada59012975b44e1feedc1ef016effda4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ada59012975b44e1feedc1ef016effda4">&#9670;&#160;</a></span>match_completions()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::block::AhciDriver::match_completions </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>busy</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>armed_mask</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>is</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *</td>          <td class="paramname"><span class="paramname"><em>out_done</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *</td>          <td class="paramname"><span class="paramname"><em>out_error</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Pure completion matcher (#64, unit-testable without hardware): which armed slots complete given CI/SACT/IS snapshots. A slot completes when its CI bit cleared (non-NCQ) or both CI and SACT cleared (NCQ, SDBS path). TFES snapshots mark the error bit. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">busy</td><td>CI|SACT snapshot (bit set = slot still issued). </td></tr>
+    <tr><td class="paramname">armed_mask</td><td>Bit set = slot has an armed waiter. </td></tr>
+    <tr><td class="paramname">is</td><td>PORT_IS snapshot (TFES = error). </td></tr>
+    <tr><td class="paramname">out_done</td><td>Mask of armed slots that completed (non-null). </td></tr>
+    <tr><td class="paramname">out_error</td><td>Mask of completed slots with TFES set (non-null). </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="ae4fdfe570740190bd60f0d6213bac92f" name="ae4fdfe570740190bd60f0d6213bac92f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae4fdfe570740190bd60f0d6213bac92f">&#9670;&#160;</a></span>msi_armed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::block::AhciDriver::msi_armed </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Whether the MSI completion ISR is armed (test introspection). </p>
 
 </div>
 </div>
@@ -263,7 +435,7 @@ Static Public Member Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1block_1_1_ahci_driver_aa258d5a2509fe8f45957670ff024a8d4_cgraph.png" border="0" usemap="#aclasskernel_1_1block_1_1_ahci_driver_aa258d5a2509fe8f45957670ff024a8d4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -295,6 +467,16 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Read a single sector. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lba</td><td>Logical block address. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Output buffer (must be at least <a class="el" href="#a4a48682bd0410dfca5c1b6e185a2445d" title="Size of each sector in bytes.">sector_size()</a> bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
+
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a6caeec0ca8f2b83f8bbaa29eeb74ea25">kernel::block::BlockDevice</a>.</p>
 
 </div>
@@ -322,6 +504,8 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Total number of sectors. </p>
+
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#acce1608b55153216bf752ee1fd9211b0">kernel::block::BlockDevice</a>.</p>
 
 </div>
@@ -348,6 +532,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Size of each sector in bytes. </p>
 
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a23f79506430cc318765da0aa8cbaab8c">kernel::block::BlockDevice</a>.</p>
 
@@ -379,6 +565,16 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Write a single sector. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lba</td><td>Logical block address. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Input buffer (must be at least <a class="el" href="#a4a48682bd0410dfca5c1b6e185a2445d" title="Size of each sector in bytes.">sector_size()</a> bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
 
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a7b5cf59b19211ba94309727e73ffef60">kernel::block::BlockDevice</a>.</p>
 

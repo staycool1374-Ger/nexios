@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structnet_1_1_
 </div><!--header-->
 <div class="contents">
 
+<p>ICMP echo request/reply header (8 bytes).  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="icmp_8hpp_source.html">icmp.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for net::IcmpHeader:</div>
@@ -130,12 +133,19 @@ Collaboration diagram for net::IcmpHeader:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:ab372e4245b1d10a9fb0d25fd11732843" id="r_ab372e4245b1d10a9fb0d25fd11732843"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ab372e4245b1d10a9fb0d25fd11732843">type</a></td></tr>
+<tr class="memdesc:ab372e4245b1d10a9fb0d25fd11732843"><td class="mdescLeft">&#160;</td><td class="mdescRight">Message type (ECHO_REQUEST = 8, ECHO_REPLY = 0).  <br /></td></tr>
 <tr class="memitem:a17df920c03cce5b3699b0306244ec2d6" id="r_a17df920c03cce5b3699b0306244ec2d6"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a17df920c03cce5b3699b0306244ec2d6">code</a></td></tr>
+<tr class="memdesc:a17df920c03cce5b3699b0306244ec2d6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Code (0 for echo).  <br /></td></tr>
 <tr class="memitem:a32133ebf42a61aab49bf338a5a8db7fd" id="r_a32133ebf42a61aab49bf338a5a8db7fd"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a32133ebf42a61aab49bf338a5a8db7fd">checksum</a></td></tr>
+<tr class="memdesc:a32133ebf42a61aab49bf338a5a8db7fd"><td class="mdescLeft">&#160;</td><td class="mdescRight">ICMP header + data checksum (big-endian).  <br /></td></tr>
 <tr class="memitem:ade99206684e57cdeba01a49558f464d0" id="r_ade99206684e57cdeba01a49558f464d0"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ade99206684e57cdeba01a49558f464d0">ident</a></td></tr>
+<tr class="memdesc:ade99206684e57cdeba01a49558f464d0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Identifier (big-endian).  <br /></td></tr>
 <tr class="memitem:aeb7350736f0f0a1893a94a3d6e384da7" id="r_aeb7350736f0f0a1893a94a3d6e384da7"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#aeb7350736f0f0a1893a94a3d6e384da7">seq</a></td></tr>
+<tr class="memdesc:aeb7350736f0f0a1893a94a3d6e384da7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sequence number (big-endian).  <br /></td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>ICMP echo request/reply header (8 bytes). </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a32133ebf42a61aab49bf338a5a8db7fd" name="a32133ebf42a61aab49bf338a5a8db7fd"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a32133ebf42a61aab49bf338a5a8db7fd">&#9670;&#160;</a></span>checksum</h2>
 
@@ -147,6 +157,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>ICMP header + data checksum (big-endian). </p>
 
 </div>
 </div>
@@ -162,6 +174,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Code (0 for echo). </p>
+
 </div>
 </div>
 <a id="ade99206684e57cdeba01a49558f464d0" name="ade99206684e57cdeba01a49558f464d0"></a>
@@ -175,6 +189,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Identifier (big-endian). </p>
 
 </div>
 </div>
@@ -190,6 +206,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Sequence number (big-endian). </p>
+
 </div>
 </div>
 <a id="ab372e4245b1d10a9fb0d25fd11732843" name="ab372e4245b1d10a9fb0d25fd11732843"></a>
@@ -203,6 +221,8 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Message type (ECHO_REQUEST = 8, ECHO_REPLY = 0). </p>
 
 </div>
 </div>

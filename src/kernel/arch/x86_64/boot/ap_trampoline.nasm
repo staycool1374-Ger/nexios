@@ -50,7 +50,12 @@ prot32:
     mov cr3, eax
     mov ecx, 0xC0000080         ; EFER
     rdmsr
-    or eax, 0x100               ; LME: enable long mode
+    ; Issue #380: LME|NXE (parity with boot.asm).  The AP previously
+    ; enabled LME only; any touch of an NX-marked kernel-half page
+    ; (#376: runtime maps, hardened image, NX split fills) raised
+    ; #PF(RSVD) with no IDT yet -> #GP -> #DF -> triple fault -> silent
+    ; QEMU exit.  Same imm32 encoding size as before (no layout shift).
+    or eax, 0x900               ; LME | NXE: enable long mode + NX bit
     wrmsr
     mov eax, cr0
     or eax, 0x80000000          ; PG: enable paging -> long mode active

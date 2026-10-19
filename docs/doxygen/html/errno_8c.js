@@ -1,4 +1,4 @@
 var errno_8c =
 [
-    [ "errno", "errno_8c.html#ad65a8842cc674e3ddf69355898c0ecbf", null ]
+    [ "__errno_location", "errno_8c.html#a4fd616e20294ce1318de576c5b8c1472", null ]
 ];

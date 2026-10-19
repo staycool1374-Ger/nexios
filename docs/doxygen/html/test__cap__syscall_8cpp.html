@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__cap__sys
 </div><!--header-->
 <div class="contents">
 
-<p>SYS_CAP_* syscall dispatch tests. Every syscall is invoked by a REAL kernel task via Syscall::handle() so <a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f" title="Get the currently running task from the scheduler.">syscall_task()</a> resolves to the genuinely-running task (v0.3.10 driven-test discipline).  
+<p>SYS_CAP_* syscall dispatch tests. Every syscall is invoked by a REAL kernel task via <a class="el" href="classkernel_1_1_syscall.html#a4166c97da7594caaa03a16894d8dadf7" title="Dispatch a system call to the appropriate handler.">Syscall::handle()</a> so <a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f" title="Get the currently running task from the scheduler.">syscall_task()</a> resolves to the genuinely-running task (v0.3.10 driven-test discipline).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
@@ -152,7 +152,7 @@ Functions</h2></td></tr>
 <tr class="memitem:af5931d753b67276203ca6923bea6d771" id="r_af5931d753b67276203ca6923bea6d771"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af5931d753b67276203ca6923bea6d771">register_cap_syscall_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>SYS_CAP_* syscall dispatch tests. Every syscall is invoked by a REAL kernel task via Syscall::handle() so <a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f" title="Get the currently running task from the scheduler.">syscall_task()</a> resolves to the genuinely-running task (v0.3.10 driven-test discipline). </p>
+<div class="textblock"><p>SYS_CAP_* syscall dispatch tests. Every syscall is invoked by a REAL kernel task via <a class="el" href="classkernel_1_1_syscall.html#a4166c97da7594caaa03a16894d8dadf7" title="Dispatch a system call to the appropriate handler.">Syscall::handle()</a> so <a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f" title="Get the currently running task from the scheduler.">syscall_task()</a> resolves to the genuinely-running task (v0.3.10 driven-test discipline). </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="af7caa1ed63b9a682755eb4cd3d47f7ba" name="af7caa1ed63b9a682755eb4cd3d47f7ba"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#af7caa1ed63b9a682755eb4cd3d47f7ba">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/9]</span></h2>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -129,6 +129,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__tls_8cpp
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="hal_2irq__guard_8hpp_source.html">kernel/arch/hal/irq_guard.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="msr_8hpp_source.html">kernel/arch/msr.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="elf__loader_8hpp_source.html">kernel/elf/elf_loader.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="test__isolate_8hpp_source.html">kernel/test/test_isolate.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
 <code>#include &quot;<a class="el" href="test__sched__helpers_8hpp_source.html">test_sched_helpers.hpp</a>&quot;</code><br />
@@ -153,13 +159,14 @@ Functions</h2></td></tr>
 <tr class="memitem:ad59622161023675fd1d7cdfaa278faf5" id="r_ad59622161023675fd1d7cdfaa278faf5"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ad59622161023675fd1d7cdfaa278faf5">JARVIS_TEST</a> (tls_cancel_clears_slot, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a6813d8957f779b1f43e0dd7164a19b5e" id="r_a6813d8957f779b1f43e0dd7164a19b5e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a6813d8957f779b1f43e0dd7164a19b5e">JARVIS_TEST</a> (tls_second_publish_site, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a54e355520eac6d40b7a04b9322c7d985" id="r_a54e355520eac6d40b7a04b9322c7d985"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a54e355520eac6d40b7a04b9322c7d985">JARVIS_TEST</a> (tls_no_stale_slot_after_cancel, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a4f208410aed7bb420441e16a8e2b5a1a" id="r_a4f208410aed7bb420441e16a8e2b5a1a"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a4f208410aed7bb420441e16a8e2b5a1a">JARVIS_TEST</a> (tls_errno_ring3_cell, &quot;PRE: <a class="el" href="namespacekernel_1_1vfsd.html">vfsd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a39d52e21b47bf80c5cb1fc4168d1a330" id="r_a39d52e21b47bf80c5cb1fc4168d1a330"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a39d52e21b47bf80c5cb1fc4168d1a330">register_tls_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>TLS_SET(85) + TLS-on-context-switch tests (issue #74). DRIVEN: every syscall is invoked by a REAL dispatched kernel task so <a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f" title="Get the currently running task from the scheduler.">syscall_task()</a> resolves genuinely (<a class="el" href="test__syscall_8cpp.html" title="System call interface tests.">test_syscall.cpp</a> pattern). Publish/apply mechanics use synthetic-user tasks (is_user_ set on a kernel-context TCB): a C++ lambda cannot run as a true userspace task (<a class="el" href="test__ipc__blocking_8cpp.html" title="IPC blocking send/receive tests.">test_ipc_blocking.cpp</a> documents the constraint), and the validation/publish paths key off the flag + page-table fields the test controls. Full ring-3 acceptance belongs to #75 (crt0 calls TLS_SET through the real gate). </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="ad59622161023675fd1d7cdfaa278faf5" name="ad59622161023675fd1d7cdfaa278faf5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad59622161023675fd1d7cdfaa278faf5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad59622161023675fd1d7cdfaa278faf5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -186,7 +193,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="ad3a49124a6c335f0c054f9672e15231e" name="ad3a49124a6c335f0c054f9672e15231e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad3a49124a6c335f0c054f9672e15231e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad3a49124a6c335f0c054f9672e15231e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -212,8 +219,29 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a4f208410aed7bb420441e16a8e2b5a1a" name="a4f208410aed7bb420441e16a8e2b5a1a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4f208410aed7bb420441e16a8e2b5a1a">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">tls_errno_ring3_cell</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1vfsd.html">vfsd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a54e355520eac6d40b7a04b9322c7d985" name="a54e355520eac6d40b7a04b9322c7d985"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a54e355520eac6d40b7a04b9322c7d985">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a54e355520eac6d40b7a04b9322c7d985">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -240,7 +268,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="ae8bf56958edf46121783936e11f93257" name="ae8bf56958edf46121783936e11f93257"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae8bf56958edf46121783936e11f93257">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ae8bf56958edf46121783936e11f93257">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -267,7 +295,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a256cbe06af3b0071677626c76d9cfca0" name="a256cbe06af3b0071677626c76d9cfca0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a256cbe06af3b0071677626c76d9cfca0">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a256cbe06af3b0071677626c76d9cfca0">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -294,7 +322,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a48034da50dc231c8f48525ff75662143" name="a48034da50dc231c8f48525ff75662143"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a48034da50dc231c8f48525ff75662143">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a48034da50dc231c8f48525ff75662143">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -321,7 +349,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a6813d8957f779b1f43e0dd7164a19b5e" name="a6813d8957f779b1f43e0dd7164a19b5e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6813d8957f779b1f43e0dd7164a19b5e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a6813d8957f779b1f43e0dd7164a19b5e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -348,7 +376,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="ad2a03dc47b10963d571c0bdd94431fe1" name="ad2a03dc47b10963d571c0bdd94431fe1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad2a03dc47b10963d571c0bdd94431fe1">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad2a03dc47b10963d571c0bdd94431fe1">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -375,7 +403,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="ab488004f9912dd5ca61d698ea5c91af4" name="ab488004f9912dd5ca61d698ea5c91af4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab488004f9912dd5ca61d698ea5c91af4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ab488004f9912dd5ca61d698ea5c91af4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -402,7 +430,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a6f031f5b3f5b5eb0bf5b1838a4ef11ef" name="a6f031f5b3f5b5eb0bf5b1838a4ef11ef"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6f031f5b3f5b5eb0bf5b1838a4ef11ef">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a6f031f5b3f5b5eb0bf5b1838a4ef11ef">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[11/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -429,7 +457,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a1243d351bbb6b57e758e108578014771" name="a1243d351bbb6b57e758e108578014771"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1243d351bbb6b57e758e108578014771">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[11/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a1243d351bbb6b57e758e108578014771">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[12/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -456,7 +484,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="ae8cec74763e84d57a4787f9673699429" name="ae8cec74763e84d57a4787f9673699429"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae8cec74763e84d57a4787f9673699429">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[12/12]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ae8cec74763e84d57a4787f9673699429">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[13/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">

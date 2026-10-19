@@ -30,6 +30,7 @@
 #include <kernel/debug/debug_bind.hpp>
 #include <kernel/debug/debug_regs.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/scheduler_debug_internal.hpp>
 #include <kernel/task/sporadic_server.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/memory/vmm.hpp>
@@ -50,6 +51,17 @@ namespace {
 static uint64_t snap_budget_of(const TaskControlBlock &tgt) noexcept {
     kernel::task::SporadicServer *srv = tgt.get_sporadic_server();
     if (!srv) {
+        return 0;
+    }
+    // Issue #379 (kill-while-debugged): the death snapshot can observe a
+    // sporadic-server pointer freed concurrently (0xDD-poisoned under
+    // CONFIG_DEBUG) or otherwise outside the kernel half. Fail closed with
+    // budget 0 — the DEATH event itself never depends on this advisory
+    // read. Mirrors the on_tick SS-race guard (scheduler_tick.cpp).
+    if (!TaskControlBlock::is_kernel_pointer(srv)) {
+        return 0;
+    }
+    if (sched_debug::is_poisoned_block(srv)) {
         return 0;
     }
     return srv->remaining_budget();
@@ -138,12 +150,12 @@ bp_insn_len(uint64_t va, const TaskControlBlock &target) noexcept {
 [[maybe_unused]] bool bp_write_at(TaskControlBlock &target, uint64_t va,
                                     const uint8_t *bytes,
                                     size_t len) noexcept {
-    if (len == 0 || len > 4 || target.page_table_ == 0)
+    if (len == 0 || len > 4 || target.get_page_table() == 0)
         return false;
     uint64_t page_off = va & 0xFFFULL;
     if (page_off + len > 0x1000ULL)
         return false; // never straddle a page (all bp insns fit)
-    uint64_t phys = VMM::virt_to_phys_in_pml4(va, target.page_table_);
+    uint64_t phys = VMM::virt_to_phys_in_pml4(va, target.get_page_table());
     if (phys == 0)
         return false;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -168,12 +180,12 @@ bp_insn_len(uint64_t va, const TaskControlBlock &target) noexcept {
 /// @brief Read @p len bytes at @p va through the target's tables.
 [[maybe_unused]] bool bp_read_at(TaskControlBlock &target, uint64_t va,
                                    uint8_t *out, size_t len) noexcept {
-    if (len == 0 || len > 4 || target.page_table_ == 0)
+    if (len == 0 || len > 4 || target.get_page_table() == 0)
         return false;
     uint64_t page_off = va & 0xFFFULL;
     if (page_off + len > 0x1000ULL)
         return false;
-    uint64_t phys = VMM::virt_to_phys_in_pml4(va, target.page_table_);
+    uint64_t phys = VMM::virt_to_phys_in_pml4(va, target.get_page_table());
     if (phys == 0)
         return false;
     // Walk result is the exact phys (see bp_write_at note) — no page_off.
@@ -747,6 +759,14 @@ void debug_publish_death(TaskControlBlock &dying) noexcept {
 #if !defined(CONFIG_DEBUG)
     (void)dying;
 #else
+    // Issue #379 (kill-while-debugged): a concurrent teardown may have
+    // freed the TCB (0xDD-poisoned under CONFIG_DEBUG) before this
+    // snapshot runs. is_valid reads mapped memory only (address check
+    // first), so the check itself cannot fault; skip silently when id/gen
+    // are unreadable — no addressable event exists to report.
+    if (!TaskControlBlock::is_valid(&dying)) {
+        return;
+    }
     uint64_t debugger_id =
         __atomic_load_n(&dying.debugger_id, __ATOMIC_ACQUIRE);
     // Clear this target's shadows by id (tables are about to be freed —

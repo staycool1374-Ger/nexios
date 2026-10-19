@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,17 +121,487 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('elf_8hpp.html'
 
 <p>ELF64 binary loader — validate, load, exec, shared-object support.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="span_8hpp_source.html">span.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="elf__shared_8hpp_source.html">kernel/elf/elf_shared.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for elf.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="elf_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2elf_2elf_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="elf_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2elf_2elf_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="elf_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Aelf_3A_3AELF64Header" id="r_kernel_3A_3Aelf_3A_3AELF64Header"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1elf_1_1_e_l_f64_header.html">kernel::elf::ELF64Header</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF64 file header (64-byte packed structure).  <a href="structkernel_1_1elf_1_1_e_l_f64_header.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Aelf_3A_3AELF64ProgramHeader" id="r_kernel_3A_3Aelf_3A_3AELF64ProgramHeader"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1elf_1_1_e_l_f64_program_header.html">kernel::elf::ELF64ProgramHeader</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF64 program header (segment descriptor).  <a href="structkernel_1_1elf_1_1_e_l_f64_program_header.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Aelf" id="r_kernel_3A_3Aelf"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html">kernel::elf</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a93a0c5cb4a73743e4134a09a46455ac7" id="r_a93a0c5cb4a73743e4134a09a46455ac7"><td class="memItemLeft">enum &#160;</td><td class="memItemRight">: uint8_t { <br />
+&#160;&#160;<a class="el" href="namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7a1beec79abed6ad657d663fa56209b414">kernel::elf::PT_NULL</a> = 0
+, <a class="el" href="namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7a52253db63b76b3709f3dc3e993e8ec6d">kernel::elf::PT_LOAD</a> = 1
+, <a class="el" href="namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7ab451b2dd4cbe11c5da4e76a0640db6c2">kernel::elf::PT_DYNAMIC</a> = 2
+, <a class="el" href="namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7adaa7247c566bf3bbc492e2a2c373cc2f">kernel::elf::PT_INTERP</a> = 3
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7a4c31012213e67538bb9b214b6c32f035">kernel::elf::PT_NOTE</a> = 4
+, <a class="el" href="namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7ad93d86832c835403b548ec32e11c71a9">kernel::elf::PT_PHDR</a> = 6
+<br />
+ }</td></tr>
+<tr class="memdesc:a93a0c5cb4a73743e4134a09a46455ac7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Program header type constants.  <a href="namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7">More...</a><br /></td></tr>
+<tr class="memitem:ac020a77569b055084f1684573d2bc1a8" id="r_ac020a77569b055084f1684573d2bc1a8"><td class="memItemLeft">enum &#160;</td><td class="memItemRight">: uint8_t { <a class="el" href="namespacekernel_1_1elf.html#ac020a77569b055084f1684573d2bc1a8a996883b1572a79a37bbc6945cae280d6">kernel::elf::PF_X</a> = 1
+, <a class="el" href="namespacekernel_1_1elf.html#ac020a77569b055084f1684573d2bc1a8aa9ffa4320a526945a5595c6ba6fb8d16">kernel::elf::PF_W</a> = 2
+, <a class="el" href="namespacekernel_1_1elf.html#ac020a77569b055084f1684573d2bc1a8abf8533ab66e53a924a7fb2f99e6bf738">kernel::elf::PF_R</a> = 4
+ }</td></tr>
+<tr class="memdesc:ac020a77569b055084f1684573d2bc1a8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Program header flag constants.  <a href="namespacekernel_1_1elf.html#ac020a77569b055084f1684573d2bc1a8">More...</a><br /></td></tr>
+<tr class="memitem:a0b29abae84fc9902caa8c0842ede1084" id="r_a0b29abae84fc9902caa8c0842ede1084"><td class="memItemLeft">enum &#160;</td><td class="memItemRight">: uint8_t { <a class="el" href="namespacekernel_1_1elf.html#a0b29abae84fc9902caa8c0842ede1084a5e3275f9789979217620b04bc684ad2c">kernel::elf::ET_NONE</a> = 0
+, <a class="el" href="namespacekernel_1_1elf.html#a0b29abae84fc9902caa8c0842ede1084ab8a30deeb1e75437c2256469f6a91185">kernel::elf::ET_EXEC</a> = 2
+, <a class="el" href="namespacekernel_1_1elf.html#a0b29abae84fc9902caa8c0842ede1084a76e05b52ee88b4188cba7809439611c6">kernel::elf::ET_DYN</a> = 3
+ }</td></tr>
+<tr class="memdesc:a0b29abae84fc9902caa8c0842ede1084"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF header type constants.  <a href="namespacekernel_1_1elf.html#a0b29abae84fc9902caa8c0842ede1084">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a119f96828b99ef43bba81460b4fe5cc8" id="r_a119f96828b99ef43bba81460b4fe5cc8"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1elf_1_1_e_l_f64_header.html">kernel::elf::ELF64Header</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a119f96828b99ef43bba81460b4fe5cc8">kernel::elf::__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:a4cc4dbbd98459ac9088cc86e6b3c9734" id="r_a4cc4dbbd98459ac9088cc86e6b3c9734"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a4cc4dbbd98459ac9088cc86e6b3c9734">ELF64Header</a> ()=default</td></tr>
+<tr class="memitem:a9fa3c50daf5e73ecd014d79fa3b2bb6e" id="r_a9fa3c50daf5e73ecd014d79fa3b2bb6e"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a9fa3c50daf5e73ecd014d79fa3b2bb6e">kernel::elf::validate_header</a> (const <a class="el" href="structkernel_1_1elf_1_1_e_l_f64_header.html">ELF64Header</a> *hdr)</td></tr>
+<tr class="memdesc:a9fa3c50daf5e73ecd014d79fa3b2bb6e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate an ELF64 header (magic, class, endianness, version).  <br /></td></tr>
+<tr class="memitem:aabcc159162aad4fabe6a4483934fd33b" id="r_aabcc159162aad4fabe6a4483934fd33b"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#aabcc159162aad4fabe6a4483934fd33b">kernel::elf::validate_segment</a> (const <a class="el" href="structkernel_1_1elf_1_1_e_l_f64_program_header.html">ELF64ProgramHeader</a> *phdr, uint64_t file_size=0)</td></tr>
+<tr class="memdesc:aabcc159162aad4fabe6a4483934fd33b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate a single ELF program-header segment (bounds, W^X, sizes).  <br /></td></tr>
+<tr class="memitem:af4659b6dfe981955594fc4466b5a9dae" id="r_af4659b6dfe981955594fc4466b5a9dae"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#af4659b6dfe981955594fc4466b5a9dae">kernel::elf::collect_ro_ranges</a> (<a class="el" href="classkernel_1_1_span.html">kernel::Span</a>&lt; const uint8_t &gt; image, uint64_t phdr_buf_off, uint16_t phnum, uint64_t phentsize, uint64_t file_size, <a class="el" href="classkernel_1_1_span.html">kernel::Span</a>&lt; <a class="el" href="structkernel_1_1_task_control_block_1_1_ro_range.html">TaskControlBlock::RoRange</a> &gt; out) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:af4659b6dfe981955594fc4466b5a9dae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Collect the covered read-only ranges (issue #46): every PT_LOAD segment without PF_W, as [vaddr, filesz), validated segments only.  <br /></td></tr>
+<tr class="memitem:ab17534bb543abbd372af4f9129e7d433" id="r_ab17534bb543abbd372af4f9129e7d433"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#ab17534bb543abbd372af4f9129e7d433">kernel::elf::text_canary_slot</a> (const uint8_t *phdr_image, uint64_t phdr_buf_off, uint16_t phnum, uint64_t phentsize, uint64_t file_size, uint64_t *slot_out) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:ab17534bb543abbd372af4f9129e7d433"><td class="mdescLeft">&#160;</td><td class="mdescRight">Locate the TEXT before-canary slot (issue #46): mirrors install_segment_canaries' text_base rule (first PF_X PT_LOAD, page_align_down(vaddr)) so the authenticity coverage can exclude the 8 bytes the canary subsystem owns and checks itself.  <br /></td></tr>
+<tr class="memitem:a9024e1c0be1324638cc1b83724001072" id="r_a9024e1c0be1324638cc1b83724001072"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a9024e1c0be1324638cc1b83724001072">kernel::elf::crc_user_range</a> (uint64_t pml4, uint64_t vaddr, uint64_t len, uint32_t &amp;acc) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a9024e1c0be1324638cc1b83724001072"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fold one mapped range into <code class="param">acc</code> via the target page table.  <br /></td></tr>
+<tr class="memitem:a202ab589a130ada255a0629cb0fd9e89" id="r_a202ab589a130ada255a0629cb0fd9e89"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a202ab589a130ada255a0629cb0fd9e89">kernel::elf::snapshot_ro_baseline</a> (uint64_t pml4, const uint8_t *phdr_image, uint64_t phdr_buf_off, uint16_t phnum, uint64_t phentsize, uint64_t file_size, bool has_dynamic, uint32_t load_crc, uint64_t canary_slot, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *tcb) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a202ab589a130ada255a0629cb0fd9e89"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture the post-relocation CRC baseline into <code class="param">tcb</code> (issue #46). For static images the scan must equal the incremental chunk-loop CRC (copy-path cross-check); dynamic images adopt the scan. The TEXT before-canary slot (<code class="param">canary_slot</code>, 0 = none) is carved out of the scan — the canary subsystem owns and checks it.  <br /></td></tr>
+<tr class="memitem:ada05ba431e1699232e0cb0ca87af0a2b" id="r_ada05ba431e1699232e0cb0ca87af0a2b"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#ada05ba431e1699232e0cb0ca87af0a2b">kernel::elf::load</a> (const <a class="el" href="structkernel_1_1elf_1_1_e_l_f64_header.html">ELF64Header</a> *hdr, const uint8_t *data, uint64_t file_size=0)</td></tr>
+<tr class="memdesc:ada05ba431e1699232e0cb0ca87af0a2b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Load an ELF binary into a new task.  <br /></td></tr>
+<tr class="memitem:af0f8dea59eb8cf69559d9199d5b78d10" id="r_af0f8dea59eb8cf69559d9199d5b78d10"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#af0f8dea59eb8cf69559d9199d5b78d10">kernel::elf::alloc_user_stack_and_heap</a> (uint64_t pml4, uint64_t *out_ustack_phys)</td></tr>
+<tr class="memdesc:af0f8dea59eb8cf69559d9199d5b78d10"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocate and map the user stack (guard page + pages) and the initial heap into <code class="param">pml4</code>. Extracted from load_segments_and_stack for reuse by the background <a class="el" href="classkernel_1_1elf_1_1_elf_loader.html" title="Background ELF loader singleton.">ElfLoader</a> (chunked loader) which maps segments itself and only needs the stack + heap tail.  <br /></td></tr>
+<tr class="memitem:a4a78f2b4b292d565c901908fddd7b0a4" id="r_a4a78f2b4b292d565c901908fddd7b0a4"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a4a78f2b4b292d565c901908fddd7b0a4">kernel::elf::finalize_loaded_task</a> (const <a class="el" href="structkernel_1_1elf_1_1_e_l_f64_header.html">ELF64Header</a> *hdr, uint64_t pml4, uint64_t ustack_phys, const uint8_t *phdr_image, uint64_t file_size)</td></tr>
+<tr class="memdesc:a4a78f2b4b292d565c901908fddd7b0a4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finish a partially-built load: allocate the TCB, kernel stack, adopt <code class="param">pml4</code> as page_table_, wire std fds, setup the user stack frame and install segment canaries. Extracted from <a class="el" href="namespacekernel_1_1elf.html#ada05ba431e1699232e0cb0ca87af0a2b" title="Load an ELF binary into a new task.">elf::load</a> for reuse by the background <a class="el" href="classkernel_1_1elf_1_1_elf_loader.html" title="Background ELF loader singleton.">ElfLoader</a> (chunked loader).  <br /></td></tr>
+<tr class="memitem:ab1b83adb897c2a485a0ac8f73818b795" id="r_ab1b83adb897c2a485a0ac8f73818b795"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#ab1b83adb897c2a485a0ac8f73818b795">kernel::elf::finalize_user_tcb_tail</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *tcb, const <a class="el" href="structkernel_1_1elf_1_1_e_l_f64_header.html">ELF64Header</a> *hdr, uint64_t ustack_phys, const uint8_t *phdr_image, uint64_t file_size)</td></tr>
+<tr class="memdesc:ab1b83adb897c2a485a0ac8f73818b795"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shared user-TCB final tail (issue #271 P2 rerun): open_std_fds, user stack/heap fields, setup_user_stack + entry frame, canaries, text/data/bss sizes, TLS guard. Factored from finalize_loaded_task so the rerun builder produces a byte-identical init (a hand-rolled tail diverges and panics in teardown).  <br /></td></tr>
+<tr class="memitem:a852693e314f221723c482fd0304d7258" id="r_a852693e314f221723c482fd0304d7258"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a852693e314f221723c482fd0304d7258">kernel::elf::exec_into_current</a> (const <a class="el" href="structkernel_1_1elf_1_1_e_l_f64_header.html">ELF64Header</a> *hdr, const uint8_t *data, const char *const *argv, const char *const *envp, uint64_t *regs, uint64_t file_size=0)</td></tr>
+<tr class="memdesc:a852693e314f221723c482fd0304d7258"><td class="mdescLeft">&#160;</td><td class="mdescRight">Replace the current task's address space with an ELF binary (exec).  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a1b354dc0890e0000a1250287f91f3a8c" id="r_a1b354dc0890e0000a1250287f91f3a8c"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a1b354dc0890e0000a1250287f91f3a8c">ident</a> [16]</td></tr>
+<tr class="memdesc:a1b354dc0890e0000a1250287f91f3a8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF magic + class/endian/version/OSABI/pad.  <br /></td></tr>
+<tr class="memitem:ad44b615021ed3ccb734fcaf583ef4a03" id="r_ad44b615021ed3ccb734fcaf583ef4a03"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#ad44b615021ed3ccb734fcaf583ef4a03">type</a></td></tr>
+<tr class="memdesc:ad44b615021ed3ccb734fcaf583ef4a03"><td class="mdescLeft">&#160;</td><td class="mdescRight">Object file type (ET_NONE, ET_EXEC, ET_DYN).  <br /></td></tr>
+<tr class="memitem:a5ddefb78020e9dd399d269d24330b51b" id="r_a5ddefb78020e9dd399d269d24330b51b"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a5ddefb78020e9dd399d269d24330b51b">machine</a></td></tr>
+<tr class="memdesc:a5ddefb78020e9dd399d269d24330b51b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Architecture (e.g. 0x3E for x86_64).  <br /></td></tr>
+<tr class="memitem:acd99bb05ca015e7d74448acb1deba7ca" id="r_acd99bb05ca015e7d74448acb1deba7ca"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#acd99bb05ca015e7d74448acb1deba7ca">version</a></td></tr>
+<tr class="memdesc:acd99bb05ca015e7d74448acb1deba7ca"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF version (must be 1).  <br /></td></tr>
+<tr class="memitem:a6aac0a1a7d70f8270f9bb1222445f370" id="r_a6aac0a1a7d70f8270f9bb1222445f370"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a6aac0a1a7d70f8270f9bb1222445f370">entry</a></td></tr>
+<tr class="memdesc:a6aac0a1a7d70f8270f9bb1222445f370"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual address of entry point.  <br /></td></tr>
+<tr class="memitem:a07817a321b4c5975442bc34892ec4355" id="r_a07817a321b4c5975442bc34892ec4355"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a07817a321b4c5975442bc34892ec4355">phoff</a></td></tr>
+<tr class="memdesc:a07817a321b4c5975442bc34892ec4355"><td class="mdescLeft">&#160;</td><td class="mdescRight">Program header table offset.  <br /></td></tr>
+<tr class="memitem:ad9fa788b52f640eb1b47e3a84b3b4f18" id="r_ad9fa788b52f640eb1b47e3a84b3b4f18"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad9fa788b52f640eb1b47e3a84b3b4f18">shoff</a></td></tr>
+<tr class="memdesc:ad9fa788b52f640eb1b47e3a84b3b4f18"><td class="mdescLeft">&#160;</td><td class="mdescRight">Section header table offset.  <br /></td></tr>
+<tr class="memitem:a773b39d480759f67926cb18ae2219281" id="r_a773b39d480759f67926cb18ae2219281"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a773b39d480759f67926cb18ae2219281">flags</a></td></tr>
+<tr class="memdesc:a773b39d480759f67926cb18ae2219281"><td class="mdescLeft">&#160;</td><td class="mdescRight">Processor-specific flags.  <br /></td></tr>
+<tr class="memitem:a6d0244e480ce5bb98063269b70ae1235" id="r_a6d0244e480ce5bb98063269b70ae1235"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a6d0244e480ce5bb98063269b70ae1235">ehsize</a></td></tr>
+<tr class="memdesc:a6d0244e480ce5bb98063269b70ae1235"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF header size (64).  <br /></td></tr>
+<tr class="memitem:a903697b1611868112b680e143365e043" id="r_a903697b1611868112b680e143365e043"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a903697b1611868112b680e143365e043">phentsize</a></td></tr>
+<tr class="memdesc:a903697b1611868112b680e143365e043"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of one program header entry.  <br /></td></tr>
+<tr class="memitem:a3989b32fd3bc6c1ecff527e49db1a3c9" id="r_a3989b32fd3bc6c1ecff527e49db1a3c9"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a3989b32fd3bc6c1ecff527e49db1a3c9">phnum</a></td></tr>
+<tr class="memdesc:a3989b32fd3bc6c1ecff527e49db1a3c9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of program header entries.  <br /></td></tr>
+<tr class="memitem:a112a1e2cf2eba318d8c5a5a7edbbd110" id="r_a112a1e2cf2eba318d8c5a5a7edbbd110"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a112a1e2cf2eba318d8c5a5a7edbbd110">shentsize</a></td></tr>
+<tr class="memdesc:a112a1e2cf2eba318d8c5a5a7edbbd110"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of one section header entry.  <br /></td></tr>
+<tr class="memitem:a5b011f9387123f9ba48b2e85f01e2cbb" id="r_a5b011f9387123f9ba48b2e85f01e2cbb"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a5b011f9387123f9ba48b2e85f01e2cbb">shnum</a></td></tr>
+<tr class="memdesc:a5b011f9387123f9ba48b2e85f01e2cbb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of section header entries.  <br /></td></tr>
+<tr class="memitem:a04b3fc1cea065101e384e2459dd36be1" id="r_a04b3fc1cea065101e384e2459dd36be1"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a04b3fc1cea065101e384e2459dd36be1">shstrndx</a></td></tr>
+<tr class="memdesc:a04b3fc1cea065101e384e2459dd36be1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Section header string table index.  <br /></td></tr>
+<tr class="memitem:a612bb2807d848cca89ea1437cceea886" id="r_a612bb2807d848cca89ea1437cceea886"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a612bb2807d848cca89ea1437cceea886">offset</a></td></tr>
+<tr class="memdesc:a612bb2807d848cca89ea1437cceea886"><td class="mdescLeft">&#160;</td><td class="mdescRight">Offset in file.  <br /></td></tr>
+<tr class="memitem:a674826ac4551bd6353b61bb78db62172" id="r_a674826ac4551bd6353b61bb78db62172"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a674826ac4551bd6353b61bb78db62172">vaddr</a></td></tr>
+<tr class="memdesc:a674826ac4551bd6353b61bb78db62172"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual address to load at.  <br /></td></tr>
+<tr class="memitem:ae9dc8e8a9723a93ab6242bfe23ddab83" id="r_ae9dc8e8a9723a93ab6242bfe23ddab83"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ae9dc8e8a9723a93ab6242bfe23ddab83">paddr</a></td></tr>
+<tr class="memdesc:ae9dc8e8a9723a93ab6242bfe23ddab83"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical address (usually same as vaddr).  <br /></td></tr>
+<tr class="memitem:a13cb0a9e2897cbdb19e974bfea300f85" id="r_a13cb0a9e2897cbdb19e974bfea300f85"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a13cb0a9e2897cbdb19e974bfea300f85">filesz</a></td></tr>
+<tr class="memdesc:a13cb0a9e2897cbdb19e974bfea300f85"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size in file.  <br /></td></tr>
+<tr class="memitem:a7943f0ab0e451f376a0620bf3151e6dc" id="r_a7943f0ab0e451f376a0620bf3151e6dc"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a7943f0ab0e451f376a0620bf3151e6dc">memsz</a></td></tr>
+<tr class="memdesc:a7943f0ab0e451f376a0620bf3151e6dc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size in memory (zero-padded if &gt; filesz).  <br /></td></tr>
+<tr class="memitem:ae762be4c1d1b1bf587592e9225d96d5c" id="r_ae762be4c1d1b1bf587592e9225d96d5c"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ae762be4c1d1b1bf587592e9225d96d5c">align</a></td></tr>
+<tr class="memdesc:ae762be4c1d1b1bf587592e9225d96d5c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Alignment constraint.  <br /></td></tr>
+<tr class="memitem:a2cd9863e264cd6858259950dc11b3d01" id="r_a2cd9863e264cd6858259950dc11b3d01"><td class="memItemLeft">enum kernel::elf:: { ... } &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a2cd9863e264cd6858259950dc11b3d01">kernel::elf::__attribute__</a></td></tr>
+<tr class="memdesc:a2cd9863e264cd6858259950dc11b3d01"><td class="mdescLeft">&#160;</td><td class="mdescRight">Program header type constants.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>ELF64 binary loader — validate, load, exec, shared-object support. </p>
-</div></div><!-- contents -->
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a4cc4dbbd98459ac9088cc86e6b3c9734" name="a4cc4dbbd98459ac9088cc86e6b3c9734"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4cc4dbbd98459ac9088cc86e6b3c9734">&#9670;&#160;</a></span>ELF64Header()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">__attribute__::ELF64Header </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel default">default</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="ae762be4c1d1b1bf587592e9225d96d5c" name="ae762be4c1d1b1bf587592e9225d96d5c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae762be4c1d1b1bf587592e9225d96d5c">&#9670;&#160;</a></span>align</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t align</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Alignment constraint. </p>
+
+</div>
+</div>
+<a id="a6d0244e480ce5bb98063269b70ae1235" name="a6d0244e480ce5bb98063269b70ae1235"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6d0244e480ce5bb98063269b70ae1235">&#9670;&#160;</a></span>ehsize</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t ehsize</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>ELF header size (64). </p>
+
+</div>
+</div>
+<a id="a6aac0a1a7d70f8270f9bb1222445f370" name="a6aac0a1a7d70f8270f9bb1222445f370"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6aac0a1a7d70f8270f9bb1222445f370">&#9670;&#160;</a></span>entry</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t entry</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Virtual address of entry point. </p>
+
+</div>
+</div>
+<a id="a13cb0a9e2897cbdb19e974bfea300f85" name="a13cb0a9e2897cbdb19e974bfea300f85"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a13cb0a9e2897cbdb19e974bfea300f85">&#9670;&#160;</a></span>filesz</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t filesz</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Size in file. </p>
+
+</div>
+</div>
+<a id="a773b39d480759f67926cb18ae2219281" name="a773b39d480759f67926cb18ae2219281"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a773b39d480759f67926cb18ae2219281">&#9670;&#160;</a></span>flags</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t flags</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Processor-specific flags. </p>
+<p>Segment flags (PF_R, PF_W, PF_X). </p>
+
+</div>
+</div>
+<a id="a1b354dc0890e0000a1250287f91f3a8c" name="a1b354dc0890e0000a1250287f91f3a8c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1b354dc0890e0000a1250287f91f3a8c">&#9670;&#160;</a></span>ident</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t ident[16]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>ELF magic + class/endian/version/OSABI/pad. </p>
+
+</div>
+</div>
+<a id="a5ddefb78020e9dd399d269d24330b51b" name="a5ddefb78020e9dd399d269d24330b51b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5ddefb78020e9dd399d269d24330b51b">&#9670;&#160;</a></span>machine</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t machine</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Architecture (e.g. 0x3E for x86_64). </p>
+
+</div>
+</div>
+<a id="a7943f0ab0e451f376a0620bf3151e6dc" name="a7943f0ab0e451f376a0620bf3151e6dc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7943f0ab0e451f376a0620bf3151e6dc">&#9670;&#160;</a></span>memsz</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t memsz</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Size in memory (zero-padded if &gt; filesz). </p>
+
+</div>
+</div>
+<a id="a612bb2807d848cca89ea1437cceea886" name="a612bb2807d848cca89ea1437cceea886"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a612bb2807d848cca89ea1437cceea886">&#9670;&#160;</a></span>offset</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t offset</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Offset in file. </p>
+
+</div>
+</div>
+<a id="ae9dc8e8a9723a93ab6242bfe23ddab83" name="ae9dc8e8a9723a93ab6242bfe23ddab83"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae9dc8e8a9723a93ab6242bfe23ddab83">&#9670;&#160;</a></span>paddr</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t paddr</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Physical address (usually same as vaddr). </p>
+
+</div>
+</div>
+<a id="a903697b1611868112b680e143365e043" name="a903697b1611868112b680e143365e043"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a903697b1611868112b680e143365e043">&#9670;&#160;</a></span>phentsize</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t phentsize</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Size of one program header entry. </p>
+
+</div>
+</div>
+<a id="a3989b32fd3bc6c1ecff527e49db1a3c9" name="a3989b32fd3bc6c1ecff527e49db1a3c9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3989b32fd3bc6c1ecff527e49db1a3c9">&#9670;&#160;</a></span>phnum</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t phnum</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Number of program header entries. </p>
+
+</div>
+</div>
+<a id="a07817a321b4c5975442bc34892ec4355" name="a07817a321b4c5975442bc34892ec4355"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a07817a321b4c5975442bc34892ec4355">&#9670;&#160;</a></span>phoff</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t phoff</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Program header table offset. </p>
+
+</div>
+</div>
+<a id="a112a1e2cf2eba318d8c5a5a7edbbd110" name="a112a1e2cf2eba318d8c5a5a7edbbd110"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a112a1e2cf2eba318d8c5a5a7edbbd110">&#9670;&#160;</a></span>shentsize</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t shentsize</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Size of one section header entry. </p>
+
+</div>
+</div>
+<a id="a5b011f9387123f9ba48b2e85f01e2cbb" name="a5b011f9387123f9ba48b2e85f01e2cbb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5b011f9387123f9ba48b2e85f01e2cbb">&#9670;&#160;</a></span>shnum</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t shnum</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Number of section header entries. </p>
+
+</div>
+</div>
+<a id="ad9fa788b52f640eb1b47e3a84b3b4f18" name="ad9fa788b52f640eb1b47e3a84b3b4f18"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad9fa788b52f640eb1b47e3a84b3b4f18">&#9670;&#160;</a></span>shoff</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t shoff</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Section header table offset. </p>
+
+</div>
+</div>
+<a id="a04b3fc1cea065101e384e2459dd36be1" name="a04b3fc1cea065101e384e2459dd36be1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a04b3fc1cea065101e384e2459dd36be1">&#9670;&#160;</a></span>shstrndx</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t shstrndx</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Section header string table index. </p>
+
+</div>
+</div>
+<a id="ad44b615021ed3ccb734fcaf583ef4a03" name="ad44b615021ed3ccb734fcaf583ef4a03"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad44b615021ed3ccb734fcaf583ef4a03">&#9670;&#160;</a></span>type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Object file type (ET_NONE, ET_EXEC, ET_DYN). </p>
+<p>Segment type (PT_NULL, PT_LOAD, PT_DYNAMIC, etc.). </p>
+
+</div>
+</div>
+<a id="a674826ac4551bd6353b61bb78db62172" name="a674826ac4551bd6353b61bb78db62172"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a674826ac4551bd6353b61bb78db62172">&#9670;&#160;</a></span>vaddr</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t vaddr</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Virtual address to load at. </p>
+
+</div>
+</div>
+<a id="acd99bb05ca015e7d74448acb1deba7ca" name="acd99bb05ca015e7d74448acb1deba7ca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acd99bb05ca015e7d74448acb1deba7ca">&#9670;&#160;</a></span>version</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t version</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>ELF version (must be 1). </p>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,14 +121,42 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2interrupt
 
 <p>Interrupt controller abstraction — PIC (x86_64), GIC (AArch64), PLIC (RISC-V).  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="hal_2io_8hpp_source.html">kernel/arch/hal/io.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for interrupt_controller.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="hal_2interrupt__controller_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2arch_2hal_2interrupt__controller_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="hal_2interrupt__controller_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2arch_2hal_2interrupt__controller_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="hal_2interrupt__controller_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:arch_3A_3AIrqState" id="r_arch_3A_3AIrqState"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_irq_state.html">arch::IrqState</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot of the x86-64 PIC mask registers.  <a href="structarch_1_1_irq_state.html#details">More...</a><br /></td></tr>
+<tr class="memitem:arch_3A_3AArchInterruptController" id="r_arch_3A_3AArchInterruptController"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_arch_interrupt_controller.html">arch::ArchInterruptController</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 PIC (8259A) interrupt controller driver.  <a href="classarch_1_1_arch_interrupt_controller.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
+<tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ac7375681b455a01cbd2c161dbb0409c2" id="r_ac7375681b455a01cbd2c161dbb0409c2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ac7375681b455a01cbd2c161dbb0409c2">arch::gic_redist_ready</a> ()</td></tr>
+<tr class="memdesc:ac7375681b455a01cbd2c161dbb0409c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or when no redistributor exists (GICv2 path). Polarity follows the GICv3 spec (online = 1); the pre-#198 poll loop tested the inverted bit.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Interrupt controller abstraction — PIC (x86_64), GIC (AArch64), PLIC (RISC-V). </p>
 </div></div><!-- contents -->

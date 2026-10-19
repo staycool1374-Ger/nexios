@@ -1,24 +1,21 @@
-diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
---- a/src/kernel/memory/vmm.cpp
-+++ b/src/kernel/memory/vmm.cpp
-@@ -1936,7 +1936,10 @@ errors::VmmError VMM::map_phys_range_try(uint64_t virt_addr,
-     if (page_count == 0 ||
-         page_count > (UINT64_MAX - virt_addr) / arch::PAGE_SIZE) {
-         return errors::VMM_ERR_INVALID_ADDR;
-     }
-+    if (page_count > (UINT64_MAX - phys_addr) / arch::PAGE_SIZE) {
-+        return errors::VMM_ERR_INVALID_ADDR;
-+    }
-     for (size_t page_idx = 0; page_idx < page_count; ++page_idx) {
-         const uint64_t page_va = virt_addr + page_idx * arch::PAGE_SIZE;
-         const uint64_t page_pa = phys_addr + page_idx * arch::PAGE_SIZE;
-@@ -1999,6 +2003,9 @@ errors::VmmError VMM::map_mmio_from_cap_err(cap::MmioCap *mmio,
-         return errors::VMM_ERR_INVALID_ADDR; // port I/O is delegated via
-                                              // sys_ioport_grant, not MMIO
-     }
-+    if (mmio->size > UINT64_MAX - (arch::PAGE_SIZE - 1)) {
-+        return errors::VMM_ERR_INVALID_ADDR;
-+    }
-     const size_t pages =
-         (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
-     return map_phys_range_try(virt_addr, mmio->phys, pages, user, pml4_phys);
+diff --git a/src/kernel/memory/vmm_aarch64.cpp b/src/kernel/memory/vmm_aarch64.cpp
+--- a/src/kernel/memory/vmm_aarch64.cpp
++++ b/src/kernel/memory/vmm_aarch64.cpp
+@@ -117,9 +117,15 @@ uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
+     return leaf & ~(PAGE_UXN | PAGE_PXN);
+ }
+
+ bool VMM::vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out) {
+-    bool ro = (leaf & (PAGE_AP_USER | PAGE_AP_RO)) ==
+-              (PAGE_AP_USER | PAGE_AP_RO);
++    // Issue #376 boot-text W^X: AP[1] (PAGE_AP_RO) alone selects
++    // read-only on ARMv8 (AP=10 is EL1-RO, AP=11 is EL1+EL0-RO).
++    // Requiring AP_USER as well misreports EL1-only RO kernel leaves
++    // (hardened text/rodata, AP=10) as writable, failing the
++    // kernel_half_boot_wx_pins text/rodata asserts on aarch64 despite
++    // correct hardware state. User RO leaves (AP=11) still read true;
++    // user/kernel RW leaves (AP=00/01) still read false.
++    bool ro = (leaf & PAGE_AP_RO) != 0;
+     if (executable_out != nullptr)
+         *executable_out = (leaf & PAGE_UXN) == 0;
+     return ro;

@@ -542,7 +542,7 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     {
         uint64_t nsp = task_stack_ptr(&next);
         uint64_t nbase = reinterpret_cast<uint64_t>(next.kernel_stack);
-        uint64_t npg = reinterpret_cast<uint64_t>(next.page_table_);
+        uint64_t npg = reinterpret_cast<uint64_t>(next.get_page_table());
         // The harness's context.rsp may be a LIVE boot-stack RSP (its genuine
         // test-mode stack, kept current by the boot-stack save in
         // switch_to_task) rather than a TCB kernel-stack address — that is
@@ -660,11 +660,11 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next.kernel_stack_top,
                      __ATOMIC_RELEASE);
-    if (next.page_table_) {
+    if (next.get_page_table()) {
         // Issue #156: publish tagged (PCID 0 = raw phys, full flush).
-        uint64_t cr3_value = next.page_table_;
+        uint64_t cr3_value = next.get_page_table();
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-        cr3_value = arch::pcid_tag(next.page_table_,
+        cr3_value = arch::pcid_tag(next.get_page_table(),
                                    publish_pcid_for(next));
 #endif
         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
@@ -876,8 +876,8 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
                 (!nsp ||
                  (!harness_boot_ctx &&
                   (nsp < nbase || nsp >= next->kernel_stack_top)) ||
-                 (next->page_table_ != 0 &&
-                  (next->page_table_ & 0xFFF) != 0));
+                 (next->get_page_table() != 0 &&
+                  (next->get_page_table() & 0xFFF) != 0));
             if (!bad) {
                 // Unused on riscv64 (no validation branch below).
                 [[maybe_unused]] const uint64_t *f =
@@ -922,11 +922,11 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
                          __ATOMIC_RELEASE);
         __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next->kernel_stack_top,
                          __ATOMIC_RELEASE);
-        if (next->page_table_) {
+        if (next->get_page_table()) {
             // Issue #156: tagged publish (same contract as above).
-            uint64_t cr3_value = next->page_table_;
+            uint64_t cr3_value = next->get_page_table();
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-            cr3_value = arch::pcid_tag(next->page_table_,
+            cr3_value = arch::pcid_tag(next->get_page_table(),
                                        publish_pcid_for(*next));
 #endif
             __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
@@ -951,7 +951,7 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
         next->state = TaskState::RUNNING;
 
         // Issue #25 C1: CPU0-gated (shared TSS; see above).
-        if (next->page_table_ && sched_cpu() == 0)
+        if (next->get_page_table() && sched_cpu() == 0)
             arch::GDT::set_tss_rsp0(next->kernel_stack_top);
 
         // Apply the target task's I/O permission bitmap (issue #3).

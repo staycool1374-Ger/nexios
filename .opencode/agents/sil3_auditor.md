@@ -1,1 +1,1 @@
-../../PROMPT-audit.md
+../../prompts/PROMPT-audit.md

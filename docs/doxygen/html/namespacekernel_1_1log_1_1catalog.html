@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -147,7 +147,7 @@ Variables</h2></td></tr>
 <tr class="memitem:a551f4a358170ea2214923d29758b09fc" id="r_a551f4a358170ea2214923d29758b09fc"><td class="memItemLeft">constexpr <a class="el" href="structkernel_1_1log_1_1catalog_1_1_dmesg_record.html">DmesgRecord</a>&#160;</td><td class="memItemRight"><a class="el" href="#a551f4a358170ea2214923d29758b09fc">kDmesgCatalog_NET</a> []</td></tr>
 <tr class="memdesc:a551f4a358170ea2214923d29758b09fc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Network records (canonical base kDmesgBase_NET). No producer pushes these yet — the space is reserved so drivers report into a stable numbering from day one.  <br /></td></tr>
 <tr class="memitem:a8d322de7376aa6eaaec5d54f8dce67a7" id="r_a8d322de7376aa6eaaec5d54f8dce67a7"><td class="memItemLeft">constexpr <a class="el" href="structkernel_1_1log_1_1catalog_1_1_dmesg_record.html">DmesgRecord</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8d322de7376aa6eaaec5d54f8dce67a7">kDmesgCatalog_DRIVER</a> []</td></tr>
-<tr class="memdesc:a8d322de7376aa6eaaec5d54f8dce67a7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Driver records (canonical base kDmesgBase_DRIVER): probe, transport, queue, request and DMA failures across ahci/virtio/pci.  <br /></td></tr>
+<tr class="memdesc:a8d322de7376aa6eaaec5d54f8dce67a7"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structkernel_1_1_driver.html" title="Describes a single driver module.">Driver</a> records (canonical base kDmesgBase_DRIVER): probe, transport, queue, request and DMA failures across ahci/virtio/pci.  <br /></td></tr>
 <tr class="memitem:a5e9f6975a2bf059fda2af6af990fc62d" id="r_a5e9f6975a2bf059fda2af6af990fc62d"><td class="memItemLeft">constexpr <a class="el" href="structkernel_1_1log_1_1catalog_1_1_dmesg_record.html">DmesgRecord</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5e9f6975a2bf059fda2af6af990fc62d">kDmesgCatalog_INIT</a> []</td></tr>
 <tr class="memdesc:a5e9f6975a2bf059fda2af6af990fc62d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Init records (canonical base kDmesgBase_INIT): init-rc, fstab, daemon-startup and shell-creation milestones and failures.  <br /></td></tr>
 <tr class="memitem:a0a3ac25128cf2f20f367de5c1083b18b" id="r_a0a3ac25128cf2f20f367de5c1083b18b"><td class="memItemLeft">constexpr <a class="el" href="structkernel_1_1log_1_1catalog_1_1_dmesg_record.html">DmesgRecord</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0a3ac25128cf2f20f367de5c1083b18b">kDmesgCatalog_TIMING</a> []</td></tr>
@@ -391,7 +391,7 @@ Here is the call graph for this function:</div>
 <div class="ttc" id="anamespacekernel_1_1log_html_a0a15565ea32d9d5ddb218c71e3f3c44aa0420dcd0a9b3fc40a86ae7e7b530bcbf"><div class="ttname"><a href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa0420dcd0a9b3fc40a86ae7e7b530bcbf">kernel::log::ErrorSubsystem::DRIVER</a></div><div class="ttdeci">@ DRIVER</div><div class="ttdoc">Device drivers + PCI (issue #234 full taxonomy).</div><div class="ttdef"><b>Definition</b> dmesg.hpp:94</div></div>
 <div class="ttc" id="anamespacekernel_1_1log_html_ad073d77cb5319a5718c6990297776294"><div class="ttname"><a href="namespacekernel_1_1log.html#ad073d77cb5319a5718c6990297776294">kernel::log::kDmesgBase_DRIVER</a></div><div class="ttdeci">constexpr uint64_t kDmesgBase_DRIVER</div><div class="ttdef"><b>Definition</b> dmesg.hpp:120</div></div>
 </div><!-- fragment -->
-<p>Driver records (canonical base kDmesgBase_DRIVER): probe, transport, queue, request and DMA failures across ahci/virtio/pci. </p>
+<p><a class="el" href="structkernel_1_1_driver.html" title="Describes a single driver module.">Driver</a> records (canonical base kDmesgBase_DRIVER): probe, transport, queue, request and DMA failures across ahci/virtio/pci. </p>
 
 </div>
 </div>

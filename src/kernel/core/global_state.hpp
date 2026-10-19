@@ -43,6 +43,7 @@
 #include <concepts.hpp>
 #include <kernel/boot/bootinfo.hpp>
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/debug/ipc_sched_trace.hpp> // issue #368: h2_record home
 
 // The Filesystem singletons (initrd_fs/dev_fs/proc_fs/tmpfs_fs/fat32_fs) are
 // module-owned objects defined with file-static ops tables in their own

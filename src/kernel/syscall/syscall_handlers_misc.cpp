@@ -150,10 +150,10 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                     if (p->waiting_child_status) {
                         uint64_t old_cr3 = 0;
                         bool switched = false;
-                        if (p->page_table_ &&
-                            arch::read_cr3() != p->page_table_) {
+                        if (p->get_page_table() &&
+                            arch::read_cr3() != p->get_page_table()) {
                             old_cr3 = arch::read_cr3();
-                            arch::write_cr3(p->page_table_);
+                            arch::write_cr3(p->get_page_table());
                             switched = true;
                         }
                         // MP-4 (SMAP): the status page is a user page in the
@@ -326,13 +326,13 @@ uint64_t Syscall::sys_brk(uint64_t arg0, uint64_t, uint64_t, uint64_t,
         for (uint64_t vaddr = start_page; vaddr < end_page;
              vaddr += arch::PAGE_SIZE) {
             // Check if already mapped
-            if (VMM::virt_to_phys_in_pml4(vaddr, t->page_table_) != 0)
+            if (VMM::virt_to_phys_in_pml4(vaddr, t->get_page_table()) != 0)
                 continue;
             uint64_t phys = PMM::alloc_user_page();
             if (!phys)
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             // Issue #325-D: brk heap is data (never executable).
-            VMM::map_page_in_pml4(vaddr, phys, true, false, t->page_table_);
+            VMM::map_page_in_pml4(vaddr, phys, true, false, t->get_page_table());
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys),
                              0, arch::PAGE_SIZE);
@@ -352,7 +352,7 @@ uint64_t Syscall::sys_brk(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                 t->canary_after[heap] = new_top;
                 canary_write_at(new_top,
                                 TaskControlBlock::CANARY_MAGIC ^ (heap + 1),
-                                t->page_table_);
+                                t->get_page_table());
             }
         }
     }

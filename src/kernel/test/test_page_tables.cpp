@@ -82,12 +82,12 @@ JARVIS_TEST(page_tables_kernel_task_private_pml4, "PRE: none | POST: none") {
         t->cleanup();
         delete t;
     });
-    JARVIS_ASSERT(t->page_table_ != 0);
-    JARVIS_ASSERT(t->page_table_ != VMM::get_kernel_pml4());
+    JARVIS_ASSERT(t->get_page_table() != 0);
+    JARVIS_ASSERT(t->get_page_table() != VMM::get_kernel_pml4());
     JARVIS_ASSERT(t->is_user_ == false);
 
     auto *priv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                              (t->page_table_ & ~0xFFFULL));
+                                              (t->get_page_table() & ~0xFFFULL));
     auto *kern = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
@@ -106,17 +106,17 @@ JARVIS_TEST(page_tables_user_task_page_table_set, "PRE: none | POST: none") {
         t->cleanup();
         delete t;
     });
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
     JARVIS_TEST_PASS();
 }
 
 JARVIS_TEST(page_tables_free_pages_on_cleanup, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
     JARVIS_ASSERT(t != nullptr);
-    uint64_t page_table = t->page_table_;
+    uint64_t page_table = t->get_page_table();
     JARVIS_ASSERT(page_table != 0);
     t->cleanup();
-    JARVIS_ASSERT(t->page_table_ == 0);
+    JARVIS_ASSERT(t->get_page_table() == 0);
     JARVIS_ASSERT(t->user_stack_ == 0);
     delete t; // free the TCB block (cleanup only tears down resources)
     JARVIS_TEST_PASS();
@@ -129,12 +129,12 @@ JARVIS_TEST(page_tables_max_process_pages_config, "PRE: none | POST: none") {
     // by creating a user task and checking its page table is usable
     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
     JARVIS_ASSERT(t != nullptr);
-    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->get_page_table() != 0);
     // Map a page to verify the page table works
     uint64_t test_pa = PMM::alloc_user_page();
     JARVIS_ASSERT(test_pa != 0);
-    VMM::map_page_in_pml4(0x10000000, test_pa, true, false, t->page_table_);
-    uint64_t resolved = VMM::virt_to_phys_in_pml4(0x10000000, t->page_table_);
+    VMM::map_page_in_pml4(0x10000000, test_pa, true, false, t->get_page_table());
+    uint64_t resolved = VMM::virt_to_phys_in_pml4(0x10000000, t->get_page_table());
     JARVIS_ASSERT_EQ(test_pa, resolved);
     PMM::free_page(test_pa);
     t->cleanup();
@@ -180,20 +180,20 @@ JARVIS_TEST(page_tables_isolation, "PRE: none | POST: none") {
         b->cleanup();
         delete b;
     });
-    JARVIS_ASSERT(a->page_table_ != b->page_table_);
+    JARVIS_ASSERT(a->get_page_table() != b->get_page_table());
 
     // Map a test page in A's PML4 at a known VA (below STACK_VADDR).
     uint64_t test_va = 0x10000000;
     uint64_t test_pa = PMM::alloc_user_page();
     JARVIS_ASSERT(test_pa != 0);
-    VMM::map_page_in_pml4(test_va, test_pa, true, false, a->page_table_);
+    VMM::map_page_in_pml4(test_va, test_pa, true, false, a->get_page_table());
 
-    uint64_t in_a = VMM::virt_to_phys_in_pml4(test_va, a->page_table_);
+    uint64_t in_a = VMM::virt_to_phys_in_pml4(test_va, a->get_page_table());
     JARVIS_ASSERT_FMT(in_a == test_pa,
                       "Page in A resolves to 0x%lx (expected 0x%lx)",
                       in_a, test_pa);
 
-    uint64_t in_b = VMM::virt_to_phys_in_pml4(test_va, b->page_table_);
+    uint64_t in_b = VMM::virt_to_phys_in_pml4(test_va, b->get_page_table());
     JARVIS_ASSERT_FMT(in_b == 0,
                       "Page in B resolves to 0x%lx (expected 0 — isolated)",
                       in_b);
@@ -367,6 +367,122 @@ JARVIS_TEST(map_page_err_oom_writes_nothing, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: runtime kernel-half maps are non-executable (issue #376
+//           slice 1 — x86 encode_kernel_leaf carries NX; riscv never
+//           sets X; aarch64 sets UXN+PXN in this path).
+// Input: kernel-table map at a scratch HHDM VA (fresh split, restored
+//        after like map_page_err_validation_and_success).
+// Expect: pte_is_executable_in_pml4() false while mapped; VA unmapped
+//         after; PMM delta zero.
+// Depends: VMM::map_page_err, VMM::pte_is_executable_in_pml4
+JARVIS_TEST(kernel_half_runtime_map_nx, "PRE: none | POST: none") {
+    // Same scratch VA as map_page_err_validation_and_success (proven 2 MiB
+    // boot huge entry; tests run sequentially with snapshot restore between).
+    constexpr uint64_t SCRATCH_VA = arch::HHDM_OFFSET + 0x2000000ULL;
+    uint64_t phys = PMM::alloc_page();
+    JARVIS_ASSERT(phys != 0);
+#if defined(CONFIG_ARCH_X86_64)
+    // Same PD save/restore as map_page_err_validation_and_success: the
+    // scratch VA sits in a boot 2 MiB huge entry; the split PT is freed
+    // manually (snapshot rewind does not free split tables).
+    constexpr uint64_t kX86TableFrameMask = 0x000FFFFFFFFFF000ULL;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (VMM::get_kernel_pml4() &
+                                               kX86TableFrameMask));
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *pdpt = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET +
+        (pml4[arch::ArchPageTable::pml4_index(SCRATCH_VA)] &
+         kX86TableFrameMask));
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *pd = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET +
+        (pdpt[arch::ArchPageTable::pdpt_index(SCRATCH_VA)] &
+         kX86TableFrameMask));
+    const size_t pd_idx = arch::ArchPageTable::pd_index(SCRATCH_VA);
+    constexpr uint64_t kX86HugeBit = 1ULL << 7;
+    const uint64_t boot_entry = pd[pd_idx];
+    JARVIS_ASSERT((boot_entry & kX86HugeBit) != 0);
+    {
+        arch::IrqGuard irq_guard;
+        JARVIS_ASSERT(VMM::map_page_err(SCRATCH_VA, phys, false) ==
+                      errors::VMM_ERR_OK);
+        JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(
+            SCRATCH_VA, VMM::get_kernel_pml4()));
+        VMM::unmap_page(SCRATCH_VA);
+        const uint64_t split_pt = pd[pd_idx] & kX86TableFrameMask;
+        pd[pd_idx] = boot_entry;
+        arch::ArchPageTable::tlb_flush(SCRATCH_VA);
+        PMM::free_page(split_pt);
+    }
+    JARVIS_ASSERT_EQ(boot_entry, pd[pd_idx]);
+#else
+    JARVIS_ASSERT(VMM::map_page_err(SCRATCH_VA, phys, false) ==
+                  errors::VMM_ERR_OK);
+    JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(SCRATCH_VA,
+                                                  VMM::get_kernel_pml4()));
+    VMM::unmap_page(SCRATCH_VA);
+#endif
+    PMM::free_page(phys);
+    JARVIS_TEST_PASS();
+}
+
+extern "C" {
+// Linker image bounds (4K-aligned starts; see linker/linker_*.ld).
+// Mirrors the integrity.hpp _text_start idiom.
+extern uint64_t _text_start[];
+extern uint64_t _rodata_start[];
+extern uint64_t _data_start[];
+extern uint64_t _bss_end[];
+}
+
+// Runmode: kernel
+// Testidea: boot-established kernel-half image permissions are W^X
+//           (issue #376 epic remainder, VMM::harden_kernel_half): text RX,
+//           rodata RO+NX, data/bss RW+NX. Sample VAs come straight from the
+//           linker symbols; arch dispatch lives in the inspectors.
+// Input: live kernel PML4 + section VAs.
+// Expect: text RO + executable (also the inspector's positive control);
+//         rodata RO + non-executable; data/bss non-RO + non-executable.
+//         No mapping changes (walk-only), PMM delta zero.
+// Depends: harden_kernel_half, pte_is_ro_in_pml4,
+//          pte_is_executable_in_pml4.
+// Note: the x86 kslot window (RW+NX via map_kstack_page) has no stable VA
+// in the test harness (HHDM fallback when in_test_harness), so no slot
+// assert here — every x86 task creation post-harden maps its stack NX,
+// and a faulting stack would triple-fault the suite instantly.
+JARVIS_TEST(kernel_half_boot_wx_pins, "PRE: none | POST: none") {
+    const uint64_t pml4 = VMM::get_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t text_va = reinterpret_cast<uint64_t>(_text_start);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t rodata_va = reinterpret_cast<uint64_t>(_rodata_start);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t data_va = reinterpret_cast<uint64_t>(_data_start);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const uint64_t bss_va = reinterpret_cast<uint64_t>(_bss_end) - 8;
+
+    bool exec = false;
+    JARVIS_ASSERT_FMT(VMM::pte_is_ro_in_pml4(text_va, pml4, &exec),
+                      "text not RO");
+    JARVIS_ASSERT_FMT(exec, "text not executable");
+    JARVIS_ASSERT_FMT(VMM::pte_is_ro_in_pml4(rodata_va, pml4, &exec),
+                      "rodata not RO");
+    JARVIS_ASSERT_FMT(!exec, "rodata executable");
+    JARVIS_ASSERT_FMT(!VMM::pte_is_ro_in_pml4(data_va, pml4, nullptr),
+                      "data RO");
+    JARVIS_ASSERT_FMT(!VMM::pte_is_executable_in_pml4(data_va, pml4),
+                      "data executable");
+    JARVIS_ASSERT_FMT(!VMM::pte_is_ro_in_pml4(bss_va, pml4, nullptr),
+                      "bss RO");
+    JARVIS_ASSERT_FMT(!VMM::pte_is_executable_in_pml4(bss_va, pml4),
+                      "bss executable");
+    JARVIS_TEST_PASS();
+}
+
 void register_page_tables_tests() {
     Logger::info("Registering page tables tests");
     JARVIS_REGISTER_TEST(page_tables_alloc_from_pool);
@@ -380,4 +496,6 @@ void register_page_tables_tests() {
     JARVIS_REGISTER_TEST(page_tables_isolation);
     JARVIS_REGISTER_TEST(map_page_err_validation_and_success);
     JARVIS_REGISTER_TEST(map_page_err_oom_writes_nothing);
+    JARVIS_REGISTER_TEST(kernel_half_runtime_map_nx);
+    JARVIS_REGISTER_TEST(kernel_half_boot_wx_pins);
 }

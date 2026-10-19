@@ -1,7 +1,19 @@
 var searchData=
 [
-  ['ok_0',['OK',['../classkernel_1_1_tlb_shootdown.html#a64bcea6452f5f33c97ef7e0382ed173bae0aa021e21dddbd6d8cecec71e9cf564',1,'kernel::TlbShootdown::OK'],['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0ae0aa021e21dddbd6d8cecec71e9cf564',1,'arch::OK'],['../namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796ae0aa021e21dddbd6d8cecec71e9cf564',1,'kernel::elf::OK'],['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106ae0aa021e21dddbd6d8cecec71e9cf564',1,'kernel::OK'],['../namespaceservice.html#a827bfc4d7da8410f5f325ee7a9ecd55dae0aa021e21dddbd6d8cecec71e9cf564',1,'service::OK']]],
-  ['oom_1',['OOM',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a56a16d94e7f11cd4af1723c74c8d9291',1,'kernel']]],
-  ['other_2',['OTHER',['../namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6fa03570470bad94692ce93e32700d2e1cb',1,'kernel::elf']]],
-  ['owner_5fonly_3',['OWNER_ONLY',['../namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495dac0ffba7d4da134eadd8cd0f85500b94e',1,'kernel::gs']]]
+  ['nanosleep_0',['NANOSLEEP',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a9acaf540e81d3197a4fd42d203578e8c',1,'kernel']]],
+  ['native_1',['native',['../namespacekernel.html#a4735064b3e45ab6740d66071b2bba544a8e5f3adee38c8fccc13c1f3be0143796',1,'kernel']]],
+  ['net_2',['NET',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa347aadfc505a4bc6b2f9d81363d2331c',1,'kernel::log']]],
+  ['never_5fwrite_3',['NEVER_WRITE',['../namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495da02c1dcf9d4370b9359a2152eb3c55b79',1,'kernel::gs']]],
+  ['nmi_4',['NMI',['../namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630a98ac9fa587d32240fbd819325be9beac',1,'arch']]],
+  ['no_5felf_5',['NO_ELF',['../namespaceservice.html#a827bfc4d7da8410f5f325ee7a9ecd55da656a5d5b77c940ebba6b5c39849ccaa0',1,'service']]],
+  ['nomem_6',['NOMEM',['../namespacekernel_1_1elf.html#a6144be63a5e267b596cd679825c192c7a83f7ae7510d4a2108ba2c0dba5d2ae1d',1,'kernel::elf']]],
+  ['nonblock_7',['NONBLOCK',['../namespacekernel.html#acf26df622e6621b8e36d62ce14d07809aafc3203b70037086fb9aa7f2ced7a9f0',1,'kernel']]],
+  ['none_8',['NONE',['../classkernel_1_1_scheduler.html#aafa9966e76c491b9409a666d5dfd260dab50339a10e1de285ac99d4c3990b8693',1,'kernel::Scheduler::NONE'],['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ab50339a10e1de285ac99d4c3990b8693',1,'kernel::cap::NONE'],['../namespacekernel.html#acf26df622e6621b8e36d62ce14d07809ab50339a10e1de285ac99d4c3990b8693',1,'kernel::NONE']]],
+  ['not_5ffound_9',['NOT_FOUND',['../namespacekernel_1_1elf.html#a6144be63a5e267b596cd679825c192c7a8c02547a8a3b02382bac3557bcb2280d',1,'kernel::elf::NOT_FOUND'],['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a8c02547a8a3b02382bac3557bcb2280d',1,'kernel::NOT_FOUND']]],
+  ['not_5fimplemented_10',['NOT_IMPLEMENTED',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a3e860a081575fc82cc7b6ed2ca602947',1,'kernel']]],
+  ['not_5floading_11',['NOT_LOADING',['../namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796a42769f5c0b640211e86c29a70b3ad295',1,'kernel::elf']]],
+  ['notify_12',['NOTIFY',['../namespacekernel.html#a39a8b332edefebba052488078097a45ba9d087bfb809874e1b3e9adcbae8ca761',1,'kernel::NOTIFY'],['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a9d087bfb809874e1b3e9adcbae8ca761',1,'kernel::NOTIFY']]],
+  ['notify_13',['Notify',['../namespacekernel.html#aa6c3b797a7f9c5f662f307dfd8af3704aaaf9ed605d0193362321ba0def15c9b7',1,'kernel']]],
+  ['notify_5fwait_14',['NOTIFY_WAIT',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a3f6169628af7f81a8313e2a08a7c06e6',1,'kernel']]],
+  ['null_15',['Null',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99abbb93ef26e3c101ff11cdd21cab08a94',1,'kernel::cap']]]
 ];

@@ -22,10 +22,16 @@
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/idt.hpp>
+#include <kernel/bootparams.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/nexios_config.h>
 
 namespace arch {
+
+/// @brief Counter ticks remaining until the armed deadline (0 when the
+/// timer is disabled or expired). Shared by remaining()/remaining_ns().
+/// @return Remaining counter ticks (clamped, never wraps).
+static uint64_t counter_remaining();
 
 constinit uint64_t Timer::ticks_ = 0;
 uint64_t Timer::counter_freq_hz_ = 0;
@@ -50,7 +56,9 @@ void Timer::init(uint32_t frequency_hz) {
 }
 
 /// @brief Set the timer compare value to achieve a given frequency.
-/// Reads CNTFRQ_EL0 to calculate the interval and writes it to CNTP_TVAL_EL0.
+/// Programs an absolute CNTP_CVAL_EL0 deadline (now + interval) so a late
+/// re-arm cannot land in the past and storm. Re-arming uses CVAL, not the
+/// relative TVAL window.
 /// @param[in] frequency_hz Desired frequency in Hz.
 void Timer::set_frequency(uint32_t frequency_hz) {
     if (frequency_hz == 0) {
@@ -60,8 +68,12 @@ void Timer::set_frequency(uint32_t frequency_hz) {
     asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
     counter_freq_hz_ = freq;
     uint64_t interval = freq / frequency_hz;
-    tick_interval_ = static_cast<uint32_t>(interval);
-    asm volatile("msr cntp_tval_el0, %0" : : "r"(interval));
+    tick_interval_ = static_cast<uint32_t>(interval == 0 ? 1 : interval);
+    uint64_t now{};
+    asm volatile("mrs %0, cntpct_el0" : "=r"(now));
+    const uint64_t deadline =
+        (now > ~0ULL - tick_interval_) ? ~0ULL : now + tick_interval_;
+    asm volatile("msr cntp_cval_el0, %0" : : "r"(deadline));
     asm volatile("msr cntp_ctl_el0, %0" : : "r"(1UL));
     isb();
 }
@@ -85,8 +97,9 @@ uint64_t Timer::ns() {
 }
 
 /// @brief Handle a timer interrupt: increment tick count and re-arm the timer.
-/// The compare value must be pushed into the future again, otherwise the
-/// level-asserted interrupt re-pends immediately after EOI (IRQ storm).
+/// Re-arms via an absolute CVAL deadline (now + latched interval) so a
+/// delayed handler cannot program the past and storm on a level-asserted
+/// line. Saturating tick count (no wrap).
 /// @param ip Instruction pointer from interrupt frame.
 void Timer::handle_irq(uint64_t ip) {
     (void)ip;
@@ -95,7 +108,11 @@ void Timer::handle_irq(uint64_t ip) {
     if (interval == 0) {
         interval = 1;
     }
-    asm volatile("msr cntp_tval_el0, %0" : : "r"(interval));
+    uint64_t now{};
+    asm volatile("mrs %0, cntpct_el0" : "=r"(now));
+    const uint64_t deadline =
+        (now > ~0ULL - interval) ? ~0ULL : now + interval;
+    asm volatile("msr cntp_cval_el0, %0" : : "r"(deadline));
     asm volatile("msr cntp_ctl_el0, %0" : : "r"(1UL));
     isb();
 }
@@ -147,9 +164,9 @@ uint64_t Timer::remaining_ns() {
     if (freq == 0) {
         return 0;
     }
-    const uint64_t tval = remaining();
-    return (tval / freq) * 1000000000ULL +
-           ((tval % freq) * 1000000000ULL) / freq;
+    const uint64_t rem = counter_remaining();
+    return (rem / freq) * 1000000000ULL +
+           ((rem % freq) * 1000000000ULL) / freq;
 }
 
 /// @brief Override the tick counter (used in test isolation).
@@ -159,51 +176,119 @@ void Timer::set_ticks_for_test(uint64_t value) {
 }
 
 /// @brief Arm the timer for a one-shot interrupt after a number of ticks.
-/// @param[in] ticks_from_now Number of scheduler ticks (ms) from now.
+/// @param[in] ticks_from_now Number of scheduler ticks from now.
+/// Converts coarse ticks (BootParams::timer_hz, fallback CONFIG_TICK_HZ)
+/// to counter ticks and arms an absolute CVAL deadline. Saturating math:
+/// oversized requests clamp to the maximum deadline, never wrap.
+/// 0 disarms (CTL=0); remaining() then reads 0.
 void Timer::oneshot(uint64_t ticks_from_now) {
     if (ticks_from_now == 0) {
         // Disarm: clear the countdown and disable the physical timer so
-        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
+        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer
+        // contract). CTL-gated remaining() makes the readback exact
+        // (TVAL is count-minus-CVAL derived, not a stored zero).
         asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
         asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
         isb();
         return;
     }
-    uint64_t interval = ticks_from_now * (counter_freq_hz_ / 1000);
-    if (interval == 0)
+    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz != 0
+                                 ? kernel::BootParams::instance().timer_hz
+                                 : CONFIG_TICK_HZ;
+    const uint64_t freq = counter_freq_hz_;
+    const uint64_t per_coarse = (freq == 0 || boot_hz == 0)
+                                    ? 1ULL
+                                    : freq / boot_hz == 0 ? 1ULL
+                                                          : freq / boot_hz;
+    uint64_t interval = (ticks_from_now > ~0ULL / per_coarse)
+                            ? ~0ULL
+                            : ticks_from_now * per_coarse;
+    if (interval == 0) {
         interval = 1;
-    asm volatile("msr cntp_tval_el0, %0" : : "r"(interval));
+    }
+    uint64_t now{};
+    asm volatile("mrs %0, cntpct_el0" : "=r"(now));
+    const uint64_t deadline =
+        (now > ~0ULL - interval) ? ~0ULL : now + interval;
+    asm volatile("msr cntp_cval_el0, %0" : : "r"(deadline));
     asm volatile("msr cntp_ctl_el0, %0" : : "r"(1UL));
     isb();
 }
 
 /// @brief Arm the timer for periodic interrupts.
-/// @param[in] period_ticks Interval in scheduler ticks (ms).
+/// @param[in] period_ticks Period in scheduler ticks (not Hz). Converts to
+/// counter ticks at BootParams::timer_hz and latches the interval so the
+/// ISR re-arms the same period. 0 disarms (CTL=0).
 void Timer::periodic(uint64_t period_ticks) {
     if (period_ticks == 0) {
         // Disarm: clear the countdown and disable the physical timer so
-        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
+        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer
+        // contract).
         asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
         asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
         isb();
         return;
     }
-    uint64_t freq{};
-    asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
-    uint64_t interval = freq / period_ticks;
-    if (interval == 0)
+    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz != 0
+                                 ? kernel::BootParams::instance().timer_hz
+                                 : CONFIG_TICK_HZ;
+    const uint64_t freq = counter_freq_hz_;
+    const uint64_t per_coarse = (freq == 0 || boot_hz == 0)
+                                    ? 1ULL
+                                    : freq / boot_hz == 0 ? 1ULL
+                                                          : freq / boot_hz;
+    uint64_t interval = (period_ticks > ~0ULL / per_coarse)
+                            ? ~0ULL
+                            : period_ticks * per_coarse;
+    if (interval == 0) {
         interval = 1;
-    asm volatile("msr cntp_tval_el0, %0" : : "r"(interval));
+    }
+    tick_interval_ = (interval > 0xFFFFFFFFULL)
+                         ? 0xFFFFFFFFU
+                         : static_cast<uint32_t>(interval);
+    uint64_t now{};
+    asm volatile("mrs %0, cntpct_el0" : "=r"(now));
+    const uint64_t deadline =
+        (now > ~0ULL - interval) ? ~0ULL : now + interval;
+    asm volatile("msr cntp_cval_el0, %0" : : "r"(deadline));
     asm volatile("msr cntp_ctl_el0, %0" : : "r"(1UL));
     isb();
 }
 
-/// @brief Read the remaining time on the timer (CNTP_TVAL_EL0).
-/// @return Remaining timer value in counter ticks.
+/// @brief Counter ticks remaining until the armed deadline (0 when the
+/// timer is disabled or expired). Shared by remaining()/remaining_ns().
+/// @return Remaining counter ticks (clamped, never wraps).
+static uint64_t counter_remaining() {
+    uint64_t ctl{};
+    asm volatile("mrs %0, cntp_ctl_el0" : "=r"(ctl));
+    if ((ctl & 1ULL) == 0) {
+        return 0;
+    }
+    uint64_t cval{};
+    asm volatile("mrs %0, cntp_cval_el0" : "=r"(cval));
+    uint64_t now{};
+    asm volatile("mrs %0, cntpct_el0" : "=r"(now));
+    return (cval > now) ? (cval - now) : 0;
+}
+
+/// @brief Read the remaining time on the timer in coarse scheduler ticks.
+/// @return Remaining whole+partial ticks (ceil), 0 when disarmed/expired.
 uint64_t Timer::remaining() {
-    uint64_t val{};
-    asm volatile("mrs %0, cntp_tval_el0" : "=r"(val));
-    return val;
+    const uint64_t rem = counter_remaining();
+    if (rem == 0) {
+        return 0;
+    }
+    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz != 0
+                                 ? kernel::BootParams::instance().timer_hz
+                                 : CONFIG_TICK_HZ;
+    const uint64_t freq = counter_freq_hz_;
+    if (freq == 0 || boot_hz == 0) {
+        return rem;
+    }
+    const uint64_t per_coarse = freq / boot_hz == 0 ? 1 : freq / boot_hz;
+    // Ceil without add-overflow: q + (r != 0), valid for saturated ~0ULL
+    // deadlines where (rem + per_coarse - 1) would wrap (S3 hardening).
+    return rem / per_coarse + (rem % per_coarse != 0 ? 1 : 0);
 }
 
 } // namespace arch

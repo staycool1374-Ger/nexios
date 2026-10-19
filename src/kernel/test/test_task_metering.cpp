@@ -128,12 +128,12 @@ static bool run_meter_probe(uint32_t arg0_a, uint64_t arg1_a, uint32_t arg0_b,
     uint64_t data_phys = PMM::alloc_user_page();
     if (data_phys) {
         VMM::map_page_in_pml4(kMeterProbeDataVa, data_phys, true, false,
-                              fixture->page_table_);
+                              fixture->get_page_table());
     }
     uint64_t code_phys = VMM::virt_to_phys_in_pml4(kMeterProbeCodeVa,
-                                                   fixture->page_table_);
+                                                   fixture->get_page_table());
     uint64_t data_check = VMM::virt_to_phys_in_pml4(kMeterProbeDataVa,
-                                                    fixture->page_table_);
+                                                    fixture->get_page_table());
     if (!data_phys || data_check != data_phys || !code_phys) {
         kernel::test::terminate_and_drain(*fixture);
         return false;
@@ -168,7 +168,7 @@ static bool run_meter_probe(uint32_t arg0_a, uint64_t arg1_a, uint32_t arg0_b,
         arch::pause();
     }
     data_check = VMM::virt_to_phys_in_pml4(kMeterProbeDataVa,
-                                           fixture->page_table_);
+                                           fixture->get_page_table());
     bool exited = (fixture->state == TaskState::TERMINATED);
     bool clean_exit = exited && (fixture->exit_code == 0);
     bool observed = exited && (data_check == data_phys);

@@ -1,5 +1,7 @@
 var structkernel_1_1net_1_1_virtio_net_device =
 [
+    [ "~VirtioNetDevice", "structkernel_1_1net_1_1_virtio_net_device.html#abbc29bb89817f4f25288d5240e3da453", null ],
+    [ "lock_", "structkernel_1_1net_1_1_virtio_net_device.html#af64ae38ea0e7f2c8d89efaa8c12ddbff", null ],
     [ "nic", "structkernel_1_1net_1_1_virtio_net_device.html#a6199ae0688ef23c1acf0a537ddcd0ce6", null ],
     [ "queue_size", "structkernel_1_1net_1_1_virtio_net_device.html#a56c285ebe0937050b6663e369b8caf03", null ],
     [ "rx_avail", "structkernel_1_1net_1_1_virtio_net_device.html#a7137b64a82262ebf555f4eecaeb887f7", null ],
@@ -20,6 +22,7 @@ var structkernel_1_1net_1_1_virtio_net_device =
     [ "tx_buf_phys", "structkernel_1_1net_1_1_virtio_net_device.html#a91eb221c3ab8abdda859cd2ad3f0572f", null ],
     [ "tx_desc", "structkernel_1_1net_1_1_virtio_net_device.html#a61c88c87bbc89ff86fe0c20152dee6f4", null ],
     [ "tx_desc_phys", "structkernel_1_1net_1_1_virtio_net_device.html#ac4146a70968b9373e2cd9b2d372a0d7c", null ],
+    [ "tx_inflight_", "structkernel_1_1net_1_1_virtio_net_device.html#a9f14060af248ac0909f50660b2d75310", null ],
     [ "tx_used", "structkernel_1_1net_1_1_virtio_net_device.html#a9cc758a602fa1369b711d30c609bfc47", null ],
     [ "tx_used_phys", "structkernel_1_1net_1_1_virtio_net_device.html#ab6444f4b299dee0524f15a5b0b1583d8", null ]
 ];

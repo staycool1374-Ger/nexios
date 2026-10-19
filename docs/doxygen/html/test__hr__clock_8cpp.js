@@ -5,5 +5,6 @@ var test__hr__clock_8cpp =
     [ "JARVIS_TEST", "test__hr__clock_8cpp.html#a1f8e3e4c99eabde57eb369911bd2d2d3", null ],
     [ "JARVIS_TEST", "test__hr__clock_8cpp.html#a7e4e681c043771a384858e165cdc6628", null ],
     [ "JARVIS_TEST", "test__hr__clock_8cpp.html#a192beb3ebda9c924b2b05a738cd95918", null ],
+    [ "JARVIS_TEST", "test__hr__clock_8cpp.html#ad145f503682946372327439b5dbc28ea", null ],
     [ "register_hrt_monotonic_tests", "test__hr__clock_8cpp.html#a449b8e4a4177f482e31f6ffd658b436b", null ]
 ];

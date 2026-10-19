@@ -37,6 +37,17 @@ TaskControlBlock *Scheduler::find_task(uint64_t id) noexcept {
     return id_table_find(id);
 }
 
+bool Scheduler::validate_id(uint64_t id) noexcept {
+    // Issue #374: TASK_INVALID (UINT64_MAX, the alloc_id exhaustion
+    // sentinel) is never a live ID; IDs at/above the monotonic allocation
+    // high-water were never issued.  Both fail fast without probing.
+    if (id == UINT64_MAX)
+        return false;
+    uint64_t high_water =
+        __atomic_load_n(&next_task_id_, __ATOMIC_ACQUIRE);
+    return id < high_water;
+}
+
 // ---------------------------------------------------------------------------
 // O(1) task-ID→TCB hash table (open addressing, linear probing)
 // ---------------------------------------------------------------------------

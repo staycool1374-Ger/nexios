@@ -291,7 +291,7 @@ JARVIS_TEST(elf_load_from_hhdm_buffer, "PRE: none | POST: none") {
     auto *tcb = elf::load(&hdr, data);
     JARVIS_ASSERT(tcb != nullptr);
     JARVIS_ASSERT(tcb->user_stack_ != 0);
-    JARVIS_ASSERT(tcb->page_table_ != 0);
+    JARVIS_ASSERT(tcb->get_page_table() != 0);
 
     tcb->cleanup();
     delete tcb;

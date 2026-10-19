@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.2.21</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classarch_1_1_
 </div><!--header-->
 <div class="contents">
 
+<p>Manages x86-64 CPU context save/restore and stack initialisation.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="hal_2context_8hpp_source.html">context.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for arch::ArchContextManager:</div>
@@ -129,14 +132,38 @@ Collaboration diagram for arch::ArchContextManager:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:af84389904ee5b1f32b590b1e3a262a3a" id="r_af84389904ee5b1f32b590b1e3a262a3a"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af84389904ee5b1f32b590b1e3a262a3a">init_stack</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *stack_top, void(*entry)(), <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cs, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ss, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rflags, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> user_rsp)</td></tr>
-<tr class="memitem:a77498407356bad8c8bf0aa682633edb8" id="r_a77498407356bad8c8bf0aa682633edb8"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a77498407356bad8c8bf0aa682633edb8">save</a> (<a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;ctx, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rsp)</td></tr>
-<tr class="memitem:a041cb0e89166678d239c678eca9cf302" id="r_a041cb0e89166678d239c678eca9cf302"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a041cb0e89166678d239c678eca9cf302">restore</a> (const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;ctx, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;rsp)</td></tr>
-<tr class="memitem:a082720e3a0aedef71f530b7bc8a78739" id="r_a082720e3a0aedef71f530b7bc8a78739"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a082720e3a0aedef71f530b7bc8a78739">switch_to</a> (<a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;from, const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;to, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;rsp)</td></tr>
+<tr class="memitem:af84389904ee5b1f32b590b1e3a262a3a" id="r_af84389904ee5b1f32b590b1e3a262a3a"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af84389904ee5b1f32b590b1e3a262a3a">init_stack</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *stack_top, void(*entry)(), <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cs, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ss, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> rflags, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> user_rsp)</td></tr>
+<tr class="memdesc:af84389904ee5b1f32b590b1e3a262a3a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialise a stack frame for a new task (x86-64).  <br /></td></tr>
+<tr class="memitem:a77498407356bad8c8bf0aa682633edb8" id="r_a77498407356bad8c8bf0aa682633edb8"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a77498407356bad8c8bf0aa682633edb8">save</a> (<a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;ctx, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> rsp)</td></tr>
+<tr class="memdesc:a77498407356bad8c8bf0aa682633edb8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Save the current stack pointer into a context block.  <br /></td></tr>
+<tr class="memitem:a041cb0e89166678d239c678eca9cf302" id="r_a041cb0e89166678d239c678eca9cf302"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a041cb0e89166678d239c678eca9cf302">restore</a> (const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;ctx, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;rsp)</td></tr>
+<tr class="memdesc:a041cb0e89166678d239c678eca9cf302"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore a stack pointer from a context block.  <br /></td></tr>
+<tr class="memitem:a082720e3a0aedef71f530b7bc8a78739" id="r_a082720e3a0aedef71f530b7bc8a78739"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a082720e3a0aedef71f530b7bc8a78739">switch_to</a> (<a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;from, const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;to, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;rsp)</td></tr>
+<tr class="memdesc:a082720e3a0aedef71f530b7bc8a78739"><td class="mdescLeft">&#160;</td><td class="mdescRight">Switch from one context to another (x86-64).  <br /></td></tr>
+<tr class="memitem:aef5f3b94060ead3a684de1f351132c18" id="r_aef5f3b94060ead3a684de1f351132c18"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aef5f3b94060ead3a684de1f351132c18">init_stack</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *&amp;stack_top, void(*entry)(), <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> psr, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> user_rsp)</td></tr>
+<tr class="memdesc:aef5f3b94060ead3a684de1f351132c18"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialise a stack frame for a new task (AArch64).  <br /></td></tr>
+<tr class="memitem:a77498407356bad8c8bf0aa682633edb8" id="r_a77498407356bad8c8bf0aa682633edb8"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a77498407356bad8c8bf0aa682633edb8">save</a> (<a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;ctx, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> rsp)</td></tr>
+<tr class="memdesc:a77498407356bad8c8bf0aa682633edb8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Save the current stack pointer into a context block.  <br /></td></tr>
+<tr class="memitem:a041cb0e89166678d239c678eca9cf302" id="r_a041cb0e89166678d239c678eca9cf302"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a041cb0e89166678d239c678eca9cf302">restore</a> (const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;ctx, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;rsp)</td></tr>
+<tr class="memdesc:a041cb0e89166678d239c678eca9cf302"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore a stack pointer from a context block.  <br /></td></tr>
+<tr class="memitem:a082720e3a0aedef71f530b7bc8a78739" id="r_a082720e3a0aedef71f530b7bc8a78739"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a082720e3a0aedef71f530b7bc8a78739">switch_to</a> (<a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;from, const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;to, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;rsp)</td></tr>
+<tr class="memdesc:a082720e3a0aedef71f530b7bc8a78739"><td class="mdescLeft">&#160;</td><td class="mdescRight">Switch from one context to another (AArch64).  <br /></td></tr>
+<tr class="memitem:aef5f3b94060ead3a684de1f351132c18" id="r_aef5f3b94060ead3a684de1f351132c18"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aef5f3b94060ead3a684de1f351132c18">init_stack</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *&amp;stack_top, void(*entry)(), <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> psr, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> user_rsp)</td></tr>
+<tr class="memdesc:aef5f3b94060ead3a684de1f351132c18"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialise a stack frame for a new task (RISC-V 64).  <br /></td></tr>
+<tr class="memitem:a77498407356bad8c8bf0aa682633edb8" id="r_a77498407356bad8c8bf0aa682633edb8"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a77498407356bad8c8bf0aa682633edb8">save</a> (<a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;ctx, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> rsp)</td></tr>
+<tr class="memdesc:a77498407356bad8c8bf0aa682633edb8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Save the current stack pointer into a context block.  <br /></td></tr>
+<tr class="memitem:a041cb0e89166678d239c678eca9cf302" id="r_a041cb0e89166678d239c678eca9cf302"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a041cb0e89166678d239c678eca9cf302">restore</a> (const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;ctx, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;rsp)</td></tr>
+<tr class="memdesc:a041cb0e89166678d239c678eca9cf302"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore a stack pointer from a context block.  <br /></td></tr>
+<tr class="memitem:a082720e3a0aedef71f530b7bc8a78739" id="r_a082720e3a0aedef71f530b7bc8a78739"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a082720e3a0aedef71f530b7bc8a78739">switch_to</a> (<a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;from, const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;to, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;rsp)</td></tr>
+<tr class="memdesc:a082720e3a0aedef71f530b7bc8a78739"><td class="mdescLeft">&#160;</td><td class="mdescRight">Switch from one context to another (RISC-V 64).  <br /></td></tr>
 </table>
-<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
-<a id="af84389904ee5b1f32b590b1e3a262a3a" name="af84389904ee5b1f32b590b1e3a262a3a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af84389904ee5b1f32b590b1e3a262a3a">&#9670;&#160;</a></span>init_stack()</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Manages x86-64 CPU context save/restore and stack initialisation. </p>
+<p>Manages RISC-V 64 CPU context save/restore and stack initialisation.</p>
+<p>Manages AArch64 CPU context save/restore and stack initialisation. </p>
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="aef5f3b94060ead3a684de1f351132c18" name="aef5f3b94060ead3a684de1f351132c18"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aef5f3b94060ead3a684de1f351132c18">&#9670;&#160;</a></span>init_stack() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -147,7 +174,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">void arch::ArchContextManager::init_stack </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>stack_top</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *&amp;</td>          <td class="paramname"><span class="paramname"><em>stack_top</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -157,22 +184,22 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cs</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>ss</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rflags</em></span>, </td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>psr</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>user_rsp</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>user_rsp</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -182,10 +209,143 @@ Static Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Initialise a stack frame for a new task (RISC-V 64). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in,out]</td><td class="paramname">stack_top</td><td>Top of the stack (grows downward). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">entry</td><td>Entry point function. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">psr</td><td>Initial SSTATUS value. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">user_rsp</td><td>Initial user-mode SP. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="aef5f3b94060ead3a684de1f351132c18" name="aef5f3b94060ead3a684de1f351132c18"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aef5f3b94060ead3a684de1f351132c18">&#9670;&#160;</a></span>init_stack() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchContextManager::init_stack </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *&amp;</td>          <td class="paramname"><span class="paramname"><em>stack_top</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void(*</td>          <td class="paramname"><span class="paramname"><em>entry&#160;</em></span>)(), </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>psr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>user_rsp</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Initialise a stack frame for a new task (AArch64). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in,out]</td><td class="paramname">stack_top</td><td>Top of the stack (grows downward). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">entry</td><td>Entry point function. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">psr</td><td>Saved Processor State Register (SPSR). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">user_rsp</td><td>Initial user-mode SP_EL0. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="af84389904ee5b1f32b590b1e3a262a3a" name="af84389904ee5b1f32b590b1e3a262a3a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af84389904ee5b1f32b590b1e3a262a3a">&#9670;&#160;</a></span>init_stack() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchContextManager::init_stack </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>stack_top</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void(*</td>          <td class="paramname"><span class="paramname"><em>entry&#160;</em></span>)(), </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cs</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>ss</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rflags</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>user_rsp</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Initialise a stack frame for a new task (x86-64). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in,out]</td><td class="paramname">stack_top</td><td>Top of the stack (grows downward). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">entry</td><td>Entry point function. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">cs</td><td>Code segment selector. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">ss</td><td>Stack segment selector. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">rflags</td><td>Initial RFLAGS value. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">user_rsp</td><td>Initial user-mode RSP. </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <a id="a041cb0e89166678d239c678eca9cf302" name="a041cb0e89166678d239c678eca9cf302"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a041cb0e89166678d239c678eca9cf302">&#9670;&#160;</a></span>restore()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a041cb0e89166678d239c678eca9cf302">&#9670;&#160;</a></span>restore() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -201,7 +361,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -211,10 +371,95 @@ Static Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Restore a stack pointer from a context block. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">ctx</td><td>Source context. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">rsp</td><td>Output stack pointer. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a041cb0e89166678d239c678eca9cf302" name="a041cb0e89166678d239c678eca9cf302"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a041cb0e89166678d239c678eca9cf302">&#9670;&#160;</a></span>restore() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchContextManager::restore </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>ctx</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Restore a stack pointer from a context block. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">ctx</td><td>Source context. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">rsp</td><td>Output stack pointer. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a041cb0e89166678d239c678eca9cf302" name="a041cb0e89166678d239c678eca9cf302"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a041cb0e89166678d239c678eca9cf302">&#9670;&#160;</a></span>restore() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchContextManager::restore </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>ctx</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Restore a stack pointer from a context block. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir"></td><td class="paramname">ctx</td><td>Source context. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">rsp</td><td>Output stack pointer. </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <a id="a77498407356bad8c8bf0aa682633edb8" name="a77498407356bad8c8bf0aa682633edb8"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a77498407356bad8c8bf0aa682633edb8">&#9670;&#160;</a></span>save()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a77498407356bad8c8bf0aa682633edb8">&#9670;&#160;</a></span>save() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -230,7 +475,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -240,10 +485,95 @@ Static Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Save the current stack pointer into a context block. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">ctx</td><td>Destination context. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">rsp</td><td>Current stack pointer value. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a77498407356bad8c8bf0aa682633edb8" name="a77498407356bad8c8bf0aa682633edb8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a77498407356bad8c8bf0aa682633edb8">&#9670;&#160;</a></span>save() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchContextManager::save </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>ctx</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Save the current stack pointer into a context block. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">ctx</td><td>Destination context. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">rsp</td><td>Current stack pointer value. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a77498407356bad8c8bf0aa682633edb8" name="a77498407356bad8c8bf0aa682633edb8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a77498407356bad8c8bf0aa682633edb8">&#9670;&#160;</a></span>save() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchContextManager::save </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>ctx</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Save the current stack pointer into a context block. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">ctx</td><td>Destination context. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">rsp</td><td>Current stack pointer value. </td></tr>
+  </table>
+  </dd>
+</dl>
+
 </div>
 </div>
 <a id="a082720e3a0aedef71f530b7bc8a78739" name="a082720e3a0aedef71f530b7bc8a78739"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a082720e3a0aedef71f530b7bc8a78739">&#9670;&#160;</a></span>switch_to()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a082720e3a0aedef71f530b7bc8a78739">&#9670;&#160;</a></span>switch_to() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -264,7 +594,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -273,6 +603,104 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Switch from one context to another (RISC-V 64). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">from</td><td>Current context to save into. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">to</td><td>Target context to restore. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">rsp</td><td>Output stack pointer set to target's SP. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a082720e3a0aedef71f530b7bc8a78739" name="a082720e3a0aedef71f530b7bc8a78739"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a082720e3a0aedef71f530b7bc8a78739">&#9670;&#160;</a></span>switch_to() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchContextManager::switch_to </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>from</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>to</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Switch from one context to another (AArch64). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">from</td><td>Current context to save into. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">to</td><td>Target context to restore. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">rsp</td><td>Output stack pointer set to target's SP_EL0. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a082720e3a0aedef71f530b7bc8a78739" name="a082720e3a0aedef71f530b7bc8a78739"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a082720e3a0aedef71f530b7bc8a78739">&#9670;&#160;</a></span>switch_to() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::ArchContextManager::switch_to </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>from</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="structarch_1_1_arch_context.html">ArchContext</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>to</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>rsp</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Switch from one context to another (x86-64). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">from</td><td>Current context to save into. </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">to</td><td>Target context to restore. </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">rsp</td><td>Output stack pointer set to target's RSP. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>

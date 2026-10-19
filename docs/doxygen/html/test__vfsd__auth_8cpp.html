@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -175,7 +175,7 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>VFS daemon authorisation tests. </p>
-<p>v0.3.10 rework (SIMULATED → DRIVEN): every VFS syscall runs inside a REAL kernel task (prio ≥ 11) that is genuinely dispatched — the handler's <span class="tt"><a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f" title="Get the currently running task from the scheduler.">syscall_task()</a></span> resolves to the running task and the kernel-bypass / daemon authorisation path is exercised through real execution. The harness never calls Syscall::handle() directly. </p>
+<p>v0.3.10 rework (SIMULATED → DRIVEN): every VFS syscall runs inside a REAL kernel task (prio ≥ 11) that is genuinely dispatched — the handler's <span class="tt"><a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f" title="Get the currently running task from the scheduler.">syscall_task()</a></span> resolves to the running task and the kernel-bypass / daemon authorisation path is exercised through real execution. The harness never calls <a class="el" href="classkernel_1_1_syscall.html#a4166c97da7594caaa03a16894d8dadf7" title="Dispatch a system call to the appropriate handler.">Syscall::handle()</a> directly. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a25e5508c0633231b71d0492d7b8c06c4" name="a25e5508c0633231b71d0492d7b8c06c4"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a25e5508c0633231b71d0492d7b8c06c4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/27]</span></h2>
@@ -547,6 +547,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a8035ca38f3d1951d683dd59f5eb86d5e_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a8035ca38f3d1951d683dd59f5eb86d5e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
+</div>
 
 </div>
 </div>
@@ -568,6 +574,12 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a9c33ef7bb35bbe8f63ac0342611ad188_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a9c33ef7bb35bbe8f63ac0342611ad188_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 13 -->
+</div>
 
 </div>
 </div>
@@ -598,7 +610,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_aa954ba7ed2288d67878187c1dfb628c0_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_aa954ba7ed2288d67878187c1dfb628c0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -630,7 +642,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a7ef83dcbaa6f79c57b935352e8b98672_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a7ef83dcbaa6f79c57b935352e8b98672_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 15 -->
 </div>
 
 </div>
@@ -662,7 +674,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_ad73e639eab6027bf2db33a01834599b3_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_ad73e639eab6027bf2db33a01834599b3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -694,7 +706,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a274ffa703097c56c85590166dab37a39_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a274ffa703097c56c85590166dab37a39_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -726,7 +738,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a637767b7ff5f7c423d39e204b438f563_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a637767b7ff5f7c423d39e204b438f563_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -758,7 +770,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_ab13d064361ffd956dde4d4b947a60699_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_ab13d064361ffd956dde4d4b947a60699_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -790,7 +802,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a5f6fcb0a781bfbca26108b4f5122c7da_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a5f6fcb0a781bfbca26108b4f5122c7da_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -822,7 +834,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a40a6ef139cc608d262bd522bd67efc6f_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a40a6ef139cc608d262bd522bd67efc6f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -854,7 +866,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a90460e9f4eb87020b401cc1d9d8c9271_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a90460e9f4eb87020b401cc1d9d8c9271_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -886,7 +898,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a86b346c6ab8cec41080ada116e493a50_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a86b346c6ab8cec41080ada116e493a50_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 21 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -918,7 +930,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a5fe7ec7151741c86319ab305e33c67eb_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a5fe7ec7151741c86319ab305e33c67eb_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 22 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -950,7 +962,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_ae8d2dbc91211b91671fae6c1240cb4cf_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_ae8d2dbc91211b91671fae6c1240cb4cf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 23 -->
+<!-- MAP 25 -->
 </div>
 
 </div>
@@ -982,7 +994,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a7f1105c16cb72c68ab85bded186432f5_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a7f1105c16cb72c68ab85bded186432f5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 24 -->
+<!-- MAP 26 -->
 </div>
 
 </div>
@@ -1014,7 +1026,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_aaf26a97da4a5dbb2535bf6d8a1d4099a_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_aaf26a97da4a5dbb2535bf6d8a1d4099a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 25 -->
+<!-- MAP 27 -->
 </div>
 
 </div>
@@ -1039,7 +1051,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a6b203c2ce630993d8d83e48588e18b0b_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a6b203c2ce630993d8d83e48588e18b0b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 26 -->
+<!-- MAP 28 -->
 </div>
 
 </div>

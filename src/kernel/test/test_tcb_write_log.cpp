@@ -35,7 +35,13 @@ JARVIS_TEST(test_tcb_write_log_catches_stray_write, "PRE: none | POST: none") {
     // Simulate a STRAY WRITE that corrupts a TCB field, bypassing TCB_WRITE.
     // (A plain field write — exactly what a real stray write looks like to
     // the tracer: NOT recorded. That is the point of the post-hoc dump.)
-    const uint64_t off = offsetof(TaskControlBlock, magic);
+    // Issue #377: page_table_ privatization made TaskControlBlock
+    // non-standard-layout, so offsetof() is -Werror here — derive the
+    // offset from live member addresses instead (same bytes, no layout
+    // requirement).
+    const uint64_t off = static_cast<uint64_t>(
+        reinterpret_cast<uint8_t *>(&t->magic) -
+        reinterpret_cast<uint8_t *>(t));
     *reinterpret_cast<uint64_t *>(reinterpret_cast<uint8_t *>(t) + off) =
         0xDDDDDDDDDDDDDDDDULL;
 

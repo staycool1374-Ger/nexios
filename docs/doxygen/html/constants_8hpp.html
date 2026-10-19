@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -127,11 +127,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('constants_8hpp
 Include dependency graph for constants.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="constants_8hpp__incl.png" border="0" usemap="#asrc_2lib_2constants_8hpp" loading="lazy" alt=""/></div>
-<map name="asrc_2lib_2constants_8hpp" id="asrc_2lib_2constants_8hpp">
-<area shape="rect" title="Central hardware and memory&#45;layout constants (no magic numbers)." alt="" coords="5,5,148,32"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="37,80,116,107"/>
-<area shape="poly" title=" " alt="" coords="78,31,79,65,74,64,75,35"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div>
 <p><a href="constants_8hpp_source.html">Go to the source code of this file.</a></p>
@@ -141,6 +137,8 @@ Namespaces</h2></td></tr>
 <tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
 <tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
 <tr class="memitem:mem" id="r_mem"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacemem.html">mem</a></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
 Enumerations</h2></td></tr>
@@ -155,7 +153,7 @@ Variables</h2></td></tr>
 <tr class="memitem:a57c6bb74fdc3ee11eecab91b0142e95b" id="r_a57c6bb74fdc3ee11eecab91b0142e95b"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a57c6bb74fdc3ee11eecab91b0142e95b">arch::HHDM_OFFSET</a> = CONFIG_HHDM_OFFSET</td></tr>
 <tr class="memdesc:a57c6bb74fdc3ee11eecab91b0142e95b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Higher-half offset: convert physical → kernel-visible virtual.  <br /></td></tr>
 <tr class="memitem:ae0a5af75fabcbd33d35318bdc4f59957" id="r_ae0a5af75fabcbd33d35318bdc4f59957"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ae0a5af75fabcbd33d35318bdc4f59957">arch::HHDM_WINDOW_SIZE</a> = 128_MiB</td></tr>
-<tr class="memdesc:ae0a5af75fabcbd33d35318bdc4f59957"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of the PMM allocatable window — the linear-mapped RAM span the page allocator scans. Must be covered by the architecture's MMU higher-half mapping (x86_64 identity window; aarch64/riscv64 map it starting at RAM_BASE_FALLBACK).  <br /></td></tr>
+<tr class="memdesc:ae0a5af75fabcbd33d35318bdc4f59957"><td class="mdescLeft">&#160;</td><td class="mdescRight">Upper bound (exclusive) of user-space virtual addresses. Lives here (not in <a class="el" href="checked__ptr_8hpp.html">checked_ptr.hpp</a>) so validators like the ELF loader can use it without pulling the CheckedPtr machinery (issue #348-C).  <br /></td></tr>
 <tr class="memitem:aebf4e2fccb4c8c343da664bcdccc6a91" id="r_aebf4e2fccb4c8c343da664bcdccc6a91"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#aebf4e2fccb4c8c343da664bcdccc6a91">arch::RAM_BASE_FALLBACK</a> = 0x0ULL</td></tr>
 <tr class="memdesc:aebf4e2fccb4c8c343da664bcdccc6a91"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fallback RAM base when the firmware/bootloader provides no memory regions (QEMU virt machine layout for the non-x86 targets; x86_64 RAM starts at physical 0).  <br /></td></tr>
 <tr class="memitem:a99106776d58225cbe472f60fefc21958" id="r_a99106776d58225cbe472f60fefc21958"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a99106776d58225cbe472f60fefc21958">arch::PML4_USER_COUNT</a> = <a class="el" href="aarch64_2serial_8cpp.html#ad42f27563c0dabc8e3f69851bbbe9f9f">CONFIG_PML4_USER_COUNT</a></td></tr>

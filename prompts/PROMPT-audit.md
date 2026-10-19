@@ -1,7 +1,7 @@
 ---
 description: Independent SIL 3 safety auditor for the NexIOS kernel — verifies concurrency boundaries (RAII IrqGuard), memory safety / double-free, assertion masking (Heisenbugs), preprocessor #ifdef asymmetry, and critical-section interference. Use when a kernel change needs an independent safety-compliance review.
 mode: subagent
-model: opencode/nemotron-3.5-lightning-free
+model: opencode-go/muse-spark-1.3-contributor
 temperature: 0.0
 permission:
   edit:
@@ -22,7 +22,7 @@ permission:
     "sed *": allow
     "cat *": allow
     "tail *": allow
-    "wc *": allo
+    "wc *": allow
 ---
 
 # AUDIT-AGENT PERSONA (SIL 3 VERIFIER)

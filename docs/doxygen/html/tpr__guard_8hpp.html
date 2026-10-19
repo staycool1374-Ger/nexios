@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -136,7 +136,7 @@ Include dependency graph for tpr_guard.hpp:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:arch_3A_3ATprGuard" id="r_arch_3A_3ATprGuard"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_tpr_guard.html">arch::TprGuard</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces IrqGuard: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed).  <a href="classarch_1_1_tpr_guard.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces <a class="el" href="classarch_1_1_irq_guard.html" title="RAII guard that disables interrupts on construction and restores the previous interrupt state on dest...">IrqGuard</a>: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed).  <a href="classarch_1_1_tpr_guard.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>

@@ -138,7 +138,7 @@ JARVIS_TEST(stack_cookie_canary_values_are_segment_derived,
             if (slots[k] == 0)
                 continue;
             uint64_t live = 0;
-            JARVIS_ASSERT_FMT(read_live_u64(slots[k], t->page_table_, live),
+            JARVIS_ASSERT_FMT(read_live_u64(slots[k], t->get_page_table(), live),
                               "canary[%lu][%d] unreadable", seg, k);
             uint64_t expected = TaskControlBlock::CANARY_MAGIC ^ (seg + 1);
             JARVIS_ASSERT_FMT(live == expected,
@@ -174,9 +174,9 @@ JARVIS_TEST(stack_cookie_verify_is_pure_function, "PRE: none | POST: none") {
     JARVIS_ASSERT(canary_verify_user_segments(t, bad_segment, bad_va));
 
     uint64_t original = 0;
-    JARVIS_ASSERT(read_live_u64(t->canary_after[stk], t->page_table_,
+    JARVIS_ASSERT(read_live_u64(t->canary_after[stk], t->get_page_table(),
                                 original));
-    JARVIS_ASSERT(write_live_u64(t->canary_after[stk], t->page_table_,
+    JARVIS_ASSERT(write_live_u64(t->canary_after[stk], t->get_page_table(),
                                  original ^ 0xFFu));
     JARVIS_ASSERT_FMT(!canary_verify_user_segments(t, bad_segment, bad_va),
                       "tampered STACK canary verified clean");
@@ -185,7 +185,7 @@ JARVIS_TEST(stack_cookie_verify_is_pure_function, "PRE: none | POST: none") {
     JARVIS_ASSERT_FMT(bad_va == t->canary_after[stk],
                       "bad VA 0x%lx != canary_after[STACK]", bad_va);
 
-    JARVIS_ASSERT(write_live_u64(t->canary_after[stk], t->page_table_,
+    JARVIS_ASSERT(write_live_u64(t->canary_after[stk], t->get_page_table(),
                                  original));
     JARVIS_ASSERT(canary_verify_user_segments(t, bad_segment, bad_va));
     JARVIS_TEST_PASS();

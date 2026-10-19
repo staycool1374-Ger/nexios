@@ -23,7 +23,17 @@
 #include <logger.hpp>
 #include <string.hpp>
 #include <kernel/driver/driver.hpp>
+#include <kernel/driver/iocd.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/ipc/ipc.hpp>
+#include <kernel/cap/cap.hpp>
+#include <kernel/cap/cap_types.hpp>
+#include <kernel/cap/mmio.hpp>
+#include <kernel/memory/pmm.hpp>
+#include <kernel/memory/vmm.hpp>
+#include <kernel/syscall/syscall.hpp>
+#include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/arch/serial.hpp>
 #include <kernel/arch/keyboard.hpp>
 
@@ -98,13 +108,147 @@ JARVIS_TEST(serial_driver_in_iocd, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+namespace {
+
+/// @brief Daemon round-trip from any kernel task context (fixture-safe:
+///        takes the sender pid explicitly since the daemon replies to
+///        args[0]). Returns the reply result, or -99 on transport failure.
+int64_t drv_mmio_roundtrip(uint64_t self_pid, uint64_t type, uint64_t bar) {
+    const uint64_t iocd_pid = kernel::iocd::get_iocd_pid();
+    if (iocd_pid == 0)
+        return -99;
+    kernel::iocd::Msg req{};
+    req.type = type;
+    req.args[0] = self_pid;
+    req.args[1] = bar;
+    kernel::Message send{};
+    send.sender_id = self_pid;
+    send.type = type;
+    send.data_size = sizeof(req);
+    __builtin_memcpy(send.data, &req, sizeof(req));
+    kernel::Message reply{};
+    if (!kernel::IPC::send_sync(iocd_pid, send, reply))
+        return -99;
+    if (reply.data_size < sizeof(kernel::iocd::Reply))
+        return -99;
+    kernel::iocd::Reply rpl{};
+    __builtin_memcpy(&rpl, reply.data, sizeof(rpl));
+    return rpl.result;
+}
+
+uint64_t g_drv_phys = 0;
+uint64_t g_drv_map_va = 0;
+uint64_t g_drv_sys_unmap = 0;
+int64_t g_drv_reg = -99;
+int64_t g_drv_map = -99;
+int64_t g_drv_unmap = -99;
+int64_t g_drv_unreg = -99;
+
+} // namespace
+
 // Runmode: kernel
-// Testidea: STUB - Verifies the driver server can access MMIO regions via
-// capability-based permissions
-// Input: None (stub)
-// Expect: JARVIS_TEST_PASS() (stub, no actual assertion yet)
-// Depends: Driver server, capability system, MMIO
+// Testidea: Driver MMIO end-to-end across both layers (issue #303 item
+//           4): a fixture driver registers with the live iocd, gets a
+//           policy grant for bar 0, installs a REAL MEMORY MmioCap for a
+//           PMM test page, maps it via SYS_MMIO_MAP in its own cspace,
+//           then unwinds everything (UNMAP, daemon UNMAP, UNREGISTER).
+//           The daemon authorizes WHO/WHICH (policy); the kernel
+//           enforces WHAT via caps — no cap passes through the daemon
+//           (documented split; kernel PTE teardown stays with drain_task).
+// Input: dispatched fixture task drives register → daemon-MAP → cap
+//        install → SYS_MMIO_MAP → SYS_MMIO_UNMAP → daemon-UNMAP →
+//        UNREGISTER; harness joins and asserts.
+// Expect: all daemon results 0; VA in the user MMIO window; sys unmap 0;
+//         MmioUserMap live_count 0; zero tracker delta (harness).
+// Depends: iocd policy handler, MmioCap, MmioUserMap, live IPC.
 JARVIS_TEST(driver_server_mmio_via_caps, "PRE: iocd | POST: none") {
+    g_drv_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(g_drv_phys != 0);
+    g_drv_map_va = 0;
+    g_drv_sys_unmap = 0;
+    g_drv_reg = -99;
+    g_drv_map = -99;
+    g_drv_unmap = -99;
+    g_drv_unreg = -99;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            auto *cur = Scheduler::current_task();
+            const uint64_t self = cur ? cur->id : 0;
+            // Policy leg: register + grant over live IPC.
+            iocd::Msg reg{};
+            reg.type = iocd::IOCD_REGISTER_DEVICE;
+            reg.args[0] = self;
+            reg.args[1] = 0;
+            __builtin_memcpy(&reg.args[2], "drv-mmio", 9);
+            Message sreg{};
+            sreg.sender_id = self;
+            sreg.type = iocd::IOCD_REGISTER_DEVICE;
+            sreg.data_size = sizeof(reg);
+            __builtin_memcpy(sreg.data, &reg, sizeof(reg));
+            Message rreg{};
+            if (IPC::send_sync(iocd::get_iocd_pid(), sreg, rreg) &&
+                rreg.data_size >= sizeof(iocd::Reply)) {
+                iocd::Reply rr{};
+                __builtin_memcpy(&rr, rreg.data, sizeof(rr));
+                g_drv_reg = rr.result;
+            }
+            g_drv_map = drv_mmio_roundtrip(self, iocd::IOCD_MMIO_MAP, 0);
+            // Mechanism leg: real cap + syscall dispatch in own cspace.
+            if (g_drv_reg == 0 && g_drv_map == 0 && cur != nullptr) {
+                cur->ensure_cspace();
+                cap::CNode *cs = cur->get_cspace();
+                auto *mmio = cap::MmioCap::create(
+                    g_drv_phys, arch::PAGE_SIZE,
+                    arch::PciBarType::MEMORY_32);
+                if (mmio != nullptr) {
+                    int s = cs->install(mmio, cap::CapType::Mmio,
+                                        cap::CapRights::WRITE);
+                    if (s >= 0) {
+                        uint64_t h = cap::encode_handle(
+                            cs->cspace_id, static_cast<uint32_t>(s),
+                            cs->slot_gen(static_cast<uint32_t>(s)));
+                        g_drv_map_va = Syscall::handle(
+                            static_cast<uint64_t>(SyscallNumber::MMIO_MAP),
+                            h, 0, 0, 0, nullptr);
+                        if (g_drv_map_va != static_cast<uint64_t>(-1)) {
+                            g_drv_sys_unmap = Syscall::handle(
+                                static_cast<uint64_t>(
+                                    SyscallNumber::MMIO_UNMAP),
+                                g_drv_map_va, 0, 0, 0, nullptr);
+                        }
+                        cs->remove(static_cast<uint32_t>(s));
+                    }
+                    mmio->release();
+                }
+            }
+            g_drv_unmap =
+                drv_mmio_roundtrip(self, iocd::IOCD_MMIO_UNMAP, 0);
+            g_drv_unreg = drv_mmio_roundtrip(
+                self, iocd::IOCD_UNREGISTER_DEVICE, 0);
+            Scheduler::terminate(*cur, 0);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(t->get_page_table() != 0);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    Scheduler::drain_zombie_list();
+
+    JARVIS_ASSERT_FMT(g_drv_reg == 0, "register: %ld", g_drv_reg);
+    JARVIS_ASSERT_FMT(g_drv_map == 0, "daemon MAP: %ld", g_drv_map);
+    JARVIS_ASSERT_FMT(g_drv_map_va != static_cast<uint64_t>(-1),
+                      "SYS_MMIO_MAP failed");
+    JARVIS_ASSERT_FMT(
+        g_drv_map_va >= CONFIG_USER_MMIO_VA_BASE,
+        "VA 0x%lx outside user MMIO window", g_drv_map_va);
+    JARVIS_ASSERT_FMT(g_drv_sys_unmap == 0, "SYS_MMIO_UNMAP: %lu",
+                      g_drv_sys_unmap);
+    JARVIS_ASSERT_FMT(g_drv_unmap == 0, "daemon UNMAP: %ld", g_drv_unmap);
+    JARVIS_ASSERT_FMT(g_drv_unreg == 0, "UNREGISTER: %ld", g_drv_unreg);
+    JARVIS_ASSERT_EQ(static_cast<size_t>(0), cap::MmioUserMap::live_count());
+    PMM::free_page(g_drv_phys);
     JARVIS_TEST_PASS();
 }
 

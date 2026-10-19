@@ -98,6 +98,13 @@ uint64_t VMM::vmm_arch_encode_ro(uint64_t leaf, bool executable) {
     return leaf & ~PAGE_WRITE;
 }
 
+uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
+    // Issue #376: kernel text stays executable — set X cleared by the
+    // data-default 5-arg map (W was already cleared by encode_ro).
+    // Kernel-half only.
+    return leaf | PAGE_EXEC;
+}
+
 bool VMM::vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out) {
     bool ro = ((leaf & PAGE_READ) != 0) && ((leaf & PAGE_WRITE) == 0);
     if (executable_out != nullptr)
@@ -112,6 +119,15 @@ bool VMM::vmm_arch_leaf_is_executable(uint64_t leaf) {
 uint64_t VMM::vmm_arch_block_base(uint64_t entry, bool huge) {
     (void)huge; // Sv39 codec is level-agnostic (PPN<<10 either way)
     return VMM::sv39_pte_phys(entry);
+}
+
+unsigned VMM::vmm_arch_walk_levels() { return 3; }
+
+void VMM::vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]) {
+    idx[0] = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+    idx[1] = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+    idx[2] = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
+    idx[3] = 0;
 }
 
 #endif // CONFIG_ARCH_RISCV64

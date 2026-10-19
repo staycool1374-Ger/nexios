@@ -1,9 +1,19 @@
 var searchData=
 [
-  ['failed_0',['FAILED',['../structkernel_1_1_task_control_block.html#a5a15a3d081ace9f33de0cea3d09f551fab9e14d9b2886bcff408b85aefa780419',1,'kernel::TaskControlBlock::FAILED'],['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ab9e14d9b2886bcff408b85aefa780419',1,'kernel::elf::FAILED']]],
+  ['failed_0',['FAILED',['../structkernel_1_1_task_control_block.html#a5a15a3d081ace9f33de0cea3d09f551fab9e14d9b2886bcff408b85aefa780419',1,'kernel::TaskControlBlock::FAILED'],['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ab9e14d9b2886bcff408b85aefa780419',1,'kernel::elf::FAILED'],['../namespacekernel_1_1elf.html#a846fb3d998c489310f7164aa3289d7b2ab9e14d9b2886bcff408b85aefa780419',1,'kernel::elf::FAILED']]],
   ['fatal_1',['FATAL',['../namespacekernel_1_1log.html#a3715d6ea36d8e40a6fb2320b3a4eacfca19da7170bea36556dde582519795f3fc',1,'kernel::log::FATAL'],['../namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2a19da7170bea36556dde582519795f3fc',1,'kernel::FATAL']]],
   ['fault_2',['FAULT',['../namespacekernel_1_1debug.html#a7d0517c41ce6d04323f7b0a3e74d388fa893b3aaf1661e3717b18e8335ff93a72',1,'kernel::debug']]],
-  ['file_5fnot_5ffound_3',['FILE_NOT_FOUND',['../namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796acd54d99c8efb3c2db794197045f5b83c',1,'kernel::elf']]],
-  ['fixed_4',['FIXED',['../classarch_1_1_a_p_i_c.html#a6b06edfa4ecc78977b1dfc0025eddc64ac6e6dc18b53b4c2681394b9d8aefcec7',1,'arch::APIC::FIXED'],['../namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fddac6e6dc18b53b4c2681394b9d8aefcec7',1,'kernel::FIXED']]],
-  ['frame_5',['Frame',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a3bb3e8c8a24891ba0f7608bcc96f8b0a',1,'kernel::cap']]]
+  ['faulted_3',['FAULTED',['../classkernel_1_1elf_1_1_elf_loader.html#a8286baa9f3c0fec05de8010655439239a131d2cc9ffea3dcc797a4f1eb41ab4c2',1,'kernel::elf::ElfLoader']]],
+  ['file_5fnot_5ffound_4',['FILE_NOT_FOUND',['../namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796acd54d99c8efb3c2db794197045f5b83c',1,'kernel::elf']]],
+  ['finalize_5',['Finalize',['../namespacekernel.html#aa6c3b797a7f9c5f662f307dfd8af3704afd565de81da1c94807c0b80840ba18b0',1,'kernel']]],
+  ['fixed_6',['FIXED',['../classarch_1_1_a_p_i_c.html#a6b06edfa4ecc78977b1dfc0025eddc64ac6e6dc18b53b4c2681394b9d8aefcec7',1,'arch::APIC::FIXED'],['../namespacekernel.html#aa769cdcb7178170dcbb2c169fd774fddac6e6dc18b53b4c2681394b9d8aefcec7',1,'kernel::FIXED']]],
+  ['fork_7',['FORK',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aa59a5773c21e7a30b474d0b16ac5e8d2',1,'kernel']]],
+  ['fpu_5ferror_8',['FPU_ERROR',['../namespacearch.html#aa51e0cd803d847e27b50eaa53ba87630ab8f26afea9e7489af61091d3c6a41eaa',1,'arch']]],
+  ['frame_9',['Frame',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a3bb3e8c8a24891ba0f7608bcc96f8b0a',1,'kernel::cap']]],
+  ['frame_5fcreate_10',['FRAME_CREATE',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a32ed966c2c41c74784c992c3fafefc3d',1,'kernel']]],
+  ['frame_5fmap_11',['FRAME_MAP',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aefaa07b45b77095aed0b255ecc4d9bb9',1,'kernel']]],
+  ['frame_5funmap_12',['FRAME_UNMAP',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270abb364f1463965d16095c6d126a45d6a0',1,'kernel']]],
+  ['framebuild_13',['FrameBuild',['../namespacekernel.html#a8e0521a953489d8395e005169ebe917ca5366bd9c3d7db93a7b33301185738b28',1,'kernel']]],
+  ['frameguard_14',['FrameGuard',['../namespacekernel.html#ad70275577c5bd4a37c1c5d01a850b233ae2811431d953f35e38cff82b5ead20fc',1,'kernel']]],
+  ['fstat_15',['FSTAT',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a81fba48cb5642dcd38bffcf0f7147ea1',1,'kernel']]]
 ];

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -127,8 +127,15 @@ This graph shows which files directly or indirectly include this file:</div>
 </div>
 <p><a href="errno_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:nexios_5Ftcb" id="r_nexios_5Ftcb"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structnexios__tcb.html">nexios_tcb</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-task control block (issue #338 — thread-local errno). Lives in task-private memory; the kernel loads its address into the TP register on every dispatch (TLS_SET at crt0 startup, inherited across fork by address-space copy). errno sits at offset 0 so <a class="el" href="errno_8c.html#a4fd616e20294ce1318de576c5b8c1472" title="Address of the calling task&#39;s errno cell (TP + 0). Never NULL after crt0 startup (block registered be...">__errno_location()</a> is a single TP read + dereference with no layout dependency beyond this header. Future thread-private state grows here (never reorder existing fields).  <a href="structnexios__tcb.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
+<tr class="memitem:ab03f640d90fbc5bcb75285d08a0f25ed" id="r_ab03f640d90fbc5bcb75285d08a0f25ed"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab03f640d90fbc5bcb75285d08a0f25ed">errno</a>&#160;&#160;&#160;(*<a class="el" href="#a4fd616e20294ce1318de576c5b8c1472">__errno_location</a>())</td></tr>
+<tr class="memdesc:ab03f640d90fbc5bcb75285d08a0f25ed"><td class="mdescLeft">&#160;</td><td class="mdescRight">Thread-local errno (issue #338): each task reads its own TP-published cell. Plain <span class="tt"><a class="el" href="#ab03f640d90fbc5bcb75285d08a0f25ed" title="Thread-local errno (issue #338): each task reads its own TP-published cell. Plain errno = x / errno u...">errno</a> = x</span> / <span class="tt"><a class="el" href="#ab03f640d90fbc5bcb75285d08a0f25ed" title="Thread-local errno (issue #338): each task reads its own TP-published cell. Plain errno = x / errno u...">errno</a></span> uses keep working through the dereference.  <br /></td></tr>
 <tr class="memitem:add669d31505a077f769cff8e66c780b3" id="r_add669d31505a077f769cff8e66c780b3"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#add669d31505a077f769cff8e66c780b3">EPERM</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a03e689f378f643d16ea7537918528a48" id="r_a03e689f378f643d16ea7537918528a48"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a03e689f378f643d16ea7537918528a48">ENOENT</a>&#160;&#160;&#160;2</td></tr>
 <tr class="memitem:a462e47a8af6288232a5df548221ada4c" id="r_a462e47a8af6288232a5df548221ada4c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a462e47a8af6288232a5df548221ada4c">ESRCH</a>&#160;&#160;&#160;3</td></tr>
@@ -150,9 +157,10 @@ Macros</h2></td></tr>
 <tr class="memitem:a9262fb92f7ef662d0bdd577912a5b101" id="r_a9262fb92f7ef662d0bdd577912a5b101"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9262fb92f7ef662d0bdd577912a5b101">ENOTDIR</a>&#160;&#160;&#160;50</td></tr>
 <tr class="memitem:a597718e59a8fc9c4d4ab63f5a34e28b1" id="r_a597718e59a8fc9c4d4ab63f5a34e28b1"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a597718e59a8fc9c4d4ab63f5a34e28b1">ETIMEDOUT</a>&#160;&#160;&#160;110</td></tr>
 </table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
-Variables</h2></td></tr>
-<tr class="memitem:ad65a8842cc674e3ddf69355898c0ecbf" id="r_ad65a8842cc674e3ddf69355898c0ecbf"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#ad65a8842cc674e3ddf69355898c0ecbf">errno</a></td></tr>
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a4fd616e20294ce1318de576c5b8c1472" id="r_a4fd616e20294ce1318de576c5b8c1472"><td class="memItemLeft">int *&#160;</td><td class="memItemRight"><a class="el" href="#a4fd616e20294ce1318de576c5b8c1472">__errno_location</a> (void)</td></tr>
+<tr class="memdesc:a4fd616e20294ce1318de576c5b8c1472"><td class="mdescLeft">&#160;</td><td class="mdescRight">Address of the calling task's errno cell (TP + 0). Never NULL after crt0 startup (block registered before main).  <br /></td></tr>
 </table>
 <a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
 <a id="ac2a2e9fa555401f94478f74e01868032" name="ac2a2e9fa555401f94478f74e01868032"></a>
@@ -393,6 +401,22 @@ Variables</h2></td></tr>
 
 </div>
 </div>
+<a id="ab03f640d90fbc5bcb75285d08a0f25ed" name="ab03f640d90fbc5bcb75285d08a0f25ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab03f640d90fbc5bcb75285d08a0f25ed">&#9670;&#160;</a></span>errno</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define errno&#160;&#160;&#160;(*<a class="el" href="#a4fd616e20294ce1318de576c5b8c1472">__errno_location</a>())</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Thread-local errno (issue #338): each task reads its own TP-published cell. Plain <span class="tt"><a class="el" href="#ab03f640d90fbc5bcb75285d08a0f25ed" title="Thread-local errno (issue #338): each task reads its own TP-published cell. Plain errno = x / errno u...">errno</a> = x</span> / <span class="tt"><a class="el" href="#ab03f640d90fbc5bcb75285d08a0f25ed" title="Thread-local errno (issue #338): each task reads its own TP-published cell. Plain errno = x / errno u...">errno</a></span> uses keep working through the dereference. </p>
+
+</div>
+</div>
 <a id="a0e42d4f9fecdcf5fcca2b333252173c3" name="a0e42d4f9fecdcf5fcca2b333252173c3"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a0e42d4f9fecdcf5fcca2b333252173c3">&#9670;&#160;</a></span>ESPIPE</h2>
 
@@ -435,26 +459,23 @@ Variables</h2></td></tr>
 
 </div>
 </div>
-<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
-<a id="ad65a8842cc674e3ddf69355898c0ecbf" name="ad65a8842cc674e3ddf69355898c0ecbf"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad65a8842cc674e3ddf69355898c0ecbf">&#9670;&#160;</a></span>errno</h2>
+<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a4fd616e20294ce1318de576c5b8c1472" name="a4fd616e20294ce1318de576c5b8c1472"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4fd616e20294ce1318de576c5b8c1472">&#9670;&#160;</a></span>__errno_location()</h2>
 
 <div class="memitem">
 <div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">int errno</td>
+          <td class="memname">int * __errno_location </td>
+          <td>(</td>
+          <td class="paramtype">void</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
         </tr>
       </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
-  </tr>
-</table>
 </div><div class="memdoc">
+
+<p>Address of the calling task's errno cell (TP + 0). Never NULL after crt0 startup (block registered before main). </p>
 
 </div>
 </div>

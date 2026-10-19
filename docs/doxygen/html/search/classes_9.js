@@ -1,5 +1,6 @@
 var searchData=
 [
-  ['logentry_0',['LogEntry',['../structkernel_1_1log_1_1_log_entry.html',1,'kernel::log']]],
-  ['logger_1',['Logger',['../classkernel_1_1_logger.html',1,'kernel']]]
+  ['kernelobject_0',['KernelObject',['../classkernel_1_1_kernel_object.html',1,'kernel']]],
+  ['keyboard_1',['Keyboard',['../classarch_1_1_keyboard.html',1,'arch']]],
+  ['klogservice_2',['KlogService',['../classkernel_1_1log_1_1_klog_service.html',1,'kernel::log']]]
 ];

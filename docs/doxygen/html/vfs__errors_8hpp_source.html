@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -139,54 +139,59 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('vfs__errors_8h
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="comment"> */</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#pragma once</span></div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#include &lt;<a class="code" href="assert_8hpp.html">assert.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#include &lt;<a class="code" href="assert_8hpp.html">assert.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span> </div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1errors.html">kernel::errors</a> {</div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1errors.html">kernel::errors</a> {</div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span> </div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="preprocessor">#define VFS_ERROR_CODES                                                        \</span></div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="preprocessor">    X(OK, 0, &quot;OK&quot;)                                                             \</span></div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="preprocessor">    X(INVALID_FD, 1, &quot;Invalid file descriptor&quot;)                                \</span></div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="preprocessor">    X(FD_TABLE_FULL, 2, &quot;File descriptor table full&quot;)                          \</span></div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="preprocessor">    X(NOT_FOUND, 3, &quot;Path or vnode not found&quot;)                                 \</span></div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="preprocessor">    X(NOT_DIR, 4, &quot;Not a directory&quot;)                                           \</span></div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="preprocessor">    X(IS_DIR, 5, &quot;Is a directory&quot;)                                             \</span></div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="preprocessor">    X(EXISTS, 6, &quot;File or directory already exists&quot;)                           \</span></div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="preprocessor">    X(NOT_EMPTY, 7, &quot;Directory not empty&quot;)                                     \</span></div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="preprocessor">    X(NO_DEVICE, 8, &quot;No such device or mount point&quot;)                           \</span></div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span><span class="preprocessor">    X(NO_SPACE, 9, &quot;No space left on device&quot;)                                  \</span></div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="preprocessor">    X(PERMISSION, 10, &quot;Permission denied&quot;)                                     \</span></div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span><span class="preprocessor">    X(INVALID_ARGS, 11, &quot;Invalid arguments&quot;)                                   \</span></div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="preprocessor">    X(IO_ERROR, 12, &quot;I/O error&quot;)                                               \</span></div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="preprocessor">    X(NOT_SUPPORTED, 13, &quot;Operation not supported&quot;)                            \</span></div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span><span class="preprocessor">    X(MOUNT_POINT_BUSY, 14, &quot;Mount point busy&quot;)                                \</span></div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="preprocessor">    X(NO_SUCH_FS, 15, &quot;Filesystem type not found&quot;)</span></div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span> </div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="comment">// NOLINTNEXTLINE(performance-enum-size)</span></div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="keyword">enum</span> VfsError : <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> {</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="preprocessor">#define X(name, num, msg) VFS_ERR_##name = (num),</span></div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    VFS_ERROR_CODES</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><span class="preprocessor">#undef X</span></div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>};</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span></div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="keyword">template</span> &lt;&gt; <span class="keyword">inline</span> <span class="keyword">const</span> <span class="keywordtype">char</span> *<a class="code hl_function" href="namespacekernel_1_1errors.html#abd7fc221d9b305cbbc7474467e0f34db">error_string</a>(VfsError e) {</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    <span class="keywordflow">switch</span> (e) {</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="preprocessor">#define X(name, num, msg)                                                      \</span></div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span><span class="preprocessor">    case VFS_ERR_##name:                                                       \</span></div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span><span class="preprocessor">        return msg;</span></div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>        VFS_ERROR_CODES</div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="preprocessor">#undef X</span></div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    }</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>    <span class="keywordflow">return</span> <span class="stringliteral">&quot;Unknown VFS error&quot;</span>;</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>}</div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span> </div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>} <span class="comment">// namespace kernel::errors</span></div>
+<div class="foldopen" id="foldopen00029" data-start="" data-end="">
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno"><a class="line" href="vfs__errors_8hpp.html#a43c42fdc8bfaa2981bbb316a1331840c">   29</a></span><span class="preprocessor">#define VFS_ERROR_CODES                                                        \</span></div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="preprocessor">    X(OK, 0, &quot;OK&quot;)                                                             \</span></div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="preprocessor">    X(INVALID_FD, 1, &quot;Invalid file descriptor&quot;)                                \</span></div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="preprocessor">    X(FD_TABLE_FULL, 2, &quot;File descriptor table full&quot;)                          \</span></div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="preprocessor">    X(NOT_FOUND, 3, &quot;Path or vnode not found&quot;)                                 \</span></div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="preprocessor">    X(NOT_DIR, 4, &quot;Not a directory&quot;)                                           \</span></div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="preprocessor">    X(IS_DIR, 5, &quot;Is a directory&quot;)                                             \</span></div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="preprocessor">    X(EXISTS, 6, &quot;File or directory already exists&quot;)                           \</span></div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="preprocessor">    X(NOT_EMPTY, 7, &quot;Directory not empty&quot;)                                     \</span></div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="preprocessor">    X(NO_DEVICE, 8, &quot;No such device or mount point&quot;)                           \</span></div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="preprocessor">    X(NO_SPACE, 9, &quot;No space left on device&quot;)                                  \</span></div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="preprocessor">    X(PERMISSION, 10, &quot;Permission denied&quot;)                                     \</span></div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span><span class="preprocessor">    X(INVALID_ARGS, 11, &quot;Invalid arguments&quot;)                                   \</span></div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="preprocessor">    X(IO_ERROR, 12, &quot;I/O error&quot;)                                               \</span></div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span><span class="preprocessor">    X(NOT_SUPPORTED, 13, &quot;Operation not supported&quot;)                            \</span></div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="preprocessor">    X(MOUNT_POINT_BUSY, 14, &quot;Mount point busy&quot;)                                \</span></div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="preprocessor">    X(NO_SUCH_FS, 15, &quot;Filesystem type not found&quot;)</span></div>
+</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span> </div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="comment">// NOLINTNEXTLINE(performance-enum-size)</span></div>
+<div class="foldopen" id="foldopen00048" data-start="{" data-end="};">
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno"><a class="line" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">   48</a></span><span class="keyword">enum</span> <a class="code hl_enumeration" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">VfsError</a> : uint64_t {</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno"><a class="line" href="vfs__errors_8hpp.html#a3e2fb76eadf55aca2104b61591c1d165">   49</a></span><span class="preprocessor">#define X(name, num, msg) VFS_ERR_##name = (num),</span></div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno"><a class="line" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafeae0d11a6f736e71b8c93a94be5a6bf596">   50</a></span>    <a class="code hl_enumvalue" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafeae0d11a6f736e71b8c93a94be5a6bf596">VFS_ERROR_CODES</a></div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="preprocessor">#undef X</span></div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>};</div>
+</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span></div>
+<div class="foldopen" id="foldopen00055" data-start="{" data-end="}">
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno"><a class="line" href="namespacekernel_1_1errors.html#a262e036168597823565708104b7fc6aa">   55</a></span><span class="keyword">template</span> &lt;&gt; <span class="keyword">inline</span> <span class="keyword">const</span> <span class="keywordtype">char</span> *<a class="code hl_function" href="namespacekernel_1_1errors.html#acd5cc848523a2304a3a98f7088afea47">error_string</a>(<a class="code hl_enumeration" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">VfsError</a> e) {</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    <span class="keywordflow">switch</span> (e) {</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="preprocessor">#define X(name, num, msg)                                                      \</span></div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="preprocessor">    case VFS_ERR_##name:                                                       \</span></div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="preprocessor">        return msg;</span></div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>        <a class="code hl_enumvalue" href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafeae0d11a6f736e71b8c93a94be5a6bf596">VFS_ERROR_CODES</a></div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span><span class="preprocessor">#undef X</span></div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    }</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    <span class="keywordflow">return</span> <span class="stringliteral">&quot;Unknown VFS error&quot;</span>;</div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>}</div>
+</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span> </div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>} <span class="comment">// namespace kernel::errors</span></div>
 <div class="ttc" id="aassert_8hpp_html"><div class="ttname"><a href="assert_8hpp.html">assert.hpp</a></div><div class="ttdoc">Debug assertion macros and the panic handler declaration.</div></div>
-<div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
-<div class="ttc" id="anamespacekernel_1_1errors_html"><div class="ttname"><a href="namespacekernel_1_1errors.html">kernel::errors</a></div><div class="ttdoc">Primary template for per-module error-string lookup. Each module that defines error codes specialises...</div><div class="ttdef"><b>Definition</b> mempool_errors.hpp:24</div></div>
-<div class="ttc" id="anamespacekernel_1_1errors_html_abd7fc221d9b305cbbc7474467e0f34db"><div class="ttname"><a href="namespacekernel_1_1errors.html#abd7fc221d9b305cbbc7474467e0f34db">kernel::errors::error_string</a></div><div class="ttdeci">const char * error_string(MemPoolError e)</div><div class="ttdoc">Return a human-readable string for a MemPool error code.</div><div class="ttdef"><b>Definition</b> mempool_errors.hpp:45</div></div>
+<div class="ttc" id="anamespacekernel_1_1errors_html"><div class="ttname"><a href="namespacekernel_1_1errors.html">kernel::errors</a></div><div class="ttdoc">Primary template for per-module error-string lookup. Each module that defines error codes specialises...</div><div class="ttdef"><b>Definition</b> buffer_pool_errors.hpp:27</div></div>
+<div class="ttc" id="anamespacekernel_1_1errors_html_acd5cc848523a2304a3a98f7088afea47"><div class="ttname"><a href="namespacekernel_1_1errors.html#acd5cc848523a2304a3a98f7088afea47">kernel::errors::error_string</a></div><div class="ttdeci">const char * error_string(BufPoolError e)</div><div class="ttdoc">OK anchor (issue #348-C): success is zero by convention.</div><div class="ttdef"><b>Definition</b> buffer_pool_errors.hpp:53</div></div>
+<div class="ttc" id="anamespacekernel_1_1errors_html_af02af811bc63e572d34fdddbd62cdafe"><div class="ttname"><a href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafe">kernel::errors::VfsError</a></div><div class="ttdeci">VfsError</div><div class="ttdef"><b>Definition</b> vfs_errors.hpp:48</div></div>
+<div class="ttc" id="anamespacekernel_1_1errors_html_af02af811bc63e572d34fdddbd62cdafeae0d11a6f736e71b8c93a94be5a6bf596"><div class="ttname"><a href="namespacekernel_1_1errors.html#af02af811bc63e572d34fdddbd62cdafeae0d11a6f736e71b8c93a94be5a6bf596">kernel::errors::VFS_ERROR_CODES</a></div><div class="ttdeci">@ VFS_ERROR_CODES</div><div class="ttdef"><b>Definition</b> vfs_errors.hpp:50</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

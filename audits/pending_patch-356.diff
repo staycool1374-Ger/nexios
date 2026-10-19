@@ -1,0 +1,87 @@
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 19c8f819d..1ac9dc876 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -233,10 +233,12 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
+         }
+ 
+         uint64_t offset_in_region = phdr->vaddr - vaddr_base;
+-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+-        memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + seg_phys +
+-                                        offset_in_region),
+-               file_data + phdr->offset, phdr->filesz);
++        if (phdr->filesz != 0) {
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + seg_phys +
++                                            offset_in_region),
++                   file_data + phdr->offset, phdr->filesz);
++        }
+ 
+         if (phdr->memsz > phdr->filesz) {
+             uint64_t zero_offset =
+diff --git a/src/kernel/elf/elf.hpp b/src/kernel/elf/elf.hpp
+index 237d4b2a7..ef1040d9c 100644
+--- a/src/kernel/elf/elf.hpp
++++ b/src/kernel/elf/elf.hpp
+@@ -180,7 +180,11 @@ constexpr bool validate_segment(const ELF64ProgramHeader *phdr, uint64_t file_si
+     // VULN-H2: the segment's file-resident bytes must fit inside the actual
+     // file buffer.  Previously only a 4_MiB constant bounded phdr->offset;
+     // a crafted ELF could read past the PMM::alloc_contiguous() buffer.
+-    if (file_size != 0 && phdr->offset + phdr->filesz > file_size)
++    // BSS-only segments (filesz == 0) carry no bytes: a 64 KiB-aligned
++    // linker may place their offset past EOF (issue #356) without any
++    // read occurring, so the bound applies only when bytes are consumed.
++    if (file_size != 0 && phdr->filesz != 0 &&
++        phdr->offset + phdr->filesz > file_size)
+         return false;
+     // Must be within user space
+     if (phdr->vaddr >= USER_SPACE_LIMIT)
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 6c8b16631..f197a3b3f 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -130,7 +130,10 @@ namespace kernel {
+ /// spinning on task->state) observes completion.  Previously this fell into
+ /// an infinite hlt loop, leaving the task RUNNING forever and deadlocking
+ /// any caller that waits for termination (ipc_blocking test hang).
+-#if defined(CONFIG_ARCH_X86_64)
++/// All arches: the initial frame leaves the link register zeroed (x86: no
++/// return address above RBP; aarch64: x30=0; riscv: ra=0), so a task whose
++/// entry returns would branch to 0 without this catcher (#356: ELR/sepc=0
++/// faults on aarch64/riscv64).
+ // NOT instrumented (coverage builds): _task_trampoline is entered by the
+ // context switch with a synthetic frame — there is no return address above
+ // RBP, so the -finstrument-functions hook would read the unmapped stack top
+@@ -144,7 +147,6 @@ _task_trampoline(void (*entry)()) {
+     for (;;)
+         arch::hlt();
+ }
+-#endif
+ 
+ /// @brief Allocates and initialises a SporadicServer for a daemon task
+ ///        from the MemPool.  Idempotent (returns early if already set).
+@@ -1227,10 +1229,11 @@ done_stack:
+                       // timer tick (x86 kernel tasks run with IF=1).
+                       // 0x3C5 (all masked) would leave a blocking kernel
+                       // task spinning forever on aarch64.
+-    *--stack = reinterpret_cast<uint64_t>(entry); // ELR_EL1
++    *--stack = reinterpret_cast<uint64_t>(_task_trampoline); // ELR_EL1
+     *--stack = 0; // SP_EL0 (unused for kernel task)
+-    for (int i = 0; i < 31; ++i)
+-        *--stack = 0; // X0-X30
++    for (int i = 0; i < 30; ++i)
++        *--stack = 0; // X1-X30 (x30=0: trampoline catches the return)
++    *--stack = reinterpret_cast<uint64_t>(entry); // X0 = entry arg
+     tcb->context.sp_el0 = reinterpret_cast<uint64_t>(stack);
+ #elif defined(CONFIG_ARCH_RISCV64)
+     // Build trap frame matching syscall_entry.S save area layout.
+@@ -1239,7 +1242,8 @@ done_stack:
+     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
+     stack -= 37;
+     __builtin_memset(stack, 0, 37 * 8);
+-    stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
++    stack[31] = reinterpret_cast<uint64_t>(_task_trampoline); // SEPC
++    stack[9] = reinterpret_cast<uint64_t>(entry); // A0 = entry arg
+     // SSTATUS bits (issue #348-C): SPIE=1 (prior interrupt enable),
+     // SPP=1 (trap returns to S-mode).
+     constexpr uint64_t SSTATUS_SPIE = 1ULL << 5;

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,11 +121,699 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ahci__protocol
 
 <p>AHCI register layouts, command structures, and FIS types. Shared between kernel-mode driver and userspace (ring-3) driver server. No kernel dependencies — standalone portable header.  
 <a href="#details">More...</a></p>
-
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for ahci_protocol.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="ahci__protocol_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2driver_2ahci__protocol_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
+This graph shows which files directly or indirectly include this file:</div>
+<div class="dyncontent">
+<div class="center"><img src="ahci__protocol_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2driver_2ahci__protocol_8hppdep" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+</div>
 <p><a href="ahci__protocol_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Aahci_3A_3ACmdHeader" id="r_kernel_3A_3Aahci_3A_3ACmdHeader"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ahci_1_1_cmd_header.html">kernel::ahci::CmdHeader</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Command Header (32 bytes, AHCI 1.3.1 §4.2.2).  <a href="structkernel_1_1ahci_1_1_cmd_header.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Aahci_3A_3ACmdFIS" id="r_kernel_3A_3Aahci_3A_3ACmdFIS"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ahci_1_1_cmd_f_i_s.html">kernel::ahci::CmdFIS</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Command FIS (FIS Type 0x27, 5 DWORDS = 20 bytes).  <a href="structkernel_1_1ahci_1_1_cmd_f_i_s.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Aahci_3A_3APrdHbaEntry" id="r_kernel_3A_3Aahci_3A_3APrdHbaEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ahci_1_1_prd_hba_entry.html">kernel::ahci::PrdHbaEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">PRD entry (16 bytes).  <a href="structkernel_1_1ahci_1_1_prd_hba_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Aahci_3A_3ACmdTable" id="r_kernel_3A_3Aahci_3A_3ACmdTable"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ahci_1_1_cmd_table.html">kernel::ahci::CmdTable</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+<tr class="memitem:kernel_3A_3Aahci" id="r_kernel_3A_3Aahci"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html">kernel::ahci</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a4f42ccc0b0ee2b881ceb29fed64d280e" id="r_a4f42ccc0b0ee2b881ceb29fed64d280e"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1ahci_1_1_cmd_header.html">kernel::ahci::CmdHeader</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a4f42ccc0b0ee2b881ceb29fed64d280e">kernel::ahci::__attribute__</a> ((packed)) ReceivedFis</td></tr>
+<tr class="memdesc:a4f42ccc0b0ee2b881ceb29fed64d280e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Received FIS (RFIS) structure — DMA'd by HBA on each FIS receive.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:aae80ca970b5d03d9e6bf347a57258ec2" id="r_aae80ca970b5d03d9e6bf347a57258ec2"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aae80ca970b5d03d9e6bf347a57258ec2">kernel::ahci::HBA_CAP</a> = 0x00</td></tr>
+<tr class="memdesc:aae80ca970b5d03d9e6bf347a57258ec2"><td class="mdescLeft">&#160;</td><td class="mdescRight">HBA register offsets (32-bit unless noted).  <br /></td></tr>
+<tr class="memitem:a2b1c7f1184e5e6142257f2f3042f92be" id="r_a2b1c7f1184e5e6142257f2f3042f92be"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a2b1c7f1184e5e6142257f2f3042f92be">kernel::ahci::HBA_GHC</a> = 0x04</td></tr>
+<tr class="memitem:a91108ee80a2b40476de791e8e561344a" id="r_a91108ee80a2b40476de791e8e561344a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a91108ee80a2b40476de791e8e561344a">kernel::ahci::HBA_IS</a> = 0x08</td></tr>
+<tr class="memitem:ab41c35aa84b3428d0b5e346eafedb378" id="r_ab41c35aa84b3428d0b5e346eafedb378"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ab41c35aa84b3428d0b5e346eafedb378">kernel::ahci::HBA_PI</a> = 0x0C</td></tr>
+<tr class="memitem:ac12ed31619bf06bdd724b75d4c822c08" id="r_ac12ed31619bf06bdd724b75d4c822c08"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ac12ed31619bf06bdd724b75d4c822c08">kernel::ahci::HBA_VS</a> = 0x10</td></tr>
+<tr class="memitem:a4e3f96613547d0aafa01141d6ac1727f" id="r_a4e3f96613547d0aafa01141d6ac1727f"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a4e3f96613547d0aafa01141d6ac1727f">kernel::ahci::HBA_CCC_CTL</a> = 0x14</td></tr>
+<tr class="memitem:a3ba5a1d71cb4a838aaa9e7a5684187a4" id="r_a3ba5a1d71cb4a838aaa9e7a5684187a4"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a3ba5a1d71cb4a838aaa9e7a5684187a4">kernel::ahci::HBA_CCC_PORTS</a> = 0x18</td></tr>
+<tr class="memitem:afefc62b75b5481ed948c882e5ab0936b" id="r_afefc62b75b5481ed948c882e5ab0936b"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#afefc62b75b5481ed948c882e5ab0936b">kernel::ahci::HBA_EM_LOC</a> = 0x1C</td></tr>
+<tr class="memitem:ac0be124e371aab8ae5bd543d9f122cfe" id="r_ac0be124e371aab8ae5bd543d9f122cfe"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ac0be124e371aab8ae5bd543d9f122cfe">kernel::ahci::HBA_EM_CTL</a> = 0x20</td></tr>
+<tr class="memitem:af3ddea6bdeef1f5c2e6030bde7ee5165" id="r_af3ddea6bdeef1f5c2e6030bde7ee5165"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#af3ddea6bdeef1f5c2e6030bde7ee5165">kernel::ahci::HBA_CAP2</a> = 0x24</td></tr>
+<tr class="memitem:aec043c36b4d6dc972fc8aaa63c7c49f5" id="r_aec043c36b4d6dc972fc8aaa63c7c49f5"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aec043c36b4d6dc972fc8aaa63c7c49f5">kernel::ahci::HBA_BOHC</a> = 0x28</td></tr>
+<tr class="memitem:a2d974827a97c6921706c52aeb329875f" id="r_a2d974827a97c6921706c52aeb329875f"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a2d974827a97c6921706c52aeb329875f">kernel::ahci::CAP_NP</a> = 0x0000001F</td></tr>
+<tr class="memdesc:a2d974827a97c6921706c52aeb329875f"><td class="mdescLeft">&#160;</td><td class="mdescRight">CAP bits.  <br /></td></tr>
+<tr class="memitem:a97cfc89d1e1d8beff502077212ab1044" id="r_a97cfc89d1e1d8beff502077212ab1044"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a97cfc89d1e1d8beff502077212ab1044">kernel::ahci::CAP_SXS</a> = 0x00000020</td></tr>
+<tr class="memitem:a9edf52497cfb67a55b7d79f07281bad1" id="r_a9edf52497cfb67a55b7d79f07281bad1"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a9edf52497cfb67a55b7d79f07281bad1">kernel::ahci::CAP_EMS</a> = 0x00000040</td></tr>
+<tr class="memitem:ac9a96ecc139a567266cf76739a65b974" id="r_ac9a96ecc139a567266cf76739a65b974"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ac9a96ecc139a567266cf76739a65b974">kernel::ahci::CAP_CCC</a> = 0x00000080</td></tr>
+<tr class="memitem:a59f8edbea85d610979350ae842a61e91" id="r_a59f8edbea85d610979350ae842a61e91"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a59f8edbea85d610979350ae842a61e91">kernel::ahci::CAP_NCQ</a> = 0x00010000</td></tr>
+<tr class="memitem:aad4138a1493037e359c6ac4d6e378035" id="r_aad4138a1493037e359c6ac4d6e378035"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aad4138a1493037e359c6ac4d6e378035">kernel::ahci::CAP_64BIT</a> = 0x00080000</td></tr>
+<tr class="memitem:adfbe01a913e4a51f8cd7040b8263eb75" id="r_adfbe01a913e4a51f8cd7040b8263eb75"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#adfbe01a913e4a51f8cd7040b8263eb75">kernel::ahci::CAP_SNCQ</a> = 0x00100000</td></tr>
+<tr class="memitem:a0a1eb6531d7c73100e9a60e0cae2cdcc" id="r_a0a1eb6531d7c73100e9a60e0cae2cdcc"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a0a1eb6531d7c73100e9a60e0cae2cdcc">kernel::ahci::CAP_SSS</a> = 0x00200000</td></tr>
+<tr class="memitem:a27023a3ff48e2df7374b58b027545469" id="r_a27023a3ff48e2df7374b58b027545469"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a27023a3ff48e2df7374b58b027545469">kernel::ahci::CAP_SALP</a> = 0x08000000</td></tr>
+<tr class="memitem:a263cb4809e7117fc3962178b0be80dd8" id="r_a263cb4809e7117fc3962178b0be80dd8"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a263cb4809e7117fc3962178b0be80dd8">kernel::ahci::CAP_SAL</a> = 0x10000000</td></tr>
+<tr class="memitem:a1bd6f7d0ac7fd9dbd9991cec5ed3005d" id="r_a1bd6f7d0ac7fd9dbd9991cec5ed3005d"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a1bd6f7d0ac7fd9dbd9991cec5ed3005d">kernel::ahci::CAP_ISS</a> = 0x0F000000</td></tr>
+<tr class="memitem:ab460df8481b07338e2481ce23f489ef7" id="r_ab460df8481b07338e2481ce23f489ef7"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ab460df8481b07338e2481ce23f489ef7">kernel::ahci::CAP_SNZO</a> = 0x40000000</td></tr>
+<tr class="memitem:ab3d51474893067e405f4f5310002b303" id="r_ab3d51474893067e405f4f5310002b303"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ab3d51474893067e405f4f5310002b303">kernel::ahci::CAP_SAM</a> = 0x80000000</td></tr>
+<tr class="memitem:a0adcf90f41e86825f13d8e25b34306dd" id="r_a0adcf90f41e86825f13d8e25b34306dd"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a0adcf90f41e86825f13d8e25b34306dd">kernel::ahci::GHC_HR</a> = 0x00000001</td></tr>
+<tr class="memdesc:a0adcf90f41e86825f13d8e25b34306dd"><td class="mdescLeft">&#160;</td><td class="mdescRight">GHC bits.  <br /></td></tr>
+<tr class="memitem:afd3a348161d043a808fbecabe11c685e" id="r_afd3a348161d043a808fbecabe11c685e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#afd3a348161d043a808fbecabe11c685e">kernel::ahci::GHC_IE</a> = 0x00000002</td></tr>
+<tr class="memitem:a8ba4aacd002242d2cb6a5d2ccef2571a" id="r_a8ba4aacd002242d2cb6a5d2ccef2571a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a8ba4aacd002242d2cb6a5d2ccef2571a">kernel::ahci::GHC_MRSM</a> = 0x00000004</td></tr>
+<tr class="memitem:aeaf52a193dc68958becb8c34843e994d" id="r_aeaf52a193dc68958becb8c34843e994d"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aeaf52a193dc68958becb8c34843e994d">kernel::ahci::GHC_AE</a> = 0x80000000</td></tr>
+<tr class="memitem:a2356287c4107c92d388aa17d4083222a" id="r_a2356287c4107c92d388aa17d4083222a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a2356287c4107c92d388aa17d4083222a">kernel::ahci::CAP2_BOH</a> = 0x00000001</td></tr>
+<tr class="memdesc:a2356287c4107c92d388aa17d4083222a"><td class="mdescLeft">&#160;</td><td class="mdescRight">CAP2 bits.  <br /></td></tr>
+<tr class="memitem:ae7ec6b85e658e701933919f055d143a3" id="r_ae7ec6b85e658e701933919f055d143a3"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ae7ec6b85e658e701933919f055d143a3">kernel::ahci::CAP2_NVMP</a> = 0x00000002</td></tr>
+<tr class="memitem:aa163170840acb43a5840e45397a0d326" id="r_aa163170840acb43a5840e45397a0d326"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aa163170840acb43a5840e45397a0d326">kernel::ahci::CAP2_APST</a> = 0x00000004</td></tr>
+<tr class="memitem:a627f2d5754dd11bae2e79b075f4ec8e3" id="r_a627f2d5754dd11bae2e79b075f4ec8e3"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a627f2d5754dd11bae2e79b075f4ec8e3">kernel::ahci::CAP2_SDS</a> = 0x00000008</td></tr>
+<tr class="memitem:afadebf86d9be1af7ce6214fed9b5e5ff" id="r_afadebf86d9be1af7ce6214fed9b5e5ff"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#afadebf86d9be1af7ce6214fed9b5e5ff">kernel::ahci::CAP2_SADM</a> = 0x00000010</td></tr>
+<tr class="memitem:a85f8bac950ed17706dc83c680a44041f" id="r_a85f8bac950ed17706dc83c680a44041f"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a85f8bac950ed17706dc83c680a44041f">kernel::ahci::CAP2_DESO</a> = 0x00000020</td></tr>
+<tr class="memitem:abede53a32528972b8b04c950a62fd7a0" id="r_abede53a32528972b8b04c950a62fd7a0"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#abede53a32528972b8b04c950a62fd7a0">kernel::ahci::BOHC_BOS</a> = 0x00000001</td></tr>
+<tr class="memdesc:abede53a32528972b8b04c950a62fd7a0"><td class="mdescLeft">&#160;</td><td class="mdescRight">BOHC bits.  <br /></td></tr>
+<tr class="memitem:a871b9748a135e9b36e24eb551656577e" id="r_a871b9748a135e9b36e24eb551656577e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a871b9748a135e9b36e24eb551656577e">kernel::ahci::BOHC_OOS</a> = 0x00000002</td></tr>
+<tr class="memitem:a46db2da1cebae1b852f999fed45b64c6" id="r_a46db2da1cebae1b852f999fed45b64c6"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a46db2da1cebae1b852f999fed45b64c6">kernel::ahci::BOHC_SOO</a> = 0x00000004</td></tr>
+<tr class="memitem:a7eb1cf271be69bb1b059e4adb1845b17" id="r_a7eb1cf271be69bb1b059e4adb1845b17"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a7eb1cf271be69bb1b059e4adb1845b17">kernel::ahci::BOHC_OOC</a> = 0x00000008</td></tr>
+<tr class="memitem:ab39c584325d661afd95211f9f6266cdd" id="r_ab39c584325d661afd95211f9f6266cdd"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ab39c584325d661afd95211f9f6266cdd">kernel::ahci::VS_MAJOR_MASK</a> = 0xFFFF0000</td></tr>
+<tr class="memdesc:ab39c584325d661afd95211f9f6266cdd"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structkernel_1_1_version.html" title="Kernel version constants and string formatting.">Version</a> register encoding.  <br /></td></tr>
+<tr class="memitem:a19527ce2746fc2eab56de5497c7c1a6d" id="r_a19527ce2746fc2eab56de5497c7c1a6d"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a19527ce2746fc2eab56de5497c7c1a6d">kernel::ahci::VS_MINOR_MASK</a> = 0x0000FFFF</td></tr>
+<tr class="memitem:a0e88f978eb1957a80f43a98603ab444a" id="r_a0e88f978eb1957a80f43a98603ab444a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a0e88f978eb1957a80f43a98603ab444a">kernel::ahci::PORT_BASE</a> = 0x100</td></tr>
+<tr class="memdesc:a0e88f978eb1957a80f43a98603ab444a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-port register offsets (32-bit unless noted).  <br /></td></tr>
+<tr class="memitem:a18c91a89f3cd78c756095987a0466bc6" id="r_a18c91a89f3cd78c756095987a0466bc6"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a18c91a89f3cd78c756095987a0466bc6">kernel::ahci::PORT_STRIDE</a> = 0x80</td></tr>
+<tr class="memitem:a42228bd2136da6a79fda7dd500c6b10a" id="r_a42228bd2136da6a79fda7dd500c6b10a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a42228bd2136da6a79fda7dd500c6b10a">kernel::ahci::PORT_CLB</a> = 0x00</td></tr>
+<tr class="memitem:a42c77779582fe5791d9785a14b0a8c1c" id="r_a42c77779582fe5791d9785a14b0a8c1c"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a42c77779582fe5791d9785a14b0a8c1c">kernel::ahci::PORT_CLBU</a> = 0x04</td></tr>
+<tr class="memitem:a2a1de20b9f15f718bb8ee4fd9f4c7ea1" id="r_a2a1de20b9f15f718bb8ee4fd9f4c7ea1"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a2a1de20b9f15f718bb8ee4fd9f4c7ea1">kernel::ahci::PORT_FB</a> = 0x08</td></tr>
+<tr class="memitem:a15e444d229097aee98d11420420ed82e" id="r_a15e444d229097aee98d11420420ed82e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a15e444d229097aee98d11420420ed82e">kernel::ahci::PORT_FBU</a> = 0x0C</td></tr>
+<tr class="memitem:ac49f4c86888b76f284e028ddfa745b79" id="r_ac49f4c86888b76f284e028ddfa745b79"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ac49f4c86888b76f284e028ddfa745b79">kernel::ahci::PORT_IS</a> = 0x10</td></tr>
+<tr class="memitem:ac21f693abcea6557c662c84cc8db05f3" id="r_ac21f693abcea6557c662c84cc8db05f3"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ac21f693abcea6557c662c84cc8db05f3">kernel::ahci::PORT_IE</a> = 0x14</td></tr>
+<tr class="memitem:a2160c852f28394318c629ea40688e9cd" id="r_a2160c852f28394318c629ea40688e9cd"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a2160c852f28394318c629ea40688e9cd">kernel::ahci::PORT_CMD</a> = 0x18</td></tr>
+<tr class="memitem:a28e17b8a652d5b51ef76c5a9a8aa832f" id="r_a28e17b8a652d5b51ef76c5a9a8aa832f"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a28e17b8a652d5b51ef76c5a9a8aa832f">kernel::ahci::PORT_RESERVED0</a> = 0x1C</td></tr>
+<tr class="memitem:a23b851eb6ffd716dded6871755199a8e" id="r_a23b851eb6ffd716dded6871755199a8e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a23b851eb6ffd716dded6871755199a8e">kernel::ahci::PORT_TFD</a> = 0x20</td></tr>
+<tr class="memitem:a16d00f6fb5ec708157f1674d2437eedf" id="r_a16d00f6fb5ec708157f1674d2437eedf"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a16d00f6fb5ec708157f1674d2437eedf">kernel::ahci::PORT_SIG</a> = 0x24</td></tr>
+<tr class="memitem:a334f85615d8817c3171b520d88912dd4" id="r_a334f85615d8817c3171b520d88912dd4"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a334f85615d8817c3171b520d88912dd4">kernel::ahci::PORT_SIG_SATA</a> = 0x00000101</td></tr>
+<tr class="memdesc:a334f85615d8817c3171b520d88912dd4"><td class="mdescLeft">&#160;</td><td class="mdescRight">PORT_SIG device signatures (AHCI 1.3.1 §3.3.8).  <br /></td></tr>
+<tr class="memitem:ae31724e6e0dc248b9146c1a7dedebc8a" id="r_ae31724e6e0dc248b9146c1a7dedebc8a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ae31724e6e0dc248b9146c1a7dedebc8a">kernel::ahci::PORT_SIG_ATAPI</a> = 0xEB140101</td></tr>
+<tr class="memitem:a3472e32146bcc77f5201ed0ac80ae732" id="r_a3472e32146bcc77f5201ed0ac80ae732"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a3472e32146bcc77f5201ed0ac80ae732">kernel::ahci::PORT_SIG_PM</a> = 0x96690101</td></tr>
+<tr class="memitem:a6616a9cb03ee686157fb218158b334e4" id="r_a6616a9cb03ee686157fb218158b334e4"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a6616a9cb03ee686157fb218158b334e4">kernel::ahci::PORT_SIG_SEMB</a> = 0xC33C0101</td></tr>
+<tr class="memitem:a5bc2671958fbfdd0e6457f75586a1edb" id="r_a5bc2671958fbfdd0e6457f75586a1edb"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a5bc2671958fbfdd0e6457f75586a1edb">kernel::ahci::PORT_SSTS</a> = 0x28</td></tr>
+<tr class="memitem:a5d9c52d79631749f985d987c3bb13c47" id="r_a5d9c52d79631749f985d987c3bb13c47"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a5d9c52d79631749f985d987c3bb13c47">kernel::ahci::PORT_SCTL</a> = 0x2C</td></tr>
+<tr class="memitem:abd02f10589e8a3ab61514fe8c306a4e3" id="r_abd02f10589e8a3ab61514fe8c306a4e3"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#abd02f10589e8a3ab61514fe8c306a4e3">kernel::ahci::PORT_SERR</a> = 0x30</td></tr>
+<tr class="memitem:a7f20b79d756bc9dd1e2385e93b172883" id="r_a7f20b79d756bc9dd1e2385e93b172883"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a7f20b79d756bc9dd1e2385e93b172883">kernel::ahci::PORT_SACT</a> = 0x34</td></tr>
+<tr class="memitem:a48d30b4ee43345ff662e99e4516f40f0" id="r_a48d30b4ee43345ff662e99e4516f40f0"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a48d30b4ee43345ff662e99e4516f40f0">kernel::ahci::PORT_CI</a> = 0x38</td></tr>
+<tr class="memitem:ab2bf5c1883b9fbe87fbcb58e7f0f63c0" id="r_ab2bf5c1883b9fbe87fbcb58e7f0f63c0"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ab2bf5c1883b9fbe87fbcb58e7f0f63c0">kernel::ahci::PORT_SNTF</a> = 0x3C</td></tr>
+<tr class="memitem:af7f09cc484b22a846c3dcab9a1f479dd" id="r_af7f09cc484b22a846c3dcab9a1f479dd"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#af7f09cc484b22a846c3dcab9a1f479dd">kernel::ahci::PORT_FBS</a> = 0x40</td></tr>
+<tr class="memitem:ac3d4d4b35bd4ded2f1c50153a5e2d3d1" id="r_ac3d4d4b35bd4ded2f1c50153a5e2d3d1"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ac3d4d4b35bd4ded2f1c50153a5e2d3d1">kernel::ahci::PORT_DEVSLP</a> = 0x44</td></tr>
+<tr class="memitem:a12d250cf4cd89f808116142b67e7a332" id="r_a12d250cf4cd89f808116142b67e7a332"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a12d250cf4cd89f808116142b67e7a332">kernel::ahci::PORT_RESERVED1</a> = 0x48</td></tr>
+<tr class="memitem:ae95b751c13364d3323d619f7a9dc1431" id="r_ae95b751c13364d3323d619f7a9dc1431"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ae95b751c13364d3323d619f7a9dc1431">kernel::ahci::PORT_VS</a> = 0x70</td></tr>
+<tr class="memitem:a682b302ff09dbdf4f80f0c42409e21d4" id="r_a682b302ff09dbdf4f80f0c42409e21d4"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a682b302ff09dbdf4f80f0c42409e21d4">kernel::ahci::PORT_IS_DHRS</a> = 0x00000001</td></tr>
+<tr class="memdesc:a682b302ff09dbdf4f80f0c42409e21d4"><td class="mdescLeft">&#160;</td><td class="mdescRight">PORT_IS bits (Interrupt Status).  <br /></td></tr>
+<tr class="memitem:a97ce35a4cfd7e2a049227fed2168e6da" id="r_a97ce35a4cfd7e2a049227fed2168e6da"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a97ce35a4cfd7e2a049227fed2168e6da">kernel::ahci::PORT_IS_PSS</a> = 0x00000002</td></tr>
+<tr class="memitem:a3b588154c4dcaed6188154a43c909edc" id="r_a3b588154c4dcaed6188154a43c909edc"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a3b588154c4dcaed6188154a43c909edc">kernel::ahci::PORT_IS_DSS</a> = 0x00000004</td></tr>
+<tr class="memitem:af85a08baeb7d3bcf4e823fc398f2287e" id="r_af85a08baeb7d3bcf4e823fc398f2287e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#af85a08baeb7d3bcf4e823fc398f2287e">kernel::ahci::PORT_IS_SDBS</a> = 0x00000008</td></tr>
+<tr class="memitem:aa00d31fbd39512d7108991e5c8d49774" id="r_aa00d31fbd39512d7108991e5c8d49774"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aa00d31fbd39512d7108991e5c8d49774">kernel::ahci::PORT_IS_UFS</a> = 0x00000010</td></tr>
+<tr class="memitem:aece0df4d0b28c70079571b1ba992c49c" id="r_aece0df4d0b28c70079571b1ba992c49c"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aece0df4d0b28c70079571b1ba992c49c">kernel::ahci::PORT_IS_DPS</a> = 0x00000020</td></tr>
+<tr class="memitem:a727f6134b5bc7f591a7f99ba34ee8ad4" id="r_a727f6134b5bc7f591a7f99ba34ee8ad4"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a727f6134b5bc7f591a7f99ba34ee8ad4">kernel::ahci::PORT_IS_PCS</a> = 0x00000040</td></tr>
+<tr class="memitem:a778505ee005df17d54e8e429e7354187" id="r_a778505ee005df17d54e8e429e7354187"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a778505ee005df17d54e8e429e7354187">kernel::ahci::PORT_IS_DMPS</a> = 0x00000080</td></tr>
+<tr class="memitem:a32921d4a93a99fe182cce5bbe36e3c36" id="r_a32921d4a93a99fe182cce5bbe36e3c36"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a32921d4a93a99fe182cce5bbe36e3c36">kernel::ahci::PORT_IS_PRCS</a> = 0x00000100</td></tr>
+<tr class="memitem:af6639f6b6c231027d39165b53ddf515c" id="r_af6639f6b6c231027d39165b53ddf515c"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#af6639f6b6c231027d39165b53ddf515c">kernel::ahci::PORT_IS_IPMS</a> = 0x00000400</td></tr>
+<tr class="memitem:a27c80aa5fddca5af364dbdd9544432eb" id="r_a27c80aa5fddca5af364dbdd9544432eb"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a27c80aa5fddca5af364dbdd9544432eb">kernel::ahci::PORT_IS_OFS</a> = 0x00000800</td></tr>
+<tr class="memitem:a5ae3c406b74f5eb2897b52916de407bd" id="r_a5ae3c406b74f5eb2897b52916de407bd"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a5ae3c406b74f5eb2897b52916de407bd">kernel::ahci::PORT_IS_INFS</a> = 0x00001000</td></tr>
+<tr class="memitem:a6bb96a0b138a373ee1487bcae80a4b77" id="r_a6bb96a0b138a373ee1487bcae80a4b77"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a6bb96a0b138a373ee1487bcae80a4b77">kernel::ahci::PORT_IS_IFS</a> = 0x00002000</td></tr>
+<tr class="memitem:ac13429ee60a50649e7b445e4d68594e1" id="r_ac13429ee60a50649e7b445e4d68594e1"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ac13429ee60a50649e7b445e4d68594e1">kernel::ahci::PORT_IS_HBDS</a> = 0x00004000</td></tr>
+<tr class="memitem:acc8b1cb7def62fb5aae3a2dbc962f737" id="r_acc8b1cb7def62fb5aae3a2dbc962f737"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#acc8b1cb7def62fb5aae3a2dbc962f737">kernel::ahci::PORT_IS_HBFS</a> = 0x00008000</td></tr>
+<tr class="memitem:a390b0b49c48f981493b656123af307b3" id="r_a390b0b49c48f981493b656123af307b3"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a390b0b49c48f981493b656123af307b3">kernel::ahci::PORT_IS_TFES</a> = 0x00010000</td></tr>
+<tr class="memitem:a4b60ddd5a99f77eec8f703331b7020c5" id="r_a4b60ddd5a99f77eec8f703331b7020c5"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a4b60ddd5a99f77eec8f703331b7020c5">kernel::ahci::PORT_IS_CPDS</a> = 0x00020000</td></tr>
+<tr class="memitem:af2ea45ffa3f016525269a87fe49dbb47" id="r_af2ea45ffa3f016525269a87fe49dbb47"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#af2ea45ffa3f016525269a87fe49dbb47">kernel::ahci::CMD_ST</a> = 0x00000001</td></tr>
+<tr class="memdesc:af2ea45ffa3f016525269a87fe49dbb47"><td class="mdescLeft">&#160;</td><td class="mdescRight">PORT_CMD bits.  <br /></td></tr>
+<tr class="memitem:a2e5853921da7a1a5e54518f389fdb3a6" id="r_a2e5853921da7a1a5e54518f389fdb3a6"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a2e5853921da7a1a5e54518f389fdb3a6">kernel::ahci::CMD_SUD</a> = 0x00000002</td></tr>
+<tr class="memitem:a0f40c27aab32ec9581362ce2b3bd1251" id="r_a0f40c27aab32ec9581362ce2b3bd1251"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a0f40c27aab32ec9581362ce2b3bd1251">kernel::ahci::CMD_POD</a> = 0x00000004</td></tr>
+<tr class="memitem:abd8d1b9a96e5e464b5c98b7941baf2f3" id="r_abd8d1b9a96e5e464b5c98b7941baf2f3"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#abd8d1b9a96e5e464b5c98b7941baf2f3">kernel::ahci::CMD_CLO</a> = 0x00000008</td></tr>
+<tr class="memitem:ad4968a00bbd85e4d53b03d1f60c82b2b" id="r_ad4968a00bbd85e4d53b03d1f60c82b2b"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ad4968a00bbd85e4d53b03d1f60c82b2b">kernel::ahci::CMD_FRE</a> = 0x00000010</td></tr>
+<tr class="memitem:af10d7e1c9f0aaf8ef7853bf8445ca0fc" id="r_af10d7e1c9f0aaf8ef7853bf8445ca0fc"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#af10d7e1c9f0aaf8ef7853bf8445ca0fc">kernel::ahci::CMD_CCS</a> = 0x000001F0</td></tr>
+<tr class="memitem:a03c92170cc94656d949f65a8b9a40f4f" id="r_a03c92170cc94656d949f65a8b9a40f4f"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a03c92170cc94656d949f65a8b9a40f4f">kernel::ahci::CMD_MPSS</a> = 0x00000200</td></tr>
+<tr class="memitem:a28e2820ccce0e6a31ea6fb00aac00acc" id="r_a28e2820ccce0e6a31ea6fb00aac00acc"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a28e2820ccce0e6a31ea6fb00aac00acc">kernel::ahci::CMD_FR</a> = 0x00004000</td></tr>
+<tr class="memitem:a4f0c77df05d631448a31948266ac82c7" id="r_a4f0c77df05d631448a31948266ac82c7"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a4f0c77df05d631448a31948266ac82c7">kernel::ahci::CMD_CR</a> = 0x00008000</td></tr>
+<tr class="memitem:a8c2bf1a495a13a9bf43ef461ee39f299" id="r_a8c2bf1a495a13a9bf43ef461ee39f299"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a8c2bf1a495a13a9bf43ef461ee39f299">kernel::ahci::CMD_CPS</a> = 0x00010000</td></tr>
+<tr class="memitem:ae5baee75f830e9204c6d8f9f4e3ece2a" id="r_ae5baee75f830e9204c6d8f9f4e3ece2a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ae5baee75f830e9204c6d8f9f4e3ece2a">kernel::ahci::CMD_PMA</a> = 0x00020000</td></tr>
+<tr class="memitem:a2ed05042fca15fc6342f265b7366368b" id="r_a2ed05042fca15fc6342f265b7366368b"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a2ed05042fca15fc6342f265b7366368b">kernel::ahci::CMD_HP</a> = 0x00040000</td></tr>
+<tr class="memitem:aaa8f570fbf22f46072b39daa7ca98972" id="r_aaa8f570fbf22f46072b39daa7ca98972"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aaa8f570fbf22f46072b39daa7ca98972">kernel::ahci::CMD_MPSP</a> = 0x00080000</td></tr>
+<tr class="memitem:a09a81c46e243d11d0f82ccbbaa057df7" id="r_a09a81c46e243d11d0f82ccbbaa057df7"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a09a81c46e243d11d0f82ccbbaa057df7">kernel::ahci::CMD_CPD</a> = 0x00100000</td></tr>
+<tr class="memitem:aa77c9f25b8ed9cf83a20f882d3eb5b88" id="r_aa77c9f25b8ed9cf83a20f882d3eb5b88"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aa77c9f25b8ed9cf83a20f882d3eb5b88">kernel::ahci::CMD_ESP</a> = 0x00200000</td></tr>
+<tr class="memitem:a0ac93dcdf397599dcad95f9746608a31" id="r_a0ac93dcdf397599dcad95f9746608a31"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a0ac93dcdf397599dcad95f9746608a31">kernel::ahci::CMD_FBSCP</a> = 0x00400000</td></tr>
+<tr class="memitem:acf0ccb46f96e7da98b76f787c506050c" id="r_acf0ccb46f96e7da98b76f787c506050c"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#acf0ccb46f96e7da98b76f787c506050c">kernel::ahci::CMD_APSTE</a> = 0x00800000</td></tr>
+<tr class="memitem:a073e059ad0274e1fe014b255b3dea8a2" id="r_a073e059ad0274e1fe014b255b3dea8a2"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a073e059ad0274e1fe014b255b3dea8a2">kernel::ahci::CMD_ATAPI</a> = 0x01000000</td></tr>
+<tr class="memitem:aba0dae82ea2c779a8455001563af64f1" id="r_aba0dae82ea2c779a8455001563af64f1"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aba0dae82ea2c779a8455001563af64f1">kernel::ahci::CMD_DLAE</a> = 0x04000000</td></tr>
+<tr class="memitem:a44f590b9d0cf8aeea071e82d4530307f" id="r_a44f590b9d0cf8aeea071e82d4530307f"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a44f590b9d0cf8aeea071e82d4530307f">kernel::ahci::CMD_ALPE</a> = 0x08000000</td></tr>
+<tr class="memitem:a01da8edead3e7a5bb31fbd1b1532a6f4" id="r_a01da8edead3e7a5bb31fbd1b1532a6f4"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a01da8edead3e7a5bb31fbd1b1532a6f4">kernel::ahci::CMD_ASP</a> = 0x10000000</td></tr>
+<tr class="memitem:a241286fbf08514e25055e3b21a436ed5" id="r_a241286fbf08514e25055e3b21a436ed5"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a241286fbf08514e25055e3b21a436ed5">kernel::ahci::CMD_ICC</a> = 0xF0000000</td></tr>
+<tr class="memitem:a33499240d7f2a6f63b74e3c8cc56ac14" id="r_a33499240d7f2a6f63b74e3c8cc56ac14"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a33499240d7f2a6f63b74e3c8cc56ac14">kernel::ahci::TFD_BSY</a> = 0x00000080</td></tr>
+<tr class="memdesc:a33499240d7f2a6f63b74e3c8cc56ac14"><td class="mdescLeft">&#160;</td><td class="mdescRight">PORT_TFD bits (Task File Data).  <br /></td></tr>
+<tr class="memitem:a014829f27f5b09f9ad1881a002f3df7d" id="r_a014829f27f5b09f9ad1881a002f3df7d"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a014829f27f5b09f9ad1881a002f3df7d">kernel::ahci::TFD_DRQ</a> = 0x00000040</td></tr>
+<tr class="memitem:a90d461f63e17cdd3051c409aa8a4662f" id="r_a90d461f63e17cdd3051c409aa8a4662f"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a90d461f63e17cdd3051c409aa8a4662f">kernel::ahci::TFD_ERR</a> = 0x00000100</td></tr>
+<tr class="memitem:a1720d094b2e1f5dcb06fd789c119d276" id="r_a1720d094b2e1f5dcb06fd789c119d276"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a1720d094b2e1f5dcb06fd789c119d276">kernel::ahci::SSTS_DET_MASK</a> = 0x0000000F</td></tr>
+<tr class="memdesc:a1720d094b2e1f5dcb06fd789c119d276"><td class="mdescLeft">&#160;</td><td class="mdescRight">PORT_SSTS bits (SATA Status).  <br /></td></tr>
+<tr class="memitem:a9538f53c28aea23c532e696c92f85aa6" id="r_a9538f53c28aea23c532e696c92f85aa6"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a9538f53c28aea23c532e696c92f85aa6">kernel::ahci::SSTS_DET_NODEVICE</a> = 0x00</td></tr>
+<tr class="memitem:a6403f87b45b60c1d7b674cd4eaf16414" id="r_a6403f87b45b60c1d7b674cd4eaf16414"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a6403f87b45b60c1d7b674cd4eaf16414">kernel::ahci::SSTS_DET_DETACHED</a> = 0x01</td></tr>
+<tr class="memitem:a2dacbc81a3e358c8fe77cce5437cd15e" id="r_a2dacbc81a3e358c8fe77cce5437cd15e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a2dacbc81a3e358c8fe77cce5437cd15e">kernel::ahci::SSTS_DET_ONLINE</a> = 0x03</td></tr>
+<tr class="memitem:a741f80f7039c6fa13d908e2501c60f6e" id="r_a741f80f7039c6fa13d908e2501c60f6e"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a741f80f7039c6fa13d908e2501c60f6e">kernel::ahci::SSTS_DET_OFFLINE</a></td></tr>
+<tr class="memitem:a97cadcb9d28ca4921a66e08213dfea6f" id="r_a97cadcb9d28ca4921a66e08213dfea6f"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a97cadcb9d28ca4921a66e08213dfea6f">kernel::ahci::SSTS_SPD_MASK</a> = 0x000000F0</td></tr>
+<tr class="memitem:ad28b8b2cf8235b27fd0bb983ba6e0388" id="r_ad28b8b2cf8235b27fd0bb983ba6e0388"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ad28b8b2cf8235b27fd0bb983ba6e0388">kernel::ahci::SSTS_IPM_MASK</a></td></tr>
+<tr class="memitem:a1fab7a6592f12c072a5906604405aa68" id="r_a1fab7a6592f12c072a5906604405aa68"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a1fab7a6592f12c072a5906604405aa68">kernel::ahci::SERR_DIAG_X</a> = 0x00000001</td></tr>
+<tr class="memdesc:a1fab7a6592f12c072a5906604405aa68"><td class="mdescLeft">&#160;</td><td class="mdescRight">PORT_SERR bits (SATA <a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">Error</a>).  <br /></td></tr>
+<tr class="memitem:a8f1a45b77d11f501f751c31df38b2edc" id="r_a8f1a45b77d11f501f751c31df38b2edc"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a8f1a45b77d11f501f751c31df38b2edc">kernel::ahci::SERR_DIAG_F</a> = 0x00000002</td></tr>
+<tr class="memitem:a1d0c6317ee33156656a87ee6c1969497" id="r_a1d0c6317ee33156656a87ee6c1969497"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a1d0c6317ee33156656a87ee6c1969497">kernel::ahci::SERR_DIAG_T</a> = 0x00000004</td></tr>
+<tr class="memitem:a61cbf59ef3957ead2530133228c50921" id="r_a61cbf59ef3957ead2530133228c50921"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a61cbf59ef3957ead2530133228c50921">kernel::ahci::SERR_DIAG_S</a> = 0x00000008</td></tr>
+<tr class="memitem:adbcf3cd37a43936ea2b2dd228bed804d" id="r_adbcf3cd37a43936ea2b2dd228bed804d"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#adbcf3cd37a43936ea2b2dd228bed804d">kernel::ahci::SERR_DIAG_H</a> = 0x00000010</td></tr>
+<tr class="memitem:ae2b0f7353943cdf369a96a2bff8247bc" id="r_ae2b0f7353943cdf369a96a2bff8247bc"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ae2b0f7353943cdf369a96a2bff8247bc">kernel::ahci::SERR_DIAG_C</a> = 0x00000020</td></tr>
+<tr class="memitem:ad7481a6c51cec233f25f343f7b3df386" id="r_ad7481a6c51cec233f25f343f7b3df386"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ad7481a6c51cec233f25f343f7b3df386">kernel::ahci::SERR_DIAG_D</a> = 0x00000040</td></tr>
+<tr class="memitem:a36ae21140d24765318fcb7a3cbad4d3d" id="r_a36ae21140d24765318fcb7a3cbad4d3d"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a36ae21140d24765318fcb7a3cbad4d3d">kernel::ahci::SERR_DIAG_B</a> = 0x00000080</td></tr>
+<tr class="memitem:a21a5f438672f59523e94193ae3906e30" id="r_a21a5f438672f59523e94193ae3906e30"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a21a5f438672f59523e94193ae3906e30">kernel::ahci::SERR_DIAG_W</a> = 0x00000100</td></tr>
+<tr class="memitem:aee783b704f20411de059c31411387154" id="r_aee783b704f20411de059c31411387154"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aee783b704f20411de059c31411387154">kernel::ahci::SERR_DIAG_I</a> = 0x00000200</td></tr>
+<tr class="memitem:a9b84f2afbc5a02117d83b26474408260" id="r_a9b84f2afbc5a02117d83b26474408260"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a9b84f2afbc5a02117d83b26474408260">kernel::ahci::SERR_DIAG_N</a> = 0x00000400</td></tr>
+<tr class="memitem:a5061973d463b2a7cc1f2b9b0c1876197" id="r_a5061973d463b2a7cc1f2b9b0c1876197"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a5061973d463b2a7cc1f2b9b0c1876197">kernel::ahci::SERR_DIAG_P</a> = 0x00010000</td></tr>
+<tr class="memitem:a3bbe9f8ac0497ffc6976ee7b835a5942" id="r_a3bbe9f8ac0497ffc6976ee7b835a5942"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a3bbe9f8ac0497ffc6976ee7b835a5942">kernel::ahci::SERR_DIAG_C1</a> = 0x01000000</td></tr>
+<tr class="memitem:af31677808045bbc11398d87acee6f7d8" id="r_af31677808045bbc11398d87acee6f7d8"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#af31677808045bbc11398d87acee6f7d8">kernel::ahci::AHCI_MAX_CMDS</a> = 32</td></tr>
+<tr class="memdesc:af31677808045bbc11398d87acee6f7d8"><td class="mdescLeft">&#160;</td><td class="mdescRight">PORT_IE (Interrupt Enable) uses same bit positions as PORT_IS.  <br /></td></tr>
+<tr class="memitem:a603d5a096df0308ac97dbf3e7d808733" id="r_a603d5a096df0308ac97dbf3e7d808733"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a603d5a096df0308ac97dbf3e7d808733">opts</a></td></tr>
+<tr class="memitem:aef2da437ff6b7a93f6b302a955338c0f" id="r_aef2da437ff6b7a93f6b302a955338c0f"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#aef2da437ff6b7a93f6b302a955338c0f">prdtl</a></td></tr>
+<tr class="memitem:a1ef03d8aec51f86a066d18a615b114a9" id="r_a1ef03d8aec51f86a066d18a615b114a9"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a1ef03d8aec51f86a066d18a615b114a9">prdbc</a></td></tr>
+<tr class="memitem:a7b9e83f2a21a5acc68d70b04b012d6d2" id="r_a7b9e83f2a21a5acc68d70b04b012d6d2"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a7b9e83f2a21a5acc68d70b04b012d6d2">ctba</a></td></tr>
+<tr class="memitem:a0fb060abb54a57da672c1fd9603e0c12" id="r_a0fb060abb54a57da672c1fd9603e0c12"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a0fb060abb54a57da672c1fd9603e0c12">ctbau</a></td></tr>
+<tr class="memitem:a4e284d54752b3048411f642e4adad6f3" id="r_a4e284d54752b3048411f642e4adad6f3"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a4e284d54752b3048411f642e4adad6f3">rsvd1</a> [4]</td></tr>
+<tr class="memitem:a78b9b7885f42a2b4ea965dde80658271" id="r_a78b9b7885f42a2b4ea965dde80658271"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a78b9b7885f42a2b4ea965dde80658271">kernel::ahci::CMDHDR_CFL_MASK</a> = 0x001F</td></tr>
+<tr class="memdesc:a78b9b7885f42a2b4ea965dde80658271"><td class="mdescLeft">&#160;</td><td class="mdescRight">Command Header flags for attrs field.  <br /></td></tr>
+<tr class="memitem:a73652cdb0856828f3bb815ece61a4925" id="r_a73652cdb0856828f3bb815ece61a4925"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a73652cdb0856828f3bb815ece61a4925">kernel::ahci::CMDHDR_ATAPI</a> = 0x0020</td></tr>
+<tr class="memitem:af1c26cc7520894f7b352a7e51c321443" id="r_af1c26cc7520894f7b352a7e51c321443"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#af1c26cc7520894f7b352a7e51c321443">kernel::ahci::CMDHDR_WRITE</a> = 0x0040</td></tr>
+<tr class="memitem:a365d640a7853947664acdcd098c0fbad" id="r_a365d640a7853947664acdcd098c0fbad"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a365d640a7853947664acdcd098c0fbad">kernel::ahci::CMDHDR_CLR_BUSY</a> = 0x0080</td></tr>
+<tr class="memitem:a60112314c5bc7814a98cff8452b092c3" id="r_a60112314c5bc7814a98cff8452b092c3"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a60112314c5bc7814a98cff8452b092c3">kernel::ahci::CMDHDR_PREFETCH</a> = 0x0100</td></tr>
+<tr class="memitem:a5b94c1abd85ab184b24b4bb8cd52623a" id="r_a5b94c1abd85ab184b24b4bb8cd52623a"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a5b94c1abd85ab184b24b4bb8cd52623a">kernel::ahci::CMDHDR_RESET</a> = 0x0200</td></tr>
+<tr class="memitem:a6137358ed2daacbdc40bbda9f210042d" id="r_a6137358ed2daacbdc40bbda9f210042d"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a6137358ed2daacbdc40bbda9f210042d">kernel::ahci::CMDHDR_BIST</a> = 0x0400</td></tr>
+<tr class="memitem:a927b3d5a1fa1411df162ccbde048261d" id="r_a927b3d5a1fa1411df162ccbde048261d"><td class="memItemLeft">constexpr uint16_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a927b3d5a1fa1411df162ccbde048261d">kernel::ahci::CMDHDR_CMP_PMA</a> = 0x0800</td></tr>
+<tr class="memitem:aa682c9430d53cab300ee8940356ef8ec" id="r_aa682c9430d53cab300ee8940356ef8ec"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#aa682c9430d53cab300ee8940356ef8ec">fis_type</a></td></tr>
+<tr class="memitem:a774534306441e155abc3b5a480c2347b" id="r_a774534306441e155abc3b5a480c2347b"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a774534306441e155abc3b5a480c2347b">pm_port_c</a></td></tr>
+<tr class="memitem:a1a5aaa930940857f68f245eeb89506b5" id="r_a1a5aaa930940857f68f245eeb89506b5"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a1a5aaa930940857f68f245eeb89506b5">command</a></td></tr>
+<tr class="memitem:aa6b1dd1bb9c0c2e9967e4a7f61644db1" id="r_aa6b1dd1bb9c0c2e9967e4a7f61644db1"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#aa6b1dd1bb9c0c2e9967e4a7f61644db1">features</a></td></tr>
+<tr class="memitem:a286fe3731b924d7ff9e6af7ca3493858" id="r_a286fe3731b924d7ff9e6af7ca3493858"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a286fe3731b924d7ff9e6af7ca3493858">lba_lo</a></td></tr>
+<tr class="memitem:ac8cf7f1e120c2741b43f31947b31b2f2" id="r_ac8cf7f1e120c2741b43f31947b31b2f2"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ac8cf7f1e120c2741b43f31947b31b2f2">lba_mid</a></td></tr>
+<tr class="memitem:a956e2070d17dadc9bf0f2a0f55a9b1f6" id="r_a956e2070d17dadc9bf0f2a0f55a9b1f6"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a956e2070d17dadc9bf0f2a0f55a9b1f6">lba_hi</a></td></tr>
+<tr class="memitem:a2376f17d1e7367401184b2a3978bcd3a" id="r_a2376f17d1e7367401184b2a3978bcd3a"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a2376f17d1e7367401184b2a3978bcd3a">device</a></td></tr>
+<tr class="memitem:a086756bcdc5d09814644b8af8d04443c" id="r_a086756bcdc5d09814644b8af8d04443c"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a086756bcdc5d09814644b8af8d04443c">lba_lo_exp</a></td></tr>
+<tr class="memitem:aac985410a18400a2c715fd828824f735" id="r_aac985410a18400a2c715fd828824f735"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#aac985410a18400a2c715fd828824f735">lba_mid_exp</a></td></tr>
+<tr class="memitem:a9190bb29d1ab3d984b19f782300bcef9" id="r_a9190bb29d1ab3d984b19f782300bcef9"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a9190bb29d1ab3d984b19f782300bcef9">lba_hi_exp</a></td></tr>
+<tr class="memitem:a300fa9828ea0ddc391fdb351595a0f0c" id="r_a300fa9828ea0ddc391fdb351595a0f0c"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a300fa9828ea0ddc391fdb351595a0f0c">features_exp</a></td></tr>
+<tr class="memitem:a9211e566a8ad9c56d80569ed1a50fdbd" id="r_a9211e566a8ad9c56d80569ed1a50fdbd"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a9211e566a8ad9c56d80569ed1a50fdbd">count_lo</a></td></tr>
+<tr class="memitem:ab709326df1478bcad9a85997a4ec33cb" id="r_ab709326df1478bcad9a85997a4ec33cb"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ab709326df1478bcad9a85997a4ec33cb">count_hi</a></td></tr>
+<tr class="memitem:a8617e0fef3725e58934abede60a1c969" id="r_a8617e0fef3725e58934abede60a1c969"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a8617e0fef3725e58934abede60a1c969">icc</a></td></tr>
+<tr class="memitem:ae11ecbd546ec0301d5462df23b139816" id="r_ae11ecbd546ec0301d5462df23b139816"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ae11ecbd546ec0301d5462df23b139816">control</a></td></tr>
+<tr class="memitem:ac9bbabaf2ae72f5c475d939d06b3d9d1" id="r_ac9bbabaf2ae72f5c475d939d06b3d9d1"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ac9bbabaf2ae72f5c475d939d06b3d9d1">aux</a></td></tr>
+<tr class="memitem:aac7140548acc1e16b1dfbcdf5f979393" id="r_aac7140548acc1e16b1dfbcdf5f979393"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aac7140548acc1e16b1dfbcdf5f979393">kernel::ahci::FIS_TYPE_REG_H2D</a> = 0x27</td></tr>
+<tr class="memdesc:aac7140548acc1e16b1dfbcdf5f979393"><td class="mdescLeft">&#160;</td><td class="mdescRight">FIS types.  <br /></td></tr>
+<tr class="memitem:a5eb876efb839aeca967382bc56085378" id="r_a5eb876efb839aeca967382bc56085378"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a5eb876efb839aeca967382bc56085378">kernel::ahci::FIS_TYPE_REG_D2H</a> = 0x34</td></tr>
+<tr class="memitem:ab326710c8e64eb8cc5b9cb19ad84223a" id="r_ab326710c8e64eb8cc5b9cb19ad84223a"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ab326710c8e64eb8cc5b9cb19ad84223a">kernel::ahci::FIS_TYPE_DMA_ACT</a> = 0x39</td></tr>
+<tr class="memitem:a57583aed34b144e8cf7b74dc89f3fc7d" id="r_a57583aed34b144e8cf7b74dc89f3fc7d"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a57583aed34b144e8cf7b74dc89f3fc7d">kernel::ahci::FIS_TYPE_DMA_SETUP</a> = 0x41</td></tr>
+<tr class="memitem:a356dcc755d18389db0f28d103dce9d25" id="r_a356dcc755d18389db0f28d103dce9d25"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a356dcc755d18389db0f28d103dce9d25">kernel::ahci::FIS_TYPE_DATA</a> = 0x46</td></tr>
+<tr class="memitem:ad8ccd9ea8116f4442f814c4818876dc3" id="r_ad8ccd9ea8116f4442f814c4818876dc3"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ad8ccd9ea8116f4442f814c4818876dc3">kernel::ahci::FIS_TYPE_BIST</a> = 0x58</td></tr>
+<tr class="memitem:a9d96c4776bf309dfbe84d2c01649c9c1" id="r_a9d96c4776bf309dfbe84d2c01649c9c1"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a9d96c4776bf309dfbe84d2c01649c9c1">kernel::ahci::FIS_TYPE_PIO_SETUP</a> = 0x5F</td></tr>
+<tr class="memitem:a7e67634465003747f25f9b0ef07938fa" id="r_a7e67634465003747f25f9b0ef07938fa"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a7e67634465003747f25f9b0ef07938fa">kernel::ahci::FIS_TYPE_DEV_BITS</a> = 0xA1</td></tr>
+<tr class="memitem:a3d44ae193b9ea434ad6a7487abc2f82e" id="r_a3d44ae193b9ea434ad6a7487abc2f82e"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a3d44ae193b9ea434ad6a7487abc2f82e">dba</a></td></tr>
+<tr class="memitem:a0e1f5c6f210d66855938dffc753d156b" id="r_a0e1f5c6f210d66855938dffc753d156b"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a0e1f5c6f210d66855938dffc753d156b">dbau</a></td></tr>
+<tr class="memitem:aa43c4c21b173ada1b6b7568956f0d650" id="r_aa43c4c21b173ada1b6b7568956f0d650"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#aa43c4c21b173ada1b6b7568956f0d650">reserved</a></td></tr>
+<tr class="memitem:ae15613b55ef4a6c4195797e604e57966" id="r_ae15613b55ef4a6c4195797e604e57966"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ae15613b55ef4a6c4195797e604e57966">byte_count</a></td></tr>
+<tr class="memitem:acb3785a3cdc41e6321e06c06ad26d67a" id="r_acb3785a3cdc41e6321e06c06ad26d67a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#acb3785a3cdc41e6321e06c06ad26d67a">kernel::ahci::PRD_BYTE_COUNT_MASK</a> = 0x00FFFFFF</td></tr>
+<tr class="memitem:ae637cc8fb1505cc90b4c96bfa22c04dc" id="r_ae637cc8fb1505cc90b4c96bfa22c04dc"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ae637cc8fb1505cc90b4c96bfa22c04dc">kernel::ahci::PRD_IOC</a> = 0x80000000</td></tr>
+<tr class="memitem:ade01dcb2baf3ae6a29cd565476997081" id="r_ade01dcb2baf3ae6a29cd565476997081"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ade01dcb2baf3ae6a29cd565476997081">kernel::ahci::PRD_MAX_BYTES</a> = 0x00400000</td></tr>
+<tr class="memdesc:ade01dcb2baf3ae6a29cd565476997081"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum bytes per PRD entry (4 MB minus 1).  <br /></td></tr>
+<tr class="memitem:a93b59a426f268faa6dab8c8619cd0b44" id="r_a93b59a426f268faa6dab8c8619cd0b44"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a93b59a426f268faa6dab8c8619cd0b44">kernel::ahci::AHCI_MAX_PRD</a> = 256</td></tr>
+<tr class="memdesc:a93b59a426f268faa6dab8c8619cd0b44"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum PRD entries per command table.  <br /></td></tr>
+<tr class="memitem:a8f6434a21f51ab69d7616c31ff8594ea" id="r_a8f6434a21f51ab69d7616c31ff8594ea"><td class="memItemLeft">CmdFIS&#160;</td><td class="memItemRight"><a class="el" href="#a8f6434a21f51ab69d7616c31ff8594ea">cfis</a></td></tr>
+<tr class="memitem:ad6450c28d7db2cafc43a00626bf6a582" id="r_ad6450c28d7db2cafc43a00626bf6a582"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ad6450c28d7db2cafc43a00626bf6a582">atapi_cmd</a> [16]</td></tr>
+<tr class="memitem:ad5d84a636518683fed27fe5c938a18ae" id="r_ad5d84a636518683fed27fe5c938a18ae"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ad5d84a636518683fed27fe5c938a18ae">rsvd0</a> [92]</td></tr>
+<tr class="memitem:a4b9e5d86e32adc1039649dcffcc95cfe" id="r_a4b9e5d86e32adc1039649dcffcc95cfe"><td class="memItemLeft">PrdHbaEntry&#160;</td><td class="memItemRight"><a class="el" href="#a4b9e5d86e32adc1039649dcffcc95cfe">prd</a> [AHCI_MAX_PRD]</td></tr>
+<tr class="memitem:a613d424f0573b1fa4160adf0a0345f24" id="r_a613d424f0573b1fa4160adf0a0345f24"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a613d424f0573b1fa4160adf0a0345f24">kernel::ahci::ATA_CMD_READ_DMA_EXT</a> = 0x25</td></tr>
+<tr class="memitem:aa6fee3c7f02a04994363b3268d678e6e" id="r_aa6fee3c7f02a04994363b3268d678e6e"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aa6fee3c7f02a04994363b3268d678e6e">kernel::ahci::ATA_CMD_WRITE_DMA_EXT</a> = 0x35</td></tr>
+<tr class="memitem:ae6e156587495676cd710888ccd07365e" id="r_ae6e156587495676cd710888ccd07365e"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#ae6e156587495676cd710888ccd07365e">kernel::ahci::ATA_CMD_READ_FPDMA_QUEUED</a> = 0x60</td></tr>
+<tr class="memitem:a5423c168f17c6fce3f9160cb9df2d4c9" id="r_a5423c168f17c6fce3f9160cb9df2d4c9"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a5423c168f17c6fce3f9160cb9df2d4c9">kernel::ahci::ATA_CMD_WRITE_FPDMA_QUEUED</a> = 0x61</td></tr>
+<tr class="memitem:a8ee06f86baed52d79b4ac2269d028ddf" id="r_a8ee06f86baed52d79b4ac2269d028ddf"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a8ee06f86baed52d79b4ac2269d028ddf">kernel::ahci::ATA_CMD_IDENTIFY</a> = 0xEC</td></tr>
+<tr class="memitem:a96809448222daeb7b403105ccc853c4d" id="r_a96809448222daeb7b403105ccc853c4d"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a96809448222daeb7b403105ccc853c4d">kernel::ahci::ATA_CMD_SET_FEATURES</a> = 0xEF</td></tr>
+<tr class="memitem:a4f3338471ff009be56be1e17fbf4fc49" id="r_a4f3338471ff009be56be1e17fbf4fc49"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a4f3338471ff009be56be1e17fbf4fc49">kernel::ahci::ATA_CMD_FLUSH_CACHE</a> = 0xE7</td></tr>
+<tr class="memitem:aa9db48702fa76a606b0284aa6de1a98d" id="r_aa9db48702fa76a606b0284aa6de1a98d"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aa9db48702fa76a606b0284aa6de1a98d">kernel::ahci::ATA_CMD_FLUSH_CACHE_EXT</a> = 0xEA</td></tr>
+<tr class="memitem:af335369ed094f3b69cb1f47b0a03b7b6" id="r_af335369ed094f3b69cb1f47b0a03b7b6"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#af335369ed094f3b69cb1f47b0a03b7b6">kernel::ahci::ATA_CMD_STANDBY_IMMEDIATE</a> = 0xE0</td></tr>
+<tr class="memitem:a30fc5fa471db0ba27849ee4463fe9d04" id="r_a30fc5fa471db0ba27849ee4463fe9d04"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a30fc5fa471db0ba27849ee4463fe9d04">kernel::ahci::ATA_CMD_IDLE_IMMEDIATE</a> = 0xE1</td></tr>
+<tr class="memitem:a43eb070a5affe124a9694c6c4cb58f73" id="r_a43eb070a5affe124a9694c6c4cb58f73"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a43eb070a5affe124a9694c6c4cb58f73">kernel::ahci::ATA_DEV_LBA</a> = 0xE0</td></tr>
+<tr class="memdesc:a43eb070a5affe124a9694c6c4cb58f73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Device bits.  <br /></td></tr>
+<tr class="memitem:aa4e29afb28e050ab758ba9e9df90dd1c" id="r_aa4e29afb28e050ab758ba9e9df90dd1c"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#aa4e29afb28e050ab758ba9e9df90dd1c">kernel::ahci::ATA_DEV_MASTER</a> = 0x00</td></tr>
+<tr class="memitem:a892442089a0d549872afd68fe71fb76a" id="r_a892442089a0d549872afd68fe71fb76a"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a892442089a0d549872afd68fe71fb76a">kernel::ahci::ATA_DEV_SLAVE</a> = 0x10</td></tr>
+<tr class="memitem:a494e270ceb4b2d5e2f0e62156b69c767" id="r_a494e270ceb4b2d5e2f0e62156b69c767"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a494e270ceb4b2d5e2f0e62156b69c767">kernel::ahci::NCQ_TAG_SHIFT</a> = 3</td></tr>
+<tr class="memdesc:a494e270ceb4b2d5e2f0e62156b69c767"><td class="mdescLeft">&#160;</td><td class="mdescRight">NCQ: tag is encoded in bits 3-7 of the PM_PORT_C byte in <a class="el" href="structkernel_1_1ahci_1_1_cmd_f_i_s.html" title="Command FIS (FIS Type 0x27, 5 DWORDS = 20 bytes).">CmdFIS</a>.  <br /></td></tr>
+<tr class="memitem:a5387ef307192de567859e85967a2bafd" id="r_a5387ef307192de567859e85967a2bafd"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ahci.html#a5387ef307192de567859e85967a2bafd">kernel::ahci::NCQ_TAG_MASK</a> = 0x1F</td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>AHCI register layouts, command structures, and FIS types. Shared between kernel-mode driver and userspace (ring-3) driver server. No kernel dependencies — standalone portable header. </p>
-</div></div><!-- contents -->
+</div><a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="ad6450c28d7db2cafc43a00626bf6a582" name="ad6450c28d7db2cafc43a00626bf6a582"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad6450c28d7db2cafc43a00626bf6a582">&#9670;&#160;</a></span>atapi_cmd</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t atapi_cmd[16]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac9bbabaf2ae72f5c475d939d06b3d9d1" name="ac9bbabaf2ae72f5c475d939d06b3d9d1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac9bbabaf2ae72f5c475d939d06b3d9d1">&#9670;&#160;</a></span>aux</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t aux</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae15613b55ef4a6c4195797e604e57966" name="ae15613b55ef4a6c4195797e604e57966"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae15613b55ef4a6c4195797e604e57966">&#9670;&#160;</a></span>byte_count</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t byte_count</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8f6434a21f51ab69d7616c31ff8594ea" name="a8f6434a21f51ab69d7616c31ff8594ea"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8f6434a21f51ab69d7616c31ff8594ea">&#9670;&#160;</a></span>cfis</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">CmdFIS cfis</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1a5aaa930940857f68f245eeb89506b5" name="a1a5aaa930940857f68f245eeb89506b5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1a5aaa930940857f68f245eeb89506b5">&#9670;&#160;</a></span>command</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t command</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae11ecbd546ec0301d5462df23b139816" name="ae11ecbd546ec0301d5462df23b139816"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae11ecbd546ec0301d5462df23b139816">&#9670;&#160;</a></span>control</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t control</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab709326df1478bcad9a85997a4ec33cb" name="ab709326df1478bcad9a85997a4ec33cb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab709326df1478bcad9a85997a4ec33cb">&#9670;&#160;</a></span>count_hi</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t count_hi</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9211e566a8ad9c56d80569ed1a50fdbd" name="a9211e566a8ad9c56d80569ed1a50fdbd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9211e566a8ad9c56d80569ed1a50fdbd">&#9670;&#160;</a></span>count_lo</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t count_lo</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7b9e83f2a21a5acc68d70b04b012d6d2" name="a7b9e83f2a21a5acc68d70b04b012d6d2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7b9e83f2a21a5acc68d70b04b012d6d2">&#9670;&#160;</a></span>ctba</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t ctba</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0fb060abb54a57da672c1fd9603e0c12" name="a0fb060abb54a57da672c1fd9603e0c12"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0fb060abb54a57da672c1fd9603e0c12">&#9670;&#160;</a></span>ctbau</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t ctbau</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3d44ae193b9ea434ad6a7487abc2f82e" name="a3d44ae193b9ea434ad6a7487abc2f82e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3d44ae193b9ea434ad6a7487abc2f82e">&#9670;&#160;</a></span>dba</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t dba</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0e1f5c6f210d66855938dffc753d156b" name="a0e1f5c6f210d66855938dffc753d156b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0e1f5c6f210d66855938dffc753d156b">&#9670;&#160;</a></span>dbau</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t dbau</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2376f17d1e7367401184b2a3978bcd3a" name="a2376f17d1e7367401184b2a3978bcd3a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2376f17d1e7367401184b2a3978bcd3a">&#9670;&#160;</a></span>device</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t device</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa6b1dd1bb9c0c2e9967e4a7f61644db1" name="aa6b1dd1bb9c0c2e9967e4a7f61644db1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa6b1dd1bb9c0c2e9967e4a7f61644db1">&#9670;&#160;</a></span>features</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t features</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a300fa9828ea0ddc391fdb351595a0f0c" name="a300fa9828ea0ddc391fdb351595a0f0c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a300fa9828ea0ddc391fdb351595a0f0c">&#9670;&#160;</a></span>features_exp</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t features_exp</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa682c9430d53cab300ee8940356ef8ec" name="aa682c9430d53cab300ee8940356ef8ec"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa682c9430d53cab300ee8940356ef8ec">&#9670;&#160;</a></span>fis_type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t fis_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8617e0fef3725e58934abede60a1c969" name="a8617e0fef3725e58934abede60a1c969"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8617e0fef3725e58934abede60a1c969">&#9670;&#160;</a></span>icc</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t icc</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a956e2070d17dadc9bf0f2a0f55a9b1f6" name="a956e2070d17dadc9bf0f2a0f55a9b1f6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a956e2070d17dadc9bf0f2a0f55a9b1f6">&#9670;&#160;</a></span>lba_hi</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t lba_hi</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9190bb29d1ab3d984b19f782300bcef9" name="a9190bb29d1ab3d984b19f782300bcef9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9190bb29d1ab3d984b19f782300bcef9">&#9670;&#160;</a></span>lba_hi_exp</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t lba_hi_exp</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a286fe3731b924d7ff9e6af7ca3493858" name="a286fe3731b924d7ff9e6af7ca3493858"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a286fe3731b924d7ff9e6af7ca3493858">&#9670;&#160;</a></span>lba_lo</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t lba_lo</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a086756bcdc5d09814644b8af8d04443c" name="a086756bcdc5d09814644b8af8d04443c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a086756bcdc5d09814644b8af8d04443c">&#9670;&#160;</a></span>lba_lo_exp</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t lba_lo_exp</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac8cf7f1e120c2741b43f31947b31b2f2" name="ac8cf7f1e120c2741b43f31947b31b2f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac8cf7f1e120c2741b43f31947b31b2f2">&#9670;&#160;</a></span>lba_mid</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t lba_mid</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aac985410a18400a2c715fd828824f735" name="aac985410a18400a2c715fd828824f735"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac985410a18400a2c715fd828824f735">&#9670;&#160;</a></span>lba_mid_exp</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t lba_mid_exp</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a603d5a096df0308ac97dbf3e7d808733" name="a603d5a096df0308ac97dbf3e7d808733"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a603d5a096df0308ac97dbf3e7d808733">&#9670;&#160;</a></span>opts</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t opts</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a774534306441e155abc3b5a480c2347b" name="a774534306441e155abc3b5a480c2347b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a774534306441e155abc3b5a480c2347b">&#9670;&#160;</a></span>pm_port_c</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t pm_port_c</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4b9e5d86e32adc1039649dcffcc95cfe" name="a4b9e5d86e32adc1039649dcffcc95cfe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4b9e5d86e32adc1039649dcffcc95cfe">&#9670;&#160;</a></span>prd</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">PrdHbaEntry prd[AHCI_MAX_PRD]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1ef03d8aec51f86a066d18a615b114a9" name="a1ef03d8aec51f86a066d18a615b114a9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1ef03d8aec51f86a066d18a615b114a9">&#9670;&#160;</a></span>prdbc</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t prdbc</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aef2da437ff6b7a93f6b302a955338c0f" name="aef2da437ff6b7a93f6b302a955338c0f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aef2da437ff6b7a93f6b302a955338c0f">&#9670;&#160;</a></span>prdtl</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t prdtl</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa43c4c21b173ada1b6b7568956f0d650" name="aa43c4c21b173ada1b6b7568956f0d650"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa43c4c21b173ada1b6b7568956f0d650">&#9670;&#160;</a></span>reserved</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t reserved</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad5d84a636518683fed27fe5c938a18ae" name="ad5d84a636518683fed27fe5c938a18ae"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad5d84a636518683fed27fe5c938a18ae">&#9670;&#160;</a></span>rsvd0</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t rsvd0[92]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4e284d54752b3048411f642e4adad6f3" name="a4e284d54752b3048411f642e4adad6f3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4e284d54752b3048411f642e4adad6f3">&#9670;&#160;</a></span>rsvd1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t rsvd1[4]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

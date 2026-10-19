@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -121,7 +121,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('driver_8hpp.ht
 
 <p>Driver registry and module management layer.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for driver.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="driver_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2driver_2driver_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="driver_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2driver_2driver_8hppdep" loading="lazy" alt=""/></div>
@@ -139,6 +146,27 @@ This graph shows which files directly or indirectly include this file:</div>
 </div>
 </div>
 <p><a href="driver_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3ADriver" id="r_kernel_3A_3ADriver"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_driver.html">kernel::Driver</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Describes a single driver module.  <a href="structkernel_1_1_driver.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3ADriverRegistry" id="r_kernel_3A_3ADriverRegistry"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_driver_registry.html">kernel::DriverRegistry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Central registry for kernel driver modules.  <a href="classkernel_1_1_driver_registry.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a7aad192801037c1b058a87c147f00a19" id="r_a7aad192801037c1b058a87c147f00a19"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a7aad192801037c1b058a87c147f00a19">kernel::DriverState</a> : uint8_t { <a class="el" href="namespacekernel.html#a7aad192801037c1b058a87c147f00a19a795b8a51556d0b2cf4fbc11a896f6269">kernel::UNLOADED</a>
+, <a class="el" href="namespacekernel.html#a7aad192801037c1b058a87c147f00a19ab638272ceeff54912f043465e9a28c9b">kernel::LOADED</a>
+, <a class="el" href="namespacekernel.html#a7aad192801037c1b058a87c147f00a19abb1ca97ec761fc37101737ba0aa2e7c5">kernel::ERROR</a>
+ }</td></tr>
+<tr class="memdesc:a7aad192801037c1b058a87c147f00a19"><td class="mdescLeft">&#160;</td><td class="mdescRight">Describes the current state of a driver module.  <a href="namespacekernel.html#a7aad192801037c1b058a87c147f00a19">More...</a><br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Driver registry and module management layer. </p>
 </div></div><!-- contents -->

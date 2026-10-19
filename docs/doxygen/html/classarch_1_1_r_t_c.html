@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.2.21</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classarch_1_1_
 </div><!--header-->
 <div class="contents">
 
+<p>x86-64 CMOS <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> driver.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="hal_2rtc_8hpp_source.html">rtc.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for arch::RTC:</div>
@@ -145,21 +148,35 @@ Public Types</h2></td></tr>
 , <a class="el" href="#adbb6b6387e9290772332ee7ffa193df5a87ea7fa5ea12085236b1fef7b1271da7">REG_STATUS_C</a> = 0x0C
 <br />
  }</td></tr>
+<tr class="memdesc:adbb6b6387e9290772332ee7ffa193df5"><td class="mdescLeft">&#160;</td><td class="mdescRight">CMOS register addresses.  <a href="#adbb6b6387e9290772332ee7ffa193df5">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:ad72105d46ca3c367b284ca91aa97ce54" id="r_ad72105d46ca3c367b284ca91aa97ce54"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ad72105d46ca3c367b284ca91aa97ce54">init</a> ()</td></tr>
-<tr class="memitem:a87ff11aebc86b7f1665ba2fe370dee64" id="r_a87ff11aebc86b7f1665ba2fe370dee64"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a87ff11aebc86b7f1665ba2fe370dee64">read_seconds</a> ()</td></tr>
+<tr class="memdesc:ad72105d46ca3c367b284ca91aa97ce54"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialise the <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> (enable periodic interrupt if needed).  <br /></td></tr>
+<tr class="memitem:a87ff11aebc86b7f1665ba2fe370dee64" id="r_a87ff11aebc86b7f1665ba2fe370dee64"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a87ff11aebc86b7f1665ba2fe370dee64">read_seconds</a> ()</td></tr>
+<tr class="memdesc:a87ff11aebc86b7f1665ba2fe370dee64"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the current UNIX timestamp (seconds since epoch).  <br /></td></tr>
 <tr class="memitem:a9be74104f56af741680f39411b0df7d9" id="r_a9be74104f56af741680f39411b0df7d9"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a9be74104f56af741680f39411b0df7d9">read_time</a> (<a class="el" href="structtm.html">tm</a> *out)</td></tr>
-<tr class="memitem:a85b4b133932ee04419d31069530bf30a" id="r_a85b4b133932ee04419d31069530bf30a"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a85b4b133932ee04419d31069530bf30a">bcd_to_bin</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> bcd)</td></tr>
-<tr class="memitem:a4aab274333e5cc55cfbf8a1d5504b277" id="r_a4aab274333e5cc55cfbf8a1d5504b277"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4aab274333e5cc55cfbf8a1d5504b277">bin_to_bcd</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> bin)</td></tr>
+<tr class="memdesc:a9be74104f56af741680f39411b0df7d9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the current time into a broken-down tm structure.  <br /></td></tr>
+<tr class="memitem:a85b4b133932ee04419d31069530bf30a" id="r_a85b4b133932ee04419d31069530bf30a"><td class="memItemLeft">static constexpr <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a85b4b133932ee04419d31069530bf30a">bcd_to_bin</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> bcd)</td></tr>
+<tr class="memdesc:a85b4b133932ee04419d31069530bf30a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert a BCD byte to binary.  <br /></td></tr>
+<tr class="memitem:a4aab274333e5cc55cfbf8a1d5504b277" id="r_a4aab274333e5cc55cfbf8a1d5504b277"><td class="memItemLeft">static constexpr <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4aab274333e5cc55cfbf8a1d5504b277">bin_to_bcd</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> bin)</td></tr>
+<tr class="memdesc:a4aab274333e5cc55cfbf8a1d5504b277"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert a binary value to BCD.  <br /></td></tr>
+<tr class="memitem:af3c7cf627b65e67189a8f6a3f45c104e" id="r_af3c7cf627b65e67189a8f6a3f45c104e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af3c7cf627b65e67189a8f6a3f45c104e">init</a> ()</td></tr>
+<tr class="memitem:ad8ad45a31b638ede20f2de5dd83f3b6b" id="r_ad8ad45a31b638ede20f2de5dd83f3b6b"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad8ad45a31b638ede20f2de5dd83f3b6b">read_seconds</a> ()</td></tr>
+<tr class="memitem:aee7d7c99dea3263237ae9a403b7cd365" id="r_aee7d7c99dea3263237ae9a403b7cd365"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aee7d7c99dea3263237ae9a403b7cd365">read_time</a> (<a class="el" href="structtm.html">tm</a> *out)</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
-<tr class="memitem:a3233aa439568ddff2072bf1876acb5c2" id="r_a3233aa439568ddff2072bf1876acb5c2"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3233aa439568ddff2072bf1876acb5c2">CMOS_INDEX</a> = 0x70</td></tr>
-<tr class="memitem:a8ef30ff9df4d490c8b03efd8f70f03c7" id="r_a8ef30ff9df4d490c8b03efd8f70f03c7"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8ef30ff9df4d490c8b03efd8f70f03c7">CMOS_DATA</a> = 0x71</td></tr>
+<tr class="memitem:a3233aa439568ddff2072bf1876acb5c2" id="r_a3233aa439568ddff2072bf1876acb5c2"><td class="memItemLeft">static constexpr <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3233aa439568ddff2072bf1876acb5c2">CMOS_INDEX</a> = 0x70</td></tr>
+<tr class="memdesc:a3233aa439568ddff2072bf1876acb5c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">CMOS index port (0x70).  <br /></td></tr>
+<tr class="memitem:a8ef30ff9df4d490c8b03efd8f70f03c7" id="r_a8ef30ff9df4d490c8b03efd8f70f03c7"><td class="memItemLeft">static constexpr <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8ef30ff9df4d490c8b03efd8f70f03c7">CMOS_DATA</a> = 0x71</td></tr>
+<tr class="memdesc:a8ef30ff9df4d490c8b03efd8f70f03c7"><td class="mdescLeft">&#160;</td><td class="mdescRight">CMOS data port (0x71).  <br /></td></tr>
 </table>
-<a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Member Enumeration Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>x86-64 CMOS <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> driver. </p>
+<p>Platform <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> driver for AArch64/RISC-V. </p>
+</div><a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Member Enumeration Documentation</h2>
 <a id="adbb6b6387e9290772332ee7ffa193df5" name="adbb6b6387e9290772332ee7ffa193df5"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#adbb6b6387e9290772332ee7ffa193df5">&#9670;&#160;</a></span>Register</h2>
 
@@ -167,10 +184,12 @@ Static Public Attributes</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">enum <a class="el" href="#adbb6b6387e9290772332ee7ffa193df5">arch::RTC::Register</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+          <td class="memname">enum <a class="el" href="#adbb6b6387e9290772332ee7ffa193df5">arch::RTC::Register</a> : <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>CMOS register addresses. </p>
 <table class="fieldtable">
 <tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="adbb6b6387e9290772332ee7ffa193df5a88f82ac02a64e675c6d08a97bdf70c6a" name="adbb6b6387e9290772332ee7ffa193df5a88f82ac02a64e675c6d08a97bdf70c6a"></a>REG_SECONDS&#160;</td><td class="fielddoc"></td></tr>
 <tr><td class="fieldname"><a id="adbb6b6387e9290772332ee7ffa193df5a0d206f56389212c875648190869e76ce" name="adbb6b6387e9290772332ee7ffa193df5a0d206f56389212c875648190869e76ce"></a>REG_MINUTES&#160;</td><td class="fielddoc"></td></tr>
@@ -198,9 +217,9 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::RTC::bcd_to_bin </td>
+          <td class="memname">constexpr <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch::RTC::bcd_to_bin </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>bcd</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>bcd</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -210,6 +229,15 @@ Static Public Attributes</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Convert a BCD byte to binary. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">bcd</td><td>BCD-encoded value. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Binary value. </dd></dl>
 
 </div>
 </div>
@@ -223,9 +251,9 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::RTC::bin_to_bcd </td>
+          <td class="memname">constexpr <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch::RTC::bin_to_bcd </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>bin</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>bin</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -236,10 +264,44 @@ Static Public Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Convert a binary value to BCD. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">bin</td><td>Binary value. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>BCD-encoded value. </dd></dl>
+
+</div>
+</div>
+<a id="af3c7cf627b65e67189a8f6a3f45c104e" name="af3c7cf627b65e67189a8f6a3f45c104e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af3c7cf627b65e67189a8f6a3f45c104e">&#9670;&#160;</a></span>init() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::RTC::init </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
 </div>
 </div>
 <a id="ad72105d46ca3c367b284ca91aa97ce54" name="ad72105d46ca3c367b284ca91aa97ce54"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad72105d46ca3c367b284ca91aa97ce54">&#9670;&#160;</a></span>init()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad72105d46ca3c367b284ca91aa97ce54">&#9670;&#160;</a></span>init() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -261,10 +323,13 @@ Static Public Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Initialise the <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> (enable periodic interrupt if needed). </p>
+<p>Initialise the <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a>. Configures 24-hour mode and binary (non-BCD) format, disables periodic and update-ended interrupts, and clears Status <a class="el" href="#adbb6b6387e9290772332ee7ffa193df5" title="CMOS register addresses.">Register</a> C. </p>
+
 </div>
 </div>
-<a id="a87ff11aebc86b7f1665ba2fe370dee64" name="a87ff11aebc86b7f1665ba2fe370dee64"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a87ff11aebc86b7f1665ba2fe370dee64">&#9670;&#160;</a></span>read_seconds()</h2>
+<a id="ad8ad45a31b638ede20f2de5dd83f3b6b" name="ad8ad45a31b638ede20f2de5dd83f3b6b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad8ad45a31b638ede20f2de5dd83f3b6b">&#9670;&#160;</a></span>read_seconds() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -273,7 +338,7 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::RTC::read_seconds </td>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::RTC::read_seconds </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -288,8 +353,45 @@ Static Public Attributes</h2></td></tr>
 
 </div>
 </div>
-<a id="a9be74104f56af741680f39411b0df7d9" name="a9be74104f56af741680f39411b0df7d9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9be74104f56af741680f39411b0df7d9">&#9670;&#160;</a></span>read_time()</h2>
+<a id="a87ff11aebc86b7f1665ba2fe370dee64" name="a87ff11aebc86b7f1665ba2fe370dee64"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a87ff11aebc86b7f1665ba2fe370dee64">&#9670;&#160;</a></span>read_seconds() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::RTC::read_seconds </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Read the current UNIX timestamp (seconds since epoch). </p>
+<p>Read the current <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> time as a Unix timestamp.</p>
+<p>Read uptime seconds (mtime ticks / frequency) rendered from a 1970 epoch for tm conversion. NOT wall-clock time.</p>
+<p>Read the wall-clock time in seconds since the Unix epoch.</p>
+<dl class="section return"><dt>Returns</dt><dd>Seconds since 1970-01-01 00:00:00.</dd>
+<dd>
+Seconds since 1970-01-01 (Unix epoch).</dd>
+<dd>
+Seconds since boot (epoch 1970-01-01 rendering). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Uses the QEMU virt default mtime frequency of 10 MHz.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Seconds since 1970-01-01 00:00:00 UTC, or 0 on failure. </dd></dl>
+
+</div>
+</div>
+<a id="aee7d7c99dea3263237ae9a403b7cd365" name="aee7d7c99dea3263237ae9a403b7cd365"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aee7d7c99dea3263237ae9a403b7cd365">&#9670;&#160;</a></span>read_time() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -313,6 +415,51 @@ Static Public Attributes</h2></td></tr>
 
 </div>
 </div>
+<a id="a9be74104f56af741680f39411b0df7d9" name="a9be74104f56af741680f39411b0df7d9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9be74104f56af741680f39411b0df7d9">&#9670;&#160;</a></span>read_time() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::RTC::read_time </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structtm.html">tm</a> *</td>          <td class="paramname"><span class="paramname"><em>out</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Read the current time into a broken-down tm structure. </p>
+<p>Read the current <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> time into a standard tm structure.</p>
+<p>Populate a tm structure from the mtime CSR.</p>
+<p>Read and decompose the current time into a tm structure.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">out</td><td>Destination tm struct.</td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out</td><td>Pointer to tm struct to fill. If null, returns immediately.</td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out</td><td>Pointer to a tm struct to fill (no-op if nullptr).</td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">out</td><td>Pointer to a tm struct to populate. On failure the struct is zeroed. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classarch_1_1_r_t_c_a9be74104f56af741680f39411b0df7d9_cgraph.png" border="0" usemap="#aclassarch_1_1_r_t_c_a9be74104f56af741680f39411b0df7d9_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a8ef30ff9df4d490c8b03efd8f70f03c7" name="a8ef30ff9df4d490c8b03efd8f70f03c7"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a8ef30ff9df4d490c8b03efd8f70f03c7">&#9670;&#160;</a></span>CMOS_DATA</h2>
@@ -324,7 +471,7 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> arch::RTC::CMOS_DATA = 0x71</td>
+          <td class="memname"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arch::RTC::CMOS_DATA = 0x71</td>
         </tr>
       </table>
   </td>
@@ -333,6 +480,8 @@ Static Public Attributes</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>CMOS data port (0x71). </p>
 
 </div>
 </div>
@@ -346,7 +495,7 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> arch::RTC::CMOS_INDEX = 0x70</td>
+          <td class="memname"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arch::RTC::CMOS_INDEX = 0x70</td>
         </tr>
       </table>
   </td>
@@ -356,11 +505,15 @@ Static Public Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>CMOS index port (0x70). </p>
+
 </div>
 </div>
 <hr/>The documentation for this class was generated from the following files:<ul>
 <li>src/kernel/arch/hal/<a class="el" href="hal_2rtc_8hpp_source.html">rtc.hpp</a></li>
-<li>src/kernel/arch/x86_64/<a class="el" href="rtc_8cpp.html">rtc.cpp</a></li>
+<li>src/kernel/arch/aarch64/<a class="el" href="aarch64_2rtc_8cpp.html">rtc.cpp</a></li>
+<li>src/kernel/arch/riscv64/<a class="el" href="riscv64_2rtc_8cpp.html">rtc.cpp</a></li>
+<li>src/kernel/arch/x86_64/<a class="el" href="x86__64_2rtc_8cpp.html">rtc.cpp</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

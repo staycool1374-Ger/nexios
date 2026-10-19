@@ -1,4 +1,19 @@
 var searchData=
 [
-  ['notify_0',['Notify',['../classkernel_1_1sync_1_1_notify.html',1,'kernel::sync']]]
+  ['macaddr_0',['MacAddr',['../structkernel_1_1net_1_1_mac_addr.html',1,'kernel::net::MacAddr'],['../structnet_1_1_mac_addr.html',1,'net::MacAddr']]],
+  ['madtinfo_1',['MadtInfo',['../structkernel_1_1acpi_1_1_madt_info.html',1,'kernel::acpi']]],
+  ['mapout_2',['MapOut',['../structkernel_1_1elf_1_1_map_out.html',1,'kernel::elf']]],
+  ['mbrpartition_3',['MbrPartition',['../structkernel_1_1fat32_1_1_mbr_partition.html',1,'kernel::fat32']]],
+  ['meminfovnode_4',['MemInfoVnode',['../structkernel_1_1vfs_1_1_mem_info_vnode.html',1,'kernel::vfs']]],
+  ['mempool_5',['MemPool',['../classkernel_1_1_mem_pool.html',1,'kernel']]],
+  ['memregion_6',['MemRegion',['../struct_boot_info_1_1_mem_region.html',1,'BootInfo']]],
+  ['message_7',['Message',['../structkernel_1_1_message.html',1,'kernel']]],
+  ['messagequeue_8',['MessageQueue',['../structkernel_1_1_message_queue.html',1,'kernel']]],
+  ['mmiocap_9',['MmioCap',['../classkernel_1_1cap_1_1_mmio_cap.html',1,'kernel::cap']]],
+  ['mmiousermap_10',['MmioUserMap',['../classkernel_1_1cap_1_1_mmio_user_map.html',1,'kernel::cap']]],
+  ['mockblockdevice_11',['MockBlockDevice',['../classkernel_1_1block_1_1_mock_block_device.html',1,'kernel::block']]],
+  ['mount_12',['Mount',['../structkernel_1_1vfs_1_1_mount.html',1,'kernel::vfs']]],
+  ['msg_13',['Msg',['../structkernel_1_1iocd_1_1_msg.html',1,'kernel::iocd::Msg'],['../structkernel_1_1vfsd_1_1_msg.html',1,'kernel::vfsd::Msg']]],
+  ['msixcap_14',['MsixCap',['../classkernel_1_1cap_1_1_msix_cap.html',1,'kernel::cap']]],
+  ['mutex_15',['Mutex',['../classkernel_1_1sync_1_1_mutex.html',1,'kernel::sync']]]
 ];

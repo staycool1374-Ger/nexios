@@ -25,6 +25,10 @@
 #include <services/shell.hpp>
 #include <services/terminal/terminal.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/timer.hpp>
+#include <kernel/arch/keyboard.hpp>
+#include <kernel/driver/iocd.hpp>
+#include <kernel/ipc/ipc.hpp>
 #include <constants.hpp>
 
 using namespace kernel;
@@ -531,6 +535,53 @@ JARVIS_TEST(shell_clear_command, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: shell P2 key-delivery consumes a daemon-owned byte through
+//           the production poll (issue #303 item 3 seam; the #340 P2 path
+//           the tracker left manual-only).
+// Input: ownership on; inject 'a' press (set-1 0x1E) via 0xD2 + genuine
+//        handle_irq; tick-spin until the daemon queues it; drive the SEAM
+//        (service::shell_try_get_key) twice. Ownership cleared before
+//        asserts so an abort cannot leak the routing.
+// Expect: first seam call true + 'a'; second call false (exactly-once);
+//         kernel hardware ring empty (no double delivery).
+// Depends: shell_try_get_key seam + iocd decode/queue + ownership routing.
+JARVIS_TEST(shell_key_delivery_via_seam, "PRE: vfsd, iocd | POST: none") {
+    uint64_t iocd_pid = kernel::iocd::get_iocd_pid();
+    JARVIS_ASSERT_FMT(iocd_pid != 0, "iocd not running");
+    serial_flush_rx();
+    arch::Keyboard::flush();
+
+    kernel::iocd::set_keyboard_owned(true);
+    arch::outb(0x64, 0xD2); // i8042: write keyboard output buffer
+    arch::outb(0x60, 0x1E); // 'a' press
+    arch::Keyboard::handle_irq();
+
+    // The daemon needs timer ticks to run; spin until a seam poll
+    // observes the byte (bounded: 50-tick window, cross_boundary idiom).
+    char got = 0;
+    bool delivered = false;
+    const uint64_t deadline = arch::Timer::ticks() + 50;
+    while (!delivered && arch::Timer::ticks() < deadline) {
+        if (service::shell_try_get_key(got))
+            delivered = true;
+        else
+            arch::pause();
+    }
+    // Exactly-once + single ownership, collected before asserts.
+    char second = 0;
+    const bool second_empty = !service::shell_try_get_key(second);
+    char ring_byte = 0;
+    const bool ring_empty = !arch::Keyboard::getchar(ring_byte);
+    kernel::iocd::set_keyboard_owned(false);
+
+    JARVIS_ASSERT_FMT(delivered, "seam saw no byte within 50 ticks");
+    JARVIS_ASSERT_FMT(got == 'a', "seam byte 0x%x != 'a'", got);
+    JARVIS_ASSERT_FMT(second_empty, "seam delivered twice");
+    JARVIS_ASSERT_FMT(ring_empty, "byte duplicated into kernel ring");
+    JARVIS_TEST_PASS();
+}
+
 void register_shell_interaction_tests() {
     Logger::info("Registering shell interaction tests");
     JARVIS_REGISTER_RELEASE_TEST(shell_loopback_manual_string);
@@ -552,5 +603,6 @@ void register_shell_interaction_tests() {
     JARVIS_REGISTER_RELEASE_TEST(shell_sleep_zero);
     JARVIS_REGISTER_RELEASE_TEST(shell_clear_command);
     JARVIS_REGISTER_RELEASE_TEST(shell_tasks_memory_columns);
+    JARVIS_REGISTER_TEST(shell_key_delivery_via_seam);
 }
 #endif

@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['gid_5ft_0',['gid_t',['../types_8h.html#a78ecefd3a9f3f0c110b9f6f038b690eb',1,'types.h']]]
+  ['dmacallback_0',['DmaCallback',['../namespacekernel_1_1dma.html#a1e86daeaf63aaada648341891f68bb97',1,'kernel::dma']]]
 ];

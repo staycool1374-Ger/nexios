@@ -181,20 +181,27 @@ bool idle_note_exec_sample(TaskControlBlock &t) noexcept {
 IdleScanProgress idle_scan_mem(IdleScanCursor &cursor,
                                  uint64_t budget) noexcept {
     const auto check = [](TaskControlBlock *t) noexcept {
-        const uint64_t outstanding = (t->mem_alloc_ops_ >= t->mem_free_ops_)
-                                         ? t->mem_alloc_ops_ - t->mem_free_ops_
-                                         : 0;
+        // Issue #375: atomic snapshot (§11.6 — the scan runs on the idle
+        // task while the target may charge on another CPU).
+        const uint64_t alloc_ops =
+            __atomic_load_n(&t->mem_alloc_ops_, __ATOMIC_ACQUIRE);
+        const uint64_t free_ops =
+            __atomic_load_n(&t->mem_free_ops_, __ATOMIC_ACQUIRE);
+        const uint64_t outstanding =
+            (alloc_ops >= free_ops) ? alloc_ops - free_ops : 0;
         const uint64_t min_ops = static_cast<uint64_t>(
             CONFIG_IDLE_MONITOR_MEM_MIN_OPS);
+        const uint64_t used_pages =
+            __atomic_load_n(&t->memory_used_pages_, __ATOMIC_ACQUIRE);
         if (outstanding > t->mem_prev_outstanding_ + min_ops &&
-            t->memory_used_pages_ == t->mem_prev_used_) {
+            used_pages == t->mem_prev_used_) {
             if (t->mem_leak_streak_ < UINT32_MAX)
                 ++t->mem_leak_streak_;
         } else {
             t->mem_leak_streak_ = 0;
         }
         t->mem_prev_outstanding_ = outstanding;
-        t->mem_prev_used_ = t->memory_used_pages_;
+        t->mem_prev_used_ = used_pages;
         if (t->mem_leak_streak_ ==
             static_cast<uint32_t>(CONFIG_IDLE_MONITOR_MEM_PASSES)) {
             // Report only (M6): no kill, no reap, no handler — one WARN

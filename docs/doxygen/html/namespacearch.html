@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -124,19 +124,59 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacearch.
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
+<tr class="memitem:detail" id="r_detail"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1detail.html">detail</a></td></tr>
 <tr class="memitem:hpet" id="r_hpet"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1hpet.html">hpet</a></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch_1_1kernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacearch_1_1kernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convert a scoped-enum value to its underlying integer type (issue #348-D: std::to_underlying is C++23/<span class="tt">&lt;utility&gt;</span>, absent under -nostdinc — this is the hand-rolled equivalent). <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:APIC" id="r_APIC"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_a_p_i_c.html">APIC</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86_64 <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> driver — Local <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> (xAPIC + x2APIC), I/O <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a>, timer.  <a href="classarch_1_1_a_p_i_c.html#details">More...</a><br /></td></tr>
+<tr class="memitem:ArchContext" id="r_ArchContext"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_arch_context.html">ArchContext</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 CPU context — general-purpose registers, interrupt vector, error code, and interrupt-frame (rip, cs, rflags, rsp, ss).  <a href="structarch_1_1_arch_context.html#details">More...</a><br /></td></tr>
+<tr class="memitem:ArchContextManager" id="r_ArchContextManager"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_arch_context_manager.html">ArchContextManager</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Manages x86-64 CPU context save/restore and stack initialisation.  <a href="classarch_1_1_arch_context_manager.html#details">More...</a><br /></td></tr>
+<tr class="memitem:ArchInterruptController" id="r_ArchInterruptController"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_arch_interrupt_controller.html">ArchInterruptController</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 PIC (8259A) interrupt controller driver.  <a href="classarch_1_1_arch_interrupt_controller.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Caps" id="r_Caps"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_caps.html">Caps</a></td></tr>
+<tr class="memitem:GDT" id="r_GDT"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_g_d_t.html">GDT</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 Global Descriptor Table manager.  <a href="classarch_1_1_g_d_t.html#details">More...</a><br /></td></tr>
+<tr class="memitem:GDTDescriptor" id="r_GDTDescriptor"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_g_d_t_descriptor.html">GDTDescriptor</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 <a class="el" href="classarch_1_1_g_d_t.html" title="x86-64 Global Descriptor Table manager.">GDT</a> descriptor (6-byte packed, used with LGDT).  <a href="structarch_1_1_g_d_t_descriptor.html#details">More...</a><br /></td></tr>
+<tr class="memitem:GDTEntry" id="r_GDTEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_g_d_t_entry.html">GDTEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 <a class="el" href="classarch_1_1_g_d_t.html" title="x86-64 Global Descriptor Table manager.">GDT</a> entry (8-byte packed descriptor).  <a href="structarch_1_1_g_d_t_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:IDT" id="r_IDT"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_i_d_t.html">IDT</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 Interrupt Descriptor Table manager.  <a href="classarch_1_1_i_d_t.html#details">More...</a><br /></td></tr>
+<tr class="memitem:IDTDescriptor" id="r_IDTDescriptor"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_i_d_t_descriptor.html">IDTDescriptor</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> descriptor (10-byte packed, used with LIDT).  <a href="structarch_1_1_i_d_t_descriptor.html#details">More...</a><br /></td></tr>
+<tr class="memitem:IDTEntry" id="r_IDTEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_i_d_t_entry.html">IDTEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> entry (16-byte packed interrupt gate descriptor).  <a href="structarch_1_1_i_d_t_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:IrqGuard" id="r_IrqGuard"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_irq_guard.html">IrqGuard</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII guard that disables interrupts on construction and restores the previous interrupt state on destruction.  <a href="classarch_1_1_irq_guard.html#details">More...</a><br /></td></tr>
+<tr class="memitem:IrqState" id="r_IrqState"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_irq_state.html">IrqState</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot of the x86-64 PIC mask registers.  <a href="structarch_1_1_irq_state.html#details">More...</a><br /></td></tr>
+<tr class="memitem:Keyboard" id="r_Keyboard"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_keyboard.html">Keyboard</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">PS/2 keyboard driver with modifier tracking and a character ring buffer.  <a href="classarch_1_1_keyboard.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PciBdf" id="r_PciBdf"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">PCI Bus:Device.Function address.  <a href="structarch_1_1_pci_bdf.html#details">More...</a><br /></td></tr>
 <tr class="memitem:QemuDebugcon" id="r_QemuDebugcon"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_qemu_debugcon.html">QemuDebugcon</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Minimal, lock-free writer to the QEMU debugcon device (I/O port 0xE9). On non-x86_64 targets every method is a no-op so the class can be called unconditionally from shared logging code.  <a href="classarch_1_1_qemu_debugcon.html#details">More...</a><br /></td></tr>
+<tr class="memitem:RTC" id="r_RTC"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_r_t_c.html">RTC</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 CMOS <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> driver.  <a href="classarch_1_1_r_t_c.html#details">More...</a><br /></td></tr>
+<tr class="memitem:Serial" id="r_Serial"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_serial.html">Serial</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classarch_1_1_serial.html" title="Serial port (UART) driver — architecture-agnostic interface.">Serial</a> port (UART) driver — architecture-agnostic interface.  <a href="classarch_1_1_serial.html#details">More...</a><br /></td></tr>
 <tr class="memitem:ShootdownBatch" id="r_ShootdownBatch"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_shootdown_batch.html">ShootdownBatch</a></td></tr>
+<tr class="memitem:Timer" id="r_Timer"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_timer.html">Timer</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 timer driver — PIT + TSC calibration for tick and nanosecond timing.  <a href="classarch_1_1_timer.html#details">More...</a><br /></td></tr>
+<tr class="memitem:tm" id="r_tm"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1tm.html">tm</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Broken-down calendar time (compatible with struct tm).  <a href="structarch_1_1tm.html#details">More...</a><br /></td></tr>
 <tr class="memitem:TprGuard" id="r_TprGuard"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_tpr_guard.html">TprGuard</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces IrqGuard: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed).  <a href="classarch_1_1_tpr_guard.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces <a class="el" href="classarch_1_1_irq_guard.html" title="RAII guard that disables interrupts on construction and restores the previous interrupt state on dest...">IrqGuard</a>: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed).  <a href="classarch_1_1_tpr_guard.html#details">More...</a><br /></td></tr>
+<tr class="memitem:TSS" id="r_TSS"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_t_s_s.html">TSS</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86-64 Task-State Segment structure (used for IST and RSP0).  <a href="structarch_1_1_t_s_s.html#details">More...</a><br /></td></tr>
+<tr class="memitem:TSSBlock" id="r_TSSBlock"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_t_s_s_block.html">TSSBlock</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="structarch_1_1_t_s_s.html" title="x86-64 Task-State Segment structure (used for IST and RSP0).">TSS</a> plus the I/O permission bitmap, in one contiguous block so the bitmap lies inside the <a class="el" href="structarch_1_1_t_s_s.html" title="x86-64 Task-State Segment structure (used for IST and RSP0).">TSS</a> segment (hardware requirement: the bitmap is addressed relative to the <a class="el" href="structarch_1_1_t_s_s.html" title="x86-64 Task-State Segment structure (used for IST and RSP0).">TSS</a> base via <code>iopb_offset</code>).  <a href="structarch_1_1_t_s_s_block.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
@@ -152,6 +192,10 @@ Typedefs</h2></td></tr>
 <tr class="memitem:ae8258d50bd304a11135fe074ef3d438e" id="r_ae8258d50bd304a11135fe074ef3d438e"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#ae8258d50bd304a11135fe074ef3d438e">uintptr_t</a> = <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td></tr>
 <tr class="memitem:afcda08df75a143f7f38c5b694076200f" id="r_afcda08df75a143f7f38c5b694076200f"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#afcda08df75a143f7f38c5b694076200f">intptr_t</a> = <a class="el" href="#ab36a30458aed711e58ed074d7b427721">int64_t</a></td></tr>
 <tr class="memitem:a04efa6b3c0547f1ce0bb801e33467690" id="r_a04efa6b3c0547f1ce0bb801e33467690"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#a04efa6b3c0547f1ce0bb801e33467690">nullptr_t</a> = decltype(nullptr)</td></tr>
+<tr class="memitem:a88ca764670435787bd482678ef7b7084" id="r_a88ca764670435787bd482678ef7b7084"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#a88ca764670435787bd482678ef7b7084">ISRHandler</a> = void (*)(<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> vector, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="el" href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a>, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="el" href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a>)</td></tr>
+<tr class="memdesc:a88ca764670435787bd482678ef7b7084"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Service Routine function signature.  <br /></td></tr>
+<tr class="memitem:a33e0aad4e0075aca3bd6edc860f671fc" id="r_a33e0aad4e0075aca3bd6edc860f671fc"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#a33e0aad4e0075aca3bd6edc860f671fc">ArchTimer</a> = <a class="el" href="classarch_1_1_timer.html">Timer</a></td></tr>
+<tr class="memdesc:a33e0aad4e0075aca3bd6edc860f671fc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Architecture-independent timer type alias.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
 Enumerations</h2></td></tr>
@@ -166,6 +210,60 @@ Enumerations</h2></td></tr>
 <br />
  }</td></tr>
 <tr class="memdesc:aecd76646787c7d438e3d8c235ca1c2f0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Early IRQ-init outcome (issue #198). Reachable failures are error codes, never ENSURE/panic (CODING_STYLE §5).  <a href="#aecd76646787c7d438e3d8c235ca1c2f0">More...</a><br /></td></tr>
+<tr class="memitem:aef6b9ecac6af5a008c1f2954f4e2b82d" id="r_aef6b9ecac6af5a008c1f2954f4e2b82d"><td class="memItemLeft">enum &#160;</td><td class="memItemRight">: uint8_t { <br />
+&#160;&#160;<a class="el" href="#aef6b9ecac6af5a008c1f2954f4e2b82da031732b849e8057f88ccacff915c5e79">GDT_NULL</a> = 0x00
+, <a class="el" href="#aef6b9ecac6af5a008c1f2954f4e2b82da98d5ca50126cfb3d9fbc608f7ab62114">GDT_CODE</a> = 0x08
+, <a class="el" href="#aef6b9ecac6af5a008c1f2954f4e2b82dabecbf292069d1e4494e9bdbfc6fe123d">GDT_DATA</a> = 0x10
+, <a class="el" href="#aef6b9ecac6af5a008c1f2954f4e2b82da663cfbf1d8263fc2ae114d4321d7463f">GDT_USER_CODE</a> = 0x18
+, <br />
+&#160;&#160;<a class="el" href="#aef6b9ecac6af5a008c1f2954f4e2b82dae370b47e9270b688bf49eea26eb8dffd">GDT_USER_DATA</a> = 0x20
+, <a class="el" href="#aef6b9ecac6af5a008c1f2954f4e2b82daf5853cfae719c6ccb213bd0bc7f4d139">GDT_TSS</a> = 0x28
+<br />
+ }</td></tr>
+<tr class="memdesc:aef6b9ecac6af5a008c1f2954f4e2b82d"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classarch_1_1_g_d_t.html" title="x86-64 Global Descriptor Table manager.">GDT</a> segment selector constants.  <a href="#aef6b9ecac6af5a008c1f2954f4e2b82d">More...</a><br /></td></tr>
+<tr class="memitem:aa51e0cd803d847e27b50eaa53ba87630" id="r_aa51e0cd803d847e27b50eaa53ba87630"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630">InterruptVector</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630aaac08f3bf1b13771e1a9db2af3fb1010">DIV_ZERO</a> = 0
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630adc30ec20708ef7b0f641ef78b7880a15">DEBUG</a> = 1
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a98ac9fa587d32240fbd819325be9beac">NMI</a> = 2
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630afd14a8e38e53a8241e49cfbe48095de3">BREAKPOINT</a> = 3
+, <br />
+&#160;&#160;<a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a0134b04a942cbc5336958c8cd09b82f3">OVERFLOW</a> = 4
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630abb12db7eeea355518cba67caea27ee97">BOUND_RANGE</a> = 5
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a78e364cbd50bcd6e731cc156bded135e">INVALID_OPCODE</a> = 6
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a2510ed66923668b4e5a7de8e5ea25dfd">DEVICE_NA</a> = 7
+, <br />
+&#160;&#160;<a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a4610998910a6e140e710de438722c8de">DOUBLE_FAULT</a> = 8
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a3ce5c6ca0c08cbc339c355a17efdce3c">INVALID_TSS</a> = 10
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a921ec71b18fa05e696f9cea218b4d528">SEGMENT_NP</a> = 11
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a6a166ac7b8beda6e754eb18001925a35">STACK_SEG_FAULT</a> = 12
+, <br />
+&#160;&#160;<a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a3b33a94cc0376965dcbbf4f180378f32">GP_FAULT</a> = 13
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a84ec0a3ff6aea921d3fe97604180eb3c">PAGE_FAULT</a> = 14
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630ab8f26afea9e7489af61091d3c6a41eaa">FPU_ERROR</a> = 16
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630abb85438380126e2043dbbae39389d547">ALIGN_CHECK</a> = 17
+, <br />
+&#160;&#160;<a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a82628675623bec259ca206fd9f76014c">MACHINE_CHECK</a> = 18
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630aa9129a1870e9f06f7d31eb325144a86a">SIMD_ERROR</a> = 19
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630aa4637fbe447629a1a593161d20af0f89">VIRT_ERROR</a> = 20
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630ab127d163c55a6603f3a37ce3a642c36d">TIMER</a> = 32
+, <br />
+&#160;&#160;<a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630aedda266cdb6345b9f6914cc2e7577475">KEYBOARD</a> = 33
+, <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630a45f1e61f22cb04eb7a6a39016b56db9b">SYSCALL</a> = 0x80
+<br />
+ }</td></tr>
+<tr class="memdesc:aa51e0cd803d847e27b50eaa53ba87630"><td class="mdescLeft">&#160;</td><td class="mdescRight">Named interrupt vectors for x86-64.  <a href="#aa51e0cd803d847e27b50eaa53ba87630">More...</a><br /></td></tr>
+<tr class="memitem:a244685ac059b1b8e45c20d690aa81bf1" id="r_a244685ac059b1b8e45c20d690aa81bf1"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a244685ac059b1b8e45c20d690aa81bf1">TickSource</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="#a244685ac059b1b8e45c20d690aa81bf1a0655502f90e66ebc7dab94de8f9a3ef7">PIT</a> = 0
+, <a class="el" href="#a244685ac059b1b8e45c20d690aa81bf1a28e098175bb05703eb34c5adbb234370">TSC</a> = 1
+, <a class="el" href="#a244685ac059b1b8e45c20d690aa81bf1a1ad1eaecbffd66d80bad6c30884601e9">TSC_DEADLINE</a> = 2
+, <a class="el" href="#a244685ac059b1b8e45c20d690aa81bf1ab439b9d3e479ed6d43c9530b558ebbd6">HPET</a> = 3
+, <br />
+&#160;&#160;<a class="el" href="#a244685ac059b1b8e45c20d690aa81bf1a7159c74a0b8e9c1551d63fc310c163fe">GENERIC_COUNTER</a> = 4
+, <a class="el" href="#a244685ac059b1b8e45c20d690aa81bf1a2bc25ec844676fc09311e77ffbadf653">MTIME</a> = 5
+, <a class="el" href="#a244685ac059b1b8e45c20d690aa81bf1a033bd94b1168d7e4f0d644c3c95e35bf">TEST</a> = 6
+<br />
+ }</td></tr>
+<tr class="memdesc:a244685ac059b1b8e45c20d690aa81bf1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tick source backing the HRT monotonic clock (issue #16).  <a href="#a244685ac059b1b8e45c20d690aa81bf1">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
@@ -184,7 +282,7 @@ Functions</h2></td></tr>
 <tr class="memitem:ac7375681b455a01cbd2c161dbb0409c2" id="r_ac7375681b455a01cbd2c161dbb0409c2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac7375681b455a01cbd2c161dbb0409c2">gic_redist_ready</a> ()</td></tr>
 <tr class="memdesc:ac7375681b455a01cbd2c161dbb0409c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or when no redistributor exists (GICv2 path). Polarity follows the GICv3 spec (online = 1); the pre-#198 poll loop tested the inverted bit.  <br /></td></tr>
 <tr class="memitem:af44c28e0176ac64b504464bbd30f31b2" id="r_af44c28e0176ac64b504464bbd30f31b2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af44c28e0176ac64b504464bbd30f31b2">handle_gic_irq</a> (void)</td></tr>
-<tr class="memdesc:af44c28e0176ac64b504464bbd30f31b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">IRQ handler called from vectors.S. Dispatches all non-spurious INTIDs via the IDT table.  <br /></td></tr>
+<tr class="memdesc:af44c28e0176ac64b504464bbd30f31b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">IRQ handler called from vectors.S. Dispatches all non-spurious INTIDs via the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> table.  <br /></td></tr>
 <tr class="memitem:a02f1e46be9bd915e24696367061cebf5" id="r_a02f1e46be9bd915e24696367061cebf5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a02f1e46be9bd915e24696367061cebf5">aarch64_el0_fault_handler</a> ()</td></tr>
 <tr class="memdesc:a02f1e46be9bd915e24696367061cebf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL0 synchronous-fault handler called from vectors.S (issues #184/#28). Non-SVC faults from EL0 land here. Latch ESR/FAR/ELR for post-mortem GDB, mark the faulting task TERMINATED (exit_code = -SIGSEGV), and switch off it — mirroring the sys_exit self-termination path. Runs with interrupts masked (vector entry); must not re-enable IRQs, and must NOT call Scheduler::terminate (ISR-unsafe: switch_to_task resolves the live exception RSP as the save owner — see <a class="el" href="syscall__handlers__misc_8cpp.html" title="Syscall handlers for miscellaneous operations: yield, print, get_ticks, exit, etc.">syscall_handlers_misc.cpp</a>). The asm caller applies the pending switch via irq_context_switch_common; if no task is current (no user context to kill) park as a last resort. A parent BLOCKED in waitpid IS woken (issue #217: wake_waiting_parent delivers status + PID before the switch); polled waiters (wait_for_termination_safe) observe TERMINATED.  <br /></td></tr>
 <tr class="memitem:a3269bc0a72901a59c9d013f16c8d903a" id="r_a3269bc0a72901a59c9d013f16c8d903a"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3269bc0a72901a59c9d013f16c8d903a">aarch64_last_el0_esr</a> ()</td></tr>
@@ -198,9 +296,12 @@ Functions</h2></td></tr>
 <tr class="memitem:ac53772566e53832b14ccedb8d6ae2d4e" id="r_ac53772566e53832b14ccedb8d6ae2d4e"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac53772566e53832b14ccedb8d6ae2d4e">cpu_index</a> () noexcept</td></tr>
 <tr class="memdesc:ac53772566e53832b14ccedb8d6ae2d4e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current CPU index — single-core archs are always CPU 0.  <br /></td></tr>
 <tr class="memitem:a78513919ed4d338079bb56b6c548c84f" id="r_a78513919ed4d338079bb56b6c548c84f"><td class="memItemLeft"><a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0">EarlyIrqResult</a>&#160;</td><td class="memItemRight"><a class="el" href="#a78513919ed4d338079bb56b6c548c84f">early_irq_init</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> frequency_hz)</td></tr>
-<tr class="memdesc:a78513919ed4d338079bb56b6c548c84f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterruptController::init → Timer::init(frequency_hz) → Timer::calibrate. Idempotent (BOOT_ONLY): a second call repeats the sequence with no hardware side-effect delta and returns the same result.  <br /></td></tr>
+<tr class="memdesc:a78513919ed4d338079bb56b6c548c84f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the ordered early IRQ bring-up for this architecture. Stages: <a class="el" href="classarch_1_1_i_d_t.html#a1a84d139f0700c6ac5e210151777c51b" title="Initialise the IDT with default gate descriptors.">IDT::init</a> + <a class="el" href="classarch_1_1_i_d_t.html#ab5420ac0f951fe56c41843b6591a755a" title="Load the IDT via the LIDT instruction.">IDT::load</a> → <a class="el" href="classarch_1_1_arch_interrupt_controller.html#af4e4dcb29285195a41bab1340f91e9fe" title="Initialise both PICs in cascade mode with vector offsets.">ArchInterruptController::init</a> → Timer::init(frequency_hz) → <a class="el" href="classarch_1_1_timer.html#aeafbfec02a2daa169c21a5a88eb69233" title="One-time source calibration (BOOT_ONLY, idempotent). Fail-closed: falls back down TSC → HPET → PIT,...">Timer::calibrate</a>. Idempotent (BOOT_ONLY): a second call repeats the sequence with no hardware side-effect delta and returns the same result.  <br /></td></tr>
 <tr class="memitem:ac82b85b800ec3060a62a5921a7d638d8" id="r_ac82b85b800ec3060a62a5921a7d638d8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac82b85b800ec3060a62a5921a7d638d8">early_irq_init_ap</a> ()</td></tr>
-<tr class="memdesc:ac82b85b800ec3060a62a5921a7d638d8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-AP early IRQ enable (x86_64 only): LAPIC init + IDT load. Touches per-CPU state only; the shared distributor/PIC setup from <a class="el" href="#a78513919ed4d338079bb56b6c548c84f" title="Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterru...">early_irq_init()</a> is never repeated here. Defined in <a class="el" href="x86__64_2early__init_8cpp.html" title="x86_64 early IRQ bring-up (issue #198): IDT → legacy PIC → local/APIC (+ I/O APIC) → PIT/APIC timer →...">src/kernel/arch/x86_64/early_init.cpp</a>.  <br /></td></tr>
+<tr class="memdesc:ac82b85b800ec3060a62a5921a7d638d8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-AP early IRQ enable (x86_64 only): LAPIC init + <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> load. Touches per-CPU state only; the shared distributor/PIC setup from <a class="el" href="#a78513919ed4d338079bb56b6c548c84f" title="Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterru...">early_irq_init()</a> is never repeated here. Defined in <a class="el" href="x86__64_2early__init_8cpp.html" title="x86_64 early IRQ bring-up (issue #198): IDT → legacy PIC → local/APIC (+ I/O APIC) → PIT/APIC timer →...">src/kernel/arch/x86_64/early_init.cpp</a>.  <br /></td></tr>
+<tr class="memitem:a3ca5db21df1fdddf99353ce554fd6d78" id="r_a3ca5db21df1fdddf99353ce554fd6d78"><td class="memItemLeft">struct <a class="el" href="structarch_1_1_g_d_t_descriptor.html">arch::GDTDescriptor</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3ca5db21df1fdddf99353ce554fd6d78">__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:ad688be936ef7275e94d4d5595bc201c2" id="r_ad688be936ef7275e94d4d5595bc201c2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad688be936ef7275e94d4d5595bc201c2">isr_entry</a> ()</td></tr>
+<tr class="memdesc:ad688be936ef7275e94d4d5595bc201c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Assembly-level interrupt entry point.  <br /></td></tr>
 <tr class="memitem:abf043d19ff557eda98a5f62a99c78568" id="r_abf043d19ff557eda98a5f62a99c78568"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abf043d19ff557eda98a5f62a99c78568">iopb_claim</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;)</td></tr>
 <tr class="memitem:a43e6d91ea884caad134906534ca1f4d0" id="r_a43e6d91ea884caad134906534ca1f4d0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a43e6d91ea884caad134906534ca1f4d0">iopb_release</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;)</td></tr>
 <tr class="memitem:a2c4c9fbb4236aa0576c8efa8c1c3dec9" id="r_a2c4c9fbb4236aa0576c8efa8c1c3dec9"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a2c4c9fbb4236aa0576c8efa8c1c3dec9">iopb_grant_range</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>, <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>)</td></tr>
@@ -219,17 +320,17 @@ Functions</h2></td></tr>
 <tr class="memitem:a9409db147e4855832856d485ddfc9ac3" id="r_a9409db147e4855832856d485ddfc9ac3"><td class="memItemLeft"><a class="el" href="#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9409db147e4855832856d485ddfc9ac3">pci_device_count</a> ()</td></tr>
 <tr class="memitem:ab785599b40f2cc65b1a399615cb2f65e" id="r_ab785599b40f2cc65b1a399615cb2f65e"><td class="memItemLeft">const PciDeviceInfo *&#160;</td><td class="memItemRight"><a class="el" href="#ab785599b40f2cc65b1a399615cb2f65e">pci_find_device</a> (<a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> class_code, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> subclass)</td></tr>
 <tr class="memitem:a1c32f898be8b2ffa3c00040064553d30" id="r_a1c32f898be8b2ffa3c00040064553d30"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1c32f898be8b2ffa3c00040064553d30">pci_parse_bars</a> (PciDeviceInfo &amp;info)</td></tr>
-<tr class="memitem:a8fd92f41ff58ee30a496023a66c4482f" id="r_a8fd92f41ff58ee30a496023a66c4482f"><td class="memItemLeft">PciDeviceInfo&#160;</td><td class="memItemRight"><a class="el" href="#a8fd92f41ff58ee30a496023a66c4482f">pci_read_device_info</a> (PciBdf bdf)</td></tr>
+<tr class="memitem:a8fd92f41ff58ee30a496023a66c4482f" id="r_a8fd92f41ff58ee30a496023a66c4482f"><td class="memItemLeft">PciDeviceInfo&#160;</td><td class="memItemRight"><a class="el" href="#a8fd92f41ff58ee30a496023a66c4482f">pci_read_device_info</a> (<a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a> bdf)</td></tr>
 <tr class="memitem:af42ba0c651229ba30e96c82094e72d88" id="r_af42ba0c651229ba30e96c82094e72d88"><td class="memItemLeft"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af42ba0c651229ba30e96c82094e72d88">pci_alloc_vector</a> ()</td></tr>
 <tr class="memitem:a68057e54d9a90d6545678a5b77d8b604" id="r_a68057e54d9a90d6545678a5b77d8b604"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a68057e54d9a90d6545678a5b77d8b604">pci_free_vector</a> (<a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> vec)</td></tr>
-<tr class="memitem:adc4b509b8ba2e26aae708fff98409565" id="r_adc4b509b8ba2e26aae708fff98409565"><td class="memItemLeft"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adc4b509b8ba2e26aae708fff98409565">pci_find_capability</a> (PciBdf bdf, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> cap_id)</td></tr>
-<tr class="memitem:af1db3b0c561e94a99c8f3f6d020093f5" id="r_af1db3b0c561e94a99c8f3f6d020093f5"><td class="memItemLeft"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af1db3b0c561e94a99c8f3f6d020093f5">pci_enable_msi</a> (PciBdf bdf, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> apic_id)</td></tr>
+<tr class="memitem:adc4b509b8ba2e26aae708fff98409565" id="r_adc4b509b8ba2e26aae708fff98409565"><td class="memItemLeft"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adc4b509b8ba2e26aae708fff98409565">pci_find_capability</a> (<a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a> bdf, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> cap_id)</td></tr>
+<tr class="memitem:af1db3b0c561e94a99c8f3f6d020093f5" id="r_af1db3b0c561e94a99c8f3f6d020093f5"><td class="memItemLeft"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af1db3b0c561e94a99c8f3f6d020093f5">pci_enable_msi</a> (<a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a> bdf, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> apic_id)</td></tr>
 <tr class="memitem:a5f0b29e66c1ded4cde61c7ccd0dc2b4c" id="r_a5f0b29e66c1ded4cde61c7ccd0dc2b4c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5f0b29e66c1ded4cde61c7ccd0dc2b4c">pci_msix_premap_all</a> ()</td></tr>
-<tr class="memitem:ac1b280a31f7bae1f896d90239ed96348" id="r_ac1b280a31f7bae1f896d90239ed96348"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac1b280a31f7bae1f896d90239ed96348">pci_msix_table_info</a> (PciBdf bdf, PciMsixTableInfo &amp;out)</td></tr>
-<tr class="memitem:a7b9a139f7af44bc665d24c1731c6f19c" id="r_a7b9a139f7af44bc665d24c1731c6f19c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a7b9a139f7af44bc665d24c1731c6f19c">pci_program_msix_entry</a> (PciBdf bdf, const PciMsixTableInfo &amp;tbl, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> entry, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> vector, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> apic_id)</td></tr>
+<tr class="memitem:ac1b280a31f7bae1f896d90239ed96348" id="r_ac1b280a31f7bae1f896d90239ed96348"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac1b280a31f7bae1f896d90239ed96348">pci_msix_table_info</a> (<a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a> bdf, PciMsixTableInfo &amp;out)</td></tr>
+<tr class="memitem:a7b9a139f7af44bc665d24c1731c6f19c" id="r_a7b9a139f7af44bc665d24c1731c6f19c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a7b9a139f7af44bc665d24c1731c6f19c">pci_program_msix_entry</a> (<a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a> bdf, const PciMsixTableInfo &amp;tbl, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> entry, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> vector, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> apic_id)</td></tr>
 <tr class="memitem:ab73dfb2ec66dbef323c5e5cd372e3ff8" id="r_ab73dfb2ec66dbef323c5e5cd372e3ff8"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ab73dfb2ec66dbef323c5e5cd372e3ff8">pci_msix_entry_set_masked</a> (const PciMsixTableInfo &amp;tbl, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> entry, bool masked)</td></tr>
 <tr class="memitem:a064392a919e573428b1ba326b8cdb64d" id="r_a064392a919e573428b1ba326b8cdb64d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a064392a919e573428b1ba326b8cdb64d">pci_msix_entry_masked</a> (const PciMsixTableInfo &amp;tbl, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> entry)</td></tr>
-<tr class="memitem:ab8a3d0ed72e0355f607878da738a53e4" id="r_ab8a3d0ed72e0355f607878da738a53e4"><td class="memItemLeft"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab8a3d0ed72e0355f607878da738a53e4">pci_enable_msix</a> (PciBdf bdf, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> entry, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> apic_id)</td></tr>
+<tr class="memitem:ab8a3d0ed72e0355f607878da738a53e4" id="r_ab8a3d0ed72e0355f607878da738a53e4"><td class="memItemLeft"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab8a3d0ed72e0355f607878da738a53e4">pci_enable_msix</a> (<a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a> bdf, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> entry, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> apic_id)</td></tr>
 <tr class="memitem:ae035b7cc5b725012469b59d037ab15b7" id="r_ae035b7cc5b725012469b59d037ab15b7"><td class="memItemLeft">volatile <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ae035b7cc5b725012469b59d037ab15b7">plic_priority_reg</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> irq)</td></tr>
 <tr class="memitem:a6807f252e313e023fb6310b60223e4f6" id="r_a6807f252e313e023fb6310b60223e4f6"><td class="memItemLeft">volatile <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a6807f252e313e023fb6310b60223e4f6">plic_enable_reg</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> irq)</td></tr>
 <tr class="memitem:ad8cf1975e657fd548aa97fd3c37f812e" id="r_ad8cf1975e657fd548aa97fd3c37f812e"><td class="memItemLeft"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad8cf1975e657fd548aa97fd3c37f812e">plic_claim</a> ()</td></tr>
@@ -262,7 +363,7 @@ Functions</h2></td></tr>
 <tr class="memdesc:a26f0cec80cb2aa23810e6f3b3a1afad1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tag a PML4 phys with a PCID for CR3 publish (0 → raw phys). Hot path: single compare; <a class="el" href="#a9153f47be5d498ed8fa40d683e328eb4" title="Allocate a user PCID (1..4095), or 0 when unsupported. On exhaustion: epoch bump + one global flush,...">pcid_alloc()</a> only returns nonzero when tagging is active, so no support check is needed here.  <br /></td></tr>
 <tr class="memitem:aa083df7d97e20366e210c1f978abed5d" id="r_aa083df7d97e20366e210c1f978abed5d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa083df7d97e20366e210c1f978abed5d">percpu_init_bsp</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> bsp_lapic_id)</td></tr>
 <tr class="memitem:ae41ccc115f18da2b4a867210a1a99cd0" id="r_ae41ccc115f18da2b4a867210a1a99cd0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae41ccc115f18da2b4a867210a1a99cd0">percpu_init_ap</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> logical_id, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lapic_id)</td></tr>
-<tr class="memitem:a1888fb8a7b37d30dec1c191cacb1fbf2" id="r_a1888fb8a7b37d30dec1c191cacb1fbf2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1888fb8a7b37d30dec1c191cacb1fbf2">virtio_map_mmio</a> (<a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> bar, <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> offset, <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> length, VirtioMmio &amp;mmio_out, PciBdf bdf)</td></tr>
+<tr class="memitem:a1888fb8a7b37d30dec1c191cacb1fbf2" id="r_a1888fb8a7b37d30dec1c191cacb1fbf2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1888fb8a7b37d30dec1c191cacb1fbf2">virtio_map_mmio</a> (<a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> bar, <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> offset, <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> length, VirtioMmio &amp;mmio_out, <a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a> bdf)</td></tr>
 <tr class="memitem:a12155265301dd4e78b8ed8523ff7353f" id="r_a12155265301dd4e78b8ed8523ff7353f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a12155265301dd4e78b8ed8523ff7353f">virtio_find_device</a> (<a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> device_id, VirtioTransport &amp;transport)</td></tr>
 <tr class="memitem:a270fa39795ea158dfa9285d6eb472e3f" id="r_a270fa39795ea158dfa9285d6eb472e3f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a270fa39795ea158dfa9285d6eb472e3f">virtio_init_transport</a> (VirtioTransport &amp;transport)</td></tr>
 <tr class="memitem:a61b1d4d8c642abd27d65bb1f64405e58" id="r_a61b1d4d8c642abd27d65bb1f64405e58"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a61b1d4d8c642abd27d65bb1f64405e58">virtio_negotiate_features</a> (VirtioTransport &amp;t, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> driver_features)</td></tr>
@@ -293,7 +394,7 @@ Variables</h2></td></tr>
 <tr class="memitem:aeb8904daa05f0ab2d29338a6cc1a685c" id="r_aeb8904daa05f0ab2d29338a6cc1a685c"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aeb8904daa05f0ab2d29338a6cc1a685c">GICR_WAKER_CHILDREN_ONLINE</a> = 1U &lt;&lt; 1</td></tr>
 <tr class="memdesc:aeb8904daa05f0ab2d29338a6cc1a685c"><td class="mdescLeft">&#160;</td><td class="mdescRight">GICR_WAKER.Children_Online bit: redistributor finished its wake-up.  <br /></td></tr>
 <tr class="memitem:ad410a2c6d620490a71f7ab1cc2cecc1d" id="r_ad410a2c6d620490a71f7ab1cc2cecc1d"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad410a2c6d620490a71f7ab1cc2cecc1d">GICR_WAKER_MAX_POLLS</a> = 1000000</td></tr>
-<tr class="memdesc:ad410a2c6d620490a71f7ab1cc2cecc1d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bounded poll budget for redistributor wake-up (issue #198, INV-1: boot hangs are forbidden — expiry surfaces via <a class="el" href="#ac7375681b455a01cbd2c161dbb0409c2" title="Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online,...">gic_redist_ready()</a> as CTRL_TIMEOUT from early_irq_init, which then skips Timer::init).  <br /></td></tr>
+<tr class="memdesc:ad410a2c6d620490a71f7ab1cc2cecc1d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bounded poll budget for redistributor wake-up (issue #198, INV-1: boot hangs are forbidden — expiry surfaces via <a class="el" href="#ac7375681b455a01cbd2c161dbb0409c2" title="Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online,...">gic_redist_ready()</a> as CTRL_TIMEOUT from early_irq_init, which then skips <a class="el" href="classarch_1_1_timer.html#af9c0db51ea4552aa3bbbbd7cbef44fca" title="Initialise the timer with a target tick frequency.">Timer::init</a>).  <br /></td></tr>
 <tr class="memitem:ad3c0b10a2051dab9d984ab330e0ee9be" id="r_ad3c0b10a2051dab9d984ab330e0ee9be"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad3c0b10a2051dab9d984ab330e0ee9be">GICR_IGROUPR0</a> = 0x0080</td></tr>
 <tr class="memitem:a78d90969cf2e5838fd65f902472d8bed" id="r_a78d90969cf2e5838fd65f902472d8bed"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a78d90969cf2e5838fd65f902472d8bed">GICR_ISENABLER0</a> = 0x0100</td></tr>
 <tr class="memitem:a0a572c70d81a18206016f3c795172fd5" id="r_a0a572c70d81a18206016f3c795172fd5"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0a572c70d81a18206016f3c795172fd5">GICR_ICENABLER0</a> = 0x0180</td></tr>
@@ -316,10 +417,11 @@ Variables</h2></td></tr>
 <tr class="memitem:af13221a37481c42ba06dfad672246264" id="r_af13221a37481c42ba06dfad672246264"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af13221a37481c42ba06dfad672246264">INTID_VIRTIO3</a> = 39</td></tr>
 <tr class="memitem:a646aecfdaea719de77bae2c37a43d95a" id="r_a646aecfdaea719de77bae2c37a43d95a"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a646aecfdaea719de77bae2c37a43d95a">INTID_VIRTIO4</a> = 40</td></tr>
 <tr class="memitem:afd9b85181132acd76811d0e433804c37" id="r_afd9b85181132acd76811d0e433804c37"><td class="memItemLeft">constexpr <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afd9b85181132acd76811d0e433804c37">GIC_MAX_IRQ</a> = 64</td></tr>
-<tr class="memdesc:afd9b85181132acd76811d0e433804c37"><td class="mdescLeft">&#160;</td><td class="mdescRight">Valid IRQ window for mask/unmask (issue #198): the snapshot covers distributor words 0..1 and the IDT has 64 slots, so lines &gt;= 64 have no defined state and must not touch MMIO.  <br /></td></tr>
+<tr class="memdesc:afd9b85181132acd76811d0e433804c37"><td class="mdescLeft">&#160;</td><td class="mdescRight">Valid IRQ window for mask/unmask (issue #198): the snapshot covers distributor words 0..1 and the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> has 64 slots, so lines &gt;= 64 have no defined state and must not touch MMIO.  <br /></td></tr>
 <tr class="memitem:a8330daf1138ba3f2466d81406d1ab6c0" id="r_a8330daf1138ba3f2466d81406d1ab6c0"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8330daf1138ba3f2466d81406d1ab6c0">PL031_BASE</a> = 0x09010000ULL</td></tr>
 <tr class="memitem:a585a77a747cf6637b9dfc9119564b96f" id="r_a585a77a747cf6637b9dfc9119564b96f"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a585a77a747cf6637b9dfc9119564b96f">PL031_DATA</a> = 0x0000</td></tr>
 <tr class="memdesc:a585a77a747cf6637b9dfc9119564b96f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current time (Unix secs).  <br /></td></tr>
+<tr class="memitem:a8c1dfc1ccf00a08192611433ee7f17b4" id="r_a8c1dfc1ccf00a08192611433ee7f17b4"><td class="memItemLeft">struct <a class="el" href="structarch_1_1_t_s_s_block.html">arch::TSSBlock</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8c1dfc1ccf00a08192611433ee7f17b4">__attribute__</a></td></tr>
 <tr class="memitem:a430ef23b1e75c1574e6b7147df85da0a" id="r_a430ef23b1e75c1574e6b7147df85da0a"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a430ef23b1e75c1574e6b7147df85da0a">PLIC_BASE</a> = 0x0C000000ULL</td></tr>
 <tr class="memitem:abf2e1f00c3daa866f33b06562a43f162" id="r_abf2e1f00c3daa866f33b06562a43f162"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#abf2e1f00c3daa866f33b06562a43f162">PLIC_PRIORITY</a> = <a class="el" href="#a430ef23b1e75c1574e6b7147df85da0a">PLIC_BASE</a> + 0x000000</td></tr>
 <tr class="memitem:abb1979d1597b729886beeba2e2bf02e9" id="r_abb1979d1597b729886beeba2e2bf02e9"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#abb1979d1597b729886beeba2e2bf02e9">PLIC_PENDING</a> = <a class="el" href="#a430ef23b1e75c1574e6b7147df85da0a">PLIC_BASE</a> + 0x001000</td></tr>
@@ -352,7 +454,7 @@ Variables</h2></td></tr>
 <tr class="memitem:a57c6bb74fdc3ee11eecab91b0142e95b" id="r_a57c6bb74fdc3ee11eecab91b0142e95b"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a57c6bb74fdc3ee11eecab91b0142e95b">HHDM_OFFSET</a> = CONFIG_HHDM_OFFSET</td></tr>
 <tr class="memdesc:a57c6bb74fdc3ee11eecab91b0142e95b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Higher-half offset: convert physical → kernel-visible virtual.  <br /></td></tr>
 <tr class="memitem:ae0a5af75fabcbd33d35318bdc4f59957" id="r_ae0a5af75fabcbd33d35318bdc4f59957"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae0a5af75fabcbd33d35318bdc4f59957">HHDM_WINDOW_SIZE</a> = 128_MiB</td></tr>
-<tr class="memdesc:ae0a5af75fabcbd33d35318bdc4f59957"><td class="mdescLeft">&#160;</td><td class="mdescRight">Size of the PMM allocatable window — the linear-mapped RAM span the page allocator scans. Must be covered by the architecture's MMU higher-half mapping (x86_64 identity window; aarch64/riscv64 map it starting at RAM_BASE_FALLBACK).  <br /></td></tr>
+<tr class="memdesc:ae0a5af75fabcbd33d35318bdc4f59957"><td class="mdescLeft">&#160;</td><td class="mdescRight">Upper bound (exclusive) of user-space virtual addresses. Lives here (not in <a class="el" href="checked__ptr_8hpp.html">checked_ptr.hpp</a>) so validators like the ELF loader can use it without pulling the CheckedPtr machinery (issue #348-C).  <br /></td></tr>
 <tr class="memitem:aebf4e2fccb4c8c343da664bcdccc6a91" id="r_aebf4e2fccb4c8c343da664bcdccc6a91"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aebf4e2fccb4c8c343da664bcdccc6a91">RAM_BASE_FALLBACK</a> = 0x0ULL</td></tr>
 <tr class="memdesc:aebf4e2fccb4c8c343da664bcdccc6a91"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fallback RAM base when the firmware/bootloader provides no memory regions (QEMU virt machine layout for the non-x86 targets; x86_64 RAM starts at physical 0).  <br /></td></tr>
 <tr class="memitem:a99106776d58225cbe472f60fefc21958" id="r_a99106776d58225cbe472f60fefc21958"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a99106776d58225cbe472f60fefc21958">PML4_USER_COUNT</a> = <a class="el" href="aarch64_2serial_8cpp.html#ad42f27563c0dabc8e3f69851bbbe9f9f">CONFIG_PML4_USER_COUNT</a></td></tr>
@@ -391,10 +493,26 @@ Variables</h2></td></tr>
 <div class="textblock"><p>AArch64 GICv2/v3 register definitions and accessors. </p>
 <p>RISC-V 64 PLIC (Platform-Level Interrupt Controller) register definitions and accessors.</p>
 <p>Memory map (QEMU virt): GICD = 0x0800_0000 (distributor) GICC = 0x0801_0000 (GICv2 CPU interface) GICR = 0x080A_0000 (GICv3 redistributor RD frame, core 0) GICR_SGI = 0x080B_0000 (GICv3 SGI/PPI frame, core 0)</p>
-<p>INTID ranges (GICv3): 0-15 SGI (software-generated, IPI) 16-31 PPI (private per-core: timer, PMU, etc.) 32-1019 SPI (shared: UART, virtio, RTC, etc.)</p>
+<p>INTID ranges (GICv3): 0-15 SGI (software-generated, IPI) 16-31 PPI (private per-core: timer, PMU, etc.) 32-1019 SPI (shared: UART, virtio, <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a>, etc.)</p>
 <p>Memory map (QEMU virt): PLIC_BASE = 0x0C00_0000 Priority = base + 0x0000_0000 (one 4-byte word per source) Pending = base + 0x0000_1000 Enable = base + 0x0000_2000 (one bit per source) Threshold = base + 0x0020_0000 Claim/Complete= base + 0x0020_0004</p>
 <p>IRQ map (QEMU virt): 0 = reserved 1-8 = virtio-mmio devices 9 = (unused) 10 = UART 11 = (unused) 12 = keyboard (PS/2) </p>
 </div><a name="doc-typedef-members" id="doc-typedef-members"></a><h2 id="header-doc-typedef-members" class="groupheader">Typedef Documentation</h2>
+<a id="a33e0aad4e0075aca3bd6edc860f671fc" name="a33e0aad4e0075aca3bd6edc860f671fc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a33e0aad4e0075aca3bd6edc860f671fc">&#9670;&#160;</a></span>ArchTimer</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">using <a class="el" href="#a33e0aad4e0075aca3bd6edc860f671fc">arch::ArchTimer</a> = <a class="el" href="classarch_1_1_timer.html">Timer</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Architecture-independent timer type alias. </p>
+
+</div>
+</div>
 <a id="a22828bf7bcfab87c22084642f68ebf82" name="a22828bf7bcfab87c22084642f68ebf82"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a22828bf7bcfab87c22084642f68ebf82">&#9670;&#160;</a></span>int16_t</h2>
 
@@ -462,6 +580,30 @@ Variables</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a88ca764670435787bd482678ef7b7084" name="a88ca764670435787bd482678ef7b7084"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a88ca764670435787bd482678ef7b7084">&#9670;&#160;</a></span>ISRHandler</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">using <a class="el" href="#a88ca764670435787bd482678ef7b7084">arch::ISRHandler</a> = void (*)(<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> vector, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="el" href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a>, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="el" href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a>)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Interrupt Service Routine function signature. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">vector</td><td>Interrupt vector number. </td></tr>
+    <tr><td class="paramname">error_code</td><td>CPU-pushed error code (0 if none). </td></tr>
+    <tr><td class="paramname">rip</td><td>Faulting or return instruction pointer. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -564,6 +706,36 @@ Variables</h2></td></tr>
 </div>
 </div>
 <a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
+<a id="aef6b9ecac6af5a008c1f2954f4e2b82d" name="aef6b9ecac6af5a008c1f2954f4e2b82d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aef6b9ecac6af5a008c1f2954f4e2b82d">&#9670;&#160;</a></span>anonymous enum</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">anonymous enum : <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p><a class="el" href="classarch_1_1_g_d_t.html" title="x86-64 Global Descriptor Table manager.">GDT</a> segment selector constants. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="aef6b9ecac6af5a008c1f2954f4e2b82da031732b849e8057f88ccacff915c5e79" name="aef6b9ecac6af5a008c1f2954f4e2b82da031732b849e8057f88ccacff915c5e79"></a>GDT_NULL&#160;</td><td class="fielddoc"><p>Null descriptor selector. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aef6b9ecac6af5a008c1f2954f4e2b82da98d5ca50126cfb3d9fbc608f7ab62114" name="aef6b9ecac6af5a008c1f2954f4e2b82da98d5ca50126cfb3d9fbc608f7ab62114"></a>GDT_CODE&#160;</td><td class="fielddoc"><p>Kernel code segment (ring 0). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aef6b9ecac6af5a008c1f2954f4e2b82dabecbf292069d1e4494e9bdbfc6fe123d" name="aef6b9ecac6af5a008c1f2954f4e2b82dabecbf292069d1e4494e9bdbfc6fe123d"></a>GDT_DATA&#160;</td><td class="fielddoc"><p>Kernel data segment (ring 0). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aef6b9ecac6af5a008c1f2954f4e2b82da663cfbf1d8263fc2ae114d4321d7463f" name="aef6b9ecac6af5a008c1f2954f4e2b82da663cfbf1d8263fc2ae114d4321d7463f"></a>GDT_USER_CODE&#160;</td><td class="fielddoc"><p>User code segment (ring 3). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aef6b9ecac6af5a008c1f2954f4e2b82dae370b47e9270b688bf49eea26eb8dffd" name="aef6b9ecac6af5a008c1f2954f4e2b82dae370b47e9270b688bf49eea26eb8dffd"></a>GDT_USER_DATA&#160;</td><td class="fielddoc"><p>User data segment (ring 3). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aef6b9ecac6af5a008c1f2954f4e2b82daf5853cfae719c6ccb213bd0bc7f4d139" name="aef6b9ecac6af5a008c1f2954f4e2b82daf5853cfae719c6ccb213bd0bc7f4d139"></a>GDT_TSS&#160;</td><td class="fielddoc"><p><a class="el" href="structarch_1_1_t_s_s.html" title="x86-64 Task-State Segment structure (used for IST and RSP0).">TSS</a> descriptor selector. </p>
+</td></tr>
+</table>
+
+</div>
+</div>
 <a id="aecd76646787c7d438e3d8c235ca1c2f0" name="aecd76646787c7d438e3d8c235ca1c2f0"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aecd76646787c7d438e3d8c235ca1c2f0">&#9670;&#160;</a></span>EarlyIrqResult</h2>
 
@@ -596,13 +768,140 @@ Variables</h2></td></tr>
 </td></tr>
 <tr><td class="fieldname"><a id="aecd76646787c7d438e3d8c235ca1c2f0a86ee23012059305a75b5206c832d2620" name="aecd76646787c7d438e3d8c235ca1c2f0a86ee23012059305a75b5206c832d2620"></a>CTRL_TIMEOUT&#160;</td><td class="fielddoc"><p>Controller ready-poll (GIC redistributor WAKER) did not complete within its bound. </p>
 </td></tr>
-<tr><td class="fieldname"><a id="aecd76646787c7d438e3d8c235ca1c2f0a8d814dc140a613884bce790ddd87b54a" name="aecd76646787c7d438e3d8c235ca1c2f0a8d814dc140a613884bce790ddd87b54a"></a>TIMER_FREQ_UNKNOWN&#160;</td><td class="fielddoc"><p>Timer backing frequency still 0 after init. </p>
+<tr><td class="fieldname"><a id="aecd76646787c7d438e3d8c235ca1c2f0a8d814dc140a613884bce790ddd87b54a" name="aecd76646787c7d438e3d8c235ca1c2f0a8d814dc140a613884bce790ddd87b54a"></a>TIMER_FREQ_UNKNOWN&#160;</td><td class="fielddoc"><p><a class="el" href="classarch_1_1_timer.html" title="x86-64 timer driver — PIT + TSC calibration for tick and nanosecond timing.">Timer</a> backing frequency still 0 after init. </p>
+</td></tr>
+</table>
+
+</div>
+</div>
+<a id="aa51e0cd803d847e27b50eaa53ba87630" name="aa51e0cd803d847e27b50eaa53ba87630"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa51e0cd803d847e27b50eaa53ba87630">&#9670;&#160;</a></span>InterruptVector</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#aa51e0cd803d847e27b50eaa53ba87630">arch::InterruptVector</a> : <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Named interrupt vectors for x86-64. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630aaac08f3bf1b13771e1a9db2af3fb1010" name="aa51e0cd803d847e27b50eaa53ba87630aaac08f3bf1b13771e1a9db2af3fb1010"></a>DIV_ZERO&#160;</td><td class="fielddoc"><p>Divide-by-zero fault (#DE). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630adc30ec20708ef7b0f641ef78b7880a15" name="aa51e0cd803d847e27b50eaa53ba87630adc30ec20708ef7b0f641ef78b7880a15"></a>DEBUG&#160;</td><td class="fielddoc"><p>Debug trap (#DB). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a98ac9fa587d32240fbd819325be9beac" name="aa51e0cd803d847e27b50eaa53ba87630a98ac9fa587d32240fbd819325be9beac"></a>NMI&#160;</td><td class="fielddoc"><p>Non-maskable interrupt. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630afd14a8e38e53a8241e49cfbe48095de3" name="aa51e0cd803d847e27b50eaa53ba87630afd14a8e38e53a8241e49cfbe48095de3"></a>BREAKPOINT&#160;</td><td class="fielddoc"><p>Breakpoint trap (#BP). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a0134b04a942cbc5336958c8cd09b82f3" name="aa51e0cd803d847e27b50eaa53ba87630a0134b04a942cbc5336958c8cd09b82f3"></a>OVERFLOW&#160;</td><td class="fielddoc"><p>Overflow trap (#OF). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630abb12db7eeea355518cba67caea27ee97" name="aa51e0cd803d847e27b50eaa53ba87630abb12db7eeea355518cba67caea27ee97"></a>BOUND_RANGE&#160;</td><td class="fielddoc"><p>Bound-range exceeded (#BR). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a78e364cbd50bcd6e731cc156bded135e" name="aa51e0cd803d847e27b50eaa53ba87630a78e364cbd50bcd6e731cc156bded135e"></a>INVALID_OPCODE&#160;</td><td class="fielddoc"><p>Invalid opcode (#UD). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a2510ed66923668b4e5a7de8e5ea25dfd" name="aa51e0cd803d847e27b50eaa53ba87630a2510ed66923668b4e5a7de8e5ea25dfd"></a>DEVICE_NA&#160;</td><td class="fielddoc"><p>Device not available (#NM). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a4610998910a6e140e710de438722c8de" name="aa51e0cd803d847e27b50eaa53ba87630a4610998910a6e140e710de438722c8de"></a>DOUBLE_FAULT&#160;</td><td class="fielddoc"><p>Double fault (#DF). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a3ce5c6ca0c08cbc339c355a17efdce3c" name="aa51e0cd803d847e27b50eaa53ba87630a3ce5c6ca0c08cbc339c355a17efdce3c"></a>INVALID_TSS&#160;</td><td class="fielddoc"><p>Invalid <a class="el" href="structarch_1_1_t_s_s.html" title="x86-64 Task-State Segment structure (used for IST and RSP0).">TSS</a> (#TS). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a921ec71b18fa05e696f9cea218b4d528" name="aa51e0cd803d847e27b50eaa53ba87630a921ec71b18fa05e696f9cea218b4d528"></a>SEGMENT_NP&#160;</td><td class="fielddoc"><p>Segment not present (#NP). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a6a166ac7b8beda6e754eb18001925a35" name="aa51e0cd803d847e27b50eaa53ba87630a6a166ac7b8beda6e754eb18001925a35"></a>STACK_SEG_FAULT&#160;</td><td class="fielddoc"><p>Stack-segment fault (#SS). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a3b33a94cc0376965dcbbf4f180378f32" name="aa51e0cd803d847e27b50eaa53ba87630a3b33a94cc0376965dcbbf4f180378f32"></a>GP_FAULT&#160;</td><td class="fielddoc"><p>General-protection fault (#GP). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a84ec0a3ff6aea921d3fe97604180eb3c" name="aa51e0cd803d847e27b50eaa53ba87630a84ec0a3ff6aea921d3fe97604180eb3c"></a>PAGE_FAULT&#160;</td><td class="fielddoc"><p>Page fault (#PF). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630ab8f26afea9e7489af61091d3c6a41eaa" name="aa51e0cd803d847e27b50eaa53ba87630ab8f26afea9e7489af61091d3c6a41eaa"></a>FPU_ERROR&#160;</td><td class="fielddoc"><p>x87 FPU error (#MF). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630abb85438380126e2043dbbae39389d547" name="aa51e0cd803d847e27b50eaa53ba87630abb85438380126e2043dbbae39389d547"></a>ALIGN_CHECK&#160;</td><td class="fielddoc"><p>Alignment check (#AC). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a82628675623bec259ca206fd9f76014c" name="aa51e0cd803d847e27b50eaa53ba87630a82628675623bec259ca206fd9f76014c"></a>MACHINE_CHECK&#160;</td><td class="fielddoc"><p>Machine check (#MC). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630aa9129a1870e9f06f7d31eb325144a86a" name="aa51e0cd803d847e27b50eaa53ba87630aa9129a1870e9f06f7d31eb325144a86a"></a>SIMD_ERROR&#160;</td><td class="fielddoc"><p>SIMD floating-point error (#XM). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630aa4637fbe447629a1a593161d20af0f89" name="aa51e0cd803d847e27b50eaa53ba87630aa4637fbe447629a1a593161d20af0f89"></a>VIRT_ERROR&#160;</td><td class="fielddoc"><p>Virtualisation error (#VE). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630ab127d163c55a6603f3a37ce3a642c36d" name="aa51e0cd803d847e27b50eaa53ba87630ab127d163c55a6603f3a37ce3a642c36d"></a>TIMER&#160;</td><td class="fielddoc"><p>PIT/HPET timer interrupt. §1 OWNER (ABI v1 frozen): scheduler tick; never claimable (<a class="el" href="irq__delivery_8cpp.html" title="User-space IRQ delivery table (issues #2/#7). A static bounded table of armed IRQ vectors mapping to ...">irq_delivery.cpp</a> rejects). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630aedda266cdb6345b9f6914cc2e7577475" name="aa51e0cd803d847e27b50eaa53ba87630aedda266cdb6345b9f6914cc2e7577475"></a>KEYBOARD&#160;</td><td class="fielddoc"><p>PS/2 keyboard interrupt. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa51e0cd803d847e27b50eaa53ba87630a45f1e61f22cb04eb7a6a39016b56db9b" name="aa51e0cd803d847e27b50eaa53ba87630a45f1e61f22cb04eb7a6a39016b56db9b"></a>SYSCALL&#160;</td><td class="fielddoc"><p>System-call software interrupt. §1 sole live gate (ABI v1 frozen); claim rejects (<a class="el" href="irq__delivery_8cpp.html" title="User-space IRQ delivery table (issues #2/#7). A static bounded table of armed IRQ vectors mapping to ...">irq_delivery.cpp</a>). </p>
+</td></tr>
+</table>
+
+</div>
+</div>
+<a id="a244685ac059b1b8e45c20d690aa81bf1" name="a244685ac059b1b8e45c20d690aa81bf1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a244685ac059b1b8e45c20d690aa81bf1">&#9670;&#160;</a></span>TickSource</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a244685ac059b1b8e45c20d690aa81bf1">arch::TickSource</a> : <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Tick source backing the HRT monotonic clock (issue #16). </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a244685ac059b1b8e45c20d690aa81bf1a0655502f90e66ebc7dab94de8f9a3ef7" name="a244685ac059b1b8e45c20d690aa81bf1a0655502f90e66ebc7dab94de8f9a3ef7"></a>PIT&#160;</td><td class="fielddoc"><p>Legacy PIT channel 0 (fallback). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a244685ac059b1b8e45c20d690aa81bf1a28e098175bb05703eb34c5adbb234370" name="a244685ac059b1b8e45c20d690aa81bf1a28e098175bb05703eb34c5adbb234370"></a>TSC&#160;</td><td class="fielddoc"><p>Calibrated TSC over PIT/APIC tick. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a244685ac059b1b8e45c20d690aa81bf1a1ad1eaecbffd66d80bad6c30884601e9" name="a244685ac059b1b8e45c20d690aa81bf1a1ad1eaecbffd66d80bad6c30884601e9"></a>TSC_DEADLINE&#160;</td><td class="fielddoc"><p>TSC with <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> TSC-deadline mode. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a244685ac059b1b8e45c20d690aa81bf1ab439b9d3e479ed6d43c9530b558ebbd6" name="a244685ac059b1b8e45c20d690aa81bf1ab439b9d3e479ed6d43c9530b558ebbd6"></a>HPET&#160;</td><td class="fielddoc"><p>HPET main counter (when probed). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a244685ac059b1b8e45c20d690aa81bf1a7159c74a0b8e9c1551d63fc310c163fe" name="a244685ac059b1b8e45c20d690aa81bf1a7159c74a0b8e9c1551d63fc310c163fe"></a>GENERIC_COUNTER&#160;</td><td class="fielddoc"><p>AArch64 generic counter (CNTFRQ/CNTPCT). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a244685ac059b1b8e45c20d690aa81bf1a2bc25ec844676fc09311e77ffbadf653" name="a244685ac059b1b8e45c20d690aa81bf1a2bc25ec844676fc09311e77ffbadf653"></a>MTIME&#160;</td><td class="fielddoc"><p>RISC-V mtime. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a244685ac059b1b8e45c20d690aa81bf1a033bd94b1168d7e4f0d644c3c95e35bf" name="a244685ac059b1b8e45c20d690aa81bf1a033bd94b1168d7e4f0d644c3c95e35bf"></a>TEST&#160;</td><td class="fielddoc"><p>Test override (unused by production). </p>
 </td></tr>
 </table>
 
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a3ca5db21df1fdddf99353ce554fd6d78" name="a3ca5db21df1fdddf99353ce554fd6d78"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3ca5db21df1fdddf99353ce554fd6d78">&#9670;&#160;</a></span>__attribute__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct <a class="el" href="structarch_1_1_g_d_t_descriptor.html">arch::GDTDescriptor</a> arch::__attribute__ </td>
+          <td>(</td>
+          <td class="paramtype">(packed)</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a02f1e46be9bd915e24696367061cebf5" name="a02f1e46be9bd915e24696367061cebf5"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a02f1e46be9bd915e24696367061cebf5">&#9670;&#160;</a></span>aarch64_el0_fault_handler()</h2>
 
@@ -723,7 +1022,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterruptController::init → Timer::init(frequency_hz) → Timer::calibrate. Idempotent (BOOT_ONLY): a second call repeats the sequence with no hardware side-effect delta and returns the same result. </p>
+<p>Run the ordered early IRQ bring-up for this architecture. Stages: <a class="el" href="classarch_1_1_i_d_t.html#a1a84d139f0700c6ac5e210151777c51b" title="Initialise the IDT with default gate descriptors.">IDT::init</a> + <a class="el" href="classarch_1_1_i_d_t.html#ab5420ac0f951fe56c41843b6591a755a" title="Load the IDT via the LIDT instruction.">IDT::load</a> → <a class="el" href="classarch_1_1_arch_interrupt_controller.html#af4e4dcb29285195a41bab1340f91e9fe" title="Initialise both PICs in cascade mode with vector offsets.">ArchInterruptController::init</a> → Timer::init(frequency_hz) → <a class="el" href="classarch_1_1_timer.html#aeafbfec02a2daa169c21a5a88eb69233" title="One-time source calibration (BOOT_ONLY, idempotent). Fail-closed: falls back down TSC → HPET → PIT,...">Timer::calibrate</a>. Idempotent (BOOT_ONLY): a second call repeats the sequence with no hardware side-effect delta and returns the same result. </p>
 <p>aarch64 early IRQ bring-up (issue #198): VBAR/IDT → GIC (distributor + redistributor + CPU interface) → generic timer → counter-frequency calibration. Mirrors <a class="el" href="kernel_8cpp.html">kernel.cpp</a> boot order.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -732,6 +1031,12 @@ Here is the call graph for this function:</div>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd><a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0" title="Early IRQ-init outcome (issue #198). Reachable failures are error codes, never ENSURE/panic (CODING_S...">EarlyIrqResult</a> outcome; OK on success. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a78513919ed4d338079bb56b6c548c84f_cgraph.png" border="0" usemap="#anamespacearch_a78513919ed4d338079bb56b6c548c84f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -750,12 +1055,12 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Per-AP early IRQ enable (x86_64 only): LAPIC init + IDT load. Touches per-CPU state only; the shared distributor/PIC setup from <a class="el" href="#a78513919ed4d338079bb56b6c548c84f" title="Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterru...">early_irq_init()</a> is never repeated here. Defined in <a class="el" href="x86__64_2early__init_8cpp.html" title="x86_64 early IRQ bring-up (issue #198): IDT → legacy PIC → local/APIC (+ I/O APIC) → PIT/APIC timer →...">src/kernel/arch/x86_64/early_init.cpp</a>. </p>
+<p>Per-AP early IRQ enable (x86_64 only): LAPIC init + <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> load. Touches per-CPU state only; the shared distributor/PIC setup from <a class="el" href="#a78513919ed4d338079bb56b6c548c84f" title="Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterru...">early_irq_init()</a> is never repeated here. Defined in <a class="el" href="x86__64_2early__init_8cpp.html" title="x86_64 early IRQ bring-up (issue #198): IDT → legacy PIC → local/APIC (+ I/O APIC) → PIT/APIC timer →...">src/kernel/arch/x86_64/early_init.cpp</a>. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ac82b85b800ec3060a62a5921a7d638d8_cgraph.png" border="0" usemap="#anamespacearch_ac82b85b800ec3060a62a5921a7d638d8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -774,12 +1079,6 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacearch_a46488b8cc19b71e9d4bd3d8ea44603e4_cgraph.png" border="0" usemap="#anamespacearch_a46488b8cc19b71e9d4bd3d8ea44603e4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
-</div>
 
 </div>
 </div>
@@ -799,6 +1098,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or when no redistributor exists (GICv2 path). Polarity follows the GICv3 spec (online = 1); the pre-#198 poll loop tested the inverted bit. </p>
+<p>Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or on the GICv2 path (no redistributor exists). Consumed by <a class="el" href="#a78513919ed4d338079bb56b6c548c84f" title="Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterru...">early_irq_init()</a>.</p>
 <dl class="section return"><dt>Returns</dt><dd>true when interrupt delivery hardware is usable. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
@@ -1049,7 +1349,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>IRQ handler called from vectors.S. Dispatches all non-spurious INTIDs via the IDT table. </p>
+<p>IRQ handler called from vectors.S. Dispatches all non-spurious INTIDs via the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> table. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -1425,6 +1725,25 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ad688be936ef7275e94d4d5595bc201c2" name="ad688be936ef7275e94d4d5595bc201c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad688be936ef7275e94d4d5595bc201c2">&#9670;&#160;</a></span>isr_entry()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::isr_entry </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Assembly-level interrupt entry point. </p>
+
+</div>
+</div>
 <a id="a0e50c016d8d43a8848c78ed1aafe025e" name="a0e50c016d8d43a8848c78ed1aafe025e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a0e50c016d8d43a8848c78ed1aafe025e">&#9670;&#160;</a></span>operator new()</h2>
 
@@ -1611,7 +1930,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch::pci_enable_msi </td>
           <td>(</td>
-          <td class="paramtype">PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1638,7 +1957,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch::pci_enable_msix </td>
           <td>(</td>
-          <td class="paramtype">PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1670,7 +1989,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> arch::pci_find_capability </td>
           <td>(</td>
-          <td class="paramtype">PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1823,7 +2142,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool arch::pci_msix_table_info </td>
           <td>(</td>
-          <td class="paramtype">PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1888,7 +2207,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool arch::pci_program_msix_entry </td>
           <td>(</td>
-          <td class="paramtype">PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1930,7 +2249,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">PciDeviceInfo arch::pci_read_device_info </td>
           <td>(</td>
-          <td class="paramtype">PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -2462,7 +2781,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2550,6 +2869,20 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a8c1dfc1ccf00a08192611433ee7f17b4" name="a8c1dfc1ccf00a08192611433ee7f17b4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8c1dfc1ccf00a08192611433ee7f17b4">&#9670;&#160;</a></span>__attribute__</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">__attribute__</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="aabce4ce1e12afd68caf560773edc154f" name="aabce4ce1e12afd68caf560773edc154f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aabce4ce1e12afd68caf560773edc154f">&#9670;&#160;</a></span>__isr_vector</h2>
 
@@ -3018,7 +3351,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Valid IRQ window for mask/unmask (issue #198): the snapshot covers distributor words 0..1 and the IDT has 64 slots, so lines &gt;= 64 have no defined state and must not touch MMIO. </p>
+<p>Valid IRQ window for mask/unmask (issue #198): the snapshot covers distributor words 0..1 and the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> has 64 slots, so lines &gt;= 64 have no defined state and must not touch MMIO. </p>
 
 </div>
 </div>
@@ -3732,7 +4065,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Bounded poll budget for redistributor wake-up (issue #198, INV-1: boot hangs are forbidden — expiry surfaces via <a class="el" href="#ac7375681b455a01cbd2c161dbb0409c2" title="Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online,...">gic_redist_ready()</a> as CTRL_TIMEOUT from early_irq_init, which then skips Timer::init). </p>
+<p>Bounded poll budget for redistributor wake-up (issue #198, INV-1: boot hangs are forbidden — expiry surfaces via <a class="el" href="#ac7375681b455a01cbd2c161dbb0409c2" title="Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online,...">gic_redist_ready()</a> as CTRL_TIMEOUT from early_irq_init, which then skips <a class="el" href="classarch_1_1_timer.html#af9c0db51ea4552aa3bbbbd7cbef44fca" title="Initialise the timer with a target tick frequency.">Timer::init</a>). </p>
 
 </div>
 </div>
@@ -3780,6 +4113,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Upper bound (exclusive) of user-space virtual addresses. Lives here (not in <a class="el" href="checked__ptr_8hpp.html">checked_ptr.hpp</a>) so validators like the ELF loader can use it without pulling the CheckedPtr machinery (issue #348-C). </p>
 <p>Size of the PMM allocatable window — the linear-mapped RAM span the page allocator scans. Must be covered by the architecture's MMU higher-half mapping (x86_64 identity window; aarch64/riscv64 map it starting at RAM_BASE_FALLBACK). </p>
 
 </div>

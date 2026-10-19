@@ -32,6 +32,7 @@
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/driver/iocd.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/qemu_debugcon.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/timer.hpp>
 
@@ -56,6 +57,11 @@ ClassSection Registry::sections_[MAX_CLASSES] = {};
 size_t Registry::class_count_ = 0;
 size_t Registry::expected_count_ = 0;
 const char *Registry::current_name_ = nullptr;
+
+// Issue #359 P0: TSC at run start (raw_counter never rewinds, unlike
+// Timer::ticks_ which snapshot_restore rewinds after every test).
+// Set by every run_* entry point next to its start_ns sample.
+static uint64_t g_run_start_tsc = 0;
 
 // PfA-A: the harness injects one TestContext so the scheduler's ISR-visible
 // test flags live here (not as scheduler globals).  Production boots with
@@ -238,20 +244,40 @@ static void append_leak_detail(const ResourceCounters& before, const ResourceCou
     }
 }
 
-static void print_test_header(const TestCase& tc, const char* test_class, size_t test_num, size_t total_tests) {
-    Logger::raw_write("S: ");
-    if (test_class && test_class[0]) {
-        Logger::raw_write(test_class);
-        Logger::raw_write(" ");
+// ---- Fixed-column test table ----
+// Per-test S: lines render as an aligned table (CLASS / TEST / N/M /
+// RESULT).  Widths cover every registered id with headroom (longest
+// aggregate/special class: 16; longest test id measured: 58).  Overflow
+// never truncates — the field just runs long, so FAIL lines stay fully
+// greppable.  The `S: ` prefix and the `n/m: PASS|FAIL [LEAK: ...]`
+// tokens are unchanged (docs grep them; the harness keys on serial
+// growth plus the byte-stable TEST SUMMARY block below).
+static constexpr size_t kTableClassWidth = 18;
+static constexpr size_t kTableTestWidth = 62;
+static constexpr size_t kTableCountWidth = 9;
+
+static void table_write_char(char c) {
+    // Logger::putchar is private; single-char raw_write instead.
+    char tmp[2] = {c, '\0'};
+    Logger::raw_write(tmp);
+}
+
+static void table_write_padded(const char* s, size_t width) {
+    size_t n = 0;
+    while (s[n] != '\0' && n < width) {
+        table_write_char(s[n]);
+        ++n;
     }
-    Logger::raw_write(tc.suite);
-    if (tc.suite[0]) Logger::raw_write("::");
-    Logger::raw_write(tc.name);
-    Logger::raw_write(" ");
-    
+    while (n < width) {
+        table_write_char(' ');
+        ++n;
+    }
+}
+
+static void table_write_count(size_t num, size_t total) {
     char num_buf[32];
     int pos = 0;
-    size_t v = test_num;
+    size_t v = num;
     if (v == 0) num_buf[pos++] = '0';
     else {
         char rev[32];
@@ -260,7 +286,7 @@ static void print_test_header(const TestCase& tc, const char* test_class, size_t
         while (rp > 0) num_buf[pos++] = rev[--rp];
     }
     num_buf[pos++] = '/';
-    v = total_tests;
+    v = total;
     if (v == 0) num_buf[pos++] = '0';
     else {
         char rev[32];
@@ -268,10 +294,59 @@ static void print_test_header(const TestCase& tc, const char* test_class, size_t
         while (v > 0) { rev[rp++] = '0' + (v % 10); v /= 10; }
         while (rp > 0) num_buf[pos++] = rev[--rp];
     }
-    num_buf[pos++] = ':';
-    num_buf[pos++] = ' ';
     num_buf[pos] = '\0';
+    size_t len = static_cast<size_t>(pos);
+    for (size_t i = len; i < kTableCountWidth; ++i) {
+        table_write_char(' ');
+    }
     Logger::raw_write(num_buf);
+}
+
+static void print_table_header() {
+    Logger::raw_write("   ");
+    table_write_padded("CLASS", kTableClassWidth);
+    Logger::raw_write(" ");
+    table_write_padded("TEST", kTableTestWidth);
+    Logger::raw_write(" ");
+    for (size_t i = 3; i < kTableCountWidth; ++i) table_write_char(' ');
+    Logger::raw_write("N/M: RESULT\n");
+    Logger::raw_write("   ");
+    for (size_t i = 0; i < kTableClassWidth; ++i) table_write_char('-');
+    Logger::raw_write(" ");
+    for (size_t i = 0; i < kTableTestWidth; ++i) table_write_char('-');
+    Logger::raw_write(" ");
+    for (size_t i = 0; i < kTableCountWidth; ++i) table_write_char('-');
+    Logger::raw_write(": ------\n");
+}
+
+static void print_test_header(const TestCase& tc, const char* test_class, size_t test_num, size_t total_tests) {
+    Logger::raw_write("S: ");
+    table_write_padded((test_class != nullptr) ? test_class : "", kTableClassWidth);
+    Logger::raw_write(" ");
+    // suite::name, truncated defensively at the column width (never
+    // reached in practice: longest registered id is 58).
+    size_t w = 0;
+    while (tc.suite[w] != '\0' && w < kTableTestWidth) {
+        table_write_char(tc.suite[w]);
+        ++w;
+    }
+    if (tc.suite[0] != '\0' && w < kTableTestWidth) {
+        Logger::raw_write("::");
+        w += 2;
+    }
+    size_t n = 0;
+    while (tc.name[n] != '\0' && w < kTableTestWidth) {
+        table_write_char(tc.name[n]);
+        ++n;
+        ++w;
+    }
+    while (w < kTableTestWidth) {
+        table_write_char(' ');
+        ++w;
+    }
+    Logger::raw_write(" ");
+    table_write_count(test_num, total_tests);
+    Logger::raw_write(": ");
 }
 
 static void run_one(const TestCase& tc, const char* test_class, size_t test_num, size_t total_tests) {
@@ -321,8 +396,10 @@ void run_all() {
     }
 
     Logger::info("[TEST:RUN] Running %d test(s)", n);
+    print_table_header();
 
     uint64_t start_ns = arch::Timer::ns();
+    g_run_start_tsc = arch::Timer::raw_counter();
 
     for (size_t i = 0; i < n; ++i) {
         auto& tc = Registry::tests()[i];
@@ -346,8 +423,10 @@ void run_safe() {
     }
 
     Logger::info("[TEST:RUN] Running test(s) (safe mode)");
+    print_table_header();
 
     uint64_t start_ns = arch::Timer::ns();
+    g_run_start_tsc = arch::Timer::raw_counter();
     size_t run_index = 0;
 
     for (size_t i = 0; i < n; ++i) {
@@ -370,6 +449,12 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
     size_t n = Registry::count();
     if (n == 0) {
         Logger::warn("No tests registered");
+        // Issue #381: the harness watches the debugcon stream, but Logger
+        // routes to UART while the suite is inactive (set_test_active
+        // happens below, after this early return).  Mirror the notice to
+        // the debugcon so the empty-class detector can see it (no-op off
+        // x86_64, where the harness already watches serial).
+        arch::QemuDebugcon::write("No tests registered\n");
         return;
     }
 
@@ -422,9 +507,11 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
     }
 
     uint64_t start_ns = arch::Timer::ns();
+    g_run_start_tsc = arch::Timer::raw_counter();
     Logger::raw_write("[TEST_START] ns=");
     Logger::print_dec(start_ns);
     Logger::raw_write("\n");
+    print_table_header();
 
     for (size_t i = 0; i < n; ++i) {
         auto& tc = Registry::tests()[i];
@@ -782,7 +869,9 @@ void run_suite(const char* suite_name) {
     }
 
     uint64_t start_ns = arch::Timer::ns();
+    g_run_start_tsc = arch::Timer::raw_counter();
     size_t run = 0;
+    print_table_header();
 
     for (size_t i = 0; i < n; ++i) {
         auto& tc = Registry::tests()[i];
@@ -851,17 +940,25 @@ void print_report(uint64_t start_ns, uint64_t end_ns) {
         Logger::raw_write(buf + pos);
     };
 
-    Logger::raw_write("  PLANNED:    "); write_num(exp); Logger::raw_write("\n");
-    Logger::raw_write("  EXECUTED:   "); write_num(tt); Logger::raw_write("\n");
+    Logger::raw_write("  PLANNED:         "); write_num(exp); Logger::raw_write("\n");
+    Logger::raw_write("  EXECUTED:        "); write_num(tt); Logger::raw_write("\n");
     Logger::raw_write("  TIME_ELAPSED_MS: "); write_num(elapsed_ms); Logger::raw_write("\n");
     uint64_t entry_ns = kernel::gs::get_kernel_entry_ns();
     if (entry_ns > 0 && start_ns > entry_ns) {
         uint64_t boot_ms = (start_ns - entry_ns) / 1000000ULL;
         Logger::raw_write("  BOOT_TIME_MS:    "); write_num(boot_ms); Logger::raw_write("\n");
     }
-    Logger::raw_write("  PASSED:     "); write_num(tp); Logger::raw_write("\n");
-    Logger::raw_write("  FAILED:     "); write_num(tf); Logger::raw_write("\n");
+    Logger::raw_write("  PASSED:          "); write_num(tp); Logger::raw_write("\n");
+    Logger::raw_write("  FAILED:          "); write_num(tf); Logger::raw_write("\n");
     Logger::raw_write("==============================\n");
+    // Issue #359 P0: guest TSC cycles for the run, for host-side
+    // wall-truth analysis (wall ms per class is recorded host-side;
+    // TSC never rewinds, unlike Timer::ticks_ which snapshot_restore
+    // rewinds after every test).  Placed AFTER the closing ==== so the
+    // expect TEST SUMMARY regex (which ends at FAILED+====) keeps
+    // matching.
+    Logger::raw_write("  TSC_CYCLES:      "); write_num(arch::Timer::raw_counter() - g_run_start_tsc);
+    Logger::raw_write("\n");
 
     if (exp != tt) {
         Logger::raw_write("[WARN] Expected ");

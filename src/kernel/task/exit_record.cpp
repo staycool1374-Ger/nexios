@@ -65,9 +65,14 @@ void idle_record_task_exit(const TaskControlBlock &t,
     r.deadline_meets = t.deadline_meets;
     r.deadline_miss_count = t.deadline_miss_count;
     r.wcet_observed_ns = t.wcet_observed_ns;
-    r.mem_alloc_ops_ = t.mem_alloc_ops_;
-    r.mem_free_ops_ = t.mem_free_ops_;
-    r.memory_used_pages_ = t.memory_used_pages_;
+    // Issue #375: §11.6 all-or-nothing — reap runs on the reaper's CPU
+    // while the counters were last bumped on the task's own CPU.
+    r.mem_alloc_ops_ =
+        __atomic_load_n(&t.mem_alloc_ops_, __ATOMIC_ACQUIRE);
+    r.mem_free_ops_ =
+        __atomic_load_n(&t.mem_free_ops_, __ATOMIC_ACQUIRE);
+    r.memory_used_pages_ =
+        __atomic_load_n(&t.memory_used_pages_, __ATOMIC_ACQUIRE);
     r.valid = true;
 }
 

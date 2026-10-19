@@ -166,7 +166,7 @@ JARVIS_TEST(full_path_still_validates, "PRE: none | POST: none") {
     uint64_t tamper_va = t->canary_after[stk];
     JARVIS_ASSERT(tamper_va != 0);
 
-    uint64_t phys = VMM::virt_to_phys_in_pml4(tamper_va, t->page_table_);
+    uint64_t phys = VMM::virt_to_phys_in_pml4(tamper_va, t->get_page_table());
     JARVIS_ASSERT(phys != 0);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys), 0xDD,
@@ -211,7 +211,7 @@ JARVIS_TEST(fast_path_skips_canary, "PRE: none | POST: none") {
     uint64_t tamper_va = t->canary_after[stk];
     JARVIS_ASSERT(tamper_va != 0);
 
-    uint64_t phys = VMM::virt_to_phys_in_pml4(tamper_va, t->page_table_);
+    uint64_t phys = VMM::virt_to_phys_in_pml4(tamper_va, t->get_page_table());
     JARVIS_ASSERT(phys != 0);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys), 0xDD,

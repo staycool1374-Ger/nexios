@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -159,7 +159,7 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Task creation/termination lifecycle tests. </p>
-<p>v0.3.10 rework (SIMULATED → DRIVEN): every lifecycle transition is reached through REAL dispatch and the REAL terminate/reap/cleanup paths — the test never sets <span class="tt">task-&gt;state</span> directly, and blocked senders are woken by the real IPC cleanup (<a class="el" href="structkernel_1_1_message_queue.html" title="Priority-ordered circular message queue embedded in each TCB.">MessageQueue</a> destructor), not by direct field writes. </p>
+<p>v0.3.10 rework (SIMULATED → DRIVEN): every lifecycle transition is reached through REAL dispatch and the REAL terminate/reap/cleanup paths — the test never sets <span class="tt">task-&gt;state</span> directly, and blocked senders are woken by the real <a class="el" href="classkernel_1_1_i_p_c.html" title="MessageQueue is defined in &lt;kernel/task/task.hpp&gt; and embedded in each TaskControlBlock.">IPC</a> cleanup (<a class="el" href="structkernel_1_1_message_queue.html" title="Priority-ordered circular message queue embedded in each TCB.">MessageQueue</a> destructor), not by direct field writes. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="aea25bf2ba2862ea0d85cbd020494a801" name="aea25bf2ba2862ea0d85cbd020494a801"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aea25bf2ba2862ea0d85cbd020494a801">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/9]</span></h2>

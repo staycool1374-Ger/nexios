@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('eventgroup_8hp
 <div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>} <span class="comment">// namespace sync</span></div>
 <div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>} <span class="comment">// namespace kernel</span></div>
 <div class="ttc" id="aaarch64_2serial_8cpp_html_aa6208ddf66cdb8a09ee562e3f461be1c"><div class="ttname"><a href="aarch64_2serial_8cpp.html#aa6208ddf66cdb8a09ee562e3f461be1c">CONFIG_SYNC_MAX_WAITERS</a></div><div class="ttdeci">#define CONFIG_SYNC_MAX_WAITERS</div></div>
-<div class="ttc" id="aclass_spin_lock_guard_html"><div class="ttname"><a href="class_spin_lock_guard.html">SpinLockGuard</a></div><div class="ttdoc">RAII lock guard for any lock type with lock()/unlock() methods.</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:11</div></div>
+<div class="ttc" id="aclass_spin_lock_guard_html"><div class="ttname"><a href="class_spin_lock_guard.html">SpinLockGuard</a></div><div class="ttdoc">RAII lock guard for any lock type with lock()/unlock() methods.</div><div class="ttdef"><b>Definition</b> spinlock_guard.hpp:13</div></div>
 <div class="ttc" id="aclasskernel_1_1sync_1_1_event_group_html_a177d90d09bf3cd699c572f13deef0ca1"><div class="ttname"><a href="classkernel_1_1sync_1_1_event_group.html#a177d90d09bf3cd699c572f13deef0ca1">kernel::sync::EventGroup::set_bits_err</a></div><div class="ttdeci">errors::SyncError set_bits_err(uint64_t bits)</div><div class="ttdoc">Atomically set bits, waking satisfied waiters (error-returning overload).</div><div class="ttdef"><b>Definition</b> eventgroup.cpp:72</div></div>
 <div class="ttc" id="aclasskernel_1_1sync_1_1_event_group_html_a1a558918e6a858475ec12ce19162414e"><div class="ttname"><a href="classkernel_1_1sync_1_1_event_group.html#a1a558918e6a858475ec12ce19162414e">kernel::sync::EventGroup::clear_bits_err</a></div><div class="ttdeci">errors::SyncError clear_bits_err(uint64_t bits)</div><div class="ttdoc">Atomically clear bits (error-returning overload).</div><div class="ttdef"><b>Definition</b> eventgroup.cpp:86</div></div>
 <div class="ttc" id="aclasskernel_1_1sync_1_1_event_group_html_a1fb1136e2ba1805acc7f68e32443a56d"><div class="ttname"><a href="classkernel_1_1sync_1_1_event_group.html#a1fb1136e2ba1805acc7f68e32443a56d">kernel::sync::EventGroup::try_wait_bits</a></div><div class="ttdeci">bool try_wait_bits(uint64_t wanted)</div><div class="ttdoc">Check if bits are set without blocking.</div><div class="ttdef"><b>Definition</b> eventgroup.cpp:255</div></div>
@@ -235,7 +235,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('eventgroup_8hp
 <div class="ttc" id="anamespacekernel_1_1errors_html_abbe4a99ddc8a620a6497c8f2c388da9c"><div class="ttname"><a href="namespacekernel_1_1errors.html#abbe4a99ddc8a620a6497c8f2c388da9c">kernel::errors::SyncError</a></div><div class="ttdeci">SyncError</div><div class="ttdoc">Synchronisation subsystem error codes.</div><div class="ttdef"><b>Definition</b> sync_errors.hpp:49</div></div>
 <div class="ttc" id="anamespacekernel_1_1sync_html"><div class="ttname"><a href="namespacekernel_1_1sync.html">kernel::sync</a></div><div class="ttdef"><b>Definition</b> eventgroup.cpp:30</div></div>
 <div class="ttc" id="anamespacekernel_1_1task_html"><div class="ttname"><a href="namespacekernel_1_1task.html">kernel::task</a></div><div class="ttdef"><b>Definition</b> dmesg_task.cpp:21</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="aspinlock_8hpp_html"><div class="ttname"><a href="spinlock_8hpp.html">spinlock.hpp</a></div><div class="ttdoc">Busy-wait spinlock using atomic exchange.</div></div>
 <div class="ttc" id="aspinlock__guard_8hpp_html"><div class="ttname"><a href="spinlock__guard_8hpp.html">spinlock_guard.hpp</a></div></div>
 <div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:227</div></div>

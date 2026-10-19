@@ -39,34 +39,35 @@ namespace kernel {
 /// @param phys_addr Page-aligned physical address.
 /// @param user      If true, mark the page as user-accessible.
 errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
-                                      bool user) {
+                                       bool user) {
+    // Issue #378: shared index computation (levels + per-level indices
+    // from the arch shims); the descend bodies below stay per-arch —
+    // snapshot flags, split placement and ENSUREs are VMM policy (#363 P4).
+    size_t idx[4] = {0, 0, 0, 0};
+    vmm_arch_walk_indices(virt_addr, idx);
 #if defined(CONFIG_ARCH_RISCV64)
     // Sv39 3-level page table walk
     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                             (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
-
-    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
     // Issue #152: snapshot pairing for Sv39 (see arm_test_touch_flags).
     // No identity flag on riscv64: the boot identity map is dead at
     // runtime, so low-half maps arm nothing.
     // Allow kernel-space VAs when tests are active: the Sv39 L1
     // save/restore in the snapshot mechanism undoes any 2MB-block splits.
-    warn_test_kernel_touch(l0_idx == kHhdmL0Idx, TestTouchWarn::kMapL1,
-                           virt_addr, l0_idx);
-    arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
+    warn_test_kernel_touch(idx[0] == kHhdmL0Idx, TestTouchWarn::kMapL1,
+                           virt_addr, idx[0]);
+    arm_test_touch_flags(idx[0] == kHhdmL0Idx, false);
 
-    auto *l1 = get_table(l0, l0_idx, true);
+    auto *l1 = get_table(l0, idx[0], true);
     if (!l1) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
 
     // If L1 entry is a 2MB block, split it into 512 4KB entries.
-    if ((l1[l1_idx] & PAGE_PRESENT) &&
-        vmm_arch_split_needed(l1[l1_idx])) {
+    if ((l1[idx[1]] & PAGE_PRESENT) &&
+        vmm_arch_split_needed(l1[idx[1]])) {
         uint64_t new_l2_phys = PMM::alloc_page_table();
         if (!new_l2_phys) [[unlikely]] {
             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
@@ -75,11 +76,11 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
         auto *new_l2 =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_l2_phys);
         // Arch split fill + link (issue #363 P2).
-        vmm_arch_split_fill(new_l2, l1[l1_idx]);
-        l1[l1_idx] = vmm_arch_table_link(new_l2_phys);
+        vmm_arch_split_fill(new_l2, l1[idx[1]]);
+        l1[idx[1]] = vmm_arch_table_link(new_l2_phys);
     }
 
-    auto *l2 = get_table(l1, l1_idx, true);
+    auto *l2 = get_table(l1, idx[1], true);
     if (!l2) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
@@ -89,7 +90,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page: KERNEL page mapped as user-accessible");
 
-    l2[l2_idx] = vmm_arch_encode_kernel_leaf(phys_addr, user);
+    l2[idx[2]] = vmm_arch_encode_kernel_leaf(phys_addr, user);
     arch::ArchPageTable::tlb_flush(virt_addr);
     return errors::VMM_ERR_OK;
 #else
@@ -97,29 +98,23 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                               (kernel_pml4_ & PAGE_TABLE_ADDR_MASK));
 
-    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-
     // Allow kernel-space VAs when tests are active: PD save/restore in the
     // snapshot mechanism undoes any huge-page splits.  Boot-time calls (APIC
     // MMIO mapping, etc.) are still permitted as they run before snapshot.
-    warn_test_kernel_touch(pml4_idx >= arch::PML4_USER_COUNT,
-                           TestTouchWarn::kMapPd, virt_addr, pml4_idx);
-    arm_test_touch_flags(pml4_idx >= arch::PML4_USER_COUNT, false);
-    // Low identity-map VAs (pml4_idx 0, PD_IDENTITY phys 0x3000): a map_page
+    warn_test_kernel_touch(idx[0] >= arch::PML4_USER_COUNT,
+                           TestTouchWarn::kMapPd, virt_addr, idx[0]);
+    arm_test_touch_flags(idx[0] >= arch::PML4_USER_COUNT, false);
+    // Low identity-map VAs (idx[0] 0, PD_IDENTITY phys 0x3000): a map_page
     // here splits a boot 2 MiB identity huge entry into a PT page.  Flag it so
     // snapshot_restore restores PD_IDENTITY (see arm_test_touch_flags).
-    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
+    arm_test_touch_flags(false, idx[0] < arch::PML4_USER_COUNT);
 
-    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
-
-    auto *pdpt = get_table(pml4, pml4_idx, true);
+    auto *pdpt = get_table(pml4, idx[0], true);
     if (!pdpt) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
-    auto *pd = get_table(pdpt, pdpt_idx, true);
+    auto *pd = get_table(pdpt, idx[1], true);
     if (!pd) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
@@ -127,7 +122,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
 
     // If the PD entry is a 2MB huge page, split it into 512 4KB entries
     // so we can map an individual 4KB page within it.
-    if (vmm_arch_split_needed(pd[pd_idx])) {
+    if (vmm_arch_split_needed(pd[idx[2]])) {
         uint64_t new_pt_phys = PMM::alloc_page_table();
         if (!new_pt_phys) [[unlikely]] {
             note_silent_drop_once("[MAP-DROP] split ", virt_addr);
@@ -138,11 +133,11 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
         // Arch split fill + link (issue #363 P2): huge-base decode, flag
         // preservation, and the 512-entry fill live in the per-arch TU.
-        vmm_arch_split_fill(new_pt, pd[pd_idx]);
-        pd[pd_idx] = vmm_arch_table_link(new_pt_phys);
+        vmm_arch_split_fill(new_pt, pd[idx[2]]);
+        pd[idx[2]] = vmm_arch_table_link(new_pt_phys);
     }
 
-    auto *pt = get_table(pd, pd_idx, true);
+    auto *pt = get_table(pd, idx[2], true);
     if (!pt) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
@@ -152,24 +147,24 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page: KERNEL page mapped as user-accessible");
 
-    pt[pt_idx] = vmm_arch_encode_kernel_leaf(phys_addr, user);
+    pt[idx[3]] = vmm_arch_encode_kernel_leaf(phys_addr, user);
     arch::ArchPageTable::tlb_flush(virt_addr);
 #endif
     return errors::VMM_ERR_OK;
 }
 
 errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
-                                              uint64_t phys_addr, bool user,
-                                              bool executable,
-                                              uint64_t pml4_phys) {
+                                               uint64_t phys_addr, bool user,
+                                               bool executable,
+                                               uint64_t pml4_phys) {
+    // Issue #378: shared index computation; descend bodies stay per-arch
+    // (snapshot flags, split placement, #361 injector are VMM policy).
+    size_t idx[4] = {0, 0, 0, 0};
+    vmm_arch_walk_indices(virt_addr, idx);
 #if defined(CONFIG_ARCH_RISCV64)
     // Sv39 3-level page table walk
     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
-
-    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
     // Issue #152 (mirrors #197 on x86_64): flag unconditionally — no warn
     // here (designated private-table API), but the target may be the
@@ -178,14 +173,14 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
     // rewind.  Without this, splits never trigger it and persist across
     // boundaries.  HHDM only (no live identity map on riscv64 — see
     // map_page note above).
-    arm_test_touch_flags(l0_idx == kHhdmL0Idx, false);
+    arm_test_touch_flags(idx[0] == kHhdmL0Idx, false);
 
-    auto *l1 = get_table(l0, l0_idx, true, true);
+    auto *l1 = get_table(l0, idx[0], true, true);
     if (!l1) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] l1 ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
-    auto *l2 = get_table(l1, l1_idx, true, true);
+    auto *l2 = get_table(l1, idx[1], true, true);
     if (!l2) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] l2 ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
@@ -195,37 +190,32 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page_in_pml4: KERNEL page mapped as user-accessible");
 
-    l2[l2_idx] = vmm_arch_encode_map_leaf(phys_addr, user, executable);
+    l2[idx[2]] = vmm_arch_encode_map_leaf(phys_addr, user, executable);
 #else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                               (pml4_phys & PAGE_TABLE_ADDR_MASK));
-
-    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
 
     // Issue #197: mirror map_page's modified-flags (no warn here — this is
     // the designated private-table API, but the target may be the shared
     // kernel table or share PD pages with it, so flag unconditionally).
     // Without this, splits (e.g. test mb2 identity re-mapping) never
     // trigger the snapshot PD rewind and persist across boundaries.
-    arm_test_touch_flags(pml4_idx >= arch::PML4_USER_COUNT,
-                         pml4_idx < arch::PML4_USER_COUNT);
+    arm_test_touch_flags(idx[0] >= arch::PML4_USER_COUNT,
+                         idx[0] < arch::PML4_USER_COUNT);
 
-    auto *pdpt = get_table(pml4, pml4_idx, true, true);
+    auto *pdpt = get_table(pml4, idx[0], true, true);
     if (!pdpt) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pdpt ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
-    auto *pd = get_table(pdpt, pdpt_idx, true, true);
+    auto *pd = get_table(pdpt, idx[1], true, true);
     if (!pd) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pd ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
     }
 
-    if (vmm_arch_split_needed(pd[pd_idx])) {
+    if (vmm_arch_split_needed(pd[idx[2]])) {
 #if defined(CONFIG_DEBUG)
         if (VMM::test_maybe_fail_table_alloc()) // issue #361: injected fault
             return errors::VMM_ERR_PAGE_ALLOC;
@@ -239,11 +229,11 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
         auto *new_pt =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
         // Arch split fill + link (issue #363 P2).
-        vmm_arch_split_fill(new_pt, pd[pd_idx]);
-        pd[pd_idx] = vmm_arch_table_link(new_pt_phys);
+        vmm_arch_split_fill(new_pt, pd[idx[2]]);
+        pd[idx[2]] = vmm_arch_table_link(new_pt_phys);
     }
 
-    auto *pt = get_table(pd, pd_idx, true, true);
+    auto *pt = get_table(pd, idx[2], true, true);
     if (!pt) [[unlikely]] {
         note_silent_drop_once("[MAP-DROP] pt ", virt_addr);
         return errors::VMM_ERR_PAGE_ALLOC;
@@ -253,7 +243,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page_in_pml4: KERNEL page mapped as user-accessible");
 
-    pt[pt_idx] = vmm_arch_encode_map_leaf(phys_addr, user, executable);
+    pt[idx[3]] = vmm_arch_encode_map_leaf(phys_addr, user, executable);
 #endif
     // Issue #225: invalidate like every other map/unmap site in this
     // file. Harmless when these tables are not current (local INVLPG);
@@ -266,50 +256,33 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
 uint64_t *VMM::pte_leaf_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     // Walk-only leaf lookup (private helper for the RO primitive +
     // inspector; mirrors the unmap walks with create=false).
+    // Issue #378: one level-parameterized descend loop for both shapes
+    // (3-level Sv39, 4-level x86_64/aarch64).  Per-level equivalence to
+    // the pre-convergence branches: riscv guards L0/L1 with
+    // is_table_entry (huge/block leaves are not ours); x86_64/aarch64
+    // get_table returns nullptr on huge/block when create=false, and
+    // level>=3 is_table_entry is defined false (vmm_clone.cpp), so the
+    // uniform guards are no-ops there — bit-identical outcomes.
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
-#if defined(CONFIG_ARCH_RISCV64)
-    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
-    // Table-or-leaf discrimination (issue #363 P2/P4): a present leaf
-    // at L0/L1 is not ours to descend — is_table_entry owns the arch rule.
-    if (!VMM::is_table_entry(top[l0_idx], 0))
+    auto *table = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                               (pml4_phys & PAGE_TABLE_ADDR_MASK));
+    size_t idx[4] = {0, 0, 0, 0};
+    vmm_arch_walk_indices(virt_addr, idx);
+    const unsigned levels = vmm_arch_walk_levels();
+    for (unsigned level = 0; level + 1 < levels; ++level) {
+        // Table-or-leaf discrimination (issue #363 P2/P4): a present
+        // leaf/block at a table level is not ours to descend.
+        if (!VMM::is_table_entry(table[idx[level]], level))
+            return nullptr;
+        table = VMM::get_table(table, idx[level], false);
+        if (!table)
+            return nullptr;
+    }
+    if ((table[idx[levels - 1]] & VMM::PAGE_PRESENT) == 0)
         return nullptr;
-    auto *l1 = VMM::get_table(top, l0_idx, false);
-    if (!l1)
-        return nullptr;
-    if (!VMM::is_table_entry(l1[l1_idx], 1))
-        return nullptr;
-    auto *l2 = VMM::get_table(l1, l1_idx, false);
-    if (!l2)
-        return nullptr;
-    if ((l2[l2_idx] & VMM::PAGE_PRESENT) == 0)
-        return nullptr;
-    if (VMM::is_table_entry(l2[l2_idx], 2))
+    if (VMM::is_table_entry(table[idx[levels - 1]], levels - 1))
         return nullptr; // table pointer, not a leaf
-    return &l2[l2_idx];
-#else
-    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
-    auto *pdpt = VMM::get_table(top, pml4_idx, false);
-    if (!pdpt)
-        return nullptr;
-    auto *pd = VMM::get_table(pdpt, pdpt_idx, false);
-    if (!pd)
-        return nullptr;
-    if (!VMM::is_table_entry(pd[pd_idx], 2))
-        return nullptr; // Block/huge entry: not ours.
-    auto *pt = VMM::get_table(pd, pd_idx, false);
-    if (!pt)
-        return nullptr;
-    if ((pt[pt_idx] & VMM::PAGE_PRESENT) == 0)
-        return nullptr;
-    return &pt[pt_idx];
-#endif
+    return &table[idx[levels - 1]];
 }
 
 // Issue #271 P0: shared read-only user-map primitive. Map RW first
@@ -377,62 +350,30 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0) {
         return;
     }
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
+    // Issue #378: the descend is pte_leaf_in_pml4 (walk-only, same
+    // guards, create=false) — zeroing a returned nullptr was already a
+    // no-op clear, and clearing an already-zero leaf is idempotent, so
+    // leaf+zero is exactly this walk+zero.  Per-level [UNMAP-DROP] notes
+    // fold into one (no test observes the level suffix); the snapshot
+    // flags below stay per-arch policy (#363 P4).
 #if defined(CONFIG_ARCH_RISCV64)
-    // Sv39 3-level walk (mirrors map_page_in_pml4 riscv branch).
-    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
-    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
-    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
     // Issue #152: no identity flag on riscv64 (dead boot map — see
     // map_page note above). Task-private low tables need no snapshot.
-    // Block/leaf discrimination via is_table_entry (issue #363 P2/P4).
-    if (!VMM::is_table_entry(top[l0_idx], 0)) {
-        return; // 1 GiB block: not ours to clear.
-    }
-    auto *l1 = get_table(top, l0_idx, false);
-    if (!l1) [[unlikely]] {
-        note_silent_drop_once("[UNMAP-DROP] l1 ", virt_addr);
-        return;
-    }
-    if (!VMM::is_table_entry(l1[l1_idx], 1)) {
-        return; // 2 MiB block: not ours to clear.
-    }
-    auto *l2 = get_table(l1, l1_idx, false);
-    if (!l2) [[unlikely]] {
-        note_silent_drop_once("[UNMAP-DROP] l2 ", virt_addr);
-        return;
-    }
-    l2[l2_idx] = 0;
 #else
-    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
-    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
-    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
+    size_t idx[4] = {0, 0, 0, 0};
+    vmm_arch_walk_indices(virt_addr, idx);
     // Issue #197: mirror unmap_page — flag low-VA surgery for the
     // PD_IDENTITY restore (see map_page_in_pml4 note above).
-    arm_test_touch_flags(false, pml4_idx < arch::PML4_USER_COUNT);
-    auto *pdpt = get_table(top, pml4_idx, false);
-    if (!pdpt) [[unlikely]] {
-        note_silent_drop_once("[UNMAP-DROP] pdpt ", virt_addr);
-        return;
-    }
-    auto *pd = get_table(pdpt, pdpt_idx, false);
-    if (!pd) [[unlikely]] {
-        note_silent_drop_once("[UNMAP-DROP] pd ", virt_addr);
-        return;
-    }
-    if (!is_table_entry(pd[pd_idx], 2)) {
-        return; // Block/huge entry: not ours to clear.
-    }
-    auto *pt = get_table(pd, pd_idx, false);
-    if (!pt) [[unlikely]] {
-        note_silent_drop_once("[UNMAP-DROP] pt ", virt_addr);
-        return;
-    }
-    pt[pt_idx] = 0;
+    arm_test_touch_flags(false, idx[0] < arch::PML4_USER_COUNT);
 #endif
+    uint64_t *leaf = pte_leaf_in_pml4(virt_addr, pml4_phys);
+    if (!leaf) [[unlikely]] {
+        note_silent_drop_once("[UNMAP-DROP] ", virt_addr);
+    } else {
+        *leaf = 0;
+    }
+    // Unconditional flush (issue #225): the pre-convergence walk flushed
+    // whenever it reached the leaf parent, including absent-leaf clears.
     arch::ArchPageTable::tlb_flush(virt_addr);
 }
 

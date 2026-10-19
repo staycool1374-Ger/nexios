@@ -1,5 +1,7 @@
 var test__elf__loader_8cpp =
 [
+    [ "build_bss_elf", "test__elf__loader_8cpp.html#ad8aee3bc8ebfcdf6fe9ad223316deca6", null ],
+    [ "build_rw_elf", "test__elf__loader_8cpp.html#a862630d193ddcf46ea1d5b28041ef072", null ],
     [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a539dcd2f4ece902e7fae6edc04fc9d6d", null ],
     [ "JARVIS_TEST", "test__elf__loader_8cpp.html#aff9971eebe1cd4fea33e4c4687c809c8", null ],
     [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a7b460d85494cb2aa066e50588be9a481", null ],
@@ -15,5 +17,15 @@ var test__elf__loader_8cpp =
     [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a0b6637958e004fff733a70aede8448ba", null ],
     [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a9927a9e977144cf8885f4f84cf44beb2", null ],
     [ "JARVIS_TEST", "test__elf__loader_8cpp.html#af5716838a21042b8593906302d474502", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a4555f8d0aaa40c4c5a3b7a666d145578", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a85ee82d44d155ec9a42f9d1d533a6280", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a14d0a9bf721396f52696d12f1bb8b01a", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a7f3792770ca3cf841545d4f7d9cf666e", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a239ddf73d7e680c38da0fc3a7afd3a92", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#ac66ad2824c38d5b51b25aea54ab88c1d", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#ad679fd94ed079e6bab369aee1b218dd5", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a66ce01dd2248f384c15bfbc56919c5ac", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#afc77ffbeb2943f82d14a3e28af39a5cb", null ],
+    [ "JARVIS_TEST", "test__elf__loader_8cpp.html#a158547f45155b767ab82384aefcb4826", null ],
     [ "register_elf_loader_tests", "test__elf__loader_8cpp.html#a0338f2914f09b1a403ce2f2f2ef9f97c", null ]
 ];

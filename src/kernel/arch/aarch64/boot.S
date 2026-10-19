@@ -169,6 +169,11 @@ _start:
     // loaded (silent sync-exception loop in the IRQ path).
     ldr     x12, =0x8000421       // 0x8000000 | Device: Valid|Block|NS|AF
     str     x12, [x14, #64*8]
+    // Map virtio-mmio at VA 0xFFFF80000A000000 (PA 0x0A000000), L2 index
+    // 80. One 2MiB Device block covers the virtio-mmio transport region
+    // (INTIDs 48-79, issue #349); reachable through the TTBR1 window.
+    ldr     x12, =0xA000421     // 0xA000000 | Device: Valid|Block|NS|AF
+    str     x12, [x14, #80*8]
     ldr     x12, =0x40028000
     orr     x12, x12, #3
     ldr     x13, =0x40026000  // L1 base

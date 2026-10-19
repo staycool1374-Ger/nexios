@@ -1,5 +1,4 @@
 var searchData=
 [
-  ['yield_5fas_0',['yield_as',['../namespacekernel_1_1test.html#a5734651fc6722563ecb7a1893ea19b81',1,'kernel::test']]],
-  ['yield_5fto_5ftask_1',['yield_to_task',['../namespacekernel_1_1test.html#a6cdcc19c8e326942d1c980c8c62894f0',1,'kernel::test']]]
+  ['xfer_5fbuf_0',['xfer_buf',['../classkernel_1_1dma_1_1_ping_pong_dma.html#aaad93901bda3f4e9df928c30d4b2a10b',1,'kernel::dma::PingPongDma']]]
 ];

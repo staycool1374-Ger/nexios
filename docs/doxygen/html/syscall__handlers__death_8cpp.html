@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('syscall__handl
 <p>Asynchronous task-death notification syscalls (issue #105 Part B): SYS_DEATH_WATCH — register a death watch on a task (authority: the caller is the watched task or the supervisor). SYS_DEATH_RECV — drain the next pending death record (never blocks). SYS_DEATH_UNWATCH — remove a death watch. These syscalls take the registry lock and DEATH_RECV writes user memory — they MUST stay out of k_syscall_fast[] (issue #92 discipline).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="syscall_8hpp_source.html">kernel/syscall/syscall.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="syscall__errors_8hpp_source.html">kernel/syscall/syscall_errors.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="syscall__helpers_8hpp_source.html">kernel/syscall/syscall_helpers.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="death__notify_8hpp_source.html">kernel/ipc/death_notify.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="checked__ptr_8hpp_source.html">kernel/memory/checked_ptr.hpp</a>&gt;</code><br />

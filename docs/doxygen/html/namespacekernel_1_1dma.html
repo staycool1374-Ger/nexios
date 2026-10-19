@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,26 +119,144 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 </div><!--header-->
 <div class="contents">
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:SgEntry" id="r_SgEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1dma_1_1_sg_entry.html">SgEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A single scatter-gather entry.  <a href="structkernel_1_1dma_1_1_sg_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:SgList" id="r_SgList"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Scatter-gather list.  <a href="structkernel_1_1dma_1_1_sg_list.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PrdEntry" id="r_PrdEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1dma_1_1_prd_entry.html">PrdEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical Region Descriptor (ATA bus master format).  <a href="structkernel_1_1dma_1_1_prd_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PrdTable" id="r_PrdTable"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1dma_1_1_prd_table.html">PrdTable</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">PRD table — fixed-size array of <a class="el" href="structkernel_1_1dma_1_1_prd_entry.html" title="Physical Region Descriptor (ATA bus master format).">PrdEntry</a>.  <a href="structkernel_1_1dma_1_1_prd_table.html#details">More...</a><br /></td></tr>
+<tr class="memitem:DmaBuffer" id="r_DmaBuffer"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A physically contiguous DMA buffer.  <a href="structkernel_1_1dma_1_1_dma_buffer.html#details">More...</a><br /></td></tr>
+<tr class="memitem:DmaChannel" id="r_DmaChannel"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1dma_1_1_dma_channel.html">DmaChannel</a></td></tr>
+<tr class="memitem:BmDmaChannel" id="r_BmDmaChannel"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html">BmDmaChannel</a></td></tr>
+<tr class="memitem:DmaEngine" id="r_DmaEngine"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1dma_1_1_dma_engine.html">DmaEngine</a></td></tr>
+<tr class="memitem:PingPongDma" id="r_PingPongDma"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1dma_1_1_ping_pong_dma.html">PingPongDma</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
+Typedefs</h2></td></tr>
+<tr class="memitem:a1e86daeaf63aaada648341891f68bb97" id="r_a1e86daeaf63aaada648341891f68bb97"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#a1e86daeaf63aaada648341891f68bb97">DmaCallback</a> = void (*)(uint64_t context, bool success)</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a84e8c46b4e33b83d66f7b0ff078eaeac" id="r_a84e8c46b4e33b83d66f7b0ff078eaeac"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a84e8c46b4e33b83d66f7b0ff078eaeac">Direction</a> : uint8_t { <a class="el" href="#a84e8c46b4e33b83d66f7b0ff078eaeaca3466fab4975481651940ed328aa990e4">READ</a> = 0
+, <a class="el" href="#a84e8c46b4e33b83d66f7b0ff078eaeacad4b9e47f65b6e79b010582f15785867e">WRITE</a> = 1
+ }</td></tr>
+<tr class="memdesc:a84e8c46b4e33b83d66f7b0ff078eaeac"><td class="mdescLeft">&#160;</td><td class="mdescRight">DMA direction.  <a href="#a84e8c46b4e33b83d66f7b0ff078eaeac">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a9ed9bda8444aa6fed65a4d02bb7157d9" id="r_a9ed9bda8444aa6fed65a4d02bb7157d9"><td class="memItemLeft">DmaBuffer&#160;</td><td class="memItemRight"><a class="el" href="#a9ed9bda8444aa6fed65a4d02bb7157d9">alloc_buffer</a> (<a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> size)</td></tr>
-<tr class="memitem:ae63cca35e8ce0810d35364b5e21a252d" id="r_ae63cca35e8ce0810d35364b5e21a252d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae63cca35e8ce0810d35364b5e21a252d">free_buffer</a> (DmaBuffer &amp;buf)</td></tr>
-<tr class="memitem:a07c336f70f255888fe45aec890bda095" id="r_a07c336f70f255888fe45aec890bda095"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a07c336f70f255888fe45aec890bda095">sg_from_buffer</a> (SgList &amp;sg, const DmaBuffer &amp;buf, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> offset, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> length)</td></tr>
-<tr class="memitem:a6d426c4def3e0e077f11e5f5617ea809" id="r_a6d426c4def3e0e077f11e5f5617ea809"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a6d426c4def3e0e077f11e5f5617ea809">sg_from_virt</a> (SgList &amp;sg, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> virt_addr, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> length)</td></tr>
-<tr class="memitem:a3694e0ff7a283647c1638774454314f2" id="r_a3694e0ff7a283647c1638774454314f2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3694e0ff7a283647c1638774454314f2">sg_reset</a> (SgList &amp;sg)</td></tr>
-<tr class="memitem:a2b0e39f4a2f3d6d1eb72850767919d44" id="r_a2b0e39f4a2f3d6d1eb72850767919d44"><td class="memItemLeft"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2b0e39f4a2f3d6d1eb72850767919d44">prd_from_sg</a> (PrdTable &amp;prd, const SgList &amp;sg, bool eot)</td></tr>
-<tr class="memitem:a4ac8093b599e8f148c0873cb8657e7c2" id="r_a4ac8093b599e8f148c0873cb8657e7c2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4ac8093b599e8f148c0873cb8657e7c2">prd_reset</a> (PrdTable &amp;prd)</td></tr>
-<tr class="memitem:a7c295e7cd57137a154f6ce5fe0bbde68" id="r_a7c295e7cd57137a154f6ce5fe0bbde68"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7c295e7cd57137a154f6ce5fe0bbde68">pci_set_bus_master</a> (arch::PciBdf bdf, bool enable)</td></tr>
+<tr class="memitem:a9ed9bda8444aa6fed65a4d02bb7157d9" id="r_a9ed9bda8444aa6fed65a4d02bb7157d9"><td class="memItemLeft"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9ed9bda8444aa6fed65a4d02bb7157d9">alloc_buffer</a> (<a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> size)</td></tr>
+<tr class="memitem:ae63cca35e8ce0810d35364b5e21a252d" id="r_ae63cca35e8ce0810d35364b5e21a252d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae63cca35e8ce0810d35364b5e21a252d">free_buffer</a> (<a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> &amp;buf)</td></tr>
+<tr class="memdesc:ae63cca35e8ce0810d35364b5e21a252d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free a previously allocated DMA buffer.  <br /></td></tr>
+<tr class="memitem:a07c336f70f255888fe45aec890bda095" id="r_a07c336f70f255888fe45aec890bda095"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a07c336f70f255888fe45aec890bda095">sg_from_buffer</a> (<a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg, const <a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> &amp;buf, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> offset, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> length)</td></tr>
+<tr class="memitem:a6d426c4def3e0e077f11e5f5617ea809" id="r_a6d426c4def3e0e077f11e5f5617ea809"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a6d426c4def3e0e077f11e5f5617ea809">sg_from_virt</a> (<a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> virt_addr, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> length)</td></tr>
+<tr class="memitem:a3694e0ff7a283647c1638774454314f2" id="r_a3694e0ff7a283647c1638774454314f2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3694e0ff7a283647c1638774454314f2">sg_reset</a> (<a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg)</td></tr>
+<tr class="memdesc:a3694e0ff7a283647c1638774454314f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset a scatter-gather list.  <br /></td></tr>
+<tr class="memitem:a2b0e39f4a2f3d6d1eb72850767919d44" id="r_a2b0e39f4a2f3d6d1eb72850767919d44"><td class="memItemLeft"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2b0e39f4a2f3d6d1eb72850767919d44">prd_from_sg</a> (<a class="el" href="structkernel_1_1dma_1_1_prd_table.html">PrdTable</a> &amp;prd, const <a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg, bool eot)</td></tr>
+<tr class="memitem:a4ac8093b599e8f148c0873cb8657e7c2" id="r_a4ac8093b599e8f148c0873cb8657e7c2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4ac8093b599e8f148c0873cb8657e7c2">prd_reset</a> (<a class="el" href="structkernel_1_1dma_1_1_prd_table.html">PrdTable</a> &amp;prd)</td></tr>
+<tr class="memdesc:a4ac8093b599e8f148c0873cb8657e7c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset a PRD table.  <br /></td></tr>
+<tr class="memitem:a7c295e7cd57137a154f6ce5fe0bbde68" id="r_a7c295e7cd57137a154f6ce5fe0bbde68"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7c295e7cd57137a154f6ce5fe0bbde68">pci_set_bus_master</a> (<a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a> bdf, bool enable)</td></tr>
+<tr class="memitem:ae58a5d89d2f598db6a1aec1d6b9fa27e" id="r_ae58a5d89d2f598db6a1aec1d6b9fa27e"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1dma_1_1_prd_entry.html">kernel::dma::PrdEntry</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae58a5d89d2f598db6a1aec1d6b9fa27e">__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:a9ed9bda8444aa6fed65a4d02bb7157d9" id="r_a9ed9bda8444aa6fed65a4d02bb7157d9"><td class="memItemLeft"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9ed9bda8444aa6fed65a4d02bb7157d9">alloc_buffer</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> size)</td></tr>
+<tr class="memitem:aa9108fb6f9a44d1546323ec20a06c334" id="r_aa9108fb6f9a44d1546323ec20a06c334"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa9108fb6f9a44d1546323ec20a06c334">sg_from_buffer</a> (<a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg, const <a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> &amp;buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset=0, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> length=0)</td></tr>
+<tr class="memitem:a6d426c4def3e0e077f11e5f5617ea809" id="r_a6d426c4def3e0e077f11e5f5617ea809"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a6d426c4def3e0e077f11e5f5617ea809">sg_from_virt</a> (<a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg, uint64_t virt_addr, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> length)</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:aad354cd855e6380b46c7779471e09172" id="r_aad354cd855e6380b46c7779471e09172"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aad354cd855e6380b46c7779471e09172">DMA_MAX_SG_ENTRIES</a> = 256</td></tr>
+<tr class="memdesc:aad354cd855e6380b46c7779471e09172"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum entries in a scatter-gather list or PRD table.  <br /></td></tr>
+<tr class="memitem:a575880390445bddafd86f288a579b60c" id="r_a575880390445bddafd86f288a579b60c"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a575880390445bddafd86f288a579b60c">DMA_MAX_PRD_ENTRIES</a> = 256</td></tr>
+<tr class="memitem:a66632527972301cb54ea7447f4c7bb59" id="r_a66632527972301cb54ea7447f4c7bb59"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1dma_1_1_prd_table.html">kernel::dma::PrdTable</a>&#160;</td><td class="memItemRight"><a class="el" href="#a66632527972301cb54ea7447f4c7bb59">__attribute__</a></td></tr>
+<tr class="memitem:a56b2daba79fabb19559a7e49fb7d4253" id="r_a56b2daba79fabb19559a7e49fb7d4253"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a56b2daba79fabb19559a7e49fb7d4253">BMCMD_START</a> = 0x01</td></tr>
+<tr class="memdesc:a56b2daba79fabb19559a7e49fb7d4253"><td class="mdescLeft">&#160;</td><td class="mdescRight">BMDMA command register bits.  <br /></td></tr>
+<tr class="memitem:a77febcce08bec5fcf61e8a5973b8ff38" id="r_a77febcce08bec5fcf61e8a5973b8ff38"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a77febcce08bec5fcf61e8a5973b8ff38">BMCMD_STOP</a> = 0x00</td></tr>
+<tr class="memitem:af11c8d76ddba9f441582a41132de33fe" id="r_af11c8d76ddba9f441582a41132de33fe"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#af11c8d76ddba9f441582a41132de33fe">BMCMD_READ</a> = 0x08</td></tr>
+<tr class="memitem:a3b83bc74ca08bbb1dfaf6612d697eb98" id="r_a3b83bc74ca08bbb1dfaf6612d697eb98"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a3b83bc74ca08bbb1dfaf6612d697eb98">BMSTAT_ACTIVE</a> = 0x01</td></tr>
+<tr class="memdesc:a3b83bc74ca08bbb1dfaf6612d697eb98"><td class="mdescLeft">&#160;</td><td class="mdescRight">BMDMA status register bits.  <br /></td></tr>
+<tr class="memitem:ade4a1588cc0e752b16b201a058d11318" id="r_ade4a1588cc0e752b16b201a058d11318"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ade4a1588cc0e752b16b201a058d11318">BMSTAT_ERROR</a> = 0x02</td></tr>
+<tr class="memitem:ae8a94e472ff9ada3416d4504f6cb05be" id="r_ae8a94e472ff9ada3416d4504f6cb05be"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ae8a94e472ff9ada3416d4504f6cb05be">BMSTAT_INTR</a> = 0x04</td></tr>
 </table>
-<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
-<a id="a9ed9bda8444aa6fed65a4d02bb7157d9" name="a9ed9bda8444aa6fed65a4d02bb7157d9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9ed9bda8444aa6fed65a4d02bb7157d9">&#9670;&#160;</a></span>alloc_buffer()</h2>
+<a name="doc-typedef-members" id="doc-typedef-members"></a><h2 id="header-doc-typedef-members" class="groupheader">Typedef Documentation</h2>
+<a id="a1e86daeaf63aaada648341891f68bb97" name="a1e86daeaf63aaada648341891f68bb97"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1e86daeaf63aaada648341891f68bb97">&#9670;&#160;</a></span>DmaCallback</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">DmaBuffer kernel::dma::alloc_buffer </td>
+          <td class="memname">using <a class="el" href="#a1e86daeaf63aaada648341891f68bb97">kernel::dma::DmaCallback</a> = void (*)(uint64_t context, bool success)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>DMA completion callback. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">context</td><td>User-provided context value. </td></tr>
+    <tr><td class="paramname">success</td><td>True if transfer completed without error. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
+<a id="a84e8c46b4e33b83d66f7b0ff078eaeac" name="a84e8c46b4e33b83d66f7b0ff078eaeac"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a84e8c46b4e33b83d66f7b0ff078eaeac">&#9670;&#160;</a></span>Direction</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a84e8c46b4e33b83d66f7b0ff078eaeac">kernel::dma::Direction</a> : uint8_t</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>DMA direction. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a84e8c46b4e33b83d66f7b0ff078eaeaca3466fab4975481651940ed328aa990e4" name="a84e8c46b4e33b83d66f7b0ff078eaeaca3466fab4975481651940ed328aa990e4"></a>READ&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a84e8c46b4e33b83d66f7b0ff078eaeacad4b9e47f65b6e79b010582f15785867e" name="a84e8c46b4e33b83d66f7b0ff078eaeacad4b9e47f65b6e79b010582f15785867e"></a>WRITE&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="ae58a5d89d2f598db6a1aec1d6b9fa27e" name="ae58a5d89d2f598db6a1aec1d6b9fa27e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae58a5d89d2f598db6a1aec1d6b9fa27e">&#9670;&#160;</a></span>__attribute__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct <a class="el" href="structkernel_1_1dma_1_1_prd_entry.html">kernel::dma::PrdEntry</a> kernel::dma::__attribute__ </td>
+          <td>(</td>
+          <td class="paramtype">(packed)</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9ed9bda8444aa6fed65a4d02bb7157d9" name="a9ed9bda8444aa6fed65a4d02bb7157d9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9ed9bda8444aa6fed65a4d02bb7157d9">&#9670;&#160;</a></span>alloc_buffer() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> kernel::dma::alloc_buffer </td>
           <td>(</td>
           <td class="paramtype"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a></td>          <td class="paramname"><span class="paramname"><em>size</em></span></td><td>)</td>
           <td></td>
@@ -154,6 +272,30 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a9ed9bda8444aa6fed65a4d02bb7157d9" name="a9ed9bda8444aa6fed65a4d02bb7157d9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9ed9bda8444aa6fed65a4d02bb7157d9">&#9670;&#160;</a></span>alloc_buffer() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> kernel::dma::alloc_buffer </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>size</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Allocate a physically contiguous DMA buffer. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">size</td><td>Size in bytes (will be rounded up to PAGE_SIZE). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html" title="A physically contiguous DMA buffer.">DmaBuffer</a> (phys_addr=0 on failure). </dd></dl>
+
+</div>
+</div>
 <a id="ae63cca35e8ce0810d35364b5e21a252d" name="ae63cca35e8ce0810d35364b5e21a252d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ae63cca35e8ce0810d35364b5e21a252d">&#9670;&#160;</a></span>free_buffer()</h2>
 
@@ -163,11 +305,13 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::dma::free_buffer </td>
           <td>(</td>
-          <td class="paramtype">DmaBuffer &amp;</td>          <td class="paramname"><span class="paramname"><em>buf</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>buf</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Free a previously allocated DMA buffer. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -186,7 +330,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::dma::pci_set_bus_master </td>
           <td>(</td>
-          <td class="paramtype">arch::PciBdf</td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a></td>          <td class="paramname"><span class="paramname"><em>bdf</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -195,6 +339,13 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>Enable/disable PCI bus mastering for a device. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">bdf</td><td>BDF address. </td></tr>
+    <tr><td class="paramname">enable</td><td>True to enable bus mastering, false to disable. </td></tr>
+  </table>
+  </dd>
+</dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -213,20 +364,29 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> kernel::dma::prd_from_sg </td>
           <td>(</td>
-          <td class="paramtype">PrdTable &amp;</td>          <td class="paramname"><span class="paramname"><em>prd</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1dma_1_1_prd_table.html">PrdTable</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>prd</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const SgList &amp;</td>          <td class="paramname"><span class="paramname"><em>sg</em></span>, </td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>sg</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>eot</em></span>&#160;)</td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>eot</em></span><span class="paramdefsep"> = </span><span class="paramdefval">true</span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>Build a PRD table from a scatter-gather list. ATA bus master PRD format: 32-bit phys addr, 16-bit byte count-1, 16-bit flags. The table is suitable for programming a PCI bus master controller. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">prd</td><td>Output PRD table (must have backing memory accessible by device). </td></tr>
+    <tr><td class="paramname">sg</td><td>Input scatter-gather list. </td></tr>
+    <tr><td class="paramname">eot</td><td>If true, sets the EOT flag on the last entry. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of PRD entries written. </dd></dl>
 
 </div>
 </div>
@@ -239,16 +399,18 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::dma::prd_reset </td>
           <td>(</td>
-          <td class="paramtype">PrdTable &amp;</td>          <td class="paramname"><span class="paramname"><em>prd</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1dma_1_1_prd_table.html">PrdTable</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>prd</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Reset a PRD table. </p>
+
 </div>
 </div>
 <a id="a07c336f70f255888fe45aec890bda095" name="a07c336f70f255888fe45aec890bda095"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a07c336f70f255888fe45aec890bda095">&#9670;&#160;</a></span>sg_from_buffer()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a07c336f70f255888fe45aec890bda095">&#9670;&#160;</a></span>sg_from_buffer() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -256,12 +418,12 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::dma::sg_from_buffer </td>
           <td>(</td>
-          <td class="paramtype">SgList &amp;</td>          <td class="paramname"><span class="paramname"><em>sg</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>sg</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const DmaBuffer &amp;</td>          <td class="paramname"><span class="paramname"><em>buf</em></span>, </td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>buf</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -278,8 +440,40 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="aa9108fb6f9a44d1546323ec20a06c334" name="aa9108fb6f9a44d1546323ec20a06c334"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa9108fb6f9a44d1546323ec20a06c334">&#9670;&#160;</a></span>sg_from_buffer() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::dma::sg_from_buffer </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>sg</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>buf</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>offset</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>length</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Build a scatter-gather list from a DMA buffer and optional offset/length. For a single physically contiguous buffer, the SG list has one entry. </p>
+
+</div>
+</div>
 <a id="a6d426c4def3e0e077f11e5f5617ea809" name="a6d426c4def3e0e077f11e5f5617ea809"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6d426c4def3e0e077f11e5f5617ea809">&#9670;&#160;</a></span>sg_from_virt()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a6d426c4def3e0e077f11e5f5617ea809">&#9670;&#160;</a></span>sg_from_virt() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -287,7 +481,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">bool kernel::dma::sg_from_virt </td>
           <td>(</td>
-          <td class="paramtype">SgList &amp;</td>          <td class="paramname"><span class="paramname"><em>sg</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>sg</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -310,6 +504,33 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a6d426c4def3e0e077f11e5f5617ea809" name="a6d426c4def3e0e077f11e5f5617ea809"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6d426c4def3e0e077f11e5f5617ea809">&#9670;&#160;</a></span>sg_from_virt() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::dma::sg_from_virt </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>sg</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>virt_addr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>length</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Build a scatter-gather list from a virtual address range (which may cross page boundaries). Translates virtual addresses to physical via <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a>. </p>
+
+</div>
+</div>
 <a id="a3694e0ff7a283647c1638774454314f2" name="a3694e0ff7a283647c1638774454314f2"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3694e0ff7a283647c1638774454314f2">&#9670;&#160;</a></span>sg_reset()</h2>
 
@@ -319,11 +540,210 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::dma::sg_reset </td>
           <td>(</td>
-          <td class="paramtype">SgList &amp;</td>          <td class="paramname"><span class="paramname"><em>sg</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>sg</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Reset a scatter-gather list. </p>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a66632527972301cb54ea7447f4c7bb59" name="a66632527972301cb54ea7447f4c7bb59"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a66632527972301cb54ea7447f4c7bb59">&#9670;&#160;</a></span>__attribute__</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct <a class="el" href="structkernel_1_1dma_1_1_prd_table.html">kernel::dma::PrdTable</a> kernel::dma::__attribute__</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af11c8d76ddba9f441582a41132de33fe" name="af11c8d76ddba9f441582a41132de33fe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af11c8d76ddba9f441582a41132de33fe">&#9670;&#160;</a></span>BMCMD_READ</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t kernel::dma::BMCMD_READ = 0x08</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a56b2daba79fabb19559a7e49fb7d4253" name="a56b2daba79fabb19559a7e49fb7d4253"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a56b2daba79fabb19559a7e49fb7d4253">&#9670;&#160;</a></span>BMCMD_START</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t kernel::dma::BMCMD_START = 0x01</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>BMDMA command register bits. </p>
+
+</div>
+</div>
+<a id="a77febcce08bec5fcf61e8a5973b8ff38" name="a77febcce08bec5fcf61e8a5973b8ff38"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a77febcce08bec5fcf61e8a5973b8ff38">&#9670;&#160;</a></span>BMCMD_STOP</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t kernel::dma::BMCMD_STOP = 0x00</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3b83bc74ca08bbb1dfaf6612d697eb98" name="a3b83bc74ca08bbb1dfaf6612d697eb98"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3b83bc74ca08bbb1dfaf6612d697eb98">&#9670;&#160;</a></span>BMSTAT_ACTIVE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t kernel::dma::BMSTAT_ACTIVE = 0x01</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>BMDMA status register bits. </p>
+
+</div>
+</div>
+<a id="ade4a1588cc0e752b16b201a058d11318" name="ade4a1588cc0e752b16b201a058d11318"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade4a1588cc0e752b16b201a058d11318">&#9670;&#160;</a></span>BMSTAT_ERROR</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t kernel::dma::BMSTAT_ERROR = 0x02</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae8a94e472ff9ada3416d4504f6cb05be" name="ae8a94e472ff9ada3416d4504f6cb05be"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae8a94e472ff9ada3416d4504f6cb05be">&#9670;&#160;</a></span>BMSTAT_INTR</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint8_t kernel::dma::BMSTAT_INTR = 0x04</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a575880390445bddafd86f288a579b60c" name="a575880390445bddafd86f288a579b60c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a575880390445bddafd86f288a579b60c">&#9670;&#160;</a></span>DMA_MAX_PRD_ENTRIES</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::dma::DMA_MAX_PRD_ENTRIES = 256</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aad354cd855e6380b46c7779471e09172" name="aad354cd855e6380b46c7779471e09172"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aad354cd855e6380b46c7779471e09172">&#9670;&#160;</a></span>DMA_MAX_SG_ENTRIES</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> kernel::dma::DMA_MAX_SG_ENTRIES = 256</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Maximum entries in a scatter-gather list or PRD table. </p>
 
 </div>
 </div>

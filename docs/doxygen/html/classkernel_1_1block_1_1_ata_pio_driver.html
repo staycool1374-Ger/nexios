@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classkernel_1_
 </div><!--header-->
 <div class="contents">
 
+<p>PIO-based ATA driver for legacy IDE controllers.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="ata__pio_8hpp_source.html">ata_pio.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Inheritance diagram for kernel::block::AtaPioDriver:</div>
@@ -136,21 +139,31 @@ Collaboration diagram for kernel::block::AtaPioDriver:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:af29b61d98b1dfd700e6aff1225cf04aa" id="r_af29b61d98b1dfd700e6aff1225cf04aa"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#af29b61d98b1dfd700e6aff1225cf04aa">AtaPioDriver</a> (<a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> port_base=0x1F0, <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> drive_head=0xE0)</td></tr>
+<tr class="memdesc:af29b61d98b1dfd700e6aff1225cf04aa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Construct an <a class="el" href="classkernel_1_1block_1_1_ata_pio_driver.html" title="PIO-based ATA driver for legacy IDE controllers.">AtaPioDriver</a> on a given IDE channel.  <br /></td></tr>
 <tr class="memitem:ac31467387a9ed7e46ba6109d694b22f1" id="r_ac31467387a9ed7e46ba6109d694b22f1"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ac31467387a9ed7e46ba6109d694b22f1">~AtaPioDriver</a> ()=default</td></tr>
 <tr class="memitem:ac48373ab1b4ccbdc93250a6e47c7b5b4" id="r_ac48373ab1b4ccbdc93250a6e47c7b5b4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac48373ab1b4ccbdc93250a6e47c7b5b4">init</a> ()</td></tr>
+<tr class="memdesc:ac48373ab1b4ccbdc93250a6e47c7b5b4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Probe and identify the drive.  <br /></td></tr>
 <tr class="memitem:a2a4b7bd6f929b0a87fa4479af7133521" id="r_a2a4b7bd6f929b0a87fa4479af7133521"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a2a4b7bd6f929b0a87fa4479af7133521">read_sector</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lba, <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buffer) override</td></tr>
+<tr class="memdesc:a2a4b7bd6f929b0a87fa4479af7133521"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read one sector from the drive.  <br /></td></tr>
 <tr class="memitem:a67e90318b6075777fc4494b19381c316" id="r_a67e90318b6075777fc4494b19381c316"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a67e90318b6075777fc4494b19381c316">write_sector</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lba, const <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> *buffer) override</td></tr>
+<tr class="memdesc:a67e90318b6075777fc4494b19381c316"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write one sector to the drive.  <br /></td></tr>
 <tr class="memitem:af7ad5b1036c45633784ea626cb38fd75" id="r_af7ad5b1036c45633784ea626cb38fd75"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af7ad5b1036c45633784ea626cb38fd75">sector_count</a> () const override</td></tr>
+<tr class="memdesc:af7ad5b1036c45633784ea626cb38fd75"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of 512-byte sectors on the drive.  <br /></td></tr>
 <tr class="memitem:a210c05a8bf1603ec248ab96d0c21c565" id="r_a210c05a8bf1603ec248ab96d0c21c565"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a210c05a8bf1603ec248ab96d0c21c565">sector_size</a> () const override</td></tr>
+<tr class="memdesc:a210c05a8bf1603ec248ab96d0c21c565"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sector size in bytes (always 512).  <br /></td></tr>
 <tr class="memitem:a0d4e80cc74e43b85cddd753f1d235d17" id="r_a0d4e80cc74e43b85cddd753f1d235d17"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a0d4e80cc74e43b85cddd753f1d235d17">is_read_only</a> () const override</td></tr>
+<tr class="memdesc:a0d4e80cc74e43b85cddd753f1d235d17"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether the device is read-only (false for ATA PIO).  <br /></td></tr>
 <tr class="inherit_header pub_methods_classkernel_1_1block_1_1_block_device"><td colspan="2">Public Member Functions inherited from <a class="el" href="classkernel_1_1block_1_1_block_device.html">kernel::block::BlockDevice</a></td></tr>
 <tr class="memitem:acf49f308065355d5afbed60fbf10bf08 pub_methods_classkernel_1_1block_1_1_block_device" id="r_acf49f308065355d5afbed60fbf10bf08"><td class="memItemLeft">virtual&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1block_1_1_block_device.html#acf49f308065355d5afbed60fbf10bf08">~BlockDevice</a> ()=default</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a0c326cce6cb425a3b9e7ca4f165f7f8c" id="r_a0c326cce6cb425a3b9e7ca4f165f7f8c"><td class="memItemLeft">static <a class="el" href="#af29b61d98b1dfd700e6aff1225cf04aa">AtaPioDriver</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0c326cce6cb425a3b9e7ca4f165f7f8c">probe_first_drive</a> ()</td></tr>
+<tr class="memdesc:a0c326cce6cb425a3b9e7ca4f165f7f8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Iterate all IDE channels and return the first responsive drive.  <br /></td></tr>
 </table>
-<a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>PIO-based ATA driver for legacy IDE controllers. </p>
+</div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="af29b61d98b1dfd700e6aff1225cf04aa" name="af29b61d98b1dfd700e6aff1225cf04aa"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#af29b61d98b1dfd700e6aff1225cf04aa">&#9670;&#160;</a></span>AtaPioDriver()</h2>
 
@@ -169,6 +182,15 @@ Static Public Member Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Construct an <a class="el" href="classkernel_1_1block_1_1_ata_pio_driver.html" title="PIO-based ATA driver for legacy IDE controllers.">AtaPioDriver</a> on a given IDE channel. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">port_base</td><td>Base I/O port (0x1F0 primary, 0x170 secondary). </td></tr>
+    <tr><td class="paramname">drive_head</td><td>Drive/head select register value. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -213,6 +235,12 @@ Static Public Member Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Probe and identify the drive. </p>
+<p>Initialize the drive (alias for identify()).</p>
+<dl class="section return"><dt>Returns</dt><dd>true if the drive responds and is valid.</dd>
+<dd>
+true if the drive is present and ready. </dd></dl>
+
 </div>
 </div>
 <a id="a0d4e80cc74e43b85cddd753f1d235d17" name="a0d4e80cc74e43b85cddd753f1d235d17"></a>
@@ -237,6 +265,8 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Whether the device is read-only (false for ATA PIO). </p>
 
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a095720dc5cc42bb71113753a74159922">kernel::block::BlockDevice</a>.</p>
 
@@ -264,6 +294,12 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Iterate all IDE channels and return the first responsive drive. </p>
+<p>Probe primary and secondary IDE channels, master and slave, and return the first drive found.</p>
+<dl class="section return"><dt>Returns</dt><dd>A new <a class="el" href="classkernel_1_1block_1_1_ata_pio_driver.html" title="PIO-based ATA driver for legacy IDE controllers.">AtaPioDriver</a> instance, or nullptr if no drive found.</dd>
+<dd>
+A heap-allocated <a class="el" href="classkernel_1_1block_1_1_ata_pio_driver.html" title="PIO-based ATA driver for legacy IDE controllers.">AtaPioDriver</a>, or nullptr. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -300,13 +336,18 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Read one sector from the drive. </p>
+<p>Read a single 512-byte sector via PIO.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lba</td><td>Logical block address. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Output buffer (must be at least 512 bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
+
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a6caeec0ca8f2b83f8bbaa29eeb74ea25">kernel::block::BlockDevice</a>.</p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1block_1_1_ata_pio_driver_a2a4b7bd6f929b0a87fa4479af7133521_cgraph.png" border="0" usemap="#aclasskernel_1_1block_1_1_ata_pio_driver_a2a4b7bd6f929b0a87fa4479af7133521_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
-</div>
 
 </div>
 </div>
@@ -332,6 +373,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Number of 512-byte sectors on the drive. </p>
 
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#acce1608b55153216bf752ee1fd9211b0">kernel::block::BlockDevice</a>.</p>
 
@@ -359,6 +402,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Sector size in bytes (always 512). </p>
 
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a23f79506430cc318765da0aa8cbaab8c">kernel::block::BlockDevice</a>.</p>
 
@@ -391,13 +436,18 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
+<p>Write one sector to the drive. </p>
+<p>Write a single 512-byte sector via PIO.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lba</td><td>Logical block address. </td></tr>
+    <tr><td class="paramname">buffer</td><td>Input buffer (must be at least 512 bytes). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success. </dd></dl>
+
 <p>Implements <a class="el" href="classkernel_1_1block_1_1_block_device.html#a7b5cf59b19211ba94309727e73ffef60">kernel::block::BlockDevice</a>.</p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1block_1_1_ata_pio_driver_a67e90318b6075777fc4494b19381c316_cgraph.png" border="0" usemap="#aclasskernel_1_1block_1_1_ata_pio_driver_a67e90318b6075777fc4494b19381c316_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
-</div>
 
 </div>
 </div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
    </div>
   </td>
  </tr>
@@ -130,26 +130,25 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('semaphore_8hpp
 Include dependency graph for semaphore.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="semaphore_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2sync_2semaphore_8hpp" loading="lazy" alt=""/></div>
-<map name="asrc_2kernel_2sync_2semaphore_8hpp" id="asrc_2kernel_2sync_2semaphore_8hpp">
-<area shape="rect" title=" " alt="" coords="5,5,209,32"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="114,229,193,256"/>
-<area shape="poly" title=" " alt="" coords="105,30,102,66,103,106,111,144,124,180,141,216,136,215,119,182,105,146,98,107,97,66,104,35"/>
-<area shape="rect" href="task_8hpp.html" title="Task control block and state definitions for the kernel scheduler." alt="" coords="112,80,251,107"/>
-<area shape="poly" title=" " alt="" coords="120,30,161,69,156,70,120,35"/>
-<area shape="poly" title=" " alt="" coords="168,105,148,129,132,156,129,170,131,186,141,216,136,215,125,187,124,170,127,154,144,126,164,109"/>
-<area shape="rect" href="vfs_8hpp.html" title=" " alt="" coords="142,155,267,181"/>
-<area shape="poly" title=" " alt="" coords="187,105,198,140,193,139,184,110"/>
-<area shape="rect" href="signal_8hpp.html" title="Signal definitions used by the kernel for user exception delivery." alt="" coords="291,155,371,181"/>
-<area shape="poly" title=" " alt="" coords="208,105,294,147,288,148,207,110"/>
-<area shape="poly" title=" " alt="" coords="198,181,173,219,169,215,193,183"/>
-<area shape="poly" title=" " alt="" coords="303,181,199,226,198,221,297,182"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="semaphore_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2sync_2semaphore_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<map name="asrc_2kernel_2sync_2semaphore_8hppdep" id="asrc_2kernel_2sync_2semaphore_8hppdep">
+<area shape="rect" title=" " alt="" coords="215,5,418,32"/>
+<area shape="rect" href="semaphore_8cpp.html" title=" " alt="" coords="5,80,209,107"/>
+<area shape="poly" title=" " alt="" coords="264,39,145,82,143,77,267,35"/>
+<area shape="rect" href="sync_8hpp.html" title=" " alt="" coords="233,80,400,107"/>
+<area shape="poly" title=" " alt="" coords="318,46,319,81,314,78,315,50"/>
+<area shape="rect" href="pipe_8cpp.html" title=" " alt="" coords="424,80,577,107"/>
+<area shape="poly" title=" " alt="" coords="363,35,471,79,465,80,362,41"/>
+<area shape="rect" href="kernel_8cpp.html" title=" " alt="" coords="156,155,298,181"/>
+<area shape="poly" title=" " alt="" coords="291,116,244,157,241,152,286,118"/>
+<area shape="rect" href="sync_8cpp.html" title=" " alt="" coords="322,155,489,181"/>
+<area shape="poly" title=" " alt="" coords="345,114,393,155,388,154,343,119"/>
+</map>
 </div>
 </div>
 <p><a href="semaphore_8hpp_source.html">Go to the source code of this file.</a></p>
@@ -161,7 +160,7 @@ Data Structures</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
-<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Async" id="r_kernel_3A_3Async"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1sync.html">kernel::sync</a></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
