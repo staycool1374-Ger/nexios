@@ -1,0 +1,16 @@
+diff --git a/audits/cure-385.txt b/audits/cure-385.txt
+new file mode 100644
+index 0000000..3b9c5f2
+--- /dev/null
++++ b/audits/cure-385.txt
+@@ -0,0 +1,10 @@
++CURE for audit report-2026-10-19T16-11-33Z (process-only REJECT, S2 check 7).
++No kernel code change is required or included.
++To cure: post the following on issue #385, then re-request SIL 3 audit:
++  1. One graphify query/path (scheduler H2 deferred-switch precedent:
++     x86 isr_stubs guards, validator contract, riscv trap epilogue)
++     pasted with a one-line used/ignored disposition.
++  2. One obsidian vault search (H2 / deferred-switch / audit precedent)
++     pasted with a one-line used/ignored disposition
++     (or explicit "no vault coverage", proceeding from in-tree precedent).
++Reference: prompts/LEARNINGS.md entries #324 (per-increment artifacts).

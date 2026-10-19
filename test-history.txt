@@ -4120,3 +4120,8 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-19 17:03:18 timing_core PASSED: 19 FAILED: 0 TIME: 980ms STATUS: #349-P3-riscv64-final
 2026-10-19 17:03:18 irq_early_std PASSED: 7 FAILED: 0 TIME: 219ms STATUS: #349-P3-riscv64-final
 2026-10-19 17:03:18 hal_timer PASSED: 5 FAILED: 0 TIME: 159ms STATUS: #349-P3-riscv64-final
+2026-10-19 18:05:50 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 951ms STATUS: #385-epilogue-fix-run1-hang-gone-5QE+elf_ecall_smoke
+2026-10-19 18:07:30 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 959ms STATUS: #385-epilogue-fix-run2-deterministic
+2026-10-19 18:07:30 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 946ms STATUS: #385-epilogue-fix-run3-deterministic
+2026-10-19 18:09:04 elf_loader PASSED: 25 FAILED: 0 TIME: 2445ms STATUS: #385-x86-spot-after-epilogue-fix
+2026-10-19 18:09:04 selftest PASSED: 148 FAILED: 0 TIME: 12479ms STATUS: #385-x86-spot-after-epilogue-fix

@@ -27,6 +27,7 @@
 - Pure-move splits: boundary-asserted chunks, file-statics to the first-consumer shared home (never per-TU copies), using-decls for every bare cross-TU name, second-`namespace`-blocks closed before reopening (trust the compiler over stale LSP diagnostics); test class names must match the registry exactly (`Unknown test class` = zero tests + QEMU_EXIT stall).
 - Wall-truth telemetry: use rewind-proof raw TSC (`ticks_` is snapshot-rewound); additive summary lines go AFTER the expect `====` terminator; unobservable targets get DOCUMENT decisions, not servos (#359).
 - Virtualized wall accuracy gates nothing on any arch (aarch64 +28%, riscv64 +27.6% over) — bare metal only; verify numbers in the raw serial capture, never the expect-processed stream (#384).
+- riscv trap epilogue now validates deferred arms (gen-check + validate_pending_switch) like x86 — an unvalidated apply resumes freed/foreign memory with stale current, killing the wrong task (#385); M-threshold=7 is OpenSBI boot state, not corruption; fixtures must live above the post-W^X image range.
 - GIC version comes from PIDR2, never TYPER; TVAL reads are derived (cval-count) — gate `remaining()` on CTL; validator relaxations only remove failures, never add them (#349).
 - Readdir lists only the underlying fs: mount points live solely in the VFS mount table, so every `ops->readdir` caller hides them — overlay at the VFS layer (resolve + vnode_identity_match, spelling-independent), never per-fs; synthesized entries need a resolve-fallback for type probes (#346).
 - Timeout wake is edge-triggered: one expiry → one READY wake (skip duplicate READY+queued re-wakes); EDF never returns current (self-pick guard) — both one-line guards, no new locks, stranded READY still rescued (#345).
@@ -70,6 +71,12 @@
 ```
 
 ## Entries
+
+### #385 — riscv64 exec_slots hang: unvalidated deferred-switch apply (audit APPROVED, committed, issue CLOSED pending QE + #387)
+
+- **Learned:** (1) The riscv trap epilogue applied deferred switches on `save_rsp_to != 0` ALONE — no generation re-check, no target validation (x86 has both; aarch64 documents the gap as an S3 limitation). A stale arm to freed-then-recycled memory resumes a foreign context with stale `current`: sret into an unmapped yield stub → U-fault terminates the wrong task (init) → apparent hang. Post-mortem slots read zero (consumed) — absence of arms proves nothing. (2) OpenSBI sets the M-mode PLIC threshold to 7 at boot — M-context test reads are meaningless once the kernel moves to S-context (not corruption; tables verified correct). (3) Post-W^X the kernel image covers HHDM fixture blocks (L1[2]/L1[3]) — fixtures must live above the image range. (4) `PMM::free_page` is idempotent-safe (bitmap guard) and MMIO frees no-op (window guard) — kill over-free theories by code reading before burning GDB runs.
+- **Adapted:** x86-mirror guards in riscv `apply:` (gen capture + re-check → record_skip; validate call pre-load; abort path with fixup). `arch_riscv64` 24/30 + no hang ×3 deterministic; x86 `elf_loader`/`selftest` green; 3-arch link green. Handoffs: QE fixture relocation + PLIC S-context test updates; #387 (riscv fork fails, clone-path suspect).
+- **Style re-surface:** validate-before-resume for every deferred-switch consumer; keep validation + side-effect-undo in one shared helper (drop_arm) so asm ports stay thin.
 
 ### #349 — aarch64/riscv64 IRQ + timer parity (audit APPROVED, committed, issue CLOSED)
 
