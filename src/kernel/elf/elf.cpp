@@ -233,10 +233,12 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
         }
 
         uint64_t offset_in_region = phdr->vaddr - vaddr_base;
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + seg_phys +
-                                        offset_in_region),
-               file_data + phdr->offset, phdr->filesz);
+        if (phdr->filesz != 0) {
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + seg_phys +
+                                            offset_in_region),
+                   file_data + phdr->offset, phdr->filesz);
+        }
 
         if (phdr->memsz > phdr->filesz) {
             uint64_t zero_offset =

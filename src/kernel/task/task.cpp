@@ -130,7 +130,10 @@ namespace kernel {
 /// spinning on task->state) observes completion.  Previously this fell into
 /// an infinite hlt loop, leaving the task RUNNING forever and deadlocking
 /// any caller that waits for termination (ipc_blocking test hang).
-#if defined(CONFIG_ARCH_X86_64)
+/// All arches: the initial frame leaves the link register zeroed (x86: no
+/// return address above RBP; aarch64: x30=0; riscv: ra=0), so a task whose
+/// entry returns would branch to 0 without this catcher (#356: ELR/sepc=0
+/// faults on aarch64/riscv64).
 // NOT instrumented (coverage builds): _task_trampoline is entered by the
 // context switch with a synthetic frame — there is no return address above
 // RBP, so the -finstrument-functions hook would read the unmapped stack top
@@ -144,7 +147,6 @@ _task_trampoline(void (*entry)()) {
     for (;;)
         arch::hlt();
 }
-#endif
 
 /// @brief Allocates and initialises a SporadicServer for a daemon task
 ///        from the MemPool.  Idempotent (returns early if already set).
@@ -1227,10 +1229,11 @@ done_stack:
                       // timer tick (x86 kernel tasks run with IF=1).
                       // 0x3C5 (all masked) would leave a blocking kernel
                       // task spinning forever on aarch64.
-    *--stack = reinterpret_cast<uint64_t>(entry); // ELR_EL1
+    *--stack = reinterpret_cast<uint64_t>(_task_trampoline); // ELR_EL1
     *--stack = 0; // SP_EL0 (unused for kernel task)
-    for (int i = 0; i < 31; ++i)
-        *--stack = 0; // X0-X30
+    for (int i = 0; i < 30; ++i)
+        *--stack = 0; // X1-X30 (x30=0: trampoline catches the return)
+    *--stack = reinterpret_cast<uint64_t>(entry); // X0 = entry arg
     tcb->context.sp_el0 = reinterpret_cast<uint64_t>(stack);
 #elif defined(CONFIG_ARCH_RISCV64)
     // Build trap frame matching syscall_entry.S save area layout.
@@ -1239,7 +1242,8 @@ done_stack:
     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
     stack -= 37;
     __builtin_memset(stack, 0, 37 * 8);
-    stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
+    stack[31] = reinterpret_cast<uint64_t>(_task_trampoline); // SEPC
+    stack[9] = reinterpret_cast<uint64_t>(entry); // A0 = entry arg
     // SSTATUS bits (issue #348-C): SPIE=1 (prior interrupt enable),
     // SPP=1 (trap returns to S-mode).
     constexpr uint64_t SSTATUS_SPIE = 1ULL << 5;

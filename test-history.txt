@@ -4071,3 +4071,9 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-18 23:52:24 timing_core PASSED: 0 FAILED: 0 TIME: 134s STATUS: PANIC-EL1sync-ESR0x86000004-ELR0-first-test-task-spawn-vfsd-iocd-degraded
 2026-10-18 23:53:28 hrt_monotonic PASSED: 5 FAILED: 1 TIME: 2724ms STATUS: #384-P0-riscv64-ungated-wall-bound-fails-under-TCG
 2026-10-19 00:00:41 timing_core PASSED: 0 FAILED: 0 TIME: 0 STATUS: PANIC-riscv64-scause0xC-sepc0-first-test-task-spawn-vfsd-iocd-degraded
+2026-10-19 08:43:37 timing_core PASSED: 18 FAILED: 1 TIME: 907ms STATUS: #356-P0-trampoline-fixed-daemon-restart-fails-degraded-P0b
+2026-10-19 08:44:10 timing_core PASSED: 18 FAILED: 1 TIME: 968ms STATUS: #356-P0-trampoline-fixed-daemon-restart-fails-degraded-P0b
+2026-10-19 08:44:53 timing_core PASSED: 19 FAILED: 0 TIME: 1915ms STATUS: #356-P0-x86-nonregression
+2026-10-19 09:01:40 timing_core PASSED: 19 FAILED: 0 TIME: 911ms STATUS: #356-P0b-aarch64-daemons-spawn
+2026-10-19 09:02:12 timing_core PASSED: 19 FAILED: 0 TIME: 977ms STATUS: #356-P0b-riscv64-daemons-spawn
+2026-10-19 09:02:49 timing_core PASSED: 19 FAILED: 0 TIME: 1829ms STATUS: #356-P0b-x86-nonregression
