@@ -4066,3 +4066,7 @@ SUMMARY: total=20 ok=19 fail=1
 SUMMARY: total=24 ok=24 fail=0
 SUMMARY: total=26 ok=20 fail=6
 SUMMARY: total=26 ok=25 fail=1
+2026-10-19 17:12:06 hal-riscv64-pre349 PASSED: 55 FAILED: 1 TIME: 46s STATUS: cross_context_init_stack-FAIL-confirms-QE-note
+2026-10-19 17:15:05 hal PASSED: 56 FAILED: 0 TIME: 25s STATUS: riscv64-cross_context_init_stack-fixed
+2026-10-19 17:15:05 hal PASSED: 122 FAILED: 0 TIME: 39s STATUS: x86_64-unaffected
+2026-10-19 17:15:05 hal PASSED: 56 FAILED: 0 TIME: 42s STATUS: aarch64-unaffected
