@@ -1,0 +1,124 @@
+diff --git a/docs/specs/drivers.md b/docs/specs/drivers.md
+index ef163028f..a1fdfaab1 100644
+--- a/docs/specs/drivers.md
++++ b/docs/specs/drivers.md
+@@ -420,3 +420,51 @@ Racy functions:
+ | 5 | Gates | `all` → **931** | debug all 931/931, release all 84/84, selftest 132/132 |
+ 
+ Final: `make build` clean, SIL 3 auditor sign-off, zero ResourceTracker leak deltas, §8 ledger updated.
++
++## 10. Console, input and RTC parity (issue #355)
++
++### 10.1 RTC sources + `available()`/`source_name()` contract
++
++| Arch | Source | Identity | Notes |
++|---|---|---|---|
++| aarch64 | PL031 @ `0x09010000` | `"pl031"` | Signature-probed (PeriphID rev-masked), RTCEN started, boot-mapped 2 MiB leaf; always available by construction. |
++| riscv64 | Goldfish @ `0x101000` (DTB `google,goldfish-rtc`) | `"goldfish"` | HIGH/LOW/HIGH latch (bound 8, warn-once, never panic); plausibility floor 1e9 s; 4 KiB identity page (boot.S L2[0] → L3). |
++| riscv64 fallback | mtime / 10 MHz | `"mtime-fallback"` | Uptime, epoch 1970 (documented, NOT wall clock). Loud WARN + dmesg at boot, never panic. |
++
++`available() == false` ⇒ `read_seconds()` is the uptime fallback.
++PL031 RTCDR is one 32-bit seconds counter (no latch, no tear).
++Goldfish TIME is nanoseconds (`read_seconds` divides by 1e9).
++Never assert host proximity (goldfish may carry a fixed device
++offset; TCG wall is unenforceable — #319/#384).
++
++### 10.2 riscv boot mapping note
++
++`L0[0]` is a set of explicit leaves (virtio-mmio, PLIC, UART, ECAM
++range, one 4 KiB RTC page), NOT a blanket identity map. A 2 MiB leaf
++at `L2[0]` would map device space at VA 0 and defeat null-deref
++detection — hence the L3 page. `.boot` must still end at
++`0x80207000` (fixed `.text` VMA/LMA contract).
++
++### 10.3 Serial testability + loopback contract
++
++- PL011 snapshot (`FR/CR/LCR_H/IBRD/FBRD/IMSC`): read-only observers;
++  `init()` writes CR `0x301`, LCR_H `0x70`, IBRD 26, FBRD 3, IMSC 0.
++  PL011 has **no** loopback mode — never fabricate one.
++- riscv 16550: snapshot (`IER/LCR/MCR/LSR`) + raw MCR/drain accessors;
++  SBI owns TX (divisor never reprogrammed); IER is never written
++  (RX is polled). Loopback = MCR bit 4, debug-build only, quiesced
++  (drain before/after), unconditionally restored, no logging and no
++  asserts inside the window (an abort would strand LOOP and silence
++  the console suite-wide).
++
++### 10.4 Decoder contract + ordering rule
++
++Normalization: CR/LF → `\n`, BS/DEL → `\b`, TAB → `\t`, NUL dropped,
++control (`0x01–0x1F`) and high (`0x80–0xFF`) bytes verbatim (UTF-8
++pass-through; a UART has no modifier channel — Ctrl arrives as the
++byte itself, never sticky state). Static SPSC ring (256) + drop
++counter; single producer (shell pump or harness inject); polling
++only. Ordering at `shell_try_get_key_impl`: decoder (pump + ring)
++first on aarch64/riscv64, raw Serial poll as fail-open fallback,
++then iocd, then the hardware ring. `Terminal::readline` has no pump
++(no second UART consumer).
+diff --git a/docs/specs/scheduler.md b/docs/specs/scheduler.md
+index 735ecf9f4..598668a87 100644
+--- a/docs/specs/scheduler.md
++++ b/docs/specs/scheduler.md
+@@ -303,3 +303,5 @@ beyond one placement store:
+   reap `terminated` lines (this file's `fb_terminated_line`).
+ - Serial-only by default: DEBUG/WARN internals, per-tick traces,
+   suppressed runs. A line earns an fb mirror by being user-actionable.
++- Console **input** and RTC source contracts live in `docs/specs/drivers.md`
++  §10 (issue #355): decoder-first ordering, Goldfish/PL031/mtime sources.
+diff --git a/prompts/AGENTS-KERNEL-BRIEFING.md b/prompts/AGENTS-KERNEL-BRIEFING.md
+index 6488e2997..c85310ba5 100644
+--- a/prompts/AGENTS-KERNEL-BRIEFING.md
++++ b/prompts/AGENTS-KERNEL-BRIEFING.md
+@@ -172,6 +172,7 @@ make execute-test x86 release selftest    # CI gate
+ 18. **riscv64 SPP is stale for nested traps** — it records trapped-from, so a nested S-tick inside a U-handler takes the U path over the live frame. `csrci sstatus, 2` as the first trap insn (needs no scratch) forbids nesting, making SPP provably fresh; `sret` restores SIE from SPIE so U-ticks survive (issue #206, closes #219 entry aspect; return-window aspect still open).
+ 19. **TCG wall-clock variance is a known limitation, not a kernel bug** — under QEMU TCG the PIT/APIC/bus/TSC virtual clocks diverge from each other and from host wall (ns up to ~4x fast, ticks ~0.8x wall, cal 250–670 MHz across boots; issue #359, decided DOCUMENT): no boot scalar or tick-servo can be wall-true for all regimes (no sub-second in-guest wall reference; workload-dependent TSC rate). Kernel timeouts are self-consistent (single-domain). Accuracy gate is KVM/HW; TCG `hrt_wall_accuracy_bound` warn-skips on hypervisor. `OVERALL_CAP_S` stays 3600 (not re-tightened without proof). Suite summaries carry `TSC_CYCLES` (TSC never rewinds, unlike snapshot-rewound `ticks_`) for host-side analysis. Per-arch (#384, 2026-10-19): aarch64 (cntpct_el0 @ 62.5 MHz) and riscv64 (rdtime @ 10 MHz) show the same TCG unenforceability (wall bound +28%/+27.6% over, strict assert fails where x86 warn-skips — no CPUID hypervisor equivalent off-x86, QE-owned skip design); bare metal is the only quality gate on all arches, no TCG accuracy enforcement anywhere. `timing_core` off-x86 is blocked by the #356 task-spawn fault (ELR/sepc=0 at first test-task spawn, daemons degraded).
+ 20. **Off-x86 IRQ/timer contracts (issue #349)** — PLIC S-mode context is 1 (`0x0C002080` enable / `0x0C201000` threshold; M-context 0 belongs to OpenSBI, never program it); GICv2 SPIs need ITARGETSR=CPU0 (reset targets are not CPU0) and ICFGR edge only for virtio-mmio (48–79); version from GICD_PIDR2, never TYPER[15:11]. Timer `oneshot`/`periodic` args are coarse ticks at `BootParams::timer_hz` (absolute CVAL/SBI deadlines internally); `remaining()` is coarse ceil gated on the enable bit; riscv64 `remaining*` are hard 0 by S-mode hardware constraint.
++21. **Console/RTC/input parity (issue #355)** — riscv RTC is goldfish (`google,goldfish-rtc`) when the DTB provides it, mtime uptime fallback (epoch 1970) otherwise — check `RTC::source_name()`; `L0[0]` on riscv is explicit leaves plus one 4 KiB RTC page, **not** a blanket identity map (VA 0 still faults); console input on aarch64/riscv flows decoder-first (`Keyboard::pump_serial` + ring) then raw Serial; PL011 has no loopback mode (riscv MCR bit 4 only, debug-only, restore unconditionally).
+ 
+ ## 13. Enforcement Rules (MANDATORY — violations halt and require human input)
+ 
+diff --git a/prompts/LEARNINGS.md b/prompts/LEARNINGS.md
+index f1adc13ce..1f87bf6f1 100644
+--- a/prompts/LEARNINGS.md
++++ b/prompts/LEARNINGS.md
+@@ -38,6 +38,7 @@
+ - Reap stray QEMUs after every session (tool-killed interactive runs survive reparented, burning ~25% CPU each, masquerading as load spells); recipe-only Makefile edits don't rebuild cpio/ISO — rm the artifacts to force repack.
+ - Interactive user-task tests need a scripted handoff (`source`: loadelf/sleep/runelf/sleep — `fg` is a stub, /dev/tty shared); TCP-serial output before connect is lost (send CR first for a fresh prompt); convict user-space faults by pristine-binary control experiment, never by re-reading the derivation.
+ - Cross-arch: link all three arches for shared-header edits; arch-guard test bodies; riscv low half is identity/MMIO (clone copies L0[0]); aarch64 needs HHDM aliases + 48-bit phys masks; S-mode cannot touch M-mode CSRs; riscv64 never folds __builtin_memcmp (no freestanding provider) — manual compares in tests.
++- QEMU `-kernel` passes no DTB on aarch64 (x0==0, DTB-primary needs a slot-table fallback); QEMU virtio-mmio is legacy v1 (PFN/Align queues); PCI addrs are uint64_t (ECAM HHDM truncates to 0x10000004 in u32); release-boot silence is never assumed working — prove it (#355).
+ - Snapshot restore: release every capability-registry `KernelObject` pin (FrameUserMap/MmioUserMap/PagerRegistry) BEFORE `MemPool::restore_pool_data()` byte-rewinds block data — release-after-rewind over-releases (L→0) and disposes a cap the restored CSpace still points at (slot occupied/gen-matched but `acquire()` reads 0xDD poison = #320); a lazy-mapping pre-snapshot daemon is the minimal trigger.
+ - IPC-quiescence: the suite snapshot must be taken with EVERY task inbox empty — the per-task `MessageQueue` is embedded in the TCB and byte-captured, so an in-flight message replays on every `snapshot_create`/restore (#321). Convict/dismiss a "duplicate IPC" theory with counters (distinctive-type sends in `IPC::send` vs receipts in `IPC::recv`) before touching the queue; when a bug is non-reproducible, ship a structural guarantee + forward invariant test, not a fabricated A/B.
+ - Harness stall handling: retry a class ONCE on the zero-S-line stall signatures only (`RESULT: TIMEOUT`/`QEMU_EXIT`), never on a genuine test FAIL; mark `STALL-RECOVERED` only when the retry actually PASSes (guard the recovered tag on both the PASS arm and `nfail==0`), `STALL-UNRECOVERED` otherwise; size the outer per-class timeout for the doubled worst case (#322). Distinguish "no summary because it stalled" from "no summary because it crashed" before retrying.
+@@ -1384,3 +1385,8 @@
+ - **Learned:** (1) EFER is per-CPU: the AP trampoline set LME only, so any NX kernel page (#376) RSVD-faulted the AP with no IDT yet (#PF e=8 -> #GP -> #DF -> triple -> -no-reboot exit 0, zero S-lines). Convict with QEMU -d int (fault chain + EFER=0x500 NXE-clear) + GDB ap_main tracing, not by re-reading the scheduler. (2) A class with 0 tests exits fast via auto-shutdown, so the harness (debugcon watcher) can only see it if the notice reaches debugcon — Logger routes to COM1 while the suite is inactive; mirror explicitly. (3) QEMU rejects `-mon none` (no such chardev) but accepts `-monitor none`; the file-backend rewrite must use the proven spelling. (4) Python 3.4+ sets CLOEXEC on os.open (PEP 446): a double-fork daemon that dup2s a Python-opened log then execvps runs with CLOSED stdout/stderr — use os.set_inheritable first, or the gate spews EBADF and mangles test-history. (5) Mangled test-history lines from your own broken run may be excised by line (evidence preserved in the gate log); never fabricate replacements — the clean re-run re-records.
+ - **Adapted:** trampoline LME|NXE (#380, one imm32, no layout shift); run_filtered debugcon mirror (#381); QEMU_FLAGS_FILE -> `-monitor none` (#382); issues closed with evidence + audit-pending note; v0.5.4 released (debug 26/26 1836/1836, release 24/24 89/89).
+ - **Style re-surface:** BSP/AP register parity asserted at the bring-up site (comment cites both sides); harness-visible notices go to the harness-watched stream; build-system rewrites need a live q35 + empty-class proof, not just base classes.
++
++### #355 slices A–C — console/RTC/input parity (kernel track landed, QE H3–H6 pending)
++- **Learned:** (1) QEMU `-kernel` on aarch64 passes NO DTB (GDB-proven x0==0 at higherhalf_entry + full-RAM FDT-magic sweep empty) — DTB-primary designs need an architected slot-table fallback on that path (same board-knowledge class as UART/GIC maps); riscv gets its DTB via a1 and the DTB path works there. (2) QEMU `virt` virtio-mmio exposes the LEGACY (v1) interface (Version reads 1 — GDB-proven on live slots): queue setup is GuestPageSize/Align/PFN with one contiguous chunk, not Ready/addresses; submit/notify/ISR paths are version-independent. (3) `uint32_t addr = pci_make_addr(...)` truncates the aarch64 ECAM HHDM VA to 0x10000004 and faults — FAR-proof by low32 match; the callee takes uint64_t, x86 ports fit either way. (4) PL031 PeriphID carries a revision nibble (QEMU rev 1 → 0x00141031): mask PID2[7:4] for identity. (5) `fdt_first_child` returned NOTFOUND for any parent with properties (QEMU root has cells/compatible first) — skip PROP/NOP to the first BEGIN_NODE. (6) RISC-V `sd` immediate is 12-bit: L3[0x101] needs explicit address arithmetic (0x808 > 2047). (7) Release aarch64 boots silent and never schedules (stuck at vectors, zero reschedules) — pre-VBAR fault or pre-scheduler hang, NOT #355 code by construction (nothing new runs before arch init); filed as #393 under #357 (release gates). Debug E2E is proven both arches; release E2E follows the boot fix.
++- **Adapted:** drivers.md §10 (RTC/input/serial contracts) + scheduler.md §11 pointer + BRIEFING gotcha #22; HAL `available()`/`source_name()`; Goldfish latch + mtime loud-fallback; decoder-first ordering at `shell_try_get_key_impl`; H1/H2 test edits (dev-owned, authorized); #391/#392/#393 filed with mechanism proofs.
++- **Style re-surface:** single-sourced geometry shared by allocator + fit check (virtio_legacy_used_off); end-contained window checks (base+size, overflow-safe); `#if`-absence (not silent no-op) for release-cut features; test-history rows stamped per-run from log mtimes, never batched.
+diff --git a/prompts/STATE.md b/prompts/STATE.md
+index 7446d05af..716c8f8f5 100644
+--- a/prompts/STATE.md
++++ b/prompts/STATE.md
+@@ -6,7 +6,7 @@
+ ## Active Summary
+ ### Objective
+ - **ACTIVE (2026-10-20):** #353 FPU/SIMD parity — step 1b LANDED (`c0ee9de71`, APPROVED clean): eager switch in on_context_switch + frame FS (create/loader/exec) + ensure-enabled + S3 cures (availability gate, doc tail); riscv panic convicted+fixed (sret-restored FS=0); GDB gen evidence; QE task_fpu handoff posted. Remaining: QE groups + close.
+-- **ACTIVE (2026-10-20):** #350 virtio-MMIO parity — ALL THREE SLICES LANDED, awaiting final audit/commit: A (dormant transport + DTB plumbing, `edc83b1de`), B (MMIO discovery + blk live, `b7b803ab2` — legacy v1 interface, slot fallback, dma ECAM-addr fix), C (net live both arches + docs). Gates: x86 drivers 107/107 + storage 167/167 + selftest 148/148; riscv drivers 56/58 + storage 166/167; aarch64 drivers 57/58 + storage 166/167 + arch 33/33. Residuals filed: #391 (timing-marginal dma + virtio-timeout), #392 (procfs lseek).
++- **ACTIVE (2026-10-20):** #355 console/RTC/input parity — kernel track COMPLETE (all 4 slices landed, reviewed, pushed): A RTC (PL031+Goldfish+H1/H2), B serial observers, C decoder+ordering, D E2E+docs+feedback. Gates: x86 hal_rtc 2/2 + datetime 6/6 + serial 7/7 + shell 20/20; aarch64 hal_rtc 1/1 + arch 33/33; riscv hal_rtc 1/1 + arch 24/6 (stash-proven baseline); DEBUG version-E2E proven both arches (expect). Release E2E blocked on #393 (silent release boot, #357 scope). QE owns H3-H6 + #391/#392.
+ - **OPEN (2026-10-20):** #352 MMU/VMM/TLB parity — KERNEL TRACK COMPLETE (APPROVED): remaining QE test ports (pml4_clone/pt_merge, proc_elf EM, shootdown-hook invocation) + known riscv reds (#387, #388 test-side).
+ - **DONE (2026-10-19):** #385 HHDM-rot + exec_slots hang CLOSED (audited APPROVED, pending QE + #387): riscv trap epilogue now validates deferred arms (gen-check + validate_pending_switch + abort, x86 mirror) — stale arm to recycled memory no longer resumes foreign context with stale current (U-fault killed init → hang). Gates: arch_riscv64 24/30 + no hang ×3 (5 fails = QE fixture/PLIC updates, 1 = #387 fork follow-up), x86 elf_loader/selftest green, 3-arch link green. H1 (image-range creep) + tests 6/7 (M-vs-S skew, OpenSBI M-threshold=7 boot state) convicted as QE test updates. FEEDBACK entry in LEARNINGS.
+ - **DONE (2026-10-19):** #349 IRQ + timer parity CLOSED (audited APPROVED): GICv2 full init (PIDR2 version, 8 enable banks, EOI ownership, spurious no-EOI, storm limiter) + CVAL/SBI absolute deadlines with coarse-tick units + CTL-gated remaining + PLIC S-context + IDT 64→256 + docs §6 + gotcha #20. Gates: aarch64 6 classes green, riscv64 5+1 (known QE test-side), x86 all green + selftest 148/148, x86_64 bit-identical. arch_riscv64 HHDM rot filed as #385 (out of scope). FEEDBACK entry in LEARNINGS.
+diff --git a/src/kernel/arch/riscv64/serial.cpp b/src/kernel/arch/riscv64/serial.cpp
+index 8d96d0a27..ca96a53eb 100644
+--- a/src/kernel/arch/riscv64/serial.cpp
++++ b/src/kernel/arch/riscv64/serial.cpp
+@@ -36,7 +36,6 @@ static constexpr uint64_t RISCV_UART_LCR_OFF = 3;
+ static constexpr uint64_t RISCV_UART_MCR_OFF = 4;
+ static constexpr uint64_t RISCV_UART_LSR_OFF = 5;
+ static constexpr uint8_t RISCV_UART_LSR_DATA_READY = 0x01;
+-static constexpr uint8_t RISCV_UART_MCR_LOOP = 0x10;
+ static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
+ 
+ /// @brief Number of characters written to the console since boot.

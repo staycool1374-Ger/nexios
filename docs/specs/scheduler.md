@@ -303,3 +303,5 @@ beyond one placement store:
   reap `terminated` lines (this file's `fb_terminated_line`).
 - Serial-only by default: DEBUG/WARN internals, per-tick traces,
   suppressed runs. A line earns an fb mirror by being user-actionable.
+- Console **input** and RTC source contracts live in `docs/specs/drivers.md`
+  §10 (issue #355): decoder-first ordering, Goldfish/PL031/mtime sources.

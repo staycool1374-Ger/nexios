@@ -36,7 +36,6 @@ static constexpr uint64_t RISCV_UART_LCR_OFF = 3;
 static constexpr uint64_t RISCV_UART_MCR_OFF = 4;
 static constexpr uint64_t RISCV_UART_LSR_OFF = 5;
 static constexpr uint8_t RISCV_UART_LSR_DATA_READY = 0x01;
-static constexpr uint8_t RISCV_UART_MCR_LOOP = 0x10;
 static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
 
 /// @brief Number of characters written to the console since boot.

@@ -420,3 +420,51 @@ Racy functions:
 | 5 | Gates | `all` → **931** | debug all 931/931, release all 84/84, selftest 132/132 |
 
 Final: `make build` clean, SIL 3 auditor sign-off, zero ResourceTracker leak deltas, §8 ledger updated.
+
+## 10. Console, input and RTC parity (issue #355)
+
+### 10.1 RTC sources + `available()`/`source_name()` contract
+
+| Arch | Source | Identity | Notes |
+|---|---|---|---|
+| aarch64 | PL031 @ `0x09010000` | `"pl031"` | Signature-probed (PeriphID rev-masked), RTCEN started, boot-mapped 2 MiB leaf; always available by construction. |
+| riscv64 | Goldfish @ `0x101000` (DTB `google,goldfish-rtc`) | `"goldfish"` | HIGH/LOW/HIGH latch (bound 8, warn-once, never panic); plausibility floor 1e9 s; 4 KiB identity page (boot.S L2[0] → L3). |
+| riscv64 fallback | mtime / 10 MHz | `"mtime-fallback"` | Uptime, epoch 1970 (documented, NOT wall clock). Loud WARN + dmesg at boot, never panic. |
+
+`available() == false` ⇒ `read_seconds()` is the uptime fallback.
+PL031 RTCDR is one 32-bit seconds counter (no latch, no tear).
+Goldfish TIME is nanoseconds (`read_seconds` divides by 1e9).
+Never assert host proximity (goldfish may carry a fixed device
+offset; TCG wall is unenforceable — #319/#384).
+
+### 10.2 riscv boot mapping note
+
+`L0[0]` is a set of explicit leaves (virtio-mmio, PLIC, UART, ECAM
+range, one 4 KiB RTC page), NOT a blanket identity map. A 2 MiB leaf
+at `L2[0]` would map device space at VA 0 and defeat null-deref
+detection — hence the L3 page. `.boot` must still end at
+`0x80207000` (fixed `.text` VMA/LMA contract).
+
+### 10.3 Serial testability + loopback contract
+
+- PL011 snapshot (`FR/CR/LCR_H/IBRD/FBRD/IMSC`): read-only observers;
+  `init()` writes CR `0x301`, LCR_H `0x70`, IBRD 26, FBRD 3, IMSC 0.
+  PL011 has **no** loopback mode — never fabricate one.
+- riscv 16550: snapshot (`IER/LCR/MCR/LSR`) + raw MCR/drain accessors;
+  SBI owns TX (divisor never reprogrammed); IER is never written
+  (RX is polled). Loopback = MCR bit 4, debug-build only, quiesced
+  (drain before/after), unconditionally restored, no logging and no
+  asserts inside the window (an abort would strand LOOP and silence
+  the console suite-wide).
+
+### 10.4 Decoder contract + ordering rule
+
+Normalization: CR/LF → `\n`, BS/DEL → `\b`, TAB → `\t`, NUL dropped,
+control (`0x01–0x1F`) and high (`0x80–0xFF`) bytes verbatim (UTF-8
+pass-through; a UART has no modifier channel — Ctrl arrives as the
+byte itself, never sticky state). Static SPSC ring (256) + drop
+counter; single producer (shell pump or harness inject); polling
+only. Ordering at `shell_try_get_key_impl`: decoder (pump + ring)
+first on aarch64/riscv64, raw Serial poll as fail-open fallback,
+then iocd, then the hardware ring. `Terminal::readline` has no pump
+(no second UART consumer).
