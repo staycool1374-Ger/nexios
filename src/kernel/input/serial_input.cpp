@@ -39,7 +39,7 @@ namespace {
 static SPSCRing<char, kRingSize> s_ring;
 static size_t s_dropped = 0;
 static bool s_loopback_active = false;
-#if defined(CONFIG_ARCH_RISCV64)
+#if defined(CONFIG_DEBUG) && defined(CONFIG_ARCH_RISCV64)
 static uint8_t s_mcr_saved = 0;
 #endif
 

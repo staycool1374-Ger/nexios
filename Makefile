@@ -773,13 +773,26 @@ endif
 # RELEASE_CXXFLAGS, expanded per-make-parse with that make's CXX) and cleans
 # unless the tree already holds release objects for this ARCH (arch switches
 # already self-clean via the parse-time ARCH_STAMP block above).
-# ------------------------------------------------------------------------------
+#
+# Issue #357 B6: -j safety via recursive make (prerequisite order is NOT
+# guaranteed under parallel make — a concurrent clean-vs-link race; the
+# S3 in audit report-20260929T183844Z). Each step completes before the
+# next starts. The riscv release BIN is separate from the debug BIN
+# (KERNEL_RISCV_BIN, rule 416) so the two never alias.
+KERNEL_RISCV_RELEASE_BIN := build/kernel-riscv64-release.bin
 release-elf: CXXFLAGS += $(RELEASE_CXXFLAGS)
-# Prerequisite order is load-bearing (serial make builds left-to-right, same
-# pattern as `profiling: clean $(OBJ) ...` below): the stamp check cleans
-# first, then the registry header regenerates (clean deletes it), then the
-# kernel links.  $(KERNEL) itself also depends on $(TEST_REGISTRY_GEN).
-release-elf: check-release-stamp $(TEST_REGISTRY_GEN) $(KERNEL)
+release-elf:
+	$(MAKE) --no-print-directory check-release-stamp ARCH=$(ARCH)
+	$(MAKE) --no-print-directory $(KERNEL) $(TEST_REGISTRY_GEN) ARCH=$(ARCH) CXXFLAGS="$(CXXFLAGS)"
+	$(MAKE) --no-print-directory _release-elf-finalize ARCH=$(ARCH)
+_release-elf-finalize:
+	@printf '%s\n' "$$(cat initrd/tests/test-config.txt 2>/dev/null || printf none)" > build/.baked-test-config-$(ARCH)
+	if [ "$(ARCH)" = "riscv64" ]; then \
+	    $(OBJCOPY) -O binary $(KERNEL) $(KERNEL_RISCV_RELEASE_BIN); \
+	    printf '  %-7s %s\n' 'BIN' '$(KERNEL_RISCV_RELEASE_BIN)'; \
+	fi; \
+	printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $(KERNEL)) bytes"; \
+	printf '  %-7s %s\n' 'DONE' "Release ELF: $(KERNEL) (tests: $$(cat build/.baked-test-config-$(ARCH)))"
 # Release-build stamp (issue #246): clean on same-arch build-type switch.
 # Inverse-compatible: a later `make debug` sees stamp != debug and cleans via
 # the untouched check-build-stamp branch (a); `make release` always cleans.
@@ -1027,6 +1040,28 @@ run-release-mode:
 # then forward to the private _do_execute_test target using NAMED variables.
 # This avoids re-parsing MAKECMDGOALS inside the worker and removes any
 # ambiguity with the %:: catch-all / default `all` goal.
+#
+# Per-arch gate lists (issue #357 Slice B): filled ONLY from measured
+# green rows (B1 census). A class enters on FAILED: 0; exclusion cites
+# the red row + issue. No blind wiring, no hand sums.
+# x86_64 debug = the 26 script classes (exact match, control).
+TEST_FULL_CLASSES_x86_64 := core_basic core_sync core_sched core_task core_memory core_syscall core_tracing ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu ahci_live iommu_live testrunner
+# x86_64 release = measured 24/24 (ahci/iommu are DEBUG_ONLY-skipped).
+TEST_FULL_CLASSES_x86_64_release := core_basic core_sync core_sched core_task core_memory core_syscall core_tracing ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu testrunner
+# aarch64 debug = B1 green aggregates + testrunner (excluded: core_sched
+# STALL, core_memory PANIC, capability STALL, proc_elf 43/22, storage
+# #392, servers 60/6, drivers #391, deadline PANIC, ui fb-gap, bench
+# 27/1, task_fpu empty, smp*/ahci/iommu x86-only).
+TEST_FULL_CLASSES_aarch64 := core_basic core_sync core_task core_syscall core_tracing ipc hal logging_debug random task_tcb_log testrunner
+# riscv64 debug = owner-mandated base + measured-green extensions
+# (excluded: drivers #391x2, storage #392, proc_elf, ui, hal #388,
+# selftest reds; arch_riscv64 known-red until #387+QE).
+TEST_FULL_CLASSES_riscv64 := arch_riscv64 scheduler_zombie configuration_build memory_vmm memory_page_tables timing_core hal_timer irq_early_std
+SELFTEST_CLASSES_x86_64 := selftest
+SELFTEST_CLASSES_aarch64 := arch_aarch64 configuration_build hal hal_timer irq_early_std memory_page_tables memory_vmm timing_core
+SELFTEST_CLASSES_riscv64 := configuration_build hal_timer irq_early_std memory_page_tables memory_vmm timing_core scheduler_zombie
+TEST_FULL_CLASSES := $(TEST_FULL_CLASSES_$(ARCH))
+SELFTEST_CLASSES := $(SELFTEST_CLASSES_$(ARCH))
 execute-test:
 	@: $(eval _ae := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))) $(eval _ARCH := $(call _map_arch,$(word 1,$(_ae)))) $(eval _BUILD := $(or $(BUILD),$(word 2,$(_ae)))) $(eval _CLASS := $(or $(CLASS),$(word 3,$(_ae))))
 	@if [ -z "$(_ARCH)" -o -z "$(_BUILD)" -o -z "$(_CLASS)" ]; then \
@@ -1047,8 +1082,14 @@ _do_execute_test:
 	case "$(BUILD)" in debug|release) ;; *) echo "ERROR: build must be 'debug' or 'release'"; exit 1;; esac; \
 	mkdir -p initrd/tests; \
 	_class_file=$(CLASS); \
-	[ "$${_class_file}" = "selftest" ] && _class_file=safe; \
-	printf '%s\n' "$${_class_file}" > initrd/tests/test-config.txt; \
+	if [ "$${_class_file}" = "selftest" ]; then \
+	    if [ "$(ARCH)" = "x86_64" ]; then \
+	        _class_file=safe; \
+	    else \
+	        printf '%s\n' $(SELFTEST_CLASSES) > initrd/tests/test-config.txt; \
+	    fi; \
+	fi; \
+	[ "$${_class_file}" != "selftest" ] && printf '%s\n' "$${_class_file}" > initrd/tests/test-config.txt; \
 	if [ "$(CLASS)" = "iommu_live" ] && [ -z "$(OVMF_CODE)" ]; then \
 	    echo "ERROR: iommu_live requires OVMF_CODE (edk2-x86_64-code.fd)"; exit 1; fi; \
 	if [ "$(CLASS)" = "ahci_live" ] && [ -z "$(OVMF_CODE)" ]; then \
@@ -1062,16 +1103,23 @@ _do_execute_test:
  	        $(MAKE) release ARCH=$(ARCH) || exit 1; \
 	    elif [ "$(BUILD)" = "release" ]; then \
 	        $(MAKE) release-elf ARCH=$(ARCH) || exit 1; \
-	        if [ "$(ARCH)" = "riscv64" ]; then \
-	            $(MAKE) $(KERNEL_RISCV_BIN) ARCH=$(ARCH) KERNEL_DEBUG=$(KERNEL) || exit 1; \
-	        fi; \
 	    else \
 	        $(MAKE) debug ARCH=$(ARCH) || exit 1; \
 	    fi; \
+	    if [ "$(BUILD)" = "release" ] && [ "$(ARCH)" != "x86_64" ]; then \
+	        _baked="$$(cat build/.baked-test-config-$(ARCH) 2>/dev/null)"; \
+	        if [ "$${_baked}" != "$(CLASS)" ]; then \
+	            echo "ERROR: release ELF baked for '$${_baked}' but CLASS=$(CLASS) — stale artifact, rebuild via release-elf"; exit 1; \
+	        fi; \
+	    fi; \
 	else \
-	    $(MAKE) $(BUILD) ARCH=$(ARCH) || exit 1; \
+	    if [ "$(BUILD)" = "release" ] && [ "$(ARCH)" != "x86_64" ]; then \
+	        $(MAKE) release-elf ARCH=$(ARCH) || exit 1; \
+	    else \
+	        $(MAKE) $(BUILD) ARCH=$(ARCH) || exit 1; \
+	    fi; \
 	fi; \
-	true $(if $(filter release,$(BUILD)),$(eval DEBUG_ISO := $(RELEASE_ISO)))$(if $(and $(filter release,$(BUILD)),$(filter aarch64,$(ARCH))),$(eval QEMU_FLAGS := $(subst $(KERNEL_DEBUG),$(KERNEL),$(QEMU_FLAGS)))); \
+	true $(if $(filter release,$(BUILD)),$(eval DEBUG_ISO := $(RELEASE_ISO)))$(if $(and $(filter release,$(BUILD)),$(filter aarch64,$(ARCH))),$(eval QEMU_FLAGS := $(subst $(KERNEL_DEBUG),$(KERNEL),$(QEMU_FLAGS))))$(if $(and $(filter release,$(BUILD)),$(filter riscv64,$(ARCH))),$(eval QEMU_FLAGS := $(subst $(KERNEL_RISCV_BIN),$(KERNEL_RISCV_RELEASE_BIN),$(subst $(KERNEL_DEBUG),$(KERNEL),$(QEMU_FLAGS))))); \
 	if [ "$(CLASS)" = "none" ]; then \
 	    if command -v $(QEMU_SYSTEM) >/dev/null 2>&1; then \
 	        printf '  %-7s %s\n' 'QEMU' 'Starting (Ctrl+A then X to exit)…'; \
@@ -1090,10 +1138,23 @@ _do_execute_test:
 # structural aggregate plus the 4 standalone specials, one reboot per
 # class, recording PASS/FAIL per class into test-history.txt.
 # Usage: make test-full [x86_64] [debug]  (arch/build optional positionals)
+# Per-arch lists come from TEST_FULL_CLASSES_* (issue #357); release uses
+# the _release vars when present and errors loudly otherwise (never the
+# debug list on a release build).
 test-full:
 	@: $(eval _ae := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))) $(eval _ARCH := $(or $(filter $(SUPPORTED_ARCHS),$(call _map_arch,$(word 1,$(_ae)))),$(ARCH),x86_64)) $(eval _BUILD := $(or $(BUILD),$(word 2,$(_ae)),debug))
 	@case "$(_BUILD)" in debug|release) ;; *) echo "ERROR: build must be 'debug' or 'release'"; exit 1;; esac; \
-	bash scripts/run_all_classes.sh $(_ARCH) $(_BUILD)
+	if [ "$(_BUILD)" = "release" ]; then \
+	    if [ -z "$(TEST_FULL_CLASSES_$(_ARCH)_release)" ]; then \
+	        echo "ERROR: no measured release gate list for ARCH=$(_ARCH) (see #357)"; exit 1; \
+	    fi; \
+	    NEXIOS_TEST_CLASSES="$(TEST_FULL_CLASSES_$(_ARCH)_release)" bash scripts/run_all_classes.sh $(_ARCH) $(_BUILD); \
+	else \
+	    if [ -z "$(TEST_FULL_CLASSES_$(_ARCH))" ]; then \
+	        echo "ERROR: no measured gate list for ARCH=$(_ARCH) (see #357)"; exit 1; \
+	    fi; \
+	    NEXIOS_TEST_CLASSES="$(TEST_FULL_CLASSES_$(_ARCH))" bash scripts/run_all_classes.sh $(_ARCH) $(_BUILD); \
+	fi
 
 debug-test:
 	@: $(eval _ae := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))) $(eval _ARCH := $(call _map_arch,$(word 1,$(_ae)))) $(eval _BUILD := $(word 2,$(_ae))) $(eval _CLASS := $(word 3,$(_ae))) $(eval _GDB := $(word 4,$(_ae)))

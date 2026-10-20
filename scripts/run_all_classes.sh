@@ -20,11 +20,19 @@ BUILD="${2:-debug}"
 # end and deterministic log ordering.
 CLASSES="core_basic core_sync core_sched core_task core_memory core_syscall core_tracing ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu ahci_live iommu_live testrunner"
 
+# Issue #357: the Makefile owns the per-arch gate lists (measured rows
+# only) and passes them via NEXIOS_TEST_CLASSES; the script default
+# below is the x86_64 control list. X86_ONLY/DEBUG_ONLY stay as defense.
+if [ -n "${NEXIOS_TEST_CLASSES:-}" ]; then
+    CLASSES="$NEXIOS_TEST_CLASSES"
+fi
+
 # Issue #207: riscv64 runs its own green-evidenced class set (arch_riscv64
 # 24/24 incl. full daemon boot, scheduler_zombie 5/5).  The generic
 # aggregates are not gated on riscv64 (no evidence yet — wiring them in
 # blind would red the gate for unrelated pre-existing gaps).
-if [ "$ARCH" = "riscv64" ]; then
+# Issue #357: skipped when the Makefile passes its measured list.
+if [ "$ARCH" = "riscv64" ] && [ -z "${NEXIOS_TEST_CLASSES:-}" ]; then
     CLASSES="arch_riscv64 scheduler_zombie"
 fi
 
@@ -174,5 +182,5 @@ for c in $RUN; do
     printf '[%s] %s\n' "$verdict" "$row"
 done
 
-printf '\nSUMMARY: total=%d ok=%d fail=%d\n' "$total" "$passed_classes" "$failed_classes" >> test-history.txt
-printf '\n=== SUMMARY total=%d ok=%d fail=%d ===\n' "$total" "$passed_classes" "$failed_classes"
+printf '\nSUMMARY: total=%d ok=%d fail=%d ARCH=%s\n' "$total" "$passed_classes" "$failed_classes" "$ARCH" >> test-history.txt
+printf '\n=== SUMMARY total=%d ok=%d fail=%d ARCH=%s ===\n' "$total" "$passed_classes" "$failed_classes" "$ARCH"
