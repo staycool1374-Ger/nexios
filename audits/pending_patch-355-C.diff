@@ -1,0 +1,386 @@
+diff --git a/src/kernel/arch/hal/keyboard.hpp b/src/kernel/arch/hal/keyboard.hpp
+index eed83d4db..2b8c14753 100644
+--- a/src/kernel/arch/hal/keyboard.hpp
++++ b/src/kernel/arch/hal/keyboard.hpp
+@@ -102,18 +102,24 @@ class Keyboard {
+ /// @brief No-op keyboard stub for architectures without PS/2.
+ class Keyboard {
+   public:
+-    static void init() {
+-    }
+-    static void handle_irq() {
+-    }
+-    static bool getchar(char &) {
+-        return false;
+-    }
+-    static size_t read(char *, size_t) {
+-        return 0;
+-    }
+-    static void flush() {
+-    }
++    static void init();
++    /// @brief Contract-parity no-op — no UART IRQ exists on these
++    ///        arches (issue #355: polling decoder instead).
++    static void handle_irq();
++    /// @brief Pop one decoded key (non-blocking).
++    /// @param[out] c Output character.
++    /// @return true if a key was available.
++    static bool getchar(char &c);
++    /// @brief Pop up to @p len decoded keys (non-blocking).
++    static size_t read(char *buf, size_t len);
++    /// @brief Discard all buffered keys.
++    static void flush();
++    /// @brief Pump the UART into the decoder (shell input path).
++    /// @return Bytes pushed.
++    static size_t pump_serial();
++    /// @brief Inject raw serial bytes (harness/test path).
++    /// @return Bytes accepted.
++    static size_t inject_serial(const char *bytes, size_t len);
+     static bool is_shifted() {
+         return false;
+     }
+diff --git a/src/kernel/input/serial_input.cpp b/src/kernel/input/serial_input.cpp
+new file mode 100644
+index 000000000..22d39cc88
+--- /dev/null
++++ b/src/kernel/input/serial_input.cpp
+@@ -0,0 +1,206 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file serial_input.cpp
++/// @brief Serial-injected key decoder (issue #355). See serial_input.hpp.
++/// Empty TU on x86_64 (the i8042 Keyboard owns input there).
++
++#include <kernel/input/serial_input.hpp>
++
++#if !defined(CONFIG_ARCH_X86_64)
++
++#include <kernel/arch/hal/keyboard.hpp>
++#include <kernel/arch/hal/serial.hpp>
++#include <kernel/nexios_config.h>
++#include <kernel/sync/spsc_ring.hpp>
++
++namespace kernel::input::serial {
++
++namespace {
++
++// Strict SPSC: producer = shell pump / harness inject; consumer =
++// shell/readline/tests. Static storage, no allocation, no locks.
++// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
++static SPSCRing<char, kRingSize> s_ring;
++static size_t s_dropped = 0;
++static bool s_loopback_active = false;
++#if defined(CONFIG_ARCH_RISCV64)
++static uint8_t s_mcr_saved = 0;
++#endif
++
++/// @brief Normalize one raw UART byte into the ring.
++/// NUL is dropped (never a key); DEL becomes backspace; CR/LF both
++/// become newline; control/high bytes pass through verbatim (a UART
++/// has no modifier channel — Ctrl arrives as 0x01-0x1A, never sticky).
++void push_decoded(uint8_t byte) {
++    char out = 0;
++    bool emit = true;
++    if (byte == 0x00) {
++        emit = false; // NUL: dropped, counts below
++    } else if (byte == 0x0D || byte == 0x0A) {
++        out = '\n';
++    } else if (byte == 0x08 || byte == 0x7F) {
++        out = '\b';
++    } else if (byte == 0x09) {
++        out = '\t';
++    } else {
++        out = static_cast<char>(byte);
++    }
++    if (!emit) {
++        ++s_dropped;
++        return;
++    }
++    if (!s_ring.try_push(out))
++        ++s_dropped;
++}
++
++} // namespace
++
++void reset() {
++    s_ring.reset();
++    s_dropped = 0;
++    s_loopback_active = false;
++}
++
++size_t inject(const char *bytes, size_t len) {
++    if (!bytes)
++        return 0;
++    size_t accepted = 0;
++    for (size_t idx = 0; idx < len; ++idx) {
++        size_t before = s_dropped;
++        push_decoded(static_cast<uint8_t>(bytes[idx]));
++        if (s_dropped == before)
++            ++accepted;
++    }
++    return accepted;
++}
++
++size_t pump() {
++    if (s_loopback_active)
++        return 0;
++    size_t pushed = 0;
++    for (size_t idx = 0; idx < kPumpBudget; ++idx) {
++        char byte = 0;
++        if (!arch::Serial::poll_getchar(byte))
++            break;
++        size_t before = s_dropped;
++        push_decoded(static_cast<uint8_t>(byte));
++        if (s_dropped == before)
++            ++pushed;
++    }
++    return pushed;
++}
++
++bool pop(char &out) {
++    return s_ring.try_pop(out);
++}
++
++size_t dropped_count() {
++    return s_dropped;
++}
++
++bool loopback_begin() {
++#if !defined(CONFIG_DEBUG)
++    return false;
++#elif !defined(CONFIG_ARCH_RISCV64)
++    return false;
++#else
++    if (s_loopback_active)
++        return false;
++    uint8_t current = arch::Serial::uart_mcr();
++    if ((current & arch::Serial::UART_MCR_LOOP) != 0)
++        return false; // foreign LOOP bit — not ours to own
++    arch::Serial::uart_mcr_set(
++        static_cast<uint8_t>(current | arch::Serial::UART_MCR_LOOP));
++    if (arch::Serial::uart_mcr() !=
++        static_cast<uint8_t>(current | arch::Serial::UART_MCR_LOOP)) {
++        arch::Serial::uart_mcr_set(current);
++        return false;
++    }
++    s_mcr_saved = current;
++    arch::Serial::uart_drain_rx();
++    s_loopback_active = true;
++    return true;
++#endif
++}
++
++void loopback_end() {
++#if defined(CONFIG_DEBUG) && defined(CONFIG_ARCH_RISCV64)
++    if (!s_loopback_active)
++        return;
++    arch::Serial::uart_mcr_set(s_mcr_saved);
++    s_loopback_active = false;
++    arch::Serial::uart_drain_rx();
++#endif
++}
++
++bool loopback_active() {
++    return s_loopback_active;
++}
++
++bool capture_suspended() {
++    return s_loopback_active;
++}
++
++} // namespace kernel::input::serial
++
++// Non-x86 arch::Keyboard: one-line delegates onto the decoder (issue
++// #355). handle_irq is a contract-parity no-op — no UART IRQ exists on
++// these arches. Modifiers are always false: a UART has no modifier
++// channel.
++namespace arch {
++
++void Keyboard::init() {
++    kernel::input::serial::reset();
++}
++
++void Keyboard::handle_irq() {
++}
++
++bool Keyboard::getchar(char &c) {
++    return kernel::input::serial::pop(c);
++}
++
++size_t Keyboard::read(char *buf, size_t len) {
++    if (!buf)
++        return 0;
++    size_t count = 0;
++    while (count < len) {
++        char c = 0;
++        if (!kernel::input::serial::pop(c))
++            break;
++        buf[count++] = c;
++    }
++    return count;
++}
++
++void Keyboard::flush() {
++    kernel::input::serial::reset();
++}
++
++size_t Keyboard::pump_serial() {
++    return kernel::input::serial::pump();
++}
++
++size_t Keyboard::inject_serial(const char *bytes, size_t len) {
++    return kernel::input::serial::inject(bytes, len);
++}
++
++} // namespace arch
++
++#endif // !CONFIG_ARCH_X86_64
+diff --git a/src/kernel/input/serial_input.hpp b/src/kernel/input/serial_input.hpp
+new file mode 100644
+index 000000000..f07c7a2e1
+--- /dev/null
++++ b/src/kernel/input/serial_input.hpp
+@@ -0,0 +1,76 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file serial_input.hpp
++/// @brief Serial-injected key decoder for architectures without PS/2
++///        (issue #355). A static single-producer ring normalizes UART
++///        bytes into key events: the shell task pumps the UART, the
++///        harness injects bytes directly, consumers pop decoded keys.
++///        Zero allocation, zero locks, polling only — no UART interrupt
++///        exists on these arches and none is enabled here.
++
++#include <types.hpp>
++
++namespace kernel::input::serial {
++
++/// @brief Decoder ring capacity (power of two, SPSC requirement).
++constexpr size_t kRingSize = 256;
++/// @brief Per-pump UART poll budget (bounds one pump call).
++constexpr size_t kPumpBudget = 32;
++
++/// @brief Reset the ring and counters. QUIESCENT-ONLY: never while a
++///        producer or consumer is active (mirrors SPSCRing::reset).
++void reset();
++
++/// @brief Inject raw serial bytes (harness/test path).
++/// @return Bytes accepted (ring-full remainder counts as dropped).
++size_t inject(const char *bytes, size_t len);
++
++/// @brief Poll the UART (up to kPumpBudget bytes) into the ring.
++/// Inert while loopback is active (the loopback window owns the UART).
++/// @return Bytes pushed.
++size_t pump();
++
++/// @brief Pop one decoded key (consumer: shell/readline/tests).
++/// @return true with the oldest key iff the ring was non-empty.
++bool pop(char &out);
++
++/// @brief Ring-full drops since boot (diagnostic, monotonic).
++size_t dropped_count();
++
++/// @brief Enter the MCR loopback window (riscv64 debug builds only).
++/// Fail-closed: false on other arches, in release, when already
++/// active, on a foreign LOOP bit, or on read-back mismatch.
++/// While active, pump() is inert and capture is suspended.
++/// No logging and no asserts may run inside the window (an abort
++/// would strand LOOP and silence the console suite-wide).
++bool loopback_begin();
++
++/// @brief Leave the loopback window (unconditional restore + drain).
++void loopback_end();
++
++/// @brief Whether the loopback window is active.
++bool loopback_active();
++
++/// @brief Whether Terminal capture must suspend (true while loopback
++///        owns the UART). Consulted by tests, not production.
++bool capture_suspended();
++
++} // namespace kernel::input::serial
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index be7482d72..73a6c1fa7 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -142,8 +142,20 @@ void shell_input_timeout_fire(void *context) {
+ // so the P2 key-delivery path is automatable by a shell-level test.
+ // Zero logic change on the move out of the anonymous namespace.
+ bool shell_try_get_key_impl(char &out) {
++#if defined(CONFIG_ARCH_X86_64)
++    if (arch::Serial::poll_getchar(out))
++        return true;
++#else
++    // Issue #355: decoder-first on non-x86. Serial-first would let raw
++    // bytes bypass normalization and split one keystroke stream between
++    // two sources — the decoder owns the UART when healthy; the raw
++    // poll below is the fail-open fallback only.
++    (void)arch::Keyboard::pump_serial();
++    if (arch::Keyboard::getchar(out))
++        return true;
+     if (arch::Serial::poll_getchar(out))
+         return true;
++#endif
+     uint64_t pid = kernel::iocd::get_iocd_pid();
+     if (pid != 0) {
+         kernel::iocd::Msg req{};
+@@ -541,10 +553,10 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
+         }
+ 
+         char c = 0;
+-        // Issue #245: poll the UART first on every architecture (the old
+-        // x86-only COM1 inline poll never ran on aarch64/riscv64), then
+-        // the iocd-routed keyboard, then the hardware ring fallback
+-        // (issue #340: single helper owns the order + fallback).
++        // Input order (issues #245/#340/#355): decoder-owned UART first
++        // on aarch64/riscv64 (Keyboard pump + ring), raw Serial poll as
++        // fail-open fallback, then the iocd-routed keyboard, then the
++        // hardware ring fallback. x86: serial → iocd → ring (unchanged).
+         bool got_char = shell_try_get_key(c);
+ 
+         if (!got_char) {
+diff --git a/test-history.txt b/test-history.txt
+index ceeeba330..01ed9f865 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4269,3 +4269,6 @@ SUMMARY: total=26 ok=25 fail=1
+ 2026-10-20 21:05:11 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 657ms STATUS: #355-sliceB-x86-control
+ 2026-10-20 21:06:22 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1030ms STATUS: #355-sliceB-aarch64-gate
+ 2026-10-20 21:07:33 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 916ms STATUS: #355-sliceB-riscv64-known6
++2026-10-20 21:10:11 shell_interaction PASSED: 20 FAILED: 0 TIME: 3428ms STATUS: #355-sliceC-x86-control
++2026-10-20 21:11:22 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1030ms STATUS: #355-sliceC-aarch64-gate
++2026-10-20 21:12:33 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 919ms STATUS: #355-sliceC-riscv64-known6

@@ -142,8 +142,20 @@ void shell_input_timeout_fire(void *context) {
 // so the P2 key-delivery path is automatable by a shell-level test.
 // Zero logic change on the move out of the anonymous namespace.
 bool shell_try_get_key_impl(char &out) {
+#if defined(CONFIG_ARCH_X86_64)
     if (arch::Serial::poll_getchar(out))
         return true;
+#else
+    // Issue #355: decoder-first on non-x86. Serial-first would let raw
+    // bytes bypass normalization and split one keystroke stream between
+    // two sources — the decoder owns the UART when healthy; the raw
+    // poll below is the fail-open fallback only.
+    (void)arch::Keyboard::pump_serial();
+    if (arch::Keyboard::getchar(out))
+        return true;
+    if (arch::Serial::poll_getchar(out))
+        return true;
+#endif
     uint64_t pid = kernel::iocd::get_iocd_pid();
     if (pid != 0) {
         kernel::iocd::Msg req{};
@@ -541,10 +553,10 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
         }
 
         char c = 0;
-        // Issue #245: poll the UART first on every architecture (the old
-        // x86-only COM1 inline poll never ran on aarch64/riscv64), then
-        // the iocd-routed keyboard, then the hardware ring fallback
-        // (issue #340: single helper owns the order + fallback).
+        // Input order (issues #245/#340/#355): decoder-owned UART first
+        // on aarch64/riscv64 (Keyboard pump + ring), raw Serial poll as
+        // fail-open fallback, then the iocd-routed keyboard, then the
+        // hardware ring fallback. x86: serial → iocd → ring (unchanged).
         bool got_char = shell_try_get_key(c);
 
         if (!got_char) {
