@@ -4219,3 +4219,13 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-20 10:05:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 340ms STATUS: #352-s3c-riscv64-gate
 2026-10-20 10:05:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 447ms STATUS: #352-s3c-riscv64-gate
 2026-10-20 10:05:00 timing_core PASSED: 19 FAILED: 0 TIME: 958ms STATUS: #352-s3c-riscv64-gate
+2026-10-20 10:15:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 337ms STATUS: #352-2ciii-riscv64-gate
+2026-10-20 10:15:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 452ms STATUS: #352-2ciii-riscv64-gate
+2026-10-20 10:15:00 timing_core PASSED: 19 FAILED: 0 TIME: 971ms STATUS: #352-2ciii-riscv64-gate
+2026-10-20 10:15:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 330ms STATUS: #352-2ciii-aarch64-gate
+2026-10-20 10:15:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 419ms STATUS: #352-2ciii-aarch64-gate
+2026-10-20 10:15:00 timing_core PASSED: 19 FAILED: 0 TIME: 912ms STATUS: #352-2ciii-aarch64-gate
+2026-10-20 10:15:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1056ms STATUS: #352-2ciii-aarch64-gate
+2026-10-20 10:15:00 elf_loader PASSED: 25 FAILED: 0 TIME: 2454ms STATUS: #352-2ciii-x86_64-gate
+2026-10-20 10:15:00 selftest PASSED: 148 FAILED: 0 TIME: 12438ms STATUS: #352-2ciii-x86_64-gate
+2026-10-20 10:15:00 timing_core PASSED: 19 FAILED: 0 TIME: 1838ms STATUS: #352-2ciii-x86_64-gate

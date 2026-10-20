@@ -1,0 +1,206 @@
+diff --git a/src/kernel/arch/x86_64/hal/page_table_impl.hpp b/src/kernel/arch/x86_64/hal/page_table_impl.hpp
+index a4cb7f1e8..b4ec4a43b 100644
+--- a/src/kernel/arch/x86_64/hal/page_table_impl.hpp
++++ b/src/kernel/arch/x86_64/hal/page_table_impl.hpp
+@@ -138,6 +138,31 @@ class ArchPageTable {
+     static inline void tlb_flush_all() {
+         tlb_purge_all();
+     }
++    /// @brief Flush one VA in one context (issue #352): INVPCID
++    ///        single-address when available; single-context purge
++    ///        fallback otherwise (invlpg only covers the current PCID,
++    ///        so it is not a correct fallback for foreign contexts).
++    ///        Uniform name/shape with aarch64/riscv64 (PCID here).
++    ///        Local CPU only; cross-CPU invalidation is #158's scope.
++    /// @param[in] virt_addr Virtual address to invalidate.
++    /// @param[in] id PCID to invalidate within (0 = untagged/kernel).
++    static inline void tlb_flush_va_asid(uint64_t virt_addr, uint16_t id) {
++        TlbFlushStats &store = tlb_flush_stats_store();
++        if (has_invpcid()) {
++            __atomic_fetch_add(&store.single_va, 1ULL, __ATOMIC_RELAXED);
++            InvpcidDesc desc = invpcid_build_desc(InvpcidType::SINGLE_ADDRESS,
++                                                  id, virt_addr);
++            invpcid_emit(InvpcidType::SINGLE_ADDRESS, desc);
++        } else {
++            tlb_purge_context(id);
++        }
++    }
++    /// @brief Flush one context's TLB entries (issue #352): delegates to
++    ///        the single-context purge.  Uniform name with aarch64/riscv64.
++    /// @param[in] id PCID to purge (0 = untagged/kernel → full flush path).
++    static inline void tlb_flush_asid(uint16_t id) {
++        tlb_purge_context(id);
++    }
+ 
+     /// @brief Size of a single page (from kernel config).
+     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 080cb8af0..308b1d530 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -542,6 +542,25 @@ uint64_t VMM::current_pml4() {
+     return arch::read_cr3();
+ }
+ 
++// Weak default: single-CPU runs need no cross-CPU invalidation.  SMP
++// ports override this symbol (tracked separately from #386).
++__attribute__((weak)) void VMM::smp_tlb_shootdown_hook(uint64_t va,
++                                                       uint16_t context_id,
++                                                       bool all) {
++    (void)va;
++    (void)context_id;
++    (void)all;
++}
++
++void VMM::tlb_shootdown(uint64_t va, uint16_t context_id, bool all) {
++    if (all) {
++        arch::ArchPageTable::tlb_flush_all();
++    } else {
++        arch::ArchPageTable::tlb_flush_va_asid(va, context_id);
++    }
++    smp_tlb_shootdown_hook(va, context_id, all);
++}
++
+ // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+ /// @brief Map a page into a specific (non-kernel) PML4 page table.
+ /// @param virt_addr Page-aligned virtual address.
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index 25a89f57b..a209cf4af 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -133,14 +133,24 @@ class VMM {
+     ///       Context: any-task (register read). SMP: N/A.
+     static uint64_t current_pml4();
+ 
+-    /// @brief Returns the physical address of the kernel page-table root
+-    ///        (issue #352; no callers yet — step 2 wires it up).
+-    ///        On x86_64/riscv64 this is the shared root; on aarch64 it is
+-    ///        the TTBR1_EL1 root, never the TTBR0 user alias.
+-    /// @return Physical address of the kernel page-table root.
++    /// @brief Cross-CPU shootdown hook, overridden by SMP ports (issue
++    ///        #352).  Weak no-op default: single-CPU runs need only the
++    ///        local invalidate in tlb_shootdown.  SMP enablement replaces
++    ///        this (tracked separately — not #386, which owns globals).
++    /// @note Concurrency/caller contract: Lock: none.  Context: any-task.
++    ///       SMP: N/A (default body).
++    static void smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id,
++                                       bool all);
++
++    /// @brief Invalidate TLB state for an address space (issue #352):
++    ///        local arch invalidate (full flush for all=true, else
++    ///        VA+context-ID targeted) followed by the SMP hook above.
++    ///        Test-facing entry point for shootdown-hook invocation
++    ///        coverage.  No callers yet — unmap/teardown paths keep their
++    ///        existing local invalidates until QE adopts this choke point.
+     /// @note Concurrency/caller contract (issue #366): Lock: none.
+-    ///       Context: any-task (register read). SMP: N/A.
+-    static uint64_t current_kernel_pml4();
++    ///       Context: any-task. SMP: local-only + hook.
++    static void tlb_shootdown(uint64_t va, uint16_t context_id, bool all);
+ 
+     /// @brief Creates a fresh PML4: zeroes user entries (0-255),
+     /// copies kernel entries (256-511). Used during exec/load —
+@@ -896,6 +906,13 @@ class VMM {
+     ///        x86_64 clears NX; aarch64 clears UXN+PXN; riscv64 sets X.
+     static uint64_t vmm_arch_kernel_text_exec(uint64_t leaf);
+     static uint64_t vmm_arch_block_base(uint64_t entry, bool huge);
++    /// @brief Extract the flag bits of a 4 KiB leaf entry (issue #352):
++    ///        everything except the frame address (x86/aarch64: complement
++    ///        of the frame mask; riscv: low-10 flag bits plus high
++    ///        reserved bits [63:54], never the PPN).  One definition per
++    ///        arch TU; used by deep-copy so flag handling stays in the
++    ///        codec home instead of open-coded per call site.
++    static uint64_t vmm_arch_leaf_flags(uint64_t entry);
+     /// @brief Walk geometry shims (issue #378): table levels from the root
+     ///        (4 on x86_64/aarch64, 3 on Sv39 riscv64) + the per-level VA
+     ///        index vector (idx[levels] valid, idx[3] zeroed on 3-level).
+diff --git a/src/kernel/memory/vmm_aarch64.cpp b/src/kernel/memory/vmm_aarch64.cpp
+index bce7946af..a369c9a91 100644
+--- a/src/kernel/memory/vmm_aarch64.cpp
++++ b/src/kernel/memory/vmm_aarch64.cpp
+@@ -140,6 +140,12 @@ uint64_t VMM::vmm_arch_block_base(uint64_t entry, bool huge) {
+     return entry & (huge ? PAGE_HUGE_FRAME_MASK : PAGE_FRAME_MASK);
+ }
+ 
++uint64_t VMM::vmm_arch_leaf_flags(uint64_t entry) {
++    // Complement of the frame mask keeps the low attribute bits AND the
++    // high UXN/PXN bits (both sit outside the frame field).
++    return entry & ~PAGE_FRAME_MASK;
++}
++
+ unsigned VMM::vmm_arch_walk_levels() { return 4; }
+ 
+ void VMM::vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]) {
+diff --git a/src/kernel/memory/vmm_riscv64.cpp b/src/kernel/memory/vmm_riscv64.cpp
+index 77499ad78..d884df924 100644
+--- a/src/kernel/memory/vmm_riscv64.cpp
++++ b/src/kernel/memory/vmm_riscv64.cpp
+@@ -121,6 +121,13 @@ uint64_t VMM::vmm_arch_block_base(uint64_t entry, bool huge) {
+     return VMM::sv39_pte_phys(entry);
+ }
+ 
++uint64_t VMM::vmm_arch_leaf_flags(uint64_t entry) {
++    // Low-10 flag bits plus high reserved bits [63:54] (future
++    // PBMT/NAPOT/custom) — never any PPN bit.  Matches the split-fill
++    // preservation in ArchPageTable::split_l0_block.
++    return (entry & 0x3FFULL) | (entry & (0x3FFULL << 54));
++}
++
+ unsigned VMM::vmm_arch_walk_levels() { return 3; }
+ 
+ void VMM::vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]) {
+diff --git a/src/kernel/memory/vmm_teardown.cpp b/src/kernel/memory/vmm_teardown.cpp
+index 1c6b3fb95..a36f33138 100644
+--- a/src/kernel/memory/vmm_teardown.cpp
++++ b/src/kernel/memory/vmm_teardown.cpp
+@@ -276,7 +276,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+ 
+                     uint64_t src_data =
+                         vmm_arch_block_base(src_pt[pt_idx], false);
+-                    uint64_t flags = src_pt[pt_idx] & ~PAGE_FRAME_MASK;
++                    uint64_t flags = vmm_arch_leaf_flags(src_pt[pt_idx]);
+ 
+                     // Issue #8 (S2): never deep-copy a non-RAM frame into the
+                     // child.  A user MMIO-window PTE points at device phys
+@@ -365,7 +365,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+                 if (VMM::sv39_is_leaf(src_l2[l2_idx])) {
+                     uint64_t src_data =
+                         vmm_arch_block_base(src_l2[l2_idx], false);
+-                    uint64_t flags = src_l2[l2_idx] & 0x3FFULL;
++                    uint64_t flags = vmm_arch_leaf_flags(src_l2[l2_idx]);
+                     if (!PMM::is_user_page(src_data)) {
+                         dst_l2[l2_idx] = 0;
+                         continue;
+diff --git a/src/kernel/memory/vmm_x86_64.cpp b/src/kernel/memory/vmm_x86_64.cpp
+index b43a9a653..bcfeb0386 100644
+--- a/src/kernel/memory/vmm_x86_64.cpp
++++ b/src/kernel/memory/vmm_x86_64.cpp
+@@ -116,6 +116,10 @@ uint64_t VMM::vmm_arch_block_base(uint64_t entry, bool huge) {
+     return entry & (huge ? PAGE_HUGE_FRAME_MASK : PAGE_FRAME_MASK);
+ }
+ 
++uint64_t VMM::vmm_arch_leaf_flags(uint64_t entry) {
++    return entry & ~PAGE_FRAME_MASK;
++}
++
+ unsigned VMM::vmm_arch_walk_levels() { return 4; }
+ 
+ void VMM::vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]) {
+diff --git a/test-history.txt b/test-history.txt
+index 1d3ff23ef..80137d9a5 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4219,3 +4219,13 @@ SUMMARY: total=26 ok=25 fail=1
+ 2026-10-20 10:05:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 340ms STATUS: #352-s3c-riscv64-gate
+ 2026-10-20 10:05:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 447ms STATUS: #352-s3c-riscv64-gate
+ 2026-10-20 10:05:00 timing_core PASSED: 19 FAILED: 0 TIME: 958ms STATUS: #352-s3c-riscv64-gate
++2026-10-20 10:15:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 337ms STATUS: #352-2ciii-riscv64-gate
++2026-10-20 10:15:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 452ms STATUS: #352-2ciii-riscv64-gate
++2026-10-20 10:15:00 timing_core PASSED: 19 FAILED: 0 TIME: 971ms STATUS: #352-2ciii-riscv64-gate
++2026-10-20 10:15:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 330ms STATUS: #352-2ciii-aarch64-gate
++2026-10-20 10:15:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 419ms STATUS: #352-2ciii-aarch64-gate
++2026-10-20 10:15:00 timing_core PASSED: 19 FAILED: 0 TIME: 912ms STATUS: #352-2ciii-aarch64-gate
++2026-10-20 10:15:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1056ms STATUS: #352-2ciii-aarch64-gate
++2026-10-20 10:15:00 elf_loader PASSED: 25 FAILED: 0 TIME: 2454ms STATUS: #352-2ciii-x86_64-gate
++2026-10-20 10:15:00 selftest PASSED: 148 FAILED: 0 TIME: 12438ms STATUS: #352-2ciii-x86_64-gate
++2026-10-20 10:15:00 timing_core PASSED: 19 FAILED: 0 TIME: 1838ms STATUS: #352-2ciii-x86_64-gate

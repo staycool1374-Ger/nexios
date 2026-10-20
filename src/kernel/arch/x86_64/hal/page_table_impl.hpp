@@ -138,6 +138,31 @@ class ArchPageTable {
     static inline void tlb_flush_all() {
         tlb_purge_all();
     }
+    /// @brief Flush one VA in one context (issue #352): INVPCID
+    ///        single-address when available; single-context purge
+    ///        fallback otherwise (invlpg only covers the current PCID,
+    ///        so it is not a correct fallback for foreign contexts).
+    ///        Uniform name/shape with aarch64/riscv64 (PCID here).
+    ///        Local CPU only; cross-CPU invalidation is #158's scope.
+    /// @param[in] virt_addr Virtual address to invalidate.
+    /// @param[in] id PCID to invalidate within (0 = untagged/kernel).
+    static inline void tlb_flush_va_asid(uint64_t virt_addr, uint16_t id) {
+        TlbFlushStats &store = tlb_flush_stats_store();
+        if (has_invpcid()) {
+            __atomic_fetch_add(&store.single_va, 1ULL, __ATOMIC_RELAXED);
+            InvpcidDesc desc = invpcid_build_desc(InvpcidType::SINGLE_ADDRESS,
+                                                  id, virt_addr);
+            invpcid_emit(InvpcidType::SINGLE_ADDRESS, desc);
+        } else {
+            tlb_purge_context(id);
+        }
+    }
+    /// @brief Flush one context's TLB entries (issue #352): delegates to
+    ///        the single-context purge.  Uniform name with aarch64/riscv64.
+    /// @param[in] id PCID to purge (0 = untagged/kernel → full flush path).
+    static inline void tlb_flush_asid(uint16_t id) {
+        tlb_purge_context(id);
+    }
 
     /// @brief Size of a single page (from kernel config).
     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;

@@ -276,7 +276,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
 
                     uint64_t src_data =
                         vmm_arch_block_base(src_pt[pt_idx], false);
-                    uint64_t flags = src_pt[pt_idx] & ~PAGE_FRAME_MASK;
+                    uint64_t flags = vmm_arch_leaf_flags(src_pt[pt_idx]);
 
                     // Issue #8 (S2): never deep-copy a non-RAM frame into the
                     // child.  A user MMIO-window PTE points at device phys
@@ -365,7 +365,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                 if (VMM::sv39_is_leaf(src_l2[l2_idx])) {
                     uint64_t src_data =
                         vmm_arch_block_base(src_l2[l2_idx], false);
-                    uint64_t flags = src_l2[l2_idx] & 0x3FFULL;
+                    uint64_t flags = vmm_arch_leaf_flags(src_l2[l2_idx]);
                     if (!PMM::is_user_page(src_data)) {
                         dst_l2[l2_idx] = 0;
                         continue;
