@@ -91,7 +91,24 @@ JARVIS_TEST(page_tables_kernel_task_private_pml4, "PRE: none | POST: none") {
     auto *kern = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
+#if defined(CONFIG_ARCH_RISCV64)
+        // Issue #352: riscv64 L0[0] carries the kernel MMIO/identity
+        // subtree (U=0, issue #221 deep-copy) — not user mappings.  The
+        // ported property is "no USER-reachable entries", not
+        // blanket-zero: allow absent entries and present-but-U-clear
+        // kernel entries, reject anything U-accessible.  Local Sv39
+        // flag values (VMM members are private).
+        constexpr uint64_t SV39_V = 1ULL << 0;
+        constexpr uint64_t SV39_U = 1ULL << 4;
+        const uint64_t e = priv[i];
+        const bool absent = (e & SV39_V) == 0;
+        const bool kernel_owned =
+            ((e & SV39_V) != 0) && ((e & SV39_U) == 0);
+        JARVIS_ASSERT_FMT(absent || kernel_owned,
+                          "priv[%zu] is user-reachable: 0x%lx", i, e);
+#else
         JARVIS_ASSERT(priv[i] == 0);
+#endif
     }
     for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
         JARVIS_ASSERT(priv[i] == kern[i]);
@@ -183,7 +200,12 @@ JARVIS_TEST(page_tables_isolation, "PRE: none | POST: none") {
     JARVIS_ASSERT(a->get_page_table() != b->get_page_table());
 
     // Map a test page in A's PML4 at a known VA (below STACK_VADDR).
-    uint64_t test_va = 0x10000000;
+    // Issue #352: 0x10000000 aliases riscv64's L0[0] 0-1GB identity
+    // window, so it resolves via identity in EVERY table (no isolation
+    // failure, wrong VA choice).  0x50000000 sits in L0[1] — outside
+    // the identity window, below STACK_VADDR/HEAP_VADDR, and valid
+    // user space on x86_64/aarch64 too.
+    uint64_t test_va = 0x50000000;
     uint64_t test_pa = PMM::alloc_user_page();
     JARVIS_ASSERT(test_pa != 0);
     VMM::map_page_in_pml4(test_va, test_pa, true, false, a->get_page_table());

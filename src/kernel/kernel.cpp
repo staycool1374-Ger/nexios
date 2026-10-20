@@ -78,6 +78,11 @@
 #include <kernel/vfs/procfs.hpp>
 #include <kernel/vfs/tmpfs.hpp>
 #include <kernel/vfs/ramdisk_fs.hpp>
+#if defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/asid.hpp>
+#elif defined(CONFIG_ARCH_RISCV64)
+#include <kernel/arch/riscv64/hal/asid.hpp>
+#endif
 #include <initrd/initrd.hpp>
 #include <services/terminal/framebuffer.hpp>
 #include <services/terminal/terminal.hpp>
@@ -1485,6 +1490,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::profiling::Sampler::set_enabled(true);
 
     arch::Timer::init(kernel::BootParams::instance().timer_hz);
+
+    // Issue #352: activate context-ID tagging on aarch64/riscv64
+    // (allocator flag only — task create/teardown and switch publish
+    // pick up IDs from here on).  x86_64 activates via pcid_init()
+    // above; early_irq_init() repeats it idempotently for test paths.
+#if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    arch::asid_init();
+#endif
 
     // Issue #25 (Phase B3): wake + park APs.  Single-CPU runs are a silent
     // no-op (MADT ncpus <= 1 or unusable trampoline block).

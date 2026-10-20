@@ -47,9 +47,7 @@
 #include <kernel/debug/debug_bind.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-#include <kernel/arch/x86_64/hal/pcid.hpp>
-#endif
+#include <kernel/arch/hal/context_id.hpp>
 #include <kernel/sync/notify.hpp>
 #include <kernel/sync/eventgroup.hpp>
 #include <kernel/sync/semaphore.hpp>
@@ -1376,12 +1374,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     }
     tcb->install_page_table(pml4);
     tcb->is_user_ = true;
-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-    // Issue #156: eager PCID assignment at birth (0 when unsupported).
-    // Publish-time lazy assignment remains as backstop for paths that
-    // install user PML4s without passing here.
-    tcb->pcid_ = arch::pcid_alloc();
-#endif
+// Issue #352: eager context-ID assignment at birth (0 when unsupported).
+// Publish-time lazy assignment remains as backstop for paths that
+// install user PML4s without passing here.  Arch-neutral: x86_64
+// delegates to pcid_alloc, aarch64/riscv64 to asid_alloc.
+    tcb->pcid_ = arch::context_id_alloc();
 
     // Guard page: leave first page unmapped, start mapping at +arch::PAGE_SIZE
     uint64_t user_stack_virt = mem::STACK_VADDR + arch::PAGE_SIZE;
@@ -1649,12 +1646,11 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     // (every task now owns a private kernel-half PML4).
     bool is_user_task = is_user_parent;
     tcb->is_user_ = is_user_task;
-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-    // Issue #156: fork gets a FRESH PCID (never the parent's — the child
-    // owns a private address space).
+// Issue #352: fork gets a FRESH context ID (never the parent's — the child
+// owns a private address space).  Arch-neutral (x86_64 pcid, aarch64/riscv64
+// asid); 0 when unsupported.
     if (is_user_task)
-        tcb->pcid_ = arch::pcid_alloc();
-#endif
+        tcb->pcid_ = arch::context_id_alloc();
     uint64_t slot_va = alloc_kslot(STACK_SIZE);
     if (slot_va) {
         tcb->kstack_slot_va_ = slot_va;
@@ -2220,13 +2216,11 @@ void TaskControlBlock::complete_teardown() noexcept {
         // free below skips them (pages owned by mapping tasks, retention
         // decides frees at zero/zero).
         kernel::elf::ElfLoader::unmap_golden(this);
-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-        // Issue #156: release the PCID before the address space goes
+        // Issue #352: release the context ID before the address space goes
         // away (keyed on the live TCB, never after free; 0 is a no-op
-        // for kernel tasks and never-published users).
-        arch::pcid_free(pcid_);
+        // for kernel tasks and never-published users).  Arch-neutral.
+        arch::context_id_free(pcid_);
         pcid_ = 0;
-#endif
         VMM::free_user_pages(get_page_table());
         PMM::free_page(get_page_table());
 #if defined(CONFIG_ARCH_X86_64)

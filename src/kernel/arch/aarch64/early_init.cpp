@@ -31,6 +31,7 @@
 #include <kernel/arch/interrupt_controller.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/arch/aarch64/hal/asid.hpp>
 
 namespace arch {
 
@@ -90,6 +91,9 @@ arch::EarlyIrqResult arch::early_irq_init(uint32_t frequency_hz) {
     arch::IDT::init();
     arch::IDT::load();
     arch::ArchInterruptController::init();
+    // Issue #352: activate ASID tagging (allocator flag only — no HW
+    // touch; task create/teardown and switch publish pick up IDs).
+    arch::asid_init();
     if (!arch::gic_redist_ready()) {
         return arch::EarlyIrqResult::CTRL_TIMEOUT;
     }

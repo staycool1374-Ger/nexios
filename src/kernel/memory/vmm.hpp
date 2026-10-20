@@ -133,6 +133,15 @@ class VMM {
     ///       Context: any-task (register read). SMP: N/A.
     static uint64_t current_pml4();
 
+    /// @brief Returns the physical address of the kernel page-table root
+    ///        (issue #352; no callers yet — step 2 wires it up).
+    ///        On x86_64/riscv64 this is the shared root; on aarch64 it is
+    ///        the TTBR1_EL1 root, never the TTBR0 user alias.
+    /// @return Physical address of the kernel page-table root.
+    /// @note Concurrency/caller contract (issue #366): Lock: none.
+    ///       Context: any-task (register read). SMP: N/A.
+    static uint64_t current_kernel_pml4();
+
     /// @brief Creates a fresh PML4: zeroes user entries (0-255),
     /// copies kernel entries (256-511). Used during exec/load —
     /// NOT for fork (which needs parent user entries).

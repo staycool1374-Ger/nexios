@@ -199,6 +199,18 @@ inline void write_cr3(uint64_t v) {
 inline void write_cr3_notlbi(uint64_t v) {
     write_satp((8ULL << 60) | v);
 }
+/// @brief Read the kernel page-table root (issue #352).  Sv39 uses one
+///        shared root for both halves, so this equals the user root.
+/// @return Physical address of the kernel page table.
+inline uint64_t kernel_page_table_base() {
+    return read_cr3();
+}
+/// @brief Read the user page-table root (issue #352).  Sv39 uses one
+///        shared root for both halves, so this equals the kernel root.
+/// @return Physical address of the current user page table.
+inline uint64_t user_page_table_base() {
+    return read_cr3();
+}
 /// @brief Write the tp register (user thread-local-storage base, issue #74).
 /// @param v User VA of the thread block (0 clears). tp is ABI-reserved so the
 /// compiler never allocates it; the write is exact. Trap-return consumes the

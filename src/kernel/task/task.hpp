@@ -451,12 +451,19 @@ struct TaskControlBlock {
     void swap_page_table(uint64_t new_pml4) noexcept;
     /// @brief Teardown clear (issue #377): the caller freed the table.
     void clear_page_table() noexcept;
-    /// @brief Process-context identifier for TLB tagging (issue #156,
-    ///        x86_64 only).  0 = untagged (kernel tasks + unsupported
-    ///        CPUs); user tasks hold an allocated 1..4095.  Owned by the
-    ///        TCB (not the PML4): survives exec PML4 swaps, dies with the
-    ///        task so IDs are never reused while live.
+    /// @brief Context identifier for TLB tagging (issue #156 x86_64 PCID,
+    ///        generalized issue #352: aarch64/riscv64 ASID).  0 = untagged
+    ///        (kernel tasks + unsupported CPUs); user tasks hold an
+    ///        allocated ID.  Owned by the TCB (not the PML4): survives exec
+    ///        PML4 swaps, dies with the task so IDs are never reused
+    ///        while live.
     uint16_t pcid_;
+    /// @brief Generic context-ID accessor (issue #352).  The stored
+    ///        `pcid_` field carries the PCID on x86_64 and the ASID on
+    ///        aarch64/riscv64; 0 means untagged on every arch.
+    uint16_t context_id() const noexcept {
+        return pcid_;
+    }
     /// @brief Physical address of the private PDPT page allocated in
     /// clone() for the user stack region. Zero when not applicable.
     /// Used by cleanup() to free the private PDPT and its child PD/PT

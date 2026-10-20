@@ -283,6 +283,18 @@ inline void write_cr3_notlbi(uint64_t v) {
     write_ttbr0_el1(v);
     asm volatile("isb" : : : "memory");
 }
+/// @brief Read the kernel page-table root (TTBR1_EL1, issue #352).
+/// @return Physical address of the kernel page table.
+/// @note Distinct from read_cr3() (TTBR0/user) — callers that need the
+///       kernel half must use this, never the CR3 alias.
+inline uint64_t kernel_page_table_base() {
+    return read_ttbr1_el1();
+}
+/// @brief Read the user page-table root (TTBR0_EL1, issue #352).
+/// @return Physical address of the current user page table.
+inline uint64_t user_page_table_base() {
+    return read_ttbr0_el1();
+}
 // NOTE: dsb sy replaced with dmb sy throughout this file — QEMU TCG chokes on
 // dsb sy after MMU+cache activity.  On real hardware dsb sy is required for
 // correctness.
