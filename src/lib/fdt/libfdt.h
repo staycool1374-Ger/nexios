@@ -27,8 +27,20 @@ extern "C" {
 
 #define FDT_ERR_MAX 17
 
+/* Untrusted-DTB validation bounds (issue #350): the DTB is firmware
+ * input — layout + structure must be proven before any public walk. */
+#define FDT_MAX_TOTALSIZE (2u * 1024u * 1024u)
+#define FDT_MAX_NODES 4096
+#define FDT_MAX_DEPTH 32
+
 /* Public API */
 int fdt_check_header(const void *fdt);
+
+/* Validate header offsets/sizes against totalsize (returns -FDT_ERR_*). */
+int fdt_check_layout(const void *fdt);
+
+/* Bounded structure-block walk: tags, lengths, name offsets, depth. */
+int fdt_check_structure(const void *fdt);
 
 int fdt_num_mem_rsv(const void *fdt);
 int fdt_get_mem_rsv(const void *fdt, int n, uint64_t *addr, uint64_t *size);

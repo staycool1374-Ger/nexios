@@ -135,6 +135,14 @@ _start:
     or t1, t1, t4
     sd t1, 1024(t2)           /* 128 * 8 = 1024 */
 
+    /* L2_page[80]: 2MB leaf PA 0x0A000000 (virtio-mmio window, issue #350;
+     * matches aarch64 boot.S L2 index 80; one 2MB Device leaf covers all
+     * 32 virtio-mmio slots at 0x0A000000 + slot*0x200). */
+    li t1, 0x0A000
+    slli t1, t1, 10
+    or t1, t1, t4
+    sd t1, 640(t2)            /* 80 * 8 = 640 */
+
     /* L2_page[384..511]: 128x2MB identity leaves PA 0x30000000-0x3FFFFFFF
      * (PCIe ECAM, issue #29; QEMU virt `info mtree` proof: pcie-ecam @
      * 0x30000000, 256MB).  Identity (not HHDM-aliased): follows the

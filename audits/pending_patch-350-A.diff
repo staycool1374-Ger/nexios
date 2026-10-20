@@ -1,0 +1,705 @@
+diff --git a/src/kernel/arch/riscv64/boot.S b/src/kernel/arch/riscv64/boot.S
+index 9ee628a52..f31e4985f 100644
+--- a/src/kernel/arch/riscv64/boot.S
++++ b/src/kernel/arch/riscv64/boot.S
+@@ -135,6 +135,14 @@ _start:
+     or t1, t1, t4
+     sd t1, 1024(t2)           /* 128 * 8 = 1024 */
+ 
++    /* L2_page[80]: 2MB leaf PA 0x0A000000 (virtio-mmio window, issue #350;
++     * matches aarch64 boot.S L2 index 80; one 2MB Device leaf covers all
++     * 32 virtio-mmio slots at 0x0A000000 + slot*0x200). */
++    li t1, 0x0A000
++    slli t1, t1, 10
++    or t1, t1, t4
++    sd t1, 640(t2)            /* 80 * 8 = 640 */
++
+     /* L2_page[384..511]: 128x2MB identity leaves PA 0x30000000-0x3FFFFFFF
+      * (PCIe ECAM, issue #29; QEMU virt `info mtree` proof: pcie-ecam @
+      * 0x30000000, 256MB).  Identity (not HHDM-aliased): follows the
+diff --git a/src/kernel/arch/virtio.hpp b/src/kernel/arch/virtio.hpp
+index 0baf95442..54d0b7efe 100644
+--- a/src/kernel/arch/virtio.hpp
++++ b/src/kernel/arch/virtio.hpp
+@@ -166,8 +166,119 @@ struct VirtioTransport {
+     VirtioMmio device_cfg = {};
+ 
+     uint32_t notify_off_multiplier = 0;
++
++    // Issue #350 (MMIO): appended — existing field offsets unchanged.
++    bool mmio = false;            ///< true = MMIO v2 transport, not PCI
++    uint64_t mmio_base_phys = 0;  ///< MMIO register base (phys)
++    uint16_t mmio_irq = 0;        ///< GIC INTID / PLIC IRQ number
++    uint16_t mmio_slot = 0;       ///< DTB discovery slot index
++};
++
++/// Virtio MMIO (v2) register offsets — QEMU `virt` transport region.
++enum VirtioMmioReg : uint16_t {
++    VIRTIO_MMIO_MAGIC = 0x000,
++    VIRTIO_MMIO_VERSION = 0x004,
++    VIRTIO_MMIO_DEVICE_ID = 0x008,
++    VIRTIO_MMIO_VENDOR_ID = 0x00C,
++    VIRTIO_MMIO_DEVICE_FEATURES = 0x010,
++    VIRTIO_MMIO_DEVICE_FEATURES_SEL = 0x014,
++    VIRTIO_MMIO_DRIVER_FEATURES = 0x020,
++    VIRTIO_MMIO_DRIVER_FEATURES_SEL = 0x024,
++    VIRTIO_MMIO_QUEUE_SEL = 0x030,
++    VIRTIO_MMIO_QUEUE_NUM_MAX = 0x034,
++    VIRTIO_MMIO_QUEUE_NUM = 0x038,
++    VIRTIO_MMIO_QUEUE_READY = 0x044,
++    VIRTIO_MMIO_QUEUE_NOTIFY = 0x050,
++    VIRTIO_MMIO_INTERRUPT_STATUS = 0x060,
++    VIRTIO_MMIO_INTERRUPT_ACK = 0x064,
++    VIRTIO_MMIO_STATUS = 0x070,
++    VIRTIO_MMIO_QUEUE_DESC_LOW = 0x080,
++    VIRTIO_MMIO_QUEUE_DESC_HIGH = 0x084,
++    VIRTIO_MMIO_QUEUE_DRIVER_LOW = 0x090,
++    VIRTIO_MMIO_QUEUE_DRIVER_HIGH = 0x094,
++    VIRTIO_MMIO_QUEUE_DEVICE_LOW = 0x0A0,
++    VIRTIO_MMIO_QUEUE_DEVICE_HIGH = 0x0A4,
++    VIRTIO_MMIO_CONFIG_GENERATION = 0x0FC,
++    VIRTIO_MMIO_CONFIG = 0x100,
+ };
+ 
++/// MMIO v2 identification constants.
++constexpr uint32_t VIRTIO_MMIO_MAGIC_VALUE = 0x74726976; // "virt"
++constexpr uint32_t VIRTIO_MMIO_VERSION_MODERN = 2;
++constexpr uint32_t VIRTIO_MMIO_REGION_SIZE = 0x200;
++constexpr uint64_t VIRTIO_MMIO_BASE = 0x0A000000;
++constexpr uint64_t VIRTIO_MMIO_WINDOW = 0x200000; // one 2MiB boot leaf
++constexpr uint32_t VIRTIO_MMIO_DEVICE_NET = 1;
++constexpr uint32_t VIRTIO_MMIO_DEVICE_BLOCK = 2;
++constexpr uint16_t VIRTIO_MMIO_REG_NONE = 0xFFFF;
++
++/// Map a PCI common-cfg register to its MMIO v2 offset for reads, or
++/// VIRTIO_MMIO_REG_NONE when the register has no MMIO equivalent.
++constexpr uint16_t virtio_mmio_read_offset(uint16_t pci_reg) {
++    switch (pci_reg) {
++    case VIRTIO_COMMON_DEVICE_FEATURE_SEL:
++        return VIRTIO_MMIO_DEVICE_FEATURES_SEL;
++    case VIRTIO_COMMON_DEVICE_FEATURE:
++        return VIRTIO_MMIO_DEVICE_FEATURES;
++    case VIRTIO_COMMON_DRIVER_FEATURE_SEL:
++        return VIRTIO_MMIO_DRIVER_FEATURES_SEL;
++    case VIRTIO_COMMON_DRIVER_FEATURE:
++        return VIRTIO_MMIO_DRIVER_FEATURES;
++    case VIRTIO_COMMON_DEVICE_STATUS:
++        return VIRTIO_MMIO_STATUS;
++    case VIRTIO_COMMON_QUEUE_SEL:
++        return VIRTIO_MMIO_QUEUE_SEL;
++    case VIRTIO_COMMON_QUEUE_SIZE:
++        return VIRTIO_MMIO_QUEUE_NUM_MAX;
++    case VIRTIO_COMMON_QUEUE_DESC_LO:
++        return VIRTIO_MMIO_QUEUE_DESC_LOW;
++    case VIRTIO_COMMON_QUEUE_DESC_HI:
++        return VIRTIO_MMIO_QUEUE_DESC_HIGH;
++    case VIRTIO_COMMON_QUEUE_DRIVER_LO:
++        return VIRTIO_MMIO_QUEUE_DRIVER_LOW;
++    case VIRTIO_COMMON_QUEUE_DRIVER_HI:
++        return VIRTIO_MMIO_QUEUE_DRIVER_HIGH;
++    case VIRTIO_COMMON_QUEUE_DEVICE_LO:
++        return VIRTIO_MMIO_QUEUE_DEVICE_LOW;
++    case VIRTIO_COMMON_QUEUE_DEVICE_HI:
++        return VIRTIO_MMIO_QUEUE_DEVICE_HIGH;
++    case VIRTIO_COMMON_QUEUE_ENABLE:
++        return VIRTIO_MMIO_QUEUE_READY;
++    default:
++        return VIRTIO_MMIO_REG_NONE;
++    }
++}
++
++/// Map a PCI common-cfg register to its MMIO v2 offset for writes.
++/// QUEUE_SIZE writes target QUEUE_NUM (not NUM_MAX); per-queue MSI-X
++/// and notify-multiplier registers have no MMIO equivalent.
++constexpr uint16_t virtio_mmio_write_offset(uint16_t pci_reg) {
++    if (pci_reg == VIRTIO_COMMON_QUEUE_SIZE)
++        return VIRTIO_MMIO_QUEUE_NUM;
++    return virtio_mmio_read_offset(pci_reg);
++}
++
++/// Map a PCI modern/legacy device ID to its MMIO device ID (0 = unknown).
++constexpr uint16_t virtio_mmio_device_id(uint16_t pci_id) {
++    if (pci_id == VIRTIO_DEVICE_NET || pci_id == VIRTIO_DEVICE_NET_LEGACY)
++        return VIRTIO_MMIO_DEVICE_NET;
++    if (pci_id == VIRTIO_DEVICE_BLOCK || pci_id == VIRTIO_DEVICE_BLOCK_LEGACY)
++        return VIRTIO_MMIO_DEVICE_BLOCK;
++    return 0;
++}
++
++/// Virtual alias for an MMIO physical address (boot-provided mappings).
++inline uint64_t virtio_mmio_virt(uint64_t phys) {
++#if defined(CONFIG_ARCH_AARCH64)
++    return HHDM_OFFSET + phys;
++#elif defined(CONFIG_ARCH_RISCV64)
++    return phys; // identity L0[0] window covers the MMIO range
++#else
++    (void)phys;
++    return 0;
++#endif
++}
++
+ // --- Transport API ---
+ 
+ /// Check if a PCI device is a Virtio device (vendor 0x1AF4).
+@@ -190,47 +301,116 @@ bool virtio_map_mmio(uint8_t bar, uint32_t offset, uint32_t length,
+ 
+ /// Read a 32-bit register from the Virtio common config.
+ inline uint32_t virtio_read_common(const VirtioTransport &t, uint16_t reg) {
++#if defined(CONFIG_ARCH_X86_64)
++    auto *ptr =
++        reinterpret_cast<volatile uint32_t *>(t.common_cfg.virt_addr + reg);
++    return *ptr;
++#else
++    if (t.mmio) {
++        // MMIO registers are 32-bit; registers without an MMIO
++        // equivalent read as 0 (fail-closed).
++        uint16_t mapped = virtio_mmio_read_offset(reg);
++        if (mapped == VIRTIO_MMIO_REG_NONE) return 0;
++        auto *ptr = reinterpret_cast<volatile uint32_t *>(
++            t.common_cfg.virt_addr + mapped);
++        return *ptr;
++    }
+     auto *ptr =
+         reinterpret_cast<volatile uint32_t *>(t.common_cfg.virt_addr + reg);
+     return *ptr;
++#endif
+ }
+ 
+ /// Write a 32-bit register to the Virtio common config.
+ inline void virtio_write_common(const VirtioTransport &t, uint16_t reg,
+                                 uint32_t val) {
++#if defined(CONFIG_ARCH_X86_64)
++    auto *ptr =
++        reinterpret_cast<volatile uint32_t *>(t.common_cfg.virt_addr + reg);
++    *ptr = val;
++#else
++    if (t.mmio) {
++        uint16_t mapped = virtio_mmio_write_offset(reg);
++        if (mapped == VIRTIO_MMIO_REG_NONE) return;
++        auto *ptr = reinterpret_cast<volatile uint32_t *>(
++            t.common_cfg.virt_addr + mapped);
++        *ptr = val;
++        return;
++    }
+     auto *ptr =
+         reinterpret_cast<volatile uint32_t *>(t.common_cfg.virt_addr + reg);
+     *ptr = val;
++#endif
+ }
+ 
+ /// Read a 16-bit register from the Virtio common config.
+ inline uint16_t virtio_read_common16(const VirtioTransport &t, uint16_t reg) {
++#if defined(CONFIG_ARCH_X86_64)
+     auto *ptr =
+         reinterpret_cast<volatile uint16_t *>(t.common_cfg.virt_addr + reg);
+     return *ptr;
++#else
++    // MMIO has no 16-bit registers: 32-bit read, low half.
++    if (t.mmio)
++        return static_cast<uint16_t>(virtio_read_common(t, reg) & 0xFFFF);
++    auto *ptr =
++        reinterpret_cast<volatile uint16_t *>(t.common_cfg.virt_addr + reg);
++    return *ptr;
++#endif
+ }
+ 
+ /// Write a 16-bit register to the Virtio common config.
+ inline void virtio_write_common16(const VirtioTransport &t, uint16_t reg,
+                                   uint16_t val) {
++#if defined(CONFIG_ARCH_X86_64)
++    auto *ptr =
++        reinterpret_cast<volatile uint16_t *>(t.common_cfg.virt_addr + reg);
++    *ptr = val;
++#else
++    // MMIO takes 32-bit accesses (reserved upper bytes stay zero).
++    if (t.mmio) {
++        virtio_write_common(t, reg, val);
++        return;
++    }
+     auto *ptr =
+         reinterpret_cast<volatile uint16_t *>(t.common_cfg.virt_addr + reg);
+     *ptr = val;
++#endif
+ }
+ 
+ /// Read an 8-bit register from the Virtio common config.
+ inline uint8_t virtio_read_common8(const VirtioTransport &t, uint16_t reg) {
++#if defined(CONFIG_ARCH_X86_64)
++    auto *ptr =
++        reinterpret_cast<volatile uint8_t *>(t.common_cfg.virt_addr + reg);
++    return *ptr;
++#else
++    // MMIO has no 8-bit registers: 32-bit read, low byte.
++    if (t.mmio)
++        return static_cast<uint8_t>(virtio_read_common(t, reg) & 0xFF);
+     auto *ptr =
+         reinterpret_cast<volatile uint8_t *>(t.common_cfg.virt_addr + reg);
+     return *ptr;
++#endif
+ }
+ 
+ /// Write an 8-bit register to the Virtio common config.
+ inline void virtio_write_common8(const VirtioTransport &t, uint16_t reg,
+                                  uint8_t val) {
++#if defined(CONFIG_ARCH_X86_64)
++    auto *ptr =
++        reinterpret_cast<volatile uint8_t *>(t.common_cfg.virt_addr + reg);
++    *ptr = val;
++#else
++    // MMIO takes 32-bit accesses (reserved upper bytes stay zero).
++    if (t.mmio) {
++        virtio_write_common(t, reg, val);
++        return;
++    }
+     auto *ptr =
+         reinterpret_cast<volatile uint8_t *>(t.common_cfg.virt_addr + reg);
+     *ptr = val;
++#endif
+ }
+ 
+ /// Read device status (8-bit register at 0x14).
+@@ -261,10 +441,24 @@ bool virtio_setup_queue(VirtioTransport &t, uint16_t queue_idx,
+ 
+ /// Notify the device that new descriptors are available.
+ inline void virtio_notify(const VirtioTransport &t, uint16_t queue_idx) {
++#if defined(CONFIG_ARCH_X86_64)
++    uint32_t off = t.notify_off_multiplier * queue_idx;
++    auto *ptr =
++        reinterpret_cast<volatile uint32_t *>(t.notify_cfg.virt_addr + off);
++    *ptr = queue_idx;
++#else
++    // MMIO QueueNotify is a direct queue-index write (no multiplier).
++    if (t.mmio) {
++        auto *ptr = reinterpret_cast<volatile uint32_t *>(
++            t.common_cfg.virt_addr + VIRTIO_MMIO_QUEUE_NOTIFY);
++        *ptr = queue_idx;
++        return;
++    }
+     uint32_t off = t.notify_off_multiplier * queue_idx;
+     auto *ptr =
+         reinterpret_cast<volatile uint32_t *>(t.notify_cfg.virt_addr + off);
+     *ptr = queue_idx;
++#endif
+ }
+ 
+ } // namespace arch
+diff --git a/src/kernel/boot/dtb.cpp b/src/kernel/boot/dtb.cpp
+new file mode 100644
+index 000000000..7b948c8f8
+--- /dev/null
++++ b/src/kernel/boot/dtb.cpp
+@@ -0,0 +1,217 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file dtb.cpp
++/// @brief Validated device-tree access (issue #350). See dtb.hpp.
++
++#include <kernel/boot/dtb.hpp>
++#include <kernel/boot/bootinfo.hpp>
++#include <kernel/core/global_state.hpp>
++#include <kernel/memory/vmm.hpp>
++#include <fdt/libfdt.h>
++#include <fdt/fdt.h>
++#include <string.hpp>
++
++namespace kernel::boot {
++
++namespace {
++
++// Usable RAM or firmware-reserved RAM (the DTB is firmware-placed live
++// boot data and may sit in a reserved carve-out). MMIO/ACPI rejected.
++bool dtb_region_usable(uint32_t type) {
++    return type == 1 || type == 2;
++}
++
++// Overflow-safe containment: [ptr, ptr + span) inside [base, base + size).
++bool dtb_span_inside(uint64_t ptr, uint64_t span, uint64_t base,
++                     uint64_t size) {
++    if (span > size) return false;
++    if (ptr < base) return false;
++    return ptr - base <= size - span;
++}
++
++} // namespace
++
++const void *dtb_from_boot_info() {
++    const BootInfo &info = kernel::gs::boot_info();
++    uint64_t ptr = info.dtb_ptr;
++    if (ptr == 0) return nullptr;
++    int region_count = info.num_mem_regions;
++    if (region_count < 0 || region_count > BOOTINFO_MAX_MEM_REGIONS)
++        return nullptr;
++    const BootInfo::MemRegion *home = nullptr;
++    for (int idx = 0; idx < region_count; ++idx) {
++        const BootInfo::MemRegion &region = info.mem_regions[idx];
++        if (!dtb_region_usable(region.type)) continue;
++        if (dtb_span_inside(ptr, sizeof(struct fdt_header), region.base,
++                            region.size)) {
++            home = &region;
++            break;
++        }
++    }
++    if (!home) return nullptr;
++    const void *dtb =
++        reinterpret_cast<const void *>(ptr + arch::HHDM_OFFSET);
++    if (fdt_check_layout(dtb) != 0) return nullptr;
++    const struct fdt_header *hdr = (const struct fdt_header *)dtb;
++    uint32_t total = 0;
++    __builtin_memcpy(&total, &hdr->totalsize, sizeof(total));
++    total = __builtin_bswap32(total);
++    if (!dtb_span_inside(ptr, total, home->base, home->size)) return nullptr;
++    if (fdt_check_structure(dtb) != 0) return nullptr;
++    return dtb;
++}
++
++int dtb_find_compatible_nodes(const void *fdt, const char *compat,
++                              int *out_offsets, int max_offsets) {
++    if (!fdt || !compat || !out_offsets || max_offsets <= 0)
++        return -FDT_ERR_BADOFFSET;
++    if (fdt_check_layout(fdt) != 0 || fdt_check_structure(fdt) != 0)
++        return -FDT_ERR_BADSTRUCTURE;
++    int found = 0;
++    // Iterator-stack DFS (no recursion, no allocation). Tree depth is
++    // already proven <= FDT_MAX_DEPTH; each level holds the next
++    // unvisited sibling at that depth. A step cap terminates the walk
++    // even if the walk and the proof ever disagree.
++    struct Level {
++        int next;
++    };
++    Level levels[FDT_MAX_DEPTH + 2];
++    auto visit_node = [&](int node) {
++        int prop_len = 0;
++        const void *prop =
++            fdt_getprop_namelen(fdt, node, "compatible", &prop_len);
++        if (!prop || prop_len <= 0) return;
++        // Audit S3: bounded compare — the property may lack a NUL within
++        // bounds, so plain strcmp could over-read past prop_len.
++        const char *str = (const char *)prop;
++        int rest = prop_len;
++        while (rest > 0) {
++            int idx = 0;
++            while (compat[idx] != '\0' && idx < rest && str[idx] == compat[idx])
++                ++idx;
++            if (compat[idx] == '\0' &&
++                (idx >= rest || str[idx] == '\0')) {
++                if (found < max_offsets) out_offsets[found++] = node;
++                break;
++            }
++            int adv = 0;
++            while (adv < rest && str[adv] != '\0') ++adv;
++            ++adv; // skip NUL (clamped below)
++            if (adv > rest) break;
++            str += adv;
++            rest -= adv;
++        }
++    };
++    visit_node(0); // root
++    int depth = 1;
++    levels[1].next = fdt_first_child(fdt, 0);
++    int steps = 0;
++    constexpr int kMaxSteps = 16384;
++    while (depth >= 1) {
++        if (++steps > kMaxSteps || found >= max_offsets) break;
++        if (levels[depth].next < 0) {
++            --depth;
++            continue;
++        }
++        int node = levels[depth].next;
++        levels[depth].next = fdt_next_sibling(fdt, node);
++        visit_node(node);
++        if (depth + 1 <= FDT_MAX_DEPTH) {
++            int child = fdt_first_child(fdt, node);
++            if (child >= 0) {
++                ++depth;
++                levels[depth].next = child;
++            }
++        }
++    }
++    return found;
++}
++
++bool dtb_node_reg(const void *fdt, int node, uint64_t &base,
++                  uint64_t &size) {
++    base = 0;
++    size = 0;
++    if (!fdt) return false;
++    if (fdt_check_layout(fdt) != 0 || fdt_check_structure(fdt) != 0)
++        return false;
++    uint32_t addr_cells = 2;
++    uint32_t size_cells = 2;
++    int cell_len = 0;
++    const void *cell_prop =
++        fdt_getprop_namelen(fdt, 0, "#address-cells", &cell_len);
++    if (cell_prop && cell_len == 4) {
++        uint32_t val = 0;
++        __builtin_memcpy(&val, cell_prop, sizeof(val));
++        addr_cells = __builtin_bswap32(val);
++    }
++    cell_prop = fdt_getprop_namelen(fdt, 0, "#size-cells", &cell_len);
++    if (cell_prop && cell_len == 4) {
++        uint32_t val = 0;
++        __builtin_memcpy(&val, cell_prop, sizeof(val));
++        size_cells = __builtin_bswap32(val);
++    }
++    if (addr_cells < 1 || addr_cells > 2) return false;
++    if (size_cells < 1 || size_cells > 2) return false;
++    int reg_len = 0;
++    const void *reg_prop = fdt_getprop_namelen(fdt, node, "reg", &reg_len);
++    if (!reg_prop) return false;
++    uint32_t need = (addr_cells + size_cells) * 4;
++    if (reg_len < (int)need) return false;
++    const uint8_t *bytes = (const uint8_t *)reg_prop;
++    uint64_t reg_base = 0;
++    uint64_t reg_size = 0;
++    for (uint32_t idx = 0; idx < addr_cells; ++idx) {
++        uint32_t cell = 0;
++        __builtin_memcpy(&cell, bytes + idx * 4, sizeof(cell));
++        reg_base = (reg_base << 32) | __builtin_bswap32(cell);
++    }
++    for (uint32_t idx = 0; idx < size_cells; ++idx) {
++        uint32_t cell = 0;
++        __builtin_memcpy(&cell, bytes + (addr_cells + idx) * 4,
++                         sizeof(cell));
++        reg_size = (reg_size << 32) | __builtin_bswap32(cell);
++    }
++    base = reg_base;
++    size = reg_size;
++    return true;
++}
++
++bool dtb_node_cells(const void *fdt, int node, const char *prop_name,
++                    uint32_t *out_cells, int max_cells, int &cell_count) {
++    cell_count = 0;
++    if (!fdt || !prop_name || !out_cells || max_cells <= 0) return false;
++    if (fdt_check_layout(fdt) != 0 || fdt_check_structure(fdt) != 0)
++        return false;
++    int prop_len = 0;
++    const void *prop = fdt_getprop_namelen(fdt, node, prop_name, &prop_len);
++    if (!prop || prop_len <= 0) return false;
++    if ((prop_len % 4) != 0) return false;
++    int count = prop_len / 4;
++    if (count > max_cells) return false;
++    const uint8_t *bytes = (const uint8_t *)prop;
++    for (int idx = 0; idx < count; ++idx) {
++        uint32_t cell = 0;
++        __builtin_memcpy(&cell, bytes + idx * 4, sizeof(cell));
++        out_cells[idx] = __builtin_bswap32(cell);
++    }
++    cell_count = count;
++    return true;
++}
++
++} // namespace kernel::boot
+diff --git a/src/kernel/boot/dtb.hpp b/src/kernel/boot/dtb.hpp
+new file mode 100644
+index 000000000..3b9b86f22
+--- /dev/null
++++ b/src/kernel/boot/dtb.hpp
+@@ -0,0 +1,55 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file dtb.hpp
++/// @brief Validated device-tree access (issue #350) — the DTB is firmware
++/// input, so every accessor fail-closes to null/false on absent or
++/// malformed data. No allocation; all walks bounded.
++
++#include <types.hpp>
++
++namespace kernel::boot {
++
++/// Maximum compatible-node matches returned per search.
++constexpr int DTB_MAX_MATCHES = 32;
++
++/// @brief Validated DTB pointer from boot info, or nullptr.
++/// Checks region containment (usable or reserved RAM), HHDM aliasing,
++/// layout + structure validation. Fail-closed on any defect.
++const void *dtb_from_boot_info();
++
++/// @brief Collect up to @p max_offsets node offsets whose "compatible"
++/// property contains @p compat as one NUL-separated string.
++/// @return match count (0 = none), or negative -FDT_ERR_* on bad input.
++/// The blob must already be validated (use dtb_from_boot_info()).
++int dtb_find_compatible_nodes(const void *fdt, const char *compat,
++                              int *out_offsets, int max_offsets);
++
++/// @brief Decode a node's first "reg" tuple using the root
++/// #address-cells/#size-cells (1 or 2 each, default 2/2).
++/// @return true with @p base/@p size on success, false otherwise.
++bool dtb_node_reg(const void *fdt, int node, uint64_t &base, uint64_t &size);
++
++/// @brief Decode a u32-cell property (e.g. "interrupts") big-endian.
++/// @return true with @p cell_count cells on success, false otherwise.
++bool dtb_node_cells(const void *fdt, int node, const char *prop_name,
++                    uint32_t *out_cells, int max_cells, int &cell_count);
++
++} // namespace kernel::boot
+diff --git a/src/lib/fdt/fdt_ro.cpp b/src/lib/fdt/fdt_ro.cpp
+index 9324f6682..7cbfcdaf1 100644
+--- a/src/lib/fdt/fdt_ro.cpp
++++ b/src/lib/fdt/fdt_ro.cpp
+@@ -18,6 +18,95 @@ int fdt_check_header(const void *fdt) {
+     return 0;
+ }
+ 
++// Read a big-endian u32 without assuming source alignment (issue #350:
++// riscv64 traps on misaligned loads; the struct block is 4-aligned in
++// practice but a corrupt blob is not trustworthy).
++static uint32_t fdt_load_u32(const char *blob, uint32_t byte_off) {
++    uint32_t raw = 0;
++    __builtin_memcpy(&raw, blob + byte_off, sizeof(raw));
++    return fdt32_to_cpu(raw);
++}
++
++int fdt_check_layout(const void *fdt) {
++    if (!fdt) return -FDT_ERR_BADOFFSET;
++    int hdr_err = fdt_check_header(fdt);
++    if (hdr_err != 0) return hdr_err;
++    const char *blob = (const char *)fdt;
++    // Audit S3: header u32 loads via memcpy (a corrupt dtb_ptr may be
++    // misaligned — direct dereference would fault on riscv64). Offsets
++    // per struct fdt_header (fdt.h): totalsize@4, off_dt_struct@8,
++    // off_dt_strings@12, off_mem_rsvmap@16, size_dt_strings@32,
++    // size_dt_struct@36.
++    uint32_t total = fdt_load_u32(blob, 4);
++    if (total > FDT_MAX_TOTALSIZE) return -FDT_ERR_BADLAYOUT;
++    uint32_t off_struct = fdt_load_u32(blob, 8);
++    uint32_t off_strings = fdt_load_u32(blob, 12);
++    uint32_t off_rsv = fdt_load_u32(blob, 16);
++    uint32_t size_strings = fdt_load_u32(blob, 32);
++    uint32_t size_struct = fdt_load_u32(blob, 36);
++    if (off_struct > total || off_strings > total || off_rsv > total)
++        return -FDT_ERR_BADLAYOUT;
++    if (size_struct > total - off_struct) return -FDT_ERR_BADLAYOUT;
++    if (size_strings > total - off_strings) return -FDT_ERR_BADLAYOUT;
++    if ((off_struct % FDT_TAGSIZE) != 0) return -FDT_ERR_BADLAYOUT;
++    // Reserve map must at least fit its zero terminator entry.
++    if (sizeof(struct fdt_reserve_entry) > total - off_rsv)
++        return -FDT_ERR_BADLAYOUT;
++    return 0;
++}
++
++int fdt_check_structure(const void *fdt) {
++    if (!fdt) return -FDT_ERR_BADOFFSET;
++    int layout_err = fdt_check_layout(fdt);
++    if (layout_err != 0) return layout_err;
++    const char *blob = (const char *)fdt;
++    // Same S3 as layout: memcpy loads, never direct header dereference.
++    uint32_t struct_off = fdt_load_u32(blob, 8);
++    uint32_t struct_size = fdt_load_u32(blob, 36);
++    uint32_t strings_size = fdt_load_u32(blob, 32);
++    uint32_t pos = 0;
++    int depth = 0;
++    uint32_t node_count = 0;
++    for (;;) {
++        if (pos + FDT_TAGSIZE > struct_size) return -FDT_ERR_TRUNCATED;
++        uint32_t tag = fdt_load_u32(blob, struct_off + pos);
++        pos += FDT_TAGSIZE;
++        if (tag == FDT_BEGIN_NODE) {
++            depth++;
++            if (depth > FDT_MAX_DEPTH) return -FDT_ERR_BADSTRUCTURE;
++            node_count++;
++            if (node_count > FDT_MAX_NODES) return -FDT_ERR_BADSTRUCTURE;
++            uint32_t name_end = pos;
++            while (name_end < struct_size &&
++                   blob[struct_off + name_end] != '\0')
++                name_end++;
++            if (name_end >= struct_size) return -FDT_ERR_TRUNCATED;
++            uint32_t aligned = (name_end + 1 + 3) & ~3u;
++            if (aligned > struct_size) return -FDT_ERR_TRUNCATED;
++            pos = aligned;
++        } else if (tag == FDT_PROP) {
++            if (pos + 2 * FDT_TAGSIZE > struct_size)
++                return -FDT_ERR_TRUNCATED;
++            uint32_t prop_len = fdt_load_u32(blob, struct_off + pos);
++            uint32_t name_off = fdt_load_u32(blob, struct_off + pos + 4);
++            pos += 2 * FDT_TAGSIZE;
++            if (name_off >= strings_size) return -FDT_ERR_BADSTRUCTURE;
++            if (prop_len > struct_size - pos) return -FDT_ERR_TRUNCATED;
++            pos = (pos + prop_len + 3) & ~3u;
++            if (pos > struct_size) return -FDT_ERR_TRUNCATED;
++        } else if (tag == FDT_END_NODE) {
++            depth--;
++            if (depth < 0) return -FDT_ERR_BADSTRUCTURE;
++        } else if (tag == FDT_NOP) {
++            // No payload — position already advanced past the tag.
++        } else if (tag == FDT_END) {
++            return (depth == 0) ? 0 : -FDT_ERR_BADSTRUCTURE;
++        } else {
++            return -FDT_ERR_BADSTRUCTURE;
++        }
++    }
++}
++
+ int fdt_num_mem_rsv(const void *fdt) {
+     const struct fdt_header *h = (const struct fdt_header *)fdt;
+     int count = 0;
+diff --git a/src/lib/fdt/libfdt.h b/src/lib/fdt/libfdt.h
+index bf5c06c9a..475f8eeac 100644
+--- a/src/lib/fdt/libfdt.h
++++ b/src/lib/fdt/libfdt.h
+@@ -27,9 +27,21 @@ extern "C" {
+ 
+ #define FDT_ERR_MAX 17
+ 
++/* Untrusted-DTB validation bounds (issue #350): the DTB is firmware
++ * input — layout + structure must be proven before any public walk. */
++#define FDT_MAX_TOTALSIZE (2u * 1024u * 1024u)
++#define FDT_MAX_NODES 4096
++#define FDT_MAX_DEPTH 32
++
+ /* Public API */
+ int fdt_check_header(const void *fdt);
+ 
++/* Validate header offsets/sizes against totalsize (returns -FDT_ERR_*). */
++int fdt_check_layout(const void *fdt);
++
++/* Bounded structure-block walk: tags, lengths, name offsets, depth. */
++int fdt_check_structure(const void *fdt);
++
+ int fdt_num_mem_rsv(const void *fdt);
+ int fdt_get_mem_rsv(const void *fdt, int n, uint64_t *addr, uint64_t *size);
+ 
+diff --git a/test-history.txt b/test-history.txt
+index f44737376..580b540be 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4243,3 +4243,5 @@ SUMMARY: total=26 ok=25 fail=1
+ 2026-10-20 10:55:00 timing_core PASSED: 19 FAILED: 0 TIME: 979ms STATUS: #353-s3c-riscv64-gate
+ 2026-10-20 10:55:00 timing_core PASSED: 19 FAILED: 0 TIME: 1857ms STATUS: #353-s3c-x86_64-gate
+ 2026-10-20 10:55:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 953ms STATUS: #353-s3c-riscv64-gate-known-5QE+#387
++2026-10-20 17:04:48 basic_lib PASSED: 26 FAILED: 0 TIME: 1768ms STATUS: #350-sliceA-x86-gate
++2026-10-20 17:08:19 basic_lib PASSED: 26 FAILED: 0 TIME: 1769ms STATUS: #350-sliceA-s3c-x86-gate

@@ -18,6 +18,95 @@ int fdt_check_header(const void *fdt) {
     return 0;
 }
 
+// Read a big-endian u32 without assuming source alignment (issue #350:
+// riscv64 traps on misaligned loads; the struct block is 4-aligned in
+// practice but a corrupt blob is not trustworthy).
+static uint32_t fdt_load_u32(const char *blob, uint32_t byte_off) {
+    uint32_t raw = 0;
+    __builtin_memcpy(&raw, blob + byte_off, sizeof(raw));
+    return fdt32_to_cpu(raw);
+}
+
+int fdt_check_layout(const void *fdt) {
+    if (!fdt) return -FDT_ERR_BADOFFSET;
+    int hdr_err = fdt_check_header(fdt);
+    if (hdr_err != 0) return hdr_err;
+    const char *blob = (const char *)fdt;
+    // Audit S3: header u32 loads via memcpy (a corrupt dtb_ptr may be
+    // misaligned — direct dereference would fault on riscv64). Offsets
+    // per struct fdt_header (fdt.h): totalsize@4, off_dt_struct@8,
+    // off_dt_strings@12, off_mem_rsvmap@16, size_dt_strings@32,
+    // size_dt_struct@36.
+    uint32_t total = fdt_load_u32(blob, 4);
+    if (total > FDT_MAX_TOTALSIZE) return -FDT_ERR_BADLAYOUT;
+    uint32_t off_struct = fdt_load_u32(blob, 8);
+    uint32_t off_strings = fdt_load_u32(blob, 12);
+    uint32_t off_rsv = fdt_load_u32(blob, 16);
+    uint32_t size_strings = fdt_load_u32(blob, 32);
+    uint32_t size_struct = fdt_load_u32(blob, 36);
+    if (off_struct > total || off_strings > total || off_rsv > total)
+        return -FDT_ERR_BADLAYOUT;
+    if (size_struct > total - off_struct) return -FDT_ERR_BADLAYOUT;
+    if (size_strings > total - off_strings) return -FDT_ERR_BADLAYOUT;
+    if ((off_struct % FDT_TAGSIZE) != 0) return -FDT_ERR_BADLAYOUT;
+    // Reserve map must at least fit its zero terminator entry.
+    if (sizeof(struct fdt_reserve_entry) > total - off_rsv)
+        return -FDT_ERR_BADLAYOUT;
+    return 0;
+}
+
+int fdt_check_structure(const void *fdt) {
+    if (!fdt) return -FDT_ERR_BADOFFSET;
+    int layout_err = fdt_check_layout(fdt);
+    if (layout_err != 0) return layout_err;
+    const char *blob = (const char *)fdt;
+    // Same S3 as layout: memcpy loads, never direct header dereference.
+    uint32_t struct_off = fdt_load_u32(blob, 8);
+    uint32_t struct_size = fdt_load_u32(blob, 36);
+    uint32_t strings_size = fdt_load_u32(blob, 32);
+    uint32_t pos = 0;
+    int depth = 0;
+    uint32_t node_count = 0;
+    for (;;) {
+        if (pos + FDT_TAGSIZE > struct_size) return -FDT_ERR_TRUNCATED;
+        uint32_t tag = fdt_load_u32(blob, struct_off + pos);
+        pos += FDT_TAGSIZE;
+        if (tag == FDT_BEGIN_NODE) {
+            depth++;
+            if (depth > FDT_MAX_DEPTH) return -FDT_ERR_BADSTRUCTURE;
+            node_count++;
+            if (node_count > FDT_MAX_NODES) return -FDT_ERR_BADSTRUCTURE;
+            uint32_t name_end = pos;
+            while (name_end < struct_size &&
+                   blob[struct_off + name_end] != '\0')
+                name_end++;
+            if (name_end >= struct_size) return -FDT_ERR_TRUNCATED;
+            uint32_t aligned = (name_end + 1 + 3) & ~3u;
+            if (aligned > struct_size) return -FDT_ERR_TRUNCATED;
+            pos = aligned;
+        } else if (tag == FDT_PROP) {
+            if (pos + 2 * FDT_TAGSIZE > struct_size)
+                return -FDT_ERR_TRUNCATED;
+            uint32_t prop_len = fdt_load_u32(blob, struct_off + pos);
+            uint32_t name_off = fdt_load_u32(blob, struct_off + pos + 4);
+            pos += 2 * FDT_TAGSIZE;
+            if (name_off >= strings_size) return -FDT_ERR_BADSTRUCTURE;
+            if (prop_len > struct_size - pos) return -FDT_ERR_TRUNCATED;
+            pos = (pos + prop_len + 3) & ~3u;
+            if (pos > struct_size) return -FDT_ERR_TRUNCATED;
+        } else if (tag == FDT_END_NODE) {
+            depth--;
+            if (depth < 0) return -FDT_ERR_BADSTRUCTURE;
+        } else if (tag == FDT_NOP) {
+            // No payload — position already advanced past the tag.
+        } else if (tag == FDT_END) {
+            return (depth == 0) ? 0 : -FDT_ERR_BADSTRUCTURE;
+        } else {
+            return -FDT_ERR_BADSTRUCTURE;
+        }
+    }
+}
+
 int fdt_num_mem_rsv(const void *fdt) {
     const struct fdt_header *h = (const struct fdt_header *)fdt;
     int count = 0;
