@@ -229,3 +229,43 @@ the guard keeps it that way.
 | RQ | a current task must never be queued |
 | Snapshot | rebuild_ready_queue heals all ready-queue desyncs |
 | H2 | deferred-switch race — RESOLVED 2026-08-13/15 (see `specs/ipc.md`) |
+
+## 8. Per-arch gate matrix (issue #357)
+
+Authoritative in-repo copy of the v0.5.5 per-arch gates; the Makefile
+owns the lists (`TEST_FULL_CLASSES_<arch>`, `SELFTEST_CLASSES_<arch>`),
+`scripts/run_all_classes.sh` consumes them via `NEXIOS_TEST_CLASSES`.
+Per-class rows in `test-history.txt` are canonical; the SUMMARY line
+carries `ARCH=<arch>`. Counts are measured, never hand-summed.
+
+### Debug full gate (`make test-full <arch> debug`)
+
+| Arch | Runs | Green (FAILED: 0) | Excluded (with evidence) |
+|---|---|---|---|
+| x86_64 | 26 | all (incl. smp, ahci_live, iommu_live) | — |
+| aarch64 | 11 + testrunner | core_basic, core_sync, core_task, core_syscall, core_tracing, ipc, hal, logging_debug, random, task_tcb_log | core_sched STALL, core_memory PANIC, capability STALL, proc_elf 43/22, storage #392, servers 60/6, drivers #391, deadline PANIC, ui fb-gap, bench 27/1, task_fpu empty, smp*/ahci/iommu x86-only |
+| riscv64 | 8 | arch_riscv64 (known-red: 5 QE fixtures + #387), scheduler_zombie, configuration_build, memory_vmm, memory_page_tables, timing_core, hal_timer, irq_early_std | drivers #391×2, storage #392, proc_elf, ui, hal #388, selftest reds |
+
+A class enters the green set only with a measured `FAILED: 0` row;
+exclusion cites the red row + issue. No blind wiring.
+
+### Release gate
+
+| Arch | Artifact | List |
+|---|---|---|
+| x86_64 | `make release` ISO (+ `release/.baked-test-config`) | measured 24-class TF_RELEASE set |
+| aarch64 | `make release-elf` → `build/kernel.elf` (+ `build/.baked-test-config-aarch64`) | TF_RELEASE subsets per B1 census; `none` E2E post-#393 |
+| riscv64 | `make release-elf` → `build/kernel-riscv64-release.bin` (+ stamp) | TF_RELEASE subsets per B1 census; `none` E2E post-#393 |
+
+`make release` stays x86_64-only (UEFI ISO is an x86 boot concept).
+Stale baked configs fail loud (`build/.baked-test-config-<arch>`
+vs requested class; never boot the wrong suite).
+
+### Selftest gate (`make execute-test <arch> debug|release selftest`)
+
+x86_64 → `safe` class. aarch64/riscv64 → multi-class boot from
+`SELFTEST_CLASSES_<arch>` (whitespace-separated `test-config.txt`):
+aarch64 `arch_aarch64 configuration_build hal hal_timer
+irq_early_std memory_page_tables memory_vmm timing_core`; riscv64
+`configuration_build hal_timer irq_early_std memory_page_tables
+memory_vmm timing_core scheduler_zombie`.

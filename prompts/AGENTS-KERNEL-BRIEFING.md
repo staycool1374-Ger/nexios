@@ -78,6 +78,7 @@ verifies OS and user ELF authenticity and runs diagnostic time measurements.
 - Incremental: x86_64 release interactive reuses existing ISO if present (skip rebuild)
 - Arch switching via `make run-*-mode <new-arch>` triggers `make clean` automatically via `check-arch` stamp
 - Positional arguments consumed by match-all `%:: @true` at end of Makefile
+- Per-arch gates (issue #357): the Makefile owns `TEST_FULL_CLASSES_<arch>` / `SELFTEST_CLASSES_<arch>` (measured-only green lists); `make test-full` consumes them via `NEXIOS_TEST_CLASSES` (loud error when missing); `selftest` boots one class per `SELFTEST_CLASSES` entry off-x86 (`safe` on x86); baked release configs live at `build/.baked-test-config-<arch>` and are asserted before QEMU (never boot a stale suite).
 
 **Examples:**
 ```
@@ -103,6 +104,7 @@ make execute-test x86 release selftest    # CI gate
 - `Terminal::write()` → `serial_putchar()` FIRST, THEN framebuffer rendering
 - STATUS_BAR_ROWS=2, `rows_ = (height / FONT_HEIGHT) - 2`
 - **Avoid pixel-by-pixel framebuffer loops in performance-critical paths**
+- Framebuffer gap contract (issue #357): `Framebuffer::backend_name()` is `"multiboot2"` on x86_64, `"none"` elsewhere; `available()==false` off-x86 with one WARN at boot (follow-up: #394 virtio-gpu/ramfb). Tests must branch on `available()` and assert the gap — never silently skip.
 
 ## 8. Task TCB (TaskControlBlock)
 - Fields: id, parent_id, state, priority, base_priority, period_ticks, deadline_ticks, remaining_ticks

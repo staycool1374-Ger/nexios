@@ -1,0 +1,131 @@
+diff --git a/audits/report-20261020T205006Z.md b/audits/report-20261020T205006Z.md
+new file mode 100644
+index 000000000..d1f46a95a
+--- /dev/null
++++ b/audits/report-20261020T205006Z.md
+@@ -0,0 +1,23 @@
++# AUDIT REPORT 20261020T205006Z
++PATCH: audits/pending_patch-357-B.diff
++FILES: Makefile, scripts/run_all_classes.sh, src/lib/compiler_rt.cpp, src/kernel/input/serial_input.cpp, test-history.txt
++
++## FINDINGS
++- [S3] Makefile:64 — `TEST_FULL_CLASSES_RELEASE` defined but never referenced (test-full expands `$(TEST_FULL_CLASSES_$(_ARCH)_release)` directly).
++  WHY: Dead variable risks future readers wiring the wrong list into a new target.
++- [S3] test-history.txt:249-271 — several x86_64 release census rows record `PASSED: 0 FAILED: 0` (zero TF_RELEASE tests), so the 24/24 gate passes vacuously for those classes.
++  WHY: Rows are honestly recorded (not inflated) and TF_RELEASE marking is pre-existing test design outside this patch, but gate strength for those classes depends on future test-marking, not on this wiring.
++
++## CHECK DISPOSITIONS
++1. Makefile syntax/logic: `make -pn` and `make -n test-full` parse clean; nested `$(TEST_FULL_CLASSES_$(_ARCH)_release)` resolves correctly (x86_64 release 24 tokens, aarch64 release empty → loud error as intended); token counts verified 26/24/11/8 against the B1 rows; x86_64 debug list is token-identical to the script control list; x86 debug/release codegen paths unchanged (x86 release still via `$(MAKE) release`, debug via `$(MAKE) debug`).
++2. release-elf -j safety: `$(KERNEL): $(TEST_REGISTRY_GEN)` edge exists (Makefile:506), so the single-sub-make `$(KERNEL) $(TEST_REGISTRY_GEN)` step is DAG-serialized; only the stamp-clean side effect needed isolation into its own recursive step — done. Riscv BIN separated (`KERNEL_RISCV_RELEASE_BIN`, rule 416 `KERNEL_RISCV_BIN` untouched, no alias).
++3. Selftest if/else: x86 `safe` mapping preserved byte-equivalent (`_class_file=safe` then unconditional write); non-x86 writes `$(SELFTEST_CLASSES)` and skips the second write — correct.
++4. QEMU subst: riscv `QEMU_FLAGS` references only `$(KERNEL_RISCV_BIN)` (Makefile:423), so the outer subst hits and the inner `KERNEL_DEBUG` to `KERNEL` subst is a harmless no-op; aarch64 subst unchanged.
++5. Baked-config assertion: placed in the `CLASS=none` branch after the build (only branch with an x86_64 prebuilt fast-path); the normal-class branch rebuilds release-elf fresh after writing test-config.txt, so stamp==CLASS by construction — no gap.
++6. Script: `NEXIOS_TEST_CLASSES` consumption guarded with `:-` under `set -u`; riscv override correctly skipped when the Makefile passes a list; `ARCH` always set before SUMMARY; `X86_ONLY`/`DEBUG_ONLY` skip loops intact; per-class row format untouched, SUMMARY gains `ARCH=` tag only.
++7. strncpy gate: open/close `#if` symmetric, comment matches the widened condition, x86_64 still excluded, block is top-level (prior riscv64 block closed above).
++8. serial_input guard: declaration `CONFIG_DEBUG && CONFIG_ARCH_RISCV64` exactly matches both use sites (`loopback_begin` else-branch active iff DEBUG&&RISCV64; `loopback_end` same guard) — release TU has no dangling reference.
++9. History rows: aarch64 22 rows → 10 clean + testrunner (expected-panic) + task_fpu (empty) = 12 ok, 10 fail matching the 10 documented exclusions; x86 release 24 rows all `FAILED: 0` matching the 24-token list; riscv extension counts 5/11/13/19/5/7 plus hal 56/1 and ui 20/34 match the claimed census.
++10. Deviations: (i) LTO double-stamp skipped — reasonable, `check-release-stamp` still runs as step 1 and LTO_STAMP is a debug-mode tracker; (ii) vendored picolibc `-j` race — pre-existing, serial-make green, correctly left out of scope.
++
++DECISION: APPROVED
+diff --git a/docs/specs/test-harness.md b/docs/specs/test-harness.md
+index bcc5f2b5b..c1093ceb0 100644
+--- a/docs/specs/test-harness.md
++++ b/docs/specs/test-harness.md
+@@ -229,3 +229,43 @@ the guard keeps it that way.
+ | RQ | a current task must never be queued |
+ | Snapshot | rebuild_ready_queue heals all ready-queue desyncs |
+ | H2 | deferred-switch race — RESOLVED 2026-08-13/15 (see `specs/ipc.md`) |
++
++## 8. Per-arch gate matrix (issue #357)
++
++Authoritative in-repo copy of the v0.5.5 per-arch gates; the Makefile
++owns the lists (`TEST_FULL_CLASSES_<arch>`, `SELFTEST_CLASSES_<arch>`),
++`scripts/run_all_classes.sh` consumes them via `NEXIOS_TEST_CLASSES`.
++Per-class rows in `test-history.txt` are canonical; the SUMMARY line
++carries `ARCH=<arch>`. Counts are measured, never hand-summed.
++
++### Debug full gate (`make test-full <arch> debug`)
++
++| Arch | Runs | Green (FAILED: 0) | Excluded (with evidence) |
++|---|---|---|---|
++| x86_64 | 26 | all (incl. smp, ahci_live, iommu_live) | — |
++| aarch64 | 11 + testrunner | core_basic, core_sync, core_task, core_syscall, core_tracing, ipc, hal, logging_debug, random, task_tcb_log | core_sched STALL, core_memory PANIC, capability STALL, proc_elf 43/22, storage #392, servers 60/6, drivers #391, deadline PANIC, ui fb-gap, bench 27/1, task_fpu empty, smp*/ahci/iommu x86-only |
++| riscv64 | 8 | arch_riscv64 (known-red: 5 QE fixtures + #387), scheduler_zombie, configuration_build, memory_vmm, memory_page_tables, timing_core, hal_timer, irq_early_std | drivers #391×2, storage #392, proc_elf, ui, hal #388, selftest reds |
++
++A class enters the green set only with a measured `FAILED: 0` row;
++exclusion cites the red row + issue. No blind wiring.
++
++### Release gate
++
++| Arch | Artifact | List |
++|---|---|---|
++| x86_64 | `make release` ISO (+ `release/.baked-test-config`) | measured 24-class TF_RELEASE set |
++| aarch64 | `make release-elf` → `build/kernel.elf` (+ `build/.baked-test-config-aarch64`) | TF_RELEASE subsets per B1 census; `none` E2E post-#393 |
++| riscv64 | `make release-elf` → `build/kernel-riscv64-release.bin` (+ stamp) | TF_RELEASE subsets per B1 census; `none` E2E post-#393 |
++
++`make release` stays x86_64-only (UEFI ISO is an x86 boot concept).
++Stale baked configs fail loud (`build/.baked-test-config-<arch>`
++vs requested class; never boot the wrong suite).
++
++### Selftest gate (`make execute-test <arch> debug|release selftest`)
++
++x86_64 → `safe` class. aarch64/riscv64 → multi-class boot from
++`SELFTEST_CLASSES_<arch>` (whitespace-separated `test-config.txt`):
++aarch64 `arch_aarch64 configuration_build hal hal_timer
++irq_early_std memory_page_tables memory_vmm timing_core`; riscv64
++`configuration_build hal_timer irq_early_std memory_page_tables
++memory_vmm timing_core scheduler_zombie`.
+diff --git a/prompts/AGENTS-KERNEL-BRIEFING.md b/prompts/AGENTS-KERNEL-BRIEFING.md
+index c85310ba5..64c01b13a 100644
+--- a/prompts/AGENTS-KERNEL-BRIEFING.md
++++ b/prompts/AGENTS-KERNEL-BRIEFING.md
+@@ -78,6 +78,7 @@ verifies OS and user ELF authenticity and runs diagnostic time measurements.
+ - Incremental: x86_64 release interactive reuses existing ISO if present (skip rebuild)
+ - Arch switching via `make run-*-mode <new-arch>` triggers `make clean` automatically via `check-arch` stamp
+ - Positional arguments consumed by match-all `%:: @true` at end of Makefile
++- Per-arch gates (issue #357): the Makefile owns `TEST_FULL_CLASSES_<arch>` / `SELFTEST_CLASSES_<arch>` (measured-only green lists); `make test-full` consumes them via `NEXIOS_TEST_CLASSES` (loud error when missing); `selftest` boots one class per `SELFTEST_CLASSES` entry off-x86 (`safe` on x86); baked release configs live at `build/.baked-test-config-<arch>` and are asserted before QEMU (never boot a stale suite).
+ 
+ **Examples:**
+ ```
+@@ -103,6 +104,7 @@ make execute-test x86 release selftest    # CI gate
+ - `Terminal::write()` → `serial_putchar()` FIRST, THEN framebuffer rendering
+ - STATUS_BAR_ROWS=2, `rows_ = (height / FONT_HEIGHT) - 2`
+ - **Avoid pixel-by-pixel framebuffer loops in performance-critical paths**
++- Framebuffer gap contract (issue #357): `Framebuffer::backend_name()` is `"multiboot2"` on x86_64, `"none"` elsewhere; `available()==false` off-x86 with one WARN at boot (follow-up: #394 virtio-gpu/ramfb). Tests must branch on `available()` and assert the gap — never silently skip.
+ 
+ ## 8. Task TCB (TaskControlBlock)
+ - Fields: id, parent_id, state, priority, base_priority, period_ticks, deadline_ticks, remaining_ticks
+diff --git a/prompts/LEARNINGS.md b/prompts/LEARNINGS.md
+index 1f87bf6f1..7a49e6af0 100644
+--- a/prompts/LEARNINGS.md
++++ b/prompts/LEARNINGS.md
+@@ -38,7 +38,7 @@
+ - Reap stray QEMUs after every session (tool-killed interactive runs survive reparented, burning ~25% CPU each, masquerading as load spells); recipe-only Makefile edits don't rebuild cpio/ISO — rm the artifacts to force repack.
+ - Interactive user-task tests need a scripted handoff (`source`: loadelf/sleep/runelf/sleep — `fg` is a stub, /dev/tty shared); TCP-serial output before connect is lost (send CR first for a fresh prompt); convict user-space faults by pristine-binary control experiment, never by re-reading the derivation.
+ - Cross-arch: link all three arches for shared-header edits; arch-guard test bodies; riscv low half is identity/MMIO (clone copies L0[0]); aarch64 needs HHDM aliases + 48-bit phys masks; S-mode cannot touch M-mode CSRs; riscv64 never folds __builtin_memcmp (no freestanding provider) — manual compares in tests.
+-- QEMU `-kernel` passes no DTB on aarch64 (x0==0, DTB-primary needs a slot-table fallback); QEMU virtio-mmio is legacy v1 (PFN/Align queues); PCI addrs are uint64_t (ECAM HHDM truncates to 0x10000004 in u32); release-boot silence is never assumed working — prove it (#355).
++- QEMU `-kernel` passes no DTB on aarch64 (x0==0, DTB-primary needs a slot-table fallback); QEMU virtio-mmio is legacy v1 (PFN/Align queues); PCI addrs are uint64_t (ECAM HHDM truncates to 0x10000004 in u32); release-boot silence is never assumed working — prove it (#355, #393 was SIMD-before-fp_enable).
+ - Snapshot restore: release every capability-registry `KernelObject` pin (FrameUserMap/MmioUserMap/PagerRegistry) BEFORE `MemPool::restore_pool_data()` byte-rewinds block data — release-after-rewind over-releases (L→0) and disposes a cap the restored CSpace still points at (slot occupied/gen-matched but `acquire()` reads 0xDD poison = #320); a lazy-mapping pre-snapshot daemon is the minimal trigger.
+ - IPC-quiescence: the suite snapshot must be taken with EVERY task inbox empty — the per-task `MessageQueue` is embedded in the TCB and byte-captured, so an in-flight message replays on every `snapshot_create`/restore (#321). Convict/dismiss a "duplicate IPC" theory with counters (distinctive-type sends in `IPC::send` vs receipts in `IPC::recv`) before touching the queue; when a bug is non-reproducible, ship a structural guarantee + forward invariant test, not a fabricated A/B.
+ - Harness stall handling: retry a class ONCE on the zero-S-line stall signatures only (`RESULT: TIMEOUT`/`QEMU_EXIT`), never on a genuine test FAIL; mark `STALL-RECOVERED` only when the retry actually PASSes (guard the recovered tag on both the PASS arm and `nfail==0`), `STALL-UNRECOVERED` otherwise; size the outer per-class timeout for the doubled worst case (#322). Distinguish "no summary because it stalled" from "no summary because it crashed" before retrying.
+@@ -1390,3 +1390,8 @@
+ - **Learned:** (1) QEMU `-kernel` on aarch64 passes NO DTB (GDB-proven x0==0 at higherhalf_entry + full-RAM FDT-magic sweep empty) — DTB-primary designs need an architected slot-table fallback on that path (same board-knowledge class as UART/GIC maps); riscv gets its DTB via a1 and the DTB path works there. (2) QEMU `virt` virtio-mmio exposes the LEGACY (v1) interface (Version reads 1 — GDB-proven on live slots): queue setup is GuestPageSize/Align/PFN with one contiguous chunk, not Ready/addresses; submit/notify/ISR paths are version-independent. (3) `uint32_t addr = pci_make_addr(...)` truncates the aarch64 ECAM HHDM VA to 0x10000004 and faults — FAR-proof by low32 match; the callee takes uint64_t, x86 ports fit either way. (4) PL031 PeriphID carries a revision nibble (QEMU rev 1 → 0x00141031): mask PID2[7:4] for identity. (5) `fdt_first_child` returned NOTFOUND for any parent with properties (QEMU root has cells/compatible first) — skip PROP/NOP to the first BEGIN_NODE. (6) RISC-V `sd` immediate is 12-bit: L3[0x101] needs explicit address arithmetic (0x808 > 2047). (7) Release aarch64 boots silent and never schedules (stuck at vectors, zero reschedules) — pre-VBAR fault or pre-scheduler hang, NOT #355 code by construction (nothing new runs before arch init); filed as #393 under #357 (release gates). Debug E2E is proven both arches; release E2E follows the boot fix.
+ - **Adapted:** drivers.md §10 (RTC/input/serial contracts) + scheduler.md §11 pointer + BRIEFING gotcha #22; HAL `available()`/`source_name()`; Goldfish latch + mtime loud-fallback; decoder-first ordering at `shell_try_get_key_impl`; H1/H2 test edits (dev-owned, authorized); #391/#392/#393 filed with mechanism proofs.
+ - **Style re-surface:** single-sourced geometry shared by allocator + fit check (virtio_legacy_used_off); end-contained window checks (base+size, overflow-safe); `#if`-absence (not silent no-op) for release-cut features; test-history rows stamped per-run from log mtimes, never batched.
++
++### #357 slices A–C — framebuffer gap + gates + release-boot H-1 (non-SIL3 review)
++- **Learned:** (1) Quoted-string `-D` macros do not survive generated build rules — bare tokens + in-code stringify with a static_assert that fails loudly without the flag (proves the wiring both ways). (2) A `-j4` failure inside a vendored sub-build (picolibc sysroot) is not your Makefile's race — serial green + kernel-side -j safety is the gate; document the vendored limit, don't chase it. (3) Release-only boot death with zero serial + stuck-at-vectors PC means "fault before VBAR": read VBAR_EL1/ESR/FAR directly, then single-step from the entry — but the fastest convict is static: grep the release disassembly of the entry path for SIMD before the FP enable (movi v31 + stur q31 vs zero in debug). (4) `make release` bakes the CURRENT test-config — always reset to `none` first and assert the stamp before QEMU, or you boot the wrong suite silently. (5) Gate lists come from measured rows only; a per-arch `make test-full` census is the membership proof — hand-summed lists rot on the first red class.
++- **Adapted:** `build_info.hpp` (constexpr identity + asserts); `TARGET_`→`NEXIOS_` bare-token flags on all five flag sets; `TEST_FULL_/SELFTEST_CLASSES_<arch>` + env-consuming script + baked-config stamp + separate riscv release `.bin`; `docs/specs/test-harness.md` §8 gate matrix + BRIEFING §§6–7; #393 (SIMD-before-fp_enable, Shape-A CPACR fix) with GDB + objdump + E2E evidence; #394 follow-up filed before the gap line references it.
++- **Style re-surface:** §5 error policy (loud errors over silent fallbacks); §6 debug/release parity (prove both, gate both); test-history rows measured-only, SUMMARY carries ARCH.
+diff --git a/prompts/STATE.md b/prompts/STATE.md
+index 716c8f8f5..a3f37609a 100644
+--- a/prompts/STATE.md
++++ b/prompts/STATE.md
+@@ -7,6 +7,7 @@
+ ### Objective
+ - **ACTIVE (2026-10-20):** #353 FPU/SIMD parity — step 1b LANDED (`c0ee9de71`, APPROVED clean): eager switch in on_context_switch + frame FS (create/loader/exec) + ensure-enabled + S3 cures (availability gate, doc tail); riscv panic convicted+fixed (sret-restored FS=0); GDB gen evidence; QE task_fpu handoff posted. Remaining: QE groups + close.
+ - **ACTIVE (2026-10-20):** #355 console/RTC/input parity — kernel track COMPLETE (all 4 slices landed, reviewed, pushed): A RTC (PL031+Goldfish+H1/H2), B serial observers, C decoder+ordering, D E2E+docs+feedback. Gates: x86 hal_rtc 2/2 + datetime 6/6 + serial 7/7 + shell 20/20; aarch64 hal_rtc 1/1 + arch 33/33; riscv hal_rtc 1/1 + arch 24/6 (stash-proven baseline); DEBUG version-E2E proven both arches (expect). Release E2E blocked on #393 (silent release boot, #357 scope). QE owns H3-H6 + #391/#392.
++- **ACTIVE (2026-10-21):** #357 framebuffer/gates — slices A+B landed (gap backend + build identity + per-arch gate vars + release-elf hardening); #393 H-1 fixed (Shape A, Rule-A confirmed, release E2E both arches green); slice C evidence posted. Remaining: Slice D matrix docs + feedback + QE handoff.
+ - **OPEN (2026-10-20):** #352 MMU/VMM/TLB parity — KERNEL TRACK COMPLETE (APPROVED): remaining QE test ports (pml4_clone/pt_merge, proc_elf EM, shootdown-hook invocation) + known riscv reds (#387, #388 test-side).
+ - **DONE (2026-10-19):** #385 HHDM-rot + exec_slots hang CLOSED (audited APPROVED, pending QE + #387): riscv trap epilogue now validates deferred arms (gen-check + validate_pending_switch + abort, x86 mirror) — stale arm to recycled memory no longer resumes foreign context with stale current (U-fault killed init → hang). Gates: arch_riscv64 24/30 + no hang ×3 (5 fails = QE fixture/PLIC updates, 1 = #387 fork follow-up), x86 elf_loader/selftest green, 3-arch link green. H1 (image-range creep) + tests 6/7 (M-vs-S skew, OpenSBI M-threshold=7 boot state) convicted as QE test updates. FEEDBACK entry in LEARNINGS.
+ - **DONE (2026-10-19):** #349 IRQ + timer parity CLOSED (audited APPROVED): GICv2 full init (PIDR2 version, 8 enable banks, EOI ownership, spurious no-EOI, storm limiter) + CVAL/SBI absolute deadlines with coarse-tick units + CTL-gated remaining + PLIC S-context + IDT 64→256 + docs §6 + gotcha #20. Gates: aarch64 6 classes green, riscv64 5+1 (known QE test-side), x86 all green + selftest 148/148, x86_64 bit-identical. arch_riscv64 HHDM rot filed as #385 (out of scope). FEEDBACK entry in LEARNINGS.
