@@ -168,6 +168,26 @@ inline void sfence_vma() {
 inline void sfence_vma_va(uint64_t vaddr) {
     asm volatile("sfence.vma %0" : : "r"(vaddr) : "memory");
 }
+/// @brief TLB flush for one address space (issue #352).
+///        `sfence.vma x0, asid`: rs1==x0 selects ASID-only invalidation.
+///        NOTE: scope selects on the rs1 REGISTER (x0), not on a zero
+///        value — a value-zero word in any other register fences VA 0x0 only.
+/// @param[in] asid Address-space ID to invalidate (nonzero user ID).
+inline void sfence_vma_asid(uint16_t asid) {
+    asm volatile("sfence.vma x0, %0"
+                 :
+                 : "r"(static_cast<uint64_t>(asid))
+                 : "memory");
+}
+/// @brief TLB flush for one VA in one address space (issue #352).
+/// @param[in] vaddr Virtual address to invalidate.
+/// @param[in] asid Address-space ID to invalidate within.
+inline void sfence_vma_va_asid(uint64_t vaddr, uint16_t asid) {
+    asm volatile("sfence.vma %0, %1"
+                 :
+                 : "r"(vaddr), "r"(static_cast<uint64_t>(asid))
+                 : "memory");
+}
 
 /// @brief Read the SATP CSR (supervisor address translation and protection).
 /// @return Current SATP value.

@@ -58,14 +58,17 @@ inline void arch_page_table_tlb_flush_all() {
     isb();
 }
 
-/// @brief Purge one context's non-global TLB entries (issue #184).
-///        Fallback: this port allocates no ASIDs, so the required semantics
-///        are provided via a full EL1 invalidate — a safe superset of a
-///        single-context purge, mirroring the x86_64 CR3-reload fallback.
-///        Local CPU only; cross-CPU invalidation is out of scope.
-/// @param pcid Owning context id, ignored (0 = untagged/kernel).
-inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
-    arch_page_table_tlb_flush_all();
+/// @brief Purge one context's non-global TLB entries (issue #352).
+///        Real ASID purge now that the allocator is live (issue #184
+///        fallback retained for ID 0).  Local CPU only; cross-CPU
+///        invalidation is out of scope.
+/// @param pcid Owning context id (0 = untagged/kernel → full flush).
+inline void tlb_purge_context(uint16_t pcid) {
+    if (pcid == 0) {
+        arch_page_table_tlb_flush_all();
+        return;
+    }
+    tlbi_aside1(pcid);
 }
 
 /// @brief AArch64 4-level page table manager (TTBR1_EL1 kernel space).
@@ -88,6 +91,20 @@ class ArchPageTable {
     /// @brief Flush the entire TLB.
     static inline void tlb_flush_all() {
         arch_page_table_tlb_flush_all();
+    }
+    /// @brief Flush one context's TLB entries (issue #352).
+    /// @param[in] id Address-space ID (0 → full flush, same as above).
+    static inline void tlb_flush_asid(uint16_t id) {
+        tlb_purge_context(id);
+    }
+    /// @brief Flush one VA in one context (issue #352).  Purges the
+    ///        whole context (safe superset of VA-scoped invalidation;
+    ///        revisit with a VA-scoped op if one proves available).
+    /// @param[in] virt_addr Virtual address (recorded, context purged).
+    /// @param[in] id Address-space ID (0 → full flush).
+    static inline void tlb_flush_va_asid(uint64_t virt_addr, uint16_t id) {
+        (void)virt_addr;
+        tlb_purge_context(id);
     }
 
     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;

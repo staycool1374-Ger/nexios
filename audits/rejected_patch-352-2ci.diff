@@ -1,0 +1,17 @@
+diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
+--- a/src/kernel/arch/riscv64/hal/io_impl.hpp
++++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
+@@ -171,9 +171,11 @@
+ /// @brief TLB flush for one address space (issue #352).
+ ///        `sfence.vma x0, asid`: rs1==x0 selects ASID-only invalidation.
++///        NOTE: scope selects on the rs1 REGISTER (x0), not on a zero
++///        value — a value-zero word in any other register fences VA 0x0 only.
+ /// @param[in] asid Address-space ID to invalidate (nonzero user ID).
+ inline void sfence_vma_asid(uint16_t asid) {
+-    asm volatile("sfence.vma %0, %1"
++    asm volatile("sfence.vma x0, %0"
+                  :
+-                 : "r"(0ULL), "r"(static_cast<uint64_t>(asid))
++                 : "r"(static_cast<uint64_t>(asid))
+                  : "memory");
+ }

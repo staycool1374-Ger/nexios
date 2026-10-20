@@ -211,6 +211,18 @@ inline void isb() {
 inline void tlbi_vae1(uint64_t vaddr) {
     asm volatile("tlbi vae1, %0" : : "r"(vaddr) : "memory");
 }
+/// @brief TLB invalidate by ASID (EL1, issue #352).  Drops every entry
+///        tagged with @p asid.  ASID occupies Xt[63:48] (DDI0601 TLBI
+///        ASIDE1 fieldset; low 48 bits RES0), so the raw ID is shifted.
+///        Barrier shape mirrors tlbi_alle1 (dmb, not dsb — TCG).
+/// @param[in] asid Address-space ID to invalidate (0 invalidates nothing
+///        specific; callers pass nonzero user IDs).
+inline void tlbi_aside1(uint16_t asid) {
+    asm volatile("dmb sy; tlbi aside1, %0; dmb sy; isb"
+                 :
+                 : "r"(static_cast<uint64_t>(asid) << 48)
+                 : "memory");
+}
 /// @brief TLB invalidate all (EL1).
 inline void tlbi_alle1() {
     asm volatile("dmb sy; tlbi vmalle1; dmb sy; isb" : : : "memory");

@@ -104,10 +104,10 @@ void asid_free(uint16_t asid) {
     }
     // Purge-before-free: the freed address space's entries tagged with
     // this ASID survive in the TLB (tagged switches no longer flush).
-    // A same-root full flush is the safe fallback until VA+ASID targeted
-    // invalidation lands (step 4 of issue #352).
+    // Targeted context purge (issue #352 step 2c-i); full flush was the
+    // safe fallback before targeted ops existed.
     if (g_supported)
-        ArchPageTable::tlb_flush_all();
+        ArchPageTable::tlb_flush_asid(asid);
 }
 
 uint64_t asid_epoch() {
