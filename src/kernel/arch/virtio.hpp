@@ -172,6 +172,7 @@ struct VirtioTransport {
     uint64_t mmio_base_phys = 0;  ///< MMIO register base (phys)
     uint16_t mmio_irq = 0;        ///< GIC INTID / PLIC IRQ number
     uint16_t mmio_slot = 0;       ///< DTB discovery slot index
+    uint16_t mmio_version = 0;    ///< MMIO interface version (1/2, 0 = unset)
 };
 
 /// Virtio MMIO (v2) register offsets — QEMU `virt` transport region.
@@ -184,9 +185,12 @@ enum VirtioMmioReg : uint16_t {
     VIRTIO_MMIO_DEVICE_FEATURES_SEL = 0x014,
     VIRTIO_MMIO_DRIVER_FEATURES = 0x020,
     VIRTIO_MMIO_DRIVER_FEATURES_SEL = 0x024,
+    VIRTIO_MMIO_GUEST_PAGE_SIZE = 0x028,
     VIRTIO_MMIO_QUEUE_SEL = 0x030,
     VIRTIO_MMIO_QUEUE_NUM_MAX = 0x034,
     VIRTIO_MMIO_QUEUE_NUM = 0x038,
+    VIRTIO_MMIO_QUEUE_ALIGN = 0x03C,
+    VIRTIO_MMIO_QUEUE_PFN = 0x040,
     VIRTIO_MMIO_QUEUE_READY = 0x044,
     VIRTIO_MMIO_QUEUE_NOTIFY = 0x050,
     VIRTIO_MMIO_INTERRUPT_STATUS = 0x060,
@@ -205,12 +209,46 @@ enum VirtioMmioReg : uint16_t {
 /// MMIO v2 identification constants.
 constexpr uint32_t VIRTIO_MMIO_MAGIC_VALUE = 0x74726976; // "virt"
 constexpr uint32_t VIRTIO_MMIO_VERSION_MODERN = 2;
+constexpr uint32_t VIRTIO_MMIO_VERSION_LEGACY = 1;
 constexpr uint32_t VIRTIO_MMIO_REGION_SIZE = 0x200;
-constexpr uint64_t VIRTIO_MMIO_BASE = 0x0A000000;
-constexpr uint64_t VIRTIO_MMIO_WINDOW = 0x200000; // one 2MiB boot leaf
 constexpr uint32_t VIRTIO_MMIO_DEVICE_NET = 1;
 constexpr uint32_t VIRTIO_MMIO_DEVICE_BLOCK = 2;
 constexpr uint16_t VIRTIO_MMIO_REG_NONE = 0xFFFF;
+
+/// Legacy (v1) queue chunk geometry (issue #350): one contiguous chunk
+/// holding descriptors at +0, the avail ring immediately after, and the
+/// used ring at the aligned offset below. The allocator (driver) and the
+/// fit check (setup) both derive addresses from this single definition —
+/// they cannot disagree.
+constexpr uint64_t VIRTIO_LEGACY_ALIGN = 0x1000;
+constexpr uint64_t VIRTIO_LEGACY_CHUNK_PAGES = 2;
+constexpr uint64_t virtio_legacy_used_off(uint16_t queue_size) {
+    uint64_t end = static_cast<uint64_t>(queue_size) * 16 + 6 +
+                   static_cast<uint64_t>(queue_size) * 2;
+    return (end + VIRTIO_LEGACY_ALIGN - 1) & ~(VIRTIO_LEGACY_ALIGN - 1);
+}
+
+/// Architected QEMU `virt` MMIO discovery windows (issue #350). The DTB
+/// is primary where firmware provides it (riscv64 boot passes it; the
+/// aarch64 `-kernel` path provably does not — GDB: x0 == 0 at
+/// higherhalf_entry and no FDT magic anywhere in RAM). The slot table
+/// covers the stable board layout for the fallback probe — the same
+/// class of board knowledge as the hardcoded UART/GIC/PLIC/ECAM maps.
+/// DTB windows must lie inside a boot-mapped leaf (aarch64: the 2MiB
+/// Device leaf at 0x0A000000; riscv64: the UART leaf at 0x10000000).
+#if defined(CONFIG_ARCH_AARCH64)
+constexpr uint64_t VIRTIO_MMIO_DTB_BASE = 0x0A000000;
+constexpr uint64_t VIRTIO_MMIO_DTB_WINDOW = 0x200000;
+constexpr uint64_t VIRTIO_MMIO_SLOT_BASE = 0x0A000000;
+constexpr uint32_t VIRTIO_MMIO_SLOT_STRIDE = 0x200;
+constexpr uint32_t VIRTIO_MMIO_SLOT_COUNT = 32;
+#elif defined(CONFIG_ARCH_RISCV64)
+constexpr uint64_t VIRTIO_MMIO_DTB_BASE = 0x10000000;
+constexpr uint64_t VIRTIO_MMIO_DTB_WINDOW = 0x200000;
+constexpr uint64_t VIRTIO_MMIO_SLOT_BASE = 0x10001000;
+constexpr uint32_t VIRTIO_MMIO_SLOT_STRIDE = 0x1000;
+constexpr uint32_t VIRTIO_MMIO_SLOT_COUNT = 8;
+#endif
 
 /// Map a PCI common-cfg register to its MMIO v2 offset for reads, or
 /// VIRTIO_MMIO_REG_NONE when the register has no MMIO equivalent.

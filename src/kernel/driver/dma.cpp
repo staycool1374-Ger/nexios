@@ -173,7 +173,10 @@ void prd_reset(PrdTable &prd) {
 // --- PCI Bus Master ---
 
 void pci_set_bus_master(arch::PciBdf bdf, bool enable) {
-    uint32_t addr = arch::pci_make_addr(bdf, arch::PCI_COMMAND);
+    // Issue #350: 64-bit address — the aarch64 ECAM window is an HHDM VA
+    // (0xFFFF804010000000+); a uint32_t truncated it to 0x10000004 and
+    // faulted (FAR-proof). x86 port addresses are unaffected either way.
+    uint64_t addr = arch::pci_make_addr(bdf, arch::PCI_COMMAND);
     uint16_t cmd = arch::pci_config_readw(addr);
     if (enable) {
         cmd |= arch::PCI_CMD_BUS_MASTER;

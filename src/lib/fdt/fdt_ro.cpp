@@ -197,12 +197,25 @@ int fdt_first_child(const void *fdt, int parentoffset) {
         return -FDT_ERR_BADOFFSET;
 
     offset = next;
-    tag = fdt_next_tag_(fdt, offset, &next);
-
-    if (tag != FDT_BEGIN_NODE)
-        return -FDT_ERR_NOTFOUND;
-
-    return offset;
+    // Issue #350: skip the parent's own properties — a QEMU root carries
+    // #address-cells/#size-cells/compatible/model before its first child,
+    // and the old code returned NOTFOUND for any such parent. Stop at the
+    // first nested BEGIN_NODE, the parent's END_NODE, or FDT_END. Callers
+    // must pass validated blobs (dtb.cpp enforces layout + structure);
+    // the hand-built test blobs are valid by construction.
+    for (;;) {
+        tag = fdt_next_tag_(fdt, offset, &next);
+        if (tag == FDT_BEGIN_NODE)
+            return offset;
+        if (tag == FDT_END_NODE || tag == FDT_END)
+            return -FDT_ERR_NOTFOUND;
+        // Audit S3: explicit arm — only PROP/NOP may be skipped; any
+        // other tag is malformed input (unreachable on validated blobs,
+        // which terminate in FDT_END by construction).
+        if (tag != FDT_PROP && tag != FDT_NOP)
+            return -FDT_ERR_BADSTRUCTURE;
+        offset = next;
+    }
 }
 
 int fdt_next_sibling(const void *fdt, int offset) {

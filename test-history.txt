@@ -4245,3 +4245,9 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-20 10:55:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 953ms STATUS: #353-s3c-riscv64-gate-known-5QE+#387
 2026-10-20 17:04:48 basic_lib PASSED: 26 FAILED: 0 TIME: 1768ms STATUS: #350-sliceA-x86-gate
 2026-10-20 17:08:19 basic_lib PASSED: 26 FAILED: 0 TIME: 1769ms STATUS: #350-sliceA-s3c-x86-gate
+2026-10-20 18:45:58 drivers PASSED: 56 FAILED: 2 TIME: 1823ms STATUS: #350-sliceB-riscv64-gate-known-#391x2
+2026-10-20 18:45:58 drivers PASSED: 56 FAILED: 2 TIME: 1809ms STATUS: #350-sliceB-riscv64-gate-known-#391x2
+2026-10-20 18:50:56 drivers PASSED: 57 FAILED: 1 TIME: 1877ms STATUS: #350-sliceB-aarch64-gate-known-#391
+2026-10-20 18:51:59 storage PASSED: 166 FAILED: 1 TIME: 23976ms STATUS: #350-sliceB-aarch64-gate-known-#392
+2026-10-20 18:53:07 storage PASSED: 166 FAILED: 1 TIME: 23944ms STATUS: #350-sliceB-riscv64-gate-known-#392
+2026-10-20 19:02:06 basic_lib PASSED: 26 FAILED: 0 TIME: 1659ms STATUS: #350-sliceB-s3c-x86-gate

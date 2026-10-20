@@ -68,8 +68,11 @@ bool virtio_map_mmio(uint8_t bar, uint32_t offset, uint32_t length,
     return true;
 }
 
+// PCI-finder helpers (x86-only since the finder moved under
+// CONFIG_ARCH_X86_64; kept in this TU to preserve the PCI path verbatim).
+#if defined(CONFIG_ARCH_X86_64)
 static bool parse_virtio_cap(PciBdf bdf, uint8_t cap_offset,
-                             VirtioPciCap &cap) {
+                              VirtioPciCap &cap) {
     cap.cap_vndr = pci_config_readb(pci_make_addr(bdf, cap_offset));
     cap.cap_next = pci_config_readb(pci_make_addr(bdf, cap_offset + 1));
     cap.cap_len = pci_config_readb(pci_make_addr(bdf, cap_offset + 2));
@@ -97,7 +100,11 @@ static VirtioMmio *virtio_cfg_target(VirtioTransport &t, uint8_t cfg_type) {
         return nullptr;
     }
 }
+#endif // CONFIG_ARCH_X86_64 (PCI-finder helpers)
 
+// The PCI finder owns the virtio_find_device symbol on x86_64; the MMIO
+// finder (virtio_mmio.cpp) owns it elsewhere (issue #350).
+#if defined(CONFIG_ARCH_X86_64)
 bool virtio_find_device(uint16_t device_id, VirtioTransport &transport) {
     pci_scan_all();
     const PciDeviceInfo *dev = nullptr;
@@ -154,6 +161,7 @@ bool virtio_find_device(uint16_t device_id, VirtioTransport &transport) {
                  bdf.bus, bdf.device, bdf.function, transport.modern);
     return true;
 }
+#endif // CONFIG_ARCH_X86_64
 
 bool virtio_init_transport(VirtioTransport &transport) {
     // v0.4.0 MP-1 hardening: a transport with no MMIO mapping (null
@@ -167,6 +175,13 @@ bool virtio_init_transport(VirtioTransport &transport) {
         transport.device_cfg.virt_addr == 0) {
         return false;
     }
+#if !defined(CONFIG_ARCH_X86_64)
+    // Issue #350: an MMIO transport without a discovered base never
+    // reaches the status handshake (avoids faulting on address 0x70).
+    if (transport.mmio && transport.mmio_base_phys == 0) {
+        return false;
+    }
+#endif
 
     virtio_write_status(transport, VIRTIO_STATUS_RESET);
     for (int i = 0; i < 100; ++i) {
@@ -216,6 +231,66 @@ bool virtio_negotiate_features(VirtioTransport &t, uint64_t driver_features) {
     return true;
 }
 
+#if !defined(CONFIG_ARCH_X86_64)
+// Legacy (v1) MMIO queue setup (issue #350): no per-ring address
+// registers and no Ready bit — one contiguous chunk described by PFN,
+// used ring at ALIGN_UP(desc + avail, 0x1000). desc_phys IS the chunk
+// base (the driver allocates the 2-page chunk contiguously);
+// avail_phys/used_phys are informational only on this path.
+static bool virtio_setup_queue_legacy(VirtioTransport &t, uint16_t queue_idx,
+                                      uint16_t queue_size, uint64_t chunk_phys) {
+    // Geometry is single-sourced (virtio_legacy_used_off): the driver
+    // addresses the used ring at the same offset the device computes.
+    uint64_t used_off = virtio_legacy_used_off(queue_size);
+    uint64_t used_size = 8 + static_cast<uint64_t>(queue_size) * 8;
+    if (used_off + used_size >
+        VIRTIO_LEGACY_CHUNK_PAGES * VIRTIO_LEGACY_ALIGN) {
+        Logger::error("virtio-mmio: legacy queue %d overflows chunk",
+                      queue_idx);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 3,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-mmio legacy chunk", queue_idx);
+        return false;
+    }
+    // PFN is a page number — the chunk must be page-aligned.
+    if ((chunk_phys % VIRTIO_LEGACY_ALIGN) != 0)
+        return false;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *page_size_reg = reinterpret_cast<volatile uint32_t *>(
+        t.common_cfg.virt_addr + VIRTIO_MMIO_GUEST_PAGE_SIZE);
+    *page_size_reg = static_cast<uint32_t>(PAGE_SIZE);
+    virtio_write_common16(t, VIRTIO_COMMON_QUEUE_SEL, queue_idx);
+    kernel::atomic_fence();
+    uint16_t max = virtio_read_common16(t, VIRTIO_COMMON_QUEUE_SIZE);
+    if (max == 0) {
+        Logger::error("virtio-mmio: legacy queue %d not available",
+                      queue_idx);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 3,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-mmio legacy queue", queue_idx);
+        return false;
+    }
+    if (queue_size > max)
+        queue_size = max;
+    virtio_write_common(t, VIRTIO_COMMON_QUEUE_SIZE, queue_size);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *align_reg = reinterpret_cast<volatile uint32_t *>(
+        t.common_cfg.virt_addr + VIRTIO_MMIO_QUEUE_ALIGN);
+    *align_reg = static_cast<uint32_t>(VIRTIO_LEGACY_ALIGN);
+    kernel::atomic_fence();
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *pfn_reg = reinterpret_cast<volatile uint32_t *>(
+        t.common_cfg.virt_addr + VIRTIO_MMIO_QUEUE_PFN);
+    *pfn_reg = static_cast<uint32_t>(chunk_phys / VIRTIO_LEGACY_ALIGN);
+    kernel::atomic_fence();
+    Logger::info("virtio-mmio: legacy queue %d setup (size=%d)", queue_idx,
+                 queue_size);
+    return true;
+}
+#endif // !CONFIG_ARCH_X86_64
+
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 bool virtio_setup_queue(VirtioTransport &t, uint16_t queue_idx,
                         uint16_t queue_size, uint64_t desc_phys,
@@ -234,6 +309,49 @@ bool virtio_setup_queue(VirtioTransport &t, uint16_t queue_idx,
     }
     if (queue_size > size)
         queue_size = size;
+
+#if !defined(CONFIG_ARCH_X86_64)
+    if (t.mmio) {
+        // Legacy (v1) has no per-ring registers or Ready bit: PFN path.
+        // desc_phys doubles as the chunk base (driver-side contract).
+        if (t.mmio_version == VIRTIO_MMIO_VERSION_LEGACY)
+            return virtio_setup_queue_legacy(t, queue_idx, queue_size,
+                                             desc_phys);
+        if (t.mmio_version != VIRTIO_MMIO_VERSION_MODERN)
+            return false;
+        // MMIO v2 order (issue #350): QueueNum BEFORE the addresses,
+        // then QueueReady + readback. The shared PCI order below does
+        // not apply.
+        virtio_write_common(t, VIRTIO_COMMON_QUEUE_SIZE, queue_size);
+        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DESC_LO,
+                            static_cast<uint32_t>(desc_phys & 0xFFFFFFFF));
+        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DESC_HI,
+                            static_cast<uint32_t>((desc_phys >> 32) & 0xFFFFFFFF));
+        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DRIVER_LO,
+                            static_cast<uint32_t>(avail_phys & 0xFFFFFFFF));
+        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DRIVER_HI,
+                            static_cast<uint32_t>((avail_phys >> 32) & 0xFFFFFFFF));
+        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DEVICE_LO,
+                            static_cast<uint32_t>(used_phys & 0xFFFFFFFF));
+        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DEVICE_HI,
+                            static_cast<uint32_t>((used_phys >> 32) & 0xFFFFFFFF));
+        virtio_write_common16(t, VIRTIO_COMMON_QUEUE_ENABLE, 1);
+        kernel::atomic_fence();
+        uint16_t ready = virtio_read_common16(t, VIRTIO_COMMON_QUEUE_ENABLE);
+        if (ready != 1) {
+            Logger::error("virtio-mmio: queue %d not ready", queue_idx);
+            kernel::log::dmesg_push_sev(
+                kernel::log::ErrorSubsystem::DRIVER,
+                kernel::log::kDmesgBase_DRIVER + 3,
+                kernel::log::LogSeverity::ERROR, "virtio-mmio queue ready",
+                queue_idx);
+            return false;
+        }
+        Logger::info("virtio-mmio: queue %d setup (size=%d)", queue_idx,
+                     queue_size);
+        return true;
+    }
+#endif
 
     virtio_write_common(t, VIRTIO_COMMON_QUEUE_DESC_LO,
                         static_cast<uint32_t>(desc_phys & 0xFFFFFFFF));

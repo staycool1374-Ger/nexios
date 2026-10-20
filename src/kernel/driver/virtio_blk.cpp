@@ -25,6 +25,12 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/arch/pci.hpp>
 #include <kernel/arch/hal/idt.hpp>
+#include <kernel/arch/hal/interrupt_controller.hpp>
+#if defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/gic.hpp>
+#elif defined(CONFIG_ARCH_RISCV64)
+#include <kernel/arch/riscv64/hal/plic.hpp>
+#endif
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/ipc/ipc.hpp>
@@ -55,6 +61,19 @@ VirtioBlkDriver::~VirtioBlkDriver() {
     // in-flight completion path can touch the freed queue pages.
     disable_irq();
 
+#if !defined(CONFIG_ARCH_X86_64)
+    // Legacy chunk (issue #350): free the contiguous pages at the chunk
+    // base, never the byte offsets.
+    if (legacy_queue_chunk_) {
+        for (uint64_t page = 0; page < arch::VIRTIO_LEGACY_CHUNK_PAGES;
+             ++page) {
+            PMM::free_page(desc_phys_ + page * arch::VIRTIO_LEGACY_ALIGN);
+        }
+        desc_phys_ = 0;
+        avail_phys_ = 0;
+        used_phys_ = 0;
+    }
+#endif
     if (desc_phys_)
         PMM::free_page(desc_phys_);
     if (avail_phys_)
@@ -95,9 +114,35 @@ bool VirtioBlkDriver::init() {
     // Available ring: 6 + queue_size * 2 bytes
     // Used ring: 8 + queue_size * 8 bytes
     // Total: roughly < 4KB for small queues, use one page each
-    desc_phys_ = PMM::alloc_page();
-    avail_phys_ = PMM::alloc_page();
-    used_phys_ = PMM::alloc_page();
+#if !defined(CONFIG_ARCH_X86_64)
+    if (transport_.mmio &&
+        transport_.mmio_version == arch::VIRTIO_MMIO_VERSION_LEGACY) {
+        // Legacy (v1) queue (issue #350): ONE contiguous chunk — desc at
+        // +0, avail immediately after, used at the single-sourced
+        // virtio_legacy_used_off (must match the device's PFN+align
+        // computation exactly).
+        uint64_t chunk =
+            PMM::alloc_contiguous(arch::VIRTIO_LEGACY_CHUNK_PAGES);
+        if (chunk == 0) {
+            Logger::error("virtio-blk: OOM for legacy queue chunk");
+            kernel::log::dmesg_push_sev(
+                kernel::log::ErrorSubsystem::DRIVER,
+                kernel::log::kDmesgBase_DRIVER + 6,
+                kernel::log::LogSeverity::ERROR, "virtio-blk queue OOM", 0);
+            return false;
+        }
+        desc_phys_ = chunk;
+        avail_phys_ = chunk + static_cast<uint64_t>(queue_size_) * 16;
+        used_phys_ = chunk + arch::virtio_legacy_used_off(queue_size_);
+        legacy_queue_chunk_ = true;
+    } else {
+#endif
+        desc_phys_ = PMM::alloc_page();
+        avail_phys_ = PMM::alloc_page();
+        used_phys_ = PMM::alloc_page();
+#if !defined(CONFIG_ARCH_X86_64)
+    }
+#endif
     dma_buf_phys_ = PMM::alloc_page();
 
     if (!desc_phys_ || !avail_phys_ || !used_phys_ || !dma_buf_phys_) {
@@ -139,10 +184,31 @@ bool VirtioBlkDriver::init() {
     arch::virtio_write_status(transport_, status | VIRTIO_STATUS_DRIVER_OK);
 
     // Read sector count from device config (at offset 0 for virtio-blk)
+#if defined(CONFIG_ARCH_X86_64)
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *cfg =
         reinterpret_cast<volatile uint64_t *>(transport_.device_cfg.virt_addr);
     sector_count_ = cfg[0];
+#else
+    if (transport_.mmio) {
+        // MMIO device config allows at most 4-byte accesses (issue #350):
+        // split virtio-blk.capacity into two 32-bit reads.
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *cfg_lo = reinterpret_cast<volatile uint32_t *>(
+            transport_.device_cfg.virt_addr);
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *cfg_hi = reinterpret_cast<volatile uint32_t *>(
+            transport_.device_cfg.virt_addr + 4);
+        uint32_t cap_lo = *cfg_lo;
+        uint32_t cap_hi = *cfg_hi;
+        sector_count_ = (static_cast<uint64_t>(cap_hi) << 32) | cap_lo;
+    } else {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *cfg = reinterpret_cast<volatile uint64_t *>(
+            transport_.device_cfg.virt_addr);
+        sector_count_ = cfg[0];
+    }
+#endif
     Logger::info("virtio-blk: %d sectors (%d MB)", sector_count_,
                  static_cast<uint64_t>(sector_count_) * BLOCK_SIZE /
                      (static_cast<uint64_t>(1024) * 1024));
@@ -408,14 +474,79 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
 /// @brief Read-and-ack the device ISR status byte (virtio 1.0: a read
 /// returns queue/config interrupt bits and clears them).  Null-guarded:
 /// an unmapped ISR window means no interrupt.
+/// On MMIO (issue #350) InterruptStatus is NOT read-to-clear: this
+/// returns the low 8 bits without ACK (see ack_isr_status).
 uint8_t VirtioBlkDriver::read_isr_status() const {
     if (transport_.isr_cfg.virt_addr == 0)
         return 0;
+#if !defined(CONFIG_ARCH_X86_64)
+    if (transport_.mmio) {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *reg = reinterpret_cast<volatile uint32_t *>(
+            transport_.isr_cfg.virt_addr + arch::VIRTIO_MMIO_INTERRUPT_STATUS);
+        return static_cast<uint8_t>(*reg & 0xFF);
+    }
+#endif
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *reg =
         reinterpret_cast<volatile uint8_t *>(transport_.isr_cfg.virt_addr);
     return *reg;
 }
+
+#if !defined(CONFIG_ARCH_X86_64)
+void VirtioBlkDriver::ack_isr_status(uint8_t status) const {
+    if (transport_.isr_cfg.virt_addr == 0)
+        return;
+    if (!transport_.mmio)
+        return;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *reg = reinterpret_cast<volatile uint32_t *>(
+        transport_.isr_cfg.virt_addr + arch::VIRTIO_MMIO_INTERRUPT_ACK);
+    *reg = status;
+}
+
+// MMIO drain core: the x86 collect-under-lock block, contract-coupled.
+// No ACK, no wake here — the caller orders those (drain-before-ACK).
+bool VirtioBlkDriver::drain_used_ring_mmio(TaskControlBlock *&wake_task,
+                                           uint32_t &wake_gen) {
+    bool consumed = false;
+    sync::IrqSpinLockGuard guard(compl_lock_);
+    kernel::atomic_fence();
+    uint16_t used_now = used_->idx;
+    // Bounded drain (≤ queue_size_): a coalesced/stray entry can never
+    // stick the ring, and last_seen_used_ always advances.
+    for (uint16_t pos = last_seen_used_;
+         pos != used_now &&
+         static_cast<uint16_t>(pos - last_seen_used_) < queue_size_;
+         pos = static_cast<uint16_t>(pos + 1)) {
+        uint16_t slot = static_cast<uint16_t>(pos % queue_size_);
+        uint32_t entry_id = used_->ring[slot].id;
+        last_seen_used_ = static_cast<uint16_t>(pos + 1);
+        consumed = true;
+        // Every newly-drained entry is an ISR-observed completion,
+        // waiter or not (introspection counts what the ISR consumed).
+        ++isr_completions_;
+        if (!compl_.waiter || compl_.done)
+            continue;
+        if (pos < compl_.arm_used)
+            continue;
+        bool done = false;
+        match_completion(pos, static_cast<uint16_t>(pos + 1), entry_id,
+                         compl_.head_idx, &done);
+        if (!done)
+            continue;
+        compl_.done = true;
+        auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
+            dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
+        compl_.status = *status_ptr;
+        wake_task = compl_.waiter;
+        wake_gen = compl_.waiter_gen;
+        compl_.waiter = nullptr;
+        compl_.waiter_gen = 0;
+    }
+    return consumed;
+}
+#endif
 
 void VirtioBlkDriver::isr_entry(uint64_t vector, uint64_t, uint64_t) {
     VirtioBlkDriver *target = g_virtio_blk_isr_target;
@@ -434,6 +565,25 @@ bool VirtioBlkDriver::handle_irq() {
     if (isr == 0)
         return false;
 
+#if !defined(CONFIG_ARCH_X86_64)
+    // MMIO path (issue #350): drain-before-ACK with a bounded re-check.
+    // The GIC SPI is edge-triggered: a completion landing between the
+    // drain and the ACK raises no new edge, so a single ACK-last pass
+    // could strand it in the used ring. Each pass drains first, ACKs
+    // second, and re-reads; at most 4 passes, then the waiter (if any)
+    // is woken once below. At most one waiter exists (submit_lock_).
+    if (transport_.mmio) {
+        for (uint8_t pass = 0; pass < 4; ++pass) {
+            (void)drain_used_ring_mmio(wake_task, wake_gen);
+            ack_isr_status(isr);
+            if (wake_task != nullptr)
+                break;
+            isr = read_isr_status();
+            if (isr == 0)
+                break;
+        }
+    } else {
+#endif
     {
         sync::IrqSpinLockGuard guard(compl_lock_);
         kernel::atomic_fence();
@@ -469,6 +619,9 @@ bool VirtioBlkDriver::handle_irq() {
             compl_.waiter_gen = 0;
         }
     }
+#if !defined(CONFIG_ARCH_X86_64)
+    }
+#endif
 
     // Wake-outside-lock (Notify discipline): liveness + BLOCKED +
     // generation, reject TERMINATED/REAPED.  No reschedule() from ISR.
@@ -510,6 +663,34 @@ bool VirtioBlkDriver::enable_irq() {
     irq_allocated_ = true;
     Logger::info("virtio-blk: completion ISR armed on vector %u", vec);
     return true;
+#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    // Issue #350 (MMIO): no MSI-X/MSI — the DTB-discovered GIC INTID /
+    // PLIC IRQ is the vector. Registration order mirrors x86 (handler
+    // first, source unmask last); fail-closed to polling otherwise.
+    if (irq_vector_ != 0)
+        return true;
+    if (!transport_.mmio)
+        return false;
+    uint16_t vec = transport_.mmio_irq;
+#if defined(CONFIG_ARCH_AARCH64)
+    if (vec < arch::INTID_VIRTIO_BASE ||
+        vec >= arch::INTID_VIRTIO_BASE + arch::INTID_VIRTIO_COUNT)
+        return false;
+#else
+    if (vec < arch::IRQ_VIRTIO0 ||
+        vec >= arch::IRQ_VIRTIO0 + arch::IRQ_VIRTIO_COUNT)
+        return false;
+#endif
+    g_virtio_blk_isr_target = this;
+    arch::IDT::register_handler_raw(static_cast<uint8_t>(vec),
+                                    &VirtioBlkDriver::isr_entry);
+    uint8_t stale = read_isr_status();
+    ack_isr_status(stale);
+    arch::ArchInterruptController::unmask(static_cast<uint8_t>(vec));
+    irq_vector_ = static_cast<uint8_t>(vec);
+    irq_allocated_ = true;
+    Logger::info("virtio-blk: completion ISR armed on IRQ %u", vec);
+    return true;
 #else
     return false;
 #endif
@@ -547,6 +728,40 @@ void VirtioBlkDriver::disable_irq() {
         g_virtio_blk_isr_target = nullptr;
         arch::IDT::register_handler_raw(irq_vector_, nullptr);
         arch::pci_free_vector(irq_vector_);
+    }
+    irq_vector_ = 0;
+    irq_allocated_ = false;
+#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    // Issue #350 (MMIO): mask the source first (no new ISR entries),
+    // then ACK stale status, drain an armed waiter with an error wake,
+    // then clear the handler (real registrations only — a
+    // test-simulated arming owns nothing).
+    if (irq_vector_ == 0)
+        return;
+    if (transport_.mmio) {
+        arch::ArchInterruptController::mask(irq_vector_);
+        uint8_t stale = read_isr_status();
+        ack_isr_status(stale);
+    }
+    TaskControlBlock *drained = nullptr;
+    {
+        sync::IrqSpinLockGuard guard(compl_lock_);
+        if (compl_.waiter) {
+            drained = compl_.waiter;
+            compl_.waiter = nullptr;
+            compl_.waiter_gen = 0;
+            compl_.done = true;
+            compl_.status = 0xFF; // sentinel → error return, never stranding
+        }
+    }
+    // Wakers own the wakeup contract (§12.3).
+    if (drained && TaskControlBlock::is_valid(drained) &&
+        drained->state == TaskState::BLOCKED) {
+        Scheduler::set_task_ready(*drained);
+    }
+    if (irq_allocated_) {
+        g_virtio_blk_isr_target = nullptr;
+        arch::IDT::register_handler_raw(irq_vector_, nullptr);
     }
     irq_vector_ = 0;
     irq_allocated_ = false;

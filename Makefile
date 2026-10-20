@@ -269,6 +269,10 @@ KERNEL_DIS     := build/kernel.dis
 
 FAT32_DISK     := build/fat32.img
 QEMU_NET       := -netdev user,id=net0 -device virtio-net-pci,netdev=net0,disable-legacy=on
+# Issue #350: virtio-MMIO net/block devices for the QEMU `virt` machine
+# (aarch64/riscv64 have no PCI storage); x86_64 keeps PCI/IDE above.
+QEMU_NET_MMIO  := -netdev user,id=net0 -device virtio-net-device,netdev=net0
+QEMU_STORAGE_MMIO := -drive file=$(FAT32_DISK),if=none,id=vblk0,format=raw -device virtio-blk-device,drive=vblk0
 # Recursive evaluation (use `=`) so that DEBUG_ISO can be overridden
 # per-target (e.g. release tests) via target-specific variables or $(eval).
 # Kernel debug output goes to the QEMU debugcon port (0xE9) instead of the
@@ -401,7 +405,8 @@ QEMU_TRACE_EVENTS ?= $(if $(HRT_ICOUNT),$(HRT_TRACE_FLAGS),)
 
 # For aarch64, load kernel directly instead of via ISO/GRUB
 ifeq ($(ARCH),aarch64)
-QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET) \
+QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET_MMIO) \
+                $(QEMU_STORAGE_MMIO) \
                 -machine virt -cpu cortex-a72 -display none -no-reboot \
                 -semihosting-config enable=on,target=native
 endif
@@ -415,7 +420,8 @@ $(KERNEL_RISCV_BIN): $(KERNEL_DEBUG)
 	$(OBJCOPY) -O binary $< $@
 
 QEMU_FLAGS     = -kernel $(KERNEL_RISCV_BIN) -m 256M -serial mon:stdio \
-                $(QEMU_NET) -machine virt -bios default -display none -no-reboot
+                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) \
+                -machine virt -bios default -display none -no-reboot
 endif
 
 # ------------------------------------------------------------------------------
