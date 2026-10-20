@@ -22,6 +22,7 @@
 /// @brief Serial port (UART) driver — architecture-agnostic interface.
 
 #include <types.hpp>
+#include <kernel/nexios_config.h>
 
 namespace arch {
 
@@ -50,13 +51,50 @@ class Serial {
     static void puts(const char *str);
 
     /// @brief Returns the number of characters written to the serial console
-    ///        since boot.  The interactive shell snapshots this value before
+    ///        since boot.  The interactive shell snapshots this before
     ///        drawing its prompt; if it advanced while the shell waits for
     ///        input, a background task wrote to the console and the shell
     ///        redraws its prompt on a fresh line (prevents async output such
     ///        as the ELF loader's "completed" event from gluing onto the
     ///        prompt).
     static uint64_t write_count() noexcept;
+
+#if defined(CONFIG_ARCH_AARCH64)
+    /// @brief PL011 register snapshot for init-state assertions (issue
+    ///        #355): read-only observers so tests never duplicate the
+    ///        UART base. No behavior change, no side effects.
+    struct Pl011Snapshot {
+        uint32_t fr;
+        uint32_t cr;
+        uint32_t lcr_h;
+        uint32_t ibrd;
+        uint32_t fbrd;
+        uint32_t imsc;
+    };
+    static Pl011Snapshot pl011_snapshot();
+#endif
+
+#if defined(CONFIG_ARCH_RISCV64)
+    /// @brief 16550A register snapshot (issue #355): read-only observers
+    ///        for init-state assertions (IER must stay 0 — polling only).
+    struct Uart16550Snapshot {
+        uint8_t ier;
+        uint8_t lcr;
+        uint8_t mcr;
+        uint8_t lsr;
+    };
+    static Uart16550Snapshot uart_snapshot();
+    /// @brief MCR LOOP bit (bit 4): TX→RX internal loopback for the
+    ///        test-only round-trip (production never sets it).
+    static constexpr uint8_t UART_MCR_LOOP = 0x10;
+    /// @brief Raw MCR read (loopback setup observes the pre-test value).
+    static uint8_t uart_mcr();
+    /// @brief Raw MCR write (test-only loopback control; production
+    ///        never calls it — TX stays on the SBI path).
+    static void uart_mcr_set(uint8_t value);
+    /// @brief Drain the RX FIFO (bounded 16 reads — the 16550 FIFO depth).
+    static void uart_drain_rx();
+#endif
 };
 
 } // namespace arch

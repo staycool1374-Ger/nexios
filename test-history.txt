@@ -4266,3 +4266,6 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-20 20:34:01 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 918ms STATUS: #355-sliceA-riscv64-known6-stash-proven-baseline
 2026-10-20 20:34:45 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1037ms STATUS: #355-sliceA-aarch64-gate
 2026-10-20 20:36:48 hal_rtc PASSED: 1 FAILED: 0 TIME: 38ms STATUS: #355-sliceA-riscv64-final
+2026-10-20 21:05:11 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 657ms STATUS: #355-sliceB-x86-control
+2026-10-20 21:06:22 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1030ms STATUS: #355-sliceB-aarch64-gate
+2026-10-20 21:07:33 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 916ms STATUS: #355-sliceB-riscv64-known6

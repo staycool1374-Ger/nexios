@@ -131,4 +131,17 @@ void Serial::puts(const char *s) {
         putchar(*s++);
 }
 
+/// @brief PL011 register snapshot for init-state assertions (issue #355).
+/// Read-only: six MMIO reads, no writes, no side effects.
+Serial::Pl011Snapshot Serial::pl011_snapshot() {
+    Pl011Snapshot snap{};
+    snap.fr = mmio_read32(UART_BASE + UART_FR / 4);
+    snap.cr = mmio_read32(UART_BASE + UART_CR / 4);
+    snap.lcr_h = mmio_read32(UART_BASE + UART_LCR_H / 4);
+    snap.ibrd = mmio_read32(UART_BASE + UART_IBRD / 4);
+    snap.fbrd = mmio_read32(UART_BASE + UART_FBRD / 4);
+    snap.imsc = mmio_read32(UART_BASE + UART_IMSC / 4);
+    return snap;
+}
+
 } // namespace arch
