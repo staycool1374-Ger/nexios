@@ -1,0 +1,481 @@
+diff --git a/src/kernel/arch/aarch64/rtc.cpp b/src/kernel/arch/aarch64/rtc.cpp
+index c82873b0a..e466ebefe 100644
+--- a/src/kernel/arch/aarch64/rtc.cpp
++++ b/src/kernel/arch/aarch64/rtc.cpp
+@@ -21,19 +21,102 @@
+ 
+ #include <kernel/arch/rtc.hpp>
+ #include <kernel/arch/hal/io.hpp>
++#include <kernel/log/dmesg.hpp>
++#include <logger.hpp>
+ #include <constants.hpp>
+ 
++using namespace kernel;
++
+ namespace arch {
+ 
+ // QEMU virt PL031 RTC (inside the boot-mapped 0x09000000 2 MiB Device block).
+ inline constexpr uint64_t PL031_BASE = 0x09010000ULL;
+ inline constexpr uint32_t PL031_DATA = 0x0000; ///< Current time (Unix secs)
++inline constexpr uint32_t PL031_CR = 0x00C;    ///< Control register
++inline constexpr uint32_t PL031_CR_RTCEN = 1u << 0;
++inline constexpr uint32_t PL031_PERIPHID0 = 0xFE0;
++inline constexpr uint32_t PL031_PERIPHID1 = 0xFE4;
++inline constexpr uint32_t PL031_PERIPHID2 = 0xFE8;
++inline constexpr uint32_t PL031_PERIPHID3 = 0xFEC;
++inline constexpr uint32_t PL031_ID_MAGIC = 0x00041031; // "PL031" peripheral ID
++// Peripheral-ID revision mask: PID2[7:4] is the revision nibble (QEMU
++// reports rev 1 → 0x00141031); identity ignores it (live-proven).
++inline constexpr uint32_t PL031_ID_MASK = 0xFF0FFFFFU;
++inline constexpr uint64_t PL031_WINDOW_BASE = 0x09000000ULL;
++inline constexpr uint64_t PL031_WINDOW_SIZE = 0x200000ULL;
++inline constexpr uint64_t PL031_REGION_SIZE = 0x1000ULL;
++static_assert(PL031_BASE + PL031_REGION_SIZE <=
++              PL031_WINDOW_BASE + PL031_WINDOW_SIZE);
++
++// Informational dmesg code (outside the catalog; the message carries
++// the payload). Matches the virtio-mmio source-line precedent.
++inline constexpr uint64_t kDmesgDriverRtcSource = 950;
++
++/// @brief Runtime PL031 base (0 = uninitialized → PL031_BASE).
++static uint64_t s_pl031_base = 0;
++
++/// @brief 32-bit MMIO read through the HHDM alias.
++static uint32_t pl031_read32(uint64_t phys, uint32_t reg) {
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *ptr = reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
++                                                      phys + reg);
++    return *ptr;
++}
++
++/// @brief Probe the PL031 signature, start the counter, latch the base.
++/// Idempotent: the first successful (or failed) probe wins; the base is
++/// published once. Never fails closed into a panic — worst case the
++/// counter reads while stopped (still monotonic from the reset value).
++void RTC::init() {
++    if (s_pl031_base != 0)
++        return;
++    uint64_t base = PL031_BASE;
++    uint32_t ctrl = pl031_read32(base, PL031_CR);
++    if ((ctrl & PL031_CR_RTCEN) == 0) {
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *ctrl_reg = reinterpret_cast<volatile uint32_t *>(
++            arch::HHDM_OFFSET + base + PL031_CR);
++        *ctrl_reg = ctrl | PL031_CR_RTCEN;
++        (void)pl031_read32(base, PL031_CR);
++    }
++    uint32_t id = pl031_read32(base, PL031_PERIPHID0) |
++                  (pl031_read32(base, PL031_PERIPHID1) << 8) |
++                  (pl031_read32(base, PL031_PERIPHID2) << 16) |
++                  (pl031_read32(base, PL031_PERIPHID3) << 24);
++    if ((id & PL031_ID_MASK) == (PL031_ID_MAGIC & PL031_ID_MASK)) {
++        s_pl031_base = base;
++        Logger::info("rtc: source=pl031 base=0x%lx",
++                     static_cast<uint64_t>(base));
++    } else {
++        // Loud mismatch, fail-open on the architected address: the leaf
++        // is boot-mapped by construction, so reads stay defined.
++        s_pl031_base = base;
++        Logger::info("rtc: PL031 ID mismatch 0x%x (want 0x%x), using base",
++                     id, PL031_ID_MAGIC);
++    }
++    kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
++                                kernel::log::kDmesgBase_DRIVER + 950,
++                                kernel::log::LogSeverity::INFO,
++                                "rtc source pl031", 0);
++}
++
++/// @brief PL031 is boot-mapped by construction (2 MiB Device leaf).
++bool RTC::available() {
++    return true;
++}
++
++const char *RTC::source_name() {
++    return "pl031";
++}
+ 
+ /// @brief Read the wall-clock time in seconds since the Unix epoch.
+ /// @return Seconds since 1970-01-01 (Unix epoch).
+ uint64_t RTC::read_seconds() {
++    // PL031 RTCDR is one 32-bit seconds counter — no latch, no tear.
++    uint64_t base = (s_pl031_base != 0) ? s_pl031_base : PL031_BASE;
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *rtc = reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
+-                                                      PL031_BASE);
++                                                      base);
+     return static_cast<uint64_t>(rtc[PL031_DATA / 4]);
+ }
+ 
+diff --git a/src/kernel/arch/aarch64/test_stubs.cpp b/src/kernel/arch/aarch64/test_stubs.cpp
+index 37158f6ae..8951ff4ec 100644
+--- a/src/kernel/arch/aarch64/test_stubs.cpp
++++ b/src/kernel/arch/aarch64/test_stubs.cpp
+@@ -104,11 +104,7 @@ void register_pic_tests() {
+         "Skipped: register_pic_tests (not supported on this arch)");
+ }
+ 
+-/// @brief Stub — RTC tests are not supported on non-x86_64 architectures.
+-void register_rtc_tests() {
+-    kernel::Logger::info(
+-        "Skipped: register_rtc_tests (not supported on this arch)");
+-}
++// Issue #355 H2: register_rtc_tests is defined by test_rtc.cpp (shared).
+ 
+ /// @brief Stub — Shell interaction tests are not supported on non-x86_64
+ /// architectures.
+diff --git a/src/kernel/arch/hal/rtc.hpp b/src/kernel/arch/hal/rtc.hpp
+index da6ee879f..9bdc4cdd4 100644
+--- a/src/kernel/arch/hal/rtc.hpp
++++ b/src/kernel/arch/hal/rtc.hpp
+@@ -120,13 +120,19 @@ struct tm {
+     int tm_isdst;
+ };
+ 
+-/// @brief Platform RTC driver for AArch64/RISC-V.
++/// @brief Platform RTC driver for AArch64/RISC-V (issue #355).
+ class RTC {
+   public:
+-    static void init() {
+-    }
++    static void init();
+     static uint64_t read_seconds();
+     static void read_time(tm *out);
++    /// @brief Whether a wall-clock source was discovered at boot.
++    /// `available() == false` ⇒ `read_seconds()` is the documented
++    /// uptime fallback (NOT wall clock).
++    static bool available();
++    /// @brief Wall-clock source identity (non-null static storage):
++    /// `"pl031"` (aarch64), `"goldfish"` or `"mtime-fallback"` (riscv64).
++    static const char *source_name();
+ };
+ 
+ /// @cond
+diff --git a/src/kernel/arch/riscv64/boot.S b/src/kernel/arch/riscv64/boot.S
+index f31e4985f..738bf3070 100644
+--- a/src/kernel/arch/riscv64/boot.S
++++ b/src/kernel/arch/riscv64/boot.S
+@@ -135,6 +135,25 @@ _start:
+     or t1, t1, t4
+     sd t1, 1024(t2)           /* 128 * 8 = 1024 */
+ 
++    /* L2_page[0] -> _boot_pt_l3_rtc (4 KiB Goldfish RTC page, issue #355).
++     * One 4 KiB leaf for PA 0x101000 — NOT a 2 MiB leaf: a 2 MiB leaf at
++     * L2[0] would map device space at VA 0 and silently defeat
++     * null-deref detection. t5 = table flags (V-only), t4 = leaf flags.
++     * VA 0x101000 via L3 index 0x101 (0x101 * 8 = 0x808). */
++    la t1, _boot_pt_l3_rtc
++    srli t1, t1, 2
++    or t1, t1, t5
++    la t2, _boot_pt_l2
++    sd t1, 0(t2)              /* L2_page[0] */
++    li t1, 0x101
++    slli t1, t1, 10           /* PPN << 10 */
++    or t1, t1, t4             /* | leaf flags */
++    la t2, _boot_pt_l3_rtc
++    li t3, 0x808              /* L3 index 0x101 byte offset (over 12-bit
++                               * store-imm range — address arithmetics) */
++    add t2, t2, t3
++    sd t1, 0(t2)              /* L3[0x101]: 4 KiB leaf PA 0x101000 */
++
+     /* L2_page[80]: 2MB leaf PA 0x0A000000 (virtio-mmio window, issue #350;
+      * matches aarch64 boot.S L2 index 80; one 2MB Device leaf covers all
+      * 32 virtio-mmio slots at 0x0A000000 + slot*0x200). */
+@@ -146,8 +165,11 @@ _start:
+     /* L2_page[384..511]: 128x2MB identity leaves PA 0x30000000-0x3FFFFFFF
+      * (PCIe ECAM, issue #29; QEMU virt `info mtree` proof: pcie-ecam @
+      * 0x30000000, 256MB).  Identity (not HHDM-aliased): follows the
+-     * in-tree PLIC/UART precedent above — L0[0] already covers VA
+-     * 0x0-0x40000000, so raw-phys ECAM access is valid in S-mode. */
++     * in-tree PLIC/UART precedent above.  NOTE (issue #355): L0[0] is a
++     * set of explicit leaves (virtio-mmio, PLIC, UART, ECAM range, one
++     * 4 KiB RTC page via L2[0]) — NOT a blanket 0x0-0x40000000 identity
++     * map.  Raw-phys access is valid in S-mode only where a leaf exists;
++     * VA 0 still faults. */
+     la t2, _boot_pt_l2
+     li t1, 3072              /* 384 * 8: first ECAM leaf slot */
+     add t2, t2, t1
+@@ -213,12 +235,15 @@ _boot_pt_l1_id:
+     .space 4096
+ _boot_pt_l2_id:
+     .space 4096
+-/* LOAD-BEARING PADDING: .boot must still end at 0x80207000 (= boot_vma_end
++/* LOAD-BEARING PAGE: .boot must still end at 0x80207000 (= boot_vma_end
+  * = .text LMA).  The fixed .text VMA (0xFFFFFFC080207000) requires LMA
+  * 0x80207000 (VMA = HHDM_base + (LMA & 0x1FFFFF) within the shared 2MB
+- * page).  The 64KB stack moved to .boot_stack_rv; this 4KB reservation
+- * keeps every downstream LMA byte-stable after its removal. */
+-_boot_reserved:
++ * page).  This 4 KiB page was pure padding (_boot_reserved); issue #355
++ * puts it to work as the Goldfish RTC L3 table (L2_page[0] points here).
++ * It is now functional AND load-bearing: removing it desyncs VMA/LMA.
++ * VA 0 still faults (only L3[0x101] is valid) — null-deref detection
++ * is preserved. */
++_boot_pt_l3_rtc:
+     .space 4096
+ 
+ /* Issue #29: dedicated 64KB boot stack, clear of the page tables above.
+diff --git a/src/kernel/arch/riscv64/rtc.cpp b/src/kernel/arch/riscv64/rtc.cpp
+index eb599d829..541075372 100644
+--- a/src/kernel/arch/riscv64/rtc.cpp
++++ b/src/kernel/arch/riscv64/rtc.cpp
+@@ -17,29 +17,139 @@
+  */
+ 
+ /// @file rtc.cpp
+-/// @brief RISC-V64 RTC driver — uptime clock via the mtime CSR (NOT a wall
+-///        clock: seconds since boot rendered from a 1970 epoch; a
+-///        goldfish-rtc wall-clock driver is follow-up work).
++/// @brief RISC-V64 RTC driver — Goldfish wall clock when the DTB provides
++///        it (`google,goldfish-rtc`), mtime uptime fallback otherwise
++///        (issue #355; supersedes the uptime-only driver for the
++///        DTB-present case).
+ 
+ #include <kernel/arch/rtc.hpp>
+ #include <kernel/arch/hal/io.hpp>
++#include <kernel/boot/dtb.hpp>
++#include <kernel/log/dmesg.hpp>
++#include <logger.hpp>
++
++using namespace kernel;
+ 
+ namespace arch {
+ 
+-/// @brief Read uptime seconds (mtime ticks / frequency) rendered from a
+-///        1970 epoch for tm conversion.  NOT wall-clock time.
+-/// @return Seconds since boot (epoch 1970-01-01 rendering).
+-/// @note Uses the QEMU virt default mtime frequency of 10 MHz.
+-uint64_t RTC::read_seconds() {
++// QEMU virt Goldfish RTC (DTB `google,goldfish-rtc`, reg 0x101000/0x1000;
++// proven via dumpdtb). Reached through the 4 KiB identity page at
++// VA == PA (boot.S L2[0] → _boot_pt_l3_rtc, L3[0x101]).
++inline constexpr uint64_t GOLDFISH_RTC_REGION_SIZE = 0x1000ULL;
++inline constexpr uint32_t GOLDFISH_TIME_LOW = 0x00;
++inline constexpr uint32_t GOLDFISH_TIME_HIGH = 0x04;
++inline constexpr int GOLDFISH_LATCH_TRIES = 8;
++// Plausibility floor (2001-09-09): rejects absent/zero/all-ones reads.
++// Valid until the u32 nanosecond counter wraps (year 2106).
++inline constexpr uint64_t GOLDFISH_MIN_PLAUSIBLE_NS =
++    1000000000ULL * 1000000000ULL;
++inline constexpr uint64_t MTIME_FREQ_HZ = 10000000; // QEMU virt default
++
++/// @brief Discovered Goldfish base (0 = none). Published once at boot.
++static uint64_t s_base = 0;
++/// @brief Wall-clock availability latch (release/acquire with s_base).
++static bool s_available = false;
++/// @brief init() ran (idempotence guard).
++static bool s_ready = false;
++/// @brief Latch-exhaustion warning emitted (warn-once).
++static bool s_latch_warned = false;
++
++/// @brief Read uptime seconds (mtime ticks / frequency).
++static uint64_t read_seconds_mtime() {
+     uint64_t cnt{};
+     asm volatile("csrr %0, time" : "=r"(cnt));
+-    uint64_t freq = 10000000; // QEMU virt default mtime frequency
+-    if (freq == 0)
+-        return 0;
+-    return cnt / freq;
++    return cnt / MTIME_FREQ_HZ;
++}
++
++/// @brief Read Goldfish TIME (nanoseconds) with HIGH/LOW/HIGH latch.
++/// @return Nanoseconds, or 0 after bounded exhaustion (warn-once).
++static uint64_t read_ns_goldfish(uint64_t base) {
++    for (int attempt = 0; attempt < GOLDFISH_LATCH_TRIES; ++attempt) {
++        const volatile void *hi_addr =
++            reinterpret_cast<const volatile void *>(base + GOLDFISH_TIME_HIGH);
++        const volatile void *lo_addr =
++            reinterpret_cast<const volatile void *>(base + GOLDFISH_TIME_LOW);
++        uint32_t hi_first = arch::mmio_read32(hi_addr);
++        uint32_t lo = arch::mmio_read32(lo_addr);
++        uint32_t hi_second = arch::mmio_read32(hi_addr);
++        if (hi_first == hi_second)
++            return (static_cast<uint64_t>(hi_first) << 32) | lo;
++    }
++    if (!__atomic_exchange_n(&s_latch_warned, true, __ATOMIC_ACQ_REL)) {
++        Logger::warn("rtc: goldfish latch torn %d times, reading 0",
++                     GOLDFISH_LATCH_TRIES);
++    }
++    return 0;
++}
++
++/// @brief Discover the Goldfish RTC from the DTB, validate, and probe.
++/// Idempotent; never panics; fail-loud (one WARN) to mtime fallback.
++void RTC::init() {
++    if (s_ready)
++        return;
++    s_ready = true;
++    const void *fdt = kernel::boot::dtb_from_boot_info();
++    if (fdt) {
++        int nodes[kernel::boot::DTB_MAX_MATCHES];
++        int found = kernel::boot::dtb_find_compatible_nodes(
++            fdt, "google,goldfish-rtc", nodes, kernel::boot::DTB_MAX_MATCHES);
++        for (int idx = 0; idx < found; ++idx) {
++            uint64_t base = 0;
++            uint64_t size = 0;
++            if (!kernel::boot::dtb_node_reg(fdt, nodes[idx], base, size))
++                continue;
++            // End-contained in the boot-mapped 4 KiB page (overflow-safe,
++            // same form as the virtio-MMIO window check).
++            if (base < 0x101000ULL ||
++                base + GOLDFISH_RTC_REGION_SIZE > 0x101000ULL + 0x1000ULL)
++                continue;
++            if (size < GOLDFISH_RTC_REGION_SIZE)
++                continue;
++            if ((base % 4ULL) != 0)
++                continue;
++            uint64_t nanos = read_ns_goldfish(base);
++            if (nanos < GOLDFISH_MIN_PLAUSIBLE_NS)
++                continue;
++            s_base = base;
++            __atomic_store_n(&s_available, true, __ATOMIC_RELEASE);
++            Logger::info("rtc: source=goldfish base=0x%lx",
++                         static_cast<uint64_t>(base));
++            kernel::log::dmesg_push_sev(
++                kernel::log::ErrorSubsystem::DRIVER,
++                kernel::log::kDmesgBase_DRIVER + 950,
++                kernel::log::LogSeverity::INFO, "rtc source goldfish", 0);
++            return;
++        }
++    }
++    __atomic_store_n(&s_available, false, __ATOMIC_RELEASE);
++    Logger::warn("rtc: goldfish-rtc not found/valid — wall clock "
++                 "unavailable, mtime uptime fallback (epoch 1970)");
++    kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
++                                kernel::log::kDmesgBase_DRIVER + 950,
++                                kernel::log::LogSeverity::WARN,
++                                "rtc mtime fallback", 0);
++}
++
++bool RTC::available() {
++    return __atomic_load_n(&s_available, __ATOMIC_ACQUIRE);
++}
++
++const char *RTC::source_name() {
++    return available() ? "goldfish" : "mtime-fallback";
++}
++
++/// @brief Read seconds: Goldfish wall clock when available, else mtime
++///        uptime rendered from the 1970 epoch (documented fallback).
++uint64_t RTC::read_seconds() {
++    if (available()) {
++        uint64_t base = s_base;
++        if (base != 0)
++            return read_ns_goldfish(base) / 1000000000ULL;
++    }
++    return read_seconds_mtime();
+ }
+ 
+-/// @brief Populate a tm structure from the mtime CSR.
++/// @brief Populate a tm structure (goldfish or mtime seconds).
+ /// @param[out] out Pointer to a tm struct to fill (no-op if nullptr).
+ void RTC::read_time(tm *out) {
+     if (!out)
+diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
+index 0ef4b8af4..e69b1c5e4 100644
+--- a/src/kernel/arch/riscv64/test_riscv64.cpp
++++ b/src/kernel/arch/riscv64/test_riscv64.cpp
+@@ -533,7 +533,10 @@ JARVIS_TEST(riscv64_pci_ecam_read) {
+ }
+ 
+ /// @brief Read RTC time twice with a small delay and verify the clock
+-///        advances monotonically.
++///        advances monotonically. Source-aware (issue #355): with a
++///        Goldfish wall clock the year is host-derived (range-checked);
++///        on the mtime fallback the 1970 uptime epoch is pinned
++///        (issue #205 contract, preserved for the fallback case).
+ JARVIS_TEST(riscv64_rtc_mtime_read) {
+     arch::RTC::read_seconds();
+ 
+@@ -541,10 +544,14 @@ JARVIS_TEST(riscv64_rtc_mtime_read) {
+     arch::RTC::read_time(&t1);
+ 
+     uint16_t year1 = t1.tm_year + 1900;
+-    // Issue #205: the riscv64 RTC is an mtime uptime clock (epoch 1970),
+-    // not a wall clock — pin the uptime-epoch contract + monotonicity.
+-    // A goldfish-rtc wall-clock driver is follow-up work.
+-    JARVIS_ASSERT_FMT(year1 == 1970, "RTC epoch not 1970: %u", year1);
++    if (arch::RTC::available()) {
++        JARVIS_ASSERT_FMT(year1 >= 2001 && year1 <= 2100,
++                          "RTC wall-clock year out of range: %u", year1);
++    } else {
++        // Issue #205: the mtime uptime clock renders epoch 1970, not a
++        // wall clock — pin the uptime-epoch contract + monotonicity.
++        JARVIS_ASSERT_FMT(year1 == 1970, "RTC epoch not 1970: %u", year1);
++    }
+ 
+     for (int i = 0; i < 100000; ++i) {
+         asm volatile("");
+diff --git a/src/kernel/arch/riscv64/test_stubs.cpp b/src/kernel/arch/riscv64/test_stubs.cpp
+index 2dc3e13f5..bbcdbc3fb 100644
+--- a/src/kernel/arch/riscv64/test_stubs.cpp
++++ b/src/kernel/arch/riscv64/test_stubs.cpp
+@@ -102,11 +102,7 @@ void register_pic_tests() {
+         "Skipped: register_pic_tests (not supported on this arch)");
+ }
+ 
+-/// @brief Stub — not supported on non-x86 architectures.
+-void register_rtc_tests() {
+-    kernel::Logger::info(
+-        "Skipped: register_rtc_tests (not supported on this arch)");
+-}
++// Issue #355 H2: register_rtc_tests is defined by test_rtc.cpp (shared).
+ 
+ /// @brief Stub — not supported on non-x86 architectures.
+ void register_shell_interaction_tests() {
+diff --git a/src/kernel/test/test_rtc.cpp b/src/kernel/test/test_rtc.cpp
+index 546d045e6..321df058b 100644
+--- a/src/kernel/test/test_rtc.cpp
++++ b/src/kernel/test/test_rtc.cpp
+@@ -19,7 +19,8 @@
+ /// @file test_rtc.cpp
+ /// @brief RTC (Real-Time Clock) driver tests.
+ 
+-#if defined(CONFIG_ARCH_X86_64)
++#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
++    defined(CONFIG_ARCH_RISCV64)
+ #include <test.hpp>
+ #include <logger.hpp>
+ #include <kernel/arch/rtc.hpp>
+@@ -46,6 +47,9 @@ JARVIS_TEST(rtc_read_seconds, "PRE: iocd | POST: none") {
+ // Input: bcd_to_bin on 0x00, 0x09, 0x10, 0x15, 0x23, 0x59.
+ // Expect: Correct binary values (0x00->0, 0x10->10, 0x59->0x3B, etc.).
+ // Depends: arch::RTC
++// NOTE (issue #355 H2): bcd_to_bin exists only on the x86 RTC HAL —
++// non-x86 arches have no BCD conversion API.
++#if defined(CONFIG_ARCH_X86_64)
+ JARVIS_TEST(rtc_bcd_conversion, "PRE: iocd | POST: none") {
+     JARVIS_ASSERT_EQ(0x00, arch::RTC::bcd_to_bin(0x00));
+     JARVIS_ASSERT_EQ(0x09, arch::RTC::bcd_to_bin(0x09));
+@@ -55,6 +59,7 @@ JARVIS_TEST(rtc_bcd_conversion, "PRE: iocd | POST: none") {
+     JARVIS_ASSERT_EQ(0x3B, arch::RTC::bcd_to_bin(0x59));
+     JARVIS_TEST_PASS();
+ }
++#endif // CONFIG_ARCH_X86_64 (bcd_to_bin is x86-HAL-only)
+ 
+ // Runmode: kernel
+ // Testidea: Register all RTC tests with the test framework.
+@@ -62,6 +67,8 @@ JARVIS_TEST(rtc_bcd_conversion, "PRE: iocd | POST: none") {
+ void register_rtc_tests() {
+     Logger::info("Registering RTC tests");
+     JARVIS_REGISTER_TEST(rtc_read_seconds);
++#if defined(CONFIG_ARCH_X86_64)
+     JARVIS_REGISTER_TEST(rtc_bcd_conversion);
++#endif
+ }
+ #endif
+diff --git a/test-history.txt b/test-history.txt
+index d5e95b2dd..9cd80c652 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4259,3 +4259,10 @@ SUMMARY: total=26 ok=25 fail=1
+ 2026-10-20 19:18:31 drivers PASSED: 56 FAILED: 2 TIME: 1818ms STATUS: #350-sliceC-gate-known-#391x2
+ 2026-10-20 19:19:12 storage PASSED: 166 FAILED: 1 TIME: 23967ms STATUS: #350-sliceC-gate-known-#392
+ 2026-10-20 19:19:41 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1024ms STATUS: #350-sliceC-gate
++2026-10-20 20:30:01 hal_rtc_datetime PASSED: 6 FAILED: 0 TIME: 393ms STATUS: #355-sliceA-x86-control
++2026-10-20 20:31:12 hal_rtc PASSED: 2 FAILED: 0 TIME: 142ms STATUS: #355-sliceA-x86-gate
++2026-10-20 20:32:23 hal_rtc PASSED: 1 FAILED: 0 TIME: 35ms STATUS: #355-sliceA-aarch64-gate
++2026-10-20 20:33:34 hal_rtc PASSED: 1 FAILED: 0 TIME: 38ms STATUS: #355-sliceA-riscv64-gate
++2026-10-20 20:34:01 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 918ms STATUS: #355-sliceA-riscv64-known6-stash-proven-baseline
++2026-10-20 20:34:45 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1037ms STATUS: #355-sliceA-aarch64-gate
++2026-10-20 20:36:48 hal_rtc PASSED: 1 FAILED: 0 TIME: 38ms STATUS: #355-sliceA-riscv64-final

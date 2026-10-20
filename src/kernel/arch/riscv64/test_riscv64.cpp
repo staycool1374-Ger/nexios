@@ -533,7 +533,10 @@ JARVIS_TEST(riscv64_pci_ecam_read) {
 }
 
 /// @brief Read RTC time twice with a small delay and verify the clock
-///        advances monotonically.
+///        advances monotonically. Source-aware (issue #355): with a
+///        Goldfish wall clock the year is host-derived (range-checked);
+///        on the mtime fallback the 1970 uptime epoch is pinned
+///        (issue #205 contract, preserved for the fallback case).
 JARVIS_TEST(riscv64_rtc_mtime_read) {
     arch::RTC::read_seconds();
 
@@ -541,10 +544,14 @@ JARVIS_TEST(riscv64_rtc_mtime_read) {
     arch::RTC::read_time(&t1);
 
     uint16_t year1 = t1.tm_year + 1900;
-    // Issue #205: the riscv64 RTC is an mtime uptime clock (epoch 1970),
-    // not a wall clock — pin the uptime-epoch contract + monotonicity.
-    // A goldfish-rtc wall-clock driver is follow-up work.
-    JARVIS_ASSERT_FMT(year1 == 1970, "RTC epoch not 1970: %u", year1);
+    if (arch::RTC::available()) {
+        JARVIS_ASSERT_FMT(year1 >= 2001 && year1 <= 2100,
+                          "RTC wall-clock year out of range: %u", year1);
+    } else {
+        // Issue #205: the mtime uptime clock renders epoch 1970, not a
+        // wall clock — pin the uptime-epoch contract + monotonicity.
+        JARVIS_ASSERT_FMT(year1 == 1970, "RTC epoch not 1970: %u", year1);
+    }
 
     for (int i = 0; i < 100000; ++i) {
         asm volatile("");

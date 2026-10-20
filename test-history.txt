@@ -4259,3 +4259,10 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-20 19:18:31 drivers PASSED: 56 FAILED: 2 TIME: 1818ms STATUS: #350-sliceC-gate-known-#391x2
 2026-10-20 19:19:12 storage PASSED: 166 FAILED: 1 TIME: 23967ms STATUS: #350-sliceC-gate-known-#392
 2026-10-20 19:19:41 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1024ms STATUS: #350-sliceC-gate
+2026-10-20 20:30:01 hal_rtc_datetime PASSED: 6 FAILED: 0 TIME: 393ms STATUS: #355-sliceA-x86-control
+2026-10-20 20:31:12 hal_rtc PASSED: 2 FAILED: 0 TIME: 142ms STATUS: #355-sliceA-x86-gate
+2026-10-20 20:32:23 hal_rtc PASSED: 1 FAILED: 0 TIME: 35ms STATUS: #355-sliceA-aarch64-gate
+2026-10-20 20:33:34 hal_rtc PASSED: 1 FAILED: 0 TIME: 38ms STATUS: #355-sliceA-riscv64-gate
+2026-10-20 20:34:01 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 918ms STATUS: #355-sliceA-riscv64-known6-stash-proven-baseline
+2026-10-20 20:34:45 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1037ms STATUS: #355-sliceA-aarch64-gate
+2026-10-20 20:36:48 hal_rtc PASSED: 1 FAILED: 0 TIME: 38ms STATUS: #355-sliceA-riscv64-final

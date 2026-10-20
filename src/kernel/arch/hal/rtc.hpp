@@ -120,13 +120,19 @@ struct tm {
     int tm_isdst;
 };
 
-/// @brief Platform RTC driver for AArch64/RISC-V.
+/// @brief Platform RTC driver for AArch64/RISC-V (issue #355).
 class RTC {
   public:
-    static void init() {
-    }
+    static void init();
     static uint64_t read_seconds();
     static void read_time(tm *out);
+    /// @brief Whether a wall-clock source was discovered at boot.
+    /// `available() == false` ⇒ `read_seconds()` is the documented
+    /// uptime fallback (NOT wall clock).
+    static bool available();
+    /// @brief Wall-clock source identity (non-null static storage):
+    /// `"pl031"` (aarch64), `"goldfish"` or `"mtime-fallback"` (riscv64).
+    static const char *source_name();
 };
 
 /// @cond
