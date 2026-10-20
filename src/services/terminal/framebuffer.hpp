@@ -80,6 +80,11 @@ public:
     /// @brief Returns whether the framebuffer was successfully initialised.
     /// @return True if available.
     static bool available() { return initialized_; }
+    /// @brief Compiled-in backend name (issue #357 documented gap).
+    /// Reports the backend, not runtime success: "multiboot2" on
+    /// x86_64, "none" where no backend exists.
+    /// @return Static backend name string.
+    static const char *backend_name();
     /// @brief Reads one pixel back (issue #269 test oracle).
     /// @return 0x000000 when unavailable or out of bounds.
     static uint32_t get_pixel(uint32_t x, uint32_t y);

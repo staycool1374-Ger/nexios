@@ -123,6 +123,7 @@ CXXFLAGS_COMMON := -std=c++20 -ffreestanding -fno-exceptions -fno-rtti \
                    -Wall -Wextra -Werror \
                    -I src -I src/lib -pipe -MMD -MP \
                    -DCONFIG_ARCH_$(ARCH_UPPER) \
+                   -DNEXIOS_ARCH_NAME=$(ARCH) \
                    -DPICOLIBC_VERSION_NUM=$(PICOLIBC_VERSION) \
                    -ffunction-sections -fdata-sections \
                    $(CONFIG_DEFS)
@@ -694,13 +695,13 @@ ifneq ($(NO_LTO),1)
 # link via raw ld/gcc without the LTO plugin, so they must stay non-LTO.
 # The kernel link uses the compiler driver (see mk/rules.mk) to load the
 # LTO plugin; LDFLAGS carries -flto for that.
-debug: CXXFLAGS += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer -fstack-usage -flto
+debug: CXXFLAGS += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer -fstack-usage -flto -DBUILD_TYPE=debug
 debug: CCFLAGS  += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer
 debug: LDFLAGS  += -flto
 else
 # GDB flows (debug-test/debug-shell/rr-record) build without LTO so function
 # boundaries survive for clean single-stepping and stack unwinding.
-debug: CXXFLAGS += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer -fstack-usage
+debug: CXXFLAGS += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer -fstack-usage -DBUILD_TYPE=debug
 debug: CCFLAGS  += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer
 endif
 debug: $(TEST_REGISTRY_GEN)
@@ -740,7 +741,7 @@ endif
 ifeq ($(_DISPATCH_IN_PROGRESS),)
 ANALYZER_NOWARN := analyzer-null-argument analyzer-possible-null-argument analyzer-possible-null-dereference analyzer-use-of-uninitialized-value analyzer-infinite-loop analyzer-malloc-leak analyzer-undefined-behavior-ptrdiff analyzer-out-of-bounds
 cc-has-warning = $(shell printf '\n' | $(CXX) -x c++ -fsyntax-only -Wno-error=$(1) -o /dev/null - >/dev/null 2>&1 && echo '-Wno-error=$(1)')
-RELEASE_CXXFLAGS := -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w)))
+RELEASE_CXXFLAGS := -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w))) -DBUILD_TYPE=release
 release: CXXFLAGS += $(RELEASE_CXXFLAGS)
 release: $(TEST_REGISTRY_GEN)
 release:
@@ -810,7 +811,7 @@ profiling: CXX := x86_64-elf-g++
 profiling: CXXFLAGS := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
                        -Wno-type-limits -Wno-unused-but-set-variable \
                        -Wno-class-memaccess \
-                       -finstrument-functions -DCONFIG_PROFILING -DCONFIG_DEBUG
+                       -finstrument-functions -DCONFIG_PROFILING -DCONFIG_DEBUG -DBUILD_TYPE=debug
 profiling: LDFLAGS += -L $(GCOV_LIB_DIR)
 profiling: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
 	@printf '  %-7s %s\n' 'LD' 'kernel.elf (profiling)'
@@ -892,7 +893,7 @@ COVERAGE_EXCLUDES  := src/kernel/gcov/,gcov_handler.cpp
 # Flags shared by both phases.
 COVERAGE_COMMON_FLAGS := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
                       -g -Og -fno-inline -fno-inline-functions \
-                      -fno-omit-frame-pointer -DCONFIG_DEBUG \
+                      -fno-omit-frame-pointer -DCONFIG_DEBUG -DBUILD_TYPE=debug \
                       -Wno-type-limits -Wno-unused-but-set-variable \
                       -Wno-class-memaccess
 

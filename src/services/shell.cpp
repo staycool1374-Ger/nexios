@@ -19,6 +19,7 @@
 #include <services/shell.hpp>
 #include <services/terminal/terminal.hpp>
 #include <services/terminal/framebuffer.hpp>
+#include <kernel/build_info.hpp>
 #include <lib/fmt/term_fmt.hpp>
 #include <services/program.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -1808,6 +1809,14 @@ void Shell::cmd_version(int, const char**) {
     Terminal::write(kernel::Version::build_date());
     Terminal::write(" ");
     Terminal::write(kernel::Version::build_time());
+    Terminal::write("\nArch:   ");
+    Terminal::write(kernel::build_info::arch_name);
+    Terminal::write(" (");
+    print_uint(kernel::build_info::bits);
+    Terminal::write("-bit, fb=");
+    Terminal::write(kernel::build_info::fb_backend);
+    Terminal::write(")\nType:   ");
+    Terminal::write(kernel::build_info::build_type);
     Terminal::write("\n");
 }
 

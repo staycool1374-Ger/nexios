@@ -4272,3 +4272,6 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-20 21:10:11 shell_interaction PASSED: 20 FAILED: 0 TIME: 3428ms STATUS: #355-sliceC-x86-control
 2026-10-20 21:11:22 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1030ms STATUS: #355-sliceC-aarch64-gate
 2026-10-20 21:12:33 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 919ms STATUS: #355-sliceC-riscv64-known6
+2026-10-20 21:44:07 ui PASSED: 74 FAILED: 0 TIME: 7175ms STATUS: #357-sliceA-x86-gate
+2026-10-20 21:44:07 configuration_build PASSED: 10 FAILED: 0 TIME: 643ms STATUS: #357-sliceA-x86-gate
+2026-10-20 21:44:07 selftest PASSED: 148 FAILED: 0 TIME: 11782ms STATUS: #357-sliceA-x86-gate

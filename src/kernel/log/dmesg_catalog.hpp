@@ -158,6 +158,8 @@ constexpr DmesgRecord kDmesgCatalog_DRIVER[] = {
      "Driver using fallback configuration"},
     {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 10, LogSeverity::WARN,
      "Driver scan truncated: table full"},
+    {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 11, LogSeverity::WARN,
+     "Framebuffer backend unavailable (documented gap)"},
 };
 
 /// @brief Init records (canonical base kDmesgBase_INIT): init-rc, fstab,

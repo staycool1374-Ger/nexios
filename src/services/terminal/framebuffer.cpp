@@ -21,8 +21,11 @@
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/multiboot2.hpp>
 #endif
+#include <kernel/build_info.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
+#include <kernel/log/dmesg.hpp>
+#include <logger.hpp>
 #include <assert.hpp>
 #include <constants.hpp>
 
@@ -30,15 +33,39 @@ namespace service {
 
 FramebufferInfo Framebuffer::info_ = {};
 bool Framebuffer::initialized_ = false;
+#if !defined(CONFIG_ARCH_X86_64)
+// One-shot gap line (issue #357): boot path only, pre-scheduler.
+static bool gap_logged = false;
+#endif
+
+const char *Framebuffer::backend_name() {
+    return kernel::build_info::fb_backend;
+}
 
 bool Framebuffer::init() {
 #if defined(CONFIG_ARCH_X86_64)
     uint64_t tag_addr = mb2_find_tag(8);
-    if (!tag_addr) return false;
+    if (!tag_addr) {
+        kernel::Logger::error("[FB] multiboot2 framebuffer tag missing/unusable");
+        kernel::log::dmesg_push_sev(
+            kernel::log::ErrorSubsystem::DRIVER,
+            kernel::log::kDmesgBase_DRIVER + 11,
+            kernel::log::LogSeverity::ERROR,
+            "Framebuffer backend unavailable (documented gap)", 0);
+        return false;
+    }
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto* tag = reinterpret_cast<FramebufferTag*>(tag_addr);
-    if (tag->type_specific != 1 && tag->type_specific != 2) return false;
+    if (tag->type_specific != 1 && tag->type_specific != 2) {
+        kernel::Logger::error("[FB] multiboot2 framebuffer tag missing/unusable");
+        kernel::log::dmesg_push_sev(
+            kernel::log::ErrorSubsystem::DRIVER,
+            kernel::log::kDmesgBase_DRIVER + 11,
+            kernel::log::LogSeverity::ERROR,
+            "Framebuffer backend unavailable (documented gap)", 0);
+        return false;
+    }
 
     info_.addr   = tag->addr;
     info_.pitch  = tag->pitch;
@@ -74,6 +101,18 @@ bool Framebuffer::init() {
     clear(0x000000);
     return true;
 #else
+    // Documented gap (issue #357, follow-up #394): no backend on this
+    // arch — loud once, never silent, never a panic.
+    if (!gap_logged) {
+        gap_logged = true;
+        kernel::Logger::warn("[FB] no framebuffer backend (documented gap; "
+                             "virtio-gpu/ramfb follow-up #394)");
+        kernel::log::dmesg_push_sev(
+            kernel::log::ErrorSubsystem::DRIVER,
+            kernel::log::kDmesgBase_DRIVER + 11,
+            kernel::log::LogSeverity::WARN,
+            "Framebuffer backend unavailable (documented gap)", 0);
+    }
     return false;
 #endif
 }
